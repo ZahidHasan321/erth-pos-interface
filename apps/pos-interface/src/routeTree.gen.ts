@@ -20,6 +20,7 @@ import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/sto
 import { Route as MainStoreReceivingDeliveriesRouteImport } from './routes/$main/store/receiving-deliveries'
 import { Route as MainStoreEndOfDayReportRouteImport } from './routes/$main/store/end-of-day-report'
 import { Route as MainOrdersNewWorkOrderRouteImport } from './routes/$main/orders/new-work-order'
+import { Route as MainOrdersNewSalesOrderRouteImport } from './routes/$main/orders/new-sales-order'
 import { Route as MainOrdersNewAlterationOrderRouteImport } from './routes/$main/orders/new-alteration-order'
 import { Route as MainOrdersCustomerProfilesOrdersRouteImport } from './routes/$main/orders/customer-profiles-orders'
 
@@ -80,6 +81,11 @@ const MainOrdersNewWorkOrderRoute = MainOrdersNewWorkOrderRouteImport.update({
   path: '/orders/new-work-order',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainOrdersNewSalesOrderRoute = MainOrdersNewSalesOrderRouteImport.update({
+  id: '/orders/new-sales-order',
+  path: '/orders/new-sales-order',
+  getParentRoute: () => MainRouteRoute,
+} as any)
 const MainOrdersNewAlterationOrderRoute =
   MainOrdersNewAlterationOrderRouteImport.update({
     id: '/orders/new-alteration-order',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/$main/': typeof MainIndexRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
+  '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/$main': typeof MainIndexRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
+  '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/$main/': typeof MainIndexRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
+  '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/$main/'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
+    | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/$main'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
+    | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/$main/'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
+    | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
@@ -272,6 +284,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersNewWorkOrderRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/orders/new-sales-order': {
+      id: '/$main/orders/new-sales-order'
+      path: '/orders/new-sales-order'
+      fullPath: '/$main/orders/new-sales-order'
+      preLoaderRoute: typeof MainOrdersNewSalesOrderRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
     '/$main/orders/new-alteration-order': {
       id: '/$main/orders/new-alteration-order'
       path: '/orders/new-alteration-order'
@@ -293,6 +312,7 @@ interface MainRouteRouteChildren {
   MainIndexRoute: typeof MainIndexRoute
   MainOrdersCustomerProfilesOrdersRoute: typeof MainOrdersCustomerProfilesOrdersRoute
   MainOrdersNewAlterationOrderRoute: typeof MainOrdersNewAlterationOrderRoute
+  MainOrdersNewSalesOrderRoute: typeof MainOrdersNewSalesOrderRoute
   MainOrdersNewWorkOrderRoute: typeof MainOrdersNewWorkOrderRoute
   MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
   MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
@@ -304,6 +324,7 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainIndexRoute: MainIndexRoute,
   MainOrdersCustomerProfilesOrdersRoute: MainOrdersCustomerProfilesOrdersRoute,
   MainOrdersNewAlterationOrderRoute: MainOrdersNewAlterationOrderRoute,
+  MainOrdersNewSalesOrderRoute: MainOrdersNewSalesOrderRoute,
   MainOrdersNewWorkOrderRoute: MainOrdersNewWorkOrderRoute,
   MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
   MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,

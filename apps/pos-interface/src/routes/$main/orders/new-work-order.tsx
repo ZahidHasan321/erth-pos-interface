@@ -245,7 +245,8 @@ function NewWorkOrder() {
                     setOrder(updatedOrderSchema);
                     OrderForm.reset(updatedOrderSchema);
                 }
-                handleProceed(4);
+                // Mark the final step as completed
+                addSavedStep(4);
             }
         },
         onOrderError: () => {
@@ -929,7 +930,7 @@ function NewWorkOrder() {
                     <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
                         <ShelfForm
                             form={shelfForm}
-                            isOrderClosed={isOrderClosed}
+                            isOrderDisabled={isOrderClosed}
                             onProceed={handleShelfProceed}
                         />
                     </ErrorBoundary>

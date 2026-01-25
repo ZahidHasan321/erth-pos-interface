@@ -1,4 +1,4 @@
-import { createOrder, updateOrder, deleteOrder, completeWorkOrder } from "@/api/orders";
+import { createOrder, updateOrder, deleteOrder, completeWorkOrder, completeSalesOrder } from "@/api/orders";
 import { updateShelf } from "@/api/shelf";
 import { updateFabric } from "@/api/fabrics";
 import { showFatouraNotification } from "@/lib/notifications";
@@ -313,6 +313,45 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         }
     });
 
+    const completeSalesOrderMutation = useMutation({
+        mutationFn: ({
+            orderId,
+            checkoutDetails,
+            shelfItems
+        }: {
+            orderId: number;
+            checkoutDetails: {
+                paymentType: string;
+                paid: number | null | undefined;
+                paymentRefNo?: string;
+                paymentNote?: string;
+                orderTaker?: string;
+            };
+            shelfItems: { id: number; quantity: number; unitPrice: number }[];
+        }) => {
+            return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
+        },
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
+                return;
+            }
+            toast.success("Sales order completed successfully! ✅");
+
+            // Show notification if invoice number was just generated
+            if (response.data?.invoice_number) {
+                showFatouraNotification(response.data.invoice_number);
+            }
+
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+            queryClient.invalidateQueries({ queryKey: ["products"] });
+            options.onOrderUpdated?.("updated", response.data);
+        },
+        onError: () => {
+            toast.error("An error occurred while completing the sales order");
+        }
+    });
+
     return {
         createOrder: createOrderMutation,
         updateOrder: updateOrderMutation,
@@ -320,5 +359,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         updateFabricStock: updateFabricStockMutation,
         deleteOrder: deleteOrderMutation,
         completeWorkOrder: completeWorkOrderMutation,
+        completeSalesOrder: completeSalesOrderMutation,
     };
 }

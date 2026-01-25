@@ -132,6 +132,7 @@ export function OrderSummaryAndPaymentForm({
     home_delivery = false,
     paid,
     payment_type,
+    order_type,
   ] = useWatch({
     control: form.control,
     name: [
@@ -146,6 +147,7 @@ export function OrderSummaryAndPaymentForm({
       "home_delivery",
       "paid",
       "payment_type",
+      "order_type",
     ],
   });
 
@@ -300,94 +302,96 @@ export function OrderSummaryAndPaymentForm({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* LEFT COLUMN: Delivery & Discounts */}
           <div className="space-y-6">
-            {/* Delivery Section */}
-            <motion.section
-              className="bg-card rounded-xl border border-border shadow-sm p-6"
-            >
-              <h3 className="text-lg font-semibold mb-4">Delivery Option</h3>
-              {hasAnyHomeDelivery && (
-                <Alert className="mb-4 border-primary/50 bg-primary/5">
-                  <AlertCircle className="h-4 w-4 text-primary" />
-                  <AlertTitle className="text-primary font-semibold">Home Delivery Required</AlertTitle>
-                  <AlertDescription>
-                    One or more fabrics have home delivery selected.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <FormField
-                control={form.control}
-                name="home_delivery"
-                render={({ field }) => (
-                  <RadioGroup
-                    onValueChange={(value) => field.onChange(value === "true")}
-                    value={field.value ? "true" : "false"}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    disabled={isOrderClosed || hasAnyHomeDelivery}
-                  >
-                    {deliveryOptions.map((option) => {
-                      const isDisabled = isOrderClosed || (hasAnyHomeDelivery && !option.value);
-                      const isSelected = field.value === option.value;
-                      return (
-                        <label
-                          key={option.value.toString()}
-                          htmlFor={option.value.toString()}
-                          className={cn(
-                            "flex flex-col items-center justify-center rounded-lg p-6 border-2 transition-all relative",
-                            !isDisabled && "cursor-pointer hover:border-primary hover:shadow-md",
-                            isDisabled && "opacity-50 cursor-not-allowed",
-                            isSelected
-                              ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-lg"
-                              : "border-border bg-background"
-                          )}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                              <CheckIcon className="w-4 h-4 text-primary-foreground" />
-                            </div>
-                          )}
-                          <img
-                            src={option.img}
-                            alt={option.label}
+            {/* Delivery Section - Hidden for Sales Orders */}
+            {order_type !== "SALES" && (
+              <motion.section
+                className="bg-card rounded-xl border border-border shadow-sm p-6"
+              >
+                <h3 className="text-lg font-semibold mb-4">Delivery Option</h3>
+                {hasAnyHomeDelivery && (
+                  <Alert className="mb-4 border-primary/50 bg-primary/5">
+                    <AlertCircle className="h-4 w-4 text-primary" />
+                    <AlertTitle className="text-primary font-semibold">Home Delivery Required</AlertTitle>
+                    <AlertDescription>
+                      One or more fabrics have home delivery selected.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <FormField
+                  control={form.control}
+                  name="home_delivery"
+                  render={({ field }) => (
+                    <RadioGroup
+                      onValueChange={(value) => field.onChange(value === "true")}
+                      value={field.value ? "true" : "false"}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                      disabled={isOrderClosed || hasAnyHomeDelivery}
+                    >
+                      {deliveryOptions.map((option) => {
+                        const isDisabled = isOrderClosed || (hasAnyHomeDelivery && !option.value);
+                        const isSelected = field.value === option.value;
+                        return (
+                          <label
+                            key={option.value.toString()}
+                            htmlFor={option.value.toString()}
                             className={cn(
-                              "h-16 object-contain transition-all",
-                              isSelected && "scale-110"
+                              "flex flex-col items-center justify-center rounded-lg p-6 border-2 transition-all relative",
+                              !isDisabled && "cursor-pointer hover:border-primary hover:shadow-md",
+                              isDisabled && "opacity-50 cursor-not-allowed",
+                              isSelected
+                                ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-lg"
+                                : "border-border bg-background"
                             )}
-                          />
-                          <FormLabel className={cn(
-                            "mt-3 text-base cursor-pointer transition-all",
-                            isSelected ? "font-bold text-primary" : "font-medium text-foreground"
-                          )}>
-                            {option.label}
-                          </FormLabel>
-                          <RadioGroupItem id={option.value.toString()} value={option.value.toString()} className="sr-only" />
-                        </label>
-                      );
-                    })}
-                  </RadioGroup>
-                )}
-              />
-              <AnimatePresence>
-                {showAddressWarning && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={smoothTransition}
-                    className="overflow-hidden"
-                  >
-                    <div className="pt-4">
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Address Required</AlertTitle>
-                        <AlertDescription>
-                          Please add the customer's address in Demographics.
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.section>
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                                <CheckIcon className="w-4 h-4 text-primary-foreground" />
+                              </div>
+                            )}
+                            <img
+                              src={option.img}
+                              alt={option.label}
+                              className={cn(
+                                "h-16 object-contain transition-all",
+                                isSelected && "scale-110"
+                              )}
+                            />
+                            <FormLabel className={cn(
+                              "mt-3 text-base cursor-pointer transition-all",
+                              isSelected ? "font-bold text-primary" : "font-medium text-foreground"
+                            )}>
+                              {option.label}
+                            </FormLabel>
+                            <RadioGroupItem id={option.value.toString()} value={option.value.toString()} className="sr-only" />
+                          </label>
+                        );
+                      })}
+                    </RadioGroup>
+                  )}
+                />
+                <AnimatePresence>
+                  {showAddressWarning && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={smoothTransition}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-4">
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Address Required</AlertTitle>
+                          <AlertDescription>
+                            Please add the customer's address in Demographics.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.section>
+            )}
 
             {/* Discount Section */}
             <motion.section
@@ -621,109 +625,212 @@ export function OrderSummaryAndPaymentForm({
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Sales Order specific totals and buttons */}
+              {order_type === "SALES" && (
+                <div className="mt-8 pt-6 border-t border-border space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between font-semibold text-sm">
+                      <span>Total</span>
+                      <span>{totalDue.toFixed(3)} KWD</span>
+                    </div>
+                    <div className="flex justify-between text-secondary text-sm">
+                      <span>Discount</span>
+                      <span>-{safeDiscountValue.toFixed(3)} KWD</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-xl pt-2 border-t border-border">
+                      <span>Net Total</span>
+                      <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <FormField
+                      control={form.control}
+                      name="paid"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between items-center">
+                            <FormLabel className="text-base font-bold">Amount Paid</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                className="w-32 text-right font-bold text-lg h-12" 
+                                placeholder="0.000"
+                                {...field} 
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
+                                onFocus={(e) => e.target.select()}
+                                disabled={isOrderClosed}
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {balance > 0 && (
+                      <div className="flex justify-between items-center mt-2 text-sm">
+                        <span className="text-muted-foreground">Remaining:</span>
+                        <span className="font-semibold text-destructive">
+                          {balance.toFixed(3)} KWD
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {!isOrderClosed && (
+                      <Button 
+                        type="submit" 
+                        size="lg" 
+                        className="w-full h-14 text-lg"
+                        disabled={form.formState.isSubmitting}
+                      >
+                        {form.formState.isSubmitting ? (
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        ) : (
+                          <Check className="w-5 h-5 mr-2" />
+                        )}
+                        Confirm & Complete
+                      </Button>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handlePrint}
+                        disabled={!isOrderClosed || isLoadingFatoura}
+                        className="h-12"
+                      >
+                        {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+                        Invoice
+                      </Button>
+
+                      {!isOrderClosed && (
+                        <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.section>
 
-            {/* Charges Summary */}
-            <motion.section
-              className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
-            >
-              <h3 className="text-lg font-semibold mb-2">Summary</h3>
-              <div className="space-y-2 text-sm border-b border-border pb-4">
-                <div className="flex justify-between"><span>Fabric</span><span>{Number(fabric_charge || 0).toFixed(3)} KWD</span></div>
-                <div className="flex justify-between"><span>Stitching</span><span>{Number(stitching_charge || 0).toFixed(3)} KWD</span></div>
-                <div className="flex justify-between"><span>Style</span><span>{Number(style_charge || 0).toFixed(3)} KWD</span></div>
-                <div className="flex justify-between">
-                  <span>Home Delivery</span>
-                  <span>{((hasAnyHomeDelivery || home_delivery) ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Express Surcharge</span>
-                  <span>{(hasAnyExpressDelivery ? (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
-                </div>
-                <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between font-semibold"><span>Total Due</span><span>{totalDue.toFixed(3)} KWD</span></div>
-                <div className="flex justify-between text-secondary"><span>Discount</span><span>-{safeDiscountValue.toFixed(3)} KWD</span></div>
-                <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
-                  <span>Final Total</span>
-                  <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-border">
-                <FormField
-                  control={form.control}
-                  name="paid"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex justify-between items-center">
-                        <FormLabel className="text-base font-bold">Amount Paid (KWD)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            className="w-32 text-right font-bold text-lg h-12" 
-                            placeholder="0.000"
-                            {...field} 
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
-                            onFocus={(e) => e.target.select()}
-                            disabled={isOrderClosed}
-                          />
-                        </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
+            {/* Charges Summary - Hidden for Sales Orders */}
+            {order_type !== "SALES" && (
+              <motion.section
+                className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
+              >
+                <h3 className="text-lg font-semibold mb-2">Summary</h3>
+                <div className="space-y-2 text-sm border-b border-border pb-4">
+                  {(order_type === "WORK" || Number(fabric_charge) > 0) && (
+                    <div className="flex justify-between"><span>Fabric</span><span>{Number(fabric_charge || 0).toFixed(3)} KWD</span></div>
                   )}
-                />
-                <div className="flex justify-between items-center mt-2 text-sm">
-                  <span className="text-muted-foreground">Remaining Balance:</span>
-                  <span className={cn("font-semibold", balance > 0 ? "text-destructive" : "text-primary")}>
-                    {Math.max(0, balance).toFixed(3)} KWD
-                  </span>
+                  {(order_type === "WORK" || Number(stitching_charge) > 0) && (
+                    <div className="flex justify-between"><span>Stitching</span><span>{Number(stitching_charge || 0).toFixed(3)} KWD</span></div>
+                  )}
+                  {(order_type === "WORK" || Number(style_charge) > 0) && (
+                    <div className="flex justify-between"><span>Style</span><span>{Number(style_charge || 0).toFixed(3)} KWD</span></div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>Home Delivery</span>
+                    <span>{((hasAnyHomeDelivery || home_delivery) ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
+                  </div>
+                  {(order_type === "WORK" || hasAnyExpressDelivery) && (
+                    <div className="flex justify-between">
+                      <span>Express Surcharge</span>
+                      <span>{(hasAnyExpressDelivery ? (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>
                 </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3 pt-6">
-                {!isOrderClosed && (
-                  <Button 
-                    type="submit" 
-                    size="lg" 
-                    className="w-full h-14 text-lg"
-                    disabled={form.formState.isSubmitting || showAddressWarning}
-                  >
-                    {form.formState.isSubmitting ? (
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    ) : (
-                      <Check className="w-5 h-5 mr-2" />
+                <div className="space-y-2">
+                  <div className="flex justify-between font-semibold"><span>Total Due</span><span>{totalDue.toFixed(3)} KWD</span></div>
+                  <div className="flex justify-between text-secondary"><span>Discount</span><span>-{safeDiscountValue.toFixed(3)} KWD</span></div>
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
+                    <span>Final Total</span>
+                    <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <FormField
+                    control={form.control}
+                    name="paid"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex justify-between items-center">
+                          <FormLabel className="text-base font-bold">Amount Paid (KWD)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              className="w-32 text-right font-bold text-lg h-12" 
+                              placeholder="0.000"
+                              {...field} 
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
+                              onFocus={(e) => e.target.select()}
+                              disabled={isOrderClosed}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                    {form.formState.isSubmitting ? "Processing..." : "Confirm & Complete Order"}
-                  </Button>
-                )}
+                  />
+                  <div className="flex justify-between items-center mt-2 text-sm">
+                    <span className="text-muted-foreground">Remaining Balance:</span>
+                    <span className={cn("font-semibold", balance > 0 ? "text-destructive" : "text-primary")}>
+                      {Math.max(0, balance).toFixed(3)} KWD
+                    </span>
+                  </div>
+                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handlePrint}
-                    disabled={!isOrderClosed || (isLoadingFatoura)}
-                    className="h-12"
-                  >
-                    {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-                    Print Invoice
-                  </Button>
-
+                {/* Action Buttons */}
+                <div className="flex flex-col gap-3 pt-6">
                   {!isOrderClosed && (
-                    <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
-                      <X className="w-4 h-4 mr-2" />
-                      Cancel Order
+                    <Button 
+                      type="submit" 
+                      size="lg" 
+                      className="w-full h-14 text-lg"
+                      disabled={form.formState.isSubmitting || showAddressWarning}
+                    >
+                      {form.formState.isSubmitting ? (
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      ) : (
+                        <Check className="w-5 h-5 mr-2" />
+                      )}
+                      {form.formState.isSubmitting ? "Processing..." : "Confirm & Complete Order"}
                     </Button>
                   )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handlePrint}
+                      disabled={!isOrderClosed || (isLoadingFatoura)}
+                      className="h-12"
+                    >
+                      {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+                      Print Invoice
+                    </Button>
+
+                    {!isOrderClosed && (
+                      <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel Order
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.section>
+              </motion.section>
+            )}
           </div>
         </div>
 

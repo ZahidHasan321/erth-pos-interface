@@ -220,6 +220,30 @@ export const completeWorkOrder = async (
     return { status: 'success', data: data as any };
 };
 
+export const completeSalesOrder = async (
+    orderId: number,
+    checkoutDetails: {
+        paymentType: string;
+        paid: number | null | undefined;
+        paymentRefNo?: string;
+        paymentNote?: string;
+        orderTaker?: string;
+    },
+    shelfItems: { id: number; quantity: number; unitPrice: number }[]
+): Promise<ApiResponse<Order>> => {
+    const { data, error } = await supabase.rpc('complete_sales_order', {
+        p_order_id: orderId,
+        p_checkout_details: checkoutDetails,
+        p_shelf_items: shelfItems
+    });
+
+    if (error) {
+        console.error('Error completing sales order:', error);
+        return { status: 'error', message: error.message };
+    }
+    return { status: 'success', data: data as any };
+};
+
 export const saveWorkOrderGarments = async (
     orderId: number,
     garments: any[],
