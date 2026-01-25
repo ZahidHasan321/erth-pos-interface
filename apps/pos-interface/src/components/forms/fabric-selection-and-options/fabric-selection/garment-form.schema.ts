@@ -10,16 +10,23 @@ export const garmentSchema = z.object({
   style_price_snapshot: z.number().default(0),
   style_id: z.number().optional().nullable(),
   style: z.string().optional().default('kuwaiti'),
-  measurement_id: z.string().uuid().optional().nullable(),
+  measurement_id: z.string().uuid().nullable().refine(val => val !== null, {
+    message: "Measurement ID is required"
+  }),
 
-  fabric_source: z.enum(['IN', 'OUT']).optional().nullable(),
+  fabric_source: z.enum(['IN', 'OUT'], {
+    required_error: "Fabric source is required"
+  }),
   color: z.string().optional().nullable(),
   shop_name: z.string().optional().nullable(),
   home_delivery: z.boolean().default(false),
-  fabric_length: z.number().nullish().refine(
-    (val) => val !== undefined && val !== null && val > 0,
-    { message: "Fabric length is required" }
-  ),
+  fabric_length: z.number({
+    invalid_type_error: "Fabric length must be a number"
+  })
+    .nullish()
+    .refine((val) => val !== null && val !== undefined && val > 0, {
+      message: "Fabric length is required and must be greater than 0"
+    }),
   quantity: z.number().default(1),
 
   // Style options
@@ -41,8 +48,28 @@ export const garmentSchema = z.object({
   express: z.boolean().default(false),
   brova: z.boolean().default(false),
   piece_stage: z.string().optional().nullable(),
-  delivery_date: z.string().optional().nullable(),
+  delivery_date: z.string().nullable().refine(val => val !== null && val !== "", {
+    message: "Delivery date is required"
+  }),
   notes: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+  // Conditional: Fabric ID required if source is IN
+  if (data.fabric_source === 'IN' && !data.fabric_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Fabric selection is required for internal source",
+      path: ["fabric_id"]
+    });
+  }
+
+  // Conditional: Shop Name required if source is OUT
+  if (data.fabric_source === 'OUT' && (!data.shop_name || data.shop_name.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Shop name is required for external source",
+      path: ["shop_name"]
+    });
+  }
 });
 
 export type GarmentSchema = z.infer<typeof garmentSchema>;
@@ -79,6 +106,54 @@ export const garmentDefaults: GarmentSchema = {
   delivery_date: new Date().toISOString(),
   notes: '',
 };
+
+/**
+ * Creates a schema for the entire fabric selection form, 
+ * optionally including stock validation if fabrics data is provided.
+ */
+export const createFabricSelectionFormSchema = (fabrics: any[] = []) => {
+  return z.object({
+    garments: z.array(garmentSchema).min(1, "At least one garment is required"),
+    signature: z.string().min(1, "Customer signature is required"),
+  }).superRefine((data, ctx) => {
+    if (!fabrics || fabrics.length === 0) return;
+
+    // Aggregate stock check
+    const usage = new Map<number, number>();
+    data.garments.forEach((g) => {
+      if (g.fabric_source === 'IN' && g.fabric_id) {
+        usage.set(g.fabric_id, (usage.get(g.fabric_id) || 0) + (g.fabric_length || 0));
+      }
+    });
+
+    usage.forEach((totalUsed, fabricId) => {
+      const fabric = fabrics.find(f => f.id === fabricId);
+      if (fabric) {
+        const available = parseFloat(fabric.real_stock?.toString() || "0");
+        if (totalUsed > available) {
+          // Find all rows using this fabric to mark them
+          data.garments.forEach((g, index) => {
+            if (g.fabric_source === 'IN' && g.fabric_id === fabricId) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Insufficient stock for ${fabric.name}. Total requested: ${totalUsed.toFixed(2)}m, Available: ${available.toFixed(2)}m`,
+                path: ["garments", index, "fabric_length"]
+              });
+            }
+          });
+        }
+      }
+    });
+  });
+};
+
+// Base schema for initial setup
+export const fabricSelectionFormSchema = z.object({
+  garments: z.array(garmentSchema).min(1, "At least one garment is required"),
+  signature: z.string().min(1, "Customer signature is required"),
+});
+
+export type FabricSelectionFormSchema = z.infer<typeof fabricSelectionFormSchema>;
 
 // Aliases for compatibility
 export const fabricSelectionSchema = garmentSchema;

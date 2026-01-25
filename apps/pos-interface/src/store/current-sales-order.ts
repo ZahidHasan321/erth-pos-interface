@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { customerDemographicsSchema } from "@/components/forms/customer-demographics/demographics-form.schema";
-import { shelvedProductSchema } from "@/components/forms/shelved-products/shelved-products-form.schema";
+import { shelfProductSchema } from "@/components/forms/shelf/shelf-form.schema";
 import { z } from "zod";
 import type { OrderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
 
@@ -9,7 +9,7 @@ interface CurrentSalesOrderState {
   orderId: number | null;
   order: Partial<OrderSchema>;
   customerDemographics: Partial<z.infer<typeof customerDemographicsSchema>>;
-  shelvedProducts: z.infer<typeof shelvedProductSchema>;
+  shelfProducts: z.infer<typeof shelfProductSchema>;
   currentStep: number;
   savedSteps: number[];
   paymentType: string | null;
@@ -23,7 +23,7 @@ interface CurrentSalesOrderState {
   setOrderId: (id: number | null) => void;
   setOrder: (order: Partial<OrderSchema>) => void;
   setCustomerDemographics: (data: Partial<z.infer<typeof customerDemographicsSchema>>) => void;
-  setShelvedProducts: (data: z.infer<typeof shelvedProductSchema>) => void;
+  setShelfProducts: (data: z.infer<typeof shelfProductSchema>) => void;
   setCurrentStep: (step: number) => void;
   setPaymentType: (type: string | null) => void;
   setOtherPaymentType: (type: string | null) => void;
@@ -47,7 +47,7 @@ export const createSalesOrderStore = (name: string) =>
         orderId: null,
         order: {},
         customerDemographics: {},
-        shelvedProducts: [],
+        shelfProducts: [],
         currentStep: 0,
         savedSteps: [],
         paymentType: null,
@@ -65,7 +65,7 @@ export const createSalesOrderStore = (name: string) =>
             customerDemographics: { ...state.customerDemographics, ...data },
           })),
 
-        setShelvedProducts: (data) => set({ shelvedProducts: data }),
+        setShelfProducts: (data) => set({ shelfProducts: data }),
 
         setCurrentStep: (step) => set({ currentStep: step }),
 

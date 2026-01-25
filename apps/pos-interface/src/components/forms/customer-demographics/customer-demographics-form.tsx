@@ -1,10 +1,7 @@
-import { debounce } from "@/lib/utils";
-import {
-  createCustomer,
-  searchPrimaryAccountByPhone,
-  updateCustomer,
-} from "@/api/customers";
+import { debounce, cn } from "@/lib/utils";
+import { searchPrimaryAccountByPhone, updateCustomer, createCustomer } from "@/api/customers";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -46,7 +43,9 @@ import WhatsappLogo from "@/assets/whatsapp.svg";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@/components/ui/flag-icon";
-import { Pencil, ArrowRight, X, Save, Check } from "lucide-react";
+import { Pencil, ArrowRight, X, Save, Check, Search, Users } from "lucide-react";
+import { SearchCustomer } from "./search-customer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 interface CustomerDemographicsFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,7 +55,9 @@ interface CustomerDemographicsFormProps {
   onProceed?: () => void;
   onClear?: () => void;
   onSave?: (data: Partial<CustomerDemographicsSchema>) => void;
+  onCustomerChange?: (customer: Customer) => void;
   isOrderClosed?: boolean;
+  orderId?: number | null;
   header?: string;
   subheader?: string;
   proceedButtonText?: string;
@@ -69,12 +70,15 @@ export function CustomerDemographicsForm({
   onProceed,
   onClear,
   onSave,
+  onCustomerChange,
   isOrderClosed,
+  orderId,
   header = "Demographics",
   subheader = "Customer information and contact details",
   proceedButtonText = "Confirm Order",
 }: CustomerDemographicsFormProps) {
   const [isEditing, setIsEditing] = useState(true);
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [confirmationDialog, setConfirmationDialog] = useState({
     isOpen: false,
     title: "",
@@ -290,14 +294,25 @@ export function CustomerDemographicsForm({
 
         <div className="flex justify-between items-start mb-6">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-foreground bg-linear-to-r from-primary to-secondary bg-clip-text">
-              {header}
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-foreground bg-linear-to-r from-primary to-secondary bg-clip-text">
+                {header}
+              </h1>
+              {id && isOrderClosed && (
+                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 animate-in fade-in zoom-in duration-300">
+                  <Check className="size-3 mr-1" />
+                  Profile Loaded
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">{subheader}</p>
           </div>
         </div>
 
-        <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
+        <div className={cn(
+          "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
+          id && isReadOnly && "bg-blue-50/30 border-blue-100"
+        )}>
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">
               Basic Information
@@ -538,7 +553,10 @@ export function CustomerDemographicsForm({
           </ErrorBoundary>
         </div>
 
-        <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
+        <div className={cn(
+          "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
+          id && isReadOnly && "bg-blue-50/30 border-blue-100"
+        )}>
           <h3 className="text-lg font-semibold text-foreground">
             Personal Details
           </h3>
@@ -661,7 +679,10 @@ export function CustomerDemographicsForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ErrorBoundary fallback={<div>Account Info crashed</div>}>
-            <section className="flex flex-col rounded-xl bg-card p-6 gap-4 border border-border shadow-sm">
+            <section className={cn(
+              "flex flex-col rounded-xl bg-card p-6 gap-4 border border-border shadow-sm transition-colors duration-500",
+              id && isReadOnly && "bg-blue-50/30 border-blue-100"
+            )}>
               <h3 className="text-base font-semibold text-foreground">
                 Account Information
               </h3>
@@ -742,7 +763,10 @@ export function CustomerDemographicsForm({
               />
             </section>
 
-            <section className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
+            <section className={cn(
+              "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
+              id && isReadOnly && "bg-blue-50/30 border-blue-100"
+            )}>
               <h3 className="text-base font-semibold text-foreground">
                 Customer Details
               </h3>
@@ -776,7 +800,10 @@ export function CustomerDemographicsForm({
             </section>
           </ErrorBoundary>
         </div>
-        <div className="bg-card p-6 rounded-xl space-y-4 border border-border shadow-sm">
+        <div className={cn(
+          "bg-card p-6 rounded-xl space-y-4 border border-border shadow-sm transition-colors duration-500",
+          id && isReadOnly && "bg-blue-50/30 border-blue-100"
+        )}>
           <ErrorBoundary fallback={<div>Address fields crashed</div>}>
             <h3 className="text-lg font-semibold text-foreground">Address</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -910,60 +937,93 @@ export function CustomerDemographicsForm({
         <div className="flex gap-4 justify-end">
           <ErrorBoundary fallback={<div>Action buttons crashed</div>}>
             {/* Customer loaded, not editing */}
-            {!isEditing && id && !isOrderClosed && (
-              <>
-                <Button type="button" variant="secondary" onClick={handleEdit}>
-                  <Pencil className="w-4 h-4 mr-2" />
-                  Edit Customer
-                </Button>
-                <Button
-                  type="button"
-                  onClick={onProceed}
-                  disabled={!id}
-                >
-                  {proceedButtonText}
-                  <Check className="w-4 h-4 ml-2" />
-                </Button>
-              </>
-            )}
-
-            {/* Editing an existing customer */}
-            {!isOrderClosed && isEditing && id && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCancelEdit}
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isUpdating}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isUpdating ? "Saving..." : "Save Changes"}
-                </Button>
-              </>
-            )}
-
-            {/* Creating a new customer */}
-            {isEditing && !id && !isOrderClosed && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCancelCreation}
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isCreating}>
-                  <Check className="w-4 h-4 mr-2" />
-                  {isCreating ? "Creating..." : "Create Customer"}
-                </Button>
-              </>
-            )}
-          </ErrorBoundary>
-        </div>
+                        {!isEditing && id && !isOrderClosed && (
+                          <>
+                            <Button type="button" variant="secondary" onClick={handleEdit}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Edit Customer
+                            </Button>
+                            
+                            {orderId ? (
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setIsSearchDialogOpen(true)}
+                                className="border-primary/20 text-primary hover:bg-primary/5"
+                              >
+                                <Users className="w-4 h-4 mr-2" />
+                                Change Customer
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                onClick={onProceed}
+                                disabled={!id}
+                              >
+                                {proceedButtonText}
+                                <Check className="w-4 h-4 ml-2" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                                                        {/* Editing an existing customer */}
+                                            {!isReadOnly && isEditing && id && (
+                                              <>
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  onClick={handleCancelEdit}
+                                                >
+                                                  <X className="w-4 h-4 mr-2" />
+                                                  Cancel
+                                                </Button>
+                                                <Button type="submit" disabled={isUpdating}>
+                                                  <Save className="w-4 h-4 mr-2" />
+                                                  {isUpdating ? "Saving..." : "Save Changes"}
+                                                </Button>
+                                              </>
+                                            )}
+                                    
+                                            {/* Creating a new customer */}
+                                            {isEditing && !id && !isOrderClosed && (
+                                              <>
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  onClick={handleCancelCreation}
+                                                >
+                                                  <X className="w-4 h-4 mr-2" />
+                                                  Cancel
+                                                </Button>
+                                                <Button type="submit" disabled={isCreating}>
+                                                  <Check className="w-4 h-4 mr-2" />
+                                                  {isCreating ? "Creating..." : "Create Customer"}
+                                                </Button>
+                                              </>
+                                            )}
+                                          </ErrorBoundary>
+                                        </div>
+                                    
+                                        <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
+                                          <DialogContent className="max-w-3xl p-0 overflow-visible border-none shadow-2xl">
+                                            <DialogHeader className="p-6 pb-0">
+                                              <DialogTitle className="text-2xl font-bold">Change Customer</DialogTitle>
+                                              <DialogDescription>
+                                                Search and select a new customer for this order. This will replace the current customer.
+                                              </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="p-6 pt-4">
+                                                  <SearchCustomer 
+                onCustomerFound={(customer) => {
+                  onCustomerChange?.(customer);
+                  setIsSearchDialogOpen(false);
+                }}
+                onHandleClear={() => {}}
+                checkPendingOrders={false}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </form>
     </Form>
   );

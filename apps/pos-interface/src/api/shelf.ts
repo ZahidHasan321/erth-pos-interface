@@ -4,7 +4,7 @@ import type { Shelf } from '@repo/database';
 
 const TABLE_NAME = 'shelf';
 
-export const getShelves = async (): Promise<ApiResponse<Shelf[]>> => {
+export const getShelf = async (): Promise<ApiResponse<Shelf[]>> => {
   const { data, error, count } = await supabase
     .from(TABLE_NAME)
     .select('*', { count: 'exact' });

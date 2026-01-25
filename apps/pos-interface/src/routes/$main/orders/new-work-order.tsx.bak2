@@ -30,11 +30,11 @@ import {
 import { OrderTypeAndPaymentForm } from "@/components/forms/order-type-and-payment";
 import { paymentTypeSchema } from "@/components/forms/payment-type";
 import { PaymentTypeForm } from "@/components/forms/payment-type/payment-type-form";
-import { ShelvedProductsForm } from "@/components/forms/shelved-products";
+import { ShelfProductsForm } from "@/components/forms/shelf";
 import {
   shelvesFormSchema,
   type ShelvesFormValues,
-} from "@/components/forms/shelved-products/schema";
+} from "@/components/forms/shelf/schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { OrderCreationPrompt } from "@/components/orders-at-showroom/OrderCreationPrompt";
 import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
@@ -849,7 +849,7 @@ function NewWorkOrder() {
       customerAddress: demographics.address,
       fabricSelections: fabricsData,
       styleOptions: styleOptionsData,
-      shelvedProducts: shelvesData,
+      shelfProducts: shelvesData,
       fabrics: fabricsResponse?.data || [],
       styles: stylesResponse?.data || [],
       charges: orderData.charges,
@@ -1103,7 +1103,7 @@ function NewWorkOrder() {
           className="w-full flex flex-col items-center 2xl:col-span-2"
         >
           <ErrorBoundary fallback={<div>Shelved Products crashed</div>}>
-            <ShelvedProductsForm
+            <ShelfProductsForm
               form={ShelvesForm}
               isOrderClosed={isOrderClosed}
               onProceed={handleShelvesProceed}

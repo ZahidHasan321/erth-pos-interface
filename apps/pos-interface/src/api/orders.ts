@@ -100,6 +100,24 @@ export const deleteOrder = async (
 };
 
 /**
+ * Soft delete an order by setting deleted_at timestamp
+ */
+export const softDeleteOrder = async (
+    orderId: number,
+): Promise<ApiResponse<void>> => {
+    const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', orderId);
+
+    if (error) {
+        return { status: 'error', message: error.message };
+    }
+
+    return { status: 'success' };
+};
+
+/**
  * Fetch pending work orders for a specific customer
  */
 export const getPendingOrdersByCustomer = async (
@@ -113,6 +131,7 @@ export const getPendingOrdersByCustomer = async (
         .eq('customer_id', customerId)
         .eq('checkout_status', checkoutStatus)
         .eq('order_type', 'WORK')
+        .is('deleted_at', null)
         .order('order_date', { ascending: false })
         .limit(limit);
 
@@ -179,8 +198,9 @@ export const completeWorkOrder = async (
     orderId: number,
     checkoutDetails: {
         paymentType: string;
-        paid: number;
+        paid: number | null | undefined;
         paymentRefNo?: string;
+        paymentNote?: string;
         orderTaker?: string;
     },
     shelfItems: { id: number; quantity: number }[],

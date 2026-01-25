@@ -11,11 +11,11 @@ import {
   PaymentTypeForm,
   paymentTypeSchema,
 } from "@/components/forms/payment-type";
-import { ShelvedProductsForm } from "@/components/forms/shelved-products";
+import { ShelfProductsForm } from "@/components/forms/shelf";
 import {
   shelvesFormSchema,
   type ShelvesFormValues,
-} from "@/components/forms/shelved-products/schema";
+} from "@/components/forms/shelf/schema";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { orderDefaults, orderSchema, type OrderSchema } from "@/schemas/work-order-schema";
@@ -295,7 +295,7 @@ function NewSalesOrder() {
       customerPhone: demographics.mobileNumber,
       customerAddress: demographics.address,
       fabricSelections: [],
-      shelvedProducts: shelvesData,
+      shelfProducts: shelvesData,
       charges: orderData.charges,
       discountType: orderData.discountType,
       discountValue: orderData.discountValue,
@@ -367,7 +367,7 @@ function NewSalesOrder() {
           }}
           className="w-full flex flex-col items-center"
         >
-          <ShelvedProductsForm
+          <ShelfProductsForm
             form={ShelvesForm}
             isOrderClosed={isOrderClosed}
             onProceed={handleShelvesProceed}

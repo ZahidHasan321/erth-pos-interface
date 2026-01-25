@@ -1,26 +1,11 @@
+-- 0. Cleanup old trigger and function
+DROP TRIGGER IF EXISTS trigger_assign_invoice ON orders;
+DROP FUNCTION IF EXISTS assign_invoice_number();
+
 -- 1. Create a sequence for Invoices starting at 1000
 CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1000;
 
--- 2. Create the function to assign the number
-CREATE OR REPLACE FUNCTION assign_invoice_number()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- If status changed to 'confirmed' AND invoice_number is still null
-  IF NEW.checkout_status = 'confirmed' AND OLD.checkout_status != 'confirmed' AND NEW.invoice_number IS NULL THEN
-    NEW.invoice_number := nextval('invoice_seq');
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- 3. Bind Trigger to Orders table
-DROP TRIGGER IF EXISTS trigger_assign_invoice ON orders;
-CREATE TRIGGER trigger_assign_invoice
-BEFORE UPDATE ON orders
-FOR EACH ROW
-EXECUTE FUNCTION assign_invoice_number();
-
--- 4. Transactional RPC for completing work order
+-- 2. Transactional RPC for completing work order
 CREATE OR REPLACE FUNCTION complete_work_order(
   p_order_id INT,
   p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker }
@@ -35,6 +20,7 @@ BEGIN
   -- 1. Update Order
   UPDATE orders 
   SET 
+    invoice_number = CASE WHEN invoice_number IS NULL THEN nextval('invoice_seq') ELSE invoice_number END,
     checkout_status = 'confirmed',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
     paid = (p_checkout_details->>'paid')::decimal,
@@ -77,7 +63,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 5. Transactional RPC for completing sales order (Shelf items only)
+-- 3. Transactional RPC for completing sales order (Shelf items only)
 CREATE OR REPLACE FUNCTION complete_sales_order(
   p_order_id INT,
   p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker }

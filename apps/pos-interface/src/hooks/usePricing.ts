@@ -13,7 +13,8 @@ export function usePricing() {
   const { data: pricesResponse, isLoading } = useQuery({
     queryKey: ['prices'],
     queryFn: getPrices,
-    staleTime: 1000 * 60 * 10, // 10 minutes
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   const prices = pricesResponse?.data as Price[] | undefined;

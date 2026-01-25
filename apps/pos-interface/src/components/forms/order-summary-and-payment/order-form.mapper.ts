@@ -27,6 +27,8 @@ export function mapOrderToFormValues(o: Order): Partial<OrderSchema> {
         order_total: o.order_total,
         num_of_fabrics: o.num_of_fabrics,
         payment_type: o.payment_type as any,
+        payment_ref_no: o.payment_ref_no ?? undefined,
+        payment_note: o.payment_note ?? undefined,
         discount_type: o.discount_type as any,
         discount_value: o.discount_value,
         notes: o.notes,

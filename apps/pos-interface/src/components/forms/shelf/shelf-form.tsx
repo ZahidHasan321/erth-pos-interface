@@ -4,35 +4,35 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { DataTable } from './data-table'
-import type { ShelvedProduct, ShelfFormValues } from './shelved-products-form.schema'
-import { getShelves } from '@/api/shelves'
-import { columns } from './shelves-columns'
+import type { ShelfProduct, ShelfFormValues } from './shelf-form.schema'
+import { getShelf } from '@/api/shelf'
+import { columns } from './shelf-columns'
 import { toast } from 'sonner'
 import { Plus, ArrowRight } from 'lucide-react'
 
-interface ShelvedProductsFormProps {
+interface ShelfFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<ShelfFormValues, any, any>
   onProceed?: () => void
-  isOrderClosed: boolean
+  isOrderDisabled: boolean
 }
 
-export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedProductsFormProps) {
+export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) {
   // Fetch products from server
   const { data: serverProducts, isLoading, error } = useQuery({
     queryKey: ['products'],
-    queryFn: getShelves,
+    queryFn: getShelf,
     staleTime: Infinity,
     gcTime: Infinity,
   })
 
   // Initialize state with form values or empty array
-  const [data, setData] = useState<ShelvedProduct[]>(
+  const [data, setData] = useState<ShelfProduct[]>(
     form.getValues('products') || []
   )
 
   // Define new row template
-  const newRow: ShelvedProduct = {
+  const newRow: ShelfProduct = {
     id: '',
     serial_number: '',
     product_type: '',
@@ -51,8 +51,15 @@ export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedP
 
   // Update form data whenever table data changes
   useEffect(() => {
-    form.setValue('products', data, { shouldValidate: true })
+    form.setValue('products', data)
   }, [data, form])
+
+  const handleProceed = async () => {
+    const isValid = await form.trigger('products')
+    if (isValid) {
+      onProceed?.()
+    }
+  }
 
   const addRow = () => {
     setData([...data, { ...newRow, id: crypto.randomUUID() }])
@@ -113,6 +120,34 @@ export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedP
 
           // If productType is selected, reset brand, stock, and price
           if (columnId === 'product_type') {
+            const brandsForType = serverProducts?.data?.filter(
+              (p: any) => p.type === value
+            )
+            const uniqueBrands = Array.from(new Set(brandsForType?.map((p: any) => p.brand).filter(Boolean)))
+
+            if (uniqueBrands.length === 1) {
+              const onlyBrand = uniqueBrands[0] as string
+              const selectedProduct = brandsForType?.find((p: any) => p.brand === onlyBrand)
+
+              if (selectedProduct) {
+                const selectedProducts = getSelectedProducts(rowIndex)
+                const combination = `${value}-${onlyBrand}`
+
+                // Only auto-select if not already selected elsewhere and has stock
+                if (!selectedProducts.includes(combination) && selectedProduct.stock && selectedProduct.stock > 0) {
+                  return {
+                    ...row,
+                    id: selectedProduct.id.toString(),
+                    product_type: value,
+                    brand: onlyBrand,
+                    stock: selectedProduct.stock || 0,
+                    unit_price: selectedProduct.price || 0,
+                    quantity: 1,
+                  }
+                }
+              }
+            }
+
             return {
               ...row,
               id: '',
@@ -150,9 +185,9 @@ export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedP
       <div className="flex justify-between items-start mb-2">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-foreground">
-            Shelved Products
+            Shelf Products
           </h1>
-          <p className="text-sm text-muted-foreground">Select products from inventory shelves</p>
+          <p className="text-sm text-muted-foreground">Select products from inventory shelf</p>
         </div>
       </div>
 
@@ -165,11 +200,12 @@ export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedP
           removeRow={removeRow}
           serverProducts={serverProducts?.data}
           selectedProducts={getSelectedProducts()}
-          isOrderClosed={isOrderClosed}
+          isOrderDisabled={isOrderDisabled}
+          errors={form.formState.errors.products as any}
         />
 
         <div className="flex justify-between items-center pt-4 border-t border-border">
-          {!isOrderClosed && (
+          {!isOrderDisabled && (
             <Button type="button" variant="outline" onClick={addRow}>
               <Plus className="w-4 h-4 mr-2" />
               Add Item
@@ -182,9 +218,9 @@ export function ShelvedProductsForm({ form, onProceed, isOrderClosed }: ShelvedP
       </div>
 
       {/* Action Buttons */}
-      {!isOrderClosed && (
+      {!isOrderDisabled && (
         <div className="flex gap-4 justify-end">
-          <Button type="button" onClick={onProceed}>
+          <Button type="button" onClick={handleProceed}>
             Continue to Order & Payment
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>

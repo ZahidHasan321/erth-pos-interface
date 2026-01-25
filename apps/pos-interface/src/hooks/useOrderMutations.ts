@@ -1,8 +1,9 @@
 import { createOrder, updateOrder, deleteOrder, completeWorkOrder } from "@/api/orders";
-import { updateShelf } from "@/api/shelves";
+import { updateShelf } from "@/api/shelf";
 import { updateFabric } from "@/api/fabrics";
+import { showFatouraNotification } from "@/lib/notifications";
 import { type OrderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
-import { type ShelfFormValues } from "@/components/forms/shelved-products/shelved-products-form.schema";
+import { type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { type FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -16,7 +17,7 @@ type UpdateOrderPayload = {
 
 type UseOrderMutationsOptions = {
     onOrderCreated?: (orderId: number | undefined, order: OrderSchema) => void;
-    onOrderUpdated?: (action: string | null | undefined) => void;
+    onOrderUpdated?: (action: string | null | undefined, data?: any) => void;
     onOrderError?: () => void;
     orderType?: "WORK" | "SALES";
 };
@@ -40,6 +41,7 @@ function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
     if (schema.payment_type) order.payment_type = schema.payment_type;
     if (schema.payment_ref_no !== undefined) order.payment_ref_no = cleanValue(schema.payment_ref_no) as string;
     if (schema.order_taker_id) order.order_taker_id = schema.order_taker_id;
+    if (schema.payment_note !== undefined) order.payment_note = cleanValue(schema.payment_note) as string;
     if (schema.discount_type) order.discount_type = schema.discount_type;
     if (schema.referral_code !== undefined) order.referral_code = cleanValue(schema.referral_code) as string;
     if (schema.discount_value !== undefined) order.discount_value = schema.discount_value;
@@ -62,7 +64,7 @@ function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
 /**
  * Maps Order (API/DB) to OrderSchema (form)
  */
-function mapOrderToSchema(order: Order): OrderSchema {
+export function mapOrderToSchema(order: Order): OrderSchema {
     const parseNumeric = (val: any) => {
         if (val === null || val === undefined) return undefined;
         const parsed = typeof val === 'string' ? parseFloat(val) : val;
@@ -83,10 +85,11 @@ function mapOrderToSchema(order: Order): OrderSchema {
         order_type: order.order_type || "WORK",
         payment_type: order.payment_type as any,
         payment_ref_no: order.payment_ref_no || undefined,
+        payment_note: order.payment_note || undefined,
         order_taker_id: order.order_taker_id || undefined,
         discount_type: order.discount_type as any,
         referral_code: order.referral_code || undefined,
-        discount_value: parseNumeric(order.discount_value) ?? 0,
+        discount_value: parseNumeric(order.discount_value),
         stitching_price: parseNumeric(order.stitching_price) ?? 9,
         
         fabric_charge: parseNumeric(order.fabric_charge) ?? 0,
@@ -96,7 +99,7 @@ function mapOrderToSchema(order: Order): OrderSchema {
         shelf_charge: parseNumeric(order.shelf_charge) ?? 0,
 
         advance: parseNumeric(order.advance) ?? 0,
-        paid: parseNumeric(order.paid) ?? 0,
+        paid: parseNumeric(order.paid),
         order_total: parseNumeric(order.order_total) ?? 0,
         num_of_fabrics: order.num_of_fabrics || 0,
     };
@@ -278,14 +281,15 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             orderId: number;
             checkoutDetails: {
                 paymentType: string;
-                paid: number;
+                paid: number | null | undefined;
                 paymentRefNo?: string;
+                paymentNote?: string;
                 orderTaker?: string;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
         }) => {
-            return completeWorkOrder(orderId, checkoutDetails, shelfItems, fabricItems);
+            return completeWorkOrder(orderId, checkoutDetails as any, shelfItems, fabricItems);
         },
         onSuccess: (response) => {
             if (response.status === "error") {
@@ -293,10 +297,16 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 return;
             }
             toast.success("Work order completed successfully! ✅");
+            
+            // Show notification if invoice number was just generated
+            if (response.data?.invoice_number) {
+                showFatouraNotification(response.data.invoice_number);
+            }
+
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["fabrics"] });
             queryClient.invalidateQueries({ queryKey: ["products"] });
-            options.onOrderUpdated?.("updated");
+            options.onOrderUpdated?.("updated", response.data);
         },
         onError: () => {
             toast.error("An error occurred while completing the work order");

@@ -100,12 +100,6 @@ export function DataTable<TData, TValue>({
     return (
         <div className="rounded-lg border bg-card overflow-x-auto w-full shadow">
             <Table className="">
-                <colgroup>
-                    {table.getHeaderGroups()[0]?.headers.map((header) => (
-                        <col key={header.id} span={header.colSpan} />
-                    ))}
-                </colgroup>
-
                 <TableHeader className="bg-primary-foreground">
                     {table.getHeaderGroups().map((headerGroup) => (
                         <TableRow key={headerGroup.id} className="divide-x divide-border">
@@ -113,7 +107,8 @@ export function DataTable<TData, TValue>({
                                 <TableHead
                                     key={header.id}
                                     colSpan={header.colSpan}
-                                    className="px-4 py-2 text-center font-semibold text-foreground transition-colors hover:bg-primary/10"
+                                    style={{ minWidth: header.getSize() }}
+                                    className="px-4 py-2 text-center font-semibold text-foreground transition-colors hover:bg-primary/10 whitespace-nowrap"
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -138,6 +133,7 @@ export function DataTable<TData, TValue>({
                                 {row.getVisibleCells().map((cell) => (
                                     <TableCell
                                         key={cell.id}
+                                        style={{ minWidth: cell.column.getSize() }}
                                         className={`px-4 py-2 text-center ${cell.column.parent === undefined &&
                                                 cell.column.getIndex() > 0
                                                 ? "ml-4"

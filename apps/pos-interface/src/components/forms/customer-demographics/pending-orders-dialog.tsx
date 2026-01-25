@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { Order } from "@repo/database";
-import { Calendar, Package } from "lucide-react";
+import { Calendar, Package, Trash2, Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { cn } from "@/lib/utils";
+import { softDeleteOrder } from "@/api/orders";
+import { toast } from "sonner";
 
 interface PendingOrdersDialogProps {
     isOpen: boolean;
@@ -21,6 +23,7 @@ interface PendingOrdersDialogProps {
     orders: Order[];
     onSelectOrder: (order: Order) => void;
     onCreateNewOrder?: () => void;
+    onOrderDeleted?: () => void; // Added callback
     customerName?: string;
     isLoading?: boolean;
 }
@@ -54,14 +57,24 @@ interface OrderCardProps {
     order: Order;
     isSelected: boolean;
     onSelect: (order: Order) => void;
+    onDelete?: (orderId: number) => void; // Added
+    isDeleting?: boolean; // Added
     formatDate: (dateString?: string) => string;
 }
 
 const OrderCard = React.memo<OrderCardProps>(
-    ({ order, isSelected, onSelect, formatDate }) => {
+    ({ order, isSelected, onSelect, onDelete, isDeleting, formatDate }) => {
         const handleClick = React.useCallback(() => {
+            if (isDeleting) return;
             onSelect(order);
-        }, [order, onSelect]);
+        }, [order, onSelect, isDeleting]);
+
+        const handleDelete = React.useCallback((e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (onDelete && order.id) {
+                onDelete(order.id);
+            }
+        }, [order.id, onDelete]);
 
         return (
             <div
@@ -70,11 +83,12 @@ const OrderCard = React.memo<OrderCardProps>(
                 tabIndex={-1}
                 onClick={handleClick}
                 className={cn(
-                    "p-4 border rounded-xl cursor-pointer transition-all duration-200",
+                    "p-4 border rounded-xl cursor-pointer transition-all duration-200 group relative",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                     isSelected
                         ? "border-primary bg-primary/5 shadow-md"
                         : "border-border hover:border-primary/50 hover:bg-accent/10",
+                    isDeleting && "opacity-50 pointer-events-none"
                 )}
             >
                 <div className="flex justify-between items-start mb-2">
@@ -84,9 +98,27 @@ const OrderCard = React.memo<OrderCardProps>(
                             Order #{order.id}
                         </span>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="w-4 h-4" />
-                        {formatDate(order.order_date || undefined)}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(order.order_date || undefined)}
+                        </div>
+                        
+                        {order.checkout_status === "draft" && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                )}
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -146,10 +178,30 @@ export function PendingOrdersDialog({
     orders,
     onSelectOrder,
     onCreateNewOrder,
+    onOrderDeleted,
     customerName,
     isLoading = false,
 }: PendingOrdersDialogProps) {
     const [selectedIndex, setSelectedIndex] = React.useState(0);
+    const [deletingOrderId, setDeletingOrderId] = React.useState<number | null>(null);
+
+    const handleDeleteOrder = React.useCallback(async (orderId: number) => {
+        setDeletingOrderId(orderId);
+        try {
+            const res = await softDeleteOrder(orderId);
+            if (res.status === "success") {
+                toast.success("Order removed from list");
+                onOrderDeleted?.();
+            } else {
+                toast.error(res.message || "Failed to remove order");
+            }
+        } catch (error) {
+            console.error("Error removing order:", error);
+            toast.error("Failed to remove order");
+        } finally {
+            setDeletingOrderId(null);
+        }
+    }, [onOrderDeleted]);
 
     React.useEffect(() => {
         if (isOpen && orders.length > 0) {
@@ -261,6 +313,8 @@ export function PendingOrdersDialog({
                                     order={order}
                                     isSelected={selectedIndex === index}
                                     onSelect={handleSelectOrder}
+                                    onDelete={handleDeleteOrder}
+                                    isDeleting={deletingOrderId === order.id}
                                     formatDate={formatDate}
                                 />
                             ))

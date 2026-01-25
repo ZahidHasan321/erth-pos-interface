@@ -7,7 +7,7 @@ import { relations, type InferSelectModel, type InferInsertModel } from "drizzle
 const numeric = (name: string, config?: { precision?: number; scale?: number }) =>
     customType<{ data: number; driverData: string }>({
         dataType() {
-            return config ? `numeric(${config.precision},${config.scale})` : "numeric";
+            return config ? `numeric(${config.precision}, ${config.scale})` : "numeric";
         },
         fromDriver(value: string): number {
             return Number(value);
@@ -246,10 +246,11 @@ export const orders = pgTable("orders", {
     // Financials
     payment_type: paymentTypeEnum("payment_type"),
     payment_ref_no: text("payment_ref_no"),
+    payment_note: text("payment_note"),
     discount_type: discountTypeEnum("discount_type"),
     discount_value: numeric("discount_value", { precision: 10, scale: 3 }),
     referral_code: text("referral_code"),
-    paid: numeric("paid", { precision: 10, scale: 3 }).default(0),
+    paid: numeric("paid", { precision: 10, scale: 3 }),
     stitching_price: numeric("stitching_price", { precision: 10, scale: 3 }),
 
     // Charges & Totals
@@ -270,6 +271,7 @@ export const orders = pgTable("orders", {
 
     // Workshop interaction
     call_status: text("call_status"),
+    deleted_at: timestamp("deleted_at"),
 }, (t) => ({
     invoiceIdx: uniqueIndex("orders_invoice_idx").on(t.invoice_number),
     customerIdx: index("orders_customer_idx").on(t.customer_id),

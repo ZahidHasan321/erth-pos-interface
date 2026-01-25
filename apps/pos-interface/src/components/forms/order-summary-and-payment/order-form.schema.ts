@@ -5,7 +5,10 @@ export const orderSchema = z.object({
   invoice_number: z.number().optional(),
   customer_id: z.number().optional(),
   campaign_id: z.number().optional().nullable(),
-  order_taker_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).optional().nullable(),
+  order_taker_id: z.string()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Invalid Order Taker selection")
+    .optional()
+    .nullable(),
 
   order_date: z.string().optional(),
   delivery_date: z.string().optional().nullable(),
@@ -14,11 +17,14 @@ export const orderSchema = z.object({
   production_stage: z.string().optional().nullable(),
   order_type: z.enum(['WORK', 'SALES']).optional().nullable(),
 
-  payment_type: z.enum(['knet', 'cash', 'link_payment', 'installments', 'others']).optional().nullable(),
+  payment_type: z.enum(['knet', 'cash', 'link_payment', 'installments', 'others'], {
+    required_error: "Please select a payment method",
+  }).optional().nullable(),
   payment_ref_no: z.string().optional().nullable(),
+  payment_note: z.string().optional().nullable(),
   discount_type: z.enum(['flat', 'referral', 'loyalty', 'by_value']).optional().nullable(),
-  discount_value: z.number().default(0),
-  discount_percentage: z.number().default(0),
+  discount_value: z.number().optional().nullable(),
+  discount_percentage: z.number().optional().nullable(),
   discount_in_kwd: z.string().optional(), // Non-persisted UI field
 
   // All charges as numbers (matching database decimal type)
@@ -29,16 +35,40 @@ export const orderSchema = z.object({
   shelf_charge: z.number().default(0),
 
   advance: z.number().default(0),
-  paid: z.number().nullish().refine(
-    (val) => val !== undefined && val !== null,
-    { message: "Payment amount is required" }
-  ),
+  paid: z.number().nullish(),
   order_total: z.number().default(0),
 
   num_of_fabrics: z.number().optional().nullable(),
   home_delivery: z.boolean().default(false),
   notes: z.string().optional().nullable(),
   stitching_price: z.number().default(9),
+}).superRefine((data, ctx) => {
+  // Only enforce strict validation if we are trying to confirm the order
+  if (data.checkout_status === 'confirmed') {
+    if (!data.payment_type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Payment type is required to confirm",
+        path: ["payment_type"],
+      });
+    }
+
+    if (data.payment_type && data.payment_type !== 'cash' && !data.payment_ref_no) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Reference number is required for non-cash payments",
+        path: ["payment_ref_no"],
+      });
+    }
+
+    if (data.payment_type === 'others' && !data.payment_note) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Payment note is required for 'Others' payment method",
+        path: ["payment_note"],
+      });
+    }
+  }
 });
 
 export type OrderSchema = z.infer<typeof orderSchema>;
@@ -52,8 +82,8 @@ export const orderDefaults: OrderSchema = {
   payment_type: "cash",
   order_type: "WORK",
   home_delivery: false,
-  discount_value: 0,
-  discount_percentage: 0,
+  discount_value: undefined,
+  discount_percentage: undefined,
   stitching_price: 9,
 
   fabric_charge: 0,

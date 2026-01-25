@@ -33,8 +33,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import { getEmployees } from "@/api/employees";
 import { OrderInvoice, type InvoiceData } from "@/components/invoice";
-import { useFatouraPolling } from "@/hooks/useFatouraPolling";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { FullScreenLoader } from "@/components/global/full-screen-loader";
+import { usePricing } from "@/hooks/usePricing";
 
 import HomeDeliveryIcon from "@/assets/home_delivery.png";
 import PickUpIcon from "@/assets/pickup.png";
@@ -98,6 +98,8 @@ interface OrderSummaryAndPaymentFormProps {
     address_note?: string;
   };
   fabricSelections?: FabricSelectionSchema[];
+  fatoura?: number;
+  isLoadingFatoura?: boolean;
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -110,9 +112,11 @@ export function OrderSummaryAndPaymentForm({
   checkoutStatus,
   customerAddress,
   fabricSelections = [],
+  fatoura,
+  isLoadingFatoura,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
-  const [showZeroPaymentDialog, setShowZeroPaymentDialog] = React.useState(false);
+  const { getPrice } = usePricing();
 
   // Watch form values
   const [
@@ -121,11 +125,11 @@ export function OrderSummaryAndPaymentForm({
     style_charge,
     delivery_charge,
     shelf_charge,
-    discount_value = 0,
+    discount_value,
     discount_type,
-    discount_percentage = 0,
+    discount_percentage,
     home_delivery = false,
-    paid = 0,
+    paid,
     payment_type,
   ] = useWatch({
     control: form.control,
@@ -144,11 +148,7 @@ export function OrderSummaryAndPaymentForm({
     ],
   });
 
-  // Poll for fatoura number when order is completed
-  const { fatoura, isLoadingFatoura, hasFatoura } = useFatouraPolling(
-    orderId,
-    checkoutStatus === "confirmed",
-  );
+  const hasFatoura = !!fatoura;
 
   // Fetch employees data
   const { data: employeesResponse } = useQuery({
@@ -184,13 +184,15 @@ export function OrderSummaryAndPaymentForm({
   React.useEffect(() => {
     let newDeliveryCharge = 0;
     if (hasAnyHomeDelivery || home_delivery) {
-      newDeliveryCharge = 5; 
-      if (hasAnyExpressDelivery) {
-        newDeliveryCharge += 2; 
-      }
+      newDeliveryCharge += getPrice("HOME_DELIVERY") || 5; 
     }
+    
+    if (hasAnyExpressDelivery) {
+      newDeliveryCharge += (getPrice("EXPRESS_SURCHARGE") || 2); 
+    }
+    
     form.setValue("delivery_charge", newDeliveryCharge);
-  }, [home_delivery, hasAnyHomeDelivery, hasAnyExpressDelivery, form]);
+  }, [home_delivery, hasAnyHomeDelivery, hasAnyExpressDelivery, form, getPrice]);
 
   // Pricing logic
   const totalDue = (Number(fabric_charge) || 0) + 
@@ -213,10 +215,10 @@ export function OrderSummaryAndPaymentForm({
   React.useEffect(() => {
     if (
       (discount_type === "flat" || discount_type === "referral" || discount_type === "loyalty") &&
-      discount_percentage
+      discount_percentage !== undefined && discount_percentage !== null
     ) {
       const discount = parseFloat(
-        (totalDue * (discount_percentage / 100)).toFixed(2)
+        (totalDue * (Number(discount_percentage) / 100)).toFixed(2)
       );
       form.setValue("discount_value", discount);
       form.setValue("discount_in_kwd", discount.toFixed(2));
@@ -224,7 +226,7 @@ export function OrderSummaryAndPaymentForm({
   }, [discount_percentage, totalDue, discount_type, form]);
 
   React.useEffect(() => {
-    if (discount_type === "by_value" && discount_value !== undefined) {
+    if (discount_type === "by_value" && discount_value !== undefined && discount_value !== null) {
       form.setValue("discount_in_kwd", Number(discount_value).toFixed(2));
     }
   }, [discount_value, discount_type, form]);
@@ -258,23 +260,24 @@ export function OrderSummaryAndPaymentForm({
 
   const handleSubmit = (data: z.infer<typeof orderSchema>) => {
     if (showAddressWarning) return;
-
-    if (!data.paid || data.paid === 0) {
-      setShowZeroPaymentDialog(true);
-    } else {
-      onConfirm(data);
-    }
+    onConfirm(data);
   };
 
-  const handleConfirmOrder = () => {
-    const data = form.getValues();
-    onConfirm(data);
+  const onInvalid = (errors: any) => {
+    console.error("Order Form Validation Errors:", errors);
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length > 0) {
+      const firstKey = errorKeys[0];
+      const error = errors[firstKey];
+      const message = error?.message || `Invalid value for ${firstKey}`;
+      toast.error(message);
+    }
   };
 
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(handleSubmit)}
+        onSubmit={form.handleSubmit(handleSubmit, onInvalid)}
         className="space-y-8 w-full"
       >
         <div className="flex justify-between items-start mb-2">
@@ -293,8 +296,6 @@ export function OrderSummaryAndPaymentForm({
           <div className="space-y-6">
             {/* Delivery Section */}
             <motion.section
-              layout
-              transition={smoothTransition}
               className="bg-card rounded-xl border border-border shadow-sm p-6"
             >
               <h3 className="text-lg font-semibold mb-4">Delivery Option</h3>
@@ -365,15 +366,18 @@ export function OrderSummaryAndPaymentForm({
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden mt-4"
+                    transition={smoothTransition}
+                    className="overflow-hidden"
                   >
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Address Required</AlertTitle>
-                      <AlertDescription>
-                        Please add the customer's address in Demographics.
-                      </AlertDescription>
-                    </Alert>
+                    <div className="pt-4">
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Address Required</AlertTitle>
+                        <AlertDescription>
+                          Please add the customer's address in Demographics.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -381,8 +385,6 @@ export function OrderSummaryAndPaymentForm({
 
             {/* Discount Section */}
             <motion.section
-              layout
-              transition={smoothTransition}
               className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
             >
               <header className="bg-primary text-primary-foreground px-6 py-4">
@@ -423,7 +425,7 @@ export function OrderSummaryAndPaymentForm({
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
+                      className="overflow-hidden px-1 -mx-1 pb-1"
                     >
                       <div className="pt-4 space-y-4 border-t border-border mt-2">
                         {discount_type === "flat" || discount_type === "referral" || discount_type === "loyalty" ? (
@@ -509,8 +511,6 @@ export function OrderSummaryAndPaymentForm({
           <div className="space-y-6">
             {/* Payment Method */}
             <motion.section
-              layout
-              transition={smoothTransition}
               className="bg-card rounded-xl border border-border shadow-sm p-6"
             >
               <h3 className="text-lg font-semibold mb-4">Payment Method</h3>
@@ -550,44 +550,75 @@ export function OrderSummaryAndPaymentForm({
                 )}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                <FormField
-                  control={form.control}
-                  name="payment_ref_no"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ref. No {payment_type !== "cash" && "*"}</FormLabel>
-                      <FormControl><Input {...field} disabled={isOrderClosed} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
+              <div className="space-y-4 mt-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="payment_ref_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ref. No {payment_type !== "cash" && "*"}</FormLabel>
+                        <FormControl><Input {...field} disabled={isOrderClosed} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="order_taker_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Order Taker</FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            placeholder="Select..."
+                            disabled={isOrderClosed}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <AnimatePresence>
+                  {payment_type === "others" && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={smoothTransition}
+                      className="overflow-hidden px-1 -mx-1 pb-1"
+                    >
+                      <FormField
+                        control={form.control}
+                        name="payment_note"
+                        render={({ field }) => (
+                          <FormItem className="pt-2">
+                            <FormLabel>Payment Note *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="Specify other payment method..." 
+                                disabled={isOrderClosed} 
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </motion.div>
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="order_taker_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Order Taker</FormLabel>
-                      <FormControl>
-                        <Combobox
-                          options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
-                          value={field.value ?? ""}
-                          onChange={field.onChange}
-                          placeholder="Select..."
-                          disabled={isOrderClosed}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                </AnimatePresence>
               </div>
             </motion.section>
 
             {/* Charges Summary */}
             <motion.section
-              layout
-              transition={smoothTransition}
               className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
             >
               <h3 className="text-lg font-semibold mb-2">Summary</h3>
@@ -595,7 +626,14 @@ export function OrderSummaryAndPaymentForm({
                 <div className="flex justify-between"><span>Fabric</span><span>{Number(fabric_charge || 0).toFixed(3)} KWD</span></div>
                 <div className="flex justify-between"><span>Stitching</span><span>{Number(stitching_charge || 0).toFixed(3)} KWD</span></div>
                 <div className="flex justify-between"><span>Style</span><span>{Number(style_charge || 0).toFixed(3)} KWD</span></div>
-                <div className="flex justify-between"><span>Delivery</span><span>{Number(delivery_charge || 0).toFixed(3)} KWD</span></div>
+                <div className="flex justify-between">
+                  <span>Home Delivery</span>
+                  <span>{((hasAnyHomeDelivery || home_delivery) ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Express Surcharge</span>
+                  <span>{(hasAnyExpressDelivery ? (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
+                </div>
                 <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>
               </div>
 
@@ -685,25 +723,11 @@ export function OrderSummaryAndPaymentForm({
 
         {/* Loading Overlay */}
         {isOrderClosed && isLoadingFatoura && (
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-card p-8 rounded-xl border border-border shadow-lg flex flex-col items-center gap-4">
-              <Loader2 className="w-12 h-12 text-primary animate-spin" />
-              <h3 className="text-lg font-semibold">Generating Invoice...</h3>
-            </div>
-          </div>
+          <FullScreenLoader 
+            title="Generating Invoice" 
+            subtitle="Please wait while we finalize the records..." 
+          />
         )}
-
-        <ConfirmationDialog
-          isOpen={showZeroPaymentDialog}
-          onClose={() => setShowZeroPaymentDialog(false)}
-          onConfirm={() => {
-            setShowZeroPaymentDialog(false);
-            handleConfirmOrder();
-          }}
-          title="Zero Payment"
-          description="Are you sure you want to complete this order without any payment?"
-          confirmText="Yes, Complete Order"
-        />
       </form>
     </Form>
   );

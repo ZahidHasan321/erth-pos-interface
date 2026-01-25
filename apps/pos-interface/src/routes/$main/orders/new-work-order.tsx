@@ -5,7 +5,7 @@ import {
 } from "@/api/measurements";
 import { getEmployees } from "@/api/employees";
 import { getFabrics } from "@/api/fabrics";
-import { getOrderDetails } from "@/api/orders";
+import { getOrderDetails, updateOrder } from "@/api/orders";
 import { getStyles } from "@/api/styles";
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import {
@@ -24,22 +24,23 @@ import {
     garmentSchema,
     garmentDefaults,
     type GarmentSchema,
+    createFabricSelectionFormSchema,
 } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { mapGarmentToFormValues } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.mapper";
 import { OrderSummaryAndPaymentForm } from "@/components/forms/order-summary-and-payment";
-import { ShelvedProductsForm } from "@/components/forms/shelved-products";
+import { ShelfForm } from "@/components/forms/shelf";
 import {
     shelfFormSchema,
     type ShelfFormValues,
-} from "@/components/forms/shelved-products/shelved-products-form.schema";
+} from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
+import { FullScreenLoader } from "@/components/global/full-screen-loader";
 import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
-import { useFatouraPolling } from "@/hooks/useFatouraPolling";
-import { useOrderMutations } from "@/hooks/useOrderMutations";
+import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
 import { useStepNavigation } from "@/hooks/useStepNavigation";
 import { calculateStylePrice, calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 import { usePricing } from "@/hooks/usePricing";
@@ -73,7 +74,7 @@ const steps = [
     { title: "Demographics", id: "step-0" },
     { title: "Measurement", id: "step-1" },
     { title: "Fabric Selection", id: "step-2" },
-    { title: "Shelves Products", id: "step-3" },
+    { title: "Shelf Products", id: "step-3" },
     { title: "Review & Payment", id: "step-4" },
 ];
 
@@ -99,13 +100,6 @@ function NewWorkOrder() {
         gcTime: Infinity,
     });
 
-    const { data: stylesResponse } = useQuery({
-        queryKey: ["styles"],
-        queryFn: getStyles,
-        staleTime: Infinity,
-        gcTime: Infinity,
-    });
-
     const { data: employeesResponse } = useQuery({
         queryKey: ["employees"],
         queryFn: getEmployees,
@@ -113,7 +107,6 @@ function NewWorkOrder() {
         gcTime: Infinity,
     });
 
-    const styles = stylesResponse?.data || [];
     const employees = employeesResponse?.data || [];
 
     // Store selectors
@@ -159,27 +152,29 @@ function NewWorkOrder() {
         },
     });
 
+    const fabricSelectionResolver = React.useMemo(() => {
+        return zodResolver(createFabricSelectionFormSchema(fabricsResponse?.data || []));
+    }, [fabricsResponse?.data]);
+
     const fabricSelectionForm = useForm<{
         garments: GarmentSchema[];
         signature: string;
     }>({
-        resolver: zodResolver(
-            z.object({
-                garments: z.array(garmentSchema),
-                signature: z.string().min(1, "Customer signature is required"),
-            }),
-        ) as any,
+        resolver: fabricSelectionResolver as any,
         defaultValues: { garments: [], signature: "" },
     });
 
-    const ShelfForm = useForm<ShelfFormValues>({
+    const shelfForm = useForm<ShelfFormValues>({
         resolver: zodResolver(shelfFormSchema),
         defaultValues: { products: [] },
     });
 
     const OrderForm = useForm<OrderSchema>({
         resolver: zodResolver(orderSchema) as any,
-        defaultValues: orderDefaults,
+        defaultValues: {
+            ...orderDefaults,
+            stitching_price: stitchingPrice,
+        },
     });
 
     // Watch form values
@@ -189,14 +184,14 @@ function NewWorkOrder() {
     });
 
     const products = useWatch({
-        control: ShelfForm.control,
+        control: shelfForm.control,
         name: "products",
     });
 
     const isOrderClosed =
         checkoutStatus === "confirmed" || checkoutStatus === "cancelled";
 
-    const totalShelveAmount =
+    const totalShelfAmount =
         products?.reduce(
             (acc, p) => acc + (p.quantity ?? 0) * (p.unit_price ?? 0),
             0,
@@ -213,13 +208,7 @@ function NewWorkOrder() {
         addSavedStep,
     });
 
-    // ============================================================================
-    // FATOURA POLLING
-    // ============================================================================
-    const { fatoura } = useFatouraPolling(
-        orderId,
-        checkoutStatus === "confirmed",
-    );
+    const fatoura = order.invoice_number;
 
     // ============================================================================
     // ORDER MUTATIONS
@@ -239,7 +228,7 @@ function NewWorkOrder() {
             // demographicsForm.reset(); // Don't reset demographics as we just filled it
             measurementsForm.reset();
             fabricSelectionForm.reset();
-            ShelfForm.reset();
+            shelfForm.reset();
             OrderForm.reset();
 
             setViewMode("ACTIVE_ORDER");
@@ -247,10 +236,15 @@ function NewWorkOrder() {
             handleProceed(0);
         },
 
-        onOrderUpdated: (action) => {
+        onOrderUpdated: (action, data) => {
             if (action === "customer") {
                 handleProceed(0);
             } else if (action === "updated") {
+                if (data) {
+                    const updatedOrderSchema = mapOrderToSchema(data);
+                    setOrder(updatedOrderSchema);
+                    OrderForm.reset(updatedOrderSchema);
+                }
                 handleProceed(4);
             }
         },
@@ -262,12 +256,29 @@ function NewWorkOrder() {
     // ============================================================================
     // PENDING ORDER LOADING
     // ============================================================================
-    const handleCustomerFound = (customer: Customer) => {
+    const handleCustomerFound = async (customer: Customer) => {
         const formValues = mapCustomerToFormValues(customer);
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
-        setViewMode("ACTIVE_ORDER");
-        setCurrentStep(0);
+
+        if (orderId) {
+            try {
+                const response = await updateOrder({ customer_id: customer.id }, orderId);
+                if (response.status === "success") {
+                    toast.success("Order customer updated successfully");
+                    handleProceed(0); // Auto-proceed to next step if order is active
+                } else {
+                    toast.error("Failed to update order customer: " + response.message);
+                }
+            } catch (error) {
+                console.error("Error updating order customer:", error);
+                toast.error("An error occurred while updating order customer");
+            }
+        } else {
+            toast.success(`Customer loaded: ${customer.name}`);
+            setViewMode("ACTIVE_ORDER");
+            setCurrentStep(0);
+        }
     };
 
     const handlePendingOrderSelected = async (order: Order) => {
@@ -290,7 +301,7 @@ function NewWorkOrder() {
                 garments: [],
                 signature: "",
             });
-            ShelfForm.reset({ products: [] });
+            shelfForm.reset({ products: [] });
             OrderForm.reset(orderDefaults);
 
             // Clear saved steps
@@ -332,7 +343,13 @@ function NewWorkOrder() {
 
                 // Populate order form
                 if (orderData) {
-                    OrderForm.reset(mapOrderToFormValues(orderData));
+                    const mappedOrder = mapOrderToFormValues(orderData);
+                    
+                    // Sync the stitching price to the store so the UI reflects it
+                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
+                    setStitchPrice(dbStitchingPrice);
+
+                    OrderForm.reset(mappedOrder);
                 }
 
                 // Populate fabric selections and style options if available
@@ -344,7 +361,7 @@ function NewWorkOrder() {
 
                     fabricSelectionForm.setValue("garments", mappedGarments);
                     setFabricSelections(mappedGarments);
-                    addSavedStep(2);
+                    // Do not addSavedStep(2) here because signature is required every time
                 }
 
                 // Populate payment form
@@ -486,10 +503,11 @@ function NewWorkOrder() {
         OrderForm.setValue("fabric_charge", fabricPrice);
         OrderForm.setValue("stitching_charge", stitchingPrices);
         OrderForm.setValue("style_charge", stylePrice);
+        OrderForm.setValue("stitching_price", stitchingPrice);
     };
 
     // ============================================================================
-    // SHELVES FORM HANDLERS
+    // Shelf FORM HANDLERS
     // ============================================================================
     const handleShelfProceed = () => {
         handleProceed(3);
@@ -519,7 +537,7 @@ function NewWorkOrder() {
         }
 
         // Prepare items for deduction
-        const shelfItems = ShelfForm.getValues().products
+        const shelfItems = shelfForm.getValues().products
             .filter(p => p.id && p.quantity)
             // Fix: Convert p.id to Number
             .map(p => ({ id: Number(p.id!), quantity: p.quantity! }));
@@ -532,8 +550,9 @@ function NewWorkOrder() {
             orderId,
             checkoutDetails: {
                 paymentType: data.payment_type!,
-                paid: data.paid,
+                paid: data.paid ?? 0,
                 paymentRefNo: data.payment_ref_no ?? undefined,
+                paymentNote: data.payment_note ?? undefined,
                 orderTaker: data.order_taker_id ?? undefined
             },
             shelfItems,
@@ -556,8 +575,8 @@ function NewWorkOrder() {
     // ============================================================================
     // Sync shelf amount to order charges (flattened)
     React.useEffect(() => {
-        OrderForm.setValue("shelf_charge", totalShelveAmount);
-    }, [totalShelveAmount]);
+        OrderForm.setValue("shelf_charge", totalShelfAmount);
+    }, [totalShelfAmount]);
 
     // Reset measurements when customer changes
     React.useEffect(() => {
@@ -595,7 +614,7 @@ function NewWorkOrder() {
             garments: [],
             signature: "",
         });
-        ShelfForm.reset({ products: [] });
+        shelfForm.reset({ products: [] });
         OrderForm.reset(orderDefaults);
         setIsLoadingOrderData(false);
     };
@@ -685,7 +704,7 @@ function NewWorkOrder() {
         const demographics = demographicsForm.getValues();
         const orderData = OrderForm.getValues();
         const garmentsData = fabricSelectionForm.getValues().garments;
-        const shelfData = ShelfForm.getValues().products;
+        const shelfData = shelfForm.getValues().products;
 
         // Find employee name
         const orderTakerEmployee = employees.find(
@@ -707,9 +726,8 @@ function NewWorkOrder() {
                 house_no: demographics.house_no ?? undefined,
             },
             fabricSelections: garmentsData,
-            shelvedProducts: shelfData,
+            shelfProducts: shelfData,
             fabrics: fabricsResponse?.data || [],
-            styles: stylesResponse?.data || [],
             charges: {
                 fabric: orderData.fabric_charge ?? 0,
                 stitching: orderData.stitching_charge ?? 0,
@@ -730,40 +748,31 @@ function NewWorkOrder() {
         OrderForm,
         fabricSelectionForm,
         order,
-        ShelfForm,
+        shelfForm,
         order.id,
         employees,
         fabricsResponse,
-        stylesResponse,
     ]);
 
 
     // ============================================================================
-    // RENDER: LOADING ORDER DATA STATE
+    // RENDER
     // ============================================================================
-    if (isLoadingOrderData || createOrderMutation.isPending || completeWorkOrderMutation.isPending) {
-        return (
-            <div className="mb-12 flex items-center justify-center min-h-screen">
-                <div className="text-center space-y-4">
-                    <div className="flex justify-center">
-                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-                    </div>
-                    <h2 className="text-2xl font-bold text-foreground">
-                        {createOrderMutation.isPending
-                            ? "Creating Order..."
-                            : completeWorkOrderMutation.isPending
-                                ? "Completing Order..."
-                                : "Loading Order..."}
-                    </h2>
-                    <p className="text-muted-foreground">Please wait...</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <>
             <ScrollProgress />
+            {(isLoadingOrderData || createOrderMutation.isPending || completeWorkOrderMutation.isPending) && (
+                <FullScreenLoader 
+                    title={
+                        createOrderMutation.isPending 
+                            ? "Creating Order" 
+                            : completeWorkOrderMutation.isPending 
+                                ? "Completing Order" 
+                                : "Loading Order"
+                    }
+                    subtitle="Please wait while we process your request..."
+                />
+            )}
             <ConfirmationDialog
                 isOpen={dialog.isOpen}
                 onClose={closeDialog}
@@ -834,6 +843,8 @@ function NewWorkOrder() {
                     <CustomerDemographicsForm
                         form={demographicsForm}
                         isOrderClosed={isOrderClosed}
+                        orderId={orderId}
+                        onCustomerChange={handleCustomerFound}
                         onEdit={() => removeSavedStep(0)}
                         onCancel={() => addSavedStep(0)}
                         onProceed={handleDemographicsProceed}
@@ -848,7 +859,7 @@ function NewWorkOrder() {
                 <div
                     id={steps[1].id}
                     ref={(el) => {
-                        sectionRefs.current[1] = el; sectionRefs.current[1] = el;
+                        sectionRefs.current[1] = el;
                     }}
                     className="w-full flex flex-col items-center"
                 >
@@ -902,7 +913,7 @@ function NewWorkOrder() {
                     </ErrorBoundary>
                 </div>
 
-                {/* STEP 3: Shelved Products */}
+                {/* STEP 3: Shelf Products */}
                 <div
                     id={steps[3].id}
                     ref={(el) => {
@@ -910,9 +921,9 @@ function NewWorkOrder() {
                     }}
                     className="w-full flex flex-col items-center 2xl:col-span-2"
                 >
-                    <ErrorBoundary fallback={<div>Shelved Products crashed</div>}>
-                        <ShelvedProductsForm
-                            form={ShelfForm}
+                    <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
+                        <ShelfForm
+                            form={shelfForm}
                             isOrderClosed={isOrderClosed}
                             onProceed={handleShelfProceed}
                         />
@@ -934,6 +945,8 @@ function NewWorkOrder() {
                             invoiceData={invoiceData}
                             orderId={orderId}
                             checkoutStatus={checkoutStatus}
+                            fatoura={fatoura}
+                            isLoadingFatoura={completeWorkOrderMutation.isPending}
                             customerAddress={{
                                 city: customerDemographics?.city ?? undefined,
                                 area: customerDemographics?.area ?? undefined,
@@ -944,9 +957,12 @@ function NewWorkOrder() {
                             }}
                             fabricSelections={fabricSelections}
                             onConfirm={(data) => {
+                                const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
                                 openDialog(
-                                    "Confirm new work order",
-                                    "Do you want to confirm a new work order?",
+                                    isZeroPayment ? "Confirm with Zero Payment?" : "Confirm new work order",
+                                    isZeroPayment 
+                                        ? "You are about to confirm this order without any payment. Are you sure you want to proceed?" 
+                                        : "Do you want to confirm a new work order?",
                                     () => {
                                         handleOrderConfirmation(data);
                                         closeDialog();

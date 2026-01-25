@@ -30,6 +30,21 @@ export const searchCustomerByPhone = async (
   return { status: 'success', data: data as any, count: count || 0 };
 };
 
+export const fuzzySearchCustomers = async (
+  query: string,
+): Promise<ApiResponse<Customer[]>> => {
+  const { data, error, count } = await supabase
+    .from(TABLE_NAME)
+    .select('*', { count: 'exact' })
+    .or(`name.ilike.%${query}%,phone.ilike.%${query}%,arabic_name.ilike.%${query}%,nick_name.ilike.%${query}%`)
+    .limit(10);
+
+  if (error) {
+    return { status: 'error', message: error.message, data: [], count: 0 };
+  }
+  return { status: 'success', data: data as any, count: count || 0 };
+};
+
 export const searchPrimaryAccountByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {

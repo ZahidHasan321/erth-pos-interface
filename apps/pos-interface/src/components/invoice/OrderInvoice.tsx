@@ -3,7 +3,7 @@ import ErthLogo from "@/assets/erth-light.svg";
 import type { FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import type { OrderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
-import type { ShelfFormValues } from "@/components/forms/shelved-products/shelved-products-form.schema";
+import type { ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import type { Fabric, Style } from "@repo/database";
 
 export interface InvoiceData {

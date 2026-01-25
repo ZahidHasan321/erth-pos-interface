@@ -141,7 +141,6 @@ export const FabricSourceCell = ({
 
     React.useEffect(() => {
         if (fabricSource === "OUT" && previousFabricSource.current === "IN") {
-            // In the new schema, color is not a direct field but let's assume it's needed for UI
             setValue(`garments.${row.index}.color`, "", {
                 shouldValidate: true,
             });
@@ -407,78 +406,11 @@ export const FabricLengthCell = ({
     row,
     table,
 }: CellContext<GarmentSchema, unknown>) => {
-    const { control, setError, clearErrors } = useFormContext();
+    const { control } = useFormContext();
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
-        tempStockUsage?: Map<string, number>;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
-    const tempStockUsage = meta?.tempStockUsage || new Map();
-    const { data: fabricsResponse } = useQuery({
-        queryKey: ["fabrics"],
-        queryFn: getFabrics,
-        staleTime: Infinity,
-        gcTime: Infinity,
-    });
-    const fabrics = fabricsResponse?.data || [];
-
-    const [fabricSource, fabricId, fabricLength] = useWatch({
-        name: [
-            `garments.${row.index}.fabric_source`,
-            `garments.${row.index}.fabric_id`,
-            `garments.${row.index}.fabric_length`,
-        ],
-    });
-
-    React.useEffect(() => {
-        // Skip validation if fabric_length is empty (will be validated on submit via schema refine)
-        if (fabricLength == null) {
-            clearErrors(`garments.${row.index}.fabric_length`);
-            return;
-        }
-
-        const requestedLength = Number(fabricLength);
-
-        if (fabricSource === "IN" && fabricId) {
-            const selectedFabric = fabrics.find((f) => f.id === fabricId);
-            if (selectedFabric) {
-                const realStock = selectedFabric.real_stock ?? 0;
-                const totalUsage = tempStockUsage.get(fabricId.toString()) || 0;
-
-                if (isNaN(requestedLength) || requestedLength < 0) {
-                    setError(`garments.${row.index}.fabric_length`, {
-                        type: "manual",
-                        message: "Invalid length",
-                    });
-                } else if (totalUsage > realStock) {
-                    setError(`garments.${row.index}.fabric_length`, {
-                        type: "manual",
-                        message: `Insufficient stock (Total used: ${totalUsage.toFixed(2)}m, Available: ${realStock.toFixed(2)}m)`,
-                    });
-                } else {
-                    clearErrors(`garments.${row.index}.fabric_length`);
-                }
-            }
-        } else if (fabricSource === "OUT") {
-            if (isNaN(requestedLength) || requestedLength < 0) {
-                setError(`garments.${row.index}.fabric_length`, {
-                    type: "manual",
-                    message: "Invalid length",
-                });
-            } else {
-                clearErrors(`garments.${row.index}.fabric_length`);
-            }
-        }
-    }, [
-        fabricId,
-        fabricLength,
-        fabricSource,
-        fabrics,
-        setError,
-        clearErrors,
-        row.index,
-        tempStockUsage,
-    ]);
 
     return (
         <div className="min-w-30">
@@ -543,29 +475,14 @@ export const DeliveryDateCell = ({
     row,
     table,
 }: CellContext<GarmentSchema, unknown>) => {
-    const { control, setValue, setError, clearErrors } = useFormContext();
+    const { control, setValue } = useFormContext();
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
-    const deliveryDate = useWatch({
-        name: `garments.${row.index}.delivery_date`,
-    });
-
-    React.useEffect(() => {
-        if (!deliveryDate) {
-            setError(`garments.${row.index}.delivery_date`, {
-                type: "manual",
-                message: "Delivery date is required",
-            });
-        } else {
-            clearErrors(`garments.${row.index}.delivery_date`);
-        }
-    }, [deliveryDate, row.index, setError, clearErrors]);
-
     const handleDateChange = (date: Date | null) => {
-        setValue(`garments.${row.index}.delivery_date`, date?.toISOString() || null);
+        setValue(`garments.${row.index}.delivery_date`, date?.toISOString() || null, { shouldValidate: true });
     };
 
     return (
@@ -604,6 +521,7 @@ export const FabricAmountCell = ({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
+        gcTime: Infinity,
     });
     const fabrics = fabricsResponse?.data || [];
 
@@ -722,4 +640,3 @@ export const HomeDeliveryCell = ({
         </div>
     );
 };
-

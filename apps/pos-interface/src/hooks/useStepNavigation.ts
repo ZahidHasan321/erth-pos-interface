@@ -21,32 +21,57 @@ export function useStepNavigation({
   const sectionRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const isManualScrolling = React.useRef(false);
 
+  // Helper to find the scrollable parent
+  const getScrollParent = (node: HTMLElement | null): HTMLElement | Window => {
+    if (!node) return window;
+    let parent = node.parentElement;
+    while (parent) {
+      const overflowY = window.getComputedStyle(parent).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return window;
+  };
+
   React.useEffect(() => {
     sectionRefs.current = steps.map((_, i) => sectionRefs.current[i] ?? null);
   }, [steps]);
 
   const handleStepChange = React.useCallback(
     (i: number) => {
-      // Update the current step immediately
-      setCurrentStep(i);
-
       const el = sectionRefs.current[i];
+      
       if (el) {
-        const rect = el.getBoundingClientRect();
-        const offsetPosition = window.scrollY + rect.top - headerOffset;
+        // Update the current step immediately
+        setCurrentStep(i);
+
+        const scrollParent = getScrollParent(el);
+        const isWindow = scrollParent === window;
+
+        let targetTop = 0;
+        if (isWindow) {
+          const rect = el.getBoundingClientRect();
+          targetTop = window.scrollY + rect.top - headerOffset;
+        } else {
+          // Calculate position relative to the scrollable parent
+          const parent = scrollParent as HTMLElement;
+          targetTop = (el.offsetTop - parent.offsetTop) - headerOffset;
+        }
 
         // Set flag to prevent scroll tracking from interfering
         isManualScrolling.current = true;
 
-        window.scrollTo({
-          top: offsetPosition,
+        scrollParent.scrollTo({
+          top: targetTop,
           behavior: "smooth",
         });
 
-        // Reset flag after scroll completes (smooth scroll takes ~500-800ms)
+        // Reset flag after scroll completes
         setTimeout(() => {
           isManualScrolling.current = false;
-        }, 1000);
+        }, 1200);
       }
     },
     [setCurrentStep, headerOffset]
@@ -65,6 +90,7 @@ export function useStepNavigation({
   // Scroll tracking with RAF throttling
   React.useEffect(() => {
     let ticking = false;
+    const scrollParent = getScrollParent(sectionRefs.current[0]);
 
     const updateActive = () => {
       // Don't update if user is manually scrolling via step click
@@ -73,10 +99,13 @@ export function useStepNavigation({
         return;
       }
 
-      const viewportHeight = window.innerHeight;
-      const viewportTop = window.scrollY + headerOffset;
-      const viewportBottom = window.scrollY + viewportHeight;
-      const viewportCenter = window.scrollY + viewportHeight / 2;
+      const isWindow = scrollParent === window;
+      const viewportHeight = isWindow ? window.innerHeight : (scrollParent as HTMLElement).clientHeight;
+      const scrollY = isWindow ? window.scrollY : (scrollParent as HTMLElement).scrollTop;
+      
+      const viewportTop = scrollY + headerOffset;
+      const viewportBottom = scrollY + viewportHeight;
+      const viewportCenter = scrollY + (viewportHeight / 2);
 
       // Calculate visibility for all steps
       const currentVisibleSteps: number[] = [];
@@ -84,22 +113,25 @@ export function useStepNavigation({
         const el = sectionRefs.current[i];
         if (!el) return Number.POSITIVE_INFINITY;
         
-        const rect = el.getBoundingClientRect();
-        const elementTop = window.scrollY + rect.top;
-        const elementBottom = elementTop + rect.height;
-        const elementCenter = elementTop + rect.height / 2;
+        let elementTop = 0;
+        let elementHeight = el.offsetHeight;
+
+        if (isWindow) {
+          const rect = el.getBoundingClientRect();
+          elementTop = window.scrollY + rect.top;
+        } else {
+          const parent = scrollParent as HTMLElement;
+          elementTop = el.offsetTop - parent.offsetTop;
+        }
+
+        const elementBottom = elementTop + elementHeight;
+        const elementCenter = elementTop + (elementHeight / 2);
 
         // Check if element is significantly visible in viewport
-        // Criteria: 
-        // 1. Element center is within viewport
-        // 2. OR Element covers substantial part of viewport (for large sections)
-        // 3. OR Element is fully inside viewport
-        
         const isCenterInViewport = elementCenter >= viewportTop && elementCenter <= viewportBottom;
         const isCoveringViewport = elementTop <= viewportTop && elementBottom >= viewportBottom;
         const isFullyInViewport = elementTop >= viewportTop && elementBottom <= viewportBottom;
 
-        // For side-by-side elements (top aligned), we check if they are roughly in the same scroll band
         if (isCenterInViewport || isCoveringViewport || isFullyInViewport) {
           currentVisibleSteps.push(i);
         }
@@ -130,11 +162,11 @@ export function useStepNavigation({
       }
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
+    scrollParent.addEventListener("scroll", onScroll, { passive: true });
     // Initial check
     updateActive();
 
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => scrollParent.removeEventListener("scroll", onScroll);
   }, [setCurrentStep, steps, headerOffset]);
 
   return {

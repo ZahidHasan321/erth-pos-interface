@@ -32,7 +32,6 @@ import {
 import { toast } from "sonner";
 import {
     AlertCircle,
-    XCircle,
     Package,
     DollarSign,
     Sparkles,
@@ -47,6 +46,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFabricValue } from "@/lib/utils/fabric-utils";
+import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 import { DataTable } from "./data-table";
 import { columns as fabricSelectionColumns } from "./fabric-selection/fabric-selection-columns";
 import {
@@ -55,6 +55,7 @@ import {
 } from "./fabric-selection/garment-form.schema";
 import {
     mapFormValuesToGarment,
+    mapGarmentToFormValues,
 } from "./fabric-selection/garment-form.mapper";
 import { columns as styleOptionsColumns } from "./style-options/style-options-columns";
 import {
@@ -116,7 +117,6 @@ export function FabricSelectionForm({
     );
     const [isEditing, setIsEditing] = React.useState(true);
     const [isSaved, setIsSaved] = React.useState(false);
-    const [validationErrors, setValidationErrors] = React.useState<string[]>([]);
     const [selectedMeasurementId, setSelectedMeasurementId] = React.useState<
         string | null
     >(null);
@@ -184,7 +184,6 @@ export function FabricSelectionForm({
 
     const styles = stylesResponse?.data || [];
 
-    // --- MOVE HERE ---
     const {
         fields: garmentFields,
         append: appendGarment,
@@ -193,7 +192,6 @@ export function FabricSelectionForm({
         control: form.control,
         name: "garments",
     });
-    // -----------------
 
     const calculateTempStockUsage = React.useCallback(() => {
         const garments = form.getValues("garments");
@@ -245,75 +243,6 @@ export function FabricSelectionForm({
         });
     }, [deliveryDate, garmentFields.length]);
 
-    React.useEffect(() => {
-        const subscription = form.watch((_value, { name }) => {
-            if (
-                name?.includes(".brova") ||
-                name?.includes(".home_delivery")
-            ) {
-                const match = name?.match(/garments\.(\d+)\./);
-                if (match) {
-                    const rowIndex = parseInt(match[1], 10);
-                    form.trigger(`garments.${rowIndex}.brova`);
-                    // home_delivery trigger removed as it's not in the flat schema yet or handled elsewhere
-                }
-            }
-        });
-        return () => subscription.unsubscribe();
-    }, [form]);
-
-    const validateGarments = React.useCallback(() => {
-        const errors: string[] = [];
-        const garments = form.getValues("garments");
-
-        if (garments.length === 0) {
-            errors.push("At least one garment must be added to save");
-            return errors;
-        }
-
-        garments.forEach((garment, index) => {
-            if (!garment.fabric_source) {
-                errors.push(`Row ${index + 1}: Fabric source is required`);
-            }
-
-            if (!garment.measurement_id) {
-                errors.push(`Row ${index + 1}: Measurement ID is required`);
-            }
-
-            if (!garment.fabric_length || (garment.fabric_length ?? 0) <= 0) {
-                errors.push(`Row ${index + 1}: Valid fabric length is required`);
-            }
-
-            if (garment.fabric_source === "IN") {
-                if (!garment.fabric_id) {
-                    errors.push(
-                        `Row ${index + 1}: Fabric selection is required for "IN" source`,
-                    );
-                } else {
-                    const selectedFabric = fabrics.find(
-                        (f) => f.id === garment.fabric_id,
-                    );
-                    if (selectedFabric) {
-                        const realStock = selectedFabric.real_stock ?? 0;
-                        const totalUsage = tempStockUsage.get(garment.fabric_id.toString()) || 0;
-
-                        if (totalUsage > realStock) {
-                            errors.push(
-                                `Row ${index + 1}: Insufficient stock. Total requested for this fabric: ${totalUsage.toFixed(2)}m, Available: ${realStock}m`,
-                            );
-                        }
-                    }
-                }
-            }
-
-            if (!garment.delivery_date) {
-                errors.push(`Row ${index + 1}: Delivery date is required`);
-            }
-        });
-
-        return errors;
-    }, [form]);
-
     const { mutate: saveGarmentsMutation, isPending: isSaving } = useMutation({
         mutationFn: async (data: {
             garments: GarmentSchema[];
@@ -361,14 +290,13 @@ export function FabricSelectionForm({
                 .map((garment, index) => {
                     const savedData = responses[index]?.data;
                     if (savedData) {
-                        return mapFormValuesToGarment(savedData as any, orderId); // Wait, mapGarmentToFormValues
+                        return mapGarmentToFormValues(savedData as any); 
                     }
                     return garment;
                 });
 
             form.setValue("garments", updatedGarments);
 
-            setValidationErrors([]);
             setIsSaved(true);
             setIsEditing(false);
 
@@ -387,25 +315,30 @@ export function FabricSelectionForm({
         },
     });
 
-    const handleSaveSelections = () => {
-        const errors = validateGarments();
+    const handleSaveSelections = (data: FabricFormValues) => {
+        // Aggregate stock validation before saving
+        const usage = new Map<number, number>();
+        let stockErrorFound = false;
 
-        if (errors.length > 0) {
-            setValidationErrors(errors);
-            toast.error(`Cannot save: ${errors.length} validation error(s) found`);
+        data.garments.forEach((g) => {
+            if (g.fabric_source === 'IN' && g.fabric_id) {
+                usage.set(g.fabric_id, (usage.get(g.fabric_id) || 0) + (g.fabric_length || 0));
+            }
+        });
 
-            setTimeout(() => {
-                const alertElement = document.getElementById("validation-errors");
-                if (alertElement) {
-                    alertElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        usage.forEach((totalUsed, fabricId) => {
+            const fabric = fabrics.find(f => f.id === fabricId);
+            if (fabric) {
+                const available = parseFloat(fabric.real_stock?.toString() || "0");
+                if (totalUsed > available) {
+                    stockErrorFound = true;
+                    toast.error(`Insufficient stock for ${fabric.name}. Total requested: ${totalUsed.toFixed(2)}m, Available: ${available.toFixed(2)}m`);
                 }
-            }, 100);
-            fabrics
-            return;
-        }
+            }
+        });
 
-        setValidationErrors([]);
-        const data = form.getValues();
+        if (stockErrorFound) return;
+
         saveGarmentsMutation({ garments: data.garments });
     };
 
@@ -445,7 +378,7 @@ export function FabricSelectionForm({
                 const bottom = selectedMeasurement.bottom;
 
                 if (length && bottom) {
-                    const meter = getFabricValue(Number(length), Number(bottom)); // <--- Fix: Convert to Number
+                    const meter = getFabricValue(Number(length), Number(bottom)); 
                     if (meter) {
                         setFabricMeter(meter);
                         setQallabi(meter + 0.25);
@@ -501,10 +434,6 @@ export function FabricSelectionForm({
                 form.setValue(`garments.${index}.garment_id`, newGarmentId);
             }
         });
-
-        setValidationErrors((prev) =>
-            prev.filter((error) => !error.startsWith(`Row ${rowIndex + 1}:`)),
-        );
     };
 
     function syncRows(
@@ -530,9 +459,6 @@ export function FabricSelectionForm({
 
     const isFormDisabled = (isSaved && !isEditing) || !orderId || isOrderClosed;
 
-    const hasFormErrors =
-        Object.keys(form.formState.errors).length > 0 && form.formState.isSubmitted;
-
     const copyGarmentToAll = () => {
         const garments = form.getValues("garments");
         if (garments.length < 2) {
@@ -547,8 +473,8 @@ export function FabricSelectionForm({
             return {
                 ...garment,
                 ...firstRow,
-                id: garment.id, // Keep original ID
-                garment_id: garment.garment_id, // Keep original garment_id
+                id: garment.id, 
+                garment_id: garment.garment_id, 
             };
         });
 
@@ -556,15 +482,16 @@ export function FabricSelectionForm({
         toast.success("Copied first row's data to all rows");
     };
 
+    // Unified Error Summary Logic
+    const errorEntries = Object.entries(form.formState.errors.garments || {});
+    const hasErrors = errorEntries.length > 0 || form.formState.errors.signature;
+
     return (
         <FormProvider {...form}>
             <form
-                onSubmit={form.handleSubmit(handleSaveSelections, (errors) =>
-                    console.log("validation errors: ", errors, form.getValues()),
-                )}
+                onSubmit={form.handleSubmit(handleSaveSelections)}
                 className="w-full space-y-6"
             >
-                {/* Title Section */}
                 <div className="flex justify-between items-start mb-2">
                     <div className="space-y-1">
                         <h1 className="text-3xl font-bold text-foreground">
@@ -576,7 +503,6 @@ export function FabricSelectionForm({
                     </div>
                 </div>
 
-                {/* Order Required Warning */}
                 {!orderId && !isOrderClosed && (
                     <Alert variant="destructive" className="mb-4">
                         <AlertCircle className="h-4 w-4" />
@@ -589,8 +515,8 @@ export function FabricSelectionForm({
                 )}
 
                 <div className="p-6 border border-border rounded-xl bg-card w-full overflow-hidden shadow-sm space-y-6">
-                    {/* Validation Errors Alert */}
-                    {validationErrors.length > 0 && (
+                    {/* Unified Error Alert */}
+                    {hasErrors && form.formState.isSubmitted && (
                         <Alert
                             id="validation-errors"
                             variant="destructive"
@@ -598,38 +524,24 @@ export function FabricSelectionForm({
                         >
                             <AlertCircle className="h-4 w-4" />
                             <AlertTitle className="font-bold">
-                                Validation Errors ({validationErrors.length})
+                                Form Validation Errors
                             </AlertTitle>
                             <AlertDescription>
                                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                                    {validationErrors.map((error, index) => (
-                                        <li key={index} className="text-sm">
-                                            {error}
-                                        </li>
-                                    ))}
+                                    {form.formState.errors.signature && (
+                                        <li className="text-sm font-semibold">Signature: {form.formState.errors.signature.message}</li>
+                                    )}
+                                    {errorEntries.map(([index, error]: [string, any]) => {
+                                        const rowNum = parseInt(index) + 1;
+                                        // Collect all error messages for this row
+                                        const messages = Object.values(error).map((e: any) => e.message).filter(Boolean);
+                                        return messages.map((msg, i) => (
+                                            <li key={`${index}-${i}`} className="text-sm">
+                                                Row {rowNum}: {msg}
+                                            </li>
+                                        ));
+                                    })}
                                 </ul>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="mt-3"
-                                    onClick={() => setValidationErrors([])}
-                                >
-                                    <XCircle className="h-4 w-4 mr-1" />
-                                    Dismiss
-                                </Button>
-                            </AlertDescription>
-                        </Alert>
-                    )}
-
-                    {/* Form Errors Alert */}
-                    {hasFormErrors && validationErrors.length === 0 && (
-                        <Alert variant="destructive" className="mb-4">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Form has errors</AlertTitle>
-                            <AlertDescription>
-                                Please check the fields marked in red and correct the errors
-                                before saving.
                             </AlertDescription>
                         </Alert>
                     )}
@@ -1108,7 +1020,6 @@ export function FabricSelectionForm({
                                     variant="outline"
                                     onClick={() => {
                                         setIsEditing(false);
-                                        setValidationErrors([]);
                                     }}
                                 >
                                     <X className="w-4 h-4 mr-2" />

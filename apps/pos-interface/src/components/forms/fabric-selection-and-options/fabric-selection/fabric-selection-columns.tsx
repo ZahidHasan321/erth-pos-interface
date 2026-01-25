@@ -21,87 +21,87 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "garment_id",
     header: "Garment ID",
-    minSize: 100,
+    size: 120,
     cell: FabricCells.GarmentIdCell,
   },
   {
     accessorKey: "measurement_id",
     header: "Measurement ID",
-    minSize: 150,
+    size: 180,
     cell: FabricCells.MeasurementIdCell,
   },
   // Fabric Selection
   {
     accessorKey: "fabric_source",
     header: "Source",
-    minSize: 180,
+    size: 200,
     cell: FabricCells.FabricSourceCell,
   },
   {
     accessorKey: "fabric_id",
     header: "Fabric",
-    minSize: 200,
+    size: 250,
     cell: FabricCells.IfInsideCell,
   },
   {
     accessorKey: "shop_name",
     header: "Shop Name",
-    minSize: 150,
+    size: 200,
     cell: FabricCells.ShopNameCell,
   },
   {
     accessorKey: "color",
     header: "Color / اللون",
-    minSize: 120,
+    size: 150,
     cell: FabricCells.ColorCell,
   },
   {
     accessorKey: "fabric_length",
     header: "Length (m)",
-    minSize: 120,
+    size: 140,
     cell: FabricCells.FabricLengthCell,
   },
   {
     accessorKey: "fabric_amount",
     header: "Amount / سعر القماش",
-    minSize: 160,
+    size: 180,
     cell: FabricCells.FabricAmountCell,
   },
   // Order Details
   {
     accessorKey: "brova",
     header: "Brova",
-    minSize: 80,
+    size: 100,
     cell: FabricCells.BrovaCell,
   },
   {
     accessorKey: "express",
     header: "Express / مستعجل",
-    minSize: 80,
+    size: 180,
     cell: FabricCells.ExpressCell,
   },
   {
     accessorKey: "delivery_date",
     header: "Delivery Date / موعد التسليم",
-    minSize: 150,
+    size: 220,
     cell: FabricCells.DeliveryDateCell,
   },
   {
     accessorKey: "home_delivery",
     header: "Home Delivery",
-    minSize: 120,
+    size: 180,
     cell: FabricCells.HomeDeliveryCell,
   },
   {
     accessorKey: "notes",
     header: "Note",
-    minSize: 150,
+    size: 250,
     cell: FabricCells.NoteCell,
   },
   {
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
-    minSize: 60,
+    size: 80,
     cell: ({ row, table }) => {
       const meta = table.options.meta as {
         removeRow: (rowIndex: number) => void;

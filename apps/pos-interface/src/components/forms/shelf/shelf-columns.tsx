@@ -2,13 +2,13 @@
 
 import * as React from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { type ShelvedProduct } from './shelved-products-form.schema'
+import { type ShelfProduct } from './shelf-form.schema'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Trash2 } from 'lucide-react'
 
-export const columns: ColumnDef<ShelvedProduct>[] = [
+export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'serial_number',
     header: 'Serial Number',
@@ -18,9 +18,11 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
   {
     accessorKey: 'product_type',
     header: 'Product Type',
-    minSize: 150,
+    size: 200,
+    minSize: 200,
     cell: ({ row, table }) => {
-        const { updateData, serverProducts } = table.options.meta as any
+        const { updateData, serverProducts, errors } = table.options.meta as any
+        const error = errors?.[row.index]?.product_type
         
         // Get unique product types from server data
         const productTypes: string[] = Array.from(
@@ -28,30 +30,35 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
         )
         
         return (
-            <Select
-                value={row.original.product_type}
-                onValueChange={(value) => updateData(row.index, 'product_type', value)}
-            >
-                <SelectTrigger>
-                    <SelectValue placeholder="Select Product Type" />
-                </SelectTrigger>
-                <SelectContent>
-                    {productTypes.map((type: string, idx: number) => (
-                        <SelectItem key={`type-${idx}-${type}`} value={type}>
-                            {type}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-1">
+                <Select
+                    value={row.original.product_type}
+                    onValueChange={(value) => updateData(row.index, 'product_type', value)}
+                >
+                    <SelectTrigger className={error ? 'border-red-500' : ''}>
+                        <SelectValue placeholder="Select Product Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {productTypes.map((type: string, idx: number) => (
+                            <SelectItem key={`type-${idx}-${type}`} value={type}>
+                                {type}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {error && <span className="text-[10px] text-red-500 text-left">{error.message}</span>}
+            </div>
         )
     }
   },
 {
     accessorKey: 'brand',
     header: 'Brand',
-    minSize: 150,
+    size: 220,
+    minSize: 220,
     cell: ({ row, table }) => {
-        const { updateData, serverProducts, selectedProducts } = table.options.meta as any
+        const { updateData, serverProducts, selectedProducts, errors } = table.options.meta as any
+        const error = errors?.[row.index]?.brand
         
         // Filter brands based on selected product type
         const selectedType = row.original.product_type
@@ -62,39 +69,42 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
         const uniqueBrands: string[] = Array.from(new Set(brands))
         
         return (
-            <Select
-                value={row.original.brand}
-                onValueChange={(value) => updateData(row.index, 'brand', value)}
-                disabled={!selectedType}
-            >
-                <SelectTrigger>
-                    <SelectValue placeholder="Select Brand" />
-                </SelectTrigger>
-                <SelectContent>
-                    {uniqueBrands.map((brand: string, idx: number) => {
-                        const combination = `${selectedType}-${brand}`
-                        const isAlreadySelected = selectedProducts?.includes(combination)
+            <div className="flex flex-col gap-1">
+                <Select
+                    value={row.original.brand}
+                    onValueChange={(value) => updateData(row.index, 'brand', value)}
+                    disabled={!selectedType}
+                >
+                    <SelectTrigger className={error ? 'border-red-500' : ''}>
+                        <SelectValue placeholder="Select Brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {uniqueBrands.map((brand: string, idx: number) => {
+                            const combination = `${selectedType}-${brand}`
+                            const isAlreadySelected = selectedProducts?.includes(combination)
 
-                        // Check if product has stock
-                        const product = serverProducts?.find(
-                            (p: any) => p.brand === brand && p.type === selectedType
-                        )
-                        const hasStock = product?.stock && product.stock > 0
+                            // Check if product has stock
+                            const product = serverProducts?.find(
+                                (p: any) => p.brand === brand && p.type === selectedType
+                            )
+                            const hasStock = product?.stock && product.stock > 0
 
-                        return (
-                            <SelectItem
-                                key={`brand-${idx}-${brand}`}
-                                value={brand}
-                                disabled={isAlreadySelected || !hasStock}
-                            >
-                                {brand}
-                                {isAlreadySelected && ' (Already selected)'}
-                                {!hasStock && !isAlreadySelected && ' (OUT of stock)'}
-                            </SelectItem>
-                        )
-                    })}
-                </SelectContent>
-            </Select>
+                            return (
+                                <SelectItem
+                                    key={`brand-${idx}-${brand}`}
+                                    value={brand}
+                                    disabled={isAlreadySelected || !hasStock}
+                                >
+                                    {brand}
+                                    {isAlreadySelected && ' (Already selected)'}
+                                    {!hasStock && !isAlreadySelected && ' (OUT of stock)'}
+                                </SelectItem>
+                            )
+                        })}
+                    </SelectContent>
+                </Select>
+                {error && <span className="text-[10px] text-red-500 text-left">{error.message}</span>}
+            </div>
         )
     }
   },
@@ -103,6 +113,9 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
     header: 'Available Stock',
     minSize: 100,
     cell: ({ row }) => {
+      const isProductSelected = !!row.original.product_type && !!row.original.brand
+      if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground text-center">-</div>
+
       const stock = row.original.stock || 0;
       const getStockColorClass = () => {
         if (stock <= 0) return "text-red-600 font-semibold"; // OUT of stock
@@ -118,10 +131,11 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
     header: 'Quantity',
     minSize: 150,
     cell: ({ row, table }) => {
-      const { updateData, isOrderClosed } = table.options.meta as any
+      const { updateData, isOrderDisabled, errors } = table.options.meta as any
       const quantity = row.original.quantity
       const maxStock = row.original.stock || 0
       const [inputValue, setInputValue] = React.useState(String(quantity))
+      const error = errors?.[row.index]?.quantity
 
       // Sync local state when quantity changes externally (e.g., via buttons)
       React.useEffect(() => {
@@ -190,7 +204,9 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
         e.target.select()
       }
 
-      const hasError = maxStock === 0 || quantity > maxStock
+      const isProductSelected = !!row.original.product_type && !!row.original.brand
+      const hasStockError = isProductSelected && (maxStock === 0 || quantity > maxStock)
+      const hasError = hasStockError || !!error
 
       return (
         <div className="flex flex-col gap-1">
@@ -199,7 +215,7 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
               type="button"
               size="icon"
               onClick={handleDecrement}
-              disabled={quantity <= 1 || isOrderClosed}
+              disabled={quantity <= 1 || isOrderDisabled}
               variant="outline"
             >
               -
@@ -213,22 +229,22 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
               className={`w-16 text-center ${hasError ? 'border-red-500' : ''}`}
               max={maxStock}
               min={1}
-              disabled={isOrderClosed}
+              disabled={isOrderDisabled}
             />
             <Button
               type="button"
               size="icon"
               onClick={handleIncrement}
-              disabled={quantity >= maxStock || maxStock === 0 || isOrderClosed}
+              disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
               variant="outline"
             >
               +
             </Button>
           </div>
-          {maxStock === 0 && (
+          {isProductSelected && maxStock === 0 && (
             <span className="text-xs text-red-600 font-semibold text-center">No stock available</span>
           )}
-          {quantity > maxStock && maxStock > 0 && (
+          {isProductSelected && quantity > maxStock && maxStock > 0 && (
             <span className="text-xs text-red-600 font-semibold text-center">Exceeds stock ({maxStock})</span>
           )}
           {maxStock > 0 && maxStock < 5 && quantity <= maxStock && (
@@ -237,6 +253,7 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
           {maxStock >= 5 && maxStock <= 11 && quantity <= maxStock && (
             <span className="text-xs text-green-600 font-semibold text-center">Limited stock - {maxStock} available</span>
           )}
+          {error && <span className="text-[10px] text-red-500 text-center">{error.message}</span>}
         </div>
       )
     },
@@ -246,6 +263,9 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
     header: 'Unit Price',
     minSize: 120,
     cell: ({ row }) => {
+        const isProductSelected = !!row.original.product_type && !!row.original.brand
+        if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground">-</div>
+        
         return (
             <div className="border rounded-md p-2">
                 {row.original.unit_price.toFixed(2)}
@@ -258,6 +278,9 @@ export const columns: ColumnDef<ShelvedProduct>[] = [
     header: 'Total Amount',
     minSize: 120,
     cell: ({ row }) => {
+      const isProductSelected = !!row.original.product_type && !!row.original.brand
+      if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground">-</div>
+
       const total = row.original.quantity * row.original.unit_price
       return <div className="border rounded-md p-2"><span>{total.toFixed(2)}</span></div>
     },

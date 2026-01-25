@@ -1,7 +1,7 @@
 import { customerDemographicsSchema } from "@/components/forms/customer-demographics/demographics-form.schema";
 import { garmentSchema as fabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { styleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
-import { type ShelvedProduct } from "@/components/forms/shelved-products/shelved-products-form.schema";
+import { type ShelfProduct } from "@/components/forms/shelf/shelf-form.schema";
 import { orderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
 import { z } from "zod";
 import { create } from "zustand";
@@ -19,7 +19,7 @@ interface CurrentWorkOrderState {
   stitchingPrice: number;
   fabricSelections: FabricSelection[];
   styleOptions: StyleOption[];
-  shelvedProducts: ShelvedProduct[];
+  shelfProducts: ShelfProduct[];
   currentStep: number;
   savedSteps: number[];
 
@@ -52,7 +52,7 @@ export const createWorkOrderStore = (name: string) =>
         customerDemographics: {},
         fabricSelections: [],
         styleOptions: [],
-        shelvedProducts: [],
+        shelfProducts: [],
         currentStep: 0,
         savedSteps: [],
 

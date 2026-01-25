@@ -29,7 +29,8 @@ interface DataTableProps<TData, TValue> {
   selectedProducts?: string[];
   removeRow: (rowIndex: number) => void;
   updateData: (rowIndex: number, columnId: string, value: unknown) => void;
-  isOrderClosed: boolean
+  isOrderDisabled: boolean;
+  errors?: any[];
 }
 
 export function DataTable<TData, TValue>({
@@ -38,7 +39,8 @@ export function DataTable<TData, TValue>({
   serverProducts,
   removeRow,
   updateData,
-  isOrderClosed
+  isOrderDisabled,
+  errors
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -48,12 +50,14 @@ export function DataTable<TData, TValue>({
       serverProducts,
       removeRow,
       updateData,
-      isOrderClosed
+      isOrderDisabled,
+      errors
     } as {
       serverProducts?: Shelf[];
       removeRow: (rowIndex: number) => void;
       updateData: (rowIndex: number, columnId: string, value: unknown) => void;
-      isOrderClosed: boolean
+      isOrderDisabled: boolean;
+      errors?: any[];
     },
   });
 
@@ -73,6 +77,10 @@ export function DataTable<TData, TValue>({
                 <TableHead
                   key={header.id}
                   colSpan={header.colSpan}
+                  style={{
+                    minWidth: header.column.columnDef.minSize,
+                    width: header.column.columnDef.size,
+                  }}
                   className="px-4 py-2 text-center font-semibold text-foreground transition-colors hover:bg-primary/10"
                 >
                   {header.isPlaceholder
@@ -97,6 +105,10 @@ export function DataTable<TData, TValue>({
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
                     key={cell.id}
+                    style={{
+                      minWidth: cell.column.columnDef.minSize,
+                      width: cell.column.columnDef.size,
+                    }}
                     className={`px-4 py-2 text-center ${
                       cell.column.parent === undefined &&
                       cell.column.getIndex() > 0

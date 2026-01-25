@@ -1,4 +1,4 @@
-import type { Garment } from "@repo/database";
+import type { Garment, JabzourType } from "@repo/database";
 import { type GarmentSchema } from "./garment-form.schema";
 
 /**
@@ -10,6 +10,17 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         const parsed = typeof val === 'string' ? parseFloat(val) : val;
         return isNaN(parsed) ? 0 : parsed;
     };
+
+    // Transform Jabzour fields from backend to frontend
+    let frontendJabzour1 = g.jabzour_1 as string | undefined;
+    let frontendJabzour2 = g.jabzour_2;
+
+    if (g.jabzour_1 === "ZIPPER") {
+        frontendJabzour1 = "JAB_SHAAB";
+    } else if (g.jabzour_1 === "BUTTON") {
+        frontendJabzour1 = g.jabzour_2 || undefined;
+        frontendJabzour2 = null;
+    }
 
     return {
         id: g.id,
@@ -31,8 +42,8 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         wallet_pocket: g.wallet_pocket,
         pen_holder: g.pen_holder,
         small_tabaggi: g.small_tabaggi,
-        jabzour_1: g.jabzour_1 as any,
-        jabzour_2: g.jabzour_2,
+        jabzour_1: frontendJabzour1,
+        jabzour_2: frontendJabzour2,
         jabzour_thickness: g.jabzour_thickness,
         notes: g.notes,
         express: g.express,
@@ -63,9 +74,22 @@ export function mapFormValuesToGarment(
 ): Partial<Garment> {
     const { fabric_amount, ...rest } = formValues;
     
+    // Transform Jabzour fields from frontend to backend
+    let backendJabzour1 = formValues.jabzour_1;
+    let backendJabzour2 = formValues.jabzour_2;
+
+    if (formValues.jabzour_1 === "JAB_SHAAB") {
+        backendJabzour1 = "ZIPPER";
+    } else if (formValues.jabzour_1 && formValues.jabzour_1 !== "JAB_SHAAB") {
+        backendJabzour1 = "BUTTON";
+        backendJabzour2 = formValues.jabzour_1; 
+    }
+
     const garment: Partial<Garment> = {
         ...rest,
         order_id: orderId,
+        jabzour_1: backendJabzour1 as JabzourType,
+        jabzour_2: backendJabzour2,
         fabric_price_snapshot: snapshots?.fabric_price_snapshot ?? fabric_amount,
         stitching_price_snapshot: snapshots?.stitching_price_snapshot ?? formValues.stitching_price_snapshot,
         style_price_snapshot: snapshots?.style_price_snapshot ?? formValues.style_price_snapshot,
