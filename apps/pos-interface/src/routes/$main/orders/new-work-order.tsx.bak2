@@ -1,0 +1,1175 @@
+"use client";
+
+import { getEmployees } from "@/api/employees";
+import { getFabrics } from "@/api/fabrics";
+import { getStyles } from "@/api/styles";
+import { getCompleteOrderDetails } from "@/api/orders";
+import type { Order } from "@/types/order";
+import { mapApiGarmentToFormGarment } from "@/lib/garment-mapper";
+import { mapCustomerToFormValues } from "@/lib/customer-mapper";
+import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
+import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import {
+  customerDemographicsDefaults,
+  customerDemographicsSchema,
+} from "@/components/forms/customer-demographics/schema";
+import { CustomerMeasurementsForm } from "@/components/forms/customer-measurements";
+import {
+  customerMeasurementsDefaults,
+  customerMeasurementsSchema,
+} from "@/components/forms/customer-measurements/schema";
+import { FabricSelectionForm } from "@/components/forms/fabric-selection-and-options";
+import {
+  fabricSelectionSchema,
+  type FabricSelectionSchema,
+} from "@/components/forms/fabric-selection-and-options/fabric-selection/fabric-selection-schema";
+import {
+  styleOptionsSchema,
+  type StyleOptionsSchema,
+} from "@/components/forms/fabric-selection-and-options/style-options/style-options-schema";
+import { OrderTypeAndPaymentForm } from "@/components/forms/order-type-and-payment";
+import { paymentTypeSchema } from "@/components/forms/payment-type";
+import { PaymentTypeForm } from "@/components/forms/payment-type/payment-type-form";
+import { ShelvedProductsForm } from "@/components/forms/shelved-products";
+import {
+  shelvesFormSchema,
+  type ShelvesFormValues,
+} from "@/components/forms/shelved-products/schema";
+import { ErrorBoundary } from "@/components/global/error-boundary";
+import { OrderCreationPrompt } from "@/components/orders-at-showroom/OrderCreationPrompt";
+import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
+import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
+import { useFatouraPolling } from "@/hooks/useFatouraPolling";
+import { useOrderMutations } from "@/hooks/useOrderMutations";
+import { useStepNavigation } from "@/hooks/useStepNavigation";
+import { calculateStylePrice } from "@/lib/utils/style-utils";
+import {
+  orderDefaults,
+  orderSchema,
+  type OrderSchema,
+} from "@/schemas/work-order-schema";
+import { createWorkOrderStore } from "@/store/current-work-order";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import * as React from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+
+export const Route = createFileRoute("/$main/orders/new-work-order")({
+  component: NewWorkOrder,
+  head: () => ({
+    meta: [{ title: "New Work Order" }],
+  }),
+});
+
+const steps = [
+  { title: "Demographics", id: "step-0" },
+  { title: "Measurement", id: "step-1" },
+  { title: "Fabric Selection", id: "step-2" },
+  { title: "Shelves Products", id: "step-3" },
+  { title: "Order & Payment Info", id: "step-4" },
+  { title: "Confirmation", id: "step-5" },
+];
+
+const useCurrentWorkOrderStore = createWorkOrderStore("main");
+
+function NewWorkOrder() {
+  // ============================================================================
+  // NAVIGATION
+  // ============================================================================
+  const navigate = useNavigate();
+
+  // ============================================================================
+  // DATA FETCHING & STORE
+  // ============================================================================
+  const { data: fabricsResponse } = useQuery({
+    queryKey: ["fabrics"],
+    queryFn: getFabrics,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const { data: stylesResponse } = useQuery({
+    queryKey: ["styles"],
+    queryFn: getStyles,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const { data: employeesResponse } = useQuery({
+    queryKey: ["employees"],
+    queryFn: getEmployees,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const styles = stylesResponse?.data || [];
+  const employees = employeesResponse?.data || [];
+
+  // Store selectors
+  const currentStep = useCurrentWorkOrderStore((s) => s.currentStep);
+  const setCurrentStep = useCurrentWorkOrderStore((s) => s.setCurrentStep);
+  const savedSteps = useCurrentWorkOrderStore((s) => s.savedSteps);
+  const addSavedStep = useCurrentWorkOrderStore((s) => s.addSavedStep);
+  const removeSavedStep = useCurrentWorkOrderStore((s) => s.removeSavedStep);
+  const customerDemographics = useCurrentWorkOrderStore(
+    (s) => s.customerDemographics,
+  );
+  const setCustomerDemographics = useCurrentWorkOrderStore(
+    (s) => s.setCustomerDemographics,
+  );
+  const fabricSelections = useCurrentWorkOrderStore((s) => s.fabricSelections);
+  const setFabricSelections = useCurrentWorkOrderStore(
+    (s) => s.setFabricSelections,
+  );
+  const setStyleOptions = useCurrentWorkOrderStore((s) => s.setStyleOptions);
+  const orderId = useCurrentWorkOrderStore((s) => s.orderId);
+  const setOrderId = useCurrentWorkOrderStore((s) => s.setOrderId);
+  const order = useCurrentWorkOrderStore((s) => s.order);
+  const setOrder = useCurrentWorkOrderStore((s) => s.setOrder);
+  const stitchingPrice = useCurrentWorkOrderStore((s) => s.stitchingPrice);
+  const setStitchPrice = useCurrentWorkOrderStore((s) => s.setStitchingPrice);
+  const resetWorkOrder = useCurrentWorkOrderStore((s) => s.resetWorkOrder);
+  // Track the Airtable record ID for polling
+  const [orderRecordId, setOrderRecordId] = React.useState<string | null>(null);
+  // Track if user wants to load an existing order instead of creating new
+  const [isLoadingExistingOrder, setIsLoadingExistingOrder] =
+    React.useState(false);
+  // Track loading state when fetching order data
+  const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
+  // ============================================================================
+  // FORMS SETUP
+  // ============================================================================
+  const demographicsForm = useForm<z.infer<typeof customerDemographicsSchema>>({
+    resolver: zodResolver(customerDemographicsSchema),
+    defaultValues: customerDemographicsDefaults,
+  });
+
+  const measurementsForm = useForm<z.infer<typeof customerMeasurementsSchema>>({
+    resolver: zodResolver(customerMeasurementsSchema),
+    mode: "onSubmit",
+    defaultValues: {
+      ...customerMeasurementsDefaults,
+      measurementDate: new Date(), // Set to today for new measurements
+    },
+  });
+
+  const fabricSelectionForm = useForm<{
+    fabricSelections: FabricSelectionSchema[];
+    styleOptions: StyleOptionsSchema[];
+    signature: string;
+  }>({
+    resolver: zodResolver(
+      z.object({
+        fabricSelections: z.array(fabricSelectionSchema),
+        styleOptions: z.array(styleOptionsSchema),
+        signature: z.string().min(1, "Customer signature is required"),
+      }),
+    ),
+    defaultValues: { fabricSelections: [], styleOptions: [], signature: "" },
+  });
+
+  const ShelvesForm = useForm<ShelvesFormValues>({
+    resolver: zodResolver(shelvesFormSchema),
+    defaultValues: { products: [] },
+  });
+
+  const OrderForm = useForm<OrderSchema>({
+    resolver: zodResolver(orderSchema) as any,
+    defaultValues: orderDefaults,
+  });
+
+  const paymentForm = useForm<z.infer<typeof paymentTypeSchema>>({
+    resolver: zodResolver(paymentTypeSchema),
+    defaultValues: { paymentType: "cash" },
+  });
+
+  // Watch form values
+  const orderStatus = useWatch({
+    control: OrderForm.control,
+    name: "orderStatus",
+  });
+
+  const products = useWatch({
+    control: ShelvesForm.control,
+    name: "products",
+  });
+
+  const isOrderClosed =
+    orderStatus === "Completed" || orderStatus === "Cancelled";
+
+  const totalShelveAmount =
+    products?.reduce(
+      (acc, p) => acc + (p.quantity ?? 0) * (p.unitPrice ?? 0),
+      0,
+    ) ?? 0;
+
+  // ============================================================================
+  // NAVIGATION & UI HOOKS
+  // ============================================================================
+  const { dialog, openDialog, closeDialog } = useConfirmationDialog();
+
+  const { sectionRefs, handleStepChange, handleProceed } = useStepNavigation({
+    steps,
+    setCurrentStep,
+    addSavedStep,
+  });
+
+  // ============================================================================
+  // FATOURA POLLING
+  // ============================================================================
+  const { fatoura } = useFatouraPolling(
+    orderRecordId,
+    orderStatus === "Completed",
+  );
+
+  // ============================================================================
+  // ORDER MUTATIONS
+  // ============================================================================
+  const {
+    createOrder: createOrderMutation,
+    updateOrder: updateOrderMutation,
+    updateShelf: updateShelfMutation,
+    updateFabricStock: updateFabricStockMutation,
+    // deleteOrder: deleteOrderMutation,
+  } = useOrderMutations({
+    orderType: "WORK",
+    onOrderCreated: (id, formattedOrder, recordId) => {
+      setOrderRecordId(recordId);
+      setOrderId(id || recordId); // Use OrderID if available, otherwise use record ID temporarily
+      setOrder(formattedOrder);
+      demographicsForm.reset();
+      measurementsForm.reset();
+      fabricSelectionForm.reset();
+      ShelvesForm.reset();
+      OrderForm.reset();
+    },
+    onOrderUpdated: (action) => {
+      if (action === "customer") {
+        // Don't update the order state here - it's already correct
+        // Just proceed to the next step
+        handleProceed(0);
+      } else if (action === "updated") {
+        handleProceed(4);
+      }
+    },
+    onOrderError: () => {
+      resetWorkOrder();
+    },
+  });
+
+  // ============================================================================
+  // LOAD EXISTING ORDER HANDLER
+  // ============================================================================
+  const handleLoadExistingOrder = () => {
+    setIsLoadingExistingOrder(true);
+    setOrderId("LOADING"); // Temporary ID to show the form
+    closeDialog();
+  };
+
+  // ============================================================================
+  // PENDING ORDER LOADING
+  // ============================================================================
+  const handlePendingOrderSelected = async (order: Order) => {
+    // Set loading state
+    setIsLoadingOrderData(true);
+    try {
+      if (!order.fields.OrderID) {
+        toast.error("Invalid order ID");
+        setIsLoadingOrderData(false);
+        return;
+      }
+
+      // Reset all forms and state before loading new order
+      demographicsForm.reset(customerDemographicsDefaults);
+      measurementsForm.reset({
+        ...customerMeasurementsDefaults,
+        measurementDate: new Date(), // Set to today for new measurements
+      });
+      fabricSelectionForm.reset({
+        fabricSelections: [],
+        styleOptions: [],
+        signature: "",
+      });
+      ShelvesForm.reset({ products: [] });
+      OrderForm.reset(orderDefaults);
+      paymentForm.reset({ paymentType: "cash" });
+
+      // Clear saved steps
+      savedSteps.forEach((step) => removeSavedStep(step));
+
+      // Fetch complete order details from API
+      const response = await getCompleteOrderDetails(order.fields.OrderID);
+
+      if (response.status === "success" && response.data) {
+        const orderData = response.data;
+
+        // Set the order record ID (Airtable record ID) in store
+        if (orderData.order) {
+          setOrderId(orderData.order.fields.OrderID);
+          setOrderRecordId(orderData.order.id);
+        }
+
+        // Populate customer demographics
+        if (orderData.customer) {
+          const customer = orderData.customer;
+
+          // Use the mapper to properly transform customer data
+          const customerFormValues = mapCustomerToFormValues(customer);
+
+          // Reset form with mapped values
+          demographicsForm.reset(customerFormValues);
+
+          // Update store with full customer data (including address)
+          setCustomerDemographics(customerFormValues);
+
+          addSavedStep(0);
+        }
+
+        // Populate order form
+        if (orderData.order) {
+          const orderFields = orderData.order.fields;
+          OrderForm.setValue("customerID", orderFields.CustomerID);
+          OrderForm.setValue("orderID", orderFields.OrderID);
+          OrderForm.setValue(
+            "orderDate",
+            orderFields.OrderDate || new Date().toISOString(),
+          );
+          OrderForm.setValue(
+            "orderStatus",
+            orderFields.OrderStatus || "Pending",
+          );
+          OrderForm.setValue("homeDelivery", orderFields.HomeDelivery ?? false);
+          OrderForm.setValue("notes", orderFields.Notes || "");
+
+          if (orderFields.Campaigns) {
+            OrderForm.setValue("campaigns", orderFields.Campaigns);
+          }
+
+          setStitchPrice(orderFields.StitchingPrice || 9);
+          // Set charges
+          OrderForm.setValue("charges", {
+            fabric: orderFields.FabricCharge ?? 0,
+            stitching: orderFields.StitchingCharge ?? 0,
+            style: orderFields.StyleCharge ?? 0,
+            delivery: orderFields.DeliveryCharge ?? 0,
+            shelf: orderFields.ShelfCharge ?? 0,
+          });
+
+          OrderForm.setValue("advance", orderFields.Advance ?? 0);
+          OrderForm.setValue("paid", orderFields.Paid ?? 0);
+          OrderForm.setValue("orderTotal", orderFields.OrderTotal ?? 0);
+          OrderForm.setValue("numOfFabrics", orderFields.NumOfFabrics ?? 0);
+          OrderForm.setValue("discountType", orderFields.DiscountType as any);
+          OrderForm.setValue("discountValue", orderFields.DiscountValue ?? 0);
+
+          setOrder({
+            orderID: orderFields.OrderID,
+            customerID: orderFields.CustomerID,
+            orderDate: orderFields.OrderDate,
+            orderStatus: orderFields.OrderStatus,
+            homeDelivery: orderFields.HomeDelivery,
+            campaigns: orderFields.Campaigns,
+            deliveryDate: orderFields.DeliveryDate,
+            charges: {
+              fabric: orderFields.FabricCharge ?? 0,
+              stitching: orderFields.StitchingCharge ?? 0,
+              style: orderFields.StyleCharge ?? 0,
+              delivery: orderFields.DeliveryCharge ?? 0,
+              shelf: orderFields.ShelfCharge ?? 0,
+            },
+            advance: orderFields.Advance,
+            paid: orderFields.Paid,
+            orderTotal: orderFields.OrderTotal,
+            numOfFabrics: orderFields.NumOfFabrics,
+            paymentType: orderFields.PaymentType,
+            discountType: orderFields.DiscountType,
+            discountValue: orderFields.DiscountValue,
+          });
+        }
+
+        // Populate fabric selections and style options if available
+        if (orderData.garments && orderData.garments.length > 0) {
+          // Use the garment mapper to properly transform API data to form data
+          const mappedGarments = orderData.garments.map((garment: any) =>
+            mapApiGarmentToFormGarment(garment),
+          );
+
+          const fabricSelections = mappedGarments.map(
+            (g: any) => g.fabricSelection,
+          );
+          const styleOptions = mappedGarments.map((g: any) => g.styleOptions);
+
+          fabricSelectionForm.setValue("fabricSelections", fabricSelections);
+          fabricSelectionForm.setValue("styleOptions", styleOptions);
+          setFabricSelections(fabricSelections);
+          setStyleOptions(styleOptions);
+          addSavedStep(1); // Measurements step must be complete if fabrics exist
+          // Do NOT mark fabric selection step as saved - let user review and save
+        }
+
+        // Populate payment form
+        if (orderData.order?.fields.PaymentType) {
+          paymentForm.setValue(
+            "paymentType",
+            orderData.order.fields.PaymentType as any,
+          );
+          paymentForm.setValue(
+            "paymentRefNo",
+            orderData.order.fields.PaymentRefNo || "",
+          );
+          paymentForm.setValue(
+            "orderTaker",
+            orderData.order.fields.OrderTaker?.[0] || "",
+          );
+        }
+
+        // Navigate to first incomplete step or measurements
+        setCurrentStep(1);
+
+        toast.success(`Order #${order.fields.OrderID} loaded successfully`);
+
+        // Clear loading states after successful load
+        setIsLoadingExistingOrder(false);
+        setIsLoadingOrderData(false);
+      } else {
+        toast.error("Failed to load order details");
+        setIsLoadingOrderData(false);
+      }
+    } catch (error) {
+      console.error("Error loading pending order:", error);
+      toast.error("Failed to load order. Please try again.");
+      setIsLoadingOrderData(false);
+    }
+  };
+
+  // ============================================================================
+  // DEMOGRAPHICS FORM HANDLERS
+  // ============================================================================
+  const handleDemographicsProceed = () => {
+    const recordID = demographicsForm.getValues("customerRecordId");
+    const customerData = demographicsForm.getValues();
+
+    if (!recordID) {
+      toast.error("Please save customer information first");
+      return;
+    }
+
+    // Update OrderForm with customerID
+    OrderForm.setValue("customerID", [recordID]);
+
+    // Update store with customer demographics
+    setCustomerDemographics(customerData);
+
+    // Skip order update if we're in "loading existing order" mode
+    // (the order will be loaded when user selects a pending order)
+    if (isLoadingExistingOrder) {
+      toast.info("Please select a pending order to continue");
+      return;
+    }
+
+
+    // Update order in backend (use orderRecordId which is the Airtable record ID)
+    if (orderRecordId) {
+      updateOrderMutation.mutate({
+        fields: { customerID: [recordID] },
+        orderId: orderRecordId,
+        onSuccessAction: "customer",
+      });
+    } else {
+      toast.error("Order not created yet. Please create an order first.");
+    }
+  };
+
+  // ============================================================================
+  // MEASUREMENTS FORM HANDLERS
+  // ============================================================================
+  const handleMeasurementsProceed = () => {
+    handleProceed(1);
+  };
+
+  // ============================================================================
+  // FABRIC SELECTION HANDLERS
+  // ============================================================================
+  /**
+   * Calculate stitching price from styles data
+   * Uses the Stitch field from styles table for each selected style code
+   */
+  const calculateStitchingPrice = (
+    styleOptions: StyleOptionsSchema[],
+    stitchingPrice: number = 9.0,
+  ) => {
+    let totalStitching = 0;
+
+    totalStitching += stitchingPrice * styleOptions.length;
+
+    return totalStitching;
+  };
+
+  /**
+   * Calculate style price from styles data
+   * Uses the RatePerItem field from styles table for each selected style code
+   */
+  const calculateStylesPrices = (styleOptions: StyleOptionsSchema[]) => {
+    let totalStyle = 0;
+
+    styleOptions.forEach((styleOption) => {
+      totalStyle += calculateStylePrice(styleOption, styles);
+    });
+
+    return totalStyle;
+  };
+
+  const calculateFabricPrice = (fabricSelections: FabricSelectionSchema[]) => {
+    let fabricPrice = 0;
+    fabricSelections.forEach((fabric) => {
+      if (fabric.fabricAmount) fabricPrice += fabric.fabricAmount;
+    });
+    return fabricPrice;
+  };
+
+  const handleFabricSelectionSubmit = (data: {
+    fabricSelections: FabricSelectionSchema[];
+    styleOptions: StyleOptionsSchema[];
+    signature: string;
+  }) => {
+    setFabricSelections(data.fabricSelections);
+    setStyleOptions(data.styleOptions);
+    addSavedStep(2);
+
+    // Update number of fabrics
+    const numFabrics = data.fabricSelections.length;
+    OrderForm.setValue("numOfFabrics", numFabrics);
+    setOrder({ ...order, numOfFabrics: numFabrics });
+
+    // Calculate prices using styles data
+    const stitchingPrices = calculateStitchingPrice(
+      data.styleOptions,
+      stitchingPrice,
+    );
+    const stylePrice = calculateStylesPrices(data.styleOptions);
+    const fabricPrice = calculateFabricPrice(data.fabricSelections);
+
+    // Update order form with calculated prices
+    OrderForm.setValue("charges.fabric", fabricPrice);
+    OrderForm.setValue("charges.stitching", stitchingPrices);
+    OrderForm.setValue("charges.style", stylePrice);
+  };
+
+  // ============================================================================
+  // SHELVES FORM HANDLERS
+  // ============================================================================
+  const handleShelvesProceed = () => {
+    handleProceed(3);
+  };
+
+  // ============================================================================
+  // ORDER & PAYMENT HANDLERS
+  // ============================================================================
+  const handleOrderFormSubmit = (data: Partial<OrderSchema>) => {
+    // Preserve orderID and orderType when updating order
+    setOrder({ ...data, orderID: order.orderID, orderType: "WORK" });
+    // Mark step 4 (Order & Payment) as saved when form is submitted
+    addSavedStep(4);
+  };
+
+  const handleOrderFormProceed = () => {
+    handleProceed(4);
+  };
+
+  // ============================================================================
+  // ORDER CONFIRMATION & CANCELLATION
+  // ============================================================================
+  const validateOrderCompletion = () => {
+    if (savedSteps.length !== steps.length - 1) {
+      toast.error("Complete all the steps to confirm order!!");
+      return false;
+    }
+
+    // Validate the order schema
+    const orderData = OrderForm.getValues();
+    console.log("Order data before validation:", orderData);
+    // console.log("orderType value:", orderData.orderType);
+
+    // Ensure orderType is set to WORK for validation
+    const orderDataWithType = { ...orderData, orderType: "WORK" as const };
+    const parseResult = orderSchema.safeParse(orderDataWithType);
+
+    if (!parseResult.success) {
+      const errors = parseResult.error?.issues
+        ? parseResult.error.issues
+          .map((err: any) => `${err.path.join(".")}: ${err.message}`)
+          .join("; ")
+        : "Unknown validation error";
+      toast.error(`Order validation failed: ${errors}`);
+      console.error("Order validation errors:", parseResult.error);
+      console.error("Full order data:", orderDataWithType);
+      return false;
+    }
+
+    const address = demographicsForm.getValues().address ?? {};
+
+    const requiredFields: (keyof typeof address)[] = [
+      "city",
+      "area",
+      "block",
+      "street",
+      "houseNumber",
+    ];
+
+    const isAddressDefined = requiredFields.every(
+      (key) => typeof address[key] === "string" && address[key]!.trim() !== "",
+    );
+
+    if (OrderForm.getValues().homeDelivery && !isAddressDefined) {
+      toast.error("Need address for home delivery");
+      return false;
+    }
+
+    return true;
+  };
+
+  const confirmOrderCompletion = () => {
+    const formOrder: Partial<OrderSchema> = {
+      ...OrderForm.getValues(),
+      ...paymentForm.getValues(),
+      orderID: order.orderID, // Preserve orderID
+      orderType: "WORK", // Preserve orderType
+      orderStatus: "Completed",
+      orderDate: new Date().toISOString(),
+      numOfFabrics:
+        fabricSelectionForm.getValues()?.fabricSelections?.length ?? undefined,
+      stitchingPrice: stitchingPrice,
+    };
+
+    OrderForm.setValue("orderStatus", "Completed");
+    setOrder(formOrder);
+
+    if (orderRecordId) {
+      updateOrderMutation.mutate({
+        fields: formOrder,
+        orderId: orderRecordId,
+        onSuccessAction: "updated",
+      });
+    }
+
+    // Update stocks
+    updateShelfMutation.mutate(ShelvesForm.getValues());
+
+    const fabricSelectionsData =
+      fabricSelectionForm.getValues().fabricSelections;
+    if (fabricSelectionsData && fabricSelectionsData.length > 0) {
+      updateFabricStockMutation.mutate({
+        fabricSelections: fabricSelectionsData,
+        fabricsData: fabricsResponse?.data || [],
+      });
+    }
+
+    toast.success("Work order completed successfully! ✅");
+    handleProceed(5);
+  };
+
+  const handleOrderConfirmation = () => {
+    if (!validateOrderCompletion()) return;
+
+    confirmOrderCompletion();
+  };
+
+  const handleOrderCancellation = () => {
+    const formOrder: Partial<OrderSchema> = {
+      ...OrderForm.getValues(),
+      ...paymentForm.getValues(),
+      orderID: order.orderID, // Preserve orderID
+      orderType: "WORK", // Preserve orderType
+      orderDate: new Date().toISOString(),
+      orderStatus: "Cancelled",
+      numOfFabrics:
+        fabricSelectionForm.getValues()?.fabricSelections?.length ?? undefined,
+    };
+
+    OrderForm.setValue("orderStatus", "Cancelled");
+    setOrder(formOrder);
+
+    if (orderRecordId) {
+      updateOrderMutation.mutate({
+        fields: formOrder,
+        orderId: orderRecordId,
+        onSuccessAction: "cancelled",
+      });
+    }
+  };
+
+  // ============================================================================
+  // SIDE EFFECTS
+  // ============================================================================
+  // Sync shelf amount to order charges
+  React.useEffect(() => {
+    OrderForm.setValue("charges.shelf", totalShelveAmount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalShelveAmount]);
+
+  // Reset measurements when customer changes
+  React.useEffect(() => {
+    measurementsForm.reset({
+      ...customerMeasurementsDefaults,
+      measurementDate: new Date(), // Always set to today for new measurements
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerDemographics.id]);
+
+  // Note: Auto-dialog on mount removed - users now choose via OrderCreationPrompt buttons
+  // This prevents confusion between auto-dialog and the two-button interface
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      demographicsForm.reset();
+      resetWorkOrder();
+    };
+  }, []);
+
+  // ============================================================================
+  // NAVIGATION GUARDS
+  // ============================================================================
+  const [allowNavigation, setAllowNavigation] = React.useState(false);
+  const [pendingNavigationPath, setPendingNavigationPath] = React.useState<
+    string | null
+  >(null);
+
+  // Clear pending navigation when dialog closes without confirming
+  React.useEffect(() => {
+    if (!dialog.isOpen && pendingNavigationPath) {
+      setPendingNavigationPath(null);
+    }
+  }, [dialog.isOpen, pendingNavigationPath]);
+
+  // Prevent browser tab closing/refresh when order is in progress
+  React.useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Allow navigation if order is completed or cancelled, or if no order exists yet
+      if (
+        orderStatus === "Completed" ||
+        orderStatus === "Cancelled" ||
+        !orderId ||
+        allowNavigation
+      ) {
+        return;
+      }
+
+      // Show confirmation dialog
+      e.preventDefault();
+      e.returnValue =
+        "You have an order in progress. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [orderStatus, orderId, allowNavigation]);
+
+  // Prevent in-app navigation using link interception
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      // Don't block if order is completed/cancelled or no order exists
+      if (
+        orderStatus === "Completed" ||
+        orderStatus === "Cancelled" ||
+        !orderId ||
+        allowNavigation
+      ) {
+        return;
+      }
+
+      // Check if click target is a link
+      const target = e.target as HTMLElement;
+      const link = target.closest("a[href]");
+
+      if (link && link instanceof HTMLAnchorElement) {
+        const href = link.getAttribute("href");
+
+        // Only intercept internal navigation (not external links)
+        if (href && href.startsWith("/")) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Store the target path and show custom confirmation dialog
+          setPendingNavigationPath(href);
+          openDialog(
+            "Leave Page?",
+            "You have an order in progress. Leaving this page will not save your changes. Are you sure you want to leave?",
+            () => {
+              setAllowNavigation(true);
+              resetWorkOrder();
+              navigate({ to: href });
+              setPendingNavigationPath(null);
+              closeDialog();
+            },
+          );
+        }
+      }
+    };
+
+    document.addEventListener("click", handleClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleClick, true);
+    };
+  }, [orderStatus, orderId, allowNavigation]);
+
+  // ============================================================================
+  // INVOICE DATA PREPARATION
+  // ============================================================================
+  const invoiceData = React.useMemo(() => {
+    const demographics = demographicsForm.getValues();
+    const orderData = OrderForm.getValues();
+    const paymentData = paymentForm.getValues();
+    const fabricsData = fabricSelectionForm.getValues().fabricSelections;
+    const styleOptionsData = fabricSelectionForm.getValues().styleOptions;
+    const shelvesData = ShelvesForm.getValues().products;
+
+    // Find employee name
+    const orderTakerEmployee = employees.find(
+      (emp) => emp.id === paymentData.orderTaker,
+    );
+
+    return {
+      orderId: order.orderID,
+      orderDate: orderData.orderDate,
+      homeDelivery: orderData.homeDelivery,
+      orderStatus: orderData.orderStatus,
+      customerName: demographics.name,
+      customerPhone: demographics.mobileNumber,
+      customerAddress: demographics.address,
+      fabricSelections: fabricsData,
+      styleOptions: styleOptionsData,
+      shelvedProducts: shelvesData,
+      fabrics: fabricsResponse?.data || [],
+      styles: stylesResponse?.data || [],
+      charges: orderData.charges,
+      discountType: orderData.discountType,
+      discountValue: orderData.discountValue,
+      discountPercentage: orderData.discountPercentage,
+      advance: orderData.advance,
+      paid: orderData.paid,
+      paymentType: paymentData.paymentType,
+      otherPaymentType: paymentData.otherPaymentType,
+      paymentRefNo: paymentData.paymentRefNo,
+      orderTaker: orderTakerEmployee?.fields.Name,
+    };
+  }, [
+    demographicsForm,
+    OrderForm,
+    paymentForm,
+    fabricSelectionForm,
+    order,
+    ShelvesForm,
+    order.orderID,
+    employees,
+    fabricsResponse,
+    stylesResponse,
+  ]);
+
+  // ============================================================================
+  // RENDER: NO ORDER STATE
+  // ============================================================================
+  if (!orderId && !isLoadingExistingOrder) {
+    return (
+      <OrderCreationPrompt
+        orderType="Work Order"
+        isPending={createOrderMutation.isPending}
+        onCreateOrder={() => {
+          openDialog(
+            "Create New Work Order",
+            "This will initialize a new order entry.",
+            () => {
+              createOrderMutation.mutate(undefined);
+              closeDialog();
+            },
+          );
+        }}
+        onLoadExisting={handleLoadExistingOrder}
+        dialogState={dialog}
+        onCloseDialog={closeDialog}
+      />
+    );
+  }
+
+  // ============================================================================
+  // RENDER: LOADING ORDER DATA STATE
+  // ============================================================================
+  if (isLoadingOrderData || createOrderMutation.isPending) {
+    return (
+      <div className="mb-12 flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+          </div>
+          <h2 className="text-2xl font-bold text-foreground">
+            {createOrderMutation.isPending
+              ? "Creating Order..."
+              : "Loading Order..."}
+          </h2>
+          <p className="text-muted-foreground">
+            {createOrderMutation.isPending
+              ? "Please wait while we create a new order"
+              : "Please wait while we fetch the order details"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // RENDER: LOADING EXISTING ORDER STATE
+  // ============================================================================
+  if (isLoadingExistingOrder) {
+    return (
+      <div className="mb-12">
+        <ConfirmationDialog
+          isOpen={dialog.isOpen}
+          onClose={closeDialog}
+          onConfirm={dialog.onConfirm}
+          title={dialog.title}
+          description={dialog.description}
+        />
+
+        {/* Only show customer search when loading existing order */}
+        <div className="flex flex-col flex-1 items-center gap-10 md:gap-16 py-10 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
+          <div className="w-full flex flex-col items-center max-w-2xl">
+            <div className="w-full space-y-4">
+              <div className="space-y-1 mb-6">
+                <h1 className="text-3xl font-bold text-foreground bg-linear-to-r from-primary to-secondary bg-clip-text">
+                  Load Existing Order
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Search for a customer to view their pending orders
+                </p>
+              </div>
+              <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
+                <SearchCustomer
+                  onCustomerFound={() => {
+                    toast.info("No pending orders found for this customer");
+                  }}
+                  onHandleClear={() => {
+                    demographicsForm.reset(customerDemographicsDefaults);
+                  }}
+                  checkPendingOrders={true}
+                  onPendingOrderSelected={handlePendingOrderSelected}
+                />
+              </ErrorBoundary>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <ConfirmationDialog
+        isOpen={dialog.isOpen}
+        onClose={closeDialog}
+        onConfirm={dialog.onConfirm}
+        title={dialog.title}
+        description={dialog.description}
+      />
+
+      {/* Sticky Header with Stepper */}
+      <div className="sticky top-0 z-50 bg-background">
+        <HorizontalStepper
+          steps={steps}
+          completedSteps={savedSteps}
+          currentStep={currentStep}
+          onStepChange={handleStepChange}
+        />
+        <OrderInfoCard
+          orderID={order.orderID}
+          fatoura={fatoura}
+          orderStatus={order.orderStatus ?? "Pending"}
+          customerName={
+            customerDemographics.nickName ||
+            customerDemographics.name ||
+            undefined
+          }
+          orderType="Work Order"
+          homeDelivery={order.homeDelivery}
+          paymentType={order.paymentType}
+          numOfFabrics={order.numOfFabrics}
+          totalAmount={
+            order.charges
+              ? Object.values(order.charges).reduce((a, b) => a + b, 0)
+              : 0
+          }
+          advance={order.advance}
+          balance={(order.orderTotal ?? 0) - (order.paid ?? 0)}
+        />
+      </div>
+
+      {/* Step Content */}
+      <div className="flex flex-col items-center gap-10 md:gap-16 py-10 pb-12 mx-[5%] md:mx-[10%] 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-10 2xl:gap-y-12 2xl:max-w-screen-2xl 2xl:mx-auto">
+        {/* STEP 0: Demographics */}
+        <div
+          id={steps[0].id}
+          ref={(el) => {
+            sectionRefs.current[0] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <CustomerDemographicsForm
+            form={demographicsForm}
+            isOrderClosed={isOrderClosed}
+            onEdit={() => removeSavedStep(0)}
+            onCancel={() => addSavedStep(0)}
+            onProceed={handleDemographicsProceed}
+            onClear={() => removeSavedStep(0)}
+            checkPendingOrders={true}
+            onPendingOrderSelected={handlePendingOrderSelected}
+          />
+        </div>
+
+        {/* STEP 1: Measurements */}
+        <div
+          id={steps[1].id}
+          ref={(el) => {
+            sectionRefs.current[1] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <ErrorBoundary fallback={<div>Customer Measurements crashed</div>}>
+            <CustomerMeasurementsForm
+              form={measurementsForm}
+              isOrderClosed={isOrderClosed}
+              customerId={customerDemographics.id?.toString() || null}
+              customerRecordId={customerDemographics.customerRecordId}
+              onProceed={handleMeasurementsProceed}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 2: Fabric Selection */}
+        <div
+          id={steps[2].id}
+          ref={(el) => {
+            sectionRefs.current[2] = el;
+          }}
+          className="w-full flex flex-col items-center 2xl:col-span-2"
+        >
+          <ErrorBoundary fallback={<div>Fabric Selection crashed</div>}>
+            <FabricSelectionForm
+              customerId={customerDemographics.id?.toString() || null}
+              customerName={
+                customerDemographics.nickName || customerDemographics.name
+              }
+              customerMobile={customerDemographics.mobileNumber}
+              form={fabricSelectionForm}
+              isOrderClosed={isOrderClosed}
+              onSubmit={handleFabricSelectionSubmit}
+              onProceed={() => handleProceed(2)}
+              orderId={order.orderID || null}
+              orderRecordId={orderId}
+              onCampaignsChange={(campaigns) => {
+                if (orderId) {
+                  OrderForm.setValue("campaigns", campaigns);
+                }
+              }}
+              isProceedDisabled={fabricSelections.length === 0}
+              orderStatus={orderStatus}
+              deliveryDate={order.deliveryDate}
+              setDeliveryDate={(date: string) =>
+                setOrder({ deliveryDate: date })
+              }
+              fatoura={fatoura}
+              orderDate={order.orderDate}
+              stichingPrice={stitchingPrice}
+              setStichingPrice={setStitchPrice}
+              initialCampaigns={order.campaigns || []}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 3: Shelved Products */}
+        <div
+          id={steps[3].id}
+          ref={(el) => {
+            sectionRefs.current[3] = el;
+          }}
+          className="w-full flex flex-col items-center 2xl:col-span-2"
+        >
+          <ErrorBoundary fallback={<div>Shelved Products crashed</div>}>
+            <ShelvedProductsForm
+              form={ShelvesForm}
+              isOrderClosed={isOrderClosed}
+              onProceed={handleShelvesProceed}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 4: Order & Payment Info */}
+        <div
+          id={steps[4].id}
+          ref={(el) => {
+            sectionRefs.current[4] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
+            <OrderTypeAndPaymentForm
+              form={OrderForm}
+              onSubmit={handleOrderFormSubmit}
+              onProceed={handleOrderFormProceed}
+              customerAddress={customerDemographics?.address}
+              fabricSelections={fabricSelections}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 5: Confirmation */}
+        <div
+          id={steps[5].id}
+          ref={(el) => {
+            sectionRefs.current[5] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <ErrorBoundary fallback={<div>Payment crashed</div>}>
+            <PaymentTypeForm
+              form={paymentForm}
+              isOrderClosed={isOrderClosed}
+              invoiceData={invoiceData}
+              orderRecordId={orderRecordId}
+              orderStatus={orderStatus}
+              onConfirm={(values) => {
+                console.log("Payment form submitted with values:", values);
+                openDialog(
+                  "Confirm new work order",
+                  "Do you want to confirm a new work order?",
+                  () => {
+                    handleOrderConfirmation();
+                    closeDialog();
+                  },
+                );
+              }}
+              onCancel={() => {
+                openDialog(
+                  "Cancel new work order",
+                  "Do you want to cancel a new work order?",
+                  () => {
+                    handleOrderCancellation();
+                    closeDialog();
+                  },
+                );
+              }}
+            />
+          </ErrorBoundary>
+        </div>
+      </div>
+    </>
+  );
+}

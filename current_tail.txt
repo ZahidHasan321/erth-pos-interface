@@ -1,0 +1,100 @@
+              orderRecordId={orderId}
+              onCampaignsChange={(campaigns) => {
+                if (orderId) {
+                  OrderForm.setValue("campaigns", campaigns);
+                }
+              }}
+              isProceedDisabled={fabricSelections.length === 0}
+              orderStatus={orderStatus}
+              deliveryDate={order.deliveryDate}
+              setDeliveryDate={(date: string) =>
+                setOrder({ deliveryDate: date })
+              }
+              fatoura={fatoura}
+              orderDate={order.orderDate}
+              stichingPrice={stitchingPrice}
+              setStichingPrice={setStitchPrice}
+              initialCampaigns={order.campaigns || []}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 3: Shelved Products */}
+        <div
+          id={steps[3].id}
+          ref={(el) => {
+            sectionRefs.current[3] = el;
+          }}
+          className="w-full flex flex-col items-center 2xl:col-span-2"
+        >
+          <ErrorBoundary fallback={<div>Shelved Products crashed</div>}>
+            <ShelvedProductsForm
+              form={ShelvesForm}
+              isOrderClosed={isOrderClosed}
+              onProceed={handleShelvesProceed}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 4: Order & Payment Info */}
+        <div
+          id={steps[4].id}
+          ref={(el) => {
+            sectionRefs.current[4] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
+            <OrderTypeAndPaymentForm
+              form={OrderForm}
+              onSubmit={handleOrderFormSubmit}
+              onProceed={handleOrderFormProceed}
+              customerAddress={customerDemographics?.address}
+              fabricSelections={fabricSelections}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* STEP 5: Confirmation */}
+        <div
+          id={steps[5].id}
+          ref={(el) => {
+            sectionRefs.current[5] = el;
+          }}
+          className="w-full flex flex-col items-center"
+        >
+          <ErrorBoundary fallback={<div>Payment crashed</div>}>
+            <PaymentTypeForm
+              form={paymentForm}
+              isOrderClosed={isOrderClosed}
+              invoiceData={invoiceData}
+              orderRecordId={orderRecordId}
+              orderStatus={orderStatus}
+              onConfirm={(values) => {
+                console.log("Payment form submitted with values:", values);
+                openDialog(
+                  "Confirm new work order",
+                  "Do you want to confirm a new work order?",
+                  () => {
+                    handleOrderConfirmation();
+                    closeDialog();
+                  },
+                );
+              }}
+              onCancel={() => {
+                openDialog(
+                  "Cancel new work order",
+                  "Do you want to cancel a new work order?",
+                  () => {
+                    handleOrderCancellation();
+                    closeDialog();
+                  },
+                );
+              }}
+            />
+          </ErrorBoundary>
+        </div>
+      </div>
+    </>
+  );
+}

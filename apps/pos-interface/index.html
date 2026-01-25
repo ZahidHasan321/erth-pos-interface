@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      /* Compact Scissors Loader - Half Size */
+      :root {
+        --scissor-metal: #64748b;
+        --handle-dark: #1f2937;
+        --joint-gold: #d4af37;
+        --text-slate: #1e293b;
+      }
+
+      .loader-container {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        z-index: 9999;
+        transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .loader-container.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .scissors-wrapper {
+        position: relative;
+        width: min(180px, 60vw);
+        height: 50px;
+        margin-bottom: 1.5rem;
+        font-size: clamp(6px, 1.8vw, 10px);
+      }
+
+      /* Scissors move left to right */
+      .scissors {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 11.5em;
+        height: 4em;
+        animation: scissorsMove 2.5s ease-in-out infinite;
+      }
+
+      @keyframes scissorsMove {
+        0% {
+          left: 0;
+        }
+        50% {
+          left: calc(100% - 11.5em);
+        }
+        100% {
+          left: 0;
+        }
+      }
+
+      /* Scissor halves with cutting animation */
+      .scissors-half {
+        width: 11.5em;
+        height: 2em;
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-style: preserve-3d;
+        backface-visibility: hidden;
+        transform-origin: 46.5% 100% 0;
+        transform: rotate(12deg);
+        animation: rot-top 0.8s ease-out infinite;
+      }
+
+      .scissors-half.bottom {
+        top: 1.5em;
+        transform-origin: 46.5% 0% 0;
+        transform: rotate(-12deg);
+        animation: rot-bottom 0.8s ease-out infinite;
+      }
+
+      .scissors-half.bottom .blade {
+        top: 0;
+        border-radius: 0 0.5em 0 0;
+      }
+
+      .scissors-half.bottom .blade::after {
+        top: 0.5em;
+        border-width: 0.5em 1em 0 1em;
+        border-color: var(--scissor-metal) transparent transparent transparent;
+      }
+
+      @keyframes rot-top {
+        0% {
+          transform: rotate(12deg);
+        }
+        50% {
+          transform: rotate(35deg);
+        }
+        100% {
+          transform: rotate(12deg);
+        }
+      }
+
+      @keyframes rot-bottom {
+        0% {
+          transform: rotate(-12deg);
+        }
+        50% {
+          transform: rotate(-35deg);
+        }
+        100% {
+          transform: rotate(-12deg);
+        }
+      }
+
+      /* Joint */
+      .joint {
+        width: 0.35em;
+        height: 0.35em;
+        border-radius: 50%;
+        background: var(--joint-gold);
+        position: absolute;
+        top: 1.825em;
+        left: 45%;
+        z-index: 5;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Handles */
+      .handle {
+        width: 4em;
+        height: 2em;
+        border-radius: 1em;
+        border: 0.45em solid var(--handle-dark);
+        background: #ffffff;
+        position: absolute;
+        top: 0;
+        left: 0;
+        box-sizing: border-box;
+      }
+
+      /* Blades */
+      .blade {
+        width: 7.5em;
+        height: 0.5em;
+        position: absolute;
+        top: 1.25em;
+        left: 4em;
+        background: var(--scissor-metal);
+        border-radius: 0 0 0.5em 0;
+      }
+
+      .blade::before {
+        content: "";
+        width: 2em;
+        height: 0.5em;
+        background: var(--scissor-metal);
+        position: absolute;
+        top: 0;
+        left: -2em;
+        border-radius: 0.25em 0 0 0.25em;
+      }
+
+      .blade::after {
+        content: "";
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 0 1em 0.5em 1em;
+        border-color: transparent transparent var(--scissor-metal) transparent;
+        position: absolute;
+        top: -0.5em;
+        left: -1em;
+      }
+
+      /* Loading text */
+      .loading-text {
+        color: var(--text-slate);
+        font-family: "IBM Plex Sans Arabic", system-ui, sans-serif;
+        font-size: clamp(0.95rem, 3.5vw, 1.125rem);
+        font-weight: 600;
+      }
+
+      .loading-dots::after {
+        content: "";
+        animation: dots 1.5s steps(3, end) infinite;
+      }
+
+      @keyframes dots {
+        0%,
+        20% {
+          content: ".";
+        }
+        40% {
+          content: "..";
+        }
+        60%,
+        100% {
+          content: "...";
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="loader-container" id="loader-container">
+        <div class="scissors-wrapper">
+          <div class="scissors">
+            <div class="scissors-half">
+              <div class="handle"></div>
+              <div class="blade"></div>
+            </div>
+            <div class="scissors-half bottom">
+              <div class="handle"></div>
+              <div class="blade"></div>
+            </div>
+            <div class="joint"></div>
+          </div>
+        </div>
+        <div class="loading-text">
+          Waiting to cut<span class="loading-dots"></span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const loader = document.getElementById("loader-container");
+        const root = document.getElementById("root");
+
+        if (!loader || !root) return;
+
+        const observer = new MutationObserver(() => {
+          const hasReactContent =
+            root.children.length > 1 ||
+            (root.children.length === 1 &&
+              !root.querySelector("#loader-container"));
+
+          if (hasReactContent) {
+            loader.classList.add("fade-out");
+            setTimeout(() => observer.disconnect(), 600);
+          }
+        });
+
+        observer.observe(root, { childList: true, subtree: true });
+
+        setTimeout(() => {
+          loader.classList.add("fade-out");
+          observer.disconnect();
+        }, 5000);
+      });
+    </script>
+  </body>
+</html>
