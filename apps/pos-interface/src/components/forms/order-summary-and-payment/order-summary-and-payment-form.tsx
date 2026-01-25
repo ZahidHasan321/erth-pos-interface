@@ -16,6 +16,7 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { 
@@ -259,7 +260,12 @@ export function OrderSummaryAndPaymentForm({
   const showAddressWarning = home_delivery && !hasAddress;
 
   const handleSubmit = (data: z.infer<typeof orderSchema>) => {
-    if (showAddressWarning) return;
+    if (showAddressWarning) {
+      toast.error("Address Required", {
+        description: "Please add the customer's address in Demographics before selecting Home Delivery."
+      });
+      return;
+    }
     onConfirm(data);
   };
 
@@ -682,9 +688,18 @@ export function OrderSummaryAndPaymentForm({
               {/* Action Buttons */}
               <div className="flex flex-col gap-3 pt-6">
                 {!isOrderClosed && (
-                  <Button type="submit" size="lg" className="w-full h-14 text-lg">
-                    <Check className="w-5 h-5 mr-2" />
-                    Confirm & Complete Order
+                  <Button 
+                    type="submit" 
+                    size="lg" 
+                    className="w-full h-14 text-lg"
+                    disabled={form.formState.isSubmitting || showAddressWarning}
+                  >
+                    {form.formState.isSubmitting ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="w-5 h-5 mr-2" />
+                    )}
+                    {form.formState.isSubmitting ? "Processing..." : "Confirm & Complete Order"}
                   </Button>
                 )}
 

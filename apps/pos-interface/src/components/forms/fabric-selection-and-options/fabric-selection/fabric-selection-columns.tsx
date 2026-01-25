@@ -127,9 +127,12 @@ export const columns: ColumnDef<GarmentSchema>[] = [
       const customerMobile = meta?.customerMobile || "N/A";
       const measurementOptions = meta?.measurementOptions || [];
 
-      const currentRowData = getValues(
+      const currentRowData = (getValues(
         `garments.${row.index}`,
-      ) as GarmentSchema;
+      ) || row.original) as GarmentSchema;
+
+      if (!currentRowData) return null;
+
       const measurementDisplay =
         measurementOptions.find((m) => m.id === currentRowData.measurement_id)
           ?.MeasurementID || currentRowData.measurement_id;

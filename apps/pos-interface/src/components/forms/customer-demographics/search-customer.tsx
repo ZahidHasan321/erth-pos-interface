@@ -30,6 +30,7 @@ interface SearchCustomerProps {
   onHandleClear: () => void;
   onPendingOrderSelected?: (order: Order) => void;
   checkPendingOrders?: boolean;
+  isResetDisabled?: boolean;
 }
 
 export function SearchCustomer({
@@ -37,6 +38,7 @@ export function SearchCustomer({
   onHandleClear,
   onPendingOrderSelected,
   checkPendingOrders = false,
+  isResetDisabled = false,
 }: SearchCustomerProps) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -206,6 +208,7 @@ export function SearchCustomer({
           variant="ghost"
           size="sm"
           onClick={handleClear}
+          disabled={isResetDisabled}
           className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full h-8 px-3"
         >
           <X className="size-3.5 mr-1.5" />

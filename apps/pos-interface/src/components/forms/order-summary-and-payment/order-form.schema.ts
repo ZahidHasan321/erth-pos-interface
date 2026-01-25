@@ -34,8 +34,8 @@ export const orderSchema = z.object({
   delivery_charge: z.number().default(0),
   shelf_charge: z.number().default(0),
 
-  advance: z.number().default(0),
-  paid: z.number().nullish(),
+  advance: z.number().optional().nullable(),
+  paid: z.number().optional().nullable(),
   order_total: z.number().default(0),
 
   num_of_fabrics: z.number().optional().nullable(),
@@ -92,7 +92,7 @@ export const orderDefaults: OrderSchema = {
   delivery_charge: 0,
   shelf_charge: 0,
 
-  advance: 0,
+  advance: undefined,
   paid: undefined,
   order_total: 0,
   num_of_fabrics: 0,

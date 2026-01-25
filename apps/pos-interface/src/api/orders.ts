@@ -220,3 +220,27 @@ export const completeWorkOrder = async (
     return { status: 'success', data: data as any };
 };
 
+export const saveWorkOrderGarments = async (
+    orderId: number,
+    garments: any[],
+    orderUpdates: {
+        num_of_fabrics: number;
+        fabric_charge: number;
+        stitching_charge: number;
+        style_charge: number;
+        stitching_price: number;
+    }
+): Promise<ApiResponse<any>> => {
+    const { data, error } = await supabase.rpc('save_work_order_garments', {
+        p_order_id: orderId,
+        p_garments: garments,
+        p_order_updates: orderUpdates
+    });
+
+    if (error) {
+        console.error('Error saving work order garments:', error);
+        return { status: 'error', message: error.message };
+    }
+    return { status: 'success', data };
+};
+

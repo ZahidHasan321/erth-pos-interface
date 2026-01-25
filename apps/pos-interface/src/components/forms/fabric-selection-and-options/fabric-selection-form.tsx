@@ -3,6 +3,7 @@
 import { getFabrics } from "@/api/fabrics";
 import { getPrices } from "@/api/prices";
 import { createGarment, updateGarment } from "@/api/garments";
+import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
 import { getCampaigns } from "@/api/campaigns";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SignaturePad } from "@/components/forms/signature-pad";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { useReactToPrint } from "react-to-print";
 import {
@@ -111,6 +112,7 @@ export function FabricSelectionForm({
     setStitchingPrice,
     initialCampaigns = [],
 }: FabricSelectionFormProps) {
+    const queryClient = useQueryClient();
     const [numRowsToAdd, setNumRowsToAdd] = React.useState(0);
     const [selectedCampaigns, setSelectedCampaigns] = React.useState<string[]>(
         [],
@@ -230,10 +232,18 @@ export function FabricSelectionForm({
     React.useEffect(() => {
         if (!deliveryDate) return;
 
+        const date = new Date(deliveryDate);
+        if (isNaN(date.getTime())) {
+            console.error("Invalid delivery date:", deliveryDate);
+            return;
+        }
+
+        const isoDate = date.toISOString();
+
         garmentFields.forEach((_, index) => {
             form.setValue(
                 `garments.${index}.delivery_date`,
-                new Date(deliveryDate).toISOString(),
+                isoDate,
                 {
                     shouldDirty: true,
                     shouldTouch: false,
@@ -241,7 +251,7 @@ export function FabricSelectionForm({
                 },
             );
         });
-    }, [deliveryDate, garmentFields.length]);
+    }, [deliveryDate, garmentFields.length, form]);
 
     const { mutate: saveGarmentsMutation, isPending: isSaving } = useMutation({
         mutationFn: async (data: {
@@ -253,55 +263,59 @@ export function FabricSelectionForm({
                 );
             }
 
-            const promises = data.garments.map(async (garment) => {
+            let totalFabricCharge = 0;
+            let totalStitchingCharge = 0;
+            let totalStyleCharge = 0;
+
+            const garmentsToSave = data.garments.map((garment) => {
                 const stitchingSnapshot = garment.style === "design" ? 9 : stitchingPrice;
                 const styleSnapshot = calculateGarmentStylePrice(garment, prices || []);
                 const fabricSnapshot = garment.fabric_amount || 0;
 
-                const garmentData = mapFormValuesToGarment(garment, orderId, {
+                totalFabricCharge += fabricSnapshot;
+                totalStitchingCharge += stitchingSnapshot;
+                totalStyleCharge += styleSnapshot;
+
+                return mapFormValuesToGarment(garment, orderId, {
                     stitching_price_snapshot: stitchingSnapshot,
                     style_price_snapshot: styleSnapshot,
                     fabric_price_snapshot: fabricSnapshot,
                 });
-
-                if (garment.id && garment.id !== "") {
-                    return updateGarment(garment.id, garmentData);
-                } else {
-                    return createGarment(garmentData);
-                }
             });
 
-            return Promise.all(promises);
+            return saveWorkOrderGarments(orderId, garmentsToSave, {
+                num_of_fabrics: data.garments.length,
+                fabric_charge: totalFabricCharge,
+                stitching_charge: totalStitchingCharge,
+                style_charge: totalStyleCharge,
+                stitching_price: stitchingPrice,
+            });
         },
-        onSuccess: (responses) => {
-            const errorResponses = responses.filter((r) => !r || (r as any).status === "error");
-
-            if (errorResponses.length > 0) {
-                toast.error(
-                    `Failed to save ${errorResponses.length} garment(s)`,
-                );
+        onSuccess: async (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to save garments: ${response.message || "Unknown error"}`);
                 return;
             }
 
-            toast.success(`${responses.length} garment(s) saved successfully!`);
+            toast.success(`Garments saved successfully!`);
 
-            const updatedGarments = form
-                .getValues("garments")
-                .map((garment, index) => {
-                    const savedData = responses[index]?.data;
-                    if (savedData) {
-                        return mapGarmentToFormValues(savedData as any); 
-                    }
-                    return garment;
-                });
-
-            form.setValue("garments", updatedGarments);
+            // Fetch the updated order details to get the new garment IDs
+            if (orderId) {
+                const detailsRes = await getOrderDetails(orderId);
+                if (detailsRes.status === "success" && detailsRes.data?.garments) {
+                    const updatedGarments = detailsRes.data.garments.map((g: any) => mapGarmentToFormValues(g));
+                    form.setValue("garments", updatedGarments);
+                }
+            }
 
             setIsSaved(true);
             setIsEditing(false);
+            
+            // Sync Pending Order list
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
 
             onSubmit?.({
-                garments: updatedGarments,
+                garments: form.getValues("garments"),
                 signature: form.getValues("signature"),
             });
         },

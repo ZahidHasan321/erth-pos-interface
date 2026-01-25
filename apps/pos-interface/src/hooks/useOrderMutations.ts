@@ -98,7 +98,7 @@ export function mapOrderToSchema(order: Order): OrderSchema {
         delivery_charge: parseNumeric(order.delivery_charge) ?? 0,
         shelf_charge: parseNumeric(order.shelf_charge) ?? 0,
 
-        advance: parseNumeric(order.advance) ?? 0,
+        advance: parseNumeric(order.advance),
         paid: parseNumeric(order.paid),
         order_total: parseNumeric(order.order_total) ?? 0,
         num_of_fabrics: order.num_of_fabrics || 0,

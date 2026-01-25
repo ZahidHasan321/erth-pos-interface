@@ -108,3 +108,79 @@ BEGIN
   RETURN to_jsonb(v_order_row);
 END;
 $$ LANGUAGE plpgsql;
+
+-- 4. Transactional RPC for saving work order garments and updating order totals
+CREATE OR REPLACE FUNCTION save_work_order_garments(
+  p_order_id INT,
+  p_garments JSONB, -- Array of garment objects
+  p_order_updates JSONB -- { num_of_fabrics, fabric_charge, stitching_charge, style_charge, stitching_price }
+) RETURNS JSONB AS $$
+DECLARE
+  v_garment JSONB;
+BEGIN
+  -- 1. Update Order Totals (but not order_total yet)
+  UPDATE orders
+  SET
+    num_of_fabrics = (p_order_updates->>'num_of_fabrics')::INT,
+    fabric_charge = (p_order_updates->>'fabric_charge')::DECIMAL,
+    stitching_charge = (p_order_updates->>'stitching_charge')::DECIMAL,
+    style_charge = (p_order_updates->>'style_charge')::DECIMAL,
+    stitching_price = (p_order_updates->>'stitching_price')::DECIMAL
+  WHERE id = p_order_id;
+
+  -- 2. Clear and Re-insert Garments (Atomic Sync)
+  DELETE FROM garments WHERE order_id = p_order_id;
+
+  FOR v_garment IN SELECT * FROM jsonb_array_elements(p_garments)
+  LOOP
+    INSERT INTO garments (
+      order_id, garment_id, fabric_id, style_id, measurement_id, fabric_source,
+      quantity, fabric_length, fabric_price_snapshot, stitching_price_snapshot,
+      style_price_snapshot, collar_type, collar_button, cuffs_type, cuffs_thickness,
+      front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder,
+      small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, notes,
+      express, brova, delivery_date, piece_stage, style, shop_name, home_delivery, color
+    ) VALUES (
+      p_order_id,
+      v_garment->>'garment_id',
+      (v_garment->>'fabric_id')::INT,
+      (v_garment->>'style_id')::INT,
+      (v_garment->>'measurement_id')::UUID,
+      (v_garment->>'fabric_source')::fabric_source,
+      COALESCE((v_garment->>'quantity')::INT, 1),
+      (v_garment->>'fabric_length')::DECIMAL,
+      (v_garment->>'fabric_price_snapshot')::DECIMAL,
+      (v_garment->>'stitching_price_snapshot')::DECIMAL,
+      (v_garment->>'style_price_snapshot')::DECIMAL,
+      v_garment->>'collar_type',
+      v_garment->>'collar_button',
+      v_garment->>'cuffs_type',
+      v_garment->>'cuffs_thickness',
+      v_garment->>'front_pocket_type',
+      v_garment->>'front_pocket_thickness',
+      COALESCE((v_garment->>'wallet_pocket')::BOOLEAN, false),
+      COALESCE((v_garment->>'pen_holder')::BOOLEAN, false),
+      COALESCE((v_garment->>'small_tabaggi')::BOOLEAN, false),
+      (v_garment->>'jabzour_1')::jabzour_type,
+      v_garment->>'jabzour_2',
+      v_garment->>'jabzour_thickness',
+      COALESCE((v_garment->>'lines')::INT, 1),
+      v_garment->>'notes',
+      COALESCE((v_garment->>'express')::BOOLEAN, false),
+      COALESCE((v_garment->>'brova')::BOOLEAN, false),
+      (v_garment->>'delivery_date')::TIMESTAMP,
+      COALESCE((v_garment->>'piece_stage')::production_stage, 'order_at_shop'),
+      COALESCE(v_garment->>'style', 'kuwaiti'),
+      v_garment->>'shop_name',
+      COALESCE((v_garment->>'home_delivery')::BOOLEAN, false),
+      v_garment->>'color'
+    );
+  END LOOP;
+
+  RETURN jsonb_build_object('status', 'success');
+END;
+$$ LANGUAGE plpgsql;
+
+-- 5. Cleanup defaults that shouldn't be there
+ALTER TABLE orders ALTER COLUMN paid DROP DEFAULT;
+ALTER TABLE orders ALTER COLUMN paid SET DEFAULT NULL;

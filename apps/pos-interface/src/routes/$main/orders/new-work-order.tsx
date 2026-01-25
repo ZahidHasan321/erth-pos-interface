@@ -828,6 +828,7 @@ function NewWorkOrder() {
                             }}
                             checkPendingOrders={true}
                             onPendingOrderSelected={handlePendingOrderSelected}
+                            isResetDisabled={!!orderId}
                         />
                     </ErrorBoundary>
                 </div>
@@ -845,6 +846,10 @@ function NewWorkOrder() {
                         isOrderClosed={isOrderClosed}
                         orderId={orderId}
                         onCustomerChange={handleCustomerFound}
+                        onSave={(data) => {
+                            setCustomerDemographics(data);
+                            addSavedStep(0);
+                        }}
                         onEdit={() => removeSavedStep(0)}
                         onCancel={() => addSavedStep(0)}
                         onProceed={handleDemographicsProceed}
