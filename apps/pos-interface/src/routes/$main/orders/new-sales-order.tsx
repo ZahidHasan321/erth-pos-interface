@@ -16,7 +16,6 @@ import {
 } from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
-import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
@@ -138,7 +137,7 @@ function NewSalesOrder() {
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
                 console.log("Order Data retrieved:", orderData);
-                
+
                 // 1. Load Customer
                 if (orderData.customer) {
                     const customerFormValues = mapCustomerToFormValues(orderData.customer);
@@ -146,7 +145,7 @@ function NewSalesOrder() {
                     setCustomerDemographics(customerFormValues);
                     addSavedStep(0);
                 }
-                
+
                 // 2. Load Shelf Items
                 let mappedShelfProducts: any[] = [];
                 if (orderData.shelf_items && orderData.shelf_items.length > 0) {
@@ -167,14 +166,14 @@ function NewSalesOrder() {
                     console.log("No shelf items found in orderData");
                     shelfForm.reset({ products: [] });
                 }
-                
+
                 // 3. Load Order Info
                 const mappedOrder = mapOrderToSchema(orderData);
                 OrderForm.reset(mappedOrder);
                 setOrderId(orderData.id);
                 setOrder(mappedOrder);
                 addSavedStep(2);
-                
+
                 toast.success("Order loaded successfully");
             } else {
                 toast.error("Order not found");
@@ -202,12 +201,12 @@ function NewSalesOrder() {
     });
 
     const [
-        delivery_charge, 
-        shelf_charge, 
-        home_delivery, 
-        payment_type, 
-        order_total, 
-        paid, 
+        delivery_charge,
+        shelf_charge,
+        home_delivery,
+        payment_type,
+        order_total,
+        paid,
         advance
     ] = useWatch({
         control: OrderForm.control,
@@ -289,7 +288,7 @@ function NewSalesOrder() {
 
         // Update store with customer demographics
         setCustomerDemographics(customerData);
-        
+
         // Proceed to next step (Shelf Products)
         handleProceed(0);
     };
@@ -313,10 +312,10 @@ function NewSalesOrder() {
 
         const shelfItems = shelfForm.getValues().products
             .filter(p => p.id && p.quantity)
-            .map(p => ({ 
-                id: Number(p.id!), 
-                quantity: p.quantity!, 
-                unitPrice: p.unit_price ?? 0 
+            .map(p => ({
+                id: Number(p.id!),
+                quantity: p.quantity!,
+                unitPrice: p.unit_price ?? 0
             }));
 
         createCompleteSalesOrderMutation.mutate({
@@ -439,12 +438,12 @@ function NewSalesOrder() {
         <>
             <ScrollProgress />
             {(isLoadingOrderData || createCompleteSalesOrderMutation.isPending || completeSalesOrderMutation.isPending) && (
-                <FullScreenLoader 
+                <FullScreenLoader
                     title={
                         isLoadingOrderData
                             ? "Loading Order"
-                            : createCompleteSalesOrderMutation.isPending 
-                                ? "Creating Order" 
+                            : createCompleteSalesOrderMutation.isPending
+                                ? "Creating Order"
                                 : "Completing Sales Order"
                     }
                     subtitle="Please wait while we process your request..."
@@ -501,7 +500,7 @@ function NewSalesOrder() {
                             setCustomerDemographics(data);
                         }}
                         onEdit={() => removeSavedStep(0)}
-                        onCancel={() => {}}
+                        onCancel={() => { }}
                         onProceed={handleDemographicsProceed}
                         onClear={() => {
                             removeSavedStep(0);

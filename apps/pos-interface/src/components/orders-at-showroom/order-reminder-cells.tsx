@@ -43,7 +43,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   month: "short" 
 });
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -55,8 +55,11 @@ function useOrderUpdate() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Record<string, any> }) => 
-      updateOrder(updates, id),
+    mutationFn: ({ id, updates }: { id: string; updates: Record<string, any> }) => {
+       // id is string but API expects number
+       const numericId = parseInt(id);
+       return updateOrder(updates, numericId);
+    },
     onSuccess: async () => {
       // Invalidate everything to be safe and ensure table refreshes
       await queryClient.invalidateQueries(); 
@@ -101,7 +104,9 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
 
   const handleOpen = (open: boolean) => {
     if (open) {
-      setEditDate(displayDate || new Date().toISOString().split("T")[0]);
+      // Ensure YYYY-MM-DD
+      const d = displayDate ? new Date(displayDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+      setEditDate(d);
       setEditNote(displayNote || "");
     }
     setIsOpen(open);
@@ -116,12 +121,10 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
         escalation_notes: editNote,
       };
     } else {
-      // Keep old camelCase for R1-R3 for now if they are just meta fields, 
-      // but typically these should also be in schema.
-      const fieldPrefix = type;
+      const fieldPrefix = type.toLowerCase(); // r1, r2, r3
       updates = {
-        [`${fieldPrefix}Date`]: editDate,
-        [`${fieldPrefix}Notes`]: editNote,
+        [`${fieldPrefix}_date`]: editDate,
+        [`${fieldPrefix}_notes`]: editNote,
       };
     }
 
@@ -255,7 +258,8 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
 
   const handleOpen = (open: boolean) => {
     if (open) {
-      setEditDate(displayDate || new Date().toISOString().split("T")[0]);
+      const d = displayDate ? new Date(displayDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+      setEditDate(d);
       setEditStatus(displayStatus || "");
       setEditNote(displayNote || "");
     }

@@ -25,9 +25,7 @@ function RouteComponent() {
   
   // Initial Filter State
   const [filters, setFilters] = useState<FilterState>({
-    orderId: "",
-    fatoura: "",
-    mobile: "",
+    searchId: "",
     customer: "",
     stage: "all",
     reminderStatuses: [],
@@ -48,9 +46,7 @@ function RouteComponent() {
 
   const clearFilters = () => {
     setFilters({
-      orderId: "",
-      fatoura: "",
-      mobile: "",
+      searchId: "",
       customer: "",
       stage: "all",
       reminderStatuses: [],

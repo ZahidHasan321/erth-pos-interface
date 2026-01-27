@@ -6,13 +6,12 @@ import type { OrderRow } from "./types";
 import { CallCell, ReminderCell } from "./order-reminder-cells";
 import { Link } from "@tanstack/react-router";
 
-
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { 
   day: "numeric", 
   month: "short" 
 });
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -99,12 +98,12 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.orderStatus;
-      const colorMap = {
+      const colorMap: Record<string, string> = {
         Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
         Completed: "bg-green-100 text-green-700 border-green-200",
         Cancelled: "bg-red-100 text-red-700 border-red-200",
       };
-      const color = colorMap[status];
+      const color = colorMap[status] || "bg-gray-100 text-gray-700 border-gray-200";
 
       return (
         <span
@@ -123,7 +122,7 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "Order Stage",
     cell: ({ row }) => (
       <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-inset ring-gray-500/10 whitespace-nowrap">
-        {row.original.order.fields.FatouraStages || "—"}
+        {row.original.fatouraStage || "—"}
       </span>
     ),
   },
@@ -155,7 +154,7 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     id: "paid",
     header: "Paid",
     cell: ({ row }) => {
-      const paid = row.original.order.fields.Paid || (row.original.totalAmount - (row.original.balance || 0));
+      const paid = row.original.order.paid ? Number(row.original.order.paid) : (row.original.totalAmount - (row.original.balance || 0));
       return (
         <span className="text-xs text-muted-foreground">
           {paid.toFixed(2)}
@@ -181,10 +180,10 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "R1",
     cell: ({ row }) => (
       <ReminderCell 
-        orderId={row.original.order.id}
+        orderId={row.original.order.id.toString()}
         type="R1"
-        date={row.original.order.fields.R1Date}
-        note={row.original.order.fields.R1Notes}
+        date={row.original.order.r1_date ? new Date(row.original.order.r1_date).toISOString() : undefined}
+        note={row.original.order.r1_notes || undefined}
         colorClass="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
       />
     ),
@@ -194,10 +193,10 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "R2",
     cell: ({ row }) => (
       <ReminderCell 
-        orderId={row.original.order.id}
+        orderId={row.original.order.id.toString()}
         type="R2"
-        date={row.original.order.fields.R2Date}
-        note={row.original.order.fields.R2Notes}
+        date={row.original.order.r2_date ? new Date(row.original.order.r2_date).toISOString() : undefined}
+        note={row.original.order.r2_notes || undefined}
         colorClass="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
       />
     ),
@@ -207,10 +206,10 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "R3",
     cell: ({ row }) => (
       <ReminderCell 
-        orderId={row.original.order.id}
+        orderId={row.original.order.id.toString()}
         type="R3"
-        date={row.original.order.fields.R3Date}
-        note={row.original.order.fields.R3Notes}
+        date={row.original.order.r3_date ? new Date(row.original.order.r3_date).toISOString() : undefined}
+        note={row.original.order.r3_notes || undefined}
         colorClass="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
       />
     ),
@@ -220,10 +219,10 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "Call",
     cell: ({ row }) => (
       <CallCell 
-        orderId={row.original.order.id}
-        date={row.original.order.fields.CallReminderDate}
-        status={row.original.order.fields.CallStatus}
-        note={row.original.order.fields.CallNotes}
+        orderId={row.original.order.id.toString()}
+        date={row.original.order.call_reminder_date ? new Date(row.original.order.call_reminder_date).toISOString() : undefined}
+        status={row.original.order.call_status || undefined}
+        note={row.original.order.call_notes || undefined}
       />
     ),
   },
@@ -232,10 +231,10 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
     header: "Escalated",
     cell: ({ row }) => (
       <ReminderCell 
-        orderId={row.original.order.id}
+        orderId={row.original.order.id.toString()}
         type="Escalation"
-        date={row.original.order.fields.EscalationDate}
-        note={row.original.order.fields.EscalationNotes}
+        date={row.original.order.escalation_date ? new Date(row.original.order.escalation_date).toISOString() : undefined}
+        note={row.original.order.escalation_notes || undefined}
         colorClass="text-destructive hover:text-destructive hover:bg-destructive/10"
       />
     ),

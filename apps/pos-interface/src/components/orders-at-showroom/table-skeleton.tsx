@@ -24,7 +24,7 @@ export function TableSkeleton() {
             </TableHead>
             {/* Order ID */}
             <TableHead>
-              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-16" />
             </TableHead>
             {/* Customer */}
             <TableHead>
@@ -37,6 +37,10 @@ export function TableSkeleton() {
              {/* Status */}
             <TableHead>
               <Skeleton className="h-4 w-16" />
+            </TableHead>
+            {/* Fatoura Stage */}
+            <TableHead>
+               <Skeleton className="h-4 w-20" />
             </TableHead>
             {/* Fatoura */}
             <TableHead>
@@ -64,6 +68,10 @@ export function TableSkeleton() {
                   <Skeleton className="h-4 w-8" />
                 </TableHead>
              ))}
+             {/* Open */}
+             <TableHead className="w-10">
+               <Skeleton className="h-4 w-4" />
+             </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -91,6 +99,9 @@ export function TableSkeleton() {
                  <Skeleton className="h-5 w-16 rounded-full" />
                </TableCell>
                <TableCell className="py-3">
+                 <Skeleton className="h-4 w-16" />
+               </TableCell>
+               <TableCell className="py-3">
                  <Skeleton className="h-4 w-12" />
                </TableCell>
                 <TableCell className="py-3">
@@ -110,6 +121,9 @@ export function TableSkeleton() {
                       <Skeleton className="h-8 w-8 rounded-full" />
                     </TableCell>
                  ))}
+                 <TableCell className="py-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                 </TableCell>
             </TableRow>
           ))}
         </TableBody>

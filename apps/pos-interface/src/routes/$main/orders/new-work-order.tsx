@@ -6,7 +6,6 @@ import {
 import { getEmployees } from "@/api/employees";
 import { getFabrics } from "@/api/fabrics";
 import { getOrderDetails, updateOrder } from "@/api/orders";
-import { getStyles } from "@/api/styles";
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import {
     customerDemographicsDefaults,
@@ -21,8 +20,6 @@ import {
 } from "@/components/forms/customer-measurements/measurement-form.schema";
 import { FabricSelectionForm } from "@/components/forms/fabric-selection-and-options";
 import {
-    garmentSchema,
-    garmentDefaults,
     type GarmentSchema,
     createFabricSelectionFormSchema,
 } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
@@ -42,9 +39,8 @@ import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
 import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
 import { useStepNavigation } from "@/hooks/useStepNavigation";
-import { calculateStylePrice, calculateGarmentStylePrice } from "@/lib/utils/style-utils";
+import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 import { usePricing } from "@/hooks/usePricing";
-import { format } from "date-fns";
 import {
     orderDefaults,
     orderSchema,
@@ -53,7 +49,6 @@ import {
 import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
 import { createWorkOrderStore } from "@/store/current-work-order";
 import type { Customer, Order } from "@repo/database";
-import { PieceStageLabels } from "@/lib/constants";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -325,74 +320,75 @@ function NewWorkOrder() {
                     // Check if customer has measurements to mark step 1 as complete
                     const measurementsRes = await getMeasurementsByCustomerId(Number(orderData.customer.id));
                     if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
-                        addSavedStep(1); 
+                        addSavedStep(1);
                     }
                 } else {
                     demographicsForm.reset(customerDemographicsDefaults);
                 }
 
-                                // 2. Load Garments
-                                if (orderData.garments && orderData.garments.length > 0) {
-                                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => mapGarmentToFormValues(g));
-                                    fabricSelectionForm.setValue("garments", mappedGarments);
-                                    setFabricSelections(mappedGarments);
-                                    
-                                    // Mark as complete if confirmed, or if it's a reload of a draft that had garments saved
-                                    addSavedStep(2); 
-                                } else {
-                                    fabricSelectionForm.reset({ garments: [], signature: "" });
-                                }
-                
-                                // 3. Load Shelf Items
-                                if (orderData.shelf_items && orderData.shelf_items.length > 0) {
-                                    const mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
-                                        id: si.shelf_id.toString(),
-                                        serial_number: si.shelf?.serial_number || "",
-                                        product_type: si.shelf?.type || "",
-                                        brand: si.shelf?.brand || "",
-                                        quantity: si.quantity,
-                                        stock: si.shelf?.stock || 0,
-                                        unit_price: Number(si.unit_price),
-                                    }));
-                                    shelfForm.reset({ products: mappedShelfProducts });
-                                    
-                                    // Only mark Shelf step as saved if the order is already confirmed
-                                    if (isConfirmed) {
-                                        addSavedStep(3);
-                                    }
-                                } else {
-                                    shelfForm.reset({ products: [] });
-                                }
-                
-                                // 4. Load Order Info
-                                if (orderData) {
-                                    const mappedOrder = mapOrderToFormValues(orderData);
-                                    
-                                    // Sync the stitching price to the store so the UI reflects it
-                                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
-                                    setStitchPrice(dbStitchingPrice);
-                
-                                    OrderForm.reset(mappedOrder);
-                                    setOrder(mappedOrder);
-                                    setOrderId(orderData.id);
-                
-                                    // If order is confirmed, ensure every step is marked as complete
-                                    if (isConfirmed) {
-                                        addSavedStep(0);
-                                        addSavedStep(1);
-                                        addSavedStep(2);
-                                        addSavedStep(3);
-                                        addSavedStep(4);
-                                    }
-                                } else {
-                                    OrderForm.reset(orderDefaults);
-                                }
-                
-                                // Navigate to review step if confirmed, otherwise to measurements
-                                setViewMode("ACTIVE_ORDER");
-                                setCurrentStep(isConfirmed ? 4 : 1);
-                
-                                toast.success(`Order loaded successfully`);            } else {
+                // 2. Load Garments
+                if (orderData.garments && orderData.garments.length > 0) {
+                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => mapGarmentToFormValues(g));
+                    fabricSelectionForm.setValue("garments", mappedGarments);
+                    setFabricSelections(mappedGarments);
+
+                    // Mark as complete if confirmed, or if it's a reload of a draft that had garments saved
+                    addSavedStep(2);
+                } else {
+                    fabricSelectionForm.reset({ garments: [], signature: "" });
+                }
+
+                // 3. Load Shelf Items
+                if (orderData.shelf_items && orderData.shelf_items.length > 0) {
+                    const mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
+                        id: si.shelf_id.toString(),
+                        serial_number: si.shelf?.serial_number || "",
+                        product_type: si.shelf?.type || "",
+                        brand: si.shelf?.brand || "",
+                        quantity: si.quantity,
+                        stock: si.shelf?.stock || 0,
+                        unit_price: Number(si.unit_price),
+                    }));
+                    shelfForm.reset({ products: mappedShelfProducts });
+
+                    // Only mark Shelf step as saved if the order is already confirmed
+                    if (isConfirmed) {
+                        addSavedStep(3);
+                    }
+                } else {
+                    shelfForm.reset({ products: [] });
+                }
+
+                // 4. Load Order Info
+                if (orderData) {
+                    const mappedOrder = mapOrderToFormValues(orderData);
+
+                    // Sync the stitching price to the store so the UI reflects it
+                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
+                    setStitchPrice(dbStitchingPrice);
+
+                    OrderForm.reset(mappedOrder);
+                    setOrder(mappedOrder);
+                    setOrderId(orderData.id);
+
+                    // If order is confirmed, ensure every step is marked as complete
+                    if (isConfirmed) {
+                        addSavedStep(0);
+                        addSavedStep(1);
+                        addSavedStep(2);
+                        addSavedStep(3);
+                        addSavedStep(4);
+                    }
+                } else {
+                    OrderForm.reset(orderDefaults);
+                }
+
+                // Navigate to review step if confirmed, otherwise to measurements
+                setViewMode("ACTIVE_ORDER");
+                setCurrentStep(isConfirmed ? 4 : 1);
+
+                toast.success(`Order loaded successfully`);
+            } else {
                 toast.error("Failed to load order details");
             }
         } catch (error) {
@@ -592,8 +588,8 @@ function NewWorkOrder() {
         const shelfItems = shelfForm.getValues().products
             .filter(p => p.id && p.quantity)
             // Fix: Convert p.id to Number and include unitPrice for RPC
-            .map(p => ({ 
-                id: Number(p.id!), 
+            .map(p => ({
+                id: Number(p.id!),
                 quantity: p.quantity!,
                 unitPrice: p.unit_price ?? 0
             }));
@@ -830,12 +826,12 @@ function NewWorkOrder() {
         <>
             <ScrollProgress />
             {(isLoadingOrderData || createOrderMutation.isPending || completeWorkOrderMutation.isPending) && (
-                <FullScreenLoader 
+                <FullScreenLoader
                     title={
-                        createOrderMutation.isPending 
-                            ? "Creating Order" 
-                            : completeWorkOrderMutation.isPending 
-                                ? "Completing Order" 
+                        createOrderMutation.isPending
+                            ? "Creating Order"
+                            : completeWorkOrderMutation.isPending
+                                ? "Completing Order"
                                 : "Loading Order"
                     }
                     subtitle="Please wait while we process your request..."
@@ -1051,8 +1047,8 @@ function NewWorkOrder() {
                                 const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
                                 openDialog(
                                     isZeroPayment ? "Confirm with Zero Payment?" : "Confirm new work order",
-                                    isZeroPayment 
-                                        ? "You are about to confirm this order without any payment. Are you sure you want to proceed?" 
+                                    isZeroPayment
+                                        ? "You are about to confirm this order without any payment. Are you sure you want to proceed?"
                                         : "Do you want to confirm a new work order?",
                                     () => {
                                         handleOrderConfirmation(data);

@@ -1,4 +1,19 @@
-import { Search, X, Filter, Calendar, CreditCard, Bell, ArrowUpDown, User, ListFilter, ChevronsUpDown } from "lucide-react";
+import { useState } from "react";
+import { 
+  Search, 
+  X, 
+  Filter, 
+  Calendar, 
+  CreditCard, 
+  Bell, 
+  ArrowUpDown, 
+  User, 
+  ListFilter, 
+  ChevronsUpDown,
+  ChevronDown,
+  Settings2
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,18 +32,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ProductionStageLabels } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 
 export type FilterState = {
   // Search
-  orderId: string;
-  fatoura?: string; // Added fatoura
-  mobile: string;
-  customer: string;
+  searchId: string; // Combined Order ID / Fatoura
+  customer: string; // Combined Name / Mobile
   
   // Status & Workflow
   stage: string;
-  reminderStatuses: string[]; // Changed to array for multi-select
+  reminderStatuses: string[]; 
   
   // Dates
   deliveryDateStart: string;
@@ -69,11 +83,10 @@ export function OrderFilters({
   filteredCount,
   className,
 }: OrderFiltersProps) {
-  
+  const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
+
   const hasActiveFilters =
-    filters.orderId || 
-    filters.fatoura ||
-    filters.mobile || 
+    filters.searchId || 
     filters.customer || 
     filters.stage !== "all" ||
     filters.reminderStatuses.length > 0 ||
@@ -91,262 +104,264 @@ export function OrderFilters({
   };
 
   return (
-    <div className={`flex flex-col gap-6 bg-card rounded-xl border border-border p-6 shadow-sm ${className}`}>
+    <div className={cn("bg-card rounded-xl border-2 border-border/80 p-4 shadow-sm", className)}>
       
-      {/* --- HEADER --- */}
-      <div className="flex items-center justify-between pb-2 border-b border-border/40">
-        <h3 className="font-semibold text-foreground flex items-center gap-2 text-lg">
-           <ListFilter className="h-5 w-5 text-primary" /> 
-           Filters & Sorting
-        </h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="h-8 text-xs hover:bg-destructive/10 hover:text-destructive transition-opacity"
-          style={{
-            opacity: hasActiveFilters ? 1 : 0,
-            pointerEvents: hasActiveFilters ? "auto" : "none",
-          }}
-        >
-          <X className="h-3 w-3 mr-1" />
-          Clear all
-        </Button>
+      {/* --- QUICK SEARCH SECTION (Always Visible) --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
+        {/* Order ID / Fatoura */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">ID / Invoice</Label>
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+            <Input
+              placeholder="Search ID or Invoice..."
+              value={filters.searchId}
+              onChange={(e) => onFilterChange("searchId", e.target.value)}
+              className="pl-9 h-9 text-xs border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Customer */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">Customer / Mobile</Label>
+          <div className="relative group">
+            <User className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+            <Input
+              placeholder="Name or Phone..."
+              value={filters.customer}
+              onChange={(e) => onFilterChange("customer", e.target.value)}
+              className="pl-9 h-9 text-xs border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Sort By */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">Sort Orders</Label>
+          <Select 
+            value={filters.sortBy} 
+            onValueChange={(value) => onFilterChange("sortBy", value)}
+          >
+            <SelectTrigger className="h-9 text-xs border-2 border-border hover:border-primary/40 focus:ring-ring/50 focus:border-ring bg-background font-bold transition-all">
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="h-3.5 w-3.5 text-primary" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_desc" className="font-medium">Newest Created</SelectItem>
+              <SelectItem value="deliveryDate_asc" className="font-medium">Delivery: Earliest First</SelectItem>
+              <SelectItem value="deliveryDate_desc" className="font-medium">Delivery: Latest First</SelectItem>
+              <SelectItem value="balance_desc" className="font-medium">Highest Payment Remaining</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* --- SECTION 1: SEARCH & CONTROLS --- */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-primary/80">
-          <Search className="h-4 w-4" />
-          <Label className="text-xs font-bold uppercase tracking-wider">Search</Label>
+      {/* --- ACTIONS ROW --- */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold px-2 py-0.5 text-[10px]">
+            {filteredCount} / {totalOrders} Orders
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearFilters}
+            className={cn(
+              "h-8 px-2 text-[10px] font-bold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200",
+              !hasActiveFilters && "opacity-0 pointer-events-none"
+            )}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Reset All
+          </Button>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Order ID */}
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Order ID</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Ex: A-1001"
-                value={filters.orderId}
-                onChange={(e) => onFilterChange("orderId", e.target.value)}
-                className="pl-9 h-9 text-sm"
-              />
-            </div>
-          </div>
-          
-           {/* Fatoura Search */}
-           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Fatoura</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Ex: 12345"
-                value={filters.fatoura || ""}
-                onChange={(e) => onFilterChange("fatoura", e.target.value)}
-                className="pl-9 h-9 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Customer */}
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Customer / Mobile</Label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Name or Phone"
-                value={filters.customer}
-                onChange={(e) => {
-                  onFilterChange("customer", e.target.value);
-                  if (/^\d+$/.test(e.target.value)) onFilterChange("mobile", e.target.value);
-                  else onFilterChange("mobile", "");
-                }}
-                className="pl-9 h-9 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Sort By */}
-          <div className="space-y-1.5 sm:col-span-2 md:col-span-1">
-            <Label className="text-xs text-muted-foreground flex items-center gap-1">
-              Sort Order
-            </Label>
-            <Select 
-              value={filters.sortBy} 
-              onValueChange={(value) => onFilterChange("sortBy", value)}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={isAdvancedExpanded ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
+            className={cn(
+              "h-8 px-3 gap-1.5 text-[10px] font-bold border-2 transition-all",
+              isAdvancedExpanded ? "bg-secondary text-secondary-foreground border-secondary" : "border-border hover:border-primary/50"
+            )}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            Advanced
+            <motion.div
+              animate={{ rotate: isAdvancedExpanded ? 180 : 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <SelectTrigger className="h-9 text-sm">
-                <div className="flex items-center gap-2">
-                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="created_desc">Newest Created</SelectItem>
-                <SelectItem value="deliveryDate_asc">Delivery: Earliest First</SelectItem>
-                <SelectItem value="deliveryDate_desc">Delivery: Latest First</SelectItem>
-                <SelectItem value="balance_desc">Highest Payment Remaining</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </motion.div>
+          </Button>
         </div>
       </div>
 
-      <div className="h-px bg-border/60" />
-
-      {/* --- SECTION 2: FILTERS (Categorized) --- */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-primary/80">
-          <Filter className="h-4 w-4" />
-          <Label className="text-xs font-bold uppercase tracking-wider">Refine By</Label>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Category A: Workflow (Status + Reminders) */}
-          <div className="lg:col-span-5 space-y-3">
-             <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5 bg-muted/30 p-1.5 rounded w-fit px-3">
-                <Bell className="h-3.5 w-3.5" /> Workflow Status
-             </Label>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                   <Label className="text-xs text-muted-foreground">Order Stage</Label>
-                   <Select 
-                      value={filters.stage} 
-                      onValueChange={(value) => onFilterChange("stage", value)}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="All Stages" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Stages</SelectItem>
-                        {Object.values(ProductionStageLabels)
-                          .filter(stage => 
-                            stage.toLowerCase().includes("brova") || 
-                            stage.toLowerCase().includes("alteration")
-                          )
-                          .map((stage) => (
-                          <SelectItem key={stage} value={stage}>
-                            {stage}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                </div>
+      {/* --- ADVANCED FILTERS SECTION (Collapsible) --- */}
+      <AnimatePresence initial={false}>
+        {isAdvancedExpanded && (
+          <motion.div
+            key="advanced-filters"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 mt-2 border-t-2 border-border/40">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-muted/15 rounded-xl p-3 border border-border/30">
                 
-                {/* Multi-Select Reminder Filter */}
-                <div className="space-y-1.5">
-                   <Label className="text-xs text-muted-foreground">Reminder Stage</Label>
-                   <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="h-9 w-full justify-between text-sm font-normal px-3"
+                {/* Workflow Status Group */}
+                <div className="md:col-span-7 space-y-2.5 md:pr-3 md:border-r border-border/40">
+                  <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
+                    <Bell className="h-3 w-3 text-primary" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Workflow</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-8 space-y-1">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Stage</Label>
+                      <Select 
+                        value={filters.stage} 
+                        onValueChange={(value) => onFilterChange("stage", value)}
                       >
-                        {filters.reminderStatuses.length === 0 ? (
-                          <span className="text-muted-foreground">All Orders</span>
-                        ) : (
-                          <span className="flex items-center gap-1 truncate">
-                             <Badge variant="secondary" className="h-5 px-1 rounded-sm text-[10px] pointer-events-none">
-                               {filters.reminderStatuses.length}
-                             </Badge>
-                             <span className="truncate">Selected</span>
-                          </span>
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[200px] p-2" align="start">
-                      <div className="space-y-1">
-                        {REMINDER_OPTIONS.map((option) => (
-                          <div
-                            key={option.value}
-                            className="flex items-center space-x-2 rounded-sm p-2 hover:bg-accent cursor-pointer"
-                            onClick={() => toggleReminder(option.value)}
+                        <SelectTrigger className="h-7 text-[10px] border-2 border-border bg-background font-bold focus:ring-ring/40 focus:border-ring transition-all hover:border-primary/30">
+                          <SelectValue placeholder="Stage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="font-medium text-xs">All Stages</SelectItem>
+                          {Object.values(ProductionStageLabels)
+                            .filter(stage => 
+                              stage.toLowerCase().includes("brova") || 
+                              stage.toLowerCase().includes("alteration") ||
+                              stage.toLowerCase().includes("at_shop")
+                            )
+                            .map((stage) => (
+                            <SelectItem key={stage} value={stage} className="font-medium text-xs">
+                              {stage}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="sm:col-span-4 space-y-1">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Reminder</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="h-7 w-full justify-between text-[10px] font-bold border-2 border-border bg-background hover:border-primary/30 px-2 transition-all"
                           >
-                            <Checkbox 
-                              id={`reminder-${option.value}`}
-                              checked={filters.reminderStatuses.includes(option.value)}
-                              className="pointer-events-none"
-                            />
-                            <Label 
-                              htmlFor={`reminder-${option.value}`} 
-                              className="text-sm cursor-pointer flex-1 pointer-events-none"
-                            >
-                              {option.label}
-                            </Label>
+                            {filters.reminderStatuses.length === 0 ? (
+                              <span className="text-muted-foreground">All</span>
+                            ) : (
+                              <span className="flex items-center gap-1 truncate">
+                                <Badge variant="default" className="h-3.5 px-1 rounded-sm text-[8px] font-black">
+                                  {filters.reminderStatuses.length}
+                                </Badge>
+                                <span className="truncate">Selected</span>
+                              </span>
+                            )}
+                            <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[170px] p-1" align="start">
+                          <div className="space-y-0.5">
+                            {REMINDER_OPTIONS.map((option) => (
+                              <div
+                                key={option.value}
+                                className="flex items-center space-x-2 rounded-md p-1 hover:bg-primary/10 cursor-pointer"
+                                onClick={() => toggleReminder(option.value)}
+                              >
+                                <Checkbox 
+                                  id={`reminder-${option.value}`}
+                                  checked={filters.reminderStatuses.includes(option.value)}
+                                  className="h-3 w-3 border-2 pointer-events-none"
+                                />
+                                <Label 
+                                  className="text-[11px] font-bold cursor-pointer flex-1 pointer-events-none"
+                                >
+                                  {option.label}
+                                </Label>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
                 </div>
-             </div>
-          </div>
 
-          {/* Category B: Timeline (Date Range) */}
-          <div className="lg:col-span-4 space-y-3">
-            <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5 bg-muted/30 p-1.5 rounded w-fit px-3">
-                <Calendar className="h-3.5 w-3.5" /> Delivery Timeline
-             </Label>
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-              <div className="space-y-1.5 w-full sm:flex-1">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input 
-                  type="date" 
-                  className="h-9 text-sm"
-                  value={filters.deliveryDateStart}
-                  onChange={(e) => onFilterChange("deliveryDateStart", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5 w-full sm:flex-1">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input 
-                  type="date" 
-                  className="h-9 text-sm"
-                  value={filters.deliveryDateEnd}
-                  onChange={(e) => onFilterChange("deliveryDateEnd", e.target.value)}
-                />
+                {/* Timeline Group */}
+                <div className="md:col-span-3 space-y-2.5 md:px-3 md:border-r border-border/40">
+                  <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
+                    <Calendar className="h-3 w-3 text-primary" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Timeline</span>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-12 items-center gap-2">
+                      <Label className="col-span-2 text-[9px] font-bold text-muted-foreground uppercase">From</Label>
+                      <Input 
+                        type="date" 
+                        className="col-span-10 h-7 text-[10px] border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 p-1"
+                        value={filters.deliveryDateStart}
+                        onChange={(e) => onFilterChange("deliveryDateStart", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-12 items-center gap-2">
+                      <Label className="col-span-2 text-[9px] font-bold text-muted-foreground uppercase">To</Label>
+                      <Input 
+                        type="date" 
+                        className="col-span-10 h-7 text-[10px] border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 p-1"
+                        value={filters.deliveryDateEnd}
+                        onChange={(e) => onFilterChange("deliveryDateEnd", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Group */}
+                <div className="md:col-span-2 space-y-2.5 md:pl-3">
+                  <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
+                    <CreditCard className="h-3 w-3 text-primary" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Financial</span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Balance</Label>
+                    <div 
+                      className={cn(
+                        "flex items-center h-7 border-2 rounded-md px-2 bg-background transition-all w-full cursor-pointer",
+                        filters.hasBalance ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
+                      )}
+                      onClick={() => onFilterChange("hasBalance", !filters.hasBalance)}
+                    >
+                      <Checkbox 
+                        id="has-balance" 
+                        checked={filters.hasBalance}
+                        className="h-3 w-3 border-2 pointer-events-none"
+                      />
+                      <Label 
+                        className="text-[10px] font-black ml-1.5 cursor-pointer flex-1 truncate pointer-events-none"
+                      >
+                        Unpaid
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
-          </div>
-
-          {/* Category C: Financial */}
-          <div className="lg:col-span-3 space-y-3">
-             <Label className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5 bg-muted/30 p-1.5 rounded w-fit px-3">
-                <CreditCard className="h-3.5 w-3.5" /> Financial
-             </Label>
-             <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Payment Status</Label>
-                <div className="flex items-center h-9 border rounded-md px-3 bg-card hover:bg-muted/20 transition-colors w-full">
-                  <Checkbox 
-                    id="has-balance" 
-                    checked={filters.hasBalance}
-                    onCheckedChange={(checked) => onFilterChange("hasBalance", checked as boolean)}
-                  />
-                  <Label 
-                    htmlFor="has-balance" 
-                    className="text-sm font-medium ml-2 cursor-pointer flex-1"
-                  >
-                    Unpaid Only
-                  </Label>
-                </div>
-             </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* --- FOOTER --- */}
-      <div className="pt-2 flex justify-end">
-        <span className="text-xs text-muted-foreground bg-muted/30 px-3 py-1 rounded-full">
-          Showing <span className="font-medium text-foreground">{filteredCount}</span> of{" "}
-          <span className="font-medium text-foreground">{totalOrders}</span> orders
-        </span>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -19,11 +19,21 @@ import { Route as MainStoreStockReportRouteImport } from './routes/$main/store/s
 import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/store/request-delivery'
 import { Route as MainStoreReceivingDeliveriesRouteImport } from './routes/$main/store/receiving-deliveries'
 import { Route as MainStoreEndOfDayReportRouteImport } from './routes/$main/store/end-of-day-report'
+import { Route as MainOrdersOrdersAtShowroomRouteImport } from './routes/$main/orders/orders-at-showroom'
 import { Route as MainOrdersOrderHistoryRouteImport } from './routes/$main/orders/order-history'
 import { Route as MainOrdersNewWorkOrderRouteImport } from './routes/$main/orders/new-work-order'
 import { Route as MainOrdersNewSalesOrderRouteImport } from './routes/$main/orders/new-sales-order'
 import { Route as MainOrdersNewAlterationOrderRouteImport } from './routes/$main/orders/new-alteration-order'
 import { Route as MainOrdersCustomerProfilesOrdersRouteImport } from './routes/$main/orders/customer-profiles-orders'
+import { Route as MainOrdersOrderManagementUnlinkRouteImport } from './routes/$main/orders/order-management/unlink'
+import { Route as MainOrdersOrderManagementReceivingBrovaFinalRouteImport } from './routes/$main/orders/order-management/receiving-brova-final'
+import { Route as MainOrdersOrderManagementLinkRouteImport } from './routes/$main/orders/order-management/link'
+import { Route as MainOrdersOrderManagementFinalFeedbackRouteImport } from './routes/$main/orders/order-management/final-feedback'
+import { Route as MainOrdersOrderManagementDispatchRouteImport } from './routes/$main/orders/order-management/dispatch'
+import { Route as MainOrdersOrderManagementChangeOptionsRouteImport } from './routes/$main/orders/order-management/change-options'
+import { Route as MainOrdersOrderManagementCancelOrderRouteImport } from './routes/$main/orders/order-management/cancel-order'
+import { Route as MainOrdersOrderManagementBrovaFeedbackRouteImport } from './routes/$main/orders/order-management/brova-feedback'
+import { Route as MainOrdersOrderManagementAlterationsRouteImport } from './routes/$main/orders/order-management/alterations'
 
 const HomeRoute = HomeRouteImport.update({
   id: '/home',
@@ -77,6 +87,12 @@ const MainStoreEndOfDayReportRoute = MainStoreEndOfDayReportRouteImport.update({
   path: '/store/end-of-day-report',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainOrdersOrdersAtShowroomRoute =
+  MainOrdersOrdersAtShowroomRouteImport.update({
+    id: '/orders/orders-at-showroom',
+    path: '/orders/orders-at-showroom',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
 const MainOrdersOrderHistoryRoute = MainOrdersOrderHistoryRouteImport.update({
   id: '/orders/order-history',
   path: '/orders/order-history',
@@ -104,6 +120,60 @@ const MainOrdersCustomerProfilesOrdersRoute =
     path: '/orders/customer-profiles-orders',
     getParentRoute: () => MainRouteRoute,
   } as any)
+const MainOrdersOrderManagementUnlinkRoute =
+  MainOrdersOrderManagementUnlinkRouteImport.update({
+    id: '/orders/order-management/unlink',
+    path: '/orders/order-management/unlink',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementReceivingBrovaFinalRoute =
+  MainOrdersOrderManagementReceivingBrovaFinalRouteImport.update({
+    id: '/orders/order-management/receiving-brova-final',
+    path: '/orders/order-management/receiving-brova-final',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementLinkRoute =
+  MainOrdersOrderManagementLinkRouteImport.update({
+    id: '/orders/order-management/link',
+    path: '/orders/order-management/link',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementFinalFeedbackRoute =
+  MainOrdersOrderManagementFinalFeedbackRouteImport.update({
+    id: '/orders/order-management/final-feedback',
+    path: '/orders/order-management/final-feedback',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementDispatchRoute =
+  MainOrdersOrderManagementDispatchRouteImport.update({
+    id: '/orders/order-management/dispatch',
+    path: '/orders/order-management/dispatch',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementChangeOptionsRoute =
+  MainOrdersOrderManagementChangeOptionsRouteImport.update({
+    id: '/orders/order-management/change-options',
+    path: '/orders/order-management/change-options',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementCancelOrderRoute =
+  MainOrdersOrderManagementCancelOrderRouteImport.update({
+    id: '/orders/order-management/cancel-order',
+    path: '/orders/order-management/cancel-order',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementBrovaFeedbackRoute =
+  MainOrdersOrderManagementBrovaFeedbackRouteImport.update({
+    id: '/orders/order-management/brova-feedback',
+    path: '/orders/order-management/brova-feedback',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
+const MainOrdersOrderManagementAlterationsRoute =
+  MainOrdersOrderManagementAlterationsRouteImport.update({
+    id: '/orders/order-management/alterations',
+    path: '/orders/order-management/alterations',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,10 +187,20 @@ export interface FileRoutesByFullPath {
   '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
+  '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
+  '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
+  '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
+  '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
+  '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
+  '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
+  '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
+  '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -133,10 +213,20 @@ export interface FileRoutesByTo {
   '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
+  '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
+  '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
+  '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
+  '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
+  '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
+  '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
+  '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
+  '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -151,10 +241,20 @@ export interface FileRoutesById {
   '/$main/orders/new-sales-order': typeof MainOrdersNewSalesOrderRoute
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
+  '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
+  '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
+  '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
+  '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
+  '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
+  '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
+  '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
+  '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -170,10 +270,20 @@ export interface FileRouteTypes {
     | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
+    | '/$main/orders/orders-at-showroom'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/orders/order-management/alterations'
+    | '/$main/orders/order-management/brova-feedback'
+    | '/$main/orders/order-management/cancel-order'
+    | '/$main/orders/order-management/change-options'
+    | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/final-feedback'
+    | '/$main/orders/order-management/link'
+    | '/$main/orders/order-management/receiving-brova-final'
+    | '/$main/orders/order-management/unlink'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -186,10 +296,20 @@ export interface FileRouteTypes {
     | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
+    | '/$main/orders/orders-at-showroom'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/orders/order-management/alterations'
+    | '/$main/orders/order-management/brova-feedback'
+    | '/$main/orders/order-management/cancel-order'
+    | '/$main/orders/order-management/change-options'
+    | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/final-feedback'
+    | '/$main/orders/order-management/link'
+    | '/$main/orders/order-management/receiving-brova-final'
+    | '/$main/orders/order-management/unlink'
   id:
     | '__root__'
     | '/'
@@ -203,10 +323,20 @@ export interface FileRouteTypes {
     | '/$main/orders/new-sales-order'
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
+    | '/$main/orders/orders-at-showroom'
     | '/$main/store/end-of-day-report'
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/orders/order-management/alterations'
+    | '/$main/orders/order-management/brova-feedback'
+    | '/$main/orders/order-management/cancel-order'
+    | '/$main/orders/order-management/change-options'
+    | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/final-feedback'
+    | '/$main/orders/order-management/link'
+    | '/$main/orders/order-management/receiving-brova-final'
+    | '/$main/orders/order-management/unlink'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -289,6 +419,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainStoreEndOfDayReportRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/orders/orders-at-showroom': {
+      id: '/$main/orders/orders-at-showroom'
+      path: '/orders/orders-at-showroom'
+      fullPath: '/$main/orders/orders-at-showroom'
+      preLoaderRoute: typeof MainOrdersOrdersAtShowroomRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
     '/$main/orders/order-history': {
       id: '/$main/orders/order-history'
       path: '/orders/order-history'
@@ -324,6 +461,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersCustomerProfilesOrdersRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/orders/order-management/unlink': {
+      id: '/$main/orders/order-management/unlink'
+      path: '/orders/order-management/unlink'
+      fullPath: '/$main/orders/order-management/unlink'
+      preLoaderRoute: typeof MainOrdersOrderManagementUnlinkRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/receiving-brova-final': {
+      id: '/$main/orders/order-management/receiving-brova-final'
+      path: '/orders/order-management/receiving-brova-final'
+      fullPath: '/$main/orders/order-management/receiving-brova-final'
+      preLoaderRoute: typeof MainOrdersOrderManagementReceivingBrovaFinalRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/link': {
+      id: '/$main/orders/order-management/link'
+      path: '/orders/order-management/link'
+      fullPath: '/$main/orders/order-management/link'
+      preLoaderRoute: typeof MainOrdersOrderManagementLinkRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/final-feedback': {
+      id: '/$main/orders/order-management/final-feedback'
+      path: '/orders/order-management/final-feedback'
+      fullPath: '/$main/orders/order-management/final-feedback'
+      preLoaderRoute: typeof MainOrdersOrderManagementFinalFeedbackRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/dispatch': {
+      id: '/$main/orders/order-management/dispatch'
+      path: '/orders/order-management/dispatch'
+      fullPath: '/$main/orders/order-management/dispatch'
+      preLoaderRoute: typeof MainOrdersOrderManagementDispatchRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/change-options': {
+      id: '/$main/orders/order-management/change-options'
+      path: '/orders/order-management/change-options'
+      fullPath: '/$main/orders/order-management/change-options'
+      preLoaderRoute: typeof MainOrdersOrderManagementChangeOptionsRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/cancel-order': {
+      id: '/$main/orders/order-management/cancel-order'
+      path: '/orders/order-management/cancel-order'
+      fullPath: '/$main/orders/order-management/cancel-order'
+      preLoaderRoute: typeof MainOrdersOrderManagementCancelOrderRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/brova-feedback': {
+      id: '/$main/orders/order-management/brova-feedback'
+      path: '/orders/order-management/brova-feedback'
+      fullPath: '/$main/orders/order-management/brova-feedback'
+      preLoaderRoute: typeof MainOrdersOrderManagementBrovaFeedbackRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/orders/order-management/alterations': {
+      id: '/$main/orders/order-management/alterations'
+      path: '/orders/order-management/alterations'
+      fullPath: '/$main/orders/order-management/alterations'
+      preLoaderRoute: typeof MainOrdersOrderManagementAlterationsRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
   }
 }
 
@@ -334,10 +534,20 @@ interface MainRouteRouteChildren {
   MainOrdersNewSalesOrderRoute: typeof MainOrdersNewSalesOrderRoute
   MainOrdersNewWorkOrderRoute: typeof MainOrdersNewWorkOrderRoute
   MainOrdersOrderHistoryRoute: typeof MainOrdersOrderHistoryRoute
+  MainOrdersOrdersAtShowroomRoute: typeof MainOrdersOrdersAtShowroomRoute
   MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
   MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
   MainStoreRequestDeliveryRoute: typeof MainStoreRequestDeliveryRoute
   MainStoreStockReportRoute: typeof MainStoreStockReportRoute
+  MainOrdersOrderManagementAlterationsRoute: typeof MainOrdersOrderManagementAlterationsRoute
+  MainOrdersOrderManagementBrovaFeedbackRoute: typeof MainOrdersOrderManagementBrovaFeedbackRoute
+  MainOrdersOrderManagementCancelOrderRoute: typeof MainOrdersOrderManagementCancelOrderRoute
+  MainOrdersOrderManagementChangeOptionsRoute: typeof MainOrdersOrderManagementChangeOptionsRoute
+  MainOrdersOrderManagementDispatchRoute: typeof MainOrdersOrderManagementDispatchRoute
+  MainOrdersOrderManagementFinalFeedbackRoute: typeof MainOrdersOrderManagementFinalFeedbackRoute
+  MainOrdersOrderManagementLinkRoute: typeof MainOrdersOrderManagementLinkRoute
+  MainOrdersOrderManagementReceivingBrovaFinalRoute: typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
+  MainOrdersOrderManagementUnlinkRoute: typeof MainOrdersOrderManagementUnlinkRoute
 }
 
 const MainRouteRouteChildren: MainRouteRouteChildren = {
@@ -347,10 +557,27 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainOrdersNewSalesOrderRoute: MainOrdersNewSalesOrderRoute,
   MainOrdersNewWorkOrderRoute: MainOrdersNewWorkOrderRoute,
   MainOrdersOrderHistoryRoute: MainOrdersOrderHistoryRoute,
+  MainOrdersOrdersAtShowroomRoute: MainOrdersOrdersAtShowroomRoute,
   MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
   MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,
   MainStoreRequestDeliveryRoute: MainStoreRequestDeliveryRoute,
   MainStoreStockReportRoute: MainStoreStockReportRoute,
+  MainOrdersOrderManagementAlterationsRoute:
+    MainOrdersOrderManagementAlterationsRoute,
+  MainOrdersOrderManagementBrovaFeedbackRoute:
+    MainOrdersOrderManagementBrovaFeedbackRoute,
+  MainOrdersOrderManagementCancelOrderRoute:
+    MainOrdersOrderManagementCancelOrderRoute,
+  MainOrdersOrderManagementChangeOptionsRoute:
+    MainOrdersOrderManagementChangeOptionsRoute,
+  MainOrdersOrderManagementDispatchRoute:
+    MainOrdersOrderManagementDispatchRoute,
+  MainOrdersOrderManagementFinalFeedbackRoute:
+    MainOrdersOrderManagementFinalFeedbackRoute,
+  MainOrdersOrderManagementLinkRoute: MainOrdersOrderManagementLinkRoute,
+  MainOrdersOrderManagementReceivingBrovaFinalRoute:
+    MainOrdersOrderManagementReceivingBrovaFinalRoute,
+  MainOrdersOrderManagementUnlinkRoute: MainOrdersOrderManagementUnlinkRoute,
 }
 
 const MainRouteRouteWithChildren = MainRouteRoute._addFileChildren(

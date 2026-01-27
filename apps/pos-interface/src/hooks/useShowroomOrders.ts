@@ -65,43 +65,26 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
     // Calculate total
     const totalAmount = parseFloat(order.order_total?.toString() || "0") || (calculateTotal(order) - (parseFloat(order.discount_value?.toString() || "0")));
 
-    // Compatibility shim for components still using .fields (Airtable legacy)
-    const orderWithFields = {
-      ...order,
-      fields: {
-        ...order,
-        FatouraStages: ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || order.production_stage,
-        Paid: parseFloat(order.paid?.toString() || "0"),
-        R1Date: order.r1_date,
-        R1Notes: order.r1_notes,
-        R2Date: order.r2_date,
-        R2Notes: order.r2_notes,
-        R3Date: order.r3_date,
-        R3Notes: order.r3_notes,
-        CallReminderDate: order.call_reminder_date,
-        CallStatus: order.call_status,
-        CallNotes: order.call_notes,
-        EscalationDate: order.escalation_date,
-        EscalationNotes: order.escalation_notes,
-      }
-    };
-
     const orderRow: OrderRow = {
       // Order info
       orderId: order.id.toString(),
       orderRecordId: order.id.toString(),
+      // fatoura is alias for invoice_number
       invoiceNumber: order.invoice_number,
+      fatoura: order.invoice_number,
+      
       productionStage: order.production_stage
         ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
         : "Unknown",
       fatouraStage: order.production_stage
         ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
         : "Unknown",
+      
       orderStatus: order.checkout_status === "confirmed" ? "Completed" : order.checkout_status === "cancelled" ? "Cancelled" : "Pending",
       checkoutStatus: order.checkout_status,
+      
       orderDate: order.order_date,
       deliveryDate: order.delivery_date,
-      fatoura: order.invoice_number,
 
       // Customer info
       customerId: customer?.id?.toString() || "0",
@@ -123,7 +106,7 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
       garments: garmentRowsData,
 
       // Full records
-      order: orderWithFields as any,
+      order: order as any,
       customer,
     };
 
@@ -157,7 +140,9 @@ export function useShowroomOrders() {
           customer:customers(*),
           garments:garments(*)
         `)
-        .in('production_stage', targetStages);
+        .in('production_stage', targetStages)
+        .eq('checkout_status', 'confirmed')
+        .eq('order_type', 'WORK');
 
       if (error) {
         throw new Error(`Failed to fetch showroom orders: ${error.message}`);

@@ -19,6 +19,7 @@ import {
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -44,7 +45,7 @@ type OrderDataTableProps = {
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" });
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -73,17 +74,14 @@ export function OrderDataTable({
     // 1. Filter
     let result = data.filter((row) => {
       try {
-        const fields = row.order.fields;
+        const order = row.order;
 
-        // ID Search
-        if (filters.orderId) {
-          if (!(row.orderId || "").toLowerCase().includes(filters.orderId.toLowerCase())) return false;
-        }
-
-        // Fatoura Search
-        if (filters.fatoura) {
-          const fatouraStr = String(row.fatoura || "");
-          if (!fatouraStr.includes(filters.fatoura)) return false;
+        // ID / Invoice Search (Combined)
+        if (filters.searchId) {
+          const searchLower = filters.searchId.toLowerCase();
+          const orderIdMatch = (row.orderId || "").toLowerCase().includes(searchLower);
+          const fatouraMatch = String(row.fatoura || "").includes(searchLower);
+          if (!orderIdMatch && !fatouraMatch) return false;
         }
 
         // Customer / Mobile Search
@@ -126,33 +124,31 @@ export function OrderDataTable({
 
             switch (status) {
               case "r1_done":
-                if (fields.R1Date) matchesCurrentStatus = true;
+                if (order.r1_date) matchesCurrentStatus = true;
                 break;
               case "r1_pending":
-                if (!fields.R1Date) matchesCurrentStatus = true;
+                if (!order.r1_date) matchesCurrentStatus = true;
                 break;
               
               case "r2_done":
-                if (fields.R2Date) matchesCurrentStatus = true;
+                if (order.r2_date) matchesCurrentStatus = true;
                 break;
               case "r2_pending":
-                if (!fields.R2Date) matchesCurrentStatus = true;
+                if (!order.r2_date) matchesCurrentStatus = true;
                 break;
 
-              // --- Added R3 Logic ---
               case "r3_done":
-                if (fields.R3Date) matchesCurrentStatus = true;
+                if (order.r3_date) matchesCurrentStatus = true;
                 break;
               case "r3_pending":
-                if (!fields.R3Date) matchesCurrentStatus = true;
+                if (!order.r3_date) matchesCurrentStatus = true;
                 break;
-              // ----------------------
 
               case "call_done":
-                if (fields.CallStatus || fields.CallReminderDate) matchesCurrentStatus = true;
+                if (order.call_status || order.call_reminder_date) matchesCurrentStatus = true;
                 break;
               case "escalated":
-                if (fields.EscalationDate) matchesCurrentStatus = true;
+                if (order.escalation_date) matchesCurrentStatus = true;
                 break;
             }
 

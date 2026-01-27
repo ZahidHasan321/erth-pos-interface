@@ -1,6 +1,4 @@
-import type { Garment } from "@/types/garment";
-import type { Order } from "@/types/order";
-import type { Customer } from "@/types/customer";
+import type { Order, Customer, Garment } from "@repo/database";
 
 /**
  * Order row for orders at showroom table.
@@ -13,8 +11,8 @@ export type OrderRow = {
   fatoura?: number;
   fatouraStage: string;
   orderStatus: "Pending" | "Completed" | "Cancelled";
-  orderDate?: string;
-  deliveryDate?: string;
+  orderDate?: string | null;
+  deliveryDate?: string | null;
 
   // Customer info
   customerId: string;
@@ -23,8 +21,8 @@ export type OrderRow = {
   mobileNumber: string;
 
   // Order type and delivery
-  orderType?: "WORK" | "SALES";
-  homeDelivery?: boolean;
+  orderType?: "WORK" | "SALES" | null;
+  homeDelivery?: boolean | null;
 
   // Financial info
   totalAmount: number;
@@ -46,14 +44,14 @@ export type OrderRow = {
  * Individual garment data within an order row.
  */
 export type GarmentRowData = {
-  garmentId: string;
+  garmentId: string | null;
   garmentRecordId: string;
   pieceStage: string;
   isBrova: boolean;
-  deliveryDate: string;
+  deliveryDate: string | null;
   delayInDays: number;
-  fabricSource?: string;
-  style?: string;
+  fabricSource?: string | null;
+  style?: string | null;
   garment: Garment;
 };
 

@@ -25,6 +25,7 @@ export const orderSchema = z.object({
   discount_type: z.enum(['flat', 'referral', 'loyalty', 'by_value']).optional().nullable(),
   discount_value: z.number().optional().nullable(),
   discount_percentage: z.number().optional().nullable(),
+  referral_code: z.string().optional().nullable(),
   discount_in_kwd: z.string().optional(), // Non-persisted UI field
 
   // All charges as numbers (matching database decimal type)
@@ -89,12 +90,13 @@ export const orderDefaults: OrderSchema = {
   checkout_status: "draft",
   order_date: new Date().toISOString(),
   delivery_date: new Date().toISOString(),
-  production_stage: "order_at_shop",
+  production_stage: undefined,
   payment_type: "cash",
   order_type: "WORK",
   home_delivery: false,
   discount_value: undefined,
   discount_percentage: undefined,
+  referral_code: undefined,
   stitching_price: 9,
 
   fabric_charge: 0,
