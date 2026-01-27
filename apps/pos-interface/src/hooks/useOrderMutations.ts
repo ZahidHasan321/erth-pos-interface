@@ -43,7 +43,7 @@ function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
     if (schema.checkout_status) order.checkout_status = schema.checkout_status;
     if (schema.order_date && schema.order_date !== "") order.order_date = new Date(schema.order_date);
     if (schema.delivery_date && schema.delivery_date !== "") order.delivery_date = new Date(schema.delivery_date);
-    if (schema.production_stage) order.production_stage = schema.production_stage;
+    if (schema.production_stage) order.production_stage = schema.production_stage as Order["production_stage"];
     if (schema.customer_id) order.customer_id = schema.customer_id;
     if (schema.notes !== undefined) order.notes = cleanValue(schema.notes) as string;
     if (schema.campaign_id) order.campaign_id = schema.campaign_id;
@@ -77,10 +77,12 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
     const createOrderMutation = useMutation({
         mutationFn: (additionalFields?: Partial<OrderSchema>) => {
+            const orderType = options.orderType || "WORK";
             const order: Partial<Order> = {
                 checkout_status: "draft",
                 order_date: new Date(),
-                order_type: options.orderType || "WORK"
+                order_type: orderType,
+                ...(orderType === "WORK" && { production_stage: "order_at_shop" }),
             };
 
             if (additionalFields) {
@@ -183,7 +185,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 }
 
                 const currentStock = parseFloat(currentFabric.real_stock?.toString() || "0");
-                const usedLength = fabricSelection.fabric_length;
+                const usedLength = fabricSelection.fabric_length ?? 0;
 
                 if (isNaN(usedLength) || usedLength <= 0) {
                     console.error(`Invalid fabric length: ${fabricSelection.fabric_length}`);
@@ -199,9 +201,9 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     return Promise.resolve(null);
                 }
 
-                return updateFabric(currentId.toString(), {
-                    real_stock: newStock.toString(),
-                });
+                return updateFabric(Number(currentId), {
+                    real_stock: newStock,
+                } as any);
             });
 
             return Promise.all(promises);

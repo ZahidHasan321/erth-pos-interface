@@ -72,7 +72,7 @@ const historyColumns: ColumnDef<OrderRow>[] = [
   {
     accessorKey: "orderDate",
     header: "Date",
-    cell: ({ row }) => <span className="text-xs">{formatDate(row.original.orderDate)}</span>,
+    cell: ({ row }) => <span className="text-xs">{formatDate(row.original.orderDate ?? undefined)}</span>,
   },
   {
     accessorKey: "orderStatus",
@@ -145,9 +145,7 @@ const historyColumns: ColumnDef<OrderRow>[] = [
 ];
 
 const defaultFilters: FilterState = {
-  orderId: "",
-  fatoura: "",
-  mobile: "",
+  searchId: "",
   customer: "",
   stage: "all",
   reminderStatuses: [],

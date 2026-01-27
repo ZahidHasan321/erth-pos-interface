@@ -5,8 +5,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Package,
-  Send,
   RefreshCw,
   CheckCircle2,
   PackageCheck,
@@ -23,7 +21,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { Separator } from "@/components/ui/separator";
 
 // API and Types
 import { getOrdersList, updateOrder } from "@/api/orders";

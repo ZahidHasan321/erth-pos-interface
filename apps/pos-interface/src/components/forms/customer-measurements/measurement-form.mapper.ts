@@ -56,7 +56,7 @@ export function mapFormValuesToMeasurement(formValues: CustomerMeasurementsSchem
     type: formValues.type,
     reference: formValues.reference,
     measurer_id: formValues.measurer_id || undefined,
-    measurement_date: formValues.measurement_date,
+    measurement_date: formValues.measurement_date ? new Date(formValues.measurement_date) : undefined,
     notes: formValues.notes,
     collar_width: formValues.collar_width,
     collar_height: formValues.collar_height,

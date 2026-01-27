@@ -43,7 +43,7 @@ export function usePricing() {
     // 3. Calculate Style (sum of style extras)
     // Extra costs for specific style options (e.g. collars, cuffs)
     const styleTotal = garments.reduce((acc, g) => {
-        return acc + calculateGarmentStylePrice(g, prices || []);
+        return acc + calculateGarmentStylePrice(g, (prices || []) as any);
     }, 0);
 
     // 4. Delivery

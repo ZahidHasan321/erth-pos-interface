@@ -45,7 +45,7 @@ export function mapOrderToFormValues(order: Order): OrderSchema {
         shelf_charge: parseNumeric(order.shelf_charge) ?? 0,
         advance: parseNumeric(order.advance),
         paid: parseNumeric(order.paid),
-        order_total: parseNumeric(order.order_total),
+        order_total: parseNumeric(order.order_total) ?? 0,
         num_of_fabrics: order.num_of_fabrics ?? undefined,
         payment_type: order.payment_type ?? undefined,
         payment_ref_no: order.payment_ref_no ?? undefined,
@@ -67,8 +67,9 @@ export function mapFormValuesToOrder(formValues: OrderSchema): Partial<Order> {
     return {
         ...formValues,
         checkout_status: formValues.checkout_status as any,
+        production_stage: formValues.production_stage as any,
         order_type: formValues.order_type as any,
         payment_type: formValues.payment_type as any,
         discount_type: formValues.discount_type as any,
-    };
+    } as Partial<Order>;
 }

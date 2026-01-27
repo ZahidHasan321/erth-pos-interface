@@ -19,8 +19,6 @@ export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
 export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
-    // Basic implementation of search - Supabase doesn't support generic object search easily like Airtable wrapper
-    // We'll implement basic equality checks for provided keys
     let builder = supabase.from(TABLE_NAME).select('*', { count: 'exact' });
 
     Object.entries(query).forEach(([key, value]) => {
@@ -37,16 +35,33 @@ export const searchOrders = async (
     return { status: 'success', data: data as any, count: count || 0 };
 };
 
-export const getOrderById = async (id: number): Promise<ApiResponse<Order>> => {
+const ORDER_DETAILS_QUERY = `
+    *,
+    customer:customers(*),
+    garments:garments(*),
+    shelf_items:order_shelf_items(*, shelf:shelf(*)),
+    child_orders:orders(*)
+`;
+
+export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select('*')
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
-    if (error) {
-        return { status: 'error', message: error.message };
-    }
+    if (error) return { status: 'error', message: error.message };
+    return { status: 'success', data: data as any };
+};
+
+export const getOrderByInvoice = async (invoiceNumber: number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
+    const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
+        .eq('invoice_number', invoiceNumber)
+        .maybeSingle();
+
+    if (error) return { status: 'error', message: error.message };
     return { status: 'success', data: data as any };
 };
 
@@ -106,15 +121,19 @@ export const getPendingOrdersByCustomer = async (
     customerId: number | string,
     limit: number = 5,
     checkoutStatus: string = "draft",
-): Promise<ApiResponse<Order[]>> => {
+    includeRelations: boolean = false
+): Promise<ApiResponse<any[]>> => {
+    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, child_orders:orders(id)';
+
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
-        .select('*', { count: 'exact' })
+        .select(selectString, { count: 'exact' })
         .eq('customer_id', customerId)
         .eq('checkout_status', checkoutStatus)
         .eq('order_type', 'WORK')
         .order('order_date', { ascending: false })
         .limit(limit);
+
 
     if (error) {
         return { status: 'error', message: error.message, data: [], count: 0 };
@@ -130,14 +149,7 @@ export const getPendingOrdersByCustomer = async (
 /**
  * Get detailed order information including customer and garments.
  */
-export const getOrderDetails = async (idOrInvoice: string | number): Promise<ApiResponse<any>> => {
-    let builder = supabase.from(TABLE_NAME).select(`
-    *,
-    customer:customers(*),
-    garments:garments(*),
-    shelf_items:order_shelf_items(*, shelf:shelf(*))
-  `);
-
+export const getOrderDetails = async (idOrInvoice: string | number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
     const numericVal = typeof idOrInvoice === 'string' ? parseInt(idOrInvoice) : idOrInvoice;
 
     if (isNaN(numericVal)) {
@@ -145,14 +157,14 @@ export const getOrderDetails = async (idOrInvoice: string | number): Promise<Api
     }
 
     // Try ID first
-    const { data: byId, error: errorId } = await builder.eq('id', numericVal).single();
-    if (!errorId) return { status: 'success', data: byId };
+    const resId = await getOrderById(numericVal, includeRelations);
+    if (resId.status === 'success' && resId.data) return resId;
 
     // Try Invoice Number
-    const { data: byInvoice, error: errorInvoice } = await builder.eq('invoice_number', numericVal).single();
-    if (errorInvoice) return { status: 'error', message: errorInvoice.message };
+    const resInv = await getOrderByInvoice(numericVal, includeRelations);
+    if (resInv.status === 'success' && resInv.data) return resInv;
     
-    return { status: 'success', data: byInvoice };
+    return { status: 'error', message: "Order not found" };
 };
 
 /**
@@ -297,4 +309,3 @@ export const saveWorkOrderGarments = async (
     }
     return { status: 'success', data };
 };
-

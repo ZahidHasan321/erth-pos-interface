@@ -10,12 +10,10 @@ import {
 import { mapCustomerToFormValues } from "@/components/forms/customer-demographics/demographics-form.mapper";
 import { OrderSummaryAndPaymentForm } from "@/components/forms/order-summary-and-payment";
 import { ShelfForm } from "@/components/forms/shelf";
-import {
-    shelfFormSchema,
-    type ShelfFormValues,
-} from "@/components/forms/shelf/shelf-form.schema";
+import { shelfFormSchema, type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
+import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
@@ -91,7 +89,7 @@ function NewSalesOrder() {
     // NAVIGATION
     // ============================================================================
     const navigate = useNavigate();
-    const { prices } = usePricing();
+    usePricing();
 
     // ============================================================================
     // DATA FETCHING & STORE
@@ -132,7 +130,7 @@ function NewSalesOrder() {
             // Clear store state first
             resetSalesOrder();
 
-            const response = await getOrderDetails(orderIdToLoad);
+            const response = await getOrderDetails(orderIdToLoad, true);
             console.log("Order details response:", response);
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
@@ -188,7 +186,7 @@ function NewSalesOrder() {
 
     // Load order from search params if provided
     React.useEffect(() => {
-        if (searchOrderId && !orderId && loadingOrderIdRef.current !== searchOrderId) {
+        if (searchOrderId && orderId !== searchOrderId && loadingOrderIdRef.current !== searchOrderId) {
             loadingOrderIdRef.current = searchOrderId;
             handleLoadOrder(searchOrderId);
         }
@@ -198,19 +196,6 @@ function NewSalesOrder() {
     const checkoutStatus = useWatch({
         control: OrderForm.control,
         name: "checkout_status",
-    });
-
-    const [
-        delivery_charge,
-        shelf_charge,
-        home_delivery,
-        payment_type,
-        order_total,
-        paid,
-        advance
-    ] = useWatch({
-        control: OrderForm.control,
-        name: ["delivery_charge", "shelf_charge", "home_delivery", "payment_type", "order_total", "paid", "advance"],
     });
 
     const products = useWatch({
@@ -406,32 +391,6 @@ function NewSalesOrder() {
     ]);
 
     // ============================================================================
-    // NAVIGATION GUARDS
-    // ============================================================================
-    const [allowNavigation, setAllowNavigation] = React.useState(false);
-
-    // Prevent browser tab closing/refresh when order is in progress
-    React.useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (
-                checkoutStatus === "confirmed" ||
-                checkoutStatus === "cancelled" ||
-                !orderId ||
-                allowNavigation
-            ) {
-                return;
-            }
-
-            e.preventDefault();
-            e.returnValue = "You have an order in progress. Are you sure you want to leave?";
-            return e.returnValue;
-        };
-
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    }, [checkoutStatus, orderId, allowNavigation]);
-
-    // ============================================================================
     // RENDER
     // ============================================================================
     return (
@@ -465,6 +424,24 @@ function NewSalesOrder() {
                     currentStep={currentStep}
                     activeSteps={visibleSteps}
                     onStepChange={handleStepChange}
+                />
+                <OrderInfoCard
+                    orderID={order.id}
+                    fatoura={fatoura}
+                    checkoutStatus={order.checkout_status ?? "draft"}
+                    customerName={
+                        customerDemographics.nick_name ||
+                        customerDemographics.name ||
+                        undefined
+                    }
+                    orderType="Sales Order"
+                    homeDelivery={order.home_delivery}
+                    deliveryDate={order.delivery_date}
+                    paymentType={order.payment_type ?? undefined}
+                    numOfFabrics={products?.length ?? 0}
+                    totalAmount={order.order_total ?? totalShelfAmount}
+                    advance={order.advance ?? undefined}
+                    balance={(order.order_total ?? totalShelfAmount) - (order.paid ?? 0)}
                 />
             </div>
 

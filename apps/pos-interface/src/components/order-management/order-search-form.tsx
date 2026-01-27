@@ -1,125 +1,144 @@
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Search, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { Label } from "@/components/ui/label";
+import { Hash, Plus, RefreshCw } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
-type OrderSearchFormProps = {
+type DirectLookupCardProps = {
   orderId: number | undefined;
   fatoura: number | undefined;
-  customerMobile: number | undefined;
   onOrderIdChange: (value: number | undefined) => void;
   onFatouraChange: (value: number | undefined) => void;
-  onCustomerMobileChange: (value: number | undefined) => void;
-  onSubmit: (e: React.FormEvent) => void;
-  onClear: () => void;
-  isLoading?: boolean;
+  onOrderIdSubmit: () => void;
+  onFatouraSubmit: () => void;
+  isSearchingId?: boolean;
+  isSearchingFatoura?: boolean;
+  idError?: string;
+  fatouraError?: string;
   disabled?: boolean;
 };
 
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1 },
-};
-
-export function OrderSearchForm({
+export function DirectLookupCard({
   orderId,
   fatoura,
-  customerMobile,
   onOrderIdChange,
   onFatouraChange,
-  onCustomerMobileChange,
-  onSubmit,
-  onClear,
-  isLoading = false,
+  onOrderIdSubmit,
+  onFatouraSubmit,
+  isSearchingId = false,
+  isSearchingFatoura = false,
+  idError,
+  fatouraError,
   disabled = false,
-}: OrderSearchFormProps) {
-  const hasAnyValue = orderId || fatoura || customerMobile;
-  const canSearch = hasAnyValue && !isLoading && !disabled;
-
+}: DirectLookupCardProps) {
   return (
     <motion.div
-      variants={itemVariants}
-      className="bg-card p-6 rounded-xl border border-border shadow-sm"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-muted/40 p-6 rounded-2xl border border-border/50 shadow-sm flex flex-col justify-center h-full space-y-4"
     >
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-lg font-semibold text-foreground">
-            Search Order
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Search by Order ID, Fatoura number, or Customer phone number
-          </p>
+      <div className="flex items-center gap-3 px-1">
+        <div className="p-2 bg-primary/10 rounded-lg text-primary shadow-sm">
+          <Hash className="size-4" />
         </div>
+        <h2 className="text-sm font-bold text-foreground uppercase tracking-tight">
+          Direct Lookup
+        </h2>
+      </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Order ID
-              </label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Order ID Input Group */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+            Order ID
+          </Label>
+          <div className="flex gap-2 relative">
+            <div className="relative flex-1">
               <Input
                 type="number"
-                placeholder="Enter Order ID"
+                placeholder="e.g. 5021"
                 value={orderId ?? ""}
-                disabled={!!fatoura || !!customerMobile || disabled}
-                onChange={(e) =>
-                  onOrderIdChange(e.target.valueAsNumber || undefined)
-                }
-                className="bg-background border-border/60"
+                onChange={(e) => onOrderIdChange(e.target.valueAsNumber || undefined)}
+                disabled={disabled || isSearchingFatoura}
+                className={cn(
+                  "h-12 font-bold transition-all bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20",
+                  idError && "border-destructive ring-destructive/10"
+                )}
+                onKeyDown={(e) => e.key === 'Enter' && onOrderIdSubmit()}
               />
+              <AnimatePresence>
+                {idError && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute -bottom-4 left-1 flex items-center gap-1 text-[8px] font-black text-destructive uppercase"
+                  >
+                    {idError}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Fatoura Number
-              </label>
-              <Input
-                type="number"
-                placeholder="Enter Fatoura"
-                value={fatoura ?? ""}
-                disabled={!!orderId || !!customerMobile || disabled}
-                onChange={(e) =>
-                  onFatouraChange(e.target.valueAsNumber || undefined)
-                }
-                className="bg-background border-border/60"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Customer Mobile
-              </label>
-              <Input
-                type="number"
-                placeholder="Enter Phone Number"
-                value={customerMobile ?? ""}
-                disabled={!!orderId || !!fatoura || disabled}
-                onChange={(e) =>
-                  onCustomerMobileChange(e.target.valueAsNumber || undefined)
-                }
-                className="bg-background border-border/60"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 justify-end">
-            {hasAnyValue && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClear}
-                disabled={isLoading || disabled}
-              >
-                <X className="w-4 h-4 mr-2" />
-                Clear
-              </Button>
-            )}
-            <Button type="submit" disabled={!canSearch}>
-              <Search className="w-4 h-4 mr-2" />
-              {isLoading ? "Searching..." : "Search"}
+            <Button 
+              size="sm"
+              onClick={onOrderIdSubmit}
+              disabled={!orderId || isSearchingId || disabled || isSearchingFatoura}
+              className="h-12 px-4 font-black uppercase tracking-widest text-[10px] rounded-xl shadow-md shrink-0"
+            >
+              {isSearchingId ? (
+                <RefreshCw className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
             </Button>
           </div>
-        </form>
+        </div>
+
+        {/* Invoice No Input Group */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+            Invoice Number
+          </Label>
+          <div className="flex gap-2 relative">
+            <div className="relative flex-1">
+              <Input
+                type="number"
+                placeholder="e.g. 10025"
+                value={fatoura ?? ""}
+                onChange={(e) => onFatouraChange(e.target.valueAsNumber || undefined)}
+                disabled={disabled || isSearchingId}
+                className={cn(
+                  "h-12 font-bold transition-all bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20",
+                  fatouraError && "border-destructive ring-destructive/10"
+                )}
+                onKeyDown={(e) => e.key === 'Enter' && onFatouraSubmit()}
+              />
+              <AnimatePresence>
+                {fatouraError && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute -bottom-4 left-1 flex items-center gap-1 text-[8px] font-black text-destructive uppercase"
+                  >
+                    {fatouraError}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <Button 
+              size="sm"
+              onClick={onFatouraSubmit}
+              disabled={!fatoura || isSearchingFatoura || disabled || isSearchingId}
+              className="h-12 px-4 font-black uppercase tracking-widest text-[10px] rounded-xl shadow-md shrink-0"
+            >
+              {isSearchingFatoura ? (
+                <RefreshCw className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

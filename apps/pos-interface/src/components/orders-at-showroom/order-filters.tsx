@@ -2,13 +2,11 @@ import { useState } from "react";
 import { 
   Search, 
   X, 
-  Filter, 
   Calendar, 
   CreditCard, 
   Bell, 
   ArrowUpDown, 
   User, 
-  ListFilter, 
   ChevronsUpDown,
   ChevronDown,
   Settings2

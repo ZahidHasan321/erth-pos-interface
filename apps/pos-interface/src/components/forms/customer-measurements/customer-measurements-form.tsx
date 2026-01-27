@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { type UseFormReturn, useWatch } from "react-hook-form";
-import { z } from "zod";
+
 
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -171,7 +171,7 @@ export function CustomerMeasurementsForm({
 
   const [selectedReference, setSelectedReference] = React.useState<
     string | undefined
-  >(form.getValues("reference"));
+  >(form.getValues("reference") ?? undefined);
   useAutoProvision(form);
 
   // Track previous customerId to detect changes
@@ -348,7 +348,7 @@ export function CustomerMeasurementsForm({
   // Handlers
   // ---------------------------------------
   const handleFormSubmit = (
-    values: z.infer<typeof customerMeasurementsSchema>,
+    values: CustomerMeasurementsSchema,
   ) => {
     const onConfirm = () => {
       if (!customerId) {

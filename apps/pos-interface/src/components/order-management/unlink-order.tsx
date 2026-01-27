@@ -1,12 +1,13 @@
+"use client";
+
 import {
-  searchOrders,
   getPendingOrdersByCustomer,
   updateOrder,
   getOrderById,
+  getOrderByInvoice,
 } from "@/api/orders";
-import { searchCustomerByPhone, getCustomerByRecordId } from "@/api/customers";
-import { useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { format } from "date-fns";
 import {
   Unlink,
@@ -15,6 +16,8 @@ import {
   User,
   Package,
   Check,
+  Clock,
+  RefreshCw
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -32,186 +35,112 @@ import {
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
-import { OrderSearchForm } from "./order-search-form";
+import { DirectLookupCard } from "./order-search-form";
 import { ErrorBoundary } from "../global/error-boundary";
-
-import type { Order } from "@/types/order";
-import type { Customer } from "@/types/customer";
-import type { ApiResponse } from "@/types/api";
 import { DatePicker } from "../ui/date-picker";
 import { cn } from "@/lib/utils";
+import { SearchCustomer } from "../forms/customer-demographics/search-customer";
+import { Separator } from "../ui/separator";
+
+import type { Customer } from "@repo/database";
 
 export default function UnlinkOrder() {
-  // --- Search Inputs ---
-  const [orderId, setOrderId] = useState<number | undefined>();
-  const [fatoura, setFatoura] = useState<number | undefined>();
-  const [customerMobile, setCustomerMobile] = useState<number | undefined>();
+  const queryClient = useQueryClient();
+
+  // Search State
+  const [orderIdSearch, setOrderIdSearch] = useState<number | undefined>();
+  const [fatouraSearch, setFatouraSearch] = useState<number | undefined>();
+  const [idError, setIdError] = useState<string | undefined>();
+  const [fatouraError, setFatouraError] = useState<string | undefined>();
+  
+  const [isSearchingId, setIsSearchingId] = useState(false);
+  const [isSearchingFatoura, setIsSearchingFatoura] = useState(false);
+
+  // Global State
+  const [foundOrder, setFoundOrder] = useState<any | null>(null);
   const [reviseDate, setReviseDate] = useState<Date | null>(null);
-
-  // --- Order & Customer State ---
-  const [foundOrder, setFoundOrder] = useState<Order | null>(null);
-  const [customerInfo, setCustomerInfo] = useState<Customer | null>(null);
-  const [linkedOrdersDetails, setLinkedOrdersDetails] = useState<Order[]>([]);
-
-  // --- Loading States ---
-  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
-  const [isLoadingLinkedOrders, setIsLoadingLinkedOrders] = useState(false);
 
-  // --- Dialog State ---
+  // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
-  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<
-    string | null
-  >(null);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<number | null>(null);
 
-  // --- Single Order Search Query ---
-  const { refetch: searchSingleOrder, isFetching: isSearchingSingle } =
-    useQuery<ApiResponse<Order[]>>({
-      queryKey: ["searchOrderForUnlink", orderId, fatoura],
-      queryFn: () => {
-        if (orderId) return searchOrders({ orderId: orderId.toString() });
-        if (fatoura) return searchOrders({ fatoura: fatoura.toString() });
-        throw new Error("Missing search parameter");
-      },
-      enabled: false,
-    });
+  // Input Handlers
+  const handleOrderIdChange = (val: number | undefined) => {
+    setOrderIdSearch(val);
+    if (idError) setIdError(undefined);
+  };
 
-  // --- Fetch Customer Info when order is found ---
-  useEffect(() => {
-    async function fetchCustomerInfo() {
-      if (!foundOrder?.fields.CustomerID?.[0]) {
-        setCustomerInfo(null);
-        return;
+  const handleFatouraChange = (val: number | undefined) => {
+    setFatouraSearch(val);
+    if (fatouraError) setFatouraError(undefined);
+  };
+
+  // Search Handlers
+  const handleCustomerFound = async (customer: Customer) => {
+    try {
+      const ordersResponse = await getPendingOrdersByCustomer(
+        customer.id,
+        20,
+        "confirmed",
+        true // Include relations
+      );
+
+      if (ordersResponse.data && ordersResponse.data.length > 0) {
+        setCustomerOrders(ordersResponse.data);
+        setSelectedDialogOrderId(null);
+        setIsDialogOpen(true);
+      } else {
+        toast.info(`No confirmed orders found for ${customer.name}.`);
       }
+    } catch (error) {
+      console.error("Failed to fetch customer orders", error);
+      toast.error("Failed to fetch customer orders.");
+    }
+  };
 
-      setIsLoadingCustomer(true);
-      try {
-        const response = await getCustomerByRecordId(
-          foundOrder.fields.CustomerID[0],
-        );
-        if (response.data) {
-          setCustomerInfo(response.data);
+  const handleIdSearch = async () => {
+    if (!orderIdSearch) return;
+    setIdError(undefined);
+    setIsSearchingId(true);
+    try {
+        const res = await getOrderById(orderIdSearch, true);
+        if (res.status === "error" || !res.data) {
+            setIdError("Order not found");
+            toast.error("Order ID not found");
         } else {
-          setCustomerInfo(null);
+            setFoundOrder(res.data);
+            setOrderIdSearch(undefined);
         }
-      } catch (error) {
-        console.error("Failed to fetch customer info", error);
-        setCustomerInfo(null);
-      } finally {
-        setIsLoadingCustomer(false);
-      }
+    } catch (err) {
+        toast.error("Search failed");
+    } finally {
+        setIsSearchingId(false);
     }
+  };
 
-    fetchCustomerInfo();
-  }, [foundOrder]);
-
-  // --- Fetch Linked Order Details ---
-  useEffect(() => {
-    async function fetchLinkedOrders() {
-      if (
-        !foundOrder?.fields.LinkedTo ||
-        !Array.isArray(foundOrder.fields.LinkedTo) ||
-        foundOrder.fields.LinkedTo.length === 0
-      ) {
-        setLinkedOrdersDetails([]);
-        return;
-      }
-
-      setIsLoadingLinkedOrders(true);
-      try {
-        const promises = foundOrder.fields.LinkedTo.map((id) =>
-          getOrderById(id),
-        );
-        const responses = await Promise.all(promises);
-        const orders = responses
-          .map((res) => res.data)
-          .filter(Boolean) as Order[];
-        setLinkedOrdersDetails(orders);
-      } catch (error) {
-        console.error("Failed to fetch linked orders", error);
-        toast.error("Failed to load linked order details");
-        setLinkedOrdersDetails([]);
-      } finally {
-        setIsLoadingLinkedOrders(false);
-      }
-    }
-
-    fetchLinkedOrders();
-  }, [foundOrder]);
-
-  // --- Main Form Submit ---
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    // 1. Handle Customer Search
-    if (customerMobile) {
-      setIsSearchingCustomer(true);
-      try {
-        const customerResponse = await searchCustomerByPhone(
-          customerMobile.toString(),
-        );
-
-        if (!customerResponse.data || customerResponse.data.length === 0) {
-          toast.error("Customer not found with this phone number.");
-          return;
-        }
-
-        const customerId = customerResponse.data[0].fields.id;
-        if (!customerId) {
-          toast.error("Customer ID is missing in the record.");
-          return;
-        }
-
-        const ordersResponse = await getPendingOrdersByCustomer(
-          customerId,
-          5,
-          "Completed",
-        );
-
-        if (ordersResponse.data && ordersResponse.data.length > 0) {
-          setCustomerOrders(ordersResponse.data);
-          setSelectedDialogOrderId(null);
-          setIsDialogOpen(true);
+  const handleFatouraSearch = async () => {
+    if (!fatouraSearch) return;
+    setFatouraError(undefined);
+    setIsSearchingFatoura(true);
+    try {
+        const res = await getOrderByInvoice(fatouraSearch, true);
+        if (res.status === "error" || !res.data) {
+            setFatouraError("Invoice not found");
+            toast.error("Invoice Number not found");
         } else {
-          toast.info("No completed orders found for this customer.");
+            setFoundOrder(res.data);
+            setFatouraSearch(undefined);
         }
-      } catch (error) {
-        console.error("Failed to fetch customer orders", error);
-        toast.error("Failed to fetch customer orders.");
-      } finally {
-        setIsSearchingCustomer(false);
-      }
-      return;
+    } catch (err) {
+        toast.error("Search failed");
+    } finally {
+        setIsSearchingFatoura(false);
     }
+  };
 
-    // 2. Handle Single Order Search
-    if (orderId || fatoura) {
-      searchSingleOrder()
-        .then(({ data }) => {
-          if (!data || !data.data || data.data.length === 0) {
-            toast.error("No order found with the provided criteria.");
-            return;
-          }
-          const order = data.data[0];
-          setFoundOrder(order);
-
-          // Show info about the order's link status
-          if (order.fields.UnlinkedOrder) {
-            toast.info("This order was previously unlinked.");
-          } else if (!order.fields.LinkedOrder) {
-            toast.warning("This order is not linked to any other orders.");
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to search order", error);
-          toast.error("Failed to search for order. Please try again.");
-        });
-    }
-  }
-
-  // --- Dialog Handlers ---
+  // Dialog Handlers
   function handleDialogConfirm() {
     if (!selectedDialogOrderId) {
       toast.error("Please select an order.");
@@ -224,20 +153,12 @@ export default function UnlinkOrder() {
     }
   }
 
-  // --- Unlink Handler ---
+  // Unlink Handler
   async function handleUnlink() {
-    if (!foundOrder) {
-      toast.error("No order selected to unlink.");
-      return;
-    }
+    if (!foundOrder) return;
 
-    if (foundOrder.fields.UnlinkedOrder) {
-      toast.info("This order is already unlinked.");
-      return;
-    }
-
-    if (!foundOrder.fields.LinkedOrder) {
-      toast.info("This order was never linked.");
+    if (!foundOrder.linked_order_id) {
+      toast.info("This order is not currently linked.");
       return;
     }
 
@@ -248,49 +169,36 @@ export default function UnlinkOrder() {
 
     setIsSubmitting(true);
     try {
-      const updateData: Partial<Order["fields"]> = {
-        LinkedOrder: false,
-        UnlinkedOrder: true,
-        UnlinkedDate: new Date().toISOString(),
-        DeliveryDate: reviseDate.toISOString(),
+      const updateData: any = {
+        linked_order_id: null,
+        unlinked_date: new Date().toISOString(),
+        delivery_date: reviseDate.toISOString(),
       };
 
       await updateOrder(updateData, foundOrder.id);
 
       toast.success("Order unlinked successfully! Delivery date updated.");
-      setTimeout(() => handleClear(), 2000);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      setTimeout(() => handleClear(), 1500);
     } catch (error) {
       console.error("Unlink failed", error);
-      toast.error("Failed to unlink order. Please try again.");
+      toast.error("Failed to unlink order.");
     } finally {
       setIsSubmitting(false);
     }
   }
-  function getOrderStatusBadge() {
-    if (foundOrder?.fields.UnlinkedOrder)
-      return { label: "Unlinked", variant: "secondary" as const };
-    if (foundOrder?.fields.LinkedOrder)
-      return { label: "Linked", variant: "default" as const };
-    return { label: "Not Linked", variant: "outline" as const };
-  }
-  // --- Clear/Search Again Handler ---
+
+  // Clear/Search Again Handler
   function handleClear() {
     setFoundOrder(null);
-    setCustomerInfo(null);
-    setLinkedOrdersDetails([]);
-    setReviseDate(null); // NEW
-    setOrderId(undefined);
-    setFatoura(undefined);
-    setCustomerMobile(undefined);
+    setReviseDate(null);
+    setOrderIdSearch(undefined);
+    setFatouraSearch(undefined);
+    setIdError(undefined);
+    setFatouraError(undefined);
     setCustomerOrders([]);
     setSelectedDialogOrderId(null);
   }
-
-  const isFetching =
-    isSearchingSingle ||
-    isSearchingCustomer ||
-    isLoadingCustomer ||
-    isLoadingLinkedOrders;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -305,586 +213,286 @@ export default function UnlinkOrder() {
     visible: { y: 0, opacity: 1 },
   };
 
-  function handleClearSearch() {
-    setOrderId(undefined);
-    setFatoura(undefined);
-    setCustomerMobile(undefined);
-  }
-
   return (
     <motion.section
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-8 p-6 md:p-10 max-w-5xl mx-auto"
+      className="space-y-8 p-6 md:p-10 max-w-6xl mx-auto"
     >
       {/* --- Page Header --- */}
-      <motion.div variants={itemVariants} className="space-y-1">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+      <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-6">
+        <h1 className="text-3xl font-bold text-foreground">
           Unlink Order
         </h1>
         <p className="text-sm text-muted-foreground">
-          Remove link from an order and set a new delivery date
+          Disconnect an order from its group and reschedule delivery
         </p>
       </motion.div>
 
-      {/* --- Search Form --- */}
-      <ErrorBoundary
-        fallback={
-          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-6 text-center">
-            <p className="text-destructive font-semibold">
-              Failed to load search form
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Please refresh the page to try again
-            </p>
-          </div>
-        }
-      >
-        <OrderSearchForm
-          orderId={orderId}
-          fatoura={fatoura}
-          customerMobile={customerMobile}
-          onOrderIdChange={setOrderId}
-          onFatouraChange={setFatoura}
-          onCustomerMobileChange={setCustomerMobile}
-          onSubmit={onSubmit}
-          onClear={handleClearSearch}
-          isLoading={isFetching}
-        />
-      </ErrorBoundary>
-
-      {/* --- Order Display Card --- */}
+      {/* --- Search Section --- */}
       <AnimatePresence mode="wait">
-        {foundOrder && (
-          <ErrorBoundary
-            fallback={
-              <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-6 text-center">
-                <p className="text-destructive font-semibold">
-                  Failed to load order details
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Please try searching again
-                </p>
-              </div>
-            }
+        {!foundOrder ? (
+          <motion.div
+            key="search-mode"
+            variants={itemVariants}
+            initial="hidden"
+            animate="visible"
+            exit={{ opacity: 0, y: -20 }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch"
           >
-            <div className="space-y-6">
-              <motion.div
-                variants={itemVariants}
-                initial="hidden"
-                animate="visible"
-              >
-                <Card className="shadow-sm">
-                  <CardHeader className="bg-card border-b border-border">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                          <Package className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-xl">
-                            Order Details
-                          </CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Order #{foundOrder.fields.OrderID ?? "-"}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge
-                        variant={getOrderStatusBadge().variant}
-                        className="w-fit"
-                      >
-                        {getOrderStatusBadge().label}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6 pt-6">
-                    {/* Order Information */}
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Package className="w-4 h-4" />
-                        Order Information
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div className="space-y-1">
-                          <span className="text-muted-foreground text-xs">
-                            Order ID
-                          </span>
-                          <p className="font-semibold text-base">
-                            {foundOrder.fields.OrderID ?? "-"}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-muted-foreground text-xs">
-                            Fatoura Number
-                          </span>
-                          <p className="font-semibold text-base">
-                            {foundOrder.fields.Fatoura ?? "-"}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-muted-foreground text-xs">
-                            Current Delivery Date
-                          </span>
-                          <p className="font-semibold text-base">
-                            {foundOrder.fields.DeliveryDate
-                              ? format(
-                                  new Date(foundOrder.fields.DeliveryDate),
-                                  "PPP",
-                                )
-                              : "-"}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-muted-foreground text-xs">
-                            Order Status
-                          </span>
-                          <p className="font-semibold text-base">
-                            {foundOrder.fields.OrderStatus}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-muted-foreground text-xs">
-                            Linked Status
-                          </span>
-                          <p className="font-semibold text-base">
-                            {foundOrder.fields.LinkedOrder ? "Yes" : "No"}
-                          </p>
-                        </div>
-                        {foundOrder.fields.LinkedDate && (
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground text-xs">
-                              Linked Date
-                            </span>
-                            <p className="font-semibold text-base">
-                              {format(
-                                new Date(foundOrder.fields.LinkedDate),
-                                "PPP",
-                              )}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* New Delivery Date Picker */}
-                    <div className="pt-4 border-t border-border">
-                      <div className="space-y-3">
-                        <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <CalendarIcon className="w-4 h-4" />
-                          Set New Delivery Date{" "}
-                          {!foundOrder.fields.UnlinkedOrder && (
-                            <span className="text-destructive">*</span>
-                          )}
-                        </Label>
-                        <DatePicker
-                          value={reviseDate}
-                          onChange={setReviseDate}
-                          placeholder="Pick new delivery date"
-                          className="w-full"
-                          disabled={foundOrder.fields.UnlinkedOrder}
-                        />
-                        {foundOrder.fields.UnlinkedOrder ? (
-                          <p className="text-xs text-destructive">
-                            This order is already unlinked. Delivery date cannot
-                            be changed.
-                          </p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            This will replace the current delivery date
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Linked Orders Details */}
-                    {isLoadingLinkedOrders ? (
-                      <div className="pt-4 border-t border-border">
-                        <div className="text-sm text-muted-foreground flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          Loading linked orders...
-                        </div>
-                      </div>
-                    ) : (
-                      linkedOrdersDetails.length > 0 && (
-                        <div className="pt-4 border-t border-border">
-                          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                            <Unlink className="w-4 h-4" />
-                            Linked Orders
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {linkedOrdersDetails.map((linkedOrder) => (
-                              <div
-                                key={linkedOrder.id}
-                                className="text-sm p-4 bg-muted/30 rounded-lg border border-border space-y-2"
-                              >
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground text-xs">
-                                    Order ID
-                                  </span>
-                                  <span className="font-semibold">
-                                    {linkedOrder.fields.OrderID ?? "-"}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground text-xs">
-                                    Fatoura
-                                  </span>
-                                  <span className="font-semibold">
-                                    {linkedOrder.fields.Fatoura ?? "-"}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    )}
-
-                    {/* Customer Information */}
-                    {isLoadingCustomer ? (
-                      <div className="pt-4 border-t border-border">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          Loading customer info...
-                        </div>
-                      </div>
-                    ) : customerInfo ? (
-                      <div className="pt-4 border-t border-border">
-                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                          <User className="w-4 h-4" />
-                          Customer Information
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground text-xs">
-                              Name
-                            </span>
-                            <p className="font-semibold">
-                              {customerInfo.fields.Name}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground text-xs">
-                              Phone
-                            </span>
-                            <p className="font-semibold">
-                              {customerInfo.fields.Phone}
-                            </p>
-                          </div>
-                          {customerInfo.fields.NickName && (
-                            <div className="space-y-1">
-                              <span className="text-muted-foreground text-xs">
-                                Nickname
-                              </span>
-                              <p className="font-semibold">
-                                {customerInfo.fields.NickName}
-                              </p>
-                            </div>
-                          )}
-                          {customerInfo.fields.Email && (
-                            <div className="space-y-1">
-                              <span className="text-muted-foreground text-xs">
-                                Email
-                              </span>
-                              <p className="font-semibold">
-                                {customerInfo.fields.Email}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="pt-4 border-t border-border text-sm text-muted-foreground">
-                        Customer information not available.
-                      </div>
-                    )}
-
-                    {/* --- Action Buttons --- */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-border">
-                      <Button
-                        onClick={handleUnlink}
-                        variant="destructive"
-                        className="flex-1"
-                        disabled={
-                          isSubmitting ||
-                          !foundOrder.fields.LinkedOrder ||
-                          foundOrder.fields.UnlinkedOrder ||
-                          !reviseDate
-                        }
-                      >
-                        <Unlink className="w-4 h-4 mr-2" />
-                        {isSubmitting ? "Unlinking..." : "Unlink Order"}
-                      </Button>
-                      <Button
-                        onClick={() => setFoundOrder(null)}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        Clear Order
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* --- Info Alert --- */}
-              <motion.div
-                variants={itemVariants}
-                initial="hidden"
-                animate="visible"
-              >
-                <Card className="border-primary/30 bg-primary/5">
-                  <CardContent className="pt-6">
-                    <div className="flex gap-3">
-                      <AlertCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-foreground">
-                          Important Note
-                        </p>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          This will mark the order as unlinked and update the
-                          delivery date. The original linked IDs and date will
-                          be preserved for audit purposes. Orders that were
-                          never linked cannot be unlinked.
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+            <div className="lg:col-span-7">
+                <SearchCustomer 
+                    onCustomerFound={handleCustomerFound}
+                    onHandleClear={() => {}}
+                />
             </div>
-          </ErrorBoundary>
+            <div className="lg:col-span-5">
+                <DirectLookupCard 
+                    orderId={orderIdSearch}
+                    fatoura={fatouraSearch}
+                    onOrderIdChange={handleOrderIdChange}
+                    onFatouraChange={handleFatouraChange}
+                    onOrderIdSubmit={handleIdSearch}
+                    onFatouraSubmit={handleFatouraSearch}
+                    isSearchingId={isSearchingId}
+                    isSearchingFatoura={isSearchingFatoura}
+                    idError={idError}
+                    fatouraError={fatouraError}
+                />
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="display-mode"
+            variants={itemVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-6"
+          >
+            <Card className="overflow-hidden border-2 border-primary/20 shadow-xl">
+              <CardHeader className="bg-muted/30 border-b border-border p-6">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-primary/10 text-primary rounded-xl shadow-sm">
+                      <Package className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl font-bold text-foreground">Order #{foundOrder.id}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Inv: {foundOrder.invoice_number || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge 
+                    variant={foundOrder.linked_order_id ? "default" : "outline"}
+                    className={cn(
+                        "h-7 px-3 font-semibold text-[10px]",
+                        !foundOrder.linked_order_id && "text-muted-foreground opacity-50"
+                    )}
+                  >
+                    {foundOrder.linked_order_id ? `Linked to #${foundOrder.linked_order_id}` : "Not Linked"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="p-0">
+                <div className="grid grid-cols-1 md:grid-cols-12 items-stretch">
+                  <div className="md:col-span-7 p-8 space-y-8 border-r border-border/60">
+                    <div className="grid grid-cols-2 gap-8">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Production Stage</Label>
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-primary" />
+                                <span className="font-bold text-sm text-foreground uppercase">{foundOrder.production_stage?.replace(/_/g, " ")}</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Delivery</Label>
+                            <div className="flex items-center gap-2">
+                                <CalendarIcon className="w-4 h-4 text-primary" />
+                                <span className="font-bold text-sm text-foreground">
+                                    {foundOrder.delivery_date ? format(new Date(foundOrder.delivery_date), "PPP") : "Not Set"}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Separator className="opacity-50" />
+
+                    <div className="space-y-4">
+                        <Label className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
+                            <User className="w-3.5 h-3.5" /> Customer Details
+                        </Label>
+                        <div className="bg-muted/30 rounded-xl p-4 border border-border grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-tight">Name</span>
+                                <span className="font-bold text-sm text-foreground truncate block">{foundOrder.customer?.name || "N/A"}</span>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-tight">Phone</span>
+                                <span className="font-bold text-sm text-foreground block">{foundOrder.customer?.phone || "N/A"}</span>
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-5 p-8 bg-muted/5 space-y-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-border pb-2">
+                            <Unlink className="w-4 h-4 text-destructive" />
+                            <h4 className="text-sm font-bold text-foreground">Unlink Configuration</h4>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider ml-1">New Delivery Date</Label>
+                            <DatePicker 
+                                value={reviseDate || undefined}
+                                onChange={(date) => setReviseDate(date || null)}
+                                placeholder="Select New Date"
+                                className="w-full h-12 border-2 font-semibold"
+                            />
+                            <p className="text-[10px] text-muted-foreground font-medium px-1 italic">
+                                Required to mark the order as independent
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 space-y-3">
+                        <Button
+                            onClick={handleUnlink}
+                            variant="destructive"
+                            className="w-full h-12 font-bold uppercase tracking-wider shadow-sm transition-all active:scale-[0.98]"
+                            disabled={isSubmitting || !foundOrder.linked_order_id || !reviseDate}
+                        >
+                            {isSubmitting ? (
+                                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                            ) : (
+                                <Unlink className="w-5 h-5 mr-2" />
+                            )}
+                            Unlink & Update
+                        </Button>
+                        <Button
+                            onClick={handleClear}
+                            variant="ghost"
+                            className="w-full font-bold uppercase tracking-widest text-[10px] text-muted-foreground hover:bg-background"
+                        >
+                            Cancel and Search Again
+                        </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <motion.div variants={itemVariants} className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                    <p className="text-xs font-black uppercase tracking-tight text-amber-900">System Note</p>
+                    <p className="text-[11px] font-medium text-amber-800 leading-relaxed uppercase tracking-wide">
+                        Unlinking an order will remove its relationship with other orders in the workshop group. 
+                        A new delivery date must be set to ensure proper scheduling.
+                    </p>
+                </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- Customer Order Selection Dialog --- */}
-      <ErrorBoundary
-        fallback={
-          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-6 text-center">
-            <p className="text-destructive font-semibold">
-              Failed to load customer dialog
-            </p>
-          </div>
-        }
-      >
+      <ErrorBoundary>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-7xl max-h-[85vh]">
-            <DialogHeader className="border-b border-border pb-4">
+          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
+            <DialogHeader className="border-b border-border pb-4 px-2">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-destructive/10 rounded-lg">
-                  <Unlink className="w-5 h-5 text-destructive" />
+                <div className="p-2.5 bg-destructive/10 rounded-xl text-destructive">
+                  <Unlink className="w-6 h-6" />
                 </div>
                 <div>
-                  <DialogTitle className="text-xl">
+                  <DialogTitle className="text-2xl font-bold uppercase tracking-tight text-foreground">
                     Select Order to Unlink
                   </DialogTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Only linked orders can be selected for unlinking
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
+                    Choose a linked order to disconnect from its group
                   </p>
                 </div>
               </div>
             </DialogHeader>
 
             <RadioGroup
-              value={selectedDialogOrderId ?? undefined}
-              onValueChange={setSelectedDialogOrderId}
-              className="overflow-y-auto max-h-[calc(85vh-240px)]"
+              value={selectedDialogOrderId?.toString()}
+              onValueChange={(val) => setSelectedDialogOrderId(parseInt(val))}
+              className="overflow-y-auto max-h-[50vh] px-1"
             >
-              <div className="border rounded-lg overflow-auto">
+              <div className="border rounded-xl bg-muted/5 overflow-hidden">
                 <table className="w-full text-sm min-w-[700px]">
-                  <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10 border-b border-border">
-                    <tr>
-                      <th className="p-4 text-left w-12"></th>
-                      <th className="p-4 text-left font-semibold">
-                        Order Info
-                      </th>
-                      <th className="p-4 text-left font-semibold">
-                        Delivery Date
-                      </th>
-                      <th className="p-4 text-left font-semibold">
-                        Linked To Orders
-                      </th>
-                      <th className="p-4 text-left font-semibold">Stage</th>
-                      <th className="p-4 text-left font-semibold">Status</th>
+                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
+                    <tr className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <th className="p-4 w-12 text-center">Select</th>
+                      <th className="p-4 text-left">Identity</th>
+                      <th className="p-4 text-left">Link Status</th>
+                      <th className="p-4 text-left">Delivery Date</th>
+                      <th className="p-4 text-left">Stage</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border">
                     {customerOrders.map((order) => {
+                      const isLinked = !!order.linked_order_id;
                       const isSelected = selectedDialogOrderId === order.id;
-                      const isLinked = Boolean(order.fields.LinkedOrder);
-                      const isUnlinked = Boolean(order.fields.UnlinkedOrder);
-                      const linkedToCount = Array.isArray(order.fields.LinkedTo)
-                        ? order.fields.LinkedTo.length
-                        : 0;
-                      const canSelect = isLinked && !isUnlinked;
+                      const canSelect = isLinked;
 
                       return (
                         <tr
                           key={order.id}
                           className={cn(
-                            "border-t border-border transition-colors",
-                            !canSelect && "opacity-50 cursor-not-allowed",
-                            canSelect && "cursor-pointer",
-                            canSelect && isSelected
-                              ? "bg-primary/10 hover:bg-primary/15"
-                              : canSelect && "hover:bg-muted/20",
+                            "transition-colors group",
+                            !canSelect
+                              ? "bg-muted/30 opacity-60 grayscale cursor-not-allowed"
+                              : isSelected
+                                ? "bg-primary/5 hover:bg-primary/10"
+                                : "hover:bg-muted/20",
                           )}
-                          onClick={() =>
-                            canSelect && setSelectedDialogOrderId(order.id)
-                          }
+                          onClick={() => canSelect && setSelectedDialogOrderId(order.id)}
                         >
                           <td className="p-4">
-                            <RadioGroupItem
-                              value={order.id}
-                              id={order.id}
-                              disabled={!canSelect}
-                            />
+                            <div className="flex items-center justify-center">
+                                <RadioGroupItem
+                                    value={order.id.toString()}
+                                    id={`dialog-order-${order.id}`}
+                                    disabled={!canSelect}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </div>
                           </td>
                           <td className="p-4">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <Label
-                                  htmlFor={order.id}
-                                  className="font-semibold text-foreground cursor-pointer"
-                                >
-                                  #{order.fields.OrderID}
-                                </Label>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Fatoura: {order.fields.Fatoura ?? "N/A"}
+                              <h4 className="font-bold text-xs uppercase text-foreground">
+                                  #{order.id}
+                              </h4>
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase">
+                                Inv: {order.invoice_number ?? "—"}
                               </p>
                             </div>
                           </td>
                           <td className="p-4">
-                            <div className="text-sm">
-                              {order.fields.DeliveryDate ? (
-                                <div className="space-y-1">
-                                  <p className="font-medium">
-                                    {format(
-                                      new Date(order.fields.DeliveryDate),
-                                      "PPP",
-                                    )}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {format(
-                                      new Date(order.fields.DeliveryDate),
-                                      "p",
-                                    )}
-                                  </p>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  Not set
+                             {isLinked ? (
+                                <Badge variant="secondary" className="text-[8px] font-bold h-4 px-1 rounded-sm whitespace-nowrap">
+                                    LINKED TO #{order.linked_order_id}
+                                </Badge>
+                             ) : (
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-40">Independent</span>
+                             )}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-xs font-bold whitespace-nowrap text-foreground">
+                                    {order.delivery_date ? format(new Date(order.delivery_date), "PP") : "Not Set"}
                                 </span>
-                              )}
                             </div>
                           </td>
                           <td className="p-4">
-                            <div className="space-y-1.5">
-                              {isUnlinked ? (
-                                <>
-                                  <Badge variant="outline" className="bg-muted">
-                                    Previously Unlinked
-                                  </Badge>
-                                  {order.fields.UnlinkedDate && (
-                                    <p className="text-xs text-muted-foreground">
-                                      On{" "}
-                                      {format(
-                                        new Date(order.fields.UnlinkedDate),
-                                        "PP",
-                                      )}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-destructive font-medium">
-                                    Cannot be unlinked again
-                                  </p>
-                                </>
-                              ) : isLinked ? (
-                                <>
-                                  {linkedToCount > 0 ? (
-                                    <>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {order.fields.LinkedTo?.slice(0, 3).map(
-                                          (linkedId, idx) => {
-                                            // Try to find the order in customerOrders to show OrderID
-                                            const linkedOrderData =
-                                              customerOrders.find(
-                                                (o) => o.id === linkedId,
-                                              );
-                                            return (
-                                              <Badge
-                                                key={idx}
-                                                variant="secondary"
-                                                className="text-xs"
-                                              >
-                                                #
-                                                {linkedOrderData?.fields
-                                                  .OrderID ??
-                                                  linkedId.slice(-4)}
-                                              </Badge>
-                                            );
-                                          },
-                                        )}
-                                        {linkedToCount > 3 && (
-                                          <Badge
-                                            variant="secondary"
-                                            className="text-xs"
-                                          >
-                                            +{linkedToCount - 3} more
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        Linked to {linkedToCount} order
-                                        {linkedToCount > 1 ? "s" : ""}
-                                      </p>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Badge variant="default">
-                                        Primary Order
-                                      </Badge>
-                                      <p className="text-xs text-muted-foreground">
-                                        Other orders are linked to this one
-                                      </p>
-                                    </>
-                                  )}
-                                  {order.fields.LinkedDate && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Since{" "}
-                                      {format(
-                                        new Date(order.fields.LinkedDate),
-                                        "PP",
-                                      )}
-                                    </p>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  <Badge variant="outline">Not Linked</Badge>
-                                  <p className="text-xs text-destructive font-medium">
-                                    Cannot unlink - not linked
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className="font-normal">
-                              {order.fields.FatouraStages ?? "N/A"}
-                            </Badge>
-                          </td>
-                          <td className="p-4">
-                            <Badge
-                              variant={
-                                order.fields.OrderStatus === "Completed"
-                                  ? "default"
-                                  : "secondary"
-                              }
-                            >
-                              {order.fields.OrderStatus}
+                            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider h-5 px-2">
+                              {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
                             </Badge>
                           </td>
                         </tr>
@@ -895,33 +503,18 @@ export default function UnlinkOrder() {
               </div>
             </RadioGroup>
 
-            <DialogFooter className="border-t border-border pt-4">
+            <DialogFooter className="border-t border-border pt-6 px-2">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                <div className="text-sm">
-                  {(() => {
-                    const linkedOrders = customerOrders.filter(
-                      (o) => o.fields.LinkedOrder && !o.fields.UnlinkedOrder,
-                    );
-                    const linkedCount = linkedOrders.length;
-                    return (
-                      <div className="space-y-1">
-                        <p className="text-muted-foreground">
-                          {selectedDialogOrderId
-                            ? "Order selected for unlinking"
-                            : "No order selected"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {linkedCount} of {customerOrders.length} order
-                          {customerOrders.length !== 1 ? "s" : ""} can be
-                          unlinked
-                        </p>
-                      </div>
-                    );
-                  })()}
+                <div className="flex items-center gap-2">
+                   <div className={cn("h-2 w-2 rounded-full bg-primary", selectedDialogOrderId && "animate-pulse")} />
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {selectedDialogOrderId ? `Order #${selectedDialogOrderId} Selected` : "Select a linked order"}
+                  </p>
                 </div>
                 <div className="flex gap-3">
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    className="font-bold uppercase tracking-widest text-[10px]"
                     onClick={() => setIsDialogOpen(false)}
                   >
                     Cancel
@@ -929,9 +522,10 @@ export default function UnlinkOrder() {
                   <Button
                     onClick={handleDialogConfirm}
                     disabled={!selectedDialogOrderId}
+                    className="font-bold uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
                   >
                     <Check className="w-4 h-4 mr-2" />
-                    Select Order
+                    Load for Unlinking
                   </Button>
                 </div>
               </div>

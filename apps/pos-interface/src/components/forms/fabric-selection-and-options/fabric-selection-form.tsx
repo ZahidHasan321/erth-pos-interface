@@ -2,7 +2,6 @@
 
 import { getFabrics } from "@/api/fabrics";
 import { getPrices } from "@/api/prices";
-import { createGarment, updateGarment } from "@/api/garments";
 import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
@@ -59,10 +58,6 @@ import {
     mapGarmentToFormValues,
 } from "./fabric-selection/garment-form.mapper";
 import { columns as styleOptionsColumns } from "./style-options/style-options-columns";
-import {
-    type StyleOptionsSchema,
-    styleOptionsDefaults,
-} from "./style-options/style-options-form.schema";
 import { FabricLabel } from "./fabric-selection/fabric-print-component";
 
 type FabricFormValues = {
@@ -178,14 +173,12 @@ export function FabricSelectionForm({
 
     const prices = pricesResponse?.data || [];
 
-    const { data: stylesResponse } = useQuery({
+    const { data: _stylesResponse } = useQuery({
         queryKey: ["styles"],
         queryFn: getStyles,
         staleTime: Infinity,
         gcTime: Infinity,
     });
-
-    const styles = stylesResponse?.data || [];
 
     const {
         fields: garmentFields,
@@ -303,7 +296,7 @@ export function FabricSelectionForm({
 
             // Fetch the updated order details to get the new garment IDs
             if (orderId) {
-                const detailsRes = await getOrderDetails(orderId);
+                const detailsRes = await getOrderDetails(orderId, true);
                 if (detailsRes.status === "success" && detailsRes.data?.garments) {
                     const updatedGarments = detailsRes.data.garments.map((g: any) => mapGarmentToFormValues(g));
                     form.setValue("garments", updatedGarments);
@@ -439,7 +432,7 @@ export function FabricSelectionForm({
         appendGarment({
             ...garmentDefaults,
             garment_id: currentOrderId + "-" + (index + 1),
-            measurement_id: latestMeasurement?.id ?? null,
+            measurement_id: latestMeasurement?.id ?? null as any,
         });
     };
 
@@ -504,7 +497,9 @@ export function FabricSelectionForm({
     };
 
     // Unified Error Summary Logic
-    const errorEntries = Object.entries(form.formState.errors.garments || {});
+    const errorEntries = Object.entries(form.formState.errors.garments || {}).filter(
+        ([key, value]) => /^\d+$/.test(key) && value != null && typeof value === 'object'
+    );
     const hasErrors = errorEntries.length > 0 || form.formState.errors.signature;
 
     return (
@@ -590,6 +585,17 @@ export function FabricSelectionForm({
                                         onChange={(e) =>
                                             setNumRowsToAdd(parseInt(e.target.value, 10))
                                         }
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (numRowsToAdd > 0) {
+                                                    syncRows(numRowsToAdd, garmentFields, {
+                                                        addRow: addGarmentRow,
+                                                        removeRow: removeGarmentRow,
+                                                    });
+                                                }
+                                            }
+                                        }}
                                         className="w-32 bg-background border-border/60"
                                         disabled={isFormDisabled}
                                     />

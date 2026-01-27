@@ -8,9 +8,12 @@ export type OrderRow = {
   // Order info
   orderId: string;
   orderRecordId: string;
+  invoiceNumber?: number;
+  productionStage?: string;
   fatoura?: number;
   fatouraStage: string;
   orderStatus: "Pending" | "Completed" | "Cancelled";
+  checkoutStatus?: string;
   orderDate?: string | null;
   deliveryDate?: string | null;
 

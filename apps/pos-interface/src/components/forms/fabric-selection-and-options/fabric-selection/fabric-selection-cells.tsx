@@ -133,9 +133,11 @@ export const FabricSourceCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
-    const fabricSource = useWatch({
+    const fabricSourceWatch = useWatch({
         name: `garments.${row.index}.fabric_source`,
     });
+
+    const fabricSource = fabricSourceWatch ?? row.original.fabric_source;
 
     const previousFabricSource = React.useRef(fabricSource);
 
@@ -156,6 +158,7 @@ export const FabricSourceCell = ({
             <Controller
                 name={`garments.${row.index}.fabric_source`}
                 control={control}
+                defaultValue={row.original.fabric_source}
                 render={({ field, fieldState: { error } }) => (
                     <div className="flex flex-col gap-1">
                         <Select
@@ -196,9 +199,11 @@ export const ShopNameCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
-    const fabricSource = useWatch({
+    const fabricSourceWatch = useWatch({
         name: `garments.${row.index}.fabric_source`,
     });
+
+    const fabricSource = fabricSourceWatch ?? row.original.fabric_source;
 
     const isDisabled = fabricSource !== "OUT";
 
@@ -207,6 +212,7 @@ export const ShopNameCell = ({
             <Controller
                 name={`garments.${row.index}.shop_name`}
                 control={control}
+                defaultValue={row.original.shop_name}
                 render={({ field, fieldState: { error } }) => (
                     <div className="flex flex-col gap-1">
                         <Input
@@ -239,17 +245,20 @@ export const IfInsideCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
-    const [fabricSource, fabricId] = useWatch({
+    const [fabricSourceWatch, fabricIdWatch] = useWatch({
         name: [
             `garments.${row.index}.fabric_source`,
             `garments.${row.index}.fabric_id`,
         ],
     });
 
-    const isDisabled = fabricSource === "OUT" || !fabricSource;
+    const fabricSource = fabricSourceWatch ?? row.original.fabric_source;
+    const fabricId = fabricIdWatch ?? row.original.fabric_id;
+
+    const isInternal = fabricSource === "IN";
     const [searchQuery, setSearchQuery] = React.useState("");
 
-    const { data: fabricsResponse } = useQuery({
+    const { data: fabricsResponse, isLoading: isLoadingFabrics } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
@@ -259,7 +268,7 @@ export const IfInsideCell = ({
     const fabrics = fabricsResponse?.data || [];
 
     React.useEffect(() => {
-        if (fabricSource === "IN" && fabricId) {
+        if (isInternal && fabricId) {
             const selectedFabric = fabrics.find((f) => f.id === fabricId);
             if (selectedFabric) {
                 setValue(
@@ -269,7 +278,7 @@ export const IfInsideCell = ({
                 );
             }
         }
-    }, [fabricId, fabricSource, fabrics, row.index, setValue]);
+    }, [fabricId, isInternal, fabrics, row.index, setValue]);
 
     const fuse = React.useMemo(
         () =>
@@ -316,21 +325,23 @@ export const IfInsideCell = ({
 
     return (
         <div className="flex flex-col space-y-1 w-[200px] min-w-[200px]">
-            {isDisabled || isFormDisabled ? (
+            {!isInternal ? (
                 <Input
-                    placeholder="Search fabric..."
+                    placeholder="N/A"
                     disabled
-                    className="cursor-not-allowed text-destructive bg-muted border-border/60"
+                    className="cursor-not-allowed bg-muted border-border/60"
                 />
             ) : (
                 <Controller
                     name={`garments.${row.index}.fabric_id`}
                     control={control}
+                    defaultValue={row.original.fabric_id}
                     render={({ field, fieldState: { error } }) => (
                         <div className="flex flex-col gap-1">
                             <Combobox
                                 options={fabricOptions}
                                 value={field.value?.toString() || ""}
+                                isLoading={isLoadingFabrics}
                                 onChange={(value) => {
                                     field.onChange(value ? parseInt(value) : null);
                                     setSearchQuery("");
@@ -341,6 +352,7 @@ export const IfInsideCell = ({
                                 className={cn(
                                     "bg-background border-border/60",
                                     error && "border-destructive",
+                                    isFormDisabled && "opacity-100 cursor-default"
                                 )}
                             />
                             {error && (
@@ -367,9 +379,11 @@ export const ColorCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
-    const fabricSource = useWatch({
+    const fabricSourceWatch = useWatch({
         name: `garments.${row.index}.fabric_source`,
     });
+
+    const fabricSource = fabricSourceWatch ?? row.original.fabric_source;
 
     const isReadOnly = fabricSource === "IN";
 
@@ -378,6 +392,7 @@ export const ColorCell = ({
             <Controller
                 name={`garments.${row.index}.color`}
                 control={control}
+                defaultValue={row.original.color}
                 render={({ field, fieldState: { error } }) => (
                     <div className="flex flex-col gap-1">
                         <Input
@@ -525,13 +540,17 @@ export const FabricAmountCell = ({
     });
     const fabrics = fabricsResponse?.data || [];
 
-    const [fabricSource, fabricId, fabricLength] = useWatch({
+    const [fabricSourceWatch, fabricIdWatch, fabricLengthWatch] = useWatch({
         name: [
             `garments.${row.index}.fabric_source`,
             `garments.${row.index}.fabric_id`,
             `garments.${row.index}.fabric_length`,
         ],
     });
+
+    const fabricSource = fabricSourceWatch ?? row.original.fabric_source;
+    const fabricId = fabricIdWatch ?? row.original.fabric_id;
+    const fabricLength = fabricLengthWatch ?? row.original.fabric_length;
 
     React.useEffect(() => {
         if (fabricSource === "OUT") {

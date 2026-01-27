@@ -9,8 +9,7 @@ import {
   Printer,
   X,
   Receipt,
-  Loader2,
-  ArrowRight
+  Loader2
 } from "lucide-react";
 import React from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
@@ -112,8 +111,8 @@ export function OrderSummaryAndPaymentForm({
   onCancel,
   isOrderClosed,
   invoiceData,
-  orderId,
-  checkoutStatus,
+  orderId: _orderId,
+  checkoutStatus: _checkoutStatus,
   customerAddress,
   fabricSelections = [],
   fatoura,
@@ -157,8 +156,6 @@ export function OrderSummaryAndPaymentForm({
   });
 
   const effectiveOrderType = orderType || order_type || "WORK";
-
-  const hasFatoura = !!fatoura;
 
   // Fetch employees data
   const { data: employeesResponse } = useQuery({
@@ -210,8 +207,6 @@ export function OrderSummaryAndPaymentForm({
                    (Number(style_charge) || 0) + 
                    (Number(delivery_charge) || 0) + 
                    (Number(shelf_charge) || 0);
-
-  const previousDiscountType = React.useRef(discount_type);
 
   const toggleDiscountType = (type: OrderSchemaType["discount_type"]) => {
     if (isOrderClosed) return;

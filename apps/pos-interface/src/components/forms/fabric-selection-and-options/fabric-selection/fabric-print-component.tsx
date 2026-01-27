@@ -41,7 +41,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
     // Look up the fabric name if source is IN
     const fabricName = React.useMemo(() => {
       if (fabricData.fabricSource === 'IN' && fabricData.fabricId) {
-        const fabric = fabrics.find(f => f.id.toString() === fabricData.fabricId.toString());
+        const fabric = fabrics.find(f => f.id.toString() === fabricData.fabricId!.toString());
         return fabric?.name || 'N/A';
       }
       return 'Out';

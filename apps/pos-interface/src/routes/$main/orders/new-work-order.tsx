@@ -84,10 +84,7 @@ const steps = [
 
 const useCurrentWorkOrderStore = createWorkOrderStore("main");
 
-type ViewMode = "ACTIVE_ORDER";
-
 function NewWorkOrder() {
-    const [viewMode, setViewMode] = React.useState<ViewMode>("ACTIVE_ORDER");
     const { orderId: searchOrderId } = Route.useSearch();
     // ============================================================================
     // NAVIGATION
@@ -130,7 +127,6 @@ function NewWorkOrder() {
     const setFabricSelections = useCurrentWorkOrderStore(
         (s) => s.setFabricSelections,
     );
-    const setStyleOptions = useCurrentWorkOrderStore((s) => s.setStyleOptions);
     const orderId = useCurrentWorkOrderStore((s) => s.orderId);
     const setOrderId = useCurrentWorkOrderStore((s) => s.setOrderId);
     const order = useCurrentWorkOrderStore((s) => s.order);
@@ -222,8 +218,6 @@ function NewWorkOrder() {
     const {
         createOrder: createOrderMutation,
         updateOrder: updateOrderMutation,
-        updateShelf: updateShelfMutation,
-        updateFabricStock: updateFabricStockMutation,
         completeWorkOrder: completeWorkOrderMutation,
         // deleteOrder: deleteOrderMutation,
     } = useOrderMutations({
@@ -237,7 +231,6 @@ function NewWorkOrder() {
             shelfForm.reset();
             OrderForm.reset();
 
-            setViewMode("ACTIVE_ORDER");
             // Move to next step (Measurements)
             handleProceed(0);
         },
@@ -283,7 +276,6 @@ function NewWorkOrder() {
             }
         } else {
             toast.success(`Customer loaded: ${customer.name}`);
-            setViewMode("ACTIVE_ORDER");
             setCurrentStep(0);
         }
     };
@@ -301,7 +293,7 @@ function NewWorkOrder() {
             // Clear store state first
             resetWorkOrder();
 
-            const response = await getOrderDetails(order.id);
+            const response = await getOrderDetails(order.id, true);
             console.log("Work order details response:", response);
 
             if (response.status === "success" && response.data) {
@@ -384,7 +376,6 @@ function NewWorkOrder() {
                 }
 
                 // Navigate to review step if confirmed, otherwise to measurements
-                setViewMode("ACTIVE_ORDER");
                 setCurrentStep(isConfirmed ? 4 : 1);
 
                 toast.success(`Order loaded successfully`);
@@ -406,7 +397,6 @@ function NewWorkOrder() {
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
         toast.success(`Customer loaded: ${customer.name}`);
-        setViewMode("ACTIVE_ORDER");
         setCurrentStep(0);
     };
 
@@ -442,7 +432,7 @@ function NewWorkOrder() {
 
     // Load order from search params if provided
     React.useEffect(() => {
-        if (searchOrderId && !orderId && loadingOrderIdRef.current !== searchOrderId) {
+        if (searchOrderId && orderId !== searchOrderId && loadingOrderIdRef.current !== searchOrderId) {
             loadingOrderIdRef.current = searchOrderId;
             handlePendingOrderSelected({ id: searchOrderId } as Order);
         }
@@ -508,7 +498,7 @@ function NewWorkOrder() {
         let totalStyle = 0;
 
         garments.forEach((garment) => {
-            totalStyle += calculateGarmentStylePrice(garment, prices || []);
+            totalStyle += calculateGarmentStylePrice(garment, (prices || []) as any);
         });
 
         return totalStyle;
@@ -668,7 +658,6 @@ function NewWorkOrder() {
     >(null);
 
     const resetLocalState = () => {
-        setViewMode("ACTIVE_ORDER");
         demographicsForm.reset(customerDemographicsDefaults);
         measurementsForm.reset({
             ...customerMeasurementsDefaults,
@@ -875,7 +864,7 @@ function NewWorkOrder() {
                         (order.delivery_charge || 0) +
                         (order.shelf_charge || 0)
                     }
-                    advance={order.advance}
+                    advance={order.advance ?? undefined}
                     balance={(order.order_total ?? 0) - (order.paid ?? 0)}
                 />
             </div>
@@ -935,7 +924,6 @@ function NewWorkOrder() {
                         onProceed={handleDemographicsProceed}
                         onClear={() => {
                             removeSavedStep(0);
-                            setViewMode("ACTIVE_ORDER");
                         }}
                     />
                 </div>

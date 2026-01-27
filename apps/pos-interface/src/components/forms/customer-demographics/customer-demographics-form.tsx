@@ -44,7 +44,7 @@ import WhatsappLogo from "@/assets/whatsapp.svg";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@/components/ui/flag-icon";
-import { Pencil, ArrowRight, X, Save, Check, Search, Users, Info, Eye, Copy, MapPin } from "lucide-react";
+import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin } from "lucide-react";
 import { SearchCustomer } from "./search-customer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 

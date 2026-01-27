@@ -1,23 +1,31 @@
+"use client";
+
 import { useState, useEffect, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
 import {
   Ruler,
   Camera,
-  Video,
   Package,
   Save,
   Check,
   X,
   ThumbsUp,
   ThumbsDown,
+  Hash,
+  User,
+
+  Clock,
+  RefreshCw,
+  MessageSquare
 } from "lucide-react";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -38,18 +46,25 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { OrderSearchForm } from "@/components/order-management/order-search-form";
+import { DirectLookupCard } from "@/components/order-management/order-search-form";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import { ErrorBoundary } from "@/components/global/error-boundary";
 
 // API and Types
-import { getOrderDetails, getOrdersList } from "@/api/ordersApi";
-import { searchCustomerByPhone } from "@/api/customers";
+import { getOrderById, getOrderByInvoice, getPendingOrdersByCustomer } from "@/api/orders";
 import { getMeasurementById } from "@/api/measurements";
-import type { Measurement } from "@/types/measurement";
-import type { OrderDetails } from "@/api/ordersApi";
+import type { Measurement, Order, Garment, Customer } from "@repo/database";
 
 // Assets & Constants
 import {
@@ -74,26 +89,26 @@ export const Route = createFileRoute(
 // --- Constants & Config ---
 
 const MEASUREMENT_ROWS = [
-  { type: "Collar", subType: "Width", key: "CollarWidth" },
-  { type: "Collar", subType: "Height", key: "CollarHeight" },
-  { type: "Length", subType: "Front", key: "LengthFront" },
-  { type: "Length", subType: "Back", key: "LengthBack" },
-  { type: "Top Pocket", subType: "Length", key: "TopPocketLength" },
-  { type: "Top Pocket", subType: "Width", key: "TopPocketWidth" },
-  { type: "Top Pocket", subType: "Distance", key: "TopPocketDistance" },
-  { type: "Side Pocket", subType: "Length", key: "SidePocketLength" },
-  { type: "Side Pocket", subType: "Width", key: "SidePocketWidth" },
-  { type: "Side Pocket", subType: "Distance", key: "SidePocketDistance" },
-  { type: "Side Pocket", subType: "Opening", key: "SidePocketOpening" },
-  { type: "Waist", subType: "Front", key: "WaistFront" },
-  { type: "Waist", subType: "Back", key: "WaistBack" },
-  { type: "Arm Hole", subType: "Arm Hole", key: "Armhole" },
-  { type: "Chest", subType: "Upper", key: "ChestUpper" },
-  { type: "Chest", subType: "Full", key: "ChestFull" },
-  { type: "Chest", subType: "Half", key: "ChestFront" },
-  { type: "Elbow", subType: "Elbow", key: "Elbow" },
-  { type: "Sleeves", subType: "Sleeves", key: "SleeveLength" },
-  { type: "Bottom", subType: "Bottom", key: "Bottom" },
+  { type: "Collar", subType: "Width", key: "collar_width" },
+  { type: "Collar", subType: "Height", key: "collar_height" },
+  { type: "Length", subType: "Front", key: "length_front" },
+  { type: "Length", subType: "Back", key: "length_back" },
+  { type: "Top Pocket", subType: "Length", key: "top_pocket_length" },
+  { type: "Top Pocket", subType: "Width", key: "top_pocket_width" },
+  { type: "Top Pocket", subType: "Distance", key: "top_pocket_distance" },
+  { type: "Side Pocket", subType: "Length", key: "side_pocket_length" },
+  { type: "Side Pocket", subType: "Width", key: "side_pocket_width" },
+  { type: "Side Pocket", subType: "Distance", key: "side_pocket_distance" },
+  { type: "Side Pocket", subType: "Opening", key: "side_pocket_opening" },
+  { type: "Waist", subType: "Front", key: "waist_front" },
+  { type: "Waist", subType: "Back", key: "waist_back" },
+  { type: "Arm Hole", subType: "Arm Hole", key: "armhole" },
+  { type: "Chest", subType: "Upper", key: "chest_upper" },
+  { type: "Chest", subType: "Full", key: "chest_full" },
+  { type: "Chest", subType: "Half", key: "chest_front" },
+  { type: "Elbow", subType: "Elbow", key: "elbow" },
+  { type: "Sleeves", subType: "Sleeves", key: "sleeve_length" },
+  { type: "Bottom", subType: "Bottom", key: "bottom" },
 ] as const;
 
 const QC_STATUS_OPTIONS = [
@@ -109,50 +124,68 @@ interface ShopMeasurements {
   [key: string]: number | "";
 }
 
+interface OrderWithDetails extends Order {
+    customer: Customer;
+    garments: Garment[];
+}
+
 // --- Main Component ---
 
 function ReceivingInterface() {
   // Search State
-  const [searchOrderId, setSearchOrderId] = useState<number | undefined>(undefined);
-  const [searchFatoura, setSearchFatoura] = useState<number | undefined>(undefined);
-  const [searchMobile, setSearchMobile] = useState<number | undefined>(undefined);
-  const [isSearching, setIsSearching] = useState(false);
+  const [orderIdSearch, setOrderIdSearch] = useState<number | undefined>(undefined);
+  const [fatouraSearch, setFatouraSearch] = useState<number | undefined>(undefined);
+  const [isSearchingId, setIsSearchingId] = useState(false);
+  const [isSearchingFatoura, setIsSearchingFatoura] = useState(false);
+  const [, setIsSearchingCustomer] = useState(false);
+  const [idError, setIdError] = useState<string | undefined>();
+  const [fatouraError, setFatouraError] = useState<string | undefined>();
 
   // Active Data State
-  const [activeOrderDetails, setActiveOrderDetails] = useState<OrderDetails | null>(null);
+  const [activeOrder, setActiveOrder] = useState<OrderWithDetails | null>(null);
   const [selectedGarmentId, setSelectedGarmentId] = useState<string | null>(null);
   
   // QC State
   const [shopMeasurements, setShopMeasurements] = useState<ShopMeasurements>({});
+  const [measurementNotes, setMeasurementNotes] = useState<Record<string, string>>({});
+  const [optionNotes, setOptionNotes] = useState<Record<string, string>>({});
   const [qcStatus, setQcStatus] = useState<string>("no-diff");
   const [optionChecks, setOptionChecks] = useState<Record<string, boolean>>({});
   const [receivingAction, setReceivingAction] = useState<"accept" | "reject" | "">("");
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [evidence, setEvidence] = useState<Record<string, { type: "photo" | "video", url: string } | null>>({});
+
+  // Dialog State for Customer Orders
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [customerOrders, setCustomerOrders] = useState<OrderWithDetails[]>([]);
+  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<number | null>(null);
 
   // 1. Garment Selection Effect
   useEffect(() => {
-    if (activeOrderDetails?.garments?.length) {
+    if (activeOrder?.garments?.length) {
       // Automatically select the first garment
-      const firstGarment = activeOrderDetails.garments[0];
+      const firstGarment = activeOrder.garments[0];
       setSelectedGarmentId(firstGarment.id);
       
       // Reset QC state for new order
       setShopMeasurements({});
+      setMeasurementNotes({});
+      setOptionNotes({});
       setOptionChecks({});
       setEvidence({});
       setQcStatus("no-diff");
       setReceivingAction("");
     }
-  }, [activeOrderDetails]);
+  }, [activeOrder]);
 
   const activeGarment = useMemo(() => 
-    activeOrderDetails?.garments?.find(g => g.id === selectedGarmentId),
-    [activeOrderDetails, selectedGarmentId]
+    activeOrder?.garments?.find(g => g.id === selectedGarmentId),
+    [activeOrder, selectedGarmentId]
   );
 
   // 2. Measurement Query
-  const measurementId = activeGarment?.fields.MeasurementId?.[0];
+  const measurementId = activeGarment?.measurement_id;
   const { data: measurementData, isLoading: isMeasurementLoading } = useQuery({
     queryKey: ["measurement", measurementId],
     queryFn: () => getMeasurementById(measurementId!),
@@ -163,68 +196,78 @@ function ReceivingInterface() {
 
   // --- Search Logic ---
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSearching(true);
-    setActiveOrderDetails(null);
-
+  const handleIdSearch = async () => {
+    if (!orderIdSearch) return;
+    setIdError(undefined);
+    setIsSearchingId(true);
     try {
-      let orderDetails: OrderDetails | null = null;
-
-      if (searchOrderId) {
-        // Search by Order ID (exact)
-        // Note: The API for getOrderDetails expects string "A-1001" usually, 
-        // but here input is number. Assuming standard format or passing as is if API handles it.
-        // If OrderID is strictly formatted (e.g. "ORD-123"), we might need prefix.
-        // Assuming direct number match for now or simple string conversion.
-        const res = await getOrderDetails(searchOrderId.toString());
-        if (res.data) orderDetails = res.data;
-      } 
-      else if (searchFatoura) {
-        // Search by Fatoura (filter list)
-        const res = await getOrdersList({ Fatoura: searchFatoura });
-        if (res.data && res.data.length > 0) {
-           orderDetails = res.data[0]; // Take first match
+        const res = await getOrderById(orderIdSearch, true);
+        if (res.status === "error" || !res.data) {
+            setIdError("Order not found");
+            toast.error("Order ID not found");
+        } else {
+            setActiveOrder(res.data);
+            setOrderIdSearch(undefined);
         }
-      } 
-      else if (searchMobile) {
-        // Search by Mobile -> Get Customer -> Get Orders
-        const customerRes = await searchCustomerByPhone(searchMobile.toString());
-        if (customerRes.data && customerRes.data.length > 0) {
-            const customer = customerRes.data[0];
-            if (customer.fields.id) {
-                // Fetch pending orders for this customer
-                // Using generic search because we need linked orders
-                // But getOrdersList doesn't filter by CustomerID directly exposed in types?
-                // It does accept [key: string].
-                const ordersRes = await getOrdersList({ CustomerID: customer.fields.id });
-                if (ordersRes.data && ordersRes.data.length > 0) {
-                    // Sort by date or pick most relevant. Taking first for now.
-                    orderDetails = ordersRes.data[0];
-                }
-            }
-        }
-      }
-
-      if (orderDetails) {
-        setActiveOrderDetails(orderDetails);
-        toast.success("Order Found", { description: `Loaded Order #${orderDetails.order.fields.Fatoura}` });
-      } else {
-        toast.error("Order Not Found", { description: "No active orders matching your criteria." });
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Search Failed", { description: "An error occurred while searching." });
+    } catch (err) {
+        toast.error("Search failed");
     } finally {
-      setIsSearching(false);
+        setIsSearchingId(false);
     }
   };
 
-  const handleClearSearch = () => {
-    setSearchOrderId(undefined);
-    setSearchFatoura(undefined);
-    setSearchMobile(undefined);
-    setActiveOrderDetails(null);
+  const handleFatouraSearch = async () => {
+    if (!fatouraSearch) return;
+    setFatouraError(undefined);
+    setIsSearchingFatoura(true);
+    try {
+        const res = await getOrderByInvoice(fatouraSearch, true);
+        if (res.status === "error" || !res.data) {
+            setFatouraError("Invoice not found");
+            toast.error("Invoice Number not found");
+        } else {
+            setActiveOrder(res.data);
+            setFatouraSearch(undefined);
+        }
+    } catch (err) {
+        toast.error("Search failed");
+    } finally {
+        setIsSearchingFatoura(false);
+    }
+  };
+
+  const handleCustomerFound = async (customer: Customer) => {
+    setIsSearchingCustomer(true);
+    try {
+      const ordersResponse = await getPendingOrdersByCustomer(
+        customer.id,
+        20,
+        "confirmed",
+        true // Include relations
+      );
+
+      if (ordersResponse.data && ordersResponse.data.length > 0) {
+        setCustomerOrders(ordersResponse.data as OrderWithDetails[]);
+        setSelectedDialogOrderId(null);
+        setIsDialogOpen(true);
+      } else {
+        toast.info(`No confirmed orders found for ${customer.name}.`);
+      }
+    } catch (error) {
+      console.error("Failed to fetch customer orders", error);
+      toast.error("Failed to fetch customer orders.");
+    } finally {
+      setIsSearchingCustomer(false);
+    }
+  };
+
+  const handleDialogConfirm = () => {
+    if (!selectedDialogOrderId) return;
+    const order = customerOrders.find(o => o.id === selectedDialogOrderId);
+    if (order) {
+        setActiveOrder(order);
+        setIsDialogOpen(false);
+    }
   };
 
   // --- Handlers ---
@@ -234,6 +277,20 @@ function ReceivingInterface() {
     setShopMeasurements(prev => ({
       ...prev,
       [key]: numValue
+    }));
+  };
+
+  const handleMeasurementNoteChange = (key: string, value: string) => {
+    setMeasurementNotes(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleOptionNoteChange = (key: string, value: string) => {
+    setOptionNotes(prev => ({
+      ...prev,
+      [key]: value
     }));
   };
 
@@ -256,17 +313,33 @@ function ReceivingInterface() {
     setIsConfirmDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsConfirmDialogOpen(false);
-    toast.success(`Order ${receivingAction === 'accept' ? 'Accepted' : 'Rejected'}`, {
-        description: `Garment ${activeGarment?.fields.GarmentId} processed with status: ${QC_STATUS_OPTIONS.find(o => o.value === qcStatus)?.label}`
-    });
+    setIsSubmitting(true);
+    
+    try {
+        // Prepare next stage based on current piece stage and action
+        // For now just implementing the UI feedback as requested
+        toast.success(`Order ${receivingAction === 'accept' ? 'Accepted' : 'Rejected'}`, {
+            description: `Garment ${activeGarment?.garment_id} processed with status: ${QC_STATUS_OPTIONS.find(o => o.value === qcStatus)?.label}`
+        });
+        
+        // Potential DB Update:
+        // if (receivingAction === 'accept') { ... }
+        
+        // Clear active order to reset
+        setActiveOrder(null);
+    } catch (err) {
+        toast.error("Failed to save QC results");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   // --- Helpers ---
 
-  const getDifference = (targetVal: number | undefined, shopVal: number | "" | undefined) => {
-    if (targetVal === undefined || shopVal === "" || shopVal === undefined) return null;
+  const getDifference = (targetVal: number | undefined | null, shopVal: number | "" | undefined) => {
+    if (targetVal === null || targetVal === undefined || shopVal === "" || shopVal === undefined) return null;
     return Number((shopVal - targetVal).toFixed(2));
   };
 
@@ -278,7 +351,7 @@ function ReceivingInterface() {
   };
 
   // Option Helper
-  const findOptionImage = (list: BaseOption[], val: string | undefined) => {
+  const findOptionImage = (list: BaseOption[], val: string | undefined | null) => {
     if (!val) return null;
     return list.find(o => o.value === val || o.displayText === val)?.image;
   };
@@ -286,227 +359,324 @@ function ReceivingInterface() {
   // Build the specific rows for "Collar, Collar Button, Tabbagi, Jabzour, Front Pocket, Cuff"
   const optionRows = useMemo(() => {
     if (!activeGarment) return [];
-    const f = activeGarment.fields;
+    const g = activeGarment;
     
-    // Define the specific structure
+    // Define the specific structure based on schema
     return [
       {
         id: "collar",
         label: "Collar",
-        mainValue: f.CollarType,
-        mainImage: findOptionImage(collarTypes, f.CollarType),
-        hashwaLabel: null, // No hashwa for collar mentioned in prompt context or type?
+        mainValue: g.collar_type,
+        mainImage: findOptionImage(collarTypes, g.collar_type),
+        hashwaLabel: null,
         hashwaValue: null
       },
       {
         id: "collarBtn",
         label: "Collar Button",
-        mainValue: f.CollarButton,
-        mainImage: findOptionImage(collarButtons, f.CollarButton),
+        mainValue: g.collar_button,
+        mainImage: findOptionImage(collarButtons, g.collar_button),
         hashwaLabel: null,
         hashwaValue: null,
-        extraCheckLabel: f.SmallTabaggi ? "Small Tabbagi" : null,
-        extraCheckValue: f.SmallTabaggi
+        extraCheckLabel: g.small_tabaggi ? "Small Tabbagi" : null,
+        extraCheckValue: g.small_tabaggi
       },
       {
         id: "jabzour1",
         label: "Jabzour 1",
-        mainValue: f.Jabzour1,
-        mainImage: findOptionImage(jabzourTypes, f.Jabzour1),
+        mainValue: g.jabzour_1,
+        mainImage: findOptionImage(jabzourTypes, g.jabzour_1),
         hashwaLabel: "Hashwa",
-        hashwaValue: f.JabzourThickness // Shared thickness
+        hashwaValue: g.jabzour_thickness
       },
       {
         id: "jabzour2",
         label: "Jabzour 2",
-        mainValue: f.Jabzour2,
-        mainImage: findOptionImage(jabzourTypes, f.Jabzour2),
+        mainValue: g.jabzour_2,
+        mainImage: findOptionImage(jabzourTypes, g.jabzour_2),
         hashwaLabel: "Hashwa",
-        hashwaValue: f.JabzourThickness // Shared thickness
+        hashwaValue: g.jabzour_thickness
       },
       {
         id: "frontPocket",
         label: "Front Pocket",
-        mainValue: f.FrontPocketType,
-        mainImage: findOptionImage(topPocketTypes, f.FrontPocketType),
+        mainValue: g.front_pocket_type,
+        mainImage: findOptionImage(topPocketTypes, g.front_pocket_type),
         hashwaLabel: "Hashwa",
-        hashwaValue: f.FrontPocketThickness
+        hashwaValue: g.front_pocket_thickness
       },
       {
         id: "cuff",
         label: "Cuff",
-        mainValue: f.CuffsType,
-        mainImage: findOptionImage(cuffTypes, f.CuffsType),
+        mainValue: g.cuffs_type,
+        mainImage: findOptionImage(cuffTypes, g.cuffs_type),
         hashwaLabel: "Hashwa",
-        hashwaValue: f.CuffsThickness
+        hashwaValue: g.cuffs_thickness
       }
-    ].filter(r => r.mainValue && r.mainValue !== "None"); // Only show active options
+    ].filter(r => r.mainValue && r.mainValue !== "None");
   }, [activeGarment]);
 
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1 },
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 },
+    },
+  };
 
   return (
-    <div className="container mx-auto p-6 max-w-[1600px] space-y-6 pb-24">
+    <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="container mx-auto p-6 md:p-10 max-w-7xl space-y-8 pb-24"
+    >
       
       {/* 1. Header & Search */}
-      <div className="space-y-6">
-        <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Workshop Receiving & QC</h1>
-            <p className="text-muted-foreground">Receive finished garments, verify measurements, and check style options.</p>
+      <motion.div variants={itemVariants} className="space-y-6">
+        <div className="flex flex-col gap-1 border-b border-border pb-6">
+            <h1 className="text-3xl font-bold text-foreground">
+                Receiving <span className="text-primary">Brova & Final</span>
+            </h1>
+            <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
+                Process finished garments from workshop and perform quality control audit
+            </p>
         </div>
 
-        <OrderSearchForm 
-            orderId={searchOrderId}
-            fatoura={searchFatoura}
-            customerMobile={searchMobile}
-            onOrderIdChange={setSearchOrderId}
-            onFatouraChange={setSearchFatoura}
-            onCustomerMobileChange={setSearchMobile}
-            onSubmit={handleSearch}
-            onClear={handleClearSearch}
-            isLoading={isSearching}
-        />
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            <div className="lg:col-span-7">
+                <SearchCustomer 
+                    onCustomerFound={handleCustomerFound}
+                    onHandleClear={() => {}}
+                />
+            </div>
+            <div className="lg:col-span-5">
+                <DirectLookupCard 
+                    orderId={orderIdSearch}
+                    fatoura={fatouraSearch}
+                    onOrderIdChange={(val) => { setOrderIdSearch(val); setIdError(undefined); }}
+                    onFatouraChange={(val) => { setFatouraSearch(val); setFatouraError(undefined); }}
+                    onOrderIdSubmit={handleIdSearch}
+                    onFatouraSubmit={handleFatouraSearch}
+                    isSearchingId={isSearchingId}
+                    isSearchingFatoura={isSearchingFatoura}
+                    idError={idError}
+                    fatouraError={fatouraError}
+                />
+            </div>
+        </div>
+      </motion.div>
 
-      {activeOrderDetails && (
+      {activeOrder ? (
         <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-8"
         >
-          {/* 2. Order Context Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-             <Card className="md:col-span-1 bg-muted/40 border-muted">
-                <CardHeader className="pb-2 pt-4 px-4">
-                    <CardDescription className="text-xs uppercase tracking-wider font-semibold">Customer</CardDescription>
-                    <CardTitle className="text-lg">{activeOrderDetails.customer?.fields.Name || "Guest"}</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                    <div className="text-sm text-muted-foreground font-mono">{activeOrderDetails.customer?.fields.Phone}</div>
-                </CardContent>
-             </Card>
-             <Card className="md:col-span-3 border-muted">
-                <CardContent className="p-4 flex flex-wrap items-center gap-8 h-full">
-                    <div>
-                        <div className="text-xs text-muted-foreground uppercase font-bold tracking-wide">Order ID</div>
-                        <div className="text-2xl font-mono font-bold text-primary">#{activeOrderDetails.order.fields.Fatoura}</div>
-                    </div>
-                    <Separator orientation="vertical" className="h-10 hidden md:block" />
-                    <div>
-                        <div className="text-xs text-muted-foreground uppercase font-bold tracking-wide">Total Items</div>
-                        <div className="text-xl font-semibold">{activeOrderDetails.garments.length} Garments</div>
-                    </div>
-                    <Separator orientation="vertical" className="h-10 hidden md:block" />
-                    <div>
-                        <div className="text-xs text-muted-foreground uppercase font-bold tracking-wide">Delivery Date</div>
-                        <div className="text-xl font-semibold">{activeOrderDetails.order.fields.DeliveryDate}</div>
-                    </div>
-                </CardContent>
-             </Card>
-          </div>
+          {/* 2. Compact Order Context Bar */}
+          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-y-4 gap-x-8">
+                {/* Customer Info */}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
+                    <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
+                  </div>
+                  <div className="ml-2 pl-3 border-l border-border py-1">
+                    <p className="text-[10px] font-bold text-muted-foreground font-mono leading-none">{activeOrder.customer?.phone}</p>
+                  </div>
+                </div>
 
-          {/* 3. Garment Tabs */}
-          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full">
-            <div className="flex items-center justify-between mb-4 overflow-x-auto pb-2">
-                <TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
-                {activeOrderDetails.garments.map((garment) => (
+                <div className="hidden lg:block h-8 w-px bg-border/60" />
+
+                {/* Order Details */}
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                      <Hash className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
+                      <div className="flex items-center gap-2 leading-none">
+                        <span className="font-black text-sm">#{activeOrder.id}</span>
+                        <span className="text-[10px] font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
+                      <p className="font-bold text-sm leading-none">{activeOrder.garments?.length || 0} Pieces</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="hidden lg:block h-8 w-px bg-border/60" />
+
+                {/* Delivery */}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
+                    <p className="font-bold text-sm leading-none">
+                      {activeOrder.delivery_date ? format(new Date(activeOrder.delivery_date), "PP") : "Not Set"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Separator className="opacity-50" />
+
+          {/* 3. Garment Selection Tabs */}
+          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-6">
+            <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
+                <TabsList className="h-auto flex-nowrap justify-start gap-3 bg-transparent p-0">
+                {activeOrder.garments?.map((garment) => (
                     <TabsTrigger 
                         key={garment.id} 
                         value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border border-input bg-background px-4 py-2 h-14 min-w-[120px]"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-4 py-2 h-14 min-w-[140px] rounded-xl transition-all"
                     >
-                        <div className="text-left w-full">
-                            <div className="text-xs opacity-70">Garment</div>
-                            <div className="font-mono font-bold truncate">{garment.fields.GarmentId}</div>
+                        <div className="text-left w-full space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-[9px] font-black uppercase tracking-widest opacity-70">Item</span>
+                                <Badge 
+                                    className={cn(
+                                        "h-3.5 px-1 text-[8px] font-black uppercase border-none",
+                                        garment.brova 
+                                            ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white" 
+                                            : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
+                                    )}
+                                >
+                                    {garment.brova ? "Brova" : "Final"}
+                                </Badge>
+                            </div>
+                            <div className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</div>
                         </div>
                     </TabsTrigger>
                 ))}
                 </TabsList>
             </div>
 
-            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-8">
+            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-8 focus-visible:ring-0">
                
-                 {/* 1. MEASUREMENTS TABLE */}
-                <Card className="border-border shadow-sm overflow-hidden">
-                    <CardHeader className="bg-muted/30 border-b pb-3">
+                 {/* MEASUREMENT QC SECTION */}
+                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl">
+                    <CardHeader className="bg-muted/30 border-b p-6">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <Ruler className="w-5 h-5 text-primary" />
-                                Measurement QC
-                            </CardTitle>
-                            <Badge variant="outline" className="bg-background">
-                                {isMeasurementLoading ? "Loading Specs..." : "Specs Loaded"}
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
+                                    <Ruler className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl font-bold uppercase tracking-tight">Measurement Verification</CardTitle>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Validate physical garment dimensions</p>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="bg-background font-black text-[10px] h-7 px-3">
+                                {isMeasurementLoading ? "REFRESHING SPECS..." : "SPECIFICATIONS SYNCED"}
                             </Badge>
                         </div>
                     </CardHeader>
                     
                     <div className="relative overflow-x-auto">
                         <Table>
-                            <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                                <TableRow>
-                                    <TableHead className="w-[12%]">Type</TableHead>
-                                    <TableHead className="w-[12%]">Sub Type</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[12%]">Order (cm)</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[12%]">WS QC (cm)</TableHead>
-                                    <TableHead className="text-center w-[15%] bg-blue-50/20 dark:bg-blue-900/20">Shop (cm)</TableHead>
-                                    <TableHead className="text-center w-[15%]">Diff w/ Order</TableHead>
-                                    <TableHead className="text-center w-[15%]">Diff w/ WS QC</TableHead>
+                            <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
+                                <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                    <TableHead className="w-[15%] p-4">Dimension</TableHead>
+                                    <TableHead className="text-center bg-muted/30 w-[12%]">Target (cm)</TableHead>
+                                    <TableHead className="text-center w-[15%] bg-primary/5">Actual Shop (cm)</TableHead>
+                                    <TableHead className="text-center w-[12%]">Variance</TableHead>
+                                    <TableHead className="p-4">Verification Notes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {MEASUREMENT_ROWS.map((row) => {
-                                    // Dynamic key access for measurement
-                                    const orderValue = measurement?.fields[row.key as keyof Measurement["fields"]] as number | undefined;
+                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
                                     const shopValue = shopMeasurements[row.key];
+                                    const noteValue = measurementNotes[row.key] || "";
                                     
-                                    // Diff Calcs
                                     const diffOrder = getDifference(orderValue, shopValue);
                                     const statusOrder = getDiffStatus(diffOrder);
-                                    
-                                    const isMissing = orderValue === undefined || orderValue === 0;
+                                    const isMissing = orderValue === null || orderValue === undefined || orderValue === 0;
 
-                                    if (isMissing) return null; // Skip empty rows
+                                    if (isMissing) return null;
 
                                     return (
-                                        <TableRow key={row.key} className="hover:bg-muted/30">
-                                            <TableCell className="font-medium">{row.type}</TableCell>
-                                            <TableCell className="text-muted-foreground">{row.subType}</TableCell>
-                                            <TableCell className="text-center font-mono font-medium bg-muted/30">
+                                        <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
+                                            <TableCell className="p-4">
+                                                <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
+                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
+                                            </TableCell>
+                                            <TableCell className="text-center font-black text-sm bg-muted/30">
                                                 {orderValue || "-"}
                                             </TableCell>
-                                            <TableCell className="text-center font-mono text-muted-foreground bg-muted/30">
-                                                -
-                                            </TableCell>
-                                            <TableCell className="p-1 bg-blue-50/10 dark:bg-blue-900/10">
+                                            <TableCell className="p-2 bg-primary/[0.02]">
                                                 <Input 
                                                     type="number" 
                                                     className={cn(
-                                                        "h-9 w-24 mx-auto text-center font-mono",
-                                                        statusOrder === 'error' && "border-red-300 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800",
-                                                        statusOrder === 'warning' && "border-yellow-300 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800",
-                                                        statusOrder === 'success' && "border-green-300 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                                                        "h-10 w-28 mx-auto text-center font-black text-sm border-2 transition-all",
+                                                        statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
+                                                        statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
+                                                        statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                                                        !shopValue && "border-border hover:border-primary/40"
                                                     )}
-                                                    placeholder="0"
+                                                    placeholder="0.0"
                                                     value={shopValue ?? ""}
                                                     onChange={(e) => handleMeasurementChange(row.key, e.target.value)}
                                                 />
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                {diffOrder !== null ? (
-                                                    <Badge variant="secondary" className={cn(
-                                                        statusOrder === 'success' && "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-                                                        statusOrder === 'warning' && "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-                                                        statusOrder === 'error' && "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                                                    )}>
-                                                        {diffOrder > 0 ? `+${diffOrder}` : diffOrder} cm
-                                                        {statusOrder === 'success' && <Check className="w-3 h-3 ml-1" />}
-                                                        {statusOrder === 'error' && <X className="w-3 h-3 ml-1" />}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
+                                                <AnimatePresence mode="wait">
+                                                    {diffOrder !== null ? (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.8 }}
+                                                        >
+                                                            <Badge variant="secondary" className={cn(
+                                                                "font-black text-[10px] h-6 px-2 shadow-sm",
+                                                                statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                                                statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
+                                                                statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
+                                                            )}>
+                                                                {diffOrder > 0 ? `+${diffOrder}` : diffOrder} cm
+                                                                {statusOrder === 'success' && <Check className="w-3 h-3 ml-1" />}
+                                                                {statusOrder === 'error' && <X className="w-3 h-3 ml-1" />}
+                                                            </Badge>
+                                                        </motion.div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground font-black text-[10px] opacity-20">—</span>
+                                                    )}
+                                                </AnimatePresence>
                                             </TableCell>
-                                            <TableCell className="text-center">
-                                                <span className="text-muted-foreground">-</span>
+                                            <TableCell className="p-2">
+                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-3 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
+                                                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
+                                                    <Input 
+                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[11px] font-bold h-9"
+                                                        placeholder="Add dimension note..."
+                                                        value={noteValue}
+                                                        onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
+                                                    />
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -516,190 +686,182 @@ function ReceivingInterface() {
                     </div>
                 </Card>
 
-                {/* 2. VISUAL OPTIONS & HASHWA */}
-                <Card className="border-border">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Package className="w-4 h-4" />
-                            Style & Hashwa Verification
-                        </CardTitle>
-                        <CardDescription>Verify style options, thickness (hashwa), and capture evidence.</CardDescription>
+                {/* STYLE & HASHWA SECTION */}
+                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden">
+                    <CardHeader className="bg-muted/30 border-b p-6">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
+                                <Package className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-xl font-bold uppercase tracking-tight">Style & Detail Audit</CardTitle>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Cross-check style options and captures</p>
+                            </div>
+                        </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-6">
                        <div className="space-y-4">
-                            {/* Header Row for Desktop */}
-                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-md text-xs font-semibold uppercase text-muted-foreground">
-                                <div className="col-span-3">Option</div>
-                                <div className="col-span-3">Visual Reference</div>
-                                <div className="col-span-3">Verification</div>
-                                <div className="col-span-3">Evidence</div>
+                            <div className="hidden md:grid grid-cols-12 gap-6 px-4 py-3 bg-muted/50 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground border border-border/40">
+                                <div className="col-span-3">Configuration Item</div>
+                                <div className="col-span-2">Reference</div>
+                                <div className="col-span-3">Checklist</div>
+                                <div className="col-span-2">Notes</div>
+                                <div className="col-span-2 text-right">Evidence</div>
                             </div>
 
-                            {optionRows.map((opt) => (
-                                <div key={opt.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-lg border bg-card items-start md:items-center">
-                                    
-                                    {/* 1. Option Name */}
-                                    <div className="col-span-3">
-                                        <div className="font-semibold text-lg md:text-base">{opt.label}</div>
-                                        <div className="text-sm text-muted-foreground font-medium">{opt.mainValue}</div>
-                                    </div>
-
-                                    {/* 2. Visual */}
-                                    <div className="col-span-3">
-                                        {opt.mainImage ? (
-                                            <div className="h-16 w-16 bg-white rounded-md border p-1 shadow-sm">
-                                                <img 
-                                                    src={opt.mainImage} 
-                                                    alt={opt.label} 
-                                                    className="w-full h-full object-contain" 
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="h-16 w-16 bg-muted/20 rounded-md border border-dashed flex items-center justify-center text-muted-foreground text-xs">
-                                                No Image
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* 3. Verification Checkboxes */}
-                                    <div className="col-span-3 space-y-3">
-                                        {/* Main Option Check */}
-                                        <div className="flex items-center space-x-2">
-                                            <Checkbox 
-                                                id={`check-${opt.id}-main`}
-                                                checked={optionChecks[`${opt.id}-main`] || false}
-                                                onCheckedChange={(c) => handleCheck(`${opt.id}-main`, c as boolean)}
-                                            />
-                                            <Label htmlFor={`check-${opt.id}-main`} className="cursor-pointer">
-                                                Check {opt.label}
-                                            </Label>
+                            <AnimatePresence mode="popLayout">
+                                {optionRows.map((opt) => (
+                                    <motion.div 
+                                        key={opt.id} 
+                                        layout
+                                        className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
+                                    >
+                                        {/* Item Description */}
+                                        <div className="col-span-3 space-y-1">
+                                            <div className="font-black text-sm uppercase tracking-tight text-foreground">{opt.label}</div>
+                                            <Badge variant="outline" className="font-black text-[9px] uppercase border-primary/20 bg-primary/5 text-primary h-5">
+                                                {opt.mainValue}
+                                            </Badge>
                                         </div>
 
-                                        {/* Extra Check (e.g. Tabbagi for Collar Button) */}
-                                        {/* @ts-ignore - extraCheckValue might not be in all objects in the mapped array type yet, ignoring strict TS for quick fix or need interface update */}
-                                        {opt.extraCheckValue && (
-                                            <div className="flex items-center space-x-2 pl-4 border-l-2 border-muted">
-                                                <Checkbox 
-                                                    id={`check-${opt.id}-extra`}
-                                                    checked={optionChecks[`${opt.id}-extra`] || false}
-                                                    onCheckedChange={(c) => handleCheck(`${opt.id}-extra`, c as boolean)}
-                                                />
-                                                <div className="flex flex-col">
-                                                    <Label htmlFor={`check-${opt.id}-extra`} className="cursor-pointer">
-                                                        Check {opt.extraCheckLabel}
-                                                    </Label>
+                                        {/* Visual Reference */}
+                                        <div className="col-span-2">
+                                            {opt.mainImage ? (
+                                                <div className="h-16 w-16 bg-white rounded-xl border-2 border-border/60 p-1.5 shadow-inner">
+                                                    <img 
+                                                        src={opt.mainImage} 
+                                                        alt={opt.label} 
+                                                        className="w-full h-full object-contain" 
+                                                    />
                                                 </div>
-                                            </div>
-                                        )}
-
-                                        {/* Hashwa Check (if exists) */}
-                                        {opt.hashwaValue && (
-                                            <div className="flex items-center gap-3 p-2 rounded-md border border-dashed bg-muted/20">
-                                                <Checkbox 
-                                                    id={`check-${opt.id}-hashwa`}
-                                                    checked={optionChecks[`${opt.id}-hashwa`] || false}
-                                                    onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
-                                                />
-                                                <div className="flex items-center gap-2">
-                                                    <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-sm font-medium">
-                                                        Hashwa:
-                                                    </Label>
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className={cn(
-                                                            "font-mono text-xs",
-                                                            opt.hashwaValue === "NO HASHWA" 
-                                                                ? "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
-                                                                : "bg-background"
-                                                        )}
-                                                    >
-                                                        {opt.hashwaValue}
-                                                    </Badge>
+                                            ) : (
+                                                <div className="h-16 w-16 bg-muted/30 rounded-xl border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[10px] font-black uppercase text-center p-2 opacity-40">
+                                                    NO REF
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                            )}
+                                        </div>
 
-                                    {/* 4. Attachments */}
-                                    <div className="col-span-3 flex md:flex-col gap-2">
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            id={`file-photo-${opt.id}`}
-                                            onChange={(e) => handleCapture(opt.id, 'photo', e.target.files?.[0] || null)}
-                                        />
-                                        <input
-                                            type="file"
-                                            accept="video/*"
-                                            className="hidden"
-                                            id={`file-video-${opt.id}`}
-                                            onChange={(e) => handleCapture(opt.id, 'video', e.target.files?.[0] || null)}
-                                        />
-                                        
-                                        {evidence[opt.id] ? (
-                                            <div className="relative group w-full h-20 rounded-md overflow-hidden border">
-                                                {evidence[opt.id]?.type === 'photo' ? (
-                                                    <img src={evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <video src={evidence[opt.id]?.url} className="w-full h-full object-cover" />
+                                        {/* Checklist */}
+                                        <div className="col-span-3 space-y-3">
+                                            <div 
+                                                className={cn(
+                                                    "flex items-center space-x-3 p-2.5 rounded-xl border-2 transition-all cursor-pointer",
+                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/10 border-transparent hover:border-border"
                                                 )}
-                                                <button 
-                                                    onClick={() => setEvidence(prev => { const n = {...prev}; delete n[opt.id]; return n; })}
-                                                    className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
+                                                onClick={() => handleCheck(`${opt.id}-main`, !optionChecks[`${opt.id}-main`])}
+                                            >
+                                                <Checkbox 
+                                                    id={`check-${opt.id}-main`}
+                                                    checked={optionChecks[`${opt.id}-main`] || false}
+                                                    className="size-4 pointer-events-none"
+                                                />
+                                                <Label className="cursor-pointer text-[11px] font-black uppercase tracking-tight flex-1 pointer-events-none">
+                                                    {opt.label} Verified
+                                                </Label>
                                             </div>
-                                        ) : (
-                                            <>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    className="w-full justify-start text-xs h-8"
-                                                    onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
-                                                >
-                                                    <Camera className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                                                    Photo
-                                                </Button>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    className="w-full justify-start text-xs h-8"
-                                                    onClick={() => document.getElementById(`file-video-${opt.id}`)?.click()}
-                                                >
-                                                    <Video className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                                                    Video
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+
+                                            {opt.hashwaValue && (
+                                                <div className="flex items-center gap-3 p-2.5 rounded-xl border-2 border-dashed bg-primary/5 border-primary/20">
+                                                    <Checkbox 
+                                                        id={`check-${opt.id}-hashwa`}
+                                                        checked={optionChecks[`${opt.id}-hashwa`] || false}
+                                                        onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
+                                                        className="size-4"
+                                                    />
+                                                    <div className="flex items-center gap-2 flex-1">
+                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                                            Hashwa:
+                                                        </Label>
+                                                        <span className="font-black text-xs text-primary">{opt.hashwaValue}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Local Notes for Style */}
+                                        <div className="col-span-2">
+                                            <div className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 border-2 border-transparent focus-within:border-border focus-within:bg-background transition-all">
+                                                <MessageSquare className="size-3 text-muted-foreground/40" />
+                                                <Input 
+                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-10 p-0"
+                                                    placeholder="Audit note..."
+                                                    value={optionNotes[opt.id] || ""}
+                                                    onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Capture Actions */}
+                                        <div className="col-span-2 flex justify-end gap-2">
+                                            {evidence[opt.id] ? (
+                                                <div className="relative group size-16 rounded-xl overflow-hidden border-2 border-primary/30 shadow-lg">
+                                                    {evidence[opt.id]?.type === 'photo' ? (
+                                                        <img src={evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <video src={evidence[opt.id]?.url} className="w-full h-full object-cover" />
+                                                    )}
+                                                    <button 
+                                                        onClick={() => setEvidence(prev => { const n = {...prev}; delete n[opt.id]; return n; })}
+                                                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="w-5 h-5 text-white" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-1.5 w-full">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-8 text-[9px] font-black uppercase tracking-widest border-2 w-full justify-start"
+                                                        onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
+                                                    >
+                                                        <Camera className="w-3.5 h-3.5 mr-2" />
+                                                        Photo
+                                                    </Button>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        id={`file-photo-${opt.id}`}
+                                                        onChange={(e) => handleCapture(opt.id, 'photo', e.target.files?.[0] || null)}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                        </div>
                     </CardContent>
                 </Card>
 
-                {/* 3. FINAL ACTIONS */}
-                <Card className="border-border shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-xl">Finalize QC & Receiving</CardTitle>
-                        <CardDescription>Review final status and submit</CardDescription>
+                {/* FINAL ACTIONS CONTROL PANEL */}
+                <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
+                    <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-8">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-primary text-primary-foreground rounded-2xl shadow-lg">
+                                <Check className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-2xl font-black uppercase tracking-tight">Final QC Decision</CardTitle>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">Submit audit results to complete intake</p>
+                            </div>
+                        </div>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="p-8 space-y-8">
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                             {/* QC Classification */}
-                            <div className="space-y-3">
-                                <Label>QC Status Classification</Label>
+                            <div className="space-y-4">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Classification of Quality</Label>
                                 <Select value={qcStatus} onValueChange={setQcStatus}>
-                                    <SelectTrigger className="h-12 text-base">
+                                    <SelectTrigger className="h-14 text-base font-bold border-2 rounded-2xl shadow-sm">
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="rounded-xl border-2">
                                         {QC_STATUS_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-2">
-                                                <span className={cn("font-medium", opt.color)}>{opt.label}</span>
+                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-3 rounded-lg mx-1">
+                                                <span className={cn("font-black uppercase tracking-tight text-sm", opt.color)}>{opt.label}</span>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -707,8 +869,8 @@ function ReceivingInterface() {
                             </div>
 
                             {/* Receiving Action */}
-                            <div className="space-y-3">
-                                <Label>Receiving Decision</Label>
+                            <div className="space-y-4">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Intake Decision</Label>
                                 <RadioGroup 
                                     value={receivingAction} 
                                     onValueChange={(val) => setReceivingAction(val as "accept" | "reject")}
@@ -718,20 +880,20 @@ function ReceivingInterface() {
                                         <RadioGroupItem value="accept" id="action-accept" className="peer sr-only" />
                                         <Label
                                             htmlFor="action-accept"
-                                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
+                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-emerald-50 hover:border-emerald-200 peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 cursor-pointer transition-all shadow-sm"
                                         >
-                                            <ThumbsUp className="mb-2 h-6 w-6 text-muted-foreground peer-data-[state=checked]:text-primary" />
-                                            Accept
+                                            <ThumbsUp className="mb-2 h-6 w-6" />
+                                            <span className="font-black uppercase tracking-widest text-[10px]">Accept Item</span>
                                         </Label>
                                     </div>
                                     <div>
                                         <RadioGroupItem value="reject" id="action-reject" className="peer sr-only" />
                                         <Label
                                             htmlFor="action-reject"
-                                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-destructive/5 cursor-pointer transition-all"
+                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-red-50 hover:border-red-200 peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-destructive cursor-pointer transition-all shadow-sm"
                                         >
-                                            <ThumbsDown className="mb-2 h-6 w-6 text-muted-foreground peer-data-[state=checked]:text-destructive" />
-                                            Reject
+                                            <ThumbsDown className="mb-2 h-6 w-6" />
+                                            <span className="font-black uppercase tracking-widest text-[10px]">Reject Item</span>
                                         </Label>
                                     </div>
                                 </RadioGroup>
@@ -743,11 +905,11 @@ function ReceivingInterface() {
                         <div className="flex justify-end pt-2">
                             <Button 
                                 onClick={onConfirmClick} 
-                                disabled={!receivingAction}
-                                className="w-full md:w-auto min-w-[150px]"
+                                disabled={!receivingAction || isSubmitting}
+                                className="w-full md:w-auto h-14 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base"
                             >
-                                <Save className="w-4 h-4 mr-2" />
-                                Confirm
+                                {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
+                                Finalize Audit
                             </Button>
                         </div>
 
@@ -758,26 +920,150 @@ function ReceivingInterface() {
                     isOpen={isConfirmDialogOpen}
                     onClose={() => setIsConfirmDialogOpen(false)}
                     onConfirm={handleSave}
-                    title={receivingAction === 'accept' ? "Confirm Acceptance" : "Confirm Rejection"}
-                    description={`Are you sure you want to ${receivingAction} this order? This action will update the system status.`}
-                    confirmText={receivingAction === 'accept' ? "Yes, Accept" : "Yes, Reject"}
-                    cancelText="Cancel"
+                    title={receivingAction === 'accept' ? "Confirm Intake" : "Confirm Rejection"}
+                    description={receivingAction === 'accept' 
+                        ? `You are accepting garment ${activeGarment?.garment_id}. This will proceed to the next production stage.` 
+                        : `You are rejecting garment ${activeGarment?.garment_id}. This will flag the item for workshop correction.`
+                    }
+                    confirmText={receivingAction === 'accept' ? "Yes, Confirm Intake" : "Yes, Reject Item"}
+                    cancelText="Go Back"
                 />
 
             </TabsContent>
           </Tabs>
 
         </motion.div>
+      ) : (
+        /* Empty State */
+        <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-32 text-center"
+        >
+            <div className="size-24 bg-muted/30 rounded-full flex items-center justify-center mb-8 border-2 border-dashed border-border shadow-inner">
+                <Package className="w-10 h-10 text-muted-foreground/40" />
+            </div>
+            <h3 className="text-2xl font-black text-foreground uppercase tracking-tight">System Ready</h3>
+            <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-2">Enter an identifier or search for a customer to begin auditing</p>
+        </motion.div>
       )}
 
-      {/* Empty State */}
-      {!activeOrderDetails && !isSearching && (
-        <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
-            <Package className="w-16 h-16 mb-4 text-muted-foreground" />
-            <h3 className="text-xl font-semibold text-foreground">Ready to Receive</h3>
-            <p className="text-muted-foreground">Search for an order using ID, Fatoura, or Customer Mobile to begin.</p>
-        </div>
-      )}
-    </div>
+      {/* Customer Selection Dialog */}
+      <ErrorBoundary>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
+            <DialogHeader className="border-b border-border pb-4 px-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
+                  <RefreshCw className="w-6 h-6" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black uppercase tracking-tight">
+                    Select Order for QC
+                  </DialogTitle>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
+                    Confirmed workshop orders for this customer
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <RadioGroup
+              value={selectedDialogOrderId?.toString()}
+              onValueChange={(val) => setSelectedDialogOrderId(parseInt(val))}
+              className="overflow-y-auto max-h-[50vh] px-1"
+            >
+              <div className="border rounded-xl bg-muted/5 overflow-hidden">
+                <table className="w-full text-sm min-w-[700px]">
+                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
+                    <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="p-4 w-12 text-center">Select</th>
+                      <th className="p-4 text-left">Identity</th>
+                      <th className="p-4 text-left">Production Stage</th>
+                      <th className="p-4 text-left">Delivery Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {customerOrders.map((order) => (
+                        <tr
+                          key={order.id}
+                          className={cn(
+                            "transition-colors group cursor-pointer",
+                            selectedDialogOrderId === order.id
+                                ? "bg-primary/5 hover:bg-primary/10"
+                                : "hover:bg-muted/20",
+                          )}
+                          onClick={() => setSelectedDialogOrderId(order.id)}
+                        >
+                          <td className="p-4">
+                            <div className="flex items-center justify-center">
+                                <RadioGroupItem
+                                    value={order.id.toString()}
+                                    id={`dialog-order-${order.id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="space-y-1">
+                              <h4 className="font-black text-xs uppercase">
+                                  #{order.id}
+                              </h4>
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase">
+                                Inv: {order.invoice_number ?? "—"}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-wider h-5 px-2">
+                              {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
+                            </Badge>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-xs font-bold whitespace-nowrap">
+                                    {order.delivery_date ? format(new Date(order.delivery_date), "PP") : "Not Set"}
+                                </span>
+                            </div>
+                          </td>
+                        </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </RadioGroup>
+
+            <DialogFooter className="border-t border-border pt-6 px-2">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
+                <div className="flex items-center gap-2">
+                   <div className={cn("h-2 w-2 rounded-full bg-primary", selectedDialogOrderId && "animate-pulse")} />
+                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    {selectedDialogOrderId ? `Order #${selectedDialogOrderId} Selected` : "Select an order"}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="ghost"
+                    className="font-black uppercase tracking-widest text-[10px]"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleDialogConfirm}
+                    disabled={!selectedDialogOrderId}
+                    className="font-black uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Start Audit
+                  </Button>
+                </div>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </ErrorBoundary>
+    </motion.div>
   );
 }

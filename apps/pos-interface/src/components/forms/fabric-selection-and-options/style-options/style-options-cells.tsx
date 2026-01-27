@@ -18,7 +18,6 @@ import {
   cuffTypes,
   jabzourTypes,
   penIcon,
-  phoneIcon,
   walletIcon,
   smallTabaggiImage,
   thicknessOptions as ThicknessOptions,
@@ -184,7 +183,7 @@ export const CollarCell = ({
     isFormDisabled?: boolean;
   };
   const isFormDisabled = meta?.isFormDisabled || false;
-  const [collar_type, collar_button, small_tabaggi] = useWatch({
+  const [collar_type, collar_button, _small_tabaggi] = useWatch({
     name: [
       `garments.${row.index}.collar_type`,
       `garments.${row.index}.collar_button`,
@@ -675,7 +674,7 @@ export const CuffsCell = ({
   row,
   table,
 }: CellContext<GarmentSchema, unknown>) => {
-  const { control, setValue } = useFormContext();
+  const { control } = useFormContext();
   const meta = table.options.meta as {
     isFormDisabled?: boolean;
   };

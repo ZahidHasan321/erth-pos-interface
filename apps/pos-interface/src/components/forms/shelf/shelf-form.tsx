@@ -26,7 +26,7 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
     gcTime: Infinity,
   })
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { append, remove, update } = useFieldArray({
     control: form.control,
     name: 'products',
   });

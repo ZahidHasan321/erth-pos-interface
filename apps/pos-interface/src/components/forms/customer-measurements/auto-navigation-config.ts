@@ -6,21 +6,21 @@ import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
  * These fields will auto-focus in order when Enter is pressed
  */
 export const AUTO_NAVIGATION_FIELDS: ReadonlyArray<Path<CustomerMeasurementsSchema>> = [
-  "body.full_chest.value",      // Round chest
-  "arm.shoulder",                // Shoulder
-  "arm.sleeve_length",            // Sleeve length
-  "arm.sleeve_width",             // Sleeve bottom
-  "arm.elbow",                   // Elbow
-  "arm.armhole.value",           // Armhole
-  "body.upper_chest",            // Upper chest
-  "body.full_waist.front",       // Front waist
-  "top_pocket.distance",          // Distance to f pocket
-  "jabzour.length",              // Jabzour length
-  "lengths.front",               // Front length
-  "body.bottom",                 // Bottom
-  "body.back_chest",             // Back chest
-  "body.full_waist.back",        // Back waist
-  "lengths.back",                // Back length
-  "collar.width",                // Collar
-  "collar.height",               // Collar height
+  "chest_full",                  // Round chest
+  "shoulder",                    // Shoulder
+  "sleeve_length",               // Sleeve length
+  "sleeve_width",                // Sleeve bottom
+  "elbow",                       // Elbow
+  "armhole",                     // Armhole
+  "chest_upper",                 // Upper chest
+  "waist_front",                 // Front waist
+  "top_pocket_distance",         // Distance to f pocket
+  "jabzour_length",              // Jabzour length
+  "length_front",                // Front length
+  "bottom",                      // Bottom
+  "chest_back",                  // Back chest
+  "waist_back",                  // Back waist
+  "length_back",                 // Back length
+  "collar_width",                // Collar
+  "collar_height",               // Collar height
 ] as const;

@@ -1,4 +1,4 @@
-import type { Style, Price } from "@repo/database";
+import type { Price } from "@repo/database";
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import { type GarmentSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 

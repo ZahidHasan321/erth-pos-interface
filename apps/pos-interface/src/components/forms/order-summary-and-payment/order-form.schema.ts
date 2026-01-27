@@ -18,7 +18,7 @@ export const orderSchema = z.object({
   order_type: z.enum(['WORK', 'SALES']).optional().nullable(),
 
   payment_type: z.enum(['knet', 'cash', 'link_payment', 'installments', 'others'], {
-    required_error: "Please select a payment method",
+    message: "Please select a payment method",
   }).optional().nullable(),
   payment_ref_no: z.string().optional().nullable(),
   payment_note: z.string().optional().nullable(),

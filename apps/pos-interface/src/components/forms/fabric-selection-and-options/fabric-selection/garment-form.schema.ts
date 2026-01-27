@@ -15,13 +15,13 @@ export const garmentSchema = z.object({
   }),
 
   fabric_source: z.enum(['IN', 'OUT'], {
-    required_error: "Fabric source is required"
+    message: "Fabric source is required"
   }),
   color: z.string().optional().nullable(),
   shop_name: z.string().optional().nullable(),
   home_delivery: z.boolean().default(false),
   fabric_length: z.number({
-    invalid_type_error: "Fabric length must be a number"
+    message: "Fabric length must be a number"
   })
     .nullish()
     .refine((val) => val !== null && val !== undefined && val > 0, {
@@ -80,7 +80,7 @@ export const garmentDefaults: GarmentSchema = {
   fabric_id: null,
   style_id: null,
   style: 'kuwaiti',
-  measurement_id: null,
+  measurement_id: null as any,
   fabric_source: 'IN',
   color: '',
   shop_name: '',
@@ -100,6 +100,9 @@ export const garmentDefaults: GarmentSchema = {
   jabzour_2: null,
   jabzour_thickness: 'SINGLE',
   lines: 1,
+  fabric_amount: 0,
+  stitching_price_snapshot: 0,
+  style_price_snapshot: 0,
   express: false,
   brova: false,
   piece_stage: 'order_at_shop',

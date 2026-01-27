@@ -2,19 +2,17 @@
 
 import { fuzzySearchCustomers, getCustomerById } from "@/api/customers";
 import { getPendingOrdersByCustomer } from "@/api/orders";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
 import type { Customer, Order } from "@repo/database";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, SearchIcon, UserIcon, X, AlertCircle, History } from "lucide-react";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
@@ -227,16 +225,16 @@ export function SearchCustomer({
           subtitle="Checking for pending orders..." 
         />
       )}
-      <div ref={containerRef} className="bg-muted/40 p-6 rounded-2xl space-y-4 border border-border/50 shadow-sm relative z-10">
+      <div ref={containerRef} className="bg-muted/40 p-6 rounded-2xl space-y-4 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">
         <div className="flex justify-between items-center px-1">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div className={cn(
-              "p-2 rounded-lg shadow-sm transition-colors",
-              selectedCustomerId ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"
+              "p-2 rounded-lg transition-colors shadow-sm",
+              selectedCustomerId ? "bg-green-600 text-white" : "bg-primary/10 text-primary"
             )}>
               <SearchIcon className="size-4" />
             </div>
-            <h2 className="text-lg font-bold text-foreground tracking-tight">
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-tight">
               {selectedCustomerId ? "Selected Customer" : "Find Customer"}
             </h2>
           </div>
@@ -249,21 +247,19 @@ export function SearchCustomer({
               selectedCustomerId ? "text-green-600" : "text-muted-foreground group-focus-within:text-primary"
             )} />
             <Input
-              placeholder="Search by name, mobile, or nickname..."
+              placeholder="Search name, mobile, or nickname..."
               value={searchValue}
               onChange={(e) => {
                 const newValue = e.target.value;
                 setSearchValue(newValue);
                 if (selectedCustomerId) {
-                  // If we start typing while a customer is selected, clear selection to allow new search
-                  // But do NOT call onHandleClear here, preserving current parent state until new selection
                   setSelectedCustomerId(null);
                   setSelectedCustomer(null);
                 }
               }}
               onFocus={() => setIsFocused(true)}
               className={cn(
-                "h-14 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-md focus-visible:ring-primary/20 transition-all",
+                "h-12 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20 transition-all font-bold",
                 selectedCustomerId && "border-green-600 ring-2 ring-green-600/10 font-semibold text-green-700"
               )}
             />

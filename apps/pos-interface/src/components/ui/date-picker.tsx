@@ -19,6 +19,7 @@ export interface DatePickerProps {
   className?: string;
   calendarProps?: React.ComponentProps<typeof Calendar>;
   clearable?: boolean;
+  disabled?: boolean;
 }
 
 export function DatePicker({
@@ -28,6 +29,7 @@ export function DatePicker({
   className,
   calendarProps,
   clearable = false,
+  disabled = false,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -55,17 +57,18 @@ export function DatePicker({
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-white" align="start">
           <Calendar
+            {...calendarProps}
             mode="single"
             selected={value ?? undefined}
-            onSelect={(date) => {
+            onSelect={(date: any) => {
               onChange(date ?? null);
               setOpen(false);
             }}
+            disabled={disabled}
             autoFocus
             captionLayout="dropdown"
             startMonth={new Date(1950, 0)} // Jan 1950
             endMonth={new Date(2035, 11)} // Dec 2035
-            {...calendarProps}
           />
         </PopoverContent>
       </Popover>

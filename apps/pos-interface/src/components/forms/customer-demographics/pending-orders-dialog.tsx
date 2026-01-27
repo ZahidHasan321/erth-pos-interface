@@ -10,10 +10,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import type { Order } from "@repo/database";
-import { Calendar, Package, Trash2, Loader2, Banknote, Truck, Scissors, XCircle } from "lucide-react";
+import { Calendar, Package, Loader2, Truck, Scissors, XCircle } from "lucide-react";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { cn } from "@/lib/utils";
 import { updateOrder } from "@/api/orders";
@@ -112,7 +111,7 @@ const OrderCard = React.memo<OrderCardProps>(
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Calendar className="size-3" />
-                            {formatDate(order.order_date || undefined)}
+                            {formatDate(order.order_date ? new Date(order.order_date).toISOString() : undefined)}
                         </div>
                     </div>
 
