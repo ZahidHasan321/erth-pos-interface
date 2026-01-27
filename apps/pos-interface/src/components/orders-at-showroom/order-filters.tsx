@@ -231,16 +231,15 @@ export function OrderFilters({
                           <SelectValue placeholder="Stage" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="font-medium text-xs">All Stages</SelectItem>
-                          {Object.values(ProductionStageLabels)
-                            .filter(stage => 
-                              stage.toLowerCase().includes("brova") || 
-                              stage.toLowerCase().includes("alteration") ||
-                              stage.toLowerCase().includes("at_shop")
-                            )
-                            .map((stage) => (
-                            <SelectItem key={stage} value={stage} className="font-medium text-xs">
-                              {stage}
+                          <SelectItem value="all" className="font-medium text-xs">All Showroom Stages</SelectItem>
+                          {[
+                            "brova_at_shop",
+                            "final_at_shop",
+                            "brova_alteration",
+                            "brova_and_final_at_shop"
+                          ].map((stageKey) => (
+                            <SelectItem key={stageKey} value={stageKey} className="font-medium text-xs">
+                              {ProductionStageLabels[stageKey as keyof typeof ProductionStageLabels] || stageKey}
                             </SelectItem>
                           ))}
                         </SelectContent>

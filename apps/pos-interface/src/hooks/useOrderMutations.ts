@@ -1,10 +1,10 @@
-import { 
-    createOrder, 
-    updateOrder, 
-    deleteOrder, 
-    completeWorkOrder, 
-    completeSalesOrder, 
-    createCompleteSalesOrder 
+import {
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    completeWorkOrder,
+    completeSalesOrder,
+    createCompleteSalesOrder
 } from "@/api/orders";
 import { updateShelf } from "@/api/shelf";
 import { updateFabric } from "@/api/fabrics";
@@ -266,6 +266,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 deliveryCharge?: number;
                 shelfCharge?: number;
                 homeDelivery?: boolean;
+                deliveryDate?: string;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
@@ -293,202 +294,202 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         }
     });
 
-        const completeSalesOrderMutation = useMutation({
+    const completeSalesOrderMutation = useMutation({
 
-            mutationFn: ({
+        mutationFn: ({
 
-                orderId,
+            orderId,
 
-                checkoutDetails,
+            checkoutDetails,
 
-                shelfItems
+            shelfItems
 
-            }: {
+        }: {
 
-                orderId: number;
+            orderId: number;
 
-                checkoutDetails: {
+            checkoutDetails: {
 
-                    paymentType: string;
+                paymentType: string;
 
-                    paid: number | null | undefined;
+                paid: number | null | undefined;
 
-                    paymentRefNo?: string;
+                paymentRefNo?: string;
 
-                    paymentNote?: string;
+                paymentNote?: string;
 
-                    orderTaker?: string;
+                orderTaker?: string;
 
-                    discountType?: string;
+                discountType?: string;
 
-                    discountValue?: number;
+                discountValue?: number;
 
-                    discountPercentage?: number;
+                discountPercentage?: number;
 
-                    referralCode?: string;
+                referralCode?: string;
 
-                };
+            };
 
-                shelfItems: { id: number; quantity: number; unitPrice: number }[];
+            shelfItems: { id: number; quantity: number; unitPrice: number }[];
 
-            }) => {
+        }) => {
 
-                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
+            return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
 
-            },
+        },
 
-            onSuccess: (response) => {
+        onSuccess: (response) => {
 
-                if (response.status === "error") {
+            if (response.status === "error") {
 
-                    toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
+                toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
 
-                    return;
-
-                }
-
-                toast.success("Sales order completed successfully! ✅");
-
-    
-
-                // Show notification if invoice number was just generated
-
-                if (response.data?.invoice_number) {
-
-                    showFatouraNotification(response.data.invoice_number);
-
-                }
-
-    
-
-                queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-                queryClient.invalidateQueries({ queryKey: ["products"] });
-
-                options.onOrderUpdated?.("updated", response.data);
-
-            },
-
-            onError: () => {
-
-                toast.error("An error occurred while completing the sales order");
+                return;
 
             }
 
-        });
+            toast.success("Sales order completed successfully! ✅");
 
-    
 
-        const createCompleteSalesOrderMutation = useMutation({
 
-            mutationFn: ({
+            // Show notification if invoice number was just generated
 
-                customerId,
+            if (response.data?.invoice_number) {
 
-                checkoutDetails,
-
-                shelfItems
-
-            }: {
-
-                customerId: number;
-
-                checkoutDetails: {
-
-                    paymentType: string;
-
-                    paid: number | null | undefined;
-
-                    paymentRefNo?: string;
-
-                    paymentNote?: string;
-
-                    orderTaker?: string;
-
-                    discountType?: string;
-
-                    discountValue?: number;
-
-                    discountPercentage?: number;
-
-                    referralCode?: string;
-
-                    notes?: string;
-
-                    total: number;
-
-                    shelfCharge: number;
-
-                };
-
-                shelfItems: { id: number; quantity: number; unitPrice: number }[];
-
-            }) => {
-
-                return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
-
-            },
-
-            onSuccess: (response) => {
-
-                if (response.status === "error") {
-
-                    toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
-
-                    return;
-
-                }
-
-                toast.success("Sales order created and completed! ✅");
-
-    
-
-                if (response.data?.invoice_number) {
-
-                    showFatouraNotification(response.data.invoice_number);
-
-                }
-
-    
-
-                queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-                queryClient.invalidateQueries({ queryKey: ["products"] });
-
-                options.onOrderUpdated?.("updated", response.data);
-
-            },
-
-            onError: () => {
-
-                toast.error("An error occurred while creating the sales order");
+                showFatouraNotification(response.data.invoice_number);
 
             }
 
-        });
 
-    
 
-        return {
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
 
-            createOrder: createOrderMutation,
+            queryClient.invalidateQueries({ queryKey: ["products"] });
 
-            updateOrder: updateOrderMutation,
+            options.onOrderUpdated?.("updated", response.data);
 
-            updateShelf: updateShelfMutation,
+        },
 
-            updateFabricStock: updateFabricStockMutation,
+        onError: () => {
 
-            deleteOrder: deleteOrderMutation,
+            toast.error("An error occurred while completing the sales order");
 
-            completeWorkOrder: completeWorkOrderMutation,
+        }
 
-            completeSalesOrder: completeSalesOrderMutation,
+    });
 
-            createCompleteSalesOrder: createCompleteSalesOrderMutation,
 
-        };
 
-    }
+    const createCompleteSalesOrderMutation = useMutation({
 
-    
+        mutationFn: ({
+
+            customerId,
+
+            checkoutDetails,
+
+            shelfItems
+
+        }: {
+
+            customerId: number;
+
+            checkoutDetails: {
+
+                paymentType: string;
+
+                paid: number | null | undefined;
+
+                paymentRefNo?: string;
+
+                paymentNote?: string;
+
+                orderTaker?: string;
+
+                discountType?: string;
+
+                discountValue?: number;
+
+                discountPercentage?: number;
+
+                referralCode?: string;
+
+                notes?: string;
+
+                total: number;
+
+                shelfCharge: number;
+
+            };
+
+            shelfItems: { id: number; quantity: number; unitPrice: number }[];
+
+        }) => {
+
+            return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
+
+        },
+
+        onSuccess: (response) => {
+
+            if (response.status === "error") {
+
+                toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
+
+                return;
+
+            }
+
+            toast.success("Sales order created and completed! ✅");
+
+
+
+            if (response.data?.invoice_number) {
+
+                showFatouraNotification(response.data.invoice_number);
+
+            }
+
+
+
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+            queryClient.invalidateQueries({ queryKey: ["products"] });
+
+            options.onOrderUpdated?.("updated", response.data);
+
+        },
+
+        onError: () => {
+
+            toast.error("An error occurred while creating the sales order");
+
+        }
+
+    });
+
+
+
+    return {
+
+        createOrder: createOrderMutation,
+
+        updateOrder: updateOrderMutation,
+
+        updateShelf: updateShelfMutation,
+
+        updateFabricStock: updateFabricStockMutation,
+
+        deleteOrder: deleteOrderMutation,
+
+        completeWorkOrder: completeWorkOrderMutation,
+
+        completeSalesOrder: completeSalesOrderMutation,
+
+        createCompleteSalesOrder: createCompleteSalesOrderMutation,
+
+    };
+
+}
+
+

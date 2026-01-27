@@ -126,10 +126,7 @@ export function useShowroomOrders() {
       const targetStages = [
         "brova_at_shop",
         "final_at_shop",
-        "brova_accepted",
         "brova_alteration",
-        "brova_repair_and_production",
-        "brova_alteration_and_production",
         "brova_and_final_at_shop"
       ];
 

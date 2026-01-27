@@ -8,23 +8,21 @@ import { format } from "date-fns";
 import {
   Ruler,
   Camera,
-  Package,
-  Save,
-  Check,
-  X,
-  ThumbsUp,
-  ThumbsDown,
-  Hash,
-  User,
-
-  Clock,
-  RefreshCw,
-  MessageSquare
-} from "lucide-react";
+    Package,
+    Save,
+    Check,
+    X,
+    Hash,
+    User,
+    Clock,
+    RefreshCw,
+    MessageSquare
+  } from "lucide-react";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -49,9 +47,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -111,16 +107,40 @@ const MEASUREMENT_ROWS = [
   { type: "Bottom", subType: "Bottom", key: "bottom" },
 ] as const;
 
-const FINAL_FEEDBACK_STATUS_OPTIONS = [
-  { value: "satisfied", label: "Fully Satisfied", color: "text-green-600" },
-  { value: "adjustment", label: "Post-Delivery Adjustment", color: "text-yellow-600" },
-  { value: "repair", label: "Minor Repair Needed", color: "text-orange-600" },
-  { value: "complaint", label: "Quality Complaint", color: "text-red-600" },
+const SATISFACTION_LEVELS = [
+  { value: "angry", label: "Angry", emoji: "😠", color: "hover:bg-red-50 peer-data-[state=checked]:bg-red-100 peer-data-[state=checked]:border-red-500 text-red-600" },
+  { value: "sad", label: "Sad", emoji: "☹️", color: "hover:bg-orange-50 peer-data-[state=checked]:bg-orange-100 peer-data-[state=checked]:border-orange-500 text-orange-600" },
+  { value: "neutral", label: "Neutral", emoji: "😐", color: "hover:bg-yellow-50 peer-data-[state=checked]:bg-yellow-100 peer-data-[state=checked]:border-yellow-500 text-yellow-600" },
+  { value: "happy", label: "Happy", emoji: "🙂", color: "hover:bg-green-50 peer-data-[state=checked]:bg-green-100 peer-data-[state=checked]:border-green-500 text-green-600" },
+  { value: "very_happy", label: "Very Happy", emoji: "😄", color: "hover:bg-emerald-50 peer-data-[state=checked]:bg-emerald-100 peer-data-[state=checked]:border-emerald-500 text-emerald-600" },
+];
+
+const BROVA_ACTION_OPTIONS = [
+  { value: "accepted", label: "Accepted", color: "peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:border-emerald-500" },
+  { value: "repair", label: "Repair", color: "peer-data-[state=checked]:bg-amber-50 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:border-amber-500" },
+  { value: "repair_production", label: "Repair + Production", color: "peer-data-[state=checked]:bg-orange-50 peer-data-[state=checked]:text-orange-700 peer-data-[state=checked]:border-orange-500" },
+  { value: "redo", label: "Re-do", color: "peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-red-700 peer-data-[state=checked]:border-red-500" },
+];
+
+const ORDER_DISTRIBUTION_OPTIONS = [
+  { value: "pickup", label: "Customer Pick up", icon: Package },
+  { value: "workshop", label: "Send to Workshop", icon: RefreshCw },
+  { value: "shop", label: "Brova at Shop", icon: Clock },
+];
+
+const DIFFERENCE_REASONS = [
+  { label: "Customer Request", color: "text-emerald-600 bg-emerald-50" },
+  { label: "Workshop Error", color: "text-red-600 bg-red-50" },
+  { label: "Shop Error", color: "text-muted-foreground bg-muted/50" },
 ];
 
 // --- Types ---
 
 interface ShopMeasurements {
+  [key: string]: number | "";
+}
+
+interface FeedbackMeasurements {
   [key: string]: number | "";
 }
 
@@ -146,12 +166,16 @@ function FinalFeedbackInterface() {
   const [selectedGarmentId, setSelectedGarmentId] = useState<string | null>(null);
   
   // feedback State
-  const [shopMeasurements, setShopMeasurements] = useState<ShopMeasurements>({});
+  const [workshopMeasurements, setWorkshopMeasurements] = useState<ShopMeasurements>({});
+  const [feedbackMeasurements, setFeedbackMeasurements] = useState<FeedbackMeasurements>({});
+  const [differenceReasons, setDifferenceReasons] = useState<Record<string, string>>({});
   const [measurementNotes, setMeasurementNotes] = useState<Record<string, string>>({});
   const [optionNotes, setOptionNotes] = useState<Record<string, string>>({});
-  const [feedbackStatus, setFeedbackStatus] = useState<string>("satisfied");
+  const [satisfaction, setSatisfaction] = useState<string | null>(null);
+  const [brovaAction, setBrovaAction] = useState<string | null>(null);
+  const [distributionAction, setDistributionAction] = useState<string | null>(null);
+  const [orderNotes, setOrderNotes] = useState("");
   const [optionChecks, setOptionChecks] = useState<Record<string, boolean>>({});
-  const [receivingAction, setReceivingAction] = useState<"accept" | "reject" | "">("");
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [evidence, setEvidence] = useState<Record<string, { type: "photo" | "video", url: string } | null>>({});
@@ -159,7 +183,6 @@ function FinalFeedbackInterface() {
   // Dialog State for Customer Orders
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [customerOrders, setCustomerOrders] = useState<OrderWithDetails[]>([]);
-  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<number | null>(null);
 
   // 1. Garment Selection Effect
   useEffect(() => {
@@ -169,15 +192,25 @@ function FinalFeedbackInterface() {
       setSelectedGarmentId(firstGarment.id);
       
       // Reset feedback state for new order
-      setShopMeasurements({});
+      setWorkshopMeasurements({});
+      setFeedbackMeasurements({});
+      setDifferenceReasons({});
       setMeasurementNotes({});
       setOptionNotes({});
       setOptionChecks({});
       setEvidence({});
-      setFeedbackStatus("satisfied");
-      setReceivingAction("");
+      setSatisfaction(null);
+      setBrovaAction(null);
+      setDistributionAction(null);
+      setOrderNotes("");
     }
   }, [activeOrder]);
+
+  useEffect(() => {
+    if (brovaAction && brovaAction !== "accepted") {
+      setDistributionAction("workshop");
+    }
+  }, [brovaAction]);
 
   const activeGarment = useMemo(() => 
     activeOrder?.garments?.find(g => g.id === selectedGarmentId),
@@ -248,7 +281,6 @@ function FinalFeedbackInterface() {
 
       if (ordersResponse.data && ordersResponse.data.length > 0) {
         setCustomerOrders(ordersResponse.data as OrderWithDetails[]);
-        setSelectedDialogOrderId(null);
         setIsDialogOpen(true);
       } else {
         toast.info(`No confirmed orders found for ${customer.name}.`);
@@ -261,22 +293,33 @@ function FinalFeedbackInterface() {
     }
   };
 
-  const handleDialogConfirm = () => {
-    if (!selectedDialogOrderId) return;
-    const order = customerOrders.find(o => o.id === selectedDialogOrderId);
-    if (order) {
-        setActiveOrder(order);
-        setIsDialogOpen(false);
-    }
+  const handleSelectOrder = (order: OrderWithDetails) => {
+    setActiveOrder(order);
+    setIsDialogOpen(false);
   };
 
   // --- Handlers ---
 
-  const handleMeasurementChange = (key: string, value: string) => {
+  const handleWorkshopMeasurementChange = (key: string, value: string) => {
     const numValue = value === "" ? "" : parseFloat(value);
-    setShopMeasurements(prev => ({
+    setWorkshopMeasurements(prev => ({
       ...prev,
       [key]: numValue
+    }));
+  };
+
+  const handleFeedbackMeasurementChange = (key: string, value: string) => {
+    const numValue = value === "" ? "" : parseFloat(value);
+    setFeedbackMeasurements(prev => ({
+      ...prev,
+      [key]: numValue
+    }));
+  };
+
+  const handleDifferenceReasonChange = (key: string, value: string) => {
+    setDifferenceReasons(prev => ({
+      ...prev,
+      [key]: value
     }));
   };
 
@@ -306,8 +349,8 @@ function FinalFeedbackInterface() {
   };
 
   const onConfirmClick = () => {
-    if (!receivingAction) {
-        toast.error("Please select an action (Close Order or Re-open)");
+    if (!satisfaction || !brovaAction || !distributionAction) {
+        toast.error("Please complete all feedback sections");
         return;
     }
     setIsConfirmDialogOpen(true);
@@ -319,7 +362,7 @@ function FinalFeedbackInterface() {
     
     try {
         toast.success(`Final Feedback Logged`, {
-            description: `Order ${activeOrder?.id} completed with status: ${FINAL_FEEDBACK_STATUS_OPTIONS.find(o => o.value === feedbackStatus)?.label}`
+            description: `Order #${activeOrder?.id} completed successfully`
         });
         setActiveOrder(null);
     } catch (err) {
@@ -593,24 +636,30 @@ function FinalFeedbackInterface() {
                         <Table>
                             <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
                                 <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                    <TableHead className="w-[15%] p-4">Dimension</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[12%]">Target (cm)</TableHead>
-                                    <TableHead className="text-center w-[15%] bg-primary/5">Final (cm)</TableHead>
-                                    <TableHead className="text-center w-[12%]">Delta</TableHead>
+                                    <TableHead className="w-[12%] p-4">Dimension</TableHead>
+                                    <TableHead className="text-center bg-muted/30 w-[10%]">Order (cm)</TableHead>
+                                    <TableHead className="text-center w-[10%] bg-muted/30">QC (cm)</TableHead>
+                                    <TableHead className="text-center w-[12%] bg-primary/5">Final (cm)</TableHead>
+                                    <TableHead className="text-center w-[10%]">Delta</TableHead>
+                                    <TableHead className="text-center w-[15%]">Reason</TableHead>
                                     <TableHead className="p-4">Observation Notes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {MEASUREMENT_ROWS.map((row) => {
                                     const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                    const shopValue = shopMeasurements[row.key];
+                                    const workshopValue = workshopMeasurements[row.key];
+                                    const feedbackValue = feedbackMeasurements[row.key];
+                                    const reasonValue = differenceReasons[row.key] || "";
                                     const noteValue = measurementNotes[row.key] || "";
                                     
-                                    const diffOrder = getDifference(orderValue, shopValue);
+                                    const diffOrder = getDifference(orderValue, feedbackValue);
                                     const statusOrder = getDiffStatus(diffOrder);
                                     const isMissing = orderValue === null || orderValue === undefined || orderValue === 0;
 
                                     if (isMissing) return null;
+
+                                    const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
 
                                     return (
                                         <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
@@ -621,19 +670,28 @@ function FinalFeedbackInterface() {
                                             <TableCell className="text-center font-black text-sm bg-muted/30">
                                                 {orderValue || "-"}
                                             </TableCell>
+                                            <TableCell className="p-2 bg-muted/30">
+                                                <Input 
+                                                    type="number" 
+                                                    className="h-10 w-24 mx-auto text-center font-bold text-sm border-transparent bg-transparent hover:border-border focus:bg-background transition-all"
+                                                    placeholder="0.0"
+                                                    value={workshopValue ?? ""}
+                                                    onChange={(e) => handleWorkshopMeasurementChange(row.key, e.target.value)}
+                                                />
+                                            </TableCell>
                                             <TableCell className="p-2 bg-primary/[0.02]">
                                                 <Input 
                                                     type="number" 
                                                     className={cn(
-                                                        "h-10 w-28 mx-auto text-center font-black text-sm border-2 transition-all",
+                                                        "h-10 w-24 mx-auto text-center font-black text-sm border-2 transition-all",
                                                         statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
                                                         statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
                                                         statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
-                                                        !shopValue && "border-border hover:border-primary/40"
+                                                        !feedbackValue && "border-border hover:border-primary/40"
                                                     )}
                                                     placeholder="0.0"
-                                                    value={shopValue ?? ""}
-                                                    onChange={(e) => handleMeasurementChange(row.key, e.target.value)}
+                                                    value={feedbackValue ?? ""}
+                                                    onChange={(e) => handleFeedbackMeasurementChange(row.key, e.target.value)}
                                                 />
                                             </TableCell>
                                             <TableCell className="text-center">
@@ -651,14 +709,29 @@ function FinalFeedbackInterface() {
                                                                 statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
                                                             )}>
                                                                 {diffOrder > 0 ? `+${diffOrder}` : diffOrder} cm
-                                                                {statusOrder === 'success' && <Check className="w-3 h-3 ml-1" />}
-                                                                {statusOrder === 'error' && <X className="w-3 h-3 ml-1" />}
                                                             </Badge>
                                                         </motion.div>
                                                     ) : (
                                                         <span className="text-muted-foreground font-black text-[10px] opacity-20">—</span>
                                                     )}
                                                 </AnimatePresence>
+                                            </TableCell>
+                                            <TableCell className="p-2">
+                                                <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
+                                                    <SelectTrigger className={cn(
+                                                        "h-9 text-[10px] font-bold border-none shadow-none transition-colors",
+                                                        selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
+                                                    )}>
+                                                        <SelectValue placeholder="Reason..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {DIFFERENCE_REASONS.map(r => (
+                                                            <SelectItem key={r.label} value={r.label} className={cn("text-[10px] font-bold uppercase", r.color)}>
+                                                                {r.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </TableCell>
                                             <TableCell className="p-2">
                                                 <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-3 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
@@ -828,102 +901,158 @@ function FinalFeedbackInterface() {
                     </CardContent>
                 </Card>
 
-                {/* FINAL ACTIONS CONTROL PANEL */}
-                <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
-                    <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-8">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-primary text-primary-foreground rounded-2xl shadow-lg">
-                                <Check className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-2xl font-black uppercase tracking-tight">Final feedback Decision</CardTitle>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">Submit post-delivery audit results</p>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-8 space-y-8">
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                            {/* feedback Classification */}
-                            <div className="space-y-4">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Overall Satisfaction</Label>
-                                <Select value={feedbackStatus} onValueChange={setFeedbackStatus}>
-                                    <SelectTrigger className="h-14 text-base font-bold border-2 rounded-2xl shadow-sm">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-2">
-                                        {FINAL_FEEDBACK_STATUS_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-3 rounded-lg mx-1">
-                                                <span className={cn("font-black uppercase tracking-tight text-sm", opt.color)}>{opt.label}</span>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Receiving Action */}
-                            <div className="space-y-4">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Lifecycle Decision</Label>
-                                <RadioGroup 
-                                    value={receivingAction} 
-                                    onValueChange={(val) => setReceivingAction(val as "accept" | "reject")}
-                                    className="grid grid-cols-2 gap-4"
-                                >
-                                    <div>
-                                        <RadioGroupItem value="accept" id="action-accept" className="peer sr-only" />
-                                        <Label
-                                            htmlFor="action-accept"
-                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-emerald-50 hover:border-emerald-200 peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 cursor-pointer transition-all shadow-sm"
-                                        >
-                                            <ThumbsUp className="mb-2 h-6 w-6" />
-                                            <span className="font-black uppercase tracking-widest text-[10px]">Close Order</span>
-                                        </Label>
-                                    </div>
-                                    <div>
-                                        <RadioGroupItem value="reject" id="action-reject" className="peer sr-only" />
-                                        <Label
-                                            htmlFor="action-reject"
-                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-red-50 hover:border-red-200 peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-destructive cursor-pointer transition-all shadow-sm"
-                                        >
-                                            <ThumbsDown className="mb-2 h-6 w-6" />
-                                            <span className="font-black uppercase tracking-widest text-[10px]">Open Alteration</span>
-                                        </Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                        </div>
-                        
-                        <Separator />
-                        
-                        <div className="flex justify-end pt-2">
-                            <Button 
-                                onClick={onConfirmClick} 
-                                disabled={!receivingAction || isSubmitting}
-                                className="w-full md:w-auto h-14 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base"
-                            >
-                                {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
-                                Finalize feedback
-                            </Button>
-                        </div>
-
-                    </CardContent>
-                </Card>
-
-                <ConfirmationDialog
-                    isOpen={isConfirmDialogOpen}
-                    onClose={() => setIsConfirmDialogOpen(false)}
-                    onConfirm={handleSave}
-                    title={receivingAction === 'accept' ? "Confirm Order Closure" : "Confirm Alteration Re-entry"}
-                    description={receivingAction === 'accept' 
-                        ? `You are marking order #${activeOrder.id} as completely fulfilled. This will close the production lifecycle.` 
-                        : `You are opening a post-delivery alteration for order #${activeOrder.id}. This will return the item to production.`
-                    }
-                    confirmText={receivingAction === 'accept' ? "Yes, Close Order" : "Yes, Open Alteration"}
-                    cancelText="Go Back"
-                />
-
             </TabsContent>
           </Tabs>
+
+          {/* FINAL ACTIONS CONTROL PANEL - ORDER LEVEL */}
+          <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
+              <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-8">
+                  <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary text-primary-foreground rounded-2xl shadow-lg">
+                          <Check className="w-6 h-6" />
+                      </div>
+                      <div>
+                          <CardTitle className="text-2xl font-black uppercase tracking-tight">Post-Delivery Finalization</CardTitle>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">Record final customer satisfaction and next steps</p>
+                      </div>
+                  </div>
+              </CardHeader>
+              <CardContent className="p-8 space-y-10">
+                  
+                  {/* 1. Customer Satisfaction */}
+                  <div className="space-y-6">
+                      <div className="flex items-center gap-2">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Customer Satisfaction</Label>
+                          <Separator className="flex-1" />
+                      </div>
+                      <RadioGroup 
+                          value={satisfaction || ""} 
+                          onValueChange={setSatisfaction}
+                          className="flex flex-wrap gap-4 justify-between"
+                      >
+                          {SATISFACTION_LEVELS.map((level) => (
+                              <div key={level.value} className="flex-1 min-w-[120px]">
+                                  <RadioGroupItem value={level.value} id={`sat-${level.value}`} className="peer sr-only" />
+                                  <Label
+                                      htmlFor={`sat-${level.value}`}
+                                      className={cn(
+                                          "flex flex-col items-center justify-center gap-3 h-24 rounded-2xl border-2 border-border bg-card p-4 cursor-pointer transition-all shadow-sm",
+                                          level.color
+                                      )}
+                                  >
+                                      <span className="text-3xl">{level.emoji}</span>
+                                      <span className="font-black uppercase tracking-widest text-[9px]">{level.label}</span>
+                                  </Label>
+                              </div>
+                          ))}
+                      </RadioGroup>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                      {/* 2. Brova Action (Renamed to Status/Decision) */}
+                      <div className="space-y-6">
+                          <div className="flex items-center gap-2">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Final Decision</Label>
+                              <Separator className="flex-1" />
+                          </div>
+                          <RadioGroup 
+                              value={brovaAction || ""} 
+                              onValueChange={setBrovaAction}
+                              className="grid grid-cols-2 gap-4"
+                          >
+                              {BROVA_ACTION_OPTIONS.map((opt) => (
+                                  <div key={opt.value}>
+                                      <RadioGroupItem value={opt.value} id={`brova-${opt.value}`} className="peer sr-only" />
+                                      <Label
+                                          htmlFor={`brova-${opt.value}`}
+                                          className={cn(
+                                              "flex items-center justify-center h-14 rounded-xl border-2 border-border bg-card px-4 cursor-pointer transition-all shadow-sm font-black uppercase tracking-tight text-xs text-center",
+                                              opt.color
+                                          )}
+                                      >
+                                          {opt.label}
+                                      </Label>
+                                  </div>
+                              ))}
+                          </RadioGroup>
+                          
+                          <div className="pt-2">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 block mb-2">Audit Notes*</Label>
+                              <Textarea 
+                                  placeholder="Add specific notes about the final feedback..."
+                                  className="min-h-[100px] rounded-xl border-2 resize-none font-bold text-sm"
+                                  value={orderNotes}
+                                  onChange={(e) => setOrderNotes(e.target.value)}
+                              />
+                          </div>
+                      </div>
+
+                      {/* 3. Order Distribution */}
+                      <div className="space-y-6">
+                          <div className="flex items-center gap-2">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Distribution Action</Label>
+                              <Separator className="flex-1" />
+                          </div>
+                          <RadioGroup 
+                              value={distributionAction || ""} 
+                              onValueChange={setDistributionAction}
+                              className="flex flex-col gap-4"
+                          >
+                              {ORDER_DISTRIBUTION_OPTIONS.map((opt) => {
+                                  const isDisabled = !!(brovaAction && brovaAction !== "accepted" && opt.value !== "workshop");
+                                  return (
+                                      <div key={opt.value}>
+                                          <RadioGroupItem 
+                                              value={opt.value} 
+                                              id={`dist-${opt.value}`} 
+                                              className="peer sr-only" 
+                                              disabled={isDisabled}
+                                          />
+                                          <Label
+                                              htmlFor={`dist-${opt.value}`}
+                                              className={cn(
+                                                  "flex items-center gap-4 h-16 rounded-xl border-2 border-border bg-card px-6 cursor-pointer transition-all shadow-sm peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5",
+                                                  isDisabled && "opacity-40 cursor-not-allowed grayscale"
+                                              )}
+                                          >
+                                              <div className="p-2 bg-muted rounded-lg group-peer-data-[state=checked]:bg-primary/10">
+                                                  <opt.icon className="w-5 h-5 text-muted-foreground" />
+                                              </div>
+                                              <span className="font-black uppercase tracking-widest text-[11px] flex-1">{opt.label}</span>
+                                              {isDisabled && <Badge variant="secondary" className="text-[8px] font-black">UNAVAILABLE</Badge>}
+                                          </Label>
+                                      </div>
+                                  );
+                              })}
+                          </RadioGroup>
+                      </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-end pt-2">
+                      <Button 
+                          onClick={onConfirmClick} 
+                          disabled={!satisfaction || !brovaAction || !distributionAction || isSubmitting}
+                          className="w-full md:w-auto h-16 min-w-[280px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base rounded-2xl"
+                      >
+                          {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
+                          Finalize Post-Delivery Feedback
+                      </Button>
+                  </div>
+
+              </CardContent>
+          </Card>
+
+          <ConfirmationDialog
+              isOpen={isConfirmDialogOpen}
+              onClose={() => setIsConfirmDialogOpen(false)}
+              onConfirm={handleSave}
+              title="Confirm Final Feedback Submission"
+              description={`You are about to save the final feedback for order #${activeOrder.id}. Action: ${ORDER_DISTRIBUTION_OPTIONS.find(o => o.value === distributionAction)?.label}`}
+              confirmText="Submit Feedback"
+              cancelText="Go Back"
+          />
 
         </motion.div>
       ) : (
@@ -943,119 +1072,101 @@ function FinalFeedbackInterface() {
 
       {/* Customer Selection Dialog */}
       <ErrorBoundary>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
-            <DialogHeader className="border-b border-border pb-4 px-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-                  <RefreshCw className="w-6 h-6" />
-                </div>
-                <div>
-                  <DialogTitle className="text-2xl font-black uppercase tracking-tight">
-                    Select Order for Feedback
-                  </DialogTitle>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
-                    Delivered or collected orders for this customer
-                  </p>
-                </div>
-              </div>
-            </DialogHeader>
-
-            <RadioGroup
-              value={selectedDialogOrderId?.toString()}
-              onValueChange={(val) => setSelectedDialogOrderId(parseInt(val))}
-              className="overflow-y-auto max-h-[50vh] px-1"
-            >
-              <div className="border rounded-xl bg-muted/5 overflow-hidden">
-                <table className="w-full text-sm min-w-[700px]">
-                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
-                    <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      <th className="p-4 w-12 text-center">Select</th>
-                      <th className="p-4 text-left">Identity</th>
-                      <th className="p-4 text-left">Production Stage</th>
-                      <th className="p-4 text-left">Delivery Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {customerOrders.map((order) => (
-                        <tr
-                          key={order.id}
-                          className={cn(
-                            "transition-colors group cursor-pointer",
-                            selectedDialogOrderId === order.id
-                                ? "bg-primary/5 hover:bg-primary/10"
-                                : "hover:bg-muted/20",
-                          )}
-                          onClick={() => setSelectedDialogOrderId(order.id)}
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogContent className="!w-[95vw] sm:!w-[80vw] md:!w-[70vw] lg:!w-[55vw] !max-w-2xl max-h-[85vh] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+                    <div className="bg-primary p-6 text-primary-foreground relative">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+                          <RefreshCw className="w-7 h-7" />
+                        </div>
+                        <div>
+                          <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-1">
+                            Select Order
+                          </DialogTitle>
+                          <p className="text-xs font-bold opacity-80 uppercase tracking-widest">
+                            Choose a completed order to begin final audit
+                          </p>
+                        </div>
+                      </div>
+                      <div className="absolute top-6 right-6 opacity-10">
+                         <Package className="w-24 h-24" />
+                      </div>
+                    </div>
+            
+                    <div className="p-4 overflow-y-auto max-h-[60vh] bg-muted/30">
+                      <div className="grid gap-3">
+                        {customerOrders.map((order) => (
+                          <button
+                            key={order.id}
+                            onClick={() => handleSelectOrder(order)}
+                            className="group relative flex items-center justify-between gap-4 p-5 rounded-2xl border-2 border-transparent bg-card hover:bg-primary/5 hover:border-primary/30 transition-all duration-300 text-left shadow-sm hover:shadow-md"
+                          >
+                            <div className="flex items-center gap-6">
+                              {/* ID Tag */}
+                              <div className="flex flex-col items-center justify-center size-14 bg-primary/5 rounded-2xl group-hover:bg-primary group-hover:text-primary-foreground transition-colors border border-primary/10">
+                                <span className="text-[10px] font-black uppercase leading-none mb-1 opacity-60 group-hover:opacity-80">Order</span>
+                                <span className="text-lg font-black leading-none">{order.id}</span>
+                              </div>
+            
+                              {/* Order Details */}
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2">
+                                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none">Invoice</span>
+                                   <Badge variant="outline" className="h-5 px-2 text-[10px] font-black bg-background border-primary/20 text-primary">
+                                      #{order.invoice_number ?? "N/A"}
+                                   </Badge>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                   <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                      <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      {order.production_stage?.replace(/_/g, " ") ?? "READY"}
+                                   </span>
+                                </div>
+                              </div>
+                            </div>
+            
+                            {/* Meta Info */}
+                            <div className="flex items-center gap-6">
+                               <div className="hidden sm:flex flex-col items-end">
+                                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Composition</span>
+                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded-lg border border-border/40">
+                                     <Package className="w-3 h-3 text-muted-foreground" />
+                                     <span className="text-[10px] font-black uppercase">{order.garments?.length || 0} Pieces</span>
+                                  </div>
+                               </div>
+            
+                               <div className="flex flex-col items-end">
+                                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Delivered</span>
+                                  <div className="flex items-center gap-2 text-primary font-black text-xs">
+                                     <Clock className="w-3.5 h-3.5" />
+                                     {order.delivery_date ? format(new Date(order.delivery_date), "MMM d") : "NOT SET"}
+                                  </div>
+                               </div>
+            
+                               <div className="p-2 rounded-full bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                  <Save className="w-5 h-5 opacity-40 group-hover:opacity-100" />
+                               </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+            
+                    <div className="p-4 border-t border-border bg-background flex justify-between items-center">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                            {customerOrders.length} Available Orders for this customer
+                        </p>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="font-black uppercase tracking-widest text-[10px] h-8 rounded-lg"
+                            onClick={() => setIsDialogOpen(false)}
                         >
-                          <td className="p-4">
-                            <div className="flex items-center justify-center">
-                                <RadioGroupItem
-                                    value={order.id.toString()}
-                                    id={`dialog-order-${order.id}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="space-y-1">
-                              <h4 className="font-black text-xs uppercase">
-                                  #{order.id}
-                              </h4>
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase">
-                                Inv: {order.invoice_number ?? "—"}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-wider h-5 px-2">
-                              {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
-                            </Badge>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-xs font-bold whitespace-nowrap">
-                                    {order.delivery_date ? format(new Date(order.delivery_date), "PP") : "Not Set"}
-                                </span>
-                            </div>
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </RadioGroup>
-
-            <DialogFooter className="border-t border-border pt-6 px-2">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                <div className="flex items-center gap-2">
-                   <div className={cn("h-2 w-2 rounded-full bg-primary", selectedDialogOrderId && "animate-pulse")} />
-                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    {selectedDialogOrderId ? `Order #${selectedDialogOrderId} Selected` : "Select an order"}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    className="font-black uppercase tracking-widest text-[10px]"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleDialogConfirm}
-                    disabled={!selectedDialogOrderId}
-                    className="font-black uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Start Feedback
-                  </Button>
-                </div>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                            Cancel
+                        </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
       </ErrorBoundary>
     </motion.div>
   );
