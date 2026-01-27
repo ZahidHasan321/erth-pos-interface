@@ -155,6 +155,13 @@ export function FabricSelectionForm({
         setSelectedCampaigns(initialCampaigns || []);
     }, [initialCampaigns?.join(",")]);
 
+    React.useEffect(() => {
+        if (!deliveryDate && !isOrderClosed && !isProceedDisabled) {
+            const today = new Date();
+            setDeliveryDate(today.toISOString());
+        }
+    }, [deliveryDate, isOrderClosed, isProceedDisabled, setDeliveryDate]);
+
     const { data: fabricsResponse } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,

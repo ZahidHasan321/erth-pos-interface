@@ -221,6 +221,7 @@ export const completeWorkOrder = async (
         deliveryCharge?: number;
         shelfCharge?: number;
         homeDelivery?: boolean;
+        deliveryDate?: string;
     },
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]

@@ -608,6 +608,7 @@ function NewWorkOrder() {
                 deliveryCharge: data.delivery_charge ?? 0,
                 shelfCharge: data.shelf_charge ?? 0,
                 homeDelivery: data.home_delivery,
+                deliveryDate: order.delivery_date ?? undefined,
             },
             shelfItems,
             fabricItems
