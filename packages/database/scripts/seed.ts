@@ -203,7 +203,7 @@ async function main() {
     const [res] = await db.insert(schema.orders).values({
       customer_id: custId,
       order_taker_id: takerId,
-      parent_order_id: linkedId,
+      linked_order_id: linkedId,
       checkout_status: status as any,
       production_stage: (o.fields.FatouraStages || "order_at_shop").toLowerCase().replace(/ /g, "_") as any,
       invoice_number: o.fields.Fatoura,

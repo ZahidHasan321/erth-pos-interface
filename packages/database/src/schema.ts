@@ -230,17 +230,24 @@ export const orders = pgTable("orders", {
     campaign_id: integer("campaign_id").references(() => campaigns.id),
     order_taker_id: uuid("order_taker_id").references(() => users.id),
 
-    parent_order_id: integer("parent_order_id"),
+    linked_order_id: integer("linked_order_id").references((): any => orders.id),
 
     // Dates
     order_date: timestamp("order_date").defaultNow(),
     delivery_date: timestamp("delivery_date"),
+    linked_date: timestamp("linked_date"),
+    unlinked_date: timestamp("unlinked_date"),
+    
+    // Reminders
+    r1_date: timestamp("r1_date"),
+    r2_date: timestamp("r2_date"),
+    r3_date: timestamp("r3_date"),
     call_reminder_date: timestamp("call_reminder_date"),
     escalation_date: timestamp("escalation_date"),
 
     // State
     checkout_status: checkoutStatusEnum("checkout_status").default("draft"),
-    production_stage: productionStageEnum("production_stage").default("order_at_shop"),
+    production_stage: productionStageEnum("production_stage"),
     order_type: orderTypeEnum("order_type").default("WORK"),
 
     // Financials
@@ -266,8 +273,13 @@ export const orders = pgTable("orders", {
     // Meta
     num_of_fabrics: integer("num_of_fabrics"),
     notes: text("notes"),
+    
+    r1_notes: text("r1_notes"),
+    r2_notes: text("r2_notes"),
+    r3_notes: text("r3_notes"),
     call_notes: text("call_notes"),
     escalation_notes: text("escalation_notes"),
+    
     home_delivery: boolean("home_delivery").default(false),
 
     // Workshop interaction
@@ -276,7 +288,7 @@ export const orders = pgTable("orders", {
     invoiceIdx: uniqueIndex("orders_invoice_idx").on(t.invoice_number),
     customerIdx: index("orders_customer_idx").on(t.customer_id),
     dateIdx: index("orders_date_idx").on(t.order_date),
-    parentOrderIdx: index("orders_parent_idx").on(t.parent_order_id),
+    linkedOrderIdx: index("orders_linked_idx").on(t.linked_order_id),
 }));
 
 // --- 6. GARMENTS (Line Items) ---
@@ -349,7 +361,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     shelfItems: many(orderShelfItems),
     taker: one(users, { fields: [orders.order_taker_id], references: [users.id] }),
     campaign: one(campaigns, { fields: [orders.campaign_id], references: [campaigns.id] }),
-    parentOrder: one(orders, { fields: [orders.parent_order_id], references: [orders.id], relationName: "linked_orders" }),
+    linkedOrder: one(orders, { fields: [orders.linked_order_id], references: [orders.id], relationName: "linked_orders" }),
     childOrders: many(orders, { relationName: "linked_orders" })
 }));
 
