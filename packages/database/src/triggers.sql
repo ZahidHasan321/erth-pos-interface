@@ -33,6 +33,13 @@ BEGIN
     discount_value = (p_checkout_details->>'discountValue')::decimal,
     discount_percentage = (p_checkout_details->>'discountPercentage')::decimal,
     referral_code = (p_checkout_details->>'referralCode'),
+    order_total = (p_checkout_details->>'orderTotal')::decimal,
+    fabric_charge = (p_checkout_details->>'fabricCharge')::decimal,
+    stitching_charge = (p_checkout_details->>'stitchingCharge')::decimal,
+    style_charge = (p_checkout_details->>'styleCharge')::decimal,
+    delivery_charge = (p_checkout_details->>'deliveryCharge')::decimal,
+    shelf_charge = (p_checkout_details->>'shelfCharge')::decimal,
+    home_delivery = COALESCE((p_checkout_details->>'homeDelivery')::boolean, false),
     order_date = NOW()
   WHERE id = p_order_id
   RETURNING * INTO v_order_row;

@@ -333,9 +333,7 @@ function NewSalesOrder() {
                 referralCode: data.referral_code ?? undefined,
                 notes: data.notes ?? undefined,
                 total: data.order_total,
-                shelfCharge: data.shelf_charge,
-                deliveryCharge: data.delivery_charge,
-                homeDelivery: data.home_delivery
+                shelfCharge: data.shelf_charge
             },
             shelfItems
         });

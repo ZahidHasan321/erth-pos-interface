@@ -68,6 +68,17 @@ export const orderSchema = z.object({
         path: ["payment_note"],
       });
     }
+
+    // Overpayment validation
+    if (typeof data.paid === 'number' && typeof data.order_total === 'number' && data.order_total > 0) {
+      if (data.paid > data.order_total) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Amount paid (${data.paid.toFixed(3)}) exceeds order total (${data.order_total.toFixed(3)})`,
+          path: ["paid"],
+        });
+      }
+    }
   }
 });
 

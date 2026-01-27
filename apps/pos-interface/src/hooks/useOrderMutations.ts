@@ -256,6 +256,14 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 discountValue?: number;
                 discountPercentage?: number;
                 referralCode?: string;
+                orderTotal?: number;
+                advance?: number;
+                fabricCharge?: number;
+                stitchingCharge?: number;
+                styleCharge?: number;
+                deliveryCharge?: number;
+                shelfCharge?: number;
+                homeDelivery?: boolean;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
@@ -267,9 +275,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 toast.error(`Failed to complete work order: ${response.message || "Unknown error"}`);
                 return;
             }
-            toast.success("Work order completed successfully! ✅");
-            
-            // Show notification if invoice number was just generated
+            toast.success("Work order completed successfully!");
+
             if (response.data?.invoice_number) {
                 showFatouraNotification(response.data.invoice_number);
             }
@@ -409,10 +416,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     total: number;
 
                     shelfCharge: number;
-
-                    deliveryCharge: number;
-
-                    homeDelivery: boolean;
 
                 };
 

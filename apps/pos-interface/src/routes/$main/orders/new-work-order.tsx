@@ -614,6 +614,14 @@ function NewWorkOrder() {
                 discountValue: data.discount_value ?? undefined,
                 discountPercentage: data.discount_percentage ?? undefined,
                 referralCode: data.referral_code ?? undefined,
+                orderTotal: data.order_total ?? 0,
+                advance: data.advance ?? undefined,
+                fabricCharge: data.fabric_charge ?? 0,
+                stitchingCharge: data.stitching_charge ?? 0,
+                styleCharge: data.style_charge ?? 0,
+                deliveryCharge: data.delivery_charge ?? 0,
+                shelfCharge: data.shelf_charge ?? 0,
+                homeDelivery: data.home_delivery,
             },
             shelfItems,
             fabricItems
@@ -861,6 +869,7 @@ function NewWorkOrder() {
                     }
                     orderType="Work Order"
                     homeDelivery={order.home_delivery}
+                    deliveryDate={order.delivery_date}
                     paymentType={order.payment_type ?? undefined}   // <--- Fix: Convert null to undefined
                     numOfFabrics={order.num_of_fabrics ?? 0}        // <--- Fix: Convert null to 0
                     totalAmount={
@@ -1036,6 +1045,7 @@ function NewWorkOrder() {
                                 address_note: customerDemographics?.address_note ?? undefined,
                             }}
                             fabricSelections={fabricSelections}
+                            deliveryDate={order.delivery_date}
                             orderType="WORK"
                             onConfirm={(data) => {
                                 const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;

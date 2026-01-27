@@ -2,12 +2,13 @@
 
 import { AnimatePresence, motion, type Transition } from "framer-motion";
 import { 
-  CheckIcon, 
-  AlertCircle, 
-  Check, 
-  Printer, 
-  X, 
-  Receipt, 
+  CheckIcon,
+  AlertCircle,
+  CalendarDays,
+  Check,
+  Printer,
+  X,
+  Receipt,
   Loader2,
   ArrowRight
 } from "lucide-react";
@@ -102,6 +103,7 @@ interface OrderSummaryAndPaymentFormProps {
   fatoura?: number;
   isLoadingFatoura?: boolean;
   orderType?: "WORK" | "SALES";
+  deliveryDate?: string | null;
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -117,6 +119,7 @@ export function OrderSummaryAndPaymentForm({
   fatoura,
   isLoadingFatoura,
   orderType,
+  deliveryDate,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice } = usePricing();
@@ -671,31 +674,61 @@ export function OrderSummaryAndPaymentForm({
                         <FormItem>
                           <div className="flex justify-between items-center">
                             <FormLabel className="text-base font-bold">Amount Paid</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                className="w-32 text-right font-bold text-lg h-12" 
-                                placeholder="0.000"
-                                {...field} 
-                                value={field.value ?? ""}
-                                onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
-                                onFocus={(e) => e.target.select()}
-                                disabled={isOrderClosed}
-                              />
-                            </FormControl>
+                            <div className="flex items-center gap-2">
+                              {!isOrderClosed && finalAmount > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs font-semibold"
+                                  onClick={() => field.onChange(parseFloat(finalAmount.toFixed(3)))}
+                                >
+                                  Pay Full
+                                </Button>
+                              )}
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  className={cn(
+                                    "w-32 text-right font-bold text-lg h-12",
+                                    balance < 0 && "border-destructive focus-visible:ring-destructive/20"
+                                  )}
+                                  placeholder="0.000"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
+                                  onFocus={(e) => e.target.select()}
+                                  disabled={isOrderClosed}
+                                />
+                              </FormControl>
+                            </div>
                           </div>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    {balance > 0 && (
-                      <div className="flex justify-between items-center mt-2 text-sm">
-                        <span className="text-muted-foreground">Remaining:</span>
-                        <span className="font-semibold text-destructive">
-                          {balance.toFixed(3)} KWD
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center mt-2 text-sm">
+                      {balance < 0 ? (
+                        <>
+                          <span className="text-destructive font-semibold">Overpayment:</span>
+                          <span className="font-bold text-destructive">
+                            {Math.abs(balance).toFixed(3)} KWD
+                          </span>
+                        </>
+                      ) : balance === 0 && safePaid > 0 ? (
+                        <>
+                          <span className="text-emerald-600 font-semibold">Paid in Full</span>
+                          <span className="font-bold text-emerald-600">0.000 KWD</span>
+                        </>
+                      ) : balance > 0 ? (
+                        <>
+                          <span className="text-muted-foreground">Remaining:</span>
+                          <span className="font-semibold text-destructive">
+                            {balance.toFixed(3)} KWD
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3">
@@ -745,6 +778,15 @@ export function OrderSummaryAndPaymentForm({
                 className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
               >
                 <h3 className="text-lg font-semibold mb-2">Summary</h3>
+                {deliveryDate && (
+                  <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-muted/50 border border-border">
+                    <CalendarDays className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-muted-foreground">Delivery Date:</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-2 text-sm border-b border-border pb-4">
                   {(order_type === "WORK" || Number(fabric_charge) > 0) && (
                     <div className="flex justify-between"><span>Fabric</span><span>{Number(fabric_charge || 0).toFixed(3)} KWD</span></div>
@@ -785,28 +827,57 @@ export function OrderSummaryAndPaymentForm({
                       <FormItem>
                         <div className="flex justify-between items-center">
                           <FormLabel className="text-base font-bold">Amount Paid (KWD)</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              className="w-32 text-right font-bold text-lg h-12" 
-                              placeholder="0.000"
-                              {...field} 
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
-                              onFocus={(e) => e.target.select()}
-                              disabled={isOrderClosed}
-                            />
-                          </FormControl>
+                          <div className="flex items-center gap-2">
+                            {!isOrderClosed && finalAmount > 0 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs font-semibold"
+                                onClick={() => field.onChange(parseFloat(finalAmount.toFixed(3)))}
+                              >
+                                Pay Full
+                              </Button>
+                            )}
+                            <FormControl>
+                              <Input
+                                type="number"
+                                className={cn(
+                                  "w-32 text-right font-bold text-lg h-12",
+                                  balance < 0 && "border-destructive focus-visible:ring-destructive/20"
+                                )}
+                                placeholder="0.000"
+                                {...field}
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
+                                onFocus={(e) => e.target.select()}
+                                disabled={isOrderClosed}
+                              />
+                            </FormControl>
+                          </div>
                         </div>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <div className="flex justify-between items-center mt-2 text-sm">
-                    <span className="text-muted-foreground">Remaining Balance:</span>
-                    <span className={cn("font-semibold", balance > 0 ? "text-destructive" : "text-primary")}>
-                      {Math.max(0, balance).toFixed(3)} KWD
-                    </span>
+                    {balance < 0 ? (
+                      <>
+                        <span className="text-destructive font-semibold">Overpayment:</span>
+                        <span className="font-bold text-destructive">
+                          {Math.abs(balance).toFixed(3)} KWD
+                        </span>
+                      </>
+                    ) : balance === 0 && safePaid > 0 ? (
+                      <span className="text-emerald-600 font-semibold">Paid in Full</span>
+                    ) : (
+                      <>
+                        <span className="text-muted-foreground">Remaining Balance:</span>
+                        <span className={cn("font-semibold", balance > 0 ? "text-destructive" : "text-primary")}>
+                          {balance.toFixed(3)} KWD
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 

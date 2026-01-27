@@ -188,6 +188,14 @@ export const completeWorkOrder = async (
         discountValue?: number;
         discountPercentage?: number;
         referralCode?: string;
+        orderTotal?: number;
+        advance?: number;
+        fabricCharge?: number;
+        stitchingCharge?: number;
+        styleCharge?: number;
+        deliveryCharge?: number;
+        shelfCharge?: number;
+        homeDelivery?: boolean;
     },
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]
@@ -249,8 +257,6 @@ export const createCompleteSalesOrder = async (
         notes?: string;
         total: number;
         shelfCharge: number;
-        deliveryCharge: number;
-        homeDelivery: boolean;
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
@@ -276,6 +282,7 @@ export const saveWorkOrderGarments = async (
         stitching_charge: number;
         style_charge: number;
         stitching_price: number;
+        delivery_date?: string;
     }
 ): Promise<ApiResponse<any>> => {
     const { data, error } = await supabase.rpc('save_work_order_garments', {

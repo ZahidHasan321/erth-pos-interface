@@ -68,6 +68,7 @@ import { FabricLabel } from "./fabric-selection/fabric-print-component";
 type FabricFormValues = {
     garments: GarmentSchema[];
     signature: string;
+    delivery_date?: string;
 };
 
 interface FabricSelectionFormProps {
@@ -289,6 +290,7 @@ export function FabricSelectionForm({
                 stitching_charge: totalStitchingCharge,
                 style_charge: totalStyleCharge,
                 stitching_price: stitchingPrice,
+                delivery_date: deliveryDate,
             });
         },
         onSuccess: async (response) => {
@@ -330,6 +332,11 @@ export function FabricSelectionForm({
     });
 
     const handleSaveSelections = (data: FabricFormValues) => {
+        if (!deliveryDate) {
+            toast.error("Please select a delivery date before saving");
+            return;
+        }
+
         // Aggregate stock validation before saving
         const usage = new Map<number, number>();
         let stockErrorFound = false;

@@ -1,4 +1,4 @@
-import { Package, CreditCard, TrendingUp, Wallet, ChevronDown } from "lucide-react";
+import { Package, CreditCard, TrendingUp, Wallet, ChevronDown, CalendarDays } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ type OrderInfoCardProps = {
   totalAmount?: number;
   advance?: number;
   balance?: number;
+  deliveryDate?: string | null;
   initialExpanded?: boolean;
 };
 
@@ -31,6 +32,7 @@ export function OrderInfoCard({
   totalAmount,
   advance,
   balance,
+  deliveryDate,
   initialExpanded = false,
 }: OrderInfoCardProps) {
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
@@ -137,6 +139,17 @@ export function OrderInfoCard({
                   <span className="text-xs text-muted-foreground min-w-16">Delivery:</span>
                   <span className="text-xs font-medium text-foreground">
                     {homeDelivery ? "Home Delivery" : "Pick Up"}
+                  </span>
+                </div>
+              )}
+
+              {/* Delivery Date */}
+              {deliveryDate && (
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground min-w-16">Delivery:</span>
+                  <span className="text-xs font-medium text-foreground">
+                    {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   </span>
                 </div>
               )}
