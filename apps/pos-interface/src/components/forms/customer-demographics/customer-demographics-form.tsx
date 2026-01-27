@@ -62,6 +62,7 @@ interface CustomerDemographicsFormProps {
   header?: string;
   subheader?: string;
   proceedButtonText?: string;
+  initialIsEditing?: boolean;
 }
 
 export function CustomerDemographicsForm({
@@ -77,8 +78,9 @@ export function CustomerDemographicsForm({
   header = "Demographics",
   subheader = "Customer information and contact details",
   proceedButtonText = "Confirm Order",
+  initialIsEditing,
 }: CustomerDemographicsFormProps) {
-  const [isEditing, setIsEditing] = useState(true);
+  const [isEditing, setIsEditing] = useState(initialIsEditing ?? true);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isPrimaryDetailsOpen, setIsPrimaryDetailsOpen] = useState(false);
   const [primaryAccount, setPrimaryAccount] = useState<Customer | null>(null);
@@ -101,12 +103,17 @@ export function CustomerDemographicsForm({
   // When id changes (loaded or saved), set to readonly mode. 
   // If id is cleared, set back to editing mode.
   React.useEffect(() => {
+    if (initialIsEditing !== undefined) {
+      setIsEditing(initialIsEditing);
+      return;
+    }
+
     if (id) {
       setIsEditing(false);
     } else {
       setIsEditing(true);
     }
-  }, [id]);
+  }, [id, initialIsEditing]);
 
   const {
     data: existingUsers,

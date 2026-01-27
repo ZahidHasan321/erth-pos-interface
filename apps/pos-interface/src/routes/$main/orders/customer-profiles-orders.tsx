@@ -12,6 +12,11 @@ import {
 } from '@/components/forms/customer-demographics/demographics-form.schema';
 import type { Customer } from '@repo/database';
 import { useWatch } from 'react-hook-form';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Pencil, Phone, MapPin, Users, Plus, User, Mail, MessageSquare } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const Route = createFileRoute('/$main/orders/customer-profiles-orders')({
     component: RouteComponent,
@@ -22,55 +27,223 @@ export const Route = createFileRoute('/$main/orders/customer-profiles-orders')({
     }),
 });
 
+function CustomerSummaryCard({ 
+    customer, 
+    onEdit 
+}: { 
+    customer: CustomerDemographicsSchema, 
+    onEdit: () => void 
+}) {
+    return (
+        <Card className="overflow-hidden border-primary/20 bg-linear-to-br from-card to-primary/5 shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="flex items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <User className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-2xl font-bold text-foreground">
+                            {customer.name}
+                        </CardTitle>
+                        {customer.arabic_name && (
+                            <p className="text-lg font-medium text-muted-foreground mt-1" dir="rtl">
+                                {customer.arabic_name}
+                            </p>
+                        )}
+                    </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={onEdit} className="gap-2 border-primary/30 hover:bg-primary/10">
+                    <Pencil className="h-4 w-4 text-primary" />
+                    Edit Profile
+                </Button>
+            </CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Mobile</p>
+                            <p className="font-mono font-bold text-foreground">
+                                {customer.country_code} {customer.phone}
+                            </p>
+                            {customer.whatsapp && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <div className="size-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-green-600 uppercase">WhatsApp Active</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Location</p>
+                            <p className="font-bold text-foreground">
+                                {customer.area || "N/A"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {customer.city || "No city specified"}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
+                            <Users className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Account Type</p>
+                            <div className="flex items-center gap-2">
+                                <span className={cn(
+                                    "text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-sm",
+                                    customer.account_type === 'Primary' 
+                                        ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                        : "bg-amber-50 text-amber-700 border-amber-200"
+                                )}>
+                                    {customer.account_type}
+                                </span>
+                                {customer.relation && (
+                                    <span className="text-xs text-muted-foreground font-medium italic">
+                                        • {customer.relation}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Email</p>
+                            <p className="text-sm font-medium text-foreground truncate max-w-[150px]">
+                                {customer.email || "No email provided"}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                {customer.notes && (
+                    <div className="mt-6 p-3 rounded-lg bg-muted/30 border border-border/50 flex gap-3">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Notes</p>
+                            <p className="text-sm text-muted-foreground italic leading-relaxed">
+                                "{customer.notes}"
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 function RouteComponent() {
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+
     const form = useForm<CustomerDemographicsSchema>({
         resolver: zodResolver(customerDemographicsSchema) as Resolver<CustomerDemographicsSchema>,
         defaultValues: customerDemographicsDefaults,
     });
 
-    const customerId = useWatch({
+    const customer = useWatch({
         control: form.control,
-        name: 'id'
-    });
+    }) as CustomerDemographicsSchema;
+
+    const customerId = customer.id;
 
     const handleCustomerFound = (customer: Customer) => {
         const formValues = mapCustomerToFormValues(customer);
         form.reset(formValues);
+        setIsEditingProfile(false);
     };
 
     const handleClear = () => {
         form.reset(customerDemographicsDefaults);
+        setIsEditingProfile(false);
     };
 
     const handleSave = (data: Partial<CustomerDemographicsSchema>) => {
         console.log('Customer saved:', data);
+        setIsEditingProfile(false);
+    };
+
+    const toggleEdit = () => {
+        setIsEditingProfile(!isEditingProfile);
     };
 
     return (
         <div className="space-y-8 py-8 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
             <section className="w-full">
-                <SearchCustomer
-                    onCustomerFound={handleCustomerFound}
-                    onHandleClear={handleClear}
-                    checkPendingOrders={false}
-                />
+                <div className="flex flex-col md:flex-row gap-4 items-end md:items-center justify-between mb-2">
+                    <div className="flex-1 w-full">
+                        <SearchCustomer
+                            onCustomerFound={handleCustomerFound}
+                            onHandleClear={handleClear}
+                            checkPendingOrders={false}
+                        />
+                    </div>
+                    {!customerId && !isEditingProfile && (
+                        <Button 
+                            onClick={() => setIsEditingProfile(true)} 
+                            className="h-12 px-6 gap-2 shadow-lg hover:shadow-primary/20 transition-all shrink-0"
+                        >
+                            <Plus className="h-5 w-5" />
+                            Create New Customer
+                        </Button>
+                    )}
+                </div>
             </section>
 
-            <section className="w-full">
-                <CustomerDemographicsForm
-                    form={form}
-                    onSave={handleSave}
-                    onClear={handleClear}
-                    isOrderClosed={false}
-                    header="Customer Profile"
-                    subheader="Manage personal information, contact details, and addresses"
-                />
-            </section>
+            {customerId && !isEditingProfile && (
+                <section className="w-full animate-in fade-in slide-in-from-top-4 duration-500">
+                    <CustomerSummaryCard 
+                        customer={customer} 
+                        onEdit={toggleEdit} 
+                    />
+                </section>
+            )}
 
-            {customerId && (
+            {isEditingProfile && (
+                <section className="w-full animate-in fade-in zoom-in-95 duration-300">
+                    <CustomerDemographicsForm
+                        form={form}
+                        onSave={handleSave}
+                        onCancel={() => setIsEditingProfile(false)}
+                        onClear={handleClear}
+                        isOrderClosed={false}
+                        initialIsEditing={true}
+                        header={customerId ? "Edit Customer Profile" : "Create New Customer"}
+                        subheader={customerId ? "Update personal information and contact details" : "Enter customer details to create a new profile"}
+                    />
+                </section>
+            )}
+
+            {customerId && !isEditingProfile && (
                 <section className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <CustomerOrderHistory customerId={customerId} />
                 </section>
+            )}
+
+            {!customerId && !isEditingProfile && (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 opacity-60">
+                    <div className="p-6 rounded-full bg-muted">
+                        <Users className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-semibold">No Customer Selected</h3>
+                        <p className="text-muted-foreground max-w-xs">
+                            Search for an existing customer or create a new one to view order history.
+                        </p>
+                    </div>
+                </div>
             )}
         </div>
     );

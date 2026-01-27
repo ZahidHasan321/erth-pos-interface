@@ -1,13 +1,21 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { supabase } from "../lib/supabase";
+import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
+
+const getBrand = (): "ERTH" | "SAKKBA" => {
+    const raw = localStorage.getItem('tanstack.auth.user');
+    const user = raw ? JSON.parse(raw) : null;
+    return user?.userType === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
+};
 
 export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact' })
+        .eq('brand', getBrand());
 
     if (error) {
         console.error('Error fetching orders:', error);
@@ -19,7 +27,7 @@ export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
 export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
-    let builder = supabase.from(TABLE_NAME).select('*', { count: 'exact' });
+    let builder = supabase.from(TABLE_NAME).select('*', { count: 'exact' }).eq('brand', getBrand());
 
     Object.entries(query).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
@@ -48,6 +56,7 @@ export const getOrderById = async (id: number, includeRelations: boolean = false
         .from(TABLE_NAME)
         .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
         .eq('id', id)
+        .eq('brand', getBrand())
         .maybeSingle();
 
     if (error) return { status: 'error', message: error.message };
@@ -59,6 +68,7 @@ export const getOrderByInvoice = async (invoiceNumber: number, includeRelations:
         .from(TABLE_NAME)
         .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
         .eq('invoice_number', invoiceNumber)
+        .eq('brand', getBrand())
         .maybeSingle();
 
     if (error) return { status: 'error', message: error.message };
@@ -70,7 +80,7 @@ export const createOrder = async (
 ): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .insert(order)
+        .insert({ ...order, brand: getBrand() })
         .select()
         .single();
 
@@ -89,6 +99,7 @@ export const updateOrder = async (
         .from(TABLE_NAME)
         .update(order)
         .eq('id', orderId)
+        .eq('brand', getBrand())
         .select()
         .single();
 
@@ -105,7 +116,8 @@ export const deleteOrder = async (
     const { error } = await supabase
         .from(TABLE_NAME)
         .delete()
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .eq('brand', getBrand());
 
     if (error) {
         throw new Error(`Failed to delete order ${orderId}: ${error.message}`);
@@ -131,6 +143,7 @@ export const getPendingOrdersByCustomer = async (
         .eq('customer_id', customerId)
         .eq('checkout_status', checkoutStatus)
         .eq('order_type', 'WORK')
+        .eq('brand', getBrand())
         .order('order_date', { ascending: false })
         .limit(limit);
 
@@ -175,7 +188,7 @@ export const getOrdersList = async (filters: Record<string, any>): Promise<ApiRe
     *,
     customer:customers(*),
     garments:garments(*)
-  `);
+  `).eq('brand', getBrand());
 
     Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -212,6 +225,13 @@ export const completeWorkOrder = async (
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]
 ): Promise<ApiResponse<Order>> => {
+    // We check for brand but complete_work_order RPC doesn't take brand yet, 
+    // it updates existing order. We should ensure we only update OUR brand order.
+    const check = await getOrderById(orderId);
+    if (check.status !== 'success' || !check.data) {
+        return { status: 'error', message: "Order not found or access denied" };
+    }
+
     const { data, error } = await supabase.rpc('complete_work_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
@@ -241,6 +261,11 @@ export const completeSalesOrder = async (
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
+    const check = await getOrderById(orderId);
+    if (check.status !== 'success' || !check.data) {
+        return { status: 'error', message: "Order not found or access denied" };
+    }
+
     const { data, error } = await supabase.rpc('complete_sales_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
@@ -269,12 +294,13 @@ export const createCompleteSalesOrder = async (
         notes?: string;
         total: number;
         shelfCharge: number;
+        brand?: string;
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase.rpc('create_complete_sales_order', {
         p_customer_id: customerId,
-        p_checkout_details: checkoutDetails,
+        p_checkout_details: { ...checkoutDetails, brand: getBrand() },
         p_shelf_items: shelfItems
     });
 
@@ -297,6 +323,11 @@ export const saveWorkOrderGarments = async (
         delivery_date?: string;
     }
 ): Promise<ApiResponse<any>> => {
+    const check = await getOrderById(orderId);
+    if (check.status !== 'success' || !check.data) {
+        return { status: 'error', message: "Order not found or access denied" };
+    }
+
     const { data, error } = await supabase.rpc('save_work_order_garments', {
         p_order_id: orderId,
         p_garments: garments,
