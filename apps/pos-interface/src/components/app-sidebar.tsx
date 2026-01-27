@@ -22,6 +22,7 @@ import {
   PackagePlus,
   FileText,
   Menu,
+  History,
 } from "lucide-react";
 
 import {
@@ -85,6 +86,11 @@ const data = {
           title: "Orders at Showroom",
           url: "orders/orders-at-showroom",
           icon: Store,
+        },
+        {
+          title: "Order History",
+          url: "orders/order-history",
+          icon: History,
         },
         {
           title: "Order Management",

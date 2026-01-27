@@ -63,7 +63,16 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 
+type OrderSearch = {
+    orderId?: number;
+};
+
 export const Route = createFileRoute("/$main/orders/new-work-order")({
+    validateSearch: (search: Record<string, unknown>): OrderSearch => {
+        return {
+            orderId: search.orderId ? Number(search.orderId) : undefined,
+        };
+    },
     component: NewWorkOrder,
     head: () => ({
         meta: [{ title: "New Work Order" }],
@@ -84,6 +93,7 @@ type ViewMode = "ACTIVE_ORDER";
 
 function NewWorkOrder() {
     const [viewMode, setViewMode] = React.useState<ViewMode>("ACTIVE_ORDER");
+    const { orderId: searchOrderId } = Route.useSearch();
     // ============================================================================
     // NAVIGATION
     // ============================================================================
@@ -135,6 +145,7 @@ function NewWorkOrder() {
     const resetWorkOrder = useCurrentWorkOrderStore((s) => s.resetWorkOrder);
     // Track loading state when fetching order data
     const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
+    const loadingOrderIdRef = React.useRef<number | null>(null);
     // ============================================================================
     // FORMS SETUP
     // ============================================================================
@@ -292,114 +303,154 @@ function NewWorkOrder() {
                 return;
             }
 
-            // Reset all forms and state before loading new order
-            demographicsForm.reset(customerDemographicsDefaults);
-            measurementsForm.reset({
-                ...customerMeasurementsDefaults,
-                measurement_date: new Date().toISOString(), // Set to today for new measurements
-            });
-            fabricSelectionForm.reset({
-                garments: [],
-                signature: "",
-            });
-            shelfForm.reset({ products: [] });
-            OrderForm.reset(orderDefaults);
-
-            // Clear saved steps
-            savedSteps.forEach((step) => removeSavedStep(step));
+            // Clear store state first
+            resetWorkOrder();
 
             const response = await getOrderDetails(order.id);
+            console.log("Work order details response:", response);
 
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
+                const isConfirmed = orderData.checkout_status === "confirmed";
 
-                // Set the order record ID in store
-                if (orderData && orderData.id) {
-                    setOrderId(orderData.id);
-                }
+                console.log("Work Order Data retrieved:", orderData);
 
-                // Populate customer demographics
+                // 1. Load Customer
                 if (orderData.customer) {
-                    const customer = orderData.customer;
-
-                    // Use the direct mapper
-                    const customerFormValues = mapCustomerToFormValues(customer);
-
-                    // Reset form with mapped values
+                    const customerFormValues = mapCustomerToFormValues(orderData.customer);
                     demographicsForm.reset(customerFormValues);
-
-                    // Update store with full customer data (including address)
                     setCustomerDemographics(customerFormValues);
-
                     addSavedStep(0);
 
                     // Check if customer has measurements to mark step 1 as complete
-                    const measurementsRes = await getMeasurementsByCustomerId(Number(customer.id));
+                    const measurementsRes = await getMeasurementsByCustomerId(Number(orderData.customer.id));
                     if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
-                        addSavedStep(1); // Mark measurement step as complete if any exist
+                        addSavedStep(1); 
                     }
-                    // Note: The measurement form will handle its own initialization via React Query
-                    // when customerId changes - it will fetch/cache and select the first measurement
+                } else {
+                    demographicsForm.reset(customerDemographicsDefaults);
                 }
 
-                // Populate order form
-                if (orderData) {
-                    const mappedOrder = mapOrderToFormValues(orderData);
-                    
-                    // Sync the stitching price to the store so the UI reflects it
-                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
-                    setStitchPrice(dbStitchingPrice);
-
-                    OrderForm.reset(mappedOrder);
-                }
-
-                // Populate fabric selections and style options if available
-                if (orderData.garments && orderData.garments.length > 0) {
-                    // Direct transformation for garments
-                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => {
-                        return mapGarmentToFormValues(g);
-                    });
-
-                    fabricSelectionForm.setValue("garments", mappedGarments);
-                    setFabricSelections(mappedGarments);
-                    // Do not addSavedStep(2) here because signature is required every time
-                }
-
-                // Populate payment form
-                if (orderData.payment_type) {
-                    OrderForm.setValue(
-                        "payment_type",
-                        orderData.payment_type as any,
-                    );
-                    OrderForm.setValue(
-                        "payment_ref_no",
-                        orderData.payment_ref_no || "",
-                    );
-                    OrderForm.setValue(
-                        "order_taker_id",
-                        orderData.order_taker_id || "",
-                    );
-                }
-
-                // Navigate to first incomplete step or measurements
-                setViewMode("ACTIVE_ORDER");
-                setCurrentStep(1);
-
-                toast.success(`Order loaded successfully`);
-
-                // Clear loading states after successful load
-                setIsLoadingOrderData(false);
-            } else {
+                                // 2. Load Garments
+                                if (orderData.garments && orderData.garments.length > 0) {
+                                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => mapGarmentToFormValues(g));
+                                    fabricSelectionForm.setValue("garments", mappedGarments);
+                                    setFabricSelections(mappedGarments);
+                                    
+                                    // Mark as complete if confirmed, or if it's a reload of a draft that had garments saved
+                                    addSavedStep(2); 
+                                } else {
+                                    fabricSelectionForm.reset({ garments: [], signature: "" });
+                                }
+                
+                                // 3. Load Shelf Items
+                                if (orderData.shelf_items && orderData.shelf_items.length > 0) {
+                                    const mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
+                                        id: si.shelf_id.toString(),
+                                        serial_number: si.shelf?.serial_number || "",
+                                        product_type: si.shelf?.type || "",
+                                        brand: si.shelf?.brand || "",
+                                        quantity: si.quantity,
+                                        stock: si.shelf?.stock || 0,
+                                        unit_price: Number(si.unit_price),
+                                    }));
+                                    shelfForm.reset({ products: mappedShelfProducts });
+                                    
+                                    // Only mark Shelf step as saved if the order is already confirmed
+                                    if (isConfirmed) {
+                                        addSavedStep(3);
+                                    }
+                                } else {
+                                    shelfForm.reset({ products: [] });
+                                }
+                
+                                // 4. Load Order Info
+                                if (orderData) {
+                                    const mappedOrder = mapOrderToFormValues(orderData);
+                                    
+                                    // Sync the stitching price to the store so the UI reflects it
+                                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
+                                    setStitchPrice(dbStitchingPrice);
+                
+                                    OrderForm.reset(mappedOrder);
+                                    setOrder(mappedOrder);
+                                    setOrderId(orderData.id);
+                
+                                    // If order is confirmed, ensure every step is marked as complete
+                                    if (isConfirmed) {
+                                        addSavedStep(0);
+                                        addSavedStep(1);
+                                        addSavedStep(2);
+                                        addSavedStep(3);
+                                        addSavedStep(4);
+                                    }
+                                } else {
+                                    OrderForm.reset(orderDefaults);
+                                }
+                
+                                // Navigate to review step if confirmed, otherwise to measurements
+                                setViewMode("ACTIVE_ORDER");
+                                setCurrentStep(isConfirmed ? 4 : 1);
+                
+                                toast.success(`Order loaded successfully`);            } else {
                 toast.error("Failed to load order details");
-                setIsLoadingOrderData(false);
             }
         } catch (error) {
             console.error("Error loading pending order:", error);
             toast.error("Failed to load order. Please try again.");
+        } finally {
             setIsLoadingOrderData(false);
         }
     };
 
+    const loadCustomerFresh = (customer: Customer) => {
+        resetWorkOrder();
+        resetLocalState();
+        const formValues = mapCustomerToFormValues(customer);
+        demographicsForm.reset(formValues);
+        setCustomerDemographics(formValues);
+        toast.success(`Customer loaded: ${customer.name}`);
+        setViewMode("ACTIVE_ORDER");
+        setCurrentStep(0);
+    };
+
+    const handleTopLevelCustomerFound = (customer: Customer) => {
+        if (orderId) {
+            openDialog(
+                "Start New Order?",
+                `You have an order in progress. Discard it and start a new order for ${customer.name}?`,
+                () => {
+                    loadCustomerFresh(customer);
+                    closeDialog();
+                }
+            );
+        } else {
+            loadCustomerFresh(customer);
+        }
+    };
+
+    const handleTopLevelPendingOrderSelected = (order: Order) => {
+        if (orderId) {
+            openDialog(
+                "Switch Order?",
+                "You have an order in progress. Discard it and load the selected pending order?",
+                () => {
+                    handlePendingOrderSelected(order);
+                    closeDialog();
+                }
+            );
+        } else {
+            handlePendingOrderSelected(order);
+        }
+    };
+
+    // Load order from search params if provided
+    React.useEffect(() => {
+        if (searchOrderId && !orderId && loadingOrderIdRef.current !== searchOrderId) {
+            loadingOrderIdRef.current = searchOrderId;
+            handlePendingOrderSelected({ id: searchOrderId } as Order);
+        }
+    }, [searchOrderId, orderId, handlePendingOrderSelected]);
 
     // ============================================================================
     // DEMOGRAPHICS FORM HANDLERS
@@ -540,8 +591,12 @@ function NewWorkOrder() {
         // Prepare items for deduction
         const shelfItems = shelfForm.getValues().products
             .filter(p => p.id && p.quantity)
-            // Fix: Convert p.id to Number
-            .map(p => ({ id: Number(p.id!), quantity: p.quantity! }));
+            // Fix: Convert p.id to Number and include unitPrice for RPC
+            .map(p => ({ 
+                id: Number(p.id!), 
+                quantity: p.quantity!,
+                unitPrice: p.unit_price ?? 0
+            }));
 
         const fabricItems = fabricSelectionForm.getValues().garments
             .filter(g => g.fabric_id && g.fabric_length && g.fabric_source === 'IN')
@@ -554,7 +609,11 @@ function NewWorkOrder() {
                 paid: data.paid ?? 0,
                 paymentRefNo: data.payment_ref_no ?? undefined,
                 paymentNote: data.payment_note ?? undefined,
-                orderTaker: data.order_taker_id ?? undefined
+                orderTaker: data.order_taker_id ?? undefined,
+                discountType: data.discount_type ?? undefined,
+                discountValue: data.discount_value ?? undefined,
+                discountPercentage: data.discount_percentage ?? undefined,
+                referralCode: data.referral_code ?? undefined,
             },
             shelfItems,
             fabricItems
@@ -576,7 +635,7 @@ function NewWorkOrder() {
     // ============================================================================
     // Sync shelf amount to order charges (flattened)
     React.useEffect(() => {
-        OrderForm.setValue("shelf_charge", totalShelfAmount);
+        OrderForm.setValue("shelf_charge", totalShelfAmount, { shouldDirty: false });
     }, [totalShelfAmount]);
 
     // Reset measurements when customer changes
@@ -818,21 +877,33 @@ function NewWorkOrder() {
 
             {/* Step Content */}
             <div className="flex flex-col items-center gap-10 md:gap-16 pt-20 pb-12 mx-[5%] md:mx-[10%] 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-10 2xl:gap-y-12 2xl:max-w-screen-2xl 2xl:mx-auto">
-                <div className="w-full mt-0 2xl:col-span-2">
-                    <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
-                        <SearchCustomer
-                            onCustomerFound={handleCustomerFound}
-                            onHandleClear={() => {
-                                demographicsForm.reset(customerDemographicsDefaults);
-                                // Optionally reset other stores if needed
-                                setCustomerDemographics(customerDemographicsDefaults);
-                            }}
-                            checkPendingOrders={true}
-                            onPendingOrderSelected={handlePendingOrderSelected}
-                            isResetDisabled={!!orderId}
-                        />
-                    </ErrorBoundary>
-                </div>
+                {!isOrderClosed && (
+                    <div className="w-full mt-0 2xl:col-span-2">
+                        <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
+                            <SearchCustomer
+                                onCustomerFound={handleTopLevelCustomerFound}
+                                onHandleClear={() => {
+                                    if (orderId) {
+                                        openDialog(
+                                            "Clear Search?",
+                                            "This will clear the current customer search and reset the demographics form. Continue?",
+                                            () => {
+                                                demographicsForm.reset(customerDemographicsDefaults);
+                                                setCustomerDemographics(customerDemographicsDefaults);
+                                                closeDialog();
+                                            }
+                                        );
+                                    } else {
+                                        demographicsForm.reset(customerDemographicsDefaults);
+                                        setCustomerDemographics(customerDemographicsDefaults);
+                                    }
+                                }}
+                                checkPendingOrders={true}
+                                onPendingOrderSelected={handleTopLevelPendingOrderSelected}
+                            />
+                        </ErrorBoundary>
+                    </div>
+                )}
 
                 {/* STEP 0: Demographics */}
                 <div
@@ -849,10 +920,13 @@ function NewWorkOrder() {
                         onCustomerChange={handleCustomerFound}
                         onSave={(data) => {
                             setCustomerDemographics(data);
-                            addSavedStep(0);
+                            // Only add saved step if we already have an order
+                            if (orderId) addSavedStep(0);
                         }}
                         onEdit={() => removeSavedStep(0)}
-                        onCancel={() => addSavedStep(0)}
+                        onCancel={() => {
+                            if (orderId) addSavedStep(0);
+                        }}
                         onProceed={handleDemographicsProceed}
                         onClear={() => {
                             removeSavedStep(0);
@@ -962,6 +1036,7 @@ function NewWorkOrder() {
                                 address_note: customerDemographics?.address_note ?? undefined,
                             }}
                             fabricSelections={fabricSelections}
+                            orderType="WORK"
                             onConfirm={(data) => {
                                 const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
                                 openDialog(

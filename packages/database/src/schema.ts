@@ -249,6 +249,7 @@ export const orders = pgTable("orders", {
     payment_note: text("payment_note"),
     discount_type: discountTypeEnum("discount_type"),
     discount_value: numeric("discount_value", { precision: 10, scale: 3 }),
+    discount_percentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
     referral_code: text("referral_code"),
     paid: numeric("paid", { precision: 10, scale: 3 }),
     stitching_price: numeric("stitching_price", { precision: 10, scale: 3 }),
@@ -271,7 +272,6 @@ export const orders = pgTable("orders", {
 
     // Workshop interaction
     call_status: text("call_status"),
-    deleted_at: timestamp("deleted_at"),
 }, (t) => ({
     invoiceIdx: uniqueIndex("orders_invoice_idx").on(t.invoice_number),
     customerIdx: index("orders_customer_idx").on(t.customer_id),

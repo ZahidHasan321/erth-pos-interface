@@ -33,7 +33,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import { getEmployees } from "@/api/employees";
-import { OrderInvoice, type InvoiceData } from "@/components/invoice";
+import { OrderInvoice, SalesInvoice, type InvoiceData } from "@/components/invoice";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
 import { usePricing } from "@/hooks/usePricing";
 
@@ -101,6 +101,7 @@ interface OrderSummaryAndPaymentFormProps {
   fabricSelections?: FabricSelectionSchema[];
   fatoura?: number;
   isLoadingFatoura?: boolean;
+  orderType?: "WORK" | "SALES";
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -115,6 +116,7 @@ export function OrderSummaryAndPaymentForm({
   fabricSelections = [],
   fatoura,
   isLoadingFatoura,
+  orderType,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice } = usePricing();
@@ -151,6 +153,8 @@ export function OrderSummaryAndPaymentForm({
     ],
   });
 
+  const effectiveOrderType = orderType || order_type || "WORK";
+
   const hasFatoura = !!fatoura;
 
   // Fetch employees data
@@ -180,7 +184,7 @@ export function OrderSummaryAndPaymentForm({
 
   React.useEffect(() => {
     if (hasAnyHomeDelivery && !home_delivery) {
-      form.setValue("home_delivery", true);
+      form.setValue("home_delivery", true, { shouldDirty: false });
     }
   }, [hasAnyHomeDelivery, home_delivery, form]);
 
@@ -194,7 +198,7 @@ export function OrderSummaryAndPaymentForm({
       newDeliveryCharge += (getPrice("EXPRESS_SURCHARGE") || 2); 
     }
     
-    form.setValue("delivery_charge", newDeliveryCharge);
+    form.setValue("delivery_charge", newDeliveryCharge, { shouldDirty: false });
   }, [home_delivery, hasAnyHomeDelivery, hasAnyExpressDelivery, form, getPrice]);
 
   // Pricing logic
@@ -205,44 +209,59 @@ export function OrderSummaryAndPaymentForm({
                    (Number(shelf_charge) || 0);
 
   const previousDiscountType = React.useRef(discount_type);
-  React.useEffect(() => {
-    if (previousDiscountType.current !== discount_type) {
-      form.setValue("discount_value", 0);
-      form.setValue("discount_percentage", 0);
-      form.setValue("discount_in_kwd", undefined);
-      form.setValue("referral_code", null);
-      previousDiscountType.current = discount_type;
+
+  const toggleDiscountType = (type: OrderSchemaType["discount_type"]) => {
+    if (isOrderClosed) return;
+    
+    const currentType = form.getValues("discount_type");
+    const newType = currentType === type ? undefined : type;
+    
+    form.setValue("discount_type", newType, { shouldDirty: true });
+    
+    // Explicitly reset values ONLY when the user clicks to change/disable the type
+    if (newType !== currentType) {
+      form.setValue("discount_value", undefined, { shouldDirty: true });
+      form.setValue("discount_percentage", undefined, { shouldDirty: true });
+      form.setValue("discount_in_kwd", undefined, { shouldDirty: false });
+      form.setValue("referral_code", null, { shouldDirty: true });
     }
-  }, [discount_type, form]);
+  };
 
   React.useEffect(() => {
     if (
       (discount_type === "flat" || discount_type === "referral" || discount_type === "loyalty") &&
-      discount_percentage !== undefined && discount_percentage !== null
+      discount_percentage !== undefined && discount_percentage !== null &&
+      totalDue > 0
     ) {
       const discount = parseFloat(
-        (totalDue * (Number(discount_percentage) / 100)).toFixed(2)
+        (totalDue * (Number(discount_percentage) / 100)).toFixed(3)
       );
-      form.setValue("discount_value", discount);
-      form.setValue("discount_in_kwd", discount.toFixed(2));
+      // Only set if different to avoid render loops
+      if (form.getValues("discount_value") !== discount) {
+        form.setValue("discount_value", discount, { shouldDirty: false });
+        form.setValue("discount_in_kwd", discount.toFixed(3), { shouldDirty: false });
+      }
     }
   }, [discount_percentage, totalDue, discount_type, form]);
 
   React.useEffect(() => {
     if (discount_type === "by_value" && discount_value !== undefined && discount_value !== null) {
-      form.setValue("discount_in_kwd", Number(discount_value).toFixed(2));
+      const valStr = Number(discount_value).toFixed(3);
+      if (form.getValues("discount_in_kwd") !== valStr) {
+        form.setValue("discount_in_kwd", valStr, { shouldDirty: false });
+      }
     }
   }, [discount_value, discount_type, form]);
 
-  const safeDiscountValue = Number(discount_value) || 0;
-  const safePaid = Number(paid) || 0;
+  const safeDiscountValue = typeof discount_value === 'number' ? discount_value : 0;
+  const safePaid = typeof paid === 'number' ? paid : 0;
   const finalAmount = totalDue - safeDiscountValue;
   const balance = finalAmount - safePaid;
 
   React.useEffect(() => {
     const validTotal = finalAmount < 0 ? 0 : finalAmount;
     if (form.getValues("order_total") !== validTotal) {
-      form.setValue("order_total", validTotal);
+      form.setValue("order_total", validTotal, { shouldDirty: false });
     }
   }, [finalAmount, form]);
 
@@ -303,7 +322,7 @@ export function OrderSummaryAndPaymentForm({
           {/* LEFT COLUMN: Delivery & Discounts */}
           <div className="space-y-6">
             {/* Delivery Section - Hidden for Sales Orders */}
-            {order_type !== "SALES" && (
+            {effectiveOrderType !== "SALES" && (
               <motion.section
                 className="bg-card rounded-xl border border-border shadow-sm p-6"
               >
@@ -412,7 +431,7 @@ export function OrderSummaryAndPaymentForm({
                           <div key={opt.value}>
                             <button
                               type="button"
-                              onClick={() => !isOrderClosed && field.onChange(active ? undefined : opt.value)}
+                              onClick={() => toggleDiscountType(opt.value)}
                               className={cn(
                                 "flex items-center justify-between rounded-lg border p-4 transition-all w-full",
                                 active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background",
@@ -627,7 +646,7 @@ export function OrderSummaryAndPaymentForm({
               </div>
 
               {/* Sales Order specific totals and buttons */}
-              {order_type === "SALES" && (
+              {effectiveOrderType === "SALES" && (
                 <div className="mt-8 pt-6 border-t border-border space-y-6">
                   <div className="space-y-2">
                     <div className="flex justify-between font-semibold text-sm">
@@ -721,7 +740,7 @@ export function OrderSummaryAndPaymentForm({
             </motion.section>
 
             {/* Charges Summary - Hidden for Sales Orders */}
-            {order_type !== "SALES" && (
+            {effectiveOrderType !== "SALES" && (
               <motion.section
                 className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
               >
@@ -835,10 +854,14 @@ export function OrderSummaryAndPaymentForm({
         </div>
 
         {/* Hidden Invoice Component */}
-        <div className="hidden">
+        <div style={{ display: 'none' }}>
           <div ref={invoiceRef}>
-            {invoiceData && (isOrderClosed && hasFatoura) && (
-              <OrderInvoice data={{ ...invoiceData, fatoura }} />
+            {invoiceData && (
+              effectiveOrderType === "SALES" ? (
+                <SalesInvoice data={{ ...invoiceData, fatoura }} />
+              ) : (
+                <OrderInvoice data={{ ...invoiceData, fatoura }} />
+              )
             )}
           </div>
         </div>

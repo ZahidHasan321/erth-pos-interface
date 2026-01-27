@@ -13,10 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import type { Order } from "@repo/database";
-import { Calendar, Package, Trash2, Loader2, Banknote, Truck, Scissors } from "lucide-react";
+import { Calendar, Package, Trash2, Loader2, Banknote, Truck, Scissors, XCircle } from "lucide-react";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { cn } from "@/lib/utils";
-import { softDeleteOrder } from "@/api/orders";
+import { updateOrder } from "@/api/orders";
 import { toast } from "sonner";
 
 interface PendingOrdersDialogProps {
@@ -25,7 +25,7 @@ interface PendingOrdersDialogProps {
     orders: Order[];
     onSelectOrder: (order: Order) => void;
     onCreateNewOrder?: () => void;
-    onOrderDeleted?: () => void; // Added callback
+    onOrderCancelled?: () => void;
     customerName?: string;
     isLoading?: boolean;
 }
@@ -59,24 +59,24 @@ interface OrderCardProps {
     order: Order;
     isSelected: boolean;
     onSelect: (order: Order) => void;
-    onDelete?: (orderId: number) => void; // Added
-    isDeleting?: boolean; // Added
+    onCancel?: (orderId: number) => void;
+    isCancelling?: boolean;
     formatDate: (dateString?: string) => string;
 }
 
 const OrderCard = React.memo<OrderCardProps>(
-    ({ order, isSelected, onSelect, onDelete, isDeleting, formatDate }) => {
+    ({ order, isSelected, onSelect, onCancel, isCancelling, formatDate }) => {
         const handleClick = React.useCallback(() => {
-            if (isDeleting) return;
+            if (isCancelling) return;
             onSelect(order);
-        }, [order, onSelect, isDeleting]);
+        }, [order, onSelect, isCancelling]);
 
-        const handleDelete = React.useCallback((e: React.MouseEvent) => {
+        const handleCancel = React.useCallback((e: React.MouseEvent) => {
             e.stopPropagation();
-            if (onDelete && order.id) {
-                onDelete(order.id);
+            if (onCancel && order.id) {
+                onCancel(order.id);
             }
-        }, [order.id, onDelete]);
+        }, [order.id, onCancel]);
 
         const totalAmount = (
             Number(order.fabric_charge || 0) +
@@ -97,7 +97,7 @@ const OrderCard = React.memo<OrderCardProps>(
                     isSelected
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-border bg-card hover:bg-muted/30",
-                    isDeleting && "opacity-50 pointer-events-none"
+                    isCancelling && "opacity-50 pointer-events-none"
                 )}
             >
                 <div className="flex justify-between items-start mb-3">
@@ -128,14 +128,15 @@ const OrderCard = React.memo<OrderCardProps>(
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                title="Cancel Order"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={handleDelete}
-                                disabled={isDeleting}
+                                onClick={handleCancel}
+                                disabled={isCancelling}
                             >
-                                {isDeleting ? (
+                                {isCancelling ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                    <Trash2 className="h-4 w-4" />
+                                    <XCircle className="h-4 w-4" />
                                 )}
                             </Button>
                         )}
@@ -180,39 +181,39 @@ export function PendingOrdersDialog({
     orders,
     onSelectOrder,
     onCreateNewOrder,
-    onOrderDeleted,
+    onOrderCancelled,
     customerName,
     isLoading = false,
 }: PendingOrdersDialogProps) {
     const [selectedIndex, setSelectedIndex] = React.useState(0);
-    const [deletingOrderId, setDeletingOrderId] = React.useState<number | null>(null);
-    const [orderToDelete, setOrderToDelete] = React.useState<number | null>(null);
+    const [cancellingOrderId, setCancellingOrderId] = React.useState<number | null>(null);
+    const [orderToCancel, setOrderToCancel] = React.useState<number | null>(null);
 
-    const handleDeleteOrder = React.useCallback((orderId: number) => {
-        setOrderToDelete(orderId);
+    const handleCancelOrder = React.useCallback((orderId: number) => {
+        setOrderToCancel(orderId);
     }, []);
 
-    const confirmDelete = React.useCallback(async () => {
-        if (!orderToDelete) return;
+    const confirmCancel = React.useCallback(async () => {
+        if (!orderToCancel) return;
         
-        const orderId = orderToDelete;
-        setOrderToDelete(null);
-        setDeletingOrderId(orderId);
+        const orderId = orderToCancel;
+        setOrderToCancel(null);
+        setCancellingOrderId(orderId);
         try {
-            const res = await softDeleteOrder(orderId);
+            const res = await updateOrder({ checkout_status: 'cancelled' }, orderId);
             if (res.status === "success") {
-                toast.success("Order removed from list");
-                onOrderDeleted?.();
+                toast.success("Order cancelled successfully");
+                onOrderCancelled?.();
             } else {
-                toast.error(res.message || "Failed to remove order");
+                toast.error(res.message || "Failed to cancel order");
             }
         } catch (error) {
-            console.error("Error removing order:", error);
-            toast.error("Failed to remove order");
+            console.error("Error cancelling order:", error);
+            toast.error("Failed to cancel order");
         } finally {
-            setDeletingOrderId(null);
+            setCancellingOrderId(null);
         }
-    }, [orderToDelete, onOrderDeleted]);
+    }, [orderToCancel, onOrderCancelled]);
 
     React.useEffect(() => {
         if (isOpen && orders.length > 0) {
@@ -325,8 +326,8 @@ export function PendingOrdersDialog({
                                         order={order}
                                         isSelected={selectedIndex === index}
                                         onSelect={handleSelectOrder}
-                                        onDelete={handleDeleteOrder}
-                                        isDeleting={deletingOrderId === order.id}
+                                        onCancel={handleCancelOrder}
+                                        isCancelling={cancellingOrderId === order.id}
                                         formatDate={formatDate}
                                     />
                                 ))
@@ -344,7 +345,7 @@ export function PendingOrdersDialog({
                                 onClick={() => onOpenChange(false)}
                                 disabled={isLoading}
                             >
-                                Cancel
+                                Close
                             </Button>
                             {onCreateNewOrder && (
                                 <Button
@@ -360,12 +361,12 @@ export function PendingOrdersDialog({
             </Dialog>
 
             <ConfirmationDialog
-                isOpen={orderToDelete !== null}
-                onClose={() => setOrderToDelete(null)}
-                onConfirm={confirmDelete}
-                title="Remove Pending Order"
-                description="Are you sure you want to remove this pending order? This action cannot be undone."
-                confirmText="Remove"
+                isOpen={orderToCancel !== null}
+                onClose={() => setOrderToCancel(null)}
+                onConfirm={confirmCancel}
+                title="Cancel Pending Order"
+                description="Are you sure you want to cancel this pending order? This will move it to cancelled status."
+                confirmText="Cancel Order"
             />
         </>
     );

@@ -1,9 +1,10 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, Eye } from "lucide-react";
 import type { OrderRow } from "./types";
 import { CallCell, ReminderCell } from "./order-reminder-cells";
+import { Link } from "@tanstack/react-router";
 
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { 
@@ -238,5 +239,28 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
         colorClass="text-destructive hover:text-destructive hover:bg-destructive/10"
       />
     ),
+  },
+  {
+    id: "open",
+    header: "",
+    cell: ({ row }) => {
+      const order = row.original;
+      const routeMap = {
+        WORK: "/$main/orders/new-work-order",
+        SALES: "/$main/orders/new-sales-order",
+      };
+      const to = routeMap[order.orderType as keyof typeof routeMap] || "/$main/orders/new-work-order";
+      
+      return (
+        <Link 
+          to={to} 
+          search={{ orderId: Number(order.orderId) }}
+          className="p-2 hover:bg-muted rounded-full transition-colors flex items-center justify-center"
+          title="Open Order"
+        >
+          <Eye className="h-4 w-4 text-primary" />
+        </Link>
+      );
+    },
   },
 ];

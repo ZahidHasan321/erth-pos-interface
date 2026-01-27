@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 /**
  * Calculate delay in days between promised delivery date and today
  */
-function calculateDelay(promisedDeliveryDate: string): number {
+export function calculateDelay(promisedDeliveryDate: string): number {
   const promised = new Date(promisedDeliveryDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -21,7 +21,7 @@ function calculateDelay(promisedDeliveryDate: string): number {
 /**
  * Calculate total order amount from charges
  */
-function calculateTotal(order: any): number {
+export function calculateTotal(order: any): number {
   return (
     (parseFloat(order.fabric_charge?.toString() || "0")) +
     (parseFloat(order.stitching_charge?.toString() || "0")) +
@@ -34,7 +34,7 @@ function calculateTotal(order: any): number {
 /**
  * Transform Supabase data into OrderRow array for the showroom table.
  */
-function transformToOrderRows(ordersData: any[]): OrderRow[] {
+export function transformToOrderRows(ordersData: any[]): OrderRow[] {
   const orderRows: OrderRow[] = [];
 
   for (const order of ordersData) {
@@ -65,19 +65,46 @@ function transformToOrderRows(ordersData: any[]): OrderRow[] {
     // Calculate total
     const totalAmount = parseFloat(order.order_total?.toString() || "0") || (calculateTotal(order) - (parseFloat(order.discount_value?.toString() || "0")));
 
+    // Compatibility shim for components still using .fields (Airtable legacy)
+    const orderWithFields = {
+      ...order,
+      fields: {
+        ...order,
+        FatouraStages: ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || order.production_stage,
+        Paid: parseFloat(order.paid?.toString() || "0"),
+        R1Date: order.r1_date,
+        R1Notes: order.r1_notes,
+        R2Date: order.r2_date,
+        R2Notes: order.r2_notes,
+        R3Date: order.r3_date,
+        R3Notes: order.r3_notes,
+        CallReminderDate: order.call_reminder_date,
+        CallStatus: order.call_status,
+        CallNotes: order.call_notes,
+        EscalationDate: order.escalation_date,
+        EscalationNotes: order.escalation_notes,
+      }
+    };
+
     const orderRow: OrderRow = {
       // Order info
-      orderId: order.id,
+      orderId: order.id.toString(),
+      orderRecordId: order.id.toString(),
       invoiceNumber: order.invoice_number,
       productionStage: order.production_stage
         ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
         : "Unknown",
+      fatouraStage: order.production_stage
+        ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
+        : "Unknown",
+      orderStatus: order.checkout_status === "confirmed" ? "Completed" : order.checkout_status === "cancelled" ? "Cancelled" : "Pending",
       checkoutStatus: order.checkout_status,
       orderDate: order.order_date,
       deliveryDate: order.delivery_date,
+      fatoura: order.invoice_number,
 
       // Customer info
-      customerId: customer?.id || 0,
+      customerId: customer?.id?.toString() || "0",
       customerName,
       customerNickName,
       mobileNumber,
@@ -96,7 +123,7 @@ function transformToOrderRows(ordersData: any[]): OrderRow[] {
       garments: garmentRowsData,
 
       // Full records
-      order,
+      order: orderWithFields as any,
       customer,
     };
 

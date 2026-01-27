@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { FatouraStage } from "@/types/stages";
+import { ProductionStageLabels } from "@/lib/constants";
 
 
 export type FilterState = {
@@ -222,7 +222,7 @@ export function OrderFilters({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Stages</SelectItem>
-                        {Object.values(FatouraStage)
+                        {Object.values(ProductionStageLabels)
                           .filter(stage => 
                             stage.toLowerCase().includes("brova") || 
                             stage.toLowerCase().includes("alteration")

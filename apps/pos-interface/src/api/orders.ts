@@ -100,24 +100,6 @@ export const deleteOrder = async (
 };
 
 /**
- * Soft delete an order by setting deleted_at timestamp
- */
-export const softDeleteOrder = async (
-    orderId: number,
-): Promise<ApiResponse<void>> => {
-    const { error } = await supabase
-        .from(TABLE_NAME)
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', orderId);
-
-    if (error) {
-        return { status: 'error', message: error.message };
-    }
-
-    return { status: 'success' };
-};
-
-/**
  * Fetch pending work orders for a specific customer
  */
 export const getPendingOrdersByCustomer = async (
@@ -131,7 +113,6 @@ export const getPendingOrdersByCustomer = async (
         .eq('customer_id', customerId)
         .eq('checkout_status', checkoutStatus)
         .eq('order_type', 'WORK')
-        .is('deleted_at', null)
         .order('order_date', { ascending: false })
         .limit(limit);
 
@@ -153,7 +134,8 @@ export const getOrderDetails = async (idOrInvoice: string | number): Promise<Api
     let builder = supabase.from(TABLE_NAME).select(`
     *,
     customer:customers(*),
-    garments:garments(*)
+    garments:garments(*),
+    shelf_items:order_shelf_items(*, shelf:shelf(*))
   `);
 
     const numericVal = typeof idOrInvoice === 'string' ? parseInt(idOrInvoice) : idOrInvoice;
@@ -202,6 +184,10 @@ export const completeWorkOrder = async (
         paymentRefNo?: string;
         paymentNote?: string;
         orderTaker?: string;
+        discountType?: string;
+        discountValue?: number;
+        discountPercentage?: number;
+        referralCode?: string;
     },
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]
@@ -228,6 +214,10 @@ export const completeSalesOrder = async (
         paymentRefNo?: string;
         paymentNote?: string;
         orderTaker?: string;
+        discountType?: string;
+        discountValue?: number;
+        discountPercentage?: number;
+        referralCode?: string;
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
@@ -239,6 +229,39 @@ export const completeSalesOrder = async (
 
     if (error) {
         console.error('Error completing sales order:', error);
+        return { status: 'error', message: error.message };
+    }
+    return { status: 'success', data: data as any };
+};
+
+export const createCompleteSalesOrder = async (
+    customerId: number,
+    checkoutDetails: {
+        paymentType: string;
+        paid: number | null | undefined;
+        paymentRefNo?: string;
+        paymentNote?: string;
+        orderTaker?: string;
+        discountType?: string;
+        discountValue?: number;
+        discountPercentage?: number;
+        referralCode?: string;
+        notes?: string;
+        total: number;
+        shelfCharge: number;
+        deliveryCharge: number;
+        homeDelivery: boolean;
+    },
+    shelfItems: { id: number; quantity: number; unitPrice: number }[]
+): Promise<ApiResponse<Order>> => {
+    const { data, error } = await supabase.rpc('create_complete_sales_order', {
+        p_customer_id: customerId,
+        p_checkout_details: checkoutDetails,
+        p_shelf_items: shelfItems
+    });
+
+    if (error) {
+        console.error('Error creating complete sales order:', error);
         return { status: 'error', message: error.message };
     }
     return { status: 'success', data: data as any };

@@ -39,8 +39,18 @@ import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import { getOrderDetails } from "@/api/orders";
+
+type OrderSearch = {
+    orderId?: number;
+};
 
 export const Route = createFileRoute("/$main/orders/new-sales-order")({
+    validateSearch: (search: Record<string, unknown>): OrderSearch => {
+        return {
+            orderId: search.orderId ? Number(search.orderId) : undefined,
+        };
+    },
     component: NewSalesOrder,
     head: () => ({
         meta: [{ title: "New Sales Order" }],
@@ -56,6 +66,28 @@ const steps = [
 const useCurrentSalesOrderStore = createSalesOrderStore("main");
 
 function NewSalesOrder() {
+    // ============================================================================
+    // FORMS SETUP
+    // ============================================================================
+    const demographicsForm = useForm<z.infer<typeof customerDemographicsSchema>>({
+        resolver: zodResolver(customerDemographicsSchema) as Resolver<CustomerDemographicsSchema>,
+        defaultValues: customerDemographicsDefaults,
+    });
+
+    const shelfForm = useForm<ShelfFormValues>({
+        resolver: zodResolver(shelfFormSchema),
+        defaultValues: { products: [] },
+    });
+
+    const OrderForm = useForm<OrderSchema>({
+        resolver: zodResolver(orderSchema) as any,
+        defaultValues: {
+            ...orderDefaults,
+            order_type: "SALES",
+        },
+    });
+
+    const { orderId: searchOrderId } = Route.useSearch();
     // ============================================================================
     // NAVIGATION
     // ============================================================================
@@ -92,26 +124,76 @@ function NewSalesOrder() {
     const setOrder = useCurrentSalesOrderStore((s) => s.setOrder);
     const resetSalesOrder = useCurrentSalesOrderStore((s) => s.resetSalesOrder);
 
-    // ============================================================================
-    // FORMS SETUP
-    // ============================================================================
-    const demographicsForm = useForm<z.infer<typeof customerDemographicsSchema>>({
-        resolver: zodResolver(customerDemographicsSchema) as Resolver<CustomerDemographicsSchema>,
-        defaultValues: customerDemographicsDefaults,
-    });
+    const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
+    const loadingOrderIdRef = React.useRef<number | null>(null);
 
-    const shelfForm = useForm<ShelfFormValues>({
-        resolver: zodResolver(shelfFormSchema),
-        defaultValues: { products: [] },
-    });
+    const handleLoadOrder = React.useCallback(async (orderIdToLoad: number) => {
+        setIsLoadingOrderData(true);
+        try {
+            // Clear store state first
+            resetSalesOrder();
 
-    const OrderForm = useForm<OrderSchema>({
-        resolver: zodResolver(orderSchema) as any,
-        defaultValues: {
-            ...orderDefaults,
-            order_type: "SALES",
-        },
-    });
+            const response = await getOrderDetails(orderIdToLoad);
+            console.log("Order details response:", response);
+            if (response.status === "success" && response.data) {
+                const orderData = response.data;
+                console.log("Order Data retrieved:", orderData);
+                
+                // 1. Load Customer
+                if (orderData.customer) {
+                    const customerFormValues = mapCustomerToFormValues(orderData.customer);
+                    demographicsForm.reset(customerFormValues);
+                    setCustomerDemographics(customerFormValues);
+                    addSavedStep(0);
+                }
+                
+                // 2. Load Shelf Items
+                let mappedShelfProducts: any[] = [];
+                if (orderData.shelf_items && orderData.shelf_items.length > 0) {
+                    console.log("Found shelf items:", orderData.shelf_items);
+                    mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
+                        id: si.shelf_id.toString(),
+                        serial_number: si.shelf?.serial_number || "",
+                        product_type: si.shelf?.type || "",
+                        brand: si.shelf?.brand || "",
+                        quantity: si.quantity,
+                        stock: si.shelf?.stock || 0,
+                        unit_price: Number(si.unit_price),
+                    }));
+                    console.log("Mapped shelf products for reset:", mappedShelfProducts);
+                    shelfForm.reset({ products: mappedShelfProducts });
+                    addSavedStep(1);
+                } else {
+                    console.log("No shelf items found in orderData");
+                    shelfForm.reset({ products: [] });
+                }
+                
+                // 3. Load Order Info
+                const mappedOrder = mapOrderToSchema(orderData);
+                OrderForm.reset(mappedOrder);
+                setOrderId(orderData.id);
+                setOrder(mappedOrder);
+                addSavedStep(2);
+                
+                toast.success("Order loaded successfully");
+            } else {
+                toast.error("Order not found");
+            }
+        } catch (error) {
+            console.error("Error loading order:", error);
+            toast.error("Failed to load order");
+        } finally {
+            setIsLoadingOrderData(false);
+        }
+    }, [setOrderId, setCustomerDemographics, addSavedStep, setOrder, demographicsForm, shelfForm, OrderForm, resetSalesOrder]);
+
+    // Load order from search params if provided
+    React.useEffect(() => {
+        if (searchOrderId && !orderId && loadingOrderIdRef.current !== searchOrderId) {
+            loadingOrderIdRef.current = searchOrderId;
+            handleLoadOrder(searchOrderId);
+        }
+    }, [searchOrderId, orderId, handleLoadOrder]);
 
     // Watch form values
     const checkoutStatus = useWatch({
@@ -163,37 +245,10 @@ function NewSalesOrder() {
     // ORDER MUTATIONS
     // ============================================================================
     const {
-        createOrder: createOrderMutation,
         completeSalesOrder: completeSalesOrderMutation,
+        createCompleteSalesOrder: createCompleteSalesOrderMutation,
     } = useOrderMutations({
         orderType: "SALES",
-        onOrderCreated: (id, formattedOrder) => {
-            setOrderId(id || null);
-            setOrder(formattedOrder);
-            
-            // Immediately complete the sales order after creation
-            const paymentData = OrderForm.getValues();
-            const shelfItems = shelfForm.getValues().products
-                .filter(p => p.id && p.quantity)
-                .map(p => ({ 
-                    id: Number(p.id!), 
-                    quantity: p.quantity!, 
-                    unitPrice: p.unit_price ?? 0 
-                }));
-
-            completeSalesOrderMutation.mutate({
-                orderId: id!,
-                checkoutDetails: {
-                    paymentType: paymentData.payment_type!,
-                    paid: paymentData.paid ?? 0,
-                    paymentRefNo: paymentData.payment_ref_no ?? undefined,
-                    paymentNote: paymentData.payment_note ?? undefined,
-                    orderTaker: paymentData.order_taker_id ?? undefined
-                },
-                shelfItems
-            });
-        },
-
         onOrderUpdated: (action, data) => {
             if (action === "updated") {
                 if (data) {
@@ -204,9 +259,6 @@ function NewSalesOrder() {
                 // Mark the final step as completed
                 addSavedStep(2);
             }
-        },
-        onOrderError: () => {
-            // Error handling
         },
     });
 
@@ -253,11 +305,39 @@ function NewSalesOrder() {
     // ORDER CONFIRMATION
     // ============================================================================
     const handleOrderConfirmation = (data: OrderSchema) => {
-        // 1. Create the order as draft first (required by the completeSalesOrder mutation)
-        createOrderMutation.mutate({
-            ...data,
-            order_type: "SALES",
-            checkout_status: "draft",
+        const customerId = OrderForm.getValues("customer_id");
+        if (!customerId) {
+            toast.error("No customer selected");
+            return;
+        }
+
+        const shelfItems = shelfForm.getValues().products
+            .filter(p => p.id && p.quantity)
+            .map(p => ({ 
+                id: Number(p.id!), 
+                quantity: p.quantity!, 
+                unitPrice: p.unit_price ?? 0 
+            }));
+
+        createCompleteSalesOrderMutation.mutate({
+            customerId,
+            checkoutDetails: {
+                paymentType: data.payment_type!,
+                paid: data.paid ?? 0,
+                paymentRefNo: data.payment_ref_no ?? undefined,
+                paymentNote: data.payment_note ?? undefined,
+                orderTaker: data.order_taker_id ?? undefined,
+                discountType: data.discount_type ?? undefined,
+                discountValue: data.discount_value ?? undefined,
+                discountPercentage: data.discount_percentage ?? undefined,
+                referralCode: data.referral_code ?? undefined,
+                notes: data.notes ?? undefined,
+                total: data.order_total,
+                shelfCharge: data.shelf_charge,
+                deliveryCharge: data.delivery_charge,
+                homeDelivery: data.home_delivery
+            },
+            shelfItems
         });
     };
 
@@ -266,7 +346,7 @@ function NewSalesOrder() {
     // ============================================================================
     // Sync shelf amount to order charges
     React.useEffect(() => {
-        OrderForm.setValue("shelf_charge", totalShelfAmount);
+        OrderForm.setValue("shelf_charge", totalShelfAmount, { shouldDirty: false });
     }, [totalShelfAmount]);
 
     // Cleanup on unmount
@@ -360,12 +440,14 @@ function NewSalesOrder() {
     return (
         <>
             <ScrollProgress />
-            {(createOrderMutation.isPending || completeSalesOrderMutation.isPending) && (
+            {(isLoadingOrderData || createCompleteSalesOrderMutation.isPending || completeSalesOrderMutation.isPending) && (
                 <FullScreenLoader 
                     title={
-                        createOrderMutation.isPending 
-                            ? "Creating Order" 
-                            : "Completing Sales Order"
+                        isLoadingOrderData
+                            ? "Loading Order"
+                            : createCompleteSalesOrderMutation.isPending 
+                                ? "Creating Order" 
+                                : "Completing Sales Order"
                     }
                     subtitle="Please wait while we process your request..."
                 />
@@ -391,18 +473,20 @@ function NewSalesOrder() {
 
             {/* Step Content */}
             <div className="flex flex-col items-center gap-10 md:gap-16 pt-20 pb-12 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
-                <div className="w-full mt-0">
-                    <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
-                        <SearchCustomer
-                            onCustomerFound={handleCustomerFound}
-                            onHandleClear={() => {
-                                demographicsForm.reset(customerDemographicsDefaults);
-                                setCustomerDemographics(customerDemographicsDefaults);
-                            }}
-                            checkPendingOrders={false} // No pending orders for sales
-                        />
-                    </ErrorBoundary>
-                </div>
+                {!isOrderClosed && (
+                    <div className="w-full mt-0">
+                        <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
+                            <SearchCustomer
+                                onCustomerFound={handleCustomerFound}
+                                onHandleClear={() => {
+                                    demographicsForm.reset(customerDemographicsDefaults);
+                                    setCustomerDemographics(customerDemographicsDefaults);
+                                }}
+                                checkPendingOrders={false} // No pending orders for sales
+                            />
+                        </ErrorBoundary>
+                    </div>
+                )}
 
                 {/* STEP 0: Demographics */}
                 <div
@@ -413,18 +497,18 @@ function NewSalesOrder() {
                     <CustomerDemographicsForm
                         form={demographicsForm}
                         isOrderClosed={isOrderClosed}
-                        orderId={orderId}
+                        orderId={null} // Pass null to hide "Change Customer" and show "Proceed" instead
                         onCustomerChange={handleCustomerFound}
                         onSave={(data) => {
                             setCustomerDemographics(data);
-                            addSavedStep(0);
                         }}
                         onEdit={() => removeSavedStep(0)}
-                        onCancel={() => addSavedStep(0)}
+                        onCancel={() => {}}
                         onProceed={handleDemographicsProceed}
                         onClear={() => {
                             removeSavedStep(0);
                         }}
+                        proceedButtonText="Continue to Products"
                     />
                 </div>
 
@@ -466,6 +550,7 @@ function NewSalesOrder() {
                                 house_no: customerDemographics?.house_no ?? undefined,
                                 address_note: customerDemographics?.address_note ?? undefined,
                             }}
+                            orderType="SALES"
                             onConfirm={(data) => {
                                 openDialog(
                                     "Confirm Sales Order",

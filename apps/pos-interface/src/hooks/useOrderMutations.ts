@@ -1,13 +1,24 @@
-import { createOrder, updateOrder, deleteOrder, completeWorkOrder, completeSalesOrder } from "@/api/orders";
+import { 
+    createOrder, 
+    updateOrder, 
+    deleteOrder, 
+    completeWorkOrder, 
+    completeSalesOrder, 
+    createCompleteSalesOrder 
+} from "@/api/orders";
 import { updateShelf } from "@/api/shelf";
 import { updateFabric } from "@/api/fabrics";
 import { showFatouraNotification } from "@/lib/notifications";
 import { type OrderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
+import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
 import { type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { type FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Order } from "@repo/database";
+
+// Re-export for backward compatibility
+export const mapOrderToSchema = mapOrderToFormValues;
 
 type UpdateOrderPayload = {
     fields: Partial<OrderSchema>;
@@ -61,50 +72,6 @@ function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
     return order;
 }
 
-/**
- * Maps Order (API/DB) to OrderSchema (form)
- */
-export function mapOrderToSchema(order: Order): OrderSchema {
-    const parseNumeric = (val: any) => {
-        if (val === null || val === undefined) return undefined;
-        const parsed = typeof val === 'string' ? parseFloat(val) : val;
-        return isNaN(parsed) ? undefined : parsed;
-    };
-
-    return {
-        id: order.id,
-        invoice_number: order.invoice_number || undefined,
-        production_stage: order.production_stage || "order_at_shop",
-        customer_id: order.customer_id,
-        order_date: order.order_date ? new Date(order.order_date).toISOString() : undefined,
-        checkout_status: order.checkout_status || "draft",
-        notes: order.notes || undefined,
-        campaign_id: order.campaign_id || undefined,
-        home_delivery: order.home_delivery ?? false,
-        delivery_date: order.delivery_date ? new Date(order.delivery_date).toISOString() : undefined,
-        order_type: order.order_type || "WORK",
-        payment_type: order.payment_type as any,
-        payment_ref_no: order.payment_ref_no || undefined,
-        payment_note: order.payment_note || undefined,
-        order_taker_id: order.order_taker_id || undefined,
-        discount_type: order.discount_type as any,
-        referral_code: order.referral_code || undefined,
-        discount_value: parseNumeric(order.discount_value),
-        stitching_price: parseNumeric(order.stitching_price) ?? 9,
-        
-        fabric_charge: parseNumeric(order.fabric_charge) ?? 0,
-        stitching_charge: parseNumeric(order.stitching_charge) ?? 0,
-        style_charge: parseNumeric(order.style_charge) ?? 0,
-        delivery_charge: parseNumeric(order.delivery_charge) ?? 0,
-        shelf_charge: parseNumeric(order.shelf_charge) ?? 0,
-
-        advance: parseNumeric(order.advance),
-        paid: parseNumeric(order.paid),
-        order_total: parseNumeric(order.order_total) ?? 0,
-        num_of_fabrics: order.num_of_fabrics || 0,
-    };
-}
-
 export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
     const queryClient = useQueryClient();
 
@@ -131,7 +98,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
             if (response.data) {
                 const order = response.data;
-                const formattedOrder = mapOrderToSchema(order);
+                const formattedOrder = mapOrderToFormValues(order);
                 options.onOrderCreated?.(formattedOrder.id, formattedOrder);
                 toast.success("New order created successfully!");
             }
@@ -285,6 +252,10 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 paymentRefNo?: string;
                 paymentNote?: string;
                 orderTaker?: string;
+                discountType?: string;
+                discountValue?: number;
+                discountPercentage?: number;
+                referralCode?: string;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
@@ -313,52 +284,206 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         }
     });
 
-    const completeSalesOrderMutation = useMutation({
-        mutationFn: ({
-            orderId,
-            checkoutDetails,
-            shelfItems
-        }: {
-            orderId: number;
-            checkoutDetails: {
-                paymentType: string;
-                paid: number | null | undefined;
-                paymentRefNo?: string;
-                paymentNote?: string;
-                orderTaker?: string;
-            };
-            shelfItems: { id: number; quantity: number; unitPrice: number }[];
-        }) => {
-            return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
-        },
-        onSuccess: (response) => {
-            if (response.status === "error") {
-                toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
-                return;
+        const completeSalesOrderMutation = useMutation({
+
+            mutationFn: ({
+
+                orderId,
+
+                checkoutDetails,
+
+                shelfItems
+
+            }: {
+
+                orderId: number;
+
+                checkoutDetails: {
+
+                    paymentType: string;
+
+                    paid: number | null | undefined;
+
+                    paymentRefNo?: string;
+
+                    paymentNote?: string;
+
+                    orderTaker?: string;
+
+                    discountType?: string;
+
+                    discountValue?: number;
+
+                    discountPercentage?: number;
+
+                    referralCode?: string;
+
+                };
+
+                shelfItems: { id: number; quantity: number; unitPrice: number }[];
+
+            }) => {
+
+                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
+
+            },
+
+            onSuccess: (response) => {
+
+                if (response.status === "error") {
+
+                    toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
+
+                    return;
+
+                }
+
+                toast.success("Sales order completed successfully! ✅");
+
+    
+
+                // Show notification if invoice number was just generated
+
+                if (response.data?.invoice_number) {
+
+                    showFatouraNotification(response.data.invoice_number);
+
+                }
+
+    
+
+                queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+
+                options.onOrderUpdated?.("updated", response.data);
+
+            },
+
+            onError: () => {
+
+                toast.error("An error occurred while completing the sales order");
+
             }
-            toast.success("Sales order completed successfully! ✅");
 
-            // Show notification if invoice number was just generated
-            if (response.data?.invoice_number) {
-                showFatouraNotification(response.data.invoice_number);
+        });
+
+    
+
+        const createCompleteSalesOrderMutation = useMutation({
+
+            mutationFn: ({
+
+                customerId,
+
+                checkoutDetails,
+
+                shelfItems
+
+            }: {
+
+                customerId: number;
+
+                checkoutDetails: {
+
+                    paymentType: string;
+
+                    paid: number | null | undefined;
+
+                    paymentRefNo?: string;
+
+                    paymentNote?: string;
+
+                    orderTaker?: string;
+
+                    discountType?: string;
+
+                    discountValue?: number;
+
+                    discountPercentage?: number;
+
+                    referralCode?: string;
+
+                    notes?: string;
+
+                    total: number;
+
+                    shelfCharge: number;
+
+                    deliveryCharge: number;
+
+                    homeDelivery: boolean;
+
+                };
+
+                shelfItems: { id: number; quantity: number; unitPrice: number }[];
+
+            }) => {
+
+                return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
+
+            },
+
+            onSuccess: (response) => {
+
+                if (response.status === "error") {
+
+                    toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
+
+                    return;
+
+                }
+
+                toast.success("Sales order created and completed! ✅");
+
+    
+
+                if (response.data?.invoice_number) {
+
+                    showFatouraNotification(response.data.invoice_number);
+
+                }
+
+    
+
+                queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+
+                options.onOrderUpdated?.("updated", response.data);
+
+            },
+
+            onError: () => {
+
+                toast.error("An error occurred while creating the sales order");
+
             }
 
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["products"] });
-            options.onOrderUpdated?.("updated", response.data);
-        },
-        onError: () => {
-            toast.error("An error occurred while completing the sales order");
-        }
-    });
+        });
 
-    return {
-        createOrder: createOrderMutation,
-        updateOrder: updateOrderMutation,
-        updateShelf: updateShelfMutation,
-        updateFabricStock: updateFabricStockMutation,
-        deleteOrder: deleteOrderMutation,
-        completeWorkOrder: completeWorkOrderMutation,
-        completeSalesOrder: completeSalesOrderMutation,
-    };
-}
+    
+
+        return {
+
+            createOrder: createOrderMutation,
+
+            updateOrder: updateOrderMutation,
+
+            updateShelf: updateShelfMutation,
+
+            updateFabricStock: updateFabricStockMutation,
+
+            deleteOrder: deleteOrderMutation,
+
+            completeWorkOrder: completeWorkOrderMutation,
+
+            completeSalesOrder: completeSalesOrderMutation,
+
+            createCompleteSalesOrder: createCompleteSalesOrderMutation,
+
+        };
+
+    }
+
+    

@@ -1,6 +1,6 @@
 "use client";
 
-import { fuzzySearchCustomers } from "@/api/customers";
+import { fuzzySearchCustomers, getCustomerById } from "@/api/customers";
 import { getPendingOrdersByCustomer } from "@/api/orders";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ interface SearchCustomerProps {
   onHandleClear: () => void;
   onPendingOrderSelected?: (order: Order) => void;
   checkPendingOrders?: boolean;
-  isResetDisabled?: boolean;
 }
 
 export function SearchCustomer({
@@ -38,7 +37,6 @@ export function SearchCustomer({
   onHandleClear,
   onPendingOrderSelected,
   checkPendingOrders = false,
-  isResetDisabled = false,
 }: SearchCustomerProps) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -127,18 +125,57 @@ export function SearchCustomer({
   }, [onCustomerFound]);
 
   const handleSelectCustomer = useCallback(
-    async (customer: Customer) => {
-      saveToRecent(customer);
-      setSelectedCustomer(customer);
-      setSelectedCustomerId(customer.id);
-      setSearchValue(customer.name);
-      setDebouncedSearch("");
-      setIsFocused(false);
+    async (customer: Customer, isFromRecent: boolean = false) => {
+      if (!customer.id) return;
 
-      if (checkPendingOrders && customer.id) {
-        await fetchPendingOrders(customer);
+      // If it's from recent searches, we verify it still exists in the DB
+      if (isFromRecent) {
+        setIsLoadingPendingOrders(true);
+        try {
+          const response = await getCustomerById(customer.id);
+          
+          if (response.status === "success" && response.data) {
+            const latestCustomer = response.data;
+            saveToRecent(latestCustomer);
+            setSelectedCustomer(latestCustomer);
+            setSelectedCustomerId(latestCustomer.id);
+            setSearchValue(latestCustomer.name);
+            setDebouncedSearch("");
+            setIsFocused(false);
+
+            if (checkPendingOrders) {
+              await fetchPendingOrders(latestCustomer);
+            } else {
+              onCustomerFound(latestCustomer);
+            }
+          } else {
+            toast.error("Customer profile not found. It may have been deleted.");
+            // Remove from recent if not found
+            const updated = recentCustomers.filter((c) => c.id !== customer.id);
+            setRecentCustomers(updated);
+            localStorage.setItem(RECENT_CUSTOMERS_KEY, JSON.stringify(updated));
+            handleClear();
+          }
+        } catch (error) {
+          console.error("Error selecting customer:", error);
+          toast.error("Failed to load customer profile");
+        } finally {
+          setIsLoadingPendingOrders(false);
+        }
       } else {
-        onCustomerFound(customer);
+        // If it's a fresh search result, we just use the data we have
+        saveToRecent(customer);
+        setSelectedCustomer(customer);
+        setSelectedCustomerId(customer.id);
+        setSearchValue(customer.name);
+        setDebouncedSearch("");
+        setIsFocused(false);
+
+        if (checkPendingOrders) {
+          await fetchPendingOrders(customer);
+        } else {
+          onCustomerFound(customer);
+        }
       }
     },
     [checkPendingOrders, onCustomerFound, fetchPendingOrders, recentCustomers],
@@ -160,7 +197,7 @@ export function SearchCustomer({
     setPendingOrders([]);
   };
 
-  const handleOrderDeleted = useCallback(() => {
+  const handleOrderCancelled = useCallback(() => {
     if (selectedCustomer) {
       fetchPendingOrders(selectedCustomer);
     }
@@ -192,71 +229,59 @@ export function SearchCustomer({
       )}
       <div ref={containerRef} className="bg-muted/40 p-6 rounded-2xl space-y-4 border border-border/50 shadow-sm relative z-10">
         <div className="flex justify-between items-center px-1">
-        <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "p-2 rounded-lg shadow-sm transition-colors",
-            selectedCustomerId ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"
-          )}>
-            <SearchIcon className="size-4" />
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              "p-2 rounded-lg shadow-sm transition-colors",
+              selectedCustomerId ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"
+            )}>
+              <SearchIcon className="size-4" />
+            </div>
+            <h2 className="text-lg font-bold text-foreground tracking-tight">
+              {selectedCustomerId ? "Selected Customer" : "Find Customer"}
+            </h2>
           </div>
-          <h2 className="text-lg font-bold text-foreground tracking-tight">
-            {selectedCustomerId ? "Selected Customer" : "Find Customer"}
-          </h2>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleClear}
-          disabled={isResetDisabled}
-          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full h-8 px-3"
-        >
-          <X className="size-3.5 mr-1.5" />
-          <span className="text-xs font-bold uppercase tracking-wider">Reset / New Search</span>
-        </Button>
-      </div>
 
-      <div className="relative">
-        <div className="relative flex items-center group">
-          <SearchIcon className={cn(
-            "absolute left-4 size-5 transition-colors",
-            selectedCustomerId ? "text-green-600" : "text-muted-foreground group-focus-within:text-primary"
-          )} />
-          <Input
-            placeholder="Search by name, mobile, or nickname..."
-            value={searchValue}
-            onChange={(e) => {
-              setSearchValue(e.target.value);
-              if (selectedCustomerId) {
-                setSelectedCustomerId(null);
-                setSelectedCustomer(null);
-              }
-            }}
-            onFocus={() => setIsFocused(true)}
-            className={cn(
-              "h-14 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-md focus-visible:ring-primary/20 transition-all",
-              selectedCustomerId && "border-green-600 ring-2 ring-green-600/10 font-semibold text-green-700"
-            )}
-          />
-          <div className="absolute right-4 flex items-center gap-2">
-            {isFetching && (
-              <Loader2 className="size-5 animate-spin text-primary/60" />
-            )}
-            {searchValue && (
-              <button 
-                onClick={() => {
-                  setSearchValue("");
-                  setDebouncedSearch("");
+        <div className="relative">
+          <div className="relative flex items-center group">
+            <SearchIcon className={cn(
+              "absolute left-4 size-5 transition-colors",
+              selectedCustomerId ? "text-green-600" : "text-muted-foreground group-focus-within:text-primary"
+            )} />
+            <Input
+              placeholder="Search by name, mobile, or nickname..."
+              value={searchValue}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setSearchValue(newValue);
+                if (selectedCustomerId) {
+                  // If we start typing while a customer is selected, clear selection to allow new search
+                  // But do NOT call onHandleClear here, preserving current parent state until new selection
                   setSelectedCustomerId(null);
                   setSelectedCustomer(null);
-                }}
-                className="p-1 hover:bg-muted rounded-full transition-colors"
-              >
-                <X className="size-4 text-muted-foreground" />
-              </button>
-            )}
+                }
+              }}
+              onFocus={() => setIsFocused(true)}
+              className={cn(
+                "h-14 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-md focus-visible:ring-primary/20 transition-all",
+                selectedCustomerId && "border-green-600 ring-2 ring-green-600/10 font-semibold text-green-700"
+              )}
+            />
+            <div className="absolute right-4 flex items-center gap-2">
+              {isFetching && (
+                <Loader2 className="size-5 animate-spin text-primary/60" />
+              )}
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-1 hover:bg-muted rounded-full transition-colors"
+                >
+                  <X className="size-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
 
         {/* Floating Results List */}
         {showList && (
@@ -300,7 +325,7 @@ export function SearchCustomer({
                           <CommandItem
                             key={`recent-${customer.id}`}
                             value={customer.id.toString()}
-                            onSelect={() => handleSelectCustomer(customer)}
+                            onSelect={() => handleSelectCustomer(customer, true)}
                             className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
                           >
                              <div className="flex items-start gap-4">
@@ -406,7 +431,7 @@ export function SearchCustomer({
 
               onCreateNewOrder={handleCreateNewOrder}
 
-              onOrderDeleted={handleOrderDeleted}
+              onOrderCancelled={handleOrderCancelled}
 
               customerName={selectedCustomer?.name}
 
@@ -421,5 +446,3 @@ export function SearchCustomer({
         );
 
       }
-
-      

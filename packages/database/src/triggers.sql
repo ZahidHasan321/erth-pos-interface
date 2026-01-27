@@ -2,13 +2,15 @@
 DROP TRIGGER IF EXISTS trigger_assign_invoice ON orders;
 DROP FUNCTION IF EXISTS assign_invoice_number();
 
--- 1. Create a sequence for Invoices starting at 1000
-CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1000;
+-- 1. Create a sequence for Invoices starting at 1
+CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1;
+-- Sync sequence with the current maximum invoice number in the orders table
+SELECT setval('invoice_seq', COALESCE((SELECT MAX(invoice_number) FROM orders), 0) + 1, false);
 
 -- 2. Transactional RPC for completing work order
 CREATE OR REPLACE FUNCTION complete_work_order(
   p_order_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage }
   p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
   p_fabric_items JSONB      -- [{ id: number, length: number }]
 )
@@ -18,30 +20,32 @@ DECLARE
   v_order_row orders%ROWTYPE;
 BEGIN
   -- 1. Update Order
-  UPDATE orders 
-  SET 
+  UPDATE orders
+  SET
     invoice_number = CASE WHEN invoice_number IS NULL THEN nextval('invoice_seq') ELSE invoice_number END,
     checkout_status = 'confirmed',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
     paid = (p_checkout_details->>'paid')::decimal,
     payment_ref_no = (p_checkout_details->>'paymentRefNo'),
+    payment_note = (p_checkout_details->>'paymentNote'),
     order_taker_id = (p_checkout_details->>'orderTaker')::uuid,
+    discount_type = (p_checkout_details->>'discountType')::discount_type,
+    discount_value = (p_checkout_details->>'discountValue')::decimal,
+    discount_percentage = (p_checkout_details->>'discountPercentage')::decimal,
+    referral_code = (p_checkout_details->>'referralCode'),
     order_date = NOW()
   WHERE id = p_order_id
   RETURNING * INTO v_order_row;
 
   -- 2. Deduct Shelf Stock & Record Items
-  -- Clear any existing items for this order to prevent duplicates if re-called
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
-    -- Update stock in shelf table
     UPDATE shelf 
     SET stock = stock - (v_item->>'quantity')::int
     WHERE id = (v_item->>'id')::int;
 
-    -- Record the item in the junction table
     INSERT INTO order_shelf_items (order_id, shelf_id, quantity, unit_price)
     VALUES (
       p_order_id,
@@ -66,7 +70,7 @@ $$ LANGUAGE plpgsql;
 -- 3. Transactional RPC for completing sales order (Shelf items only)
 CREATE OR REPLACE FUNCTION complete_sales_order(
   p_order_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage }
   p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
 )
 RETURNS JSONB AS $$
@@ -75,13 +79,18 @@ DECLARE
   v_order_row orders%ROWTYPE;
 BEGIN
   -- 1. Update Order
-  UPDATE orders 
-  SET 
+  UPDATE orders
+  SET
     checkout_status = 'confirmed',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
     paid = (p_checkout_details->>'paid')::decimal,
     payment_ref_no = (p_checkout_details->>'paymentRefNo'),
+    payment_note = (p_checkout_details->>'paymentNote'),
     order_taker_id = (p_checkout_details->>'orderTaker')::uuid,
+    discount_type = (p_checkout_details->>'discountType')::discount_type,
+    discount_value = (p_checkout_details->>'discountValue')::decimal,
+    discount_percentage = (p_checkout_details->>'discountPercentage')::decimal,
+    referral_code = (p_checkout_details->>'referralCode'),
     order_date = NOW(),
     order_type = 'SALES'
   WHERE id = p_order_id
@@ -109,7 +118,82 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. Transactional RPC for saving work order garments and updating order totals
+-- 4. NEW: Transactional RPC for creating AND completing a sales order in one go
+CREATE OR REPLACE FUNCTION create_complete_sales_order(
+  p_customer_id INT,
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, homeDelivery }
+  p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_item JSONB;
+  v_order_id INT;
+  v_order_row orders%ROWTYPE;
+BEGIN
+  -- 1. Insert into orders
+  INSERT INTO orders (
+    customer_id,
+    checkout_status,
+    order_type,
+    order_date,
+    payment_type,
+    paid,
+    payment_ref_no,
+    payment_note,
+    order_taker_id,
+    discount_type,
+    discount_value,
+    discount_percentage,
+    referral_code,
+    notes,
+    order_total,
+    shelf_charge,
+    delivery_charge,
+    home_delivery
+  ) VALUES (
+    p_customer_id,
+    'confirmed',
+    'SALES',
+    NOW(),
+    (p_checkout_details->>'paymentType')::payment_type,
+    (p_checkout_details->>'paid')::decimal,
+    (p_checkout_details->>'paymentRefNo'),
+    (p_checkout_details->>'paymentNote'),
+    (p_checkout_details->>'orderTaker')::uuid,
+    (p_checkout_details->>'discountType')::discount_type,
+    (p_checkout_details->>'discountValue')::decimal,
+    (p_checkout_details->>'discountPercentage')::decimal,
+    (p_checkout_details->>'referralCode'),
+    (p_checkout_details->>'notes'),
+    (p_checkout_details->>'total')::decimal,
+    (p_checkout_details->>'shelfCharge')::decimal,
+    (p_checkout_details->>'deliveryCharge')::decimal,
+    COALESCE((p_checkout_details->>'homeDelivery')::boolean, false)
+  ) RETURNING id INTO v_order_id;
+
+  -- 2. Deduct Shelf Stock & Record Items
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
+  LOOP
+    UPDATE shelf 
+    SET stock = stock - (v_item->>'quantity')::int
+    WHERE id = (v_item->>'id')::int;
+
+    INSERT INTO order_shelf_items (order_id, shelf_id, quantity, unit_price)
+    VALUES (
+      v_order_id,
+      (v_item->>'id')::int,
+      (v_item->>'quantity')::int,
+      (v_item->>'unitPrice')::decimal
+    );
+  END LOOP;
+
+  -- 3. Return the full order row
+  SELECT * FROM orders WHERE id = v_order_id INTO v_order_row;
+  RETURN to_jsonb(v_order_row);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 5. Transactional RPC for saving work order garments and updating order totals
 CREATE OR REPLACE FUNCTION save_work_order_garments(
   p_order_id INT,
   p_garments JSONB, -- Array of garment objects

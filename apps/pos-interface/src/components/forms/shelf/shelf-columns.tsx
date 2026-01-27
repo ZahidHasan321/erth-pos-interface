@@ -21,7 +21,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     size: 200,
     minSize: 200,
     cell: ({ row, table }) => {
-        const { updateData, serverProducts, errors } = table.options.meta as any
+        const { updateData, serverProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.product_type
         
         // Get unique product types from server data
@@ -34,6 +34,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                 <Select
                     value={row.original.product_type}
                     onValueChange={(value) => updateData(row.index, 'product_type', value)}
+                    disabled={isOrderDisabled}
                 >
                     <SelectTrigger className={error ? 'border-red-500' : ''}>
                         <SelectValue placeholder="Select Product Type" />
@@ -57,7 +58,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     size: 220,
     minSize: 220,
     cell: ({ row, table }) => {
-        const { updateData, serverProducts, selectedProducts, errors } = table.options.meta as any
+        const { updateData, serverProducts, selectedProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.brand
         
         // Filter brands based on selected product type
@@ -73,7 +74,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                 <Select
                     value={row.original.brand}
                     onValueChange={(value) => updateData(row.index, 'brand', value)}
-                    disabled={!selectedType}
+                    disabled={!selectedType || isOrderDisabled}
                 >
                     <SelectTrigger className={error ? 'border-red-500' : ''}>
                         <SelectValue placeholder="Select Brand" />

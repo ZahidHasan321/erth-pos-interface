@@ -1,8 +1,8 @@
 'use client'
 import { Button } from '@/components/ui/button'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import type { UseFormReturn } from 'react-hook-form'
+import { useMemo } from 'react'
+import { useWatch, useFieldArray, type UseFormReturn } from 'react-hook-form'
 import { DataTable } from './data-table'
 import type { ShelfProduct, ShelfFormValues } from './shelf-form.schema'
 import { getShelf } from '@/api/shelf'
@@ -26,10 +26,16 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
     gcTime: Infinity,
   })
 
-  // Initialize state with form values or empty array
-  const [data, setData] = useState<ShelfProduct[]>(
-    form.getValues('products') || []
-  )
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: 'products',
+  });
+
+  // Watch products for total amount calculation and duplicate check
+  const watchedProducts = useWatch({
+    control: form.control,
+    name: 'products',
+  }) || [];
 
   // Define new row template
   const newRow: ShelfProduct = {
@@ -44,15 +50,10 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
 
   // Get already selected product combinations (excluding current row)
   const getSelectedProducts = (currentRowIndex?: number) => {
-    return data
+    return watchedProducts
       .filter((row, index) => index !== currentRowIndex && row.product_type && row.brand)
       .map(row => `${row.product_type}-${row.brand}`)
   }
-
-  // Update form data whenever table data changes
-  useEffect(() => {
-    form.setValue('products', data)
-  }, [data, form])
 
   const handleProceed = async () => {
     const isValid = await form.trigger('products')
@@ -62,17 +63,19 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
   }
 
   const addRow = () => {
-    setData([...data, { ...newRow, id: crypto.randomUUID() }])
+    append({ ...newRow, id: crypto.randomUUID() })
   }
 
   const removeRow = (rowIndex: number) => {
-    setData((old) => old.filter((_, index) => index !== rowIndex))
+    remove(rowIndex)
   }
 
   const updateData = (rowIndex: number, columnId: string, value: any) => {
+    const currentRow = watchedProducts[rowIndex]
+    if (!currentRow) return
+
     // Check for duplicate before updating state
     if (columnId === 'brand') {
-      const currentRow = data[rowIndex]
       const selectedProducts = getSelectedProducts(rowIndex)
       const newCombination = `${currentRow.product_type}-${value}`
 
@@ -80,7 +83,7 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
         toast.error('Product already selected', {
           description: 'This product is already added in another row.'
         })
-        return // Don't proceed with update
+        return
       }
 
       // Check if selected product has stock
@@ -92,64 +95,58 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
         toast.error('No stock available', {
           description: 'This product is currently out of stock.'
         })
-        return // Don't proceed with update
+        return
       }
     }
 
-    setData((old) =>
-      old.map((row, index) => {
-        if (index === rowIndex) {
-          // If brand is selected, find the matching product and update Stock and unitPrice
-          if (columnId === 'brand') {
+    let updatedRow = { ...currentRow, [columnId]: value }
 
-            const selectedProduct = serverProducts?.data?.find(
-              (p: any) => p.brand === value && p.type === row.product_type
-            )
+    // Logic for brand selection
+    if (columnId === 'brand') {
+      const selectedProduct = serverProducts?.data?.find(
+        (p: any) => p.brand === value && p.type === currentRow.product_type
+      )
 
-            if (selectedProduct) {
-              return {
-                ...row,
-                id: selectedProduct.id.toString(),
-                brand: value,
-                stock: selectedProduct.stock || 0,
-                unit_price: selectedProduct.price || 0,
-                quantity: 1,
-              }
+      if (selectedProduct) {
+        updatedRow = {
+          ...updatedRow,
+          id: selectedProduct.id.toString(),
+          stock: selectedProduct.stock || 0,
+          unit_price: selectedProduct.price || 0,
+          quantity: 1,
+        }
+      }
+    }
+
+    // Logic for product_type selection
+    if (columnId === 'product_type') {
+      const brandsForType = serverProducts?.data?.filter(
+        (p: any) => p.type === value
+      )
+      const uniqueBrands = Array.from(new Set(brandsForType?.map((p: any) => p.brand).filter(Boolean)))
+
+      if (uniqueBrands.length === 1) {
+        const onlyBrand = uniqueBrands[0] as string
+        const selectedProduct = brandsForType?.find((p: any) => p.brand === onlyBrand)
+
+        if (selectedProduct) {
+          const selectedProducts = getSelectedProducts(rowIndex)
+          const combination = `${value}-${onlyBrand}`
+
+          // Only auto-select if not already selected elsewhere and has stock
+          if (!selectedProducts.includes(combination) && selectedProduct.stock && selectedProduct.stock > 0) {
+            updatedRow = {
+              ...updatedRow,
+              id: selectedProduct.id.toString(),
+              product_type: value,
+              brand: onlyBrand,
+              stock: selectedProduct.stock || 0,
+              unit_price: selectedProduct.price || 0,
+              quantity: 1,
             }
-          }
-
-          // If productType is selected, reset brand, stock, and price
-          if (columnId === 'product_type') {
-            const brandsForType = serverProducts?.data?.filter(
-              (p: any) => p.type === value
-            )
-            const uniqueBrands = Array.from(new Set(brandsForType?.map((p: any) => p.brand).filter(Boolean)))
-
-            if (uniqueBrands.length === 1) {
-              const onlyBrand = uniqueBrands[0] as string
-              const selectedProduct = brandsForType?.find((p: any) => p.brand === onlyBrand)
-
-              if (selectedProduct) {
-                const selectedProducts = getSelectedProducts(rowIndex)
-                const combination = `${value}-${onlyBrand}`
-
-                // Only auto-select if not already selected elsewhere and has stock
-                if (!selectedProducts.includes(combination) && selectedProduct.stock && selectedProduct.stock > 0) {
-                  return {
-                    ...row,
-                    id: selectedProduct.id.toString(),
-                    product_type: value,
-                    brand: onlyBrand,
-                    stock: selectedProduct.stock || 0,
-                    unit_price: selectedProduct.price || 0,
-                    quantity: 1,
-                  }
-                }
-              }
-            }
-
-            return {
-              ...row,
+          } else {
+            updatedRow = {
+              ...updatedRow,
               id: '',
               product_type: value,
               brand: '',
@@ -158,18 +155,25 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
               quantity: 1,
             }
           }
-
-          return {
-            ...row,
-            [columnId]: value,
-          }
         }
-        return row
-      })
-    )
+      } else {
+        updatedRow = {
+          ...updatedRow,
+          id: '',
+          brand: '',
+          stock: 0,
+          unit_price: 0,
+          quantity: 1,
+        }
+      }
+    }
+
+    update(rowIndex, updatedRow)
   }
 
-  const totalAmount = data.reduce((acc, row) => acc + row.quantity * row.unit_price, 0)
+  const totalAmount = useMemo(() => 
+    watchedProducts.reduce((acc, row) => acc + (row.quantity || 0) * (row.unit_price || 0), 0)
+  , [watchedProducts])
 
   if (isLoading) {
     return <div className='p-4'>Loading products...</div>
@@ -195,7 +199,7 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
       <div className="bg-card p-6 rounded-xl border border-border shadow-sm space-y-6">
         <DataTable
           columns={columns}
-          data={data}
+          data={watchedProducts}
           updateData={updateData}
           removeRow={removeRow}
           serverProducts={serverProducts?.data}

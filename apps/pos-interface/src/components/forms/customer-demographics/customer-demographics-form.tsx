@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getSortedCountries } from "@/lib/countries";
 import type { Customer } from "@repo/database";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
 import { useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
@@ -43,9 +44,9 @@ import WhatsappLogo from "@/assets/whatsapp.svg";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@/components/ui/flag-icon";
-import { Pencil, ArrowRight, X, Save, Check, Search, Users } from "lucide-react";
+import { Pencil, ArrowRight, X, Save, Check, Search, Users, Info, Eye, Copy, MapPin } from "lucide-react";
 import { SearchCustomer } from "./search-customer";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 interface CustomerDemographicsFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +80,8 @@ export function CustomerDemographicsForm({
 }: CustomerDemographicsFormProps) {
   const [isEditing, setIsEditing] = useState(true);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
+  const [isPrimaryDetailsOpen, setIsPrimaryDetailsOpen] = useState(false);
+  const [primaryAccount, setPrimaryAccount] = useState<Customer | null>(null);
   const [confirmationDialog, setConfirmationDialog] = useState({
     isOpen: false,
     title: "",
@@ -95,10 +98,13 @@ export function CustomerDemographicsForm({
   });
   const countries = getSortedCountries();
 
-  // When id changes (loaded or saved), set to readonly mode
+  // When id changes (loaded or saved), set to readonly mode. 
+  // If id is cleared, set back to editing mode.
   React.useEffect(() => {
     if (id) {
       setIsEditing(false);
+    } else {
+      setIsEditing(true);
     }
   }, [id]);
 
@@ -122,6 +128,7 @@ export function CustomerDemographicsForm({
   function handleMobileChange(value: string) {
     if (value.trim() === "" || !isEditing) {
       setWarnings((prev) => ({ ...prev, phone: undefined }));
+      setPrimaryAccount(null);
       form.setValue("account_type", undefined);
       return;
     }
@@ -138,16 +145,19 @@ export function CustomerDemographicsForm({
         existingUsers.count > 0 &&
         existingUsers.data[0].id !== id
       ) {
+        const primary = existingUsers.data[0];
+        setPrimaryAccount(primary);
         setWarnings((prev) => ({
           ...prev,
           phone:
-            "This mobile number is already used in a Primary account. Proceed with caution.",
+            `This mobile number is already used by Primary account: ${primary.name}.`,
         }));
         if (currentAccountType !== "Secondary") {
           form.setValue("account_type", "Secondary");
         }
       } else {
         setWarnings((prev) => ({ ...prev, phone: undefined }));
+        setPrimaryAccount(null);
         if (currentAccountType !== "Primary") {
           form.setValue("account_type", "Primary");
         }
@@ -275,6 +285,19 @@ export function CustomerDemographicsForm({
   };
 
   const isReadOnly = !isEditing;
+
+  const copyPrimaryAddress = () => {
+    if (!primaryAccount) return;
+    
+    form.setValue("city", primaryAccount.city || "");
+    form.setValue("area", primaryAccount.area || "");
+    form.setValue("block", primaryAccount.block || "");
+    form.setValue("street", primaryAccount.street || "");
+    form.setValue("house_no", primaryAccount.house_no || "");
+    form.setValue("address_note", primaryAccount.address_note || "");
+    
+    toast.success("Address copied from Primary Account");
+  };
 
   return (
     <Form {...form}>
@@ -460,6 +483,39 @@ export function CustomerDemographicsForm({
                   </div>
                   <FormMessage />
 
+                  <AnimatePresence>
+                    {primaryAccount && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-2 overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 shadow-xs">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                              <Users className="size-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Linked Primary Account</span>
+                              <span className="text-sm font-bold text-foreground">{primaryAccount.name}</span>
+                            </div>
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-100/50"
+                            onClick={() => setIsPrimaryDetailsOpen(true)}
+                          >
+                            <Eye className="size-4 mr-2" />
+                            View Details
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <AnimatedMessage
                     info={
                       isFetching ? "Checking existing accounts..." : undefined
@@ -561,27 +617,6 @@ export function CustomerDemographicsForm({
             Personal Details
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ErrorBoundary fallback={<div>Note crashed</div>}>
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-medium">Note</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Add any notes about the customer"
-                        {...field}
-                        value={field.value || ""}
-                        className="bg-background border-border/60"
-                        readOnly={isReadOnly}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
             <ErrorBoundary fallback={<div>Arabic nickname crashed</div>}>
               <FormField
                 control={form.control}
@@ -674,6 +709,27 @@ export function CustomerDemographicsForm({
                 )}
               />
             </ErrorBoundary>
+            <ErrorBoundary fallback={<div>Note crashed</div>}>
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel className="font-medium">Note</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Add any notes about the customer"
+                        {...field}
+                        value={field.value || ""}
+                        className="bg-background border-border/60 min-h-[100px]"
+                        readOnly={isReadOnly}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </ErrorBoundary>
           </div>
         </div>
 
@@ -735,7 +791,10 @@ export function CustomerDemographicsForm({
                       disabled={isReadOnly || AccountType !== "Secondary"}
                     >
                       <FormControl>
-                        <SelectTrigger className="bg-background border-border/60">
+                        <SelectTrigger className={cn(
+                          "bg-background border-border/60 transition-all duration-300",
+                          AccountType === "Secondary" && !field.value && "ring-2 ring-primary/40 shadow-[0_0_10px_rgba(var(--primary),0.3)] border-primary/50 animate-pulse"
+                        )}>
                           <SelectValue
                             placeholder={
                               AccountType === "Primary"
@@ -805,7 +864,24 @@ export function CustomerDemographicsForm({
           id && isReadOnly && "bg-blue-50/30 border-blue-100"
         )}>
           <ErrorBoundary fallback={<div>Address fields crashed</div>}>
-            <h3 className="text-lg font-semibold text-foreground">Address</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="size-5 text-primary" />
+                Address
+              </h3>
+              {AccountType === "Secondary" && primaryAccount && !isReadOnly && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="bg-primary/5 border-primary/20 text-primary hover:bg-primary/10"
+                  onClick={copyPrimaryAddress}
+                >
+                  <Copy className="size-4 mr-2" />
+                  Copy Primary Address
+                </Button>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <FormField
@@ -1022,6 +1098,62 @@ export function CustomerDemographicsForm({
                 checkPendingOrders={false}
               />
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isPrimaryDetailsOpen} onOpenChange={setIsPrimaryDetailsOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="size-5 text-primary" />
+                Primary Account Details
+              </DialogTitle>
+              <DialogDescription>
+                Quick overview of the linked primary account holder.
+              </DialogDescription>
+            </DialogHeader>
+            {primaryAccount && (
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <span className="text-muted-foreground font-medium">Name:</span>
+                  <span className="col-span-2 font-semibold">{primaryAccount.name}</span>
+                  
+                  <span className="text-muted-foreground font-medium">Phone:</span>
+                  <span className="col-span-2 font-mono">{primaryAccount.phone}</span>
+                  
+                  {primaryAccount.area && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Area:</span>
+                      <span className="col-span-2">{primaryAccount.area}</span>
+                    </>
+                  )}
+                  
+                  {primaryAccount.city && (
+                    <>
+                      <span className="text-muted-foreground font-medium">City:</span>
+                      <span className="col-span-2">{primaryAccount.city}</span>
+                    </>
+                  )}
+
+                  {primaryAccount.street && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Street:</span>
+                      <span className="col-span-2">{primaryAccount.street}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-lg border border-border/50 text-xs text-muted-foreground">
+                  <p className="flex items-start gap-2">
+                    <Info className="size-3.5 mt-0.5 shrink-0" />
+                    This account serves as the billing and communication head for all linked secondary accounts using this mobile number.
+                  </p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button type="button" onClick={() => setIsPrimaryDetailsOpen(false)}>Close</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </form>
