@@ -28,6 +28,7 @@ interface SearchCustomerProps {
   onHandleClear: () => void;
   onPendingOrderSelected?: (order: Order) => void;
   checkPendingOrders?: boolean;
+  clearOnSelect?: boolean;
 }
 
 export function SearchCustomer({
@@ -35,6 +36,7 @@ export function SearchCustomer({
   onHandleClear,
   onPendingOrderSelected,
   checkPendingOrders = false,
+  clearOnSelect = false,
 }: SearchCustomerProps) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -135,10 +137,19 @@ export function SearchCustomer({
           if (response.status === "success" && response.data) {
             const latestCustomer = response.data;
             saveToRecent(latestCustomer);
-            setSelectedCustomer(latestCustomer);
-            setSelectedCustomerId(latestCustomer.id);
-            setSearchValue(latestCustomer.name);
-            setDebouncedSearch("");
+            
+            if (clearOnSelect) {
+              setSearchValue("");
+              setDebouncedSearch("");
+              setSelectedCustomerId(null);
+              setSelectedCustomer(null);
+            } else {
+              setSelectedCustomer(latestCustomer);
+              setSelectedCustomerId(latestCustomer.id);
+              setSearchValue(latestCustomer.name);
+              setDebouncedSearch("");
+            }
+            
             setIsFocused(false);
 
             if (checkPendingOrders) {
@@ -163,10 +174,19 @@ export function SearchCustomer({
       } else {
         // If it's a fresh search result, we just use the data we have
         saveToRecent(customer);
-        setSelectedCustomer(customer);
-        setSelectedCustomerId(customer.id);
-        setSearchValue(customer.name);
-        setDebouncedSearch("");
+        
+        if (clearOnSelect) {
+          setSearchValue("");
+          setDebouncedSearch("");
+          setSelectedCustomerId(null);
+          setSelectedCustomer(null);
+        } else {
+          setSelectedCustomer(customer);
+          setSelectedCustomerId(customer.id);
+          setSearchValue(customer.name);
+          setDebouncedSearch("");
+        }
+        
         setIsFocused(false);
 
         if (checkPendingOrders) {
@@ -176,7 +196,7 @@ export function SearchCustomer({
         }
       }
     },
-    [checkPendingOrders, onCustomerFound, fetchPendingOrders, recentCustomers],
+    [checkPendingOrders, onCustomerFound, fetchPendingOrders, recentCustomers, clearOnSelect],
   );
 
   const handlePendingOrderSelect = (order: Order) => {

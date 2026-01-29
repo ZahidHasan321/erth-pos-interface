@@ -5,7 +5,6 @@ import {
   getOrderForLinking,
   updateOrder,
 } from "@/api/orders";
-import { getCustomerById } from "@/api/customers";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -43,6 +42,7 @@ type SelectedOrder = {
   customerPhone?: string;
   productionStage?: string | null;
   isExistingPrimary?: boolean;
+  isExistingChild?: boolean;
 };
 
 export default function LinkOrder() {
@@ -161,82 +161,86 @@ export default function LinkOrder() {
   };
 
   // --- Helper: Add Orders to Main List ---
-  async function addOrdersToSelection(orders: any[]) {
-    const newSelectedOrders: SelectedOrder[] = [];
-    const childrenToFetch: number[] = [];
-    const primariesToFetch: number[] = [];
+  async function addOrdersToSelection(ordersToProcess: any[]) {
+    // We use a Map to keep track of orders to be added, avoiding duplicates
+    const ordersMap = new Map<number, SelectedOrder>();
+    const idsToFetch = new Set<number>();
+    
+    // 1. Initial Mapping & Identification of group members
+    for (const order of ordersToProcess) {
+        if (selectedOrders.some(o => o.id === order.id)) continue;
 
-    // 1. Process passed orders
-    for (const order of orders) {
-        if (selectedOrders.some(p => p.id === order.id)) continue;
-
-        // If it's a child, we MUST fetch its primary and all siblings to keep things in sync
-        if (order.linked_order_id) {
-            primariesToFetch.push(order.linked_order_id);
-            continue; // Skip adding directly, let the recursive fetch handle the whole group
-        }
-
-        let customerName = order.customer?.name;
-        let customerPhone = order.customer?.phone;
-
-        // If customer data is not present, fetch it (fallback)
-        if (!customerName && order.customer_id) {
-            const custRes = await getCustomerById(order.customer_id);
-            if (custRes.data) {
-                customerName = custRes.data.name;
-                customerPhone = custRes.data.phone;
-            }
-        }
-
-        const isExistingPrimary = order.child_orders && order.child_orders.length > 0;
-
-        newSelectedOrders.push({
+        const mapped: SelectedOrder = {
             id: order.id,
             invoiceNumber: order.invoice_number,
             orderDate: order.order_date,
             deliveryDate: order.delivery_date,
             customerId: order.customer_id,
-            customerName,
-            customerPhone,
+            customerName: order.customer?.name,
+            customerPhone: order.customer?.phone ?? undefined,
             productionStage: order.production_stage,
-            isExistingPrimary: isExistingPrimary
-        });
+            isExistingPrimary: order.child_orders && order.child_orders.length > 0,
+            isExistingChild: !!order.linked_order_id
+        };
+        
+        ordersMap.set(order.id, mapped);
 
-        // Collect child IDs to fetch their details
-        if (isExistingPrimary) {
-            const childIds = order.child_orders.map((c: any) => c.id || c.order_id).filter(Boolean);
-            childrenToFetch.push(...childIds);
+        // If it's a child, we need its primary
+        if (order.linked_order_id) {
+            idsToFetch.add(order.linked_order_id);
+        }
+
+        // If it's a primary, we need its children
+        if (order.child_orders) {
+            order.child_orders.forEach((c: any) => idsToFetch.add(c.id || c.order_id));
         }
     }
 
-    // 2. Identify missing group members (Children of selected primaries OR Primaries of selected children)
-    const existingIds = new Set([...selectedOrders.map(o => o.id), ...newSelectedOrders.map(o => o.id)]);
-    const finalFetchIds = [...new Set([...childrenToFetch, ...primariesToFetch])].filter(id => !existingIds.has(id));
+    // 2. Fetch missing group members
+    const finalFetchIds = Array.from(idsToFetch).filter(id => 
+        !ordersMap.has(id) && !selectedOrders.some(o => o.id === id)
+    );
 
-    // Update state with what we have so far
-    if (newSelectedOrders.length > 0) {
-        setSelectedOrders((prev) => [...prev, ...newSelectedOrders]);
-    }
-
-    // 3. Fetch and add missing group members recursively
     if (finalFetchIds.length > 0) {
         toast.info(`Syncing linked group members...`);
-        
         try {
-            const promises = finalFetchIds.map(id => getOrderForLinking(id));
-            const results = await Promise.all(promises);
+            const results = await Promise.all(finalFetchIds.map(id => getOrderForLinking(id)));
             const validOrders = results
                 .filter(res => res.status === "success" && res.data)
                 .map(res => res.data);
             
-            if (validOrders.length > 0) {
-                // Recursively call addOrdersToSelection with the newly fetched group members
-                await addOrdersToSelection(validOrders);
+            for (const order of validOrders) {
+                if (!order) continue;
+                ordersMap.set(order.id, {
+                    id: order.id,
+                    invoiceNumber: order.invoice_number,
+                    orderDate: order.order_date,
+                    deliveryDate: order.delivery_date,
+                    customerId: order.customer_id,
+                    customerName: order.customer?.name,
+                    customerPhone: order.customer?.phone ?? undefined,
+                    productionStage: order.production_stage,
+                    isExistingPrimary: order.child_orders && order.child_orders.length > 0,
+                    isExistingChild: !!order.linked_order_id
+                });
+                
+                // If the fetched order has more links, we could recurse, 
+                // but for a single level depth (primary <-> child), this is sufficient.
             }
         } catch (error) {
-            console.error("Failed to sync group", error);
-            toast.error("Some linked group members could not be loaded.");
+            console.error("Group sync failed", error);
+            toast.error("Failed to sync some group members");
         }
+    }
+
+    // 3. Update State once
+    const newItems = Array.from(ordersMap.values());
+    if (newItems.length > 0) {
+        setSelectedOrders(prev => {
+            const existingIds = new Set(prev.map(o => o.id));
+            const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
+            return [...prev, ...uniqueNewItems];
+        });
     }
   }
 
@@ -368,6 +372,7 @@ export default function LinkOrder() {
                 <SearchCustomer 
                     onCustomerFound={handleCustomerFound}
                     onHandleClear={() => {}}
+                    clearOnSelect={true}
                 />
             </div>
             
@@ -410,31 +415,36 @@ export default function LinkOrder() {
               )}
             </div>
 
-            <div className="divide-y divide-border flex-1 overflow-y-auto min-h-[300px]">
-              {!hasOrders ? (
-                <div className="p-12 text-center text-muted-foreground h-full flex flex-col items-center justify-center">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="p-4 bg-muted/50 rounded-full border-2 border-dashed border-border">
-                        <LinkIcon className="w-8 h-8 opacity-20" />
+            <div className="divide-y divide-border flex-1 overflow-y-auto min-h-[300px] relative">
+              <AnimatePresence initial={false}>
+                {!hasOrders ? (
+                  <motion.div 
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="p-12 text-center text-muted-foreground h-full flex flex-col items-center justify-center absolute inset-0"
+                  >
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="p-4 bg-muted/50 rounded-full border-2 border-dashed border-border">
+                          <LinkIcon className="w-8 h-8 opacity-20" />
+                      </div>
+                      <div>
+                          <p className="text-sm font-black uppercase tracking-tight">No orders selected</p>
+                          <p className="text-xs font-medium mt-1">Search and add orders to build your link group</p>
+                      </div>
                     </div>
-                    <div>
-                        <p className="text-sm font-black uppercase tracking-tight">No orders selected</p>
-                        <p className="text-xs font-medium mt-1">Search and add orders to build your link group</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <AnimatePresence mode="popLayout">
-                  {selectedOrders.map((order) => {
+                  </motion.div>
+                ) : (
+                  selectedOrders.map((order) => {
                     const isPrimary = order.id === primaryOrderId;
 
                     return (
                       <motion.div
                         key={order.id}
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
                         className={cn(
                           "flex flex-col sm:flex-row items-stretch sm:items-center p-3 transition-all border-l-4",
                           isPrimary 
@@ -465,7 +475,7 @@ export default function LinkOrder() {
                               {order.isExistingPrimary && !isPrimary && (
                                 <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
                               )}
-                              {!order.isExistingPrimary && !isPrimary && order.id !== primaryOrderId && (
+                              {order.isExistingChild && !isPrimary && (
                                 <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600 opacity-60">EXISTING CHILD</Badge>
                               )}
                            </div>
@@ -511,9 +521,9 @@ export default function LinkOrder() {
                         </div>
                       </motion.div>
                     );
-                  })}
-                </AnimatePresence>
-              )}
+                  })
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         </div>
