@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  getPendingOrdersByCustomer,
+  getOrdersForLinking,
+  getOrderForLinking,
   updateOrder,
-  getOrderDetails
 } from "@/api/orders";
 import { getCustomerById } from "@/api/customers";
 import { useQueryClient } from "@tanstack/react-query";
@@ -83,12 +83,7 @@ export default function LinkOrder() {
   // --- Search Handlers ---
   const handleCustomerFound = async (customer: Customer) => {
     try {
-      const ordersResponse = await getPendingOrdersByCustomer(
-        customer.id,
-        20,
-        "confirmed",
-        true // Include relations (customer and garments)
-      );
+      const ordersResponse = await getOrdersForLinking(customer.id);
 
       if (ordersResponse.data && ordersResponse.data.length > 0) {
         setCustomerOrders(ordersResponse.data);
@@ -110,7 +105,7 @@ export default function LinkOrder() {
     setIsSearchingId(true);
     
     try {
-        const res = await getOrderDetails(orderIdSearch, true);
+        const res = await getOrderForLinking(orderIdSearch);
         if (res.status === "error" || !res.data) {
             setIdError("Order ID not found");
             toast.error("Order ID not found");
@@ -135,7 +130,7 @@ export default function LinkOrder() {
     setIsSearchingFatoura(true);
     
     try {
-        const res = await getOrderDetails(fatouraSearch, true);
+        const res = await getOrderForLinking(fatouraSearch);
         if (res.status === "error" || !res.data) {
             setFatouraError("Invoice No not found");
             toast.error("Invoice Number not found");
@@ -162,33 +157,24 @@ export default function LinkOrder() {
         toast.warning("Only work orders can be linked.");
         return false;
     }
-    if (order.linked_order_id) {
-        toast.warning(`Order #${order.id} is already linked to Order #${order.linked_order_id} and cannot be re-linked.`);
-        return false;
-    }
     return true;
   };
 
   // --- Helper: Add Orders to Main List ---
   async function addOrdersToSelection(orders: any[]) {
-    const nonLinkedOrders = orders.filter((order) => !order.linked_order_id);
-
-    if (nonLinkedOrders.length < orders.length) {
-      const skippedCount = orders.length - nonLinkedOrders.length;
-      toast.warning(
-        `${skippedCount} order(s) were already linked as children and skipped.`,
-      );
-    }
-
-    if (nonLinkedOrders.length === 0) {
-      return;
-    }
-
     const newSelectedOrders: SelectedOrder[] = [];
-    const childrenToAdd: any[] = [];
+    const childrenToFetch: number[] = [];
+    const primariesToFetch: number[] = [];
 
-    for (const order of nonLinkedOrders) {
+    // 1. Process passed orders
+    for (const order of orders) {
         if (selectedOrders.some(p => p.id === order.id)) continue;
+
+        // If it's a child, we MUST fetch its primary and all siblings to keep things in sync
+        if (order.linked_order_id) {
+            primariesToFetch.push(order.linked_order_id);
+            continue; // Skip adding directly, let the recursive fetch handle the whole group
+        }
 
         let customerName = order.customer?.name;
         let customerPhone = order.customer?.phone;
@@ -216,47 +202,40 @@ export default function LinkOrder() {
             isExistingPrimary: isExistingPrimary
         });
 
-        // Collect children to add them too
+        // Collect child IDs to fetch their details
         if (isExistingPrimary) {
-            childrenToAdd.push(...order.child_orders.map((c: any) => ({
-                ...c,
-                // Ensure customer info is passed down to children
-                customer: { name: customerName, phone: customerPhone }
-            })));
+            const childIds = order.child_orders.map((c: any) => c.id || c.order_id).filter(Boolean);
+            childrenToFetch.push(...childIds);
         }
     }
 
-    setSelectedOrders((prev) => [...prev, ...newSelectedOrders]);
+    // 2. Identify missing group members (Children of selected primaries OR Primaries of selected children)
+    const existingIds = new Set([...selectedOrders.map(o => o.id), ...newSelectedOrders.map(o => o.id)]);
+    const finalFetchIds = [...new Set([...childrenToFetch, ...primariesToFetch])].filter(id => !existingIds.has(id));
 
-    // Recursively add children if any were found
-    if (childrenToAdd.length > 0) {
-        // We use a small delay or next tick to ensure state is ready, 
-        // though calling it directly here should work as it filters by `linked_order_id` internally
-        // BUT WAIT: `nonLinkedOrders` filters out anyone with `linked_order_id`. 
-        // So we need a special path for children.
+    // Update state with what we have so far
+    if (newSelectedOrders.length > 0) {
+        setSelectedOrders((prev) => [...prev, ...newSelectedOrders]);
+    }
+
+    // 3. Fetch and add missing group members recursively
+    if (finalFetchIds.length > 0) {
+        toast.info(`Syncing linked group members...`);
         
-        const childSelection: SelectedOrder[] = childrenToAdd
-            .filter(c => !selectedOrders.some(p => p.id === c.id))
-            .map(c => ({
-                id: c.id,
-                invoiceNumber: c.invoice_number,
-                orderDate: c.order_date,
-                deliveryDate: c.delivery_date,
-                customerId: c.customer_id,
-                customerName: c.customer?.name,
-                customerPhone: c.customer?.phone,
-                productionStage: c.production_stage,
-                isExistingPrimary: false // Children can't be primaries in this context
-            }));
-        
-        setSelectedOrders((prev) => {
-            const existingIds = new Set(prev.map(o => o.id));
-            const uniqueChildren = childSelection.filter(c => !existingIds.has(c.id));
-            return [...prev, ...uniqueChildren];
-        });
-        
-        if (childSelection.length > 0) {
-            toast.info(`Automatically added ${childSelection.length} linked child order(s).`);
+        try {
+            const promises = finalFetchIds.map(id => getOrderForLinking(id));
+            const results = await Promise.all(promises);
+            const validOrders = results
+                .filter(res => res.status === "success" && res.data)
+                .map(res => res.data);
+            
+            if (validOrders.length > 0) {
+                // Recursively call addOrdersToSelection with the newly fetched group members
+                await addOrdersToSelection(validOrders);
+            }
+        } catch (error) {
+            console.error("Failed to sync group", error);
+            toast.error("Some linked group members could not be loaded.");
         }
     }
   }
@@ -294,12 +273,6 @@ export default function LinkOrder() {
     if (!primaryOrderId) {
       toast.error("Please select a primary order.");
       return;
-    }
-
-    const otherPrimaries = selectedOrders.filter(o => o.isExistingPrimary && o.id !== primaryOrderId);
-    if (otherPrimaries.length > 0) {
-        toast.error(`You cannot make Order #${otherPrimaries[0].id} a child because it's already a primary of another group. Please select it as the primary instead.`);
-        return;
     }
 
     if (selectedOrders.length < 2) {
@@ -490,7 +463,10 @@ export default function LinkOrder() {
                                 <Badge variant="default" className="text-[8px] font-black h-4 px-1 rounded-sm">PRIMARY</Badge>
                               )}
                               {order.isExistingPrimary && !isPrimary && (
-                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-destructive text-destructive">MUST BE PRIMARY</Badge>
+                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
+                              )}
+                              {!order.isExistingPrimary && !isPrimary && order.id !== primaryOrderId && (
+                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600 opacity-60">EXISTING CHILD</Badge>
                               )}
                            </div>
                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -661,28 +637,24 @@ export default function LinkOrder() {
                   {customerOrders.map((order: any) => {
                     const isChild = !!order.linked_order_id;
                     const isPrimary = order.child_orders && order.child_orders.length > 0;
-                    const isBlocked = isChild;
                     const isSelected = selectedDialogIds.includes(order.id);
 
                     return (
                       <tr
                         key={order.id}
                         className={cn(
-                          "transition-colors group",
-                          isBlocked
-                            ? "bg-muted/30 opacity-60 grayscale cursor-not-allowed"
-                            : isSelected
+                          "transition-colors group cursor-pointer",
+                          isSelected
                               ? "bg-primary/5 hover:bg-primary/10"
                               : "hover:bg-muted/20",
                         )}
-                        onClick={() => !isBlocked && toggleDialogSelection(order.id)}
+                        onClick={() => toggleDialogSelection(order.id)}
                       >
                         <td className="p-4">
                           <div className="flex items-center justify-center">
                             <Checkbox
                                 checked={isSelected}
-                                onCheckedChange={() => !isBlocked && toggleDialogSelection(order.id)}
-                                disabled={isBlocked}
+                                onCheckedChange={() => toggleDialogSelection(order.id)}
                                 onClick={(e) => e.stopPropagation()}
                             />
                           </div>

@@ -112,6 +112,74 @@ export const getOrderByInvoice = async (invoiceNumber: number, includeRelations:
     return { status: 'success', data: flattenOrder(data) as Order };
 };
 
+/**
+ * Specialized fetch for Linking interface. 
+ * Includes basic order data plus a check for any child orders.
+ */
+export const getOrdersForLinking = async (
+    customerId: number,
+    checkoutStatus: string = "confirmed"
+): Promise<ApiResponse<Order[]>> => {
+    const { data, error, count } = await supabase
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id(*),
+            customer:customers(*),
+            child_orders:work_orders!linked_order_id(id:order_id)
+        `, { count: 'exact' })
+        .eq('customer_id', customerId)
+        .eq('checkout_status', checkoutStatus)
+        .eq('order_type', 'WORK')
+        .eq('brand', getBrand())
+        .order('order_date', { ascending: false });
+
+    if (error) {
+        return { status: 'error', message: error.message, data: [], count: 0 };
+    }
+
+    return {
+        status: 'success',
+        data: flattenOrder(data),
+        count: count || 0,
+    };
+};
+
+/**
+ * Direct lookup specialized for Linking interface.
+ */
+export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiResponse<Order>> => {
+    // 1. Try by ID
+    const { data: resId } = await supabase.from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id(*),
+            customer:customers(*),
+            child_orders:work_orders!linked_order_id(id:order_id)
+        `)
+        .eq('id', idOrInvoice)
+        .eq('brand', getBrand())
+        .maybeSingle();
+    
+    if (resId) return { status: 'success', data: flattenOrder(resId) };
+    
+    // 2. Try by Invoice Number
+    const { data: resInv } = await supabase.from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id!inner(*),
+            customer:customers(*),
+            child_orders:work_orders!linked_order_id(id:order_id)
+        `)
+        .eq('workOrder.invoice_number', idOrInvoice)
+        .eq('brand', getBrand())
+        .maybeSingle();
+        
+    if (resInv) return { status: 'success', data: flattenOrder(resInv) };
+    
+    return { status: 'error', message: "Order not found" };
+};
+
 export const createOrder = async (
     order: Partial<Order>,
 ): Promise<ApiResponse<Order>> => {
