@@ -83,6 +83,7 @@ interface FabricSelectionFormProps {
     orderDate?: Date | string | null;
     deliveryDate?: string | undefined;
     setDeliveryDate: (date: string) => void;
+    homeDelivery?: boolean;
     stitchingPrice: number;
     setStitchingPrice: (price: number) => void;
     initialCampaigns?: string[];
@@ -104,6 +105,7 @@ export function FabricSelectionForm({
     orderDate,
     deliveryDate,
     setDeliveryDate,
+    homeDelivery,
     stitchingPrice,
     setStitchingPrice,
     initialCampaigns = [],
@@ -291,6 +293,7 @@ export function FabricSelectionForm({
                 style_charge: totalStyleCharge,
                 stitching_price: stitchingPrice,
                 delivery_date: deliveryDate,
+                home_delivery: homeDelivery,
             });
         },
         onSuccess: async (response) => {

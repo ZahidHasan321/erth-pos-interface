@@ -60,7 +60,7 @@ export function useOrderHistory({
         .from('orders')
         .select(`
           *,
-          workOrder:work_orders(*),
+          workOrder:work_orders!order_id(*),
           customer:customers!inner(name, phone, nick_name),
           garments:garments(id),
           shelf_items:order_shelf_items(id)

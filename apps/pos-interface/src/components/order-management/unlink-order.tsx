@@ -1,538 +1,425 @@
 "use client";
 
 import {
-  getPendingOrdersByCustomer,
-  updateOrder,
-  getOrderById,
-  getOrderByInvoice,
+    updateOrder,
+    getLinkedOrders,
 } from "@/api/orders";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import {
-  Unlink,
-  Calendar as CalendarIcon,
-  AlertCircle,
-  User,
-  Package,
-  Check,
-  Clock,
-  RefreshCw
+    Unlink,
+    User,
+    Phone,
+    Package,
+    Clock,
+    RefreshCw,
+    ChevronDown,
+    Search,
+    ExternalLink,
+    Layers
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 // UI Components
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
 } from "../ui/dialog";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
-import { DirectLookupCard } from "./order-search-form";
-import { ErrorBoundary } from "../global/error-boundary";
 import { DatePicker } from "../ui/date-picker";
 import { cn } from "@/lib/utils";
-import { SearchCustomer } from "../forms/customer-demographics/search-customer";
-import { Separator } from "../ui/separator";
+import { Input } from "../ui/input";
 
-import type { Customer } from "@repo/database";
+import type { Order } from "@repo/database";
 
 export default function UnlinkOrder() {
-  const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
 
-  // Search State
-  const [orderIdSearch, setOrderIdSearch] = useState<number | undefined>();
-  const [fatouraSearch, setFatouraSearch] = useState<number | undefined>();
-  const [idError, setIdError] = useState<string | undefined>();
-  const [fatouraError, setFatouraError] = useState<string | undefined>();
-  
-  const [isSearchingId, setIsSearchingId] = useState(false);
-  const [isSearchingFatoura, setIsSearchingFatoura] = useState(false);
+    // Search/Filter State
+    const [searchQuery, setSearchQuery] = useState("");
 
-  // Global State
-  const [foundOrder, setFoundOrder] = useState<any | null>(null);
-  const [reviseDate, setReviseDate] = useState<Date | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+    // Data Fetching
+    const { data: linkedOrdersRes, isLoading } = useQuery({
+        queryKey: ["linked-orders"],
+        queryFn: getLinkedOrders,
+    });
 
-  // Dialog State
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
-  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<number | null>(null);
+    const linkedOrders = linkedOrdersRes?.data || [];
 
-  // Input Handlers
-  const handleOrderIdChange = (val: number | undefined) => {
-    setOrderIdSearch(val);
-    if (idError) setIdError(undefined);
-  };
+    // Grouping Logic
+    const linkGroups = useMemo(() => {
+        const groups: Record<number, { primaryId: number; children: Order[]; primaryDetails?: any }> = {};
 
-  const handleFatouraChange = (val: number | undefined) => {
-    setFatouraSearch(val);
-    if (fatouraError) setFatouraError(undefined);
-  };
+        linkedOrders.forEach((order: any) => {
+            const pId = order.linked_order_id;
+            if (pId) {
+                if (!groups[pId]) {
+                    groups[pId] = {
+                        primaryId: pId,
+                        children: [],
+                        primaryDetails: order.linkedTo ? {
+                            ...order.linkedTo,
+                            ... (Array.isArray(order.linkedTo.workOrder) ? order.linkedTo.workOrder[0] : order.linkedTo.workOrder)
+                        } : undefined
+                    };
+                }
+                groups[pId].children.push(order);
+            }
+        });
 
-  // Search Handlers
-  const handleCustomerFound = async (customer: Customer) => {
-    try {
-      const ordersResponse = await getPendingOrdersByCustomer(
-        customer.id,
-        20,
-        "confirmed",
-        true // Include relations
-      );
+        // Filter by search query (Invoice or ID or Customer Name)
+        return Object.values(groups).filter(group => {
+            if (!searchQuery) return true;
+            const q = searchQuery.toLowerCase();
+            const matchesPrimaryId = group.primaryId.toString().includes(q);
+            const matchesPrimaryInvoice = group.primaryDetails?.invoice_number?.toString().includes(q);
+            const matchesPrimaryCustomer = group.primaryDetails?.customer?.name.toLowerCase().includes(q);
+            const matchesChild = group.children.some(c =>
+                c.id.toString().includes(q) ||
+                c.invoice_number?.toString().includes(q) ||
+                c.customer?.name.toLowerCase().includes(q)
+            );
+            return matchesPrimaryId || matchesPrimaryInvoice || matchesPrimaryCustomer || matchesChild;
+        });
+    }, [linkedOrders, searchQuery]);
 
-      if (ordersResponse.data && ordersResponse.data.length > 0) {
-        setCustomerOrders(ordersResponse.data);
-        setSelectedDialogOrderId(null);
-        setIsDialogOpen(true);
-      } else {
-        toast.info(`No confirmed orders found for ${customer.name}.`);
-      }
-    } catch (error) {
-      console.error("Failed to fetch customer orders", error);
-      toast.error("Failed to fetch customer orders.");
-    }
-  };
+    // Global State for unlinking action
+    const [orderToUnlink, setOrderToUnlink] = useState<Order | null>(null);
+    const [reviseDate, setReviseDate] = useState<Date | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleIdSearch = async () => {
-    if (!orderIdSearch) return;
-    setIdError(undefined);
-    setIsSearchingId(true);
-    try {
-        const res = await getOrderById(orderIdSearch, true);
-        if (res.status === "error" || !res.data) {
-            setIdError("Order not found");
-            toast.error("Order ID not found");
-        } else {
-            setFoundOrder(res.data);
-            setOrderIdSearch(undefined);
+    // Unlink Handler
+    async function handleUnlinkConfirm() {
+        if (!orderToUnlink || !reviseDate) return;
+
+        setIsSubmitting(true);
+        try {
+            const updateData: any = {
+                linked_order_id: null,
+                unlinked_date: new Date().toISOString(),
+                delivery_date: reviseDate.toISOString(),
+            };
+
+            await updateOrder(updateData, orderToUnlink.id);
+
+            toast.success(`Order #${orderToUnlink.id} unlinked successfully!`);
+            queryClient.invalidateQueries({ queryKey: ["linked-orders"] });
+            setOrderToUnlink(null);
+            setReviseDate(null);
+        } catch (error) {
+            console.error("Unlink failed", error);
+            toast.error("Failed to unlink order.");
+        } finally {
+            setIsSubmitting(false);
         }
-    } catch (err) {
-        toast.error("Search failed");
-    } finally {
-        setIsSearchingId(false);
-    }
-  };
-
-  const handleFatouraSearch = async () => {
-    if (!fatouraSearch) return;
-    setFatouraError(undefined);
-    setIsSearchingFatoura(true);
-    try {
-        const res = await getOrderByInvoice(fatouraSearch, true);
-        if (res.status === "error" || !res.data) {
-            setFatouraError("Invoice not found");
-            toast.error("Invoice Number not found");
-        } else {
-            setFoundOrder(res.data);
-            setFatouraSearch(undefined);
-        }
-    } catch (err) {
-        toast.error("Search failed");
-    } finally {
-        setIsSearchingFatoura(false);
-    }
-  };
-
-  // Dialog Handlers
-  function handleDialogConfirm() {
-    if (!selectedDialogOrderId) {
-      toast.error("Please select an order.");
-      return;
-    }
-    const order = customerOrders.find((o) => o.id === selectedDialogOrderId);
-    if (order) {
-      setFoundOrder(order);
-      setIsDialogOpen(false);
-    }
-  }
-
-  // Unlink Handler
-  async function handleUnlink() {
-    if (!foundOrder) return;
-
-    if (!foundOrder.linked_order_id) {
-      toast.info("This order is not currently linked.");
-      return;
     }
 
-    if (!reviseDate) {
-      toast.error("Please select a new delivery date.");
-      return;
-    }
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.1 },
+        },
+    };
 
-    setIsSubmitting(true);
-    try {
-      const updateData: any = {
-        linked_order_id: null,
-        unlinked_date: new Date().toISOString(),
-        delivery_date: reviseDate.toISOString(),
-      };
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1 },
+    };
 
-      await updateOrder(updateData, foundOrder.id);
-
-      toast.success("Order unlinked successfully! Delivery date updated.");
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setTimeout(() => handleClear(), 1500);
-    } catch (error) {
-      console.error("Unlink failed", error);
-      toast.error("Failed to unlink order.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  // Clear/Search Again Handler
-  function handleClear() {
-    setFoundOrder(null);
-    setReviseDate(null);
-    setOrderIdSearch(undefined);
-    setFatouraSearch(undefined);
-    setIdError(undefined);
-    setFatouraError(undefined);
-    setCustomerOrders([]);
-    setSelectedDialogOrderId(null);
-  }
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
-  };
-
-  return (
-    <motion.section
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8 p-6 md:p-10 max-w-6xl mx-auto"
-    >
-      {/* --- Page Header --- */}
-      <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold text-foreground">
-          Unlink Order
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Disconnect an order from its group and reschedule delivery
-        </p>
-      </motion.div>
-
-      {/* --- Search Section --- */}
-      <AnimatePresence mode="wait">
-        {!foundOrder ? (
-          <motion.div
-            key="search-mode"
-            variants={itemVariants}
+    return (
+        <motion.section
+            variants={containerVariants}
             initial="hidden"
             animate="visible"
-            exit={{ opacity: 0, y: -20 }}
-            className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch"
-          >
-            <div className="lg:col-span-7">
-                <SearchCustomer 
-                    onCustomerFound={handleCustomerFound}
-                    onHandleClear={() => {}}
-                />
+            className="space-y-4 p-4 md:p-6 max-w-6xl mx-auto"
+        >
+            {/* --- Page Header --- */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
+                <motion.div variants={itemVariants} className="space-y-1">
+                    <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
+                        Unlink <span className="text-primary">Order</span>
+                    </h1>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+                        Manage grouped orders and disconnect items from primary references
+                    </p>
+                </motion.div>
+
+                <motion.div variants={itemVariants} className="w-full md:w-80">
+                    <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input
+                            placeholder="Search ID, Invoice or Customer..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10 h-10 bg-card border-2 border-border focus-visible:ring-primary/20"
+                        />
+                    </div>
+                </motion.div>
             </div>
-            <div className="lg:col-span-5">
-                <DirectLookupCard 
-                    orderId={orderIdSearch}
-                    fatoura={fatouraSearch}
-                    onOrderIdChange={handleOrderIdChange}
-                    onFatouraChange={handleFatouraChange}
-                    onOrderIdSubmit={handleIdSearch}
-                    onFatouraSubmit={handleFatouraSearch}
-                    isSearchingId={isSearchingId}
-                    isSearchingFatoura={isSearchingFatoura}
-                    idError={idError}
-                    fatouraError={fatouraError}
-                />
+
+            {/* --- Groups List --- */}
+            <div className="space-y-2">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <RefreshCw className="w-10 h-10 text-primary/40 animate-spin" />
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading link groups...</p>
+                    </div>
+                ) : linkGroups.length === 0 ? (
+                    <div className="bg-muted/30 rounded-3xl border-2 border-dashed border-border p-20 text-center">
+                        <div className="size-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Layers className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground uppercase tracking-tight">No Active Link Groups</h3>
+                        <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">
+                            {searchQuery ? "Try adjusting your search filters" : "There are currently no orders linked in the system"}
+                        </p>
+                    </div>
+                ) : (
+                    linkGroups.map((group) => (
+                        <LinkGroupCard
+                            key={group.primaryId}
+                            group={group}
+                            onUnlink={(order) => setOrderToUnlink(order)}
+                        />
+                    ))
+                )}
             </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="display-mode"
-            variants={itemVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-6"
-          >
-            <Card className="overflow-hidden border-2 border-primary/20 shadow-xl">
-              <CardHeader className="bg-muted/30 border-b border-border p-6">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-primary/10 text-primary rounded-xl shadow-sm">
-                      <Package className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl font-bold text-foreground">Order #{foundOrder.id}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Inv: {foundOrder.invoice_number || "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge 
-                    variant={foundOrder.linked_order_id ? "default" : "outline"}
-                    className={cn(
-                        "h-7 px-3 font-semibold text-[10px]",
-                        !foundOrder.linked_order_id && "text-muted-foreground opacity-50"
-                    )}
-                  >
-                    {foundOrder.linked_order_id ? `Linked to #${foundOrder.linked_order_id}` : "Not Linked"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="p-0">
-                <div className="grid grid-cols-1 md:grid-cols-12 items-stretch">
-                  <div className="md:col-span-7 p-8 space-y-8 border-r border-border/60">
-                    <div className="grid grid-cols-2 gap-8">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Production Stage</Label>
-                            <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-primary" />
-                                <span className="font-bold text-sm text-foreground uppercase">{foundOrder.production_stage?.replace(/_/g, " ")}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current Delivery</Label>
-                            <div className="flex items-center gap-2">
-                                <CalendarIcon className="w-4 h-4 text-primary" />
-                                <span className="font-bold text-sm text-foreground">
-                                    {foundOrder.delivery_date ? format(new Date(foundOrder.delivery_date), "PPP") : "Not Set"}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
 
-                    <Separator className="opacity-50" />
+            {/* --- Unlink Confirmation Modal --- */}
+            <Dialog open={!!orderToUnlink} onOpenChange={(open) => !open && setOrderToUnlink(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+                            <Unlink className="w-6 h-6 text-destructive" />
+                            Unlink Order
+                        </DialogTitle>
+                    </DialogHeader>
 
-                    <div className="space-y-4">
-                        <Label className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
-                            <User className="w-3.5 h-3.5" /> Customer Details
-                        </Label>
-                        <div className="bg-muted/30 rounded-xl p-4 border border-border grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-tight">Name</span>
-                                <span className="font-bold text-sm text-foreground truncate block">{foundOrder.customer?.name || "N/A"}</span>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-tight">Phone</span>
-                                <span className="font-bold text-sm text-foreground block">{foundOrder.customer?.phone || "N/A"}</span>
-                            </div>
+                    <div className="py-6 space-y-6">
+                        <div className="bg-destructive/5 border border-destructive/10 rounded-2xl p-4">
+                            <p className="text-sm font-medium text-destructive leading-relaxed">
+                                You are about to disconnect <span className="font-bold">Order #{orderToUnlink?.id}</span> from its primary group.
+                                This will make it an independent order.
+                            </p>
                         </div>
-                    </div>
-                  </div>
 
-                  <div className="md:col-span-5 p-8 bg-muted/5 space-y-6">
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 border-b border-border pb-2">
-                            <Unlink className="w-4 h-4 text-destructive" />
-                            <h4 className="text-sm font-bold text-foreground">Unlink Configuration</h4>
-                        </div>
-                        
                         <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider ml-1">New Delivery Date</Label>
-                            <DatePicker 
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">New Delivery Date</Label>
+                            <DatePicker
                                 value={reviseDate || undefined}
                                 onChange={(date) => setReviseDate(date || null)}
-                                placeholder="Select New Date"
-                                className="w-full h-12 border-2 font-semibold"
+                                className="w-full h-12 border-2 text-base font-bold"
+                                placeholder="Select Independent Delivery Date"
                             />
-                            <p className="text-[10px] text-muted-foreground font-medium px-1 italic">
-                                Required to mark the order as independent
+                            <p className="text-[10px] font-bold text-muted-foreground italic px-1">
+                                * Required to schedule the workshop separately
                             </p>
                         </div>
                     </div>
 
-                    <div className="pt-4 space-y-3">
+                    <DialogFooter className="gap-3">
+                        <Button variant="ghost" className="font-bold uppercase tracking-widest text-xs" onClick={() => setOrderToUnlink(null)}>
+                            Cancel
+                        </Button>
                         <Button
-                            onClick={handleUnlink}
                             variant="destructive"
-                            className="w-full h-12 font-bold uppercase tracking-wider shadow-sm transition-all active:scale-[0.98]"
-                            disabled={isSubmitting || !foundOrder.linked_order_id || !reviseDate}
+                            className="h-11 px-6 font-black uppercase tracking-widest shadow-lg shadow-destructive/20"
+                            disabled={!reviseDate || isSubmitting}
+                            onClick={handleUnlinkConfirm}
                         >
-                            {isSubmitting ? (
-                                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                            ) : (
-                                <Unlink className="w-5 h-5 mr-2" />
-                            )}
-                            Unlink & Update
+                            {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Unlink className="w-4 h-4 mr-2" />}
+                            Confirm Unlink
                         </Button>
-                        <Button
-                            onClick={handleClear}
-                            variant="ghost"
-                            className="w-full font-bold uppercase tracking-widest text-[10px] text-muted-foreground hover:bg-background"
-                        >
-                            Cancel and Search Again
-                        </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </motion.section>
+    );
+}
 
-            <motion.div variants={itemVariants} className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                    <p className="text-xs font-black uppercase tracking-tight text-amber-900">System Note</p>
-                    <p className="text-[11px] font-medium text-amber-800 leading-relaxed uppercase tracking-wide">
-                        Unlinking an order will remove its relationship with other orders in the workshop group. 
-                        A new delivery date must be set to ensure proper scheduling.
-                    </p>
-                </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; children: Order[]; primaryDetails?: any }, onUnlink: (order: Order) => void }) {
+    const [isExpanded, setIsExpanded] = useState(false);
 
-      <ErrorBoundary>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
-            <DialogHeader className="border-b border-border pb-4 px-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-destructive/10 rounded-xl text-destructive">
-                  <Unlink className="w-6 h-6" />
-                </div>
-                <div>
-                  <DialogTitle className="text-2xl font-bold uppercase tracking-tight text-foreground">
-                    Select Order to Unlink
-                  </DialogTitle>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
-                    Choose a linked order to disconnect from its group
-                  </p>
-                </div>
-              </div>
-            </DialogHeader>
+    // Get details from primaryDetails if available
+    const primary = group.primaryDetails;
 
-            <RadioGroup
-              value={selectedDialogOrderId?.toString()}
-              onValueChange={(val) => setSelectedDialogOrderId(parseInt(val))}
-              className="overflow-y-auto max-h-[50vh] px-1"
+    // Robust extraction helpers
+    const getCustomerName = (obj: any) => {
+        const cust = Array.isArray(obj?.customer) ? obj.customer[0] : obj?.customer;
+        return cust?.name;
+    };
+
+    const getCustomerPhone = (obj: any) => {
+        const cust = Array.isArray(obj?.customer) ? obj.customer[0] : obj?.customer;
+        return cust?.phone;
+    };
+
+    const customerName = getCustomerName(primary) || getCustomerName(group.children[0]) || "Unknown Customer";
+    const customerPhone = getCustomerPhone(primary) || getCustomerPhone(group.children[0]);
+    const invoice = primary?.invoice_number;
+    const deliveryDate = primary?.delivery_date;
+    const productionStage = primary?.production_stage;
+
+    return (
+        <Card className={cn(
+            "overflow-hidden border-2 transition-all duration-300",
+            isExpanded ? "border-primary/30 shadow-lg" : "border-border/60 hover:border-primary/20 shadow-sm"
+        )}>
+            <div
+                className={cn(
+                    "px-5 py-3 cursor-pointer flex items-center justify-between transition-colors",
+                    isExpanded ? "bg-primary/5" : "bg-card hover:bg-muted/30"
+                )}
+                onClick={() => setIsExpanded(!isExpanded)}
             >
-              <div className="border rounded-xl bg-muted/5 overflow-hidden">
-                <table className="w-full text-sm min-w-[700px]">
-                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
-                    <tr className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      <th className="p-4 w-12 text-center">Select</th>
-                      <th className="p-4 text-left">Identity</th>
-                      <th className="p-4 text-left">Link Status</th>
-                      <th className="p-4 text-left">Delivery Date</th>
-                      <th className="p-4 text-left">Stage</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {customerOrders.map((order) => {
-                      const isLinked = !!order.linked_order_id;
-                      const isSelected = selectedDialogOrderId === order.id;
-                      const canSelect = isLinked;
-
-                      return (
-                        <tr
-                          key={order.id}
-                          className={cn(
-                            "transition-colors group",
-                            !canSelect
-                              ? "bg-muted/30 opacity-60 grayscale cursor-not-allowed"
-                              : isSelected
-                                ? "bg-primary/5 hover:bg-primary/10"
-                                : "hover:bg-muted/20",
-                          )}
-                          onClick={() => canSelect && setSelectedDialogOrderId(order.id)}
-                        >
-                          <td className="p-4">
-                            <div className="flex items-center justify-center">
-                                <RadioGroupItem
-                                    value={order.id.toString()}
-                                    id={`dialog-order-${order.id}`}
-                                    disabled={!canSelect}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="space-y-1">
-                              <h4 className="font-bold text-xs uppercase text-foreground">
-                                  #{order.id}
-                              </h4>
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase">
-                                Inv: {order.invoice_number ?? "—"}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                             {isLinked ? (
-                                <Badge variant="secondary" className="text-[8px] font-bold h-4 px-1 rounded-sm whitespace-nowrap">
-                                    LINKED TO #{order.linked_order_id}
+                <div className="flex items-center gap-5 flex-1 min-w-0">
+                    <div className="size-11 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-sm border border-primary/5">
+                        <Package className="w-5.5 h-5.5" />
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-lg font-black uppercase tracking-tight leading-none">#{group.primaryId}</h3>
+                            {invoice && (
+                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md uppercase tracking-widest leading-none">INV {invoice}</span>
+                            )}
+                            <div className="h-4 w-px bg-border/60 mx-1" />
+                            <span className="text-base font-black text-foreground truncate uppercase tracking-tight">{customerName}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 flex-wrap">
+                            {productionStage && (
+                                <Badge variant="secondary" className="h-5 px-2 text-[10px] font-black uppercase bg-blue-50 text-blue-700 border-blue-100 shadow-none">
+                                    {productionStage.replace(/_/g, " ")}
                                 </Badge>
-                             ) : (
-                                <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-40">Independent</span>
-                             )}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-xs font-bold whitespace-nowrap text-foreground">
-                                    {order.delivery_date ? format(new Date(order.delivery_date), "PP") : "Not Set"}
-                                </span>
+                            )}
+                            <div className="flex items-center gap-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                                <div className="flex items-center gap-1.5">
+                                    <Phone className="size-3 text-primary/60" />
+                                    <span className="font-mono">{customerPhone || "N/A"}</span>
+                                </div>
+                                {deliveryDate && (
+                                    <div className="flex items-center gap-1.5 text-primary">
+                                        <Clock className="size-3" />
+                                        <span>{format(new Date(deliveryDate), "PP")}</span>
+                                    </div>
+                                )}
                             </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider h-5 px-2">
-                              {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </RadioGroup>
+                        </div>
+                    </div>
+                </div>
 
-            <DialogFooter className="border-t border-border pt-6 px-2">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                <div className="flex items-center gap-2">
-                   <div className={cn("h-2 w-2 rounded-full bg-primary", selectedDialogOrderId && "animate-pulse")} />
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                    {selectedDialogOrderId ? `Order #${selectedDialogOrderId} Selected` : "Select a linked order"}
-                  </p>
+                <div className="flex items-center gap-6">
+                    <div className="hidden lg:flex flex-col items-end">
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Linked Group</span>
+                        <div className="flex -space-x-2">
+                            {group.children.slice(0, 5).map((c) => (
+                                <div key={c.id} className="size-6 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shadow-sm">
+                                    {c.id.toString().slice(-2)}
+                                </div>
+                            ))}
+                            {group.children.length > 5 && (
+                                <div className="size-6 rounded-full border-2 border-background bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold shadow-sm">
+                                    +{group.children.length - 5}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <motion.div
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        className="p-2 bg-muted/50 rounded-xl"
+                    >
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    </motion.div>
                 </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    className="font-bold uppercase tracking-widest text-[10px]"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleDialogConfirm}
-                    disabled={!selectedDialogOrderId}
-                    className="font-bold uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Load for Unlinking
-                  </Button>
-                </div>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </ErrorBoundary>
-    </motion.section>
-  );
+            </div>
+
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                    >
+                        <CardContent className="p-0 border-t border-border/40 bg-muted/5">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/60 bg-muted/10">
+                                            <th className="py-2 px-4 text-left">Order Identity</th>
+                                            <th className="py-2 px-4 text-left">Production Stage</th>
+                                            <th className="py-2 px-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/40">
+                                        {group.children.map((child) => (
+                                            <tr key={child.id} className="group hover:bg-muted/20 transition-colors">
+                                                <td className="py-2 px-4">
+                                                    <div className="space-y-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-sm uppercase">#{child.id}</span>
+                                                            <span className="text-xs font-bold text-primary opacity-70">INV: {child.invoice_number || "Draft"}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                                            <User className="size-3.5" />
+                                                            <span className="text-sm font-bold uppercase truncate max-w-48">{getCustomerName(child)}</span>
+                                                            <span className="w-1 h-1 rounded-full bg-border" />
+                                                            <span className="text-xs font-medium font-mono">{getCustomerPhone(child)}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-2 px-4">
+                                                    <Badge variant="secondary" className="font-bold text-xs uppercase tracking-widest px-2 h-6">
+                                                        {child.production_stage?.replace(/_/g, " ") || "Pending"}
+                                                    </Badge>
+                                                </td>
+                                                <td className="py-2 px-4 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-9 px-3 text-primary hover:text-primary hover:bg-primary/10 font-bold text-xs uppercase"
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                to={child.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                                                                search={{ orderId: child.id }}
+                                                            >
+                                                                <ExternalLink className="size-4 mr-1.5" />
+                                                                View
+                                                            </Link>
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-9 px-3 text-destructive hover:text-destructive hover:bg-destructive/10 font-bold text-xs uppercase"
+                                                            onClick={() => onUnlink(child)}
+                                                        >
+                                                            <Unlink className="size-4 mr-1.5" />
+                                                            Unlink
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </Card>
+    );
 }

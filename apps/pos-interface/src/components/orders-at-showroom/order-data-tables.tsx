@@ -33,13 +33,20 @@ import { cn } from "@/lib/utils";
 import type { OrderRow } from "./types";
 import type { FilterState } from "./order-filters";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 type OrderDataTableProps = {
   columns: ColumnDef<OrderRow, unknown>[];
   data: OrderRow[];
   rowSelection: RowSelectionState;
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
   filters: FilterState;
-  onFilteredDataChange?: (count: number) => void;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" });
@@ -57,12 +64,12 @@ export function OrderDataTable({
   rowSelection,
   onRowSelectionChange,
   filters,
-  onFilteredDataChange,
 }: OrderDataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
+  const [pageSize, setPageSize] = React.useState(20);
 
   // --- FILTERING & SORTING LOGIC ---
   const processedData = React.useMemo(() => {
@@ -184,11 +191,6 @@ export function OrderDataTable({
     return result;
   }, [data, filters]);
 
-  // Notify parent
-  React.useEffect(() => {
-    onFilteredDataChange?.(processedData.length);
-  }, [processedData.length, onFilteredDataChange]);
-
   const table = useReactTable({
     data: processedData,
     columns,
@@ -198,6 +200,15 @@ export function OrderDataTable({
       columnVisibility,
       rowSelection,
       expanded,
+      pagination: {
+        pageIndex: 0,
+        pageSize: pageSize,
+      }
+    },
+    initialState: {
+      pagination: {
+        pageSize: pageSize,
+      }
     },
     enableRowSelection: true,
     enableExpanding: true,
@@ -213,6 +224,8 @@ export function OrderDataTable({
     getExpandedRowModel: getExpandedRowModel(),
     enableSorting: false, 
   });
+
+  const totalFilteredCount = table.getFilteredRowModel().rows.length;
 
   return (
     <div className="space-y-4">
@@ -281,18 +294,18 @@ export function OrderDataTable({
                                     {garment.isBrova ? "Brova" : "Final"}
                                   </span>
                                 </div>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground text-xs">Stage</span>
-                                    <span className="font-medium text-xs">{garment.pieceStage}</span>
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Stage</span>
+                                    <span className="font-bold text-xs bg-muted px-2 py-0.5 rounded-md">{garment.pieceStage}</span>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground text-xs">Style</span>
-                                    <span className="font-medium text-xs">{garment.style || "—"}</span>
+                                  <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-border/40">
+                                    <span className="text-muted-foreground text-[10px] uppercase font-black tracking-widest">Garment Configuration</span>
+                                    <span className="font-bold text-xs text-primary leading-relaxed">{garment.style || "Standard Kuwaiti Style"}</span>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground text-xs">Delivery</span>
-                                    <span className="font-medium text-xs">{formatDate(garment.deliveryDate)}</span>
+                                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/40">
+                                    <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Delivery</span>
+                                    <span className="font-bold text-xs">{formatDate(garment.deliveryDate)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -317,36 +330,65 @@ export function OrderDataTable({
         </Table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="h-8"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          <div className="text-xs font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+      {/* Pagination & Controls */}
+      <div className="flex items-center justify-between pt-4 border-t border-border/40">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows per page</span>
+            <Select value={pageSize.toString()} onValueChange={(v) => {
+                const newSize = Number(v);
+                setPageSize(newSize);
+                table.setPageSize(newSize);
+            }}>
+                <SelectTrigger className="h-8 w-20 bg-card border-border/60">
+                    <SelectValue placeholder={pageSize.toString()} />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+            </Select>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="h-8"
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+          
+          <div className="text-sm text-muted-foreground">
+            {totalFilteredCount > 0 && (
+                <>
+                    Showing <span className="font-bold text-foreground">{table.getRowModel().rows.length}</span> out of{" "}
+                    <span className="font-bold text-foreground">{totalFilteredCount}</span> orders
+                </>
+            )}
+          </div>
+
+          <div className="text-xs text-muted-foreground border-l border-border/60 pl-6">
+            {table.getFilteredSelectedRowModel().rows.length} row(s) selected
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

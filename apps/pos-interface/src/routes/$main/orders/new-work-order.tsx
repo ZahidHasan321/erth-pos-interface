@@ -69,6 +69,14 @@ export const Route = createFileRoute("/$main/orders/new-work-order")({
         };
     },
     component: NewWorkOrder,
+    pendingComponent: () => (
+        <FullScreenLoader
+            title="Initializing Work Order"
+            subtitle="Setting up your workstation..."
+        />
+    ),
+    pendingMs: 0,
+    pendingMinMs: 500,
     head: () => ({
         meta: [{ title: "New Work Order" }],
     }),
@@ -137,6 +145,7 @@ function NewWorkOrder() {
     // Track loading state when fetching order data
     const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
     const loadingOrderIdRef = React.useRef<number | null>(null);
+
     // ============================================================================
     // FORMS SETUP
     // ============================================================================
@@ -178,6 +187,21 @@ function NewWorkOrder() {
             stitching_price: stitchingPrice,
         },
     });
+
+    const resetLocalState = React.useCallback(() => {
+        demographicsForm.reset(customerDemographicsDefaults);
+        measurementsForm.reset({
+            ...customerMeasurementsDefaults,
+            measurement_date: new Date().toISOString(),
+        });
+        fabricSelectionForm.reset({
+            garments: [],
+            signature: "",
+        });
+        shelfForm.reset({ products: [] });
+        OrderForm.reset(orderDefaults);
+        setIsLoadingOrderData(false);
+    }, [demographicsForm, measurementsForm, fabricSelectionForm, shelfForm, OrderForm]);
 
     // Watch form values
     const checkoutStatus = useWatch({
@@ -256,7 +280,7 @@ function NewWorkOrder() {
     // ============================================================================
     // PENDING ORDER LOADING
     // ============================================================================
-    const handleCustomerFound = async (customer: Customer) => {
+    const handleCustomerFound = React.useCallback(async (customer: Customer) => {
         const formValues = mapCustomerToFormValues(customer);
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
@@ -278,9 +302,9 @@ function NewWorkOrder() {
             toast.success(`Customer loaded: ${customer.name}`);
             setCurrentStep(0);
         }
-    };
+    }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep]);
 
-    const handlePendingOrderSelected = async (order: Order) => {
+    const handlePendingOrderSelected = React.useCallback(async (order: Order) => {
         // Set loading state
         setIsLoadingOrderData(true);
         try {
@@ -388,9 +412,9 @@ function NewWorkOrder() {
         } finally {
             setIsLoadingOrderData(false);
         }
-    };
+    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep]);
 
-    const loadCustomerFresh = (customer: Customer) => {
+    const loadCustomerFresh = React.useCallback((customer: Customer) => {
         resetWorkOrder();
         resetLocalState();
         const formValues = mapCustomerToFormValues(customer);
@@ -398,9 +422,9 @@ function NewWorkOrder() {
         setCustomerDemographics(formValues);
         toast.success(`Customer loaded: ${customer.name}`);
         setCurrentStep(0);
-    };
+    }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep]);
 
-    const handleTopLevelCustomerFound = (customer: Customer) => {
+    const handleTopLevelCustomerFound = React.useCallback((customer: Customer) => {
         if (orderId) {
             openDialog(
                 "Start New Order?",
@@ -413,9 +437,9 @@ function NewWorkOrder() {
         } else {
             loadCustomerFresh(customer);
         }
-    };
+    }, [orderId, openDialog, loadCustomerFresh, closeDialog]);
 
-    const handleTopLevelPendingOrderSelected = (order: Order) => {
+    const handleTopLevelPendingOrderSelected = React.useCallback((order: Order) => {
         if (orderId) {
             openDialog(
                 "Switch Order?",
@@ -428,7 +452,7 @@ function NewWorkOrder() {
         } else {
             handlePendingOrderSelected(order);
         }
-    };
+    }, [orderId, openDialog, handlePendingOrderSelected, closeDialog]);
 
     // Load order from search params if provided
     React.useEffect(() => {
@@ -609,6 +633,7 @@ function NewWorkOrder() {
                 shelfCharge: data.shelf_charge ?? 0,
                 homeDelivery: data.home_delivery,
                 deliveryDate: order.delivery_date ?? undefined,
+                stitchingPrice: data.stitching_price,
             },
             shelfItems,
             fabricItems
@@ -657,21 +682,6 @@ function NewWorkOrder() {
     const [pendingNavigationPath, setPendingNavigationPath] = React.useState<
         string | null
     >(null);
-
-    const resetLocalState = () => {
-        demographicsForm.reset(customerDemographicsDefaults);
-        measurementsForm.reset({
-            ...customerMeasurementsDefaults,
-            measurement_date: new Date().toISOString(),
-        });
-        fabricSelectionForm.reset({
-            garments: [],
-            signature: "",
-        });
-        shelfForm.reset({ products: [] });
-        OrderForm.reset(orderDefaults);
-        setIsLoadingOrderData(false);
-    };
 
     // Clear pending navigation when dialog closes without confirming
     React.useEffect(() => {
@@ -978,6 +988,7 @@ function NewWorkOrder() {
                             setDeliveryDate={(date: string) =>
                                 setOrder({ delivery_date: date })
                             }
+                            homeDelivery={order.home_delivery}
                             fatoura={fatoura}
                             orderDate={order.order_date ?? undefined}
                             stitchingPrice={stitchingPrice}

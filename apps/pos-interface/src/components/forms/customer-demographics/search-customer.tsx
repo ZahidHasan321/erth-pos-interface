@@ -279,166 +279,151 @@ export function SearchCustomer({
             </div>
           </div>
 
-        {/* Floating Results List */}
-        {showList && (
-          <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-border bg-white shadow-2xl overflow-hidden z-40 transition-all duration-150 transform origin-top">
-            <Command shouldFilter={false} className="bg-transparent">
-              <CommandList className="max-h-[400px] scrollbar-thin overflow-y-auto">
-                {showSkeleton ? (
-                  <div className="p-2 space-y-1">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center justify-between p-4 h-[76px] border-b border-border/20 last:border-0">
-                        <div className="flex items-center gap-4">
-                          <Skeleton className="h-10 w-10 rounded-full" />
-                          <div className="space-y-2">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-24" />
+          {/* Floating Results List */}
+          {showList && (
+            <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-border bg-white shadow-2xl overflow-hidden z-40 transition-all duration-150 transform origin-top">
+              <Command shouldFilter={false} className="bg-transparent">
+                <CommandList className="max-h-[400px] scrollbar-thin overflow-y-auto">
+                  {showSkeleton ? (
+                    <div className="p-2 space-y-1">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center justify-between p-4 h-[76px] border-b border-border/20 last:border-0">
+                          <div className="flex items-center gap-4">
+                            <Skeleton className="h-10 w-10 rounded-full" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-24" />
+                            </div>
                           </div>
+                          <Skeleton className="h-6 w-16 rounded-full" />
                         </div>
-                        <Skeleton className="h-6 w-16 rounded-full" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    {!isFetching && customers.length === 0 && hasMinChars && (
-                      <div className="p-12 py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground min-h-[228px]">
-                        <div className="bg-muted p-4 rounded-full">
-                          <AlertCircle className="size-10 opacity-20" />
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {!isFetching && customers.length === 0 && hasMinChars && (
+                        <div className="p-12 py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground min-h-[228px]">
+                          <div className="bg-muted p-4 rounded-full">
+                            <AlertCircle className="size-10 opacity-20" />
+                          </div>
+                          <p className="text-sm font-medium">No customers found matching "{debouncedSearch}"</p>
                         </div>
-                        <p className="text-sm font-medium">No customers found matching "{debouncedSearch}"</p>
-                      </div>
-                    )}
+                      )}
 
-                    {showRecent && (
-                      <CommandGroup heading={
-                        <div className="flex items-center gap-2">
-                          <History className="size-3" />
-                          <span>Recent Searches</span>
-                        </div>
-                      }>
-                        {recentCustomers.map((customer) => (
-                          <CommandItem
-                            key={`recent-${customer.id}`}
-                            value={customer.id.toString()}
-                            onSelect={() => handleSelectCustomer(customer, true)}
-                            className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
-                          >
-                             <div className="flex items-start gap-4">
-                              <div className="bg-muted p-2.5 rounded-full mt-0.5">
-                                <UserIcon className="size-4 text-muted-foreground" />
-                              </div>
-                              <div className="flex flex-col gap-0.5">
-                                <div className="font-bold text-base flex items-center gap-2 text-foreground">
-                                  {customer.name}
-                                  {customer.arabic_name && (
-                                    <span className="text-muted-foreground font-normal text-xs bg-muted/50 px-2 py-0.5 rounded border border-border/30" dir="rtl">
-                                      {customer.arabic_name}
-                                    </span>
-                                  )}
+                      {showRecent && (
+                        <CommandGroup heading={
+                          <div className="flex items-center gap-2">
+                            <History className="size-3" />
+                            <span>Recent Searches</span>
+                          </div>
+                        }>
+                          {recentCustomers.map((customer) => (
+                            <CommandItem
+                              key={`recent-${customer.id}`}
+                              value={customer.id.toString()}
+                              onSelect={() => handleSelectCustomer(customer, true)}
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
+                            >
+                               <div className="flex items-start gap-4">
+                                <div className="bg-muted p-2.5 rounded-full mt-0.5">
+                                  <UserIcon className="size-4 text-muted-foreground" />
                                 </div>
-                                <div className="flex items-center gap-3 text-sm text-muted-foreground font-medium">
-                                  <span className="font-mono tracking-tight">{customer.phone}</span>
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="font-bold text-base flex items-center gap-2 text-foreground">
+                                    {customer.name}
+                                    {customer.arabic_name && (
+                                      <span className="text-muted-foreground font-normal text-xs bg-muted/50 px-2 py-0.5 rounded border border-border/30" dir="rtl">
+                                        {customer.arabic_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm text-muted-foreground font-medium">
+                                    <span className="font-mono tracking-tight">{customer.phone}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1.5 shrink-0">
-                               <Badge variant="outline" className="text-[10px] uppercase font-bold text-muted-foreground bg-muted/20">
-                                Recent
-                               </Badge>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                                                 <Badge variant="outline" className="text-xs uppercase font-bold text-muted-foreground bg-muted/20">                                Recent
+                                 </Badge>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
 
-                    {customers.length > 0 && (
-                      <CommandGroup heading={`Found ${searchResults?.count || 0} accounts`}>
-                        {customers.map((customer) => (
-                          <CommandItem
-                            key={customer.id}
-                            value={customer.id.toString()}
-                            onSelect={() => handleSelectCustomer(customer)}
-                            className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
-                          >
-                            <div className="flex items-start gap-4">
-                              <div className="bg-primary/10 p-2.5 rounded-full mt-0.5">
-                                <UserIcon className="size-4 text-primary" />
-                              </div>
-                              <div className="flex flex-col gap-0.5">
-                                <div className="font-bold text-base flex items-center gap-2 text-foreground">
-                                  {customer.name}
-                                  {customer.arabic_name && (
-                                    <span className="text-muted-foreground font-normal text-xs bg-muted/50 px-2 py-0.5 rounded border border-border/30" dir="rtl">
-                                      {customer.arabic_name}
-                                    </span>
-                                  )}
+                      {customers.length > 0 && (
+                        <CommandGroup heading={`Found ${searchResults?.count || 0} accounts`}>
+                          {customers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={customer.id.toString()}
+                              onSelect={() => handleSelectCustomer(customer)}
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
+                            >
+                              <div className="flex items-start gap-4">
+                                <div className="bg-primary/10 p-2.5 rounded-full mt-0.5">
+                                  <UserIcon className="size-4 text-primary" />
                                 </div>
-                                <div className="flex items-center gap-3 text-sm text-muted-foreground font-medium">
-                                  <span className="font-mono tracking-tight">{customer.phone}</span>
-                                  {customer.nick_name && (
-                                    <span className="text-xs italic opacity-80 uppercase tracking-tighter">
-                                      • {customer.nick_name}
-                                    </span>
-                                  )}
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="font-bold text-base flex items-center gap-2 text-foreground">
+                                    {customer.name}
+                                    {customer.arabic_name && (
+                                      <span className="text-muted-foreground font-normal text-xs bg-muted/50 px-2 py-0.5 rounded border border-border/30" dir="rtl">
+                                        {customer.arabic_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm text-muted-foreground font-medium">
+                                    <span className="font-mono tracking-tight">{customer.phone}</span>
+                                    {customer.nick_name && (
+                                      <span className="text-xs italic opacity-80 uppercase tracking-tighter">
+                                        • {customer.nick_name}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            
-                            <div className="flex flex-col items-end gap-1.5 shrink-0">
-                              <Badge 
-                                variant={customer.account_type === 'Primary' ? 'default' : 'secondary'}
-                                className={cn(
-                                  "px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider border",
-                                  customer.account_type === 'Primary' 
-                                    ? "bg-primary border-primary shadow-sm" 
-                                    : "bg-white text-muted-foreground border-border"
+                              
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                <Badge 
+                                  variant={customer.account_type === 'Primary' ? 'default' : 'secondary'}
+                                                                  className={cn(
+                                                                      "px-2.5 py-0.5 text-xs font-black uppercase tracking-wider border",                                  customer.account_type === 'Primary' 
+                                      ? "bg-primary border-primary shadow-sm" 
+                                      : "bg-white text-muted-foreground border-border"
+                                  )}
+                                >
+                                  {customer.account_type}
+                                </Badge>
+                                {customer.account_type === 'Secondary' && customer.relation && (
+                                  <span className="text-xs uppercase font-bold text-primary px-1.5 py-0.5 bg-primary/5 rounded border border-primary/10">
+                                    {customer.relation}
+                                  </span>
                                 )}
-                              >
-                                {customer.account_type}
-                              </Badge>
-                              {customer.account_type === 'Secondary' && customer.relation && (
-                                <span className="text-[10px] uppercase font-bold text-primary px-1.5 py-0.5 bg-primary/5 rounded border border-primary/10">
-                                  {customer.relation}
-                                </span>
-                              )}
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </>
-                )}
-              </CommandList>
-            </Command>
-          </div>
-        )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </>
+                  )}
+                </CommandList>
+              </Command>
+            </div>
+          )}
+        </div>
       </div>
 
-            <PendingOrdersDialog
-
-              isOpen={showPendingOrders}
-
-              onOpenChange={setShowPendingOrders}
-
-              orders={pendingOrders}
-
-              onSelectOrder={handlePendingOrderSelect}
-
-              onCreateNewOrder={handleCreateNewOrder}
-
-              onOrderCancelled={handleOrderCancelled}
-
-              customerName={selectedCustomer?.name}
-
-              isLoading={isLoadingPendingOrders}
-
-            />
-
-          </div>
-
-          </>
-
-        );
-
-      }
+      <PendingOrdersDialog
+        isOpen={showPendingOrders}
+        onOpenChange={setShowPendingOrders}
+        orders={pendingOrders}
+        onSelectOrder={handlePendingOrderSelect}
+        onCreateNewOrder={handleCreateNewOrder}
+        onOrderCancelled={handleOrderCancelled}
+        customerName={selectedCustomer?.name}
+        isLoading={isLoadingPendingOrders}
+      />
+    </>
+  );
+}

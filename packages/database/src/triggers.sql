@@ -29,6 +29,7 @@ BEGIN
   UPDATE orders
   SET
     checkout_status = 'confirmed',
+    order_type = 'WORK',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
     paid = (p_checkout_details->>'paid')::decimal,
     payment_ref_no = (p_checkout_details->>'paymentRefNo'),
@@ -113,7 +114,7 @@ $$ LANGUAGE plpgsql;
 -- 3. Transactional RPC for completing sales order (Shelf items only)
 CREATE OR REPLACE FUNCTION complete_sales_order(
   p_order_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, total, shelfCharge, deliveryCharge }
   p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
 )
 RETURNS JSONB AS $$
@@ -134,12 +135,18 @@ BEGIN
     discount_value = (p_checkout_details->>'discountValue')::decimal,
     discount_percentage = (p_checkout_details->>'discountPercentage')::decimal,
     referral_code = (p_checkout_details->>'referralCode'),
+    order_total = (p_checkout_details->>'total')::decimal,
+    shelf_charge = (p_checkout_details->>'shelfCharge')::decimal,
+    delivery_charge = (p_checkout_details->>'deliveryCharge')::decimal,
     order_date = NOW(),
     order_type = 'SALES'
   WHERE id = p_order_id
   RETURNING * INTO v_order_row;
 
-  -- 2. Deduct Shelf Stock & Record Items
+  -- 2. Ensure no work_order extension exists for sales
+  DELETE FROM work_orders WHERE order_id = p_order_id;
+
+  -- 3. Deduct Shelf Stock & Record Items
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
@@ -164,7 +171,7 @@ $$ LANGUAGE plpgsql;
 -- 4. NEW: Transactional RPC for creating AND completing a sales order in one go
 CREATE OR REPLACE FUNCTION create_complete_sales_order(
   p_customer_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, homeDelivery, brand }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, brand }
   p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
 )
 RETURNS JSONB AS $$
@@ -192,7 +199,6 @@ BEGIN
     order_total,
     shelf_charge,
     delivery_charge,
-    home_delivery,
     brand
   ) VALUES (
     p_customer_id,
@@ -212,7 +218,6 @@ BEGIN
     (p_checkout_details->>'total')::decimal,
     (p_checkout_details->>'shelfCharge')::decimal,
     (p_checkout_details->>'deliveryCharge')::decimal,
-    COALESCE((p_checkout_details->>'homeDelivery')::boolean, false),
     (p_checkout_details->>'brand')::brand
   ) RETURNING id INTO v_order_id;
 
@@ -247,6 +252,9 @@ CREATE OR REPLACE FUNCTION save_work_order_garments(
 DECLARE
   v_garment JSONB;
 BEGIN
+  -- 0. Ensure order_type is WORK
+  UPDATE orders SET order_type = 'WORK' WHERE id = p_order_id AND order_type != 'WORK';
+
   -- 1. Update Work Order Totals
   INSERT INTO work_orders (
     order_id,

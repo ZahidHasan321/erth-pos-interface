@@ -16,6 +16,33 @@ export const getCustomers = async (): Promise<ApiResponse<Customer[]>> => {
   return { status: 'success', data: data as any, count: count || 0 };
 };
 
+export const getPaginatedCustomers = async (
+  page: number,
+  pageSize: number,
+  search?: string
+): Promise<ApiResponse<Customer[]>> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from(TABLE_NAME)
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,arabic_name.ilike.%${search}%,nick_name.ilike.%${search}%`);
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('Error fetching paginated customers:', error);
+    return { status: 'error', message: error.message, data: [], count: 0 };
+  }
+  return { status: 'success', data: data as any, count: count || 0 };
+};
+
 export const searchCustomerByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {

@@ -105,8 +105,7 @@ const OrderCard = React.memo<OrderCardProps>(
                             <span className="font-bold text-lg text-foreground">
                                 Order #{order.id}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase">
-                                Draft
+                                                                        <span className="text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase">                                Draft
                             </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -117,8 +116,7 @@ const OrderCard = React.memo<OrderCardProps>(
 
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <div className="text-[10px] uppercase font-bold text-muted-foreground">Total Due</div>
-                            <div className="font-bold text-primary">
+                                                                        <div className="text-xs uppercase font-bold text-muted-foreground">Total Due</div>                            <div className="font-bold text-primary">
                                 {totalAmount.toFixed(3)} KWD
                             </div>
                         </div>

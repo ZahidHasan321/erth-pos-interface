@@ -45,18 +45,45 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
     const garments = order.garments || [];
 
     // Transform garments for this order
-    const garmentRowsData: GarmentRowData[] = garments.map((garment: any) => ({
-      garmentId: garment.garment_id,
-      pieceStage: garment.piece_stage
-        ? PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || "Unknown"
-        : "Unknown",
-      isBrova: garment.brova || false,
-      deliveryDate: garment.delivery_date || "",
-      delayInDays: calculateDelay(garment.delivery_date || new Date().toISOString()),
-      fabricSource: garment.fabric_source || undefined,
-      style: garment.style_id?.toString() || undefined,
-      garment,
-    }));
+    const garmentRowsData: GarmentRowData[] = garments.map((garment: any) => {
+      // Construct a better style description
+      const styleParts = [];
+      
+      // Fabric Info
+      if (garment.fabric?.name) {
+        styleParts.push(garment.fabric.name + (garment.color ? ` (${garment.color})` : ""));
+      } else if (garment.color) {
+        styleParts.push(garment.color);
+      }
+
+      // Style Name
+      if (garment.style) styleParts.push(garment.style.charAt(0).toUpperCase() + garment.style.slice(1));
+      
+      // Collar
+      if (garment.collar_type) {
+        const collarMap: Record<string, string> = {
+          'COL_QALLABI': 'Qallabi',
+          'COL_DOWN_COLLAR': 'Round',
+          'COL_JAPANESE': 'Japanese'
+        };
+        styleParts.push(collarMap[garment.collar_type] || garment.collar_type);
+      }
+      
+      const styleDesc = styleParts.length > 0 ? styleParts.join(" • ") : "Standard";
+
+      return {
+        garmentId: garment.garment_id,
+        pieceStage: garment.piece_stage
+          ? PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || "Unknown"
+          : "Unknown",
+        isBrova: garment.brova || false,
+        deliveryDate: garment.delivery_date || "",
+        delayInDays: calculateDelay(garment.delivery_date || new Date().toISOString()),
+        fabricSource: garment.fabric_source || undefined,
+        style: styleDesc,
+        garment,
+      };
+    });
 
     // Get customer info
     const customerName = customer?.name || "Unknown";
@@ -137,9 +164,9 @@ export function useShowroomOrders() {
         .from('orders')
         .select(`
           *,
-          workOrder:work_orders!inner(*),
+          workOrder:work_orders!order_id!inner(*),
           customer:customers(*),
-          garments:garments(*)
+          garments:garments(*, fabric:fabrics(*))
         `)
         .in('workOrder.production_stage', targetStages)
         .eq('checkout_status', 'confirmed')

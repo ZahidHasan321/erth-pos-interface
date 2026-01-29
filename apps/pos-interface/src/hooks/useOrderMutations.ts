@@ -36,7 +36,7 @@ type UseOrderMutationsOptions = {
 /**
  * Maps OrderSchema (form) to Order (API/DB)
  */
-function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
+function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): Partial<Order> {
     const order: Partial<Order> = {};
     const cleanValue = (val: any) => (val === "" || val === undefined ? null : val);
 
@@ -68,6 +68,26 @@ function mapSchemaToOrder(schema: Partial<OrderSchema>): Partial<Order> {
     if (schema.paid !== undefined) order.paid = schema.paid;
     if (schema.order_total !== undefined) order.order_total = schema.order_total;
     if (schema.num_of_fabrics !== undefined) order.num_of_fabrics = schema.num_of_fabrics;
+
+    // Add Linking Fields
+    if (schema.linked_order_id !== undefined) order.linked_order_id = schema.linked_order_id;
+    if (schema.linked_date !== undefined) order.linked_date = schema.linked_date ? new Date(schema.linked_date) : null;
+    if (schema.unlinked_date !== undefined) order.unlinked_date = schema.unlinked_date ? new Date(schema.unlinked_date) : null;
+
+    // Add Reminder Fields
+    if (schema.r1_date !== undefined) order.r1_date = schema.r1_date ? new Date(schema.r1_date) : null;
+    if (schema.r2_date !== undefined) order.r2_date = schema.r2_date ? new Date(schema.r2_date) : null;
+    if (schema.r3_date !== undefined) order.r3_date = schema.r3_date ? new Date(schema.r3_date) : null;
+    if (schema.call_reminder_date !== undefined) order.call_reminder_date = schema.call_reminder_date ? new Date(schema.call_reminder_date) : null;
+    if (schema.escalation_date !== undefined) order.escalation_date = schema.escalation_date ? new Date(schema.escalation_date) : null;
+
+    // Add Reminder Notes
+    if (schema.r1_notes !== undefined) order.r1_notes = cleanValue(schema.r1_notes) as string;
+    if (schema.r2_notes !== undefined) order.r2_notes = cleanValue(schema.r2_notes) as string;
+    if (schema.r3_notes !== undefined) order.r3_notes = cleanValue(schema.r3_notes) as string;
+    if (schema.call_notes !== undefined) order.call_notes = cleanValue(schema.call_notes) as string;
+    if (schema.escalation_notes !== undefined) order.escalation_notes = cleanValue(schema.escalation_notes) as string;
+    if (schema.call_status !== undefined) order.call_status = cleanValue(schema.call_status) as string;
 
     return order;
 }
@@ -267,6 +287,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 shelfCharge?: number;
                 homeDelivery?: boolean;
                 deliveryDate?: string;
+                stitchingPrice?: number;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
@@ -308,27 +329,33 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
             orderId: number;
 
-            checkoutDetails: {
+                        checkoutDetails: {
 
-                paymentType: string;
+                            paymentType: string;
 
-                paid: number | null | undefined;
+                            paid: number | null | undefined;
 
-                paymentRefNo?: string;
+                            paymentRefNo?: string;
 
-                paymentNote?: string;
+                            paymentNote?: string;
 
-                orderTaker?: string;
+                            orderTaker?: string;
 
-                discountType?: string;
+                            discountType?: string;
 
-                discountValue?: number;
+                            discountValue?: number;
 
-                discountPercentage?: number;
+                            discountPercentage?: number;
 
-                referralCode?: string;
+                            referralCode?: string;
 
-            };
+                            total: number;
+
+                            shelfCharge: number;
+
+                            deliveryCharge?: number;
+
+                        };
 
             shelfItems: { id: number; quantity: number; unitPrice: number }[];
 
@@ -414,13 +441,15 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
                 referralCode?: string;
 
-                notes?: string;
+                                notes?: string;
 
-                total: number;
+                                total: number;
 
-                shelfCharge: number;
+                                shelfCharge: number;
 
-            };
+                                deliveryCharge?: number;
+
+                            };
 
             shelfItems: { id: number; quantity: number; unitPrice: number }[];
 

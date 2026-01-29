@@ -13,7 +13,6 @@ import { ShelfForm } from "@/components/forms/shelf";
 import { shelfFormSchema, type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
-import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
@@ -49,6 +48,14 @@ export const Route = createFileRoute("/$main/orders/new-sales-order")({
         };
     },
     component: NewSalesOrder,
+    pendingComponent: () => (
+        <FullScreenLoader
+            title="Initializing Sales Order"
+            subtitle="Preparing order forms..."
+        />
+    ),
+    pendingMs: 0,
+    pendingMinMs: 500,
     head: () => ({
         meta: [{ title: "New Sales Order" }],
     }),
@@ -303,24 +310,41 @@ function NewSalesOrder() {
                 unitPrice: p.unit_price ?? 0
             }));
 
-        createCompleteSalesOrderMutation.mutate({
-            customerId,
-            checkoutDetails: {
-                paymentType: data.payment_type!,
-                paid: data.paid ?? 0,
-                paymentRefNo: data.payment_ref_no ?? undefined,
-                paymentNote: data.payment_note ?? undefined,
-                orderTaker: data.order_taker_id ?? undefined,
-                discountType: data.discount_type ?? undefined,
-                discountValue: data.discount_value ?? undefined,
-                discountPercentage: data.discount_percentage ?? undefined,
-                referralCode: data.referral_code ?? undefined,
-                notes: data.notes ?? undefined,
-                total: data.order_total,
-                shelfCharge: data.shelf_charge
-            },
-            shelfItems
-        });
+        const checkoutDetails = {
+            paymentType: data.payment_type!,
+            paid: data.paid ?? 0,
+            paymentRefNo: data.payment_ref_no ?? undefined,
+            paymentNote: data.payment_note ?? undefined,
+            orderTaker: data.order_taker_id ?? undefined,
+            discountType: data.discount_type ?? undefined,
+            discountValue: data.discount_value ?? undefined,
+            discountPercentage: data.discount_percentage ?? undefined,
+            referralCode: data.referral_code ?? undefined,
+            notes: data.notes ?? undefined,
+            total: data.order_total,
+            shelf_charge: data.shelf_charge, // Use snake_case if mutation handles it, else camelCase
+            deliveryCharge: data.delivery_charge
+        };
+
+        if (orderId) {
+            completeSalesOrderMutation.mutate({
+                orderId,
+                checkoutDetails: {
+                    ...checkoutDetails,
+                    shelfCharge: data.shelf_charge // mutation expects camelCase
+                },
+                shelfItems
+            });
+        } else {
+            createCompleteSalesOrderMutation.mutate({
+                customerId,
+                checkoutDetails: {
+                    ...checkoutDetails,
+                    shelfCharge: data.shelf_charge
+                },
+                shelfItems
+            });
+        }
     };
 
     // ============================================================================
@@ -424,24 +448,6 @@ function NewSalesOrder() {
                     currentStep={currentStep}
                     activeSteps={visibleSteps}
                     onStepChange={handleStepChange}
-                />
-                <OrderInfoCard
-                    orderID={order.id}
-                    fatoura={fatoura}
-                    checkoutStatus={order.checkout_status ?? "draft"}
-                    customerName={
-                        customerDemographics.nick_name ||
-                        customerDemographics.name ||
-                        undefined
-                    }
-                    orderType="Sales Order"
-                    homeDelivery={order.home_delivery}
-                    deliveryDate={order.delivery_date}
-                    paymentType={order.payment_type ?? undefined}
-                    numOfFabrics={products?.length ?? 0}
-                    totalAmount={order.order_total ?? totalShelfAmount}
-                    advance={order.advance ?? undefined}
-                    balance={(order.order_total ?? totalShelfAmount) - (order.paid ?? 0)}
                 />
             </div>
 

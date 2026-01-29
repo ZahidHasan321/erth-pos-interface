@@ -339,10 +339,7 @@ export function CustomerDemographicsForm({
           </div>
         </div>
 
-        <div className={cn(
-          "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
-          id && isReadOnly && "bg-blue-50/30 border-blue-100"
-        )}>
+        <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">
               Basic Information
@@ -616,10 +613,7 @@ export function CustomerDemographicsForm({
           </ErrorBoundary>
         </div>
 
-        <div className={cn(
-          "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
-          id && isReadOnly && "bg-blue-50/30 border-blue-100"
-        )}>
+        <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
           <h3 className="text-lg font-semibold text-foreground">
             Personal Details
           </h3>
@@ -742,10 +736,7 @@ export function CustomerDemographicsForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ErrorBoundary fallback={<div>Account Info crashed</div>}>
-            <section className={cn(
-              "flex flex-col rounded-xl bg-card p-6 gap-4 border border-border shadow-sm transition-colors duration-500",
-              id && isReadOnly && "bg-blue-50/30 border-blue-100"
-            )}>
+            <section className="flex flex-col rounded-xl bg-card p-6 gap-4 border border-border shadow-sm">
               <h3 className="text-base font-semibold text-foreground">
                 Account Information
               </h3>
@@ -829,10 +820,7 @@ export function CustomerDemographicsForm({
               />
             </section>
 
-            <section className={cn(
-              "space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm transition-colors duration-500",
-              id && isReadOnly && "bg-blue-50/30 border-blue-100"
-            )}>
+            <section className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
               <h3 className="text-base font-semibold text-foreground">
                 Customer Details
               </h3>
@@ -866,10 +854,7 @@ export function CustomerDemographicsForm({
             </section>
           </ErrorBoundary>
         </div>
-        <div className={cn(
-          "bg-card p-6 rounded-xl space-y-4 border border-border shadow-sm transition-colors duration-500",
-          id && isReadOnly && "bg-blue-50/30 border-blue-100"
-        )}>
+        <div className="bg-card p-6 rounded-xl space-y-4 border border-border shadow-sm">
           <ErrorBoundary fallback={<div>Address fields crashed</div>}>
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">

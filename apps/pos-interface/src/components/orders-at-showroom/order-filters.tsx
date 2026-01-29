@@ -57,8 +57,6 @@ type OrderFiltersProps = {
   filters: FilterState;
   onFilterChange: (key: keyof FilterState, value: any) => void;
   onClearFilters: () => void;
-  totalOrders: number;
-  filteredCount: number;
   className?: string;
 };
 
@@ -77,8 +75,6 @@ export function OrderFilters({
   filters,
   onFilterChange,
   onClearFilters,
-  totalOrders,
-  filteredCount,
   className,
 }: OrderFiltersProps) {
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
@@ -108,42 +104,42 @@ export function OrderFilters({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
         {/* Order ID / Fatoura */}
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">ID / Invoice</Label>
+          <Label className="text-xs font-black uppercase tracking-widest text-foreground/70 ml-1">ID / Invoice</Label>
           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
             <Input
               placeholder="Search ID or Invoice..."
               value={filters.searchId}
               onChange={(e) => onFilterChange("searchId", e.target.value)}
-              className="pl-9 h-9 text-xs border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
+              className="pl-9 h-10 text-sm border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
             />
           </div>
         </div>
 
         {/* Customer */}
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">Customer / Mobile</Label>
+          <Label className="text-xs font-black uppercase tracking-widest text-foreground/70 ml-1">Customer / Mobile</Label>
           <div className="relative group">
-            <User className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
             <Input
               placeholder="Name or Phone..."
               value={filters.customer}
               onChange={(e) => onFilterChange("customer", e.target.value)}
-              className="pl-9 h-9 text-xs border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
+              className="pl-9 h-10 text-sm border-2 border-border hover:border-primary/40 focus-visible:ring-ring/50 focus-visible:border-ring bg-background font-medium transition-all"
             />
           </div>
         </div>
 
         {/* Sort By */}
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-foreground/70 ml-1">Sort Orders</Label>
+          <Label className="text-xs font-black uppercase tracking-widest text-foreground/70 ml-1">Sort Orders</Label>
           <Select 
             value={filters.sortBy} 
             onValueChange={(value) => onFilterChange("sortBy", value)}
           >
-            <SelectTrigger className="h-9 text-xs border-2 border-border hover:border-primary/40 focus:ring-ring/50 focus:border-ring bg-background font-bold transition-all">
+            <SelectTrigger className="h-10 text-sm border-2 border-border hover:border-primary/40 focus:ring-ring/50 focus:border-ring bg-background font-bold transition-all">
               <div className="flex items-center gap-2">
-                <ArrowUpDown className="h-3.5 w-3.5 text-primary" />
+                <ArrowUpDown className="h-4 w-4 text-primary" />
                 <SelectValue />
               </div>
             </SelectTrigger>
@@ -160,19 +156,16 @@ export function OrderFilters({
       {/* --- ACTIONS ROW --- */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold px-2 py-0.5 text-[10px]">
-            {filteredCount} / {totalOrders} Orders
-          </Badge>
           <Button
             variant="ghost"
             size="sm"
             onClick={onClearFilters}
             className={cn(
-              "h-8 px-2 text-[10px] font-bold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200",
+              "h-8 px-2 text-xs font-bold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200",
               !hasActiveFilters && "opacity-0 pointer-events-none"
             )}
           >
-            <X className="h-3 w-3 mr-1" />
+            <X className="h-3.5 w-3.5 mr-1" />
             Reset All
           </Button>
         </div>
@@ -183,17 +176,17 @@ export function OrderFilters({
             size="sm"
             onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
             className={cn(
-              "h-8 px-3 gap-1.5 text-[10px] font-bold border-2 transition-all",
+              "h-8 px-3 gap-1.5 text-xs font-bold border-2 transition-all",
               isAdvancedExpanded ? "bg-secondary text-secondary-foreground border-secondary" : "border-border hover:border-primary/50"
             )}
           >
-            <Settings2 className="h-3.5 w-3.5" />
+            <Settings2 className="h-4 w-4" />
             Advanced
             <motion.div
               animate={{ rotate: isAdvancedExpanded ? 180 : 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-4 w-4" />
             </motion.div>
           </Button>
         </div>
@@ -216,18 +209,18 @@ export function OrderFilters({
                 {/* Workflow Status Group */}
                 <div className="md:col-span-7 space-y-2.5 md:pr-3 md:border-r border-border/40">
                   <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
-                    <Bell className="h-3 w-3 text-primary" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Workflow</span>
+                    <Bell className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">Workflow</span>
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                     <div className="sm:col-span-8 space-y-1">
-                      <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Stage</Label>
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-0.5">Stage</Label>
                       <Select 
                         value={filters.stage} 
                         onValueChange={(value) => onFilterChange("stage", value)}
                       >
-                        <SelectTrigger className="h-7 text-[10px] border-2 border-border bg-background font-bold focus:ring-ring/40 focus:border-ring transition-all hover:border-primary/30">
+                        <SelectTrigger className="h-8 text-xs border-2 border-border bg-background font-bold focus:ring-ring/40 focus:border-ring transition-all hover:border-primary/30">
                           <SelectValue placeholder="Stage" />
                         </SelectTrigger>
                         <SelectContent>
@@ -247,25 +240,25 @@ export function OrderFilters({
                     </div>
                     
                     <div className="sm:col-span-4 space-y-1">
-                      <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Reminder</Label>
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-0.5">Reminder</Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
                             role="combobox"
-                            className="h-7 w-full justify-between text-[10px] font-bold border-2 border-border bg-background hover:border-primary/30 px-2 transition-all"
+                            className="h-8 w-full justify-between text-xs font-bold border-2 border-border bg-background hover:border-primary/30 px-2 transition-all"
                           >
                             {filters.reminderStatuses.length === 0 ? (
                               <span className="text-muted-foreground">All</span>
                             ) : (
                               <span className="flex items-center gap-1 truncate">
-                                <Badge variant="default" className="h-3.5 px-1 rounded-sm text-[8px] font-black">
+                                <Badge variant="default" className="h-4 px-1 rounded-sm text-[10px] font-black">
                                   {filters.reminderStatuses.length}
                                 </Badge>
                                 <span className="truncate">Selected</span>
                               </span>
                             )}
-                            <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-[170px] p-1" align="start">
@@ -273,16 +266,16 @@ export function OrderFilters({
                             {REMINDER_OPTIONS.map((option) => (
                               <div
                                 key={option.value}
-                                className="flex items-center space-x-2 rounded-md p-1 hover:bg-primary/10 cursor-pointer"
+                                className="flex items-center space-x-2 rounded-md p-1.5 hover:bg-primary/10 cursor-pointer"
                                 onClick={() => toggleReminder(option.value)}
                               >
                                 <Checkbox 
                                   id={`reminder-${option.value}`}
                                   checked={filters.reminderStatuses.includes(option.value)}
-                                  className="h-3 w-3 border-2 pointer-events-none"
+                                  className="h-3.5 w-3.5 border-2 pointer-events-none"
                                 />
                                 <Label 
-                                  className="text-[11px] font-bold cursor-pointer flex-1 pointer-events-none"
+                                  className="text-xs font-bold cursor-pointer flex-1 pointer-events-none"
                                 >
                                   {option.label}
                                 </Label>
@@ -298,25 +291,25 @@ export function OrderFilters({
                 {/* Timeline Group */}
                 <div className="md:col-span-3 space-y-2.5 md:px-3 md:border-r border-border/40">
                   <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
-                    <Calendar className="h-3 w-3 text-primary" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Timeline</span>
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">Timeline</span>
                   </div>
                   
                   <div className="space-y-1.5">
                     <div className="grid grid-cols-12 items-center gap-2">
-                      <Label className="col-span-2 text-[9px] font-bold text-muted-foreground uppercase">From</Label>
+                      <Label className="col-span-3 text-[10px] font-bold text-muted-foreground uppercase">From</Label>
                       <Input 
                         type="date" 
-                        className="col-span-10 h-7 text-[10px] border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 p-1"
+                        className="col-span-9 h-8 text-xs border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 px-2"
                         value={filters.deliveryDateStart}
                         onChange={(e) => onFilterChange("deliveryDateStart", e.target.value)}
                       />
                     </div>
                     <div className="grid grid-cols-12 items-center gap-2">
-                      <Label className="col-span-2 text-[9px] font-bold text-muted-foreground uppercase">To</Label>
+                      <Label className="col-span-3 text-[10px] font-bold text-muted-foreground uppercase">To</Label>
                       <Input 
                         type="date" 
-                        className="col-span-10 h-7 text-[10px] border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 p-1"
+                        className="col-span-9 h-8 text-xs border-2 border-border bg-background font-bold focus-visible:ring-ring/40 focus-visible:border-ring transition-all hover:border-primary/30 px-2"
                         value={filters.deliveryDateEnd}
                         onChange={(e) => onFilterChange("deliveryDateEnd", e.target.value)}
                       />
@@ -327,15 +320,15 @@ export function OrderFilters({
                 {/* Financial Group */}
                 <div className="md:col-span-2 space-y-2.5 md:pl-3">
                   <div className="flex items-center gap-1.5 border-b border-primary/10 pb-1">
-                    <CreditCard className="h-3 w-3 text-primary" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Financial</span>
+                    <CreditCard className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">Financial</span>
                   </div>
                   
                   <div className="space-y-1">
-                    <Label className="text-[9px] font-bold text-muted-foreground uppercase ml-0.5">Balance</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-0.5">Balance</Label>
                     <div 
                       className={cn(
-                        "flex items-center h-7 border-2 rounded-md px-2 bg-background transition-all w-full cursor-pointer",
+                        "flex items-center h-8 border-2 rounded-md px-2 bg-background transition-all w-full cursor-pointer",
                         filters.hasBalance ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
                       )}
                       onClick={() => onFilterChange("hasBalance", !filters.hasBalance)}
@@ -343,10 +336,10 @@ export function OrderFilters({
                       <Checkbox 
                         id="has-balance" 
                         checked={filters.hasBalance}
-                        className="h-3 w-3 border-2 pointer-events-none"
+                        className="h-3.5 w-3.5 border-2 pointer-events-none"
                       />
                       <Label 
-                        className="text-[10px] font-black ml-1.5 cursor-pointer flex-1 truncate pointer-events-none"
+                        className="text-xs font-black ml-2 cursor-pointer flex-1 truncate pointer-events-none"
                       >
                         Unpaid
                       </Label>

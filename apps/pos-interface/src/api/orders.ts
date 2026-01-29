@@ -20,13 +20,18 @@ function flattenOrder(data: any): any {
     if (!data) return null;
     if (Array.isArray(data)) return data.map(flattenOrder);
 
-    const { workOrder, ...core } = data;
-    // workOrder might be an array if using .select('*, workOrder(*)') or an object
+    const { workOrder, customer, taker, ...core } = data;
+    
+    // Flatten relations that might be returned as single-item arrays
     const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
+    const customerData = Array.isArray(customer) ? customer[0] : customer;
+    const takerData = Array.isArray(taker) ? taker[0] : taker;
     
     return {
         ...core,
         ...workData,
+        customer: customerData,
+        taker: takerData
     };
 }
 
@@ -43,7 +48,7 @@ const FILTER_MAP: Record<string, string> = {
 export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
-        .select('*, workOrder:work_orders(*)', { count: 'exact' })
+        .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
         .eq('brand', getBrand());
 
     if (error) {
@@ -57,7 +62,7 @@ export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
     let builder = supabase.from(TABLE_NAME)
-        .select('*, workOrder:work_orders!inner(*)', { count: 'exact' })
+        .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
         .eq('brand', getBrand());
 
     Object.entries(query).forEach(([key, value]) => {
@@ -77,16 +82,16 @@ export const searchOrders = async (
 
 const ORDER_DETAILS_QUERY = `
     *,
-    workOrder:work_orders(*),
+    workOrder:work_orders!order_id(*),
     customer:customers(*),
-    garments:garments(*),
+    garments:garments(*, fabric:fabrics(*)),
     shelf_items:order_shelf_items(*, shelf:shelf(*))
 `;
 
 export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders(*)')
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)')
         .eq('id', id)
         .eq('brand', getBrand())
         .maybeSingle();
@@ -98,7 +103,7 @@ export const getOrderById = async (id: number, includeRelations: boolean = false
 export const getOrderByInvoice = async (invoiceNumber: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!inner(*)')
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id!inner(*)')
         .eq('workOrder.invoice_number', invoiceNumber)
         .eq('brand', getBrand())
         .maybeSingle();
@@ -110,7 +115,14 @@ export const getOrderByInvoice = async (invoiceNumber: number, includeRelations:
 export const createOrder = async (
     order: Partial<Order>,
 ): Promise<ApiResponse<Order>> => {
-    const WORK_FIELDS = ['invoice_number', 'delivery_date', 'advance', 'stitching_price', 'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 'num_of_fabrics', 'home_delivery'];
+    const WORK_FIELDS = [
+        'invoice_number', 'delivery_date', 'advance', 'stitching_price', 
+        'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 
+        'num_of_fabrics', 'home_delivery', 'production_stage', 'call_status', 
+        'linked_order_id', 'linked_date', 'unlinked_date',
+        'r1_date', 'r2_date', 'r3_date', 'call_reminder_date', 'escalation_date',
+        'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
+    ];
     
     const coreFields: any = { ...order, brand: getBrand() };
     const workFields: any = {};
@@ -150,7 +162,14 @@ export const updateOrder = async (
     order: Partial<Order>,
     orderId: number,
 ): Promise<ApiResponse<Order>> => {
-    const WORK_FIELDS = ['invoice_number', 'delivery_date', 'advance', 'stitching_price', 'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 'num_of_fabrics', 'production_stage', 'call_status', 'home_delivery'];
+    const WORK_FIELDS = [
+        'invoice_number', 'delivery_date', 'advance', 'stitching_price', 
+        'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 
+        'num_of_fabrics', 'home_delivery', 'production_stage', 'call_status', 
+        'linked_order_id', 'linked_date', 'unlinked_date',
+        'r1_date', 'r2_date', 'r3_date', 'call_reminder_date', 'escalation_date',
+        'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
+    ];
     
     const coreUpdates: any = { ...order };
     const workUpdates: any = {};
@@ -214,14 +233,14 @@ export const getPendingOrdersByCustomer = async (
     checkoutStatus: string = "draft",
     includeRelations: boolean = false
 ): Promise<ApiResponse<Order[]>> => {
-    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders(*), child_orders:orders(id)';
+    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)';
 
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
         .select(selectString, { count: 'exact' })
         .eq('customer_id', customerId)
         .eq('checkout_status', checkoutStatus)
-        .eq('order_type', 'WORK')
+        .or('order_type.eq.WORK,order_type.is.null')
         .eq('brand', getBrand())
         .order('order_date', { ascending: false })
         .limit(limit);
@@ -265,7 +284,7 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
 export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<Order[]>> => {
     let builder = supabase.from(TABLE_NAME).select(`
     *,
-    workOrder:work_orders(*),
+    workOrder:work_orders!order_id(*),
     customer:customers(*),
     garments:garments(*)
   `).eq('brand', getBrand());
@@ -342,6 +361,9 @@ export const completeSalesOrder = async (
         discountValue?: number;
         discountPercentage?: number;
         referralCode?: string;
+        total: number;
+        shelfCharge: number;
+        deliveryCharge?: number;
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
@@ -378,6 +400,7 @@ export const createCompleteSalesOrder = async (
         notes?: string;
         total: number;
         shelfCharge: number;
+        deliveryCharge?: number;
         brand?: string;
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
@@ -405,6 +428,7 @@ export const saveWorkOrderGarments = async (
         style_charge: number;
         stitching_price: number;
         delivery_date?: string;
+        home_delivery?: boolean;
     }
 ): Promise<ApiResponse<any>> => {
     const check = await getOrderById(orderId);
@@ -423,4 +447,67 @@ export const saveWorkOrderGarments = async (
         return { status: 'error', message: error.message };
     }
     return { status: 'success', data };
+};
+
+/**
+ * Fetch all orders that are currently linked to another order.
+ * Returns the child orders with their primary order information.
+ */
+export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
+    // First, get all linked orders (children)
+    const { data, error, count } = await supabase
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id!inner(*),
+            customer:customers!customer_id(*)
+        `)
+        .not('workOrder.linked_order_id', 'is', null)
+        .eq('brand', getBrand());
+
+    if (error) {
+        console.error('Error fetching linked orders:', error);
+        return { status: 'error', message: error.message, data: [], count: 0 };
+    }
+
+    if (!data || data.length === 0) {
+        return { status: 'success', data: [], count: 0 };
+    }
+
+    const flattened = flattenOrder(data);
+
+    // Get unique primary IDs
+    const primaryIds = [...new Set(flattened.map(o => o.linked_order_id).filter(Boolean))];
+
+    // Fetch primary details separately
+    if (primaryIds.length > 0) {
+        const { data: primaries } = await supabase
+            .from(TABLE_NAME)
+            .select(`
+                *,
+                customer:customers!customer_id(name, phone),
+                workOrder:work_orders!order_id(invoice_number, delivery_date, production_stage)
+            `)
+            .in('id', primaryIds);
+
+        if (primaries) {
+            // Attach primary details to each child order
+            flattened.forEach((order: any) => {
+                const primaryRaw = primaries.find(p => p.id === order.linked_order_id);
+                if (primaryRaw) {
+                    // Flatten the primary data correctly
+                    const { workOrder, customer, ...core } = primaryRaw;
+                    const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
+                    const customerData = Array.isArray(customer) ? customer[0] : customer;
+                    order.linkedTo = {
+                        ...core,
+                        ...workData,
+                        customer: customerData
+                    };
+                }
+            });
+        }
+    }
+
+    return { status: 'success', data: flattened, count: count || 0 };
 };

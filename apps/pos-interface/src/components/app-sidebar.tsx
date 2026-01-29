@@ -78,14 +78,14 @@ const data = {
           icon: Edit,
         },
         {
-          title: "Customer Profiles & Orders",
-          url: "orders/customer-profiles-orders",
-          icon: Users,
-        },
-        {
           title: "Orders at Showroom",
           url: "orders/orders-at-showroom",
           icon: Store,
+        },
+        {
+          title: "Customers",
+          url: "customers",
+          icon: Users,
         },
         {
           title: "Order History",

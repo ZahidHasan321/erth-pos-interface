@@ -35,18 +35,23 @@ const historyColumns: ColumnDef<OrderRow>[] = [
   {
     id: "expander",
     header: "",
-    cell: ({ row }) => (
-      <button
-        onClick={() => row.toggleExpanded()}
-        className="p-1 hover:bg-muted rounded transition-colors"
-      >
-        {row.getIsExpanded() ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
-      </button>
-    ),
+    cell: ({ row }) => {
+      // Don't show expander for Sales Orders as they don't have garments to show in the expanded view
+      if (row.original.orderType === "SALES") return null;
+      
+      return (
+        <button
+          onClick={() => row.toggleExpanded()}
+          className="p-1 hover:bg-muted rounded transition-colors"
+        >
+          {row.getIsExpanded() ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </button>
+      );
+    },
   },
   {
     accessorKey: "orderId",
@@ -79,16 +84,20 @@ const historyColumns: ColumnDef<OrderRow>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.orderStatus;
-      const colorMap = {
+      const colorMap: Record<string, string> = {
         Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
         Completed: "bg-green-100 text-green-700 border-green-200",
         Cancelled: "bg-red-100 text-red-700 border-red-200",
       };
+      const color = colorMap[status] || "bg-gray-100 text-gray-700 border-gray-200";
+
       return (
-        <span className={cn(
-          "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          colorMap[status]
-        )}>
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium uppercase tracking-wide",
+            color
+          )}
+        >
           {status}
         </span>
       );
@@ -96,8 +105,15 @@ const historyColumns: ColumnDef<OrderRow>[] = [
   },
   {
     accessorKey: "fatoura",
-    header: "Fatoura",
-    cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.fatoura || "—"}</span>,
+    header: "Invoice #",
+    cell: ({ row }) => {
+      const isWorkOrder = row.original.orderType === "WORK";
+      return (
+        <span className="font-mono text-xs text-muted-foreground">
+          {isWorkOrder ? (row.original.fatoura || "—") : "—"}
+        </span>
+      );
+    },
   },
   {
     accessorKey: "totalAmount",

@@ -43,7 +43,7 @@ export const Route = createFileRoute("/$main/orders/order-history")({
 
 function OrderHistoryPage() {
     const [page, setPage] = React.useState(0);
-    const pageSize = 20;
+    const [pageSize, setPageSize] = React.useState(20);
 
     // Filter states
     const [searchTerm, setSearchTerm] = React.useState("");
@@ -69,7 +69,7 @@ function OrderHistoryPage() {
     // Reset to page 0 when filters change
     React.useEffect(() => {
         setPage(0);
-    }, [searchTerm, statusFilter, typeFilter, sortOrder, dateFilter]);
+    }, [searchTerm, statusFilter, typeFilter, sortOrder, dateFilter, pageSize]);
 
     return (
         <div className="container mx-auto py-6 px-4 lg:px-8 space-y-4 max-w-7xl">
@@ -84,9 +84,24 @@ function OrderHistoryPage() {
                         Manage your previous work and sales orders
                     </p>
                 </div>
-                <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 text-primary font-bold text-sm">
-                    <Package className="w-4 h-4" />
-                    <span>{totalCount} {totalCount === 1 ? 'Order' : 'Orders'} Total</span>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows per page</span>
+                        <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
+                            <SelectTrigger className="h-9 w-20 bg-white border-border/80">
+                                <SelectValue placeholder={pageSize.toString()} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 text-primary font-bold text-sm">
+                        <Package className="w-4 h-4" />
+                        <span>{totalCount} {totalCount === 1 ? 'Order' : 'Orders'} Total</span>
+                    </div>
                 </div>
             </div>
 
@@ -208,7 +223,14 @@ function OrderHistoryPage() {
                         {totalPages > 1 && (
                             <div className="flex items-center justify-between px-2 py-6">
                                 <div className="text-sm text-muted-foreground">
-                                    Showing <span className="font-bold text-foreground">{page * pageSize + 1}</span> to <span className="font-bold text-foreground">{Math.min((page + 1) * pageSize, totalCount)}</span> of <span className="font-bold text-foreground">{totalCount}</span> results
+                                    {totalCount > 0 ? (
+                                        <>
+                                            Showing <span className="font-bold text-foreground">{orders.length}</span> out of{" "}
+                                            <span className="font-bold text-foreground">{totalCount}</span> orders
+                                        </>
+                                    ) : (
+                                        "No orders to show"
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <Button

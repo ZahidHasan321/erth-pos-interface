@@ -98,6 +98,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
       customerPhone,
       fabricSelections = [],
       styleOptions = [],
+      shelfProducts = [],
       fabrics = [],
       charges,
       discountValue = 0,
@@ -336,6 +337,39 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                         {row[k]}
                       </td>
                     ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Shelf Products Table */}
+        {shelfProducts && shelfProducts.length > 0 && (
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2 pb-1 border-b border-gray-700">
+              المنتجات الجاهزة
+            </h3>
+            <table className="w-full text-xs border border-gray-700 border-collapse">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="py-1 px-2 text-center border border-gray-700 w-12">#</th>
+                  <th className="py-1 px-2 text-right border border-gray-700">المنتج</th>
+                  <th className="py-1 px-2 text-center border border-gray-700 w-20">الكمية</th>
+                  <th className="py-1 px-2 text-right border border-gray-700 w-24">سعر الوحدة</th>
+                  <th className="py-1 px-2 text-right border border-gray-700 w-24">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shelfProducts.map((p, idx) => (
+                  <tr key={idx} className="even:bg-gray-50">
+                    <td className="py-1 px-2 text-center border border-gray-700">{idx + 1}</td>
+                    <td className="py-1 px-2 text-right border border-gray-700">
+                      {p.product_type} - {p.brand}
+                    </td>
+                    <td className="py-1 px-2 text-center border border-gray-700">{p.quantity}</td>
+                    <td className="py-1 px-2 text-right border border-gray-700">{fmt(p.unit_price)} د.ك</td>
+                    <td className="py-1 px-2 text-right border border-gray-700">{fmt(p.quantity * p.unit_price)} د.ك</td>
                   </tr>
                 ))}
               </tbody>

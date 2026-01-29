@@ -128,7 +128,7 @@ export const orderColumns: ColumnDef<OrderRow>[] = [
   },
   {
     accessorKey: "fatoura",
-    header: "Fatoura",
+    header: "Invoice #",
     cell: ({ row }) => (
       <span className="font-mono text-xs text-muted-foreground">{row.original.fatoura || "—"}</span>
     ),
