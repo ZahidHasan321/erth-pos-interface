@@ -102,96 +102,98 @@ export const columns: ColumnDef<GarmentSchema>[] = [
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
     size: 80,
-    cell: ({ row, table }) => {
-      const meta = table.options.meta as {
-        removeRow: (rowIndex: number) => void;
-        isFormDisabled?: boolean;
-        checkoutStatus?: "draft" | "confirmed" | "cancelled";
-        fatoura?: number;
-        orderID?: string;
-        customerId?: string;
-        customerName?: string;
-        customerMobile?: string;
-        measurementOptions?: { id: string; MeasurementID: string }[];
-      };
-
-      const isFormDisabled = meta?.isFormDisabled ?? false;
-
-      /* ---------- PRINT HOOKS ---------- */
-      const printRef = React.useRef<HTMLDivElement>(null);
-      const { getValues } = useFormContext();
-
-      const orderID = meta?.orderID || "N/A";
-      const customerId = meta?.customerId || "N/A";
-      const customerName = meta?.customerName || "N/A";
-      const customerMobile = meta?.customerMobile || "N/A";
-      const measurementOptions = meta?.measurementOptions || [];
-
-      const currentRowData = (getValues(
-        `garments.${row.index}`,
-      ) || row.original) as GarmentSchema;
-
-      if (!currentRowData) return null;
-
-      const measurementDisplay =
-        measurementOptions.find((m) => m.id === currentRowData.measurement_id)
-          ?.MeasurementID || currentRowData.measurement_id;
-
-      const handlePrint = useReactToPrint({
-        contentRef: printRef,
-        documentTitle: `Fabric-Order-${currentRowData.garment_id}`,
-        pageStyle: `
-          @page { size: 5in 4in; margin: 0; }
-          @media print {
-            html,body{margin:0;padding:0;width:5in;height:4in;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-          }`,
-      });
-
-      const fabricData = {
-        orderId: orderID,
-        customerId,
-        customerName,
-        customerMobile,
-        garmentId: currentRowData.garment_id || "",
-        fabricSource: currentRowData.fabric_source || "",
-        fabricId: currentRowData.fabric_id?.toString() || "",
-        fabricLength: currentRowData.fabric_length?.toString() ?? "0",
-        measurementId: measurementDisplay || "",
-        brova: currentRowData.brova || false,
-        express: currentRowData.express || false,
-        deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
-      };
-
-      /* ---------- RENDER ---------- */
-      return (
-        <>
-          {/* Hidden printable label */}
-          <div style={{ display: "none" }}>
-            <FabricLabel ref={printRef} fabricData={fabricData} />
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={isFormDisabled}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => handlePrint()}>
-                <Printer className="mr-2 h-4 w-4" />
-                Print
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => meta?.removeRow(row.index)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      );
-    },
+    cell: ActionCell,
   },
 ];
+
+function ActionCell({ row, table }: { row: any; table: any }) {
+  const meta = table.options.meta as {
+    removeRow: (rowIndex: number) => void;
+    isFormDisabled?: boolean;
+    checkoutStatus?: "draft" | "confirmed" | "cancelled";
+    fatoura?: number;
+    orderID?: string;
+    customerId?: string;
+    customerName?: string;
+    customerMobile?: string;
+    measurementOptions?: { id: string; MeasurementID: string }[];
+  };
+
+  const isFormDisabled = meta?.isFormDisabled ?? false;
+
+  /* ---------- PRINT HOOKS ---------- */
+  const printRef = React.useRef<HTMLDivElement>(null);
+  const { getValues } = useFormContext();
+
+  const orderID = meta?.orderID || "N/A";
+  const customerId = meta?.customerId || "N/A";
+  const customerName = meta?.customerName || "N/A";
+  const customerMobile = meta?.customerMobile || "N/A";
+  const measurementOptions = meta?.measurementOptions || [];
+
+  const currentRowData = (getValues(
+    `garments.${row.index}`,
+  ) || row.original) as GarmentSchema;
+
+  if (!currentRowData) return null;
+
+  const measurementDisplay =
+    measurementOptions.find((m) => m.id === currentRowData.measurement_id)
+      ?.MeasurementID || currentRowData.measurement_id;
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Fabric-Order-${currentRowData.garment_id}`,
+    pageStyle: `
+      @page { size: 5in 4in; margin: 0; }
+      @media print {
+        html,body{margin:0;padding:0;width:5in;height:4in;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      }`,
+  });
+
+  const fabricData = {
+    orderId: orderID,
+    customerId,
+    customerName,
+    customerMobile,
+    garmentId: currentRowData.garment_id || "",
+    fabricSource: currentRowData.fabric_source || "",
+    fabricId: currentRowData.fabric_id?.toString() || "",
+    fabricLength: currentRowData.fabric_length?.toString() ?? "0",
+    measurementId: measurementDisplay || "",
+    brova: currentRowData.brova || false,
+    express: currentRowData.express || false,
+    deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
+  };
+
+  /* ---------- RENDER ---------- */
+  return (
+    <>
+      {/* Hidden printable label */}
+      <div style={{ display: "none" }}>
+        <FabricLabel ref={printRef} fabricData={fabricData} />
+      </div>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" disabled={isFormDisabled}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => handlePrint()}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => meta?.removeRow(row.index)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}

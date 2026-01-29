@@ -44,7 +44,7 @@ export function DirectLookupCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-muted/40 p-6 rounded-2xl border border-border/50 shadow-sm flex flex-col justify-center h-full space-y-4"
+      className="bg-muted/40 px-5 py-4 rounded-2xl border border-border/50 shadow-sm flex flex-col justify-center h-full space-y-3"
     >
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-3">

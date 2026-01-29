@@ -434,12 +434,12 @@ function ReceivingInterface() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="container mx-auto p-6 md:p-10 max-w-7xl space-y-8 pb-24"
+        className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6 pb-24"
     >
       
       {/* 1. Header & Search */}
-      <motion.div variants={itemVariants} className="space-y-6">
-        <div className="flex flex-col gap-1 border-b border-border pb-6">
+      <motion.div variants={itemVariants} className="space-y-4">
+        <div className="flex flex-col gap-1 border-b border-border pb-4">
             <h1 className="text-3xl font-bold text-foreground">
                 Receiving <span className="text-primary">Brova & Final</span>
             </h1>
@@ -448,7 +448,7 @@ function ReceivingInterface() {
             </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
             <div className="lg:col-span-7">
                 <SearchCustomer 
                     onCustomerFound={handleCustomerFound}
@@ -476,19 +476,19 @@ function ReceivingInterface() {
         <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
+            className="space-y-6"
         >
           {/* 2. Compact Order Context Bar */}
-          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20">
-            <CardContent className="p-4">
-              <div className="flex flex-wrap items-center justify-between gap-y-4 gap-x-8">
+          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20 py-0 gap-0">
+            <CardContent className="p-3">
+              <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-8">
                 {/* Customer Info */}
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <User className="w-4 h-4" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                    <User className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
                     <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
                   </div>
                   <div className="ml-2 pl-3 border-l border-border py-1">
@@ -496,16 +496,16 @@ function ReceivingInterface() {
                   </div>
                 </div>
 
-                <div className="hidden lg:block h-8 w-px bg-border/60" />
+                <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Order Details */}
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                      <Hash className="w-4 h-4" />
+                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                      <Hash className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
                       <div className="flex items-center gap-2 leading-none">
                         <span className="font-black text-sm">#{activeOrder.id}</span>
                         <span className="text-[10px] font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "—"}</span>
@@ -514,25 +514,25 @@ function ReceivingInterface() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                      <Package className="w-4 h-4" />
+                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                      <Package className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
                       <p className="font-bold text-sm leading-none">{activeOrder.garments?.length || 0} Pieces</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="hidden lg:block h-8 w-px bg-border/60" />
+                <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Delivery */}
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <Clock className="w-4 h-4" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                    <Clock className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
                     <p className="font-bold text-sm leading-none">
                       {activeOrder.delivery_date ? format(new Date(activeOrder.delivery_date), "PP") : "Not Set"}
                     </p>
@@ -545,21 +545,21 @@ function ReceivingInterface() {
           <Separator className="opacity-50" />
 
           {/* 3. Garment Selection Tabs */}
-          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-6">
+          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-4">
             <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
-                <TabsList className="h-auto flex-nowrap justify-start gap-3 bg-transparent p-0">
+                <TabsList className="h-auto flex-nowrap justify-start gap-2 bg-transparent p-0">
                 {activeOrder.garments?.map((garment) => (
                     <TabsTrigger 
                         key={garment.id} 
                         value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-4 py-2 h-14 min-w-[140px] rounded-xl transition-all"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
                     >
-                        <div className="text-left w-full space-y-1">
+                        <div className="text-left w-full space-y-0.5">
                             <div className="flex items-center justify-between gap-2">
-                                <span className="text-[9px] font-black uppercase tracking-widest opacity-70">Item</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest opacity-70">Item</span>
                                 <Badge 
                                     className={cn(
-                                        "h-3.5 px-1 text-[8px] font-black uppercase border-none",
+                                        "h-3 px-1 text-[7px] font-black uppercase border-none",
                                         garment.brova 
                                             ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white" 
                                             : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
@@ -568,29 +568,29 @@ function ReceivingInterface() {
                                     {garment.brova ? "Brova" : "Final"}
                                 </Badge>
                             </div>
-                            <div className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</div>
+                            <div className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</div>
                         </div>
                     </TabsTrigger>
                 ))}
                 </TabsList>
             </div>
 
-            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-8 focus-visible:ring-0">
+            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-6 focus-visible:ring-0">
                
                  {/* MEASUREMENT QC SECTION */}
-                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl">
-                    <CardHeader className="bg-muted/30 border-b p-6">
+                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl py-0 gap-0">
+                    <CardHeader className="bg-muted/30 border-b p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
-                                    <Ruler className="w-5 h-5" />
+                                <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
+                                    <Ruler className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-xl font-bold uppercase tracking-tight">Measurement Verification</CardTitle>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Validate physical garment dimensions</p>
+                                    <CardTitle className="text-lg font-bold uppercase tracking-tight">Measurement Verification</CardTitle>
+                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Validate physical garment dimensions</p>
                                 </div>
                             </div>
-                            <Badge variant="outline" className="bg-background font-black text-[10px] h-7 px-3">
+                            <Badge variant="outline" className="bg-background font-black text-[9px] h-6 px-2">
                                 {isMeasurementLoading ? "REFRESHING SPECS..." : "SPECIFICATIONS SYNCED"}
                             </Badge>
                         </div>
@@ -600,11 +600,11 @@ function ReceivingInterface() {
                         <Table>
                             <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
                                 <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                    <TableHead className="w-[15%] p-4">Dimension</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[12%]">Target (cm)</TableHead>
-                                    <TableHead className="text-center w-[15%] bg-primary/5">Actual Shop (cm)</TableHead>
-                                    <TableHead className="text-center w-[12%]">Variance</TableHead>
-                                    <TableHead className="p-4">Verification Notes</TableHead>
+                                    <TableHead className="w-[15%] p-3">Dimension</TableHead>
+                                    <TableHead className="text-center bg-muted/30 w-[12%] p-3">Target (cm)</TableHead>
+                                    <TableHead className="text-center w-[15%] bg-primary/5 p-3">Actual Shop (cm)</TableHead>
+                                    <TableHead className="text-center w-[12%] p-3">Variance</TableHead>
+                                    <TableHead className="p-3">Verification Notes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -621,18 +621,18 @@ function ReceivingInterface() {
 
                                     return (
                                         <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
-                                            <TableCell className="p-4">
+                                            <TableCell className="p-3">
                                                 <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
                                                 <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
                                             </TableCell>
                                             <TableCell className="text-center font-black text-sm bg-muted/30">
                                                 {orderValue || "-"}
                                             </TableCell>
-                                            <TableCell className="p-2 bg-primary/[0.02]">
+                                            <TableCell className="p-1.5 bg-primary/[0.02]">
                                                 <Input 
                                                     type="number" 
                                                     className={cn(
-                                                        "h-10 w-28 mx-auto text-center font-black text-sm border-2 transition-all",
+                                                        "h-8 w-24 mx-auto text-center font-black text-sm border-2 transition-all",
                                                         statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
                                                         statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
                                                         statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
@@ -652,7 +652,7 @@ function ReceivingInterface() {
                                                             exit={{ opacity: 0, scale: 0.8 }}
                                                         >
                                                             <Badge variant="secondary" className={cn(
-                                                                "font-black text-[10px] h-6 px-2 shadow-sm",
+                                                                "font-black text-[10px] h-6 px-1.5 shadow-sm",
                                                                 statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
                                                                 statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
                                                                 statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
@@ -667,11 +667,11 @@ function ReceivingInterface() {
                                                     )}
                                                 </AnimatePresence>
                                             </TableCell>
-                                            <TableCell className="p-2">
-                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-3 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
+                                            <TableCell className="p-1.5">
+                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-2 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
                                                     <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
                                                     <Input 
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[11px] font-bold h-9"
+                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-8"
                                                         placeholder="Add dimension note..."
                                                         value={noteValue}
                                                         onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
@@ -687,25 +687,25 @@ function ReceivingInterface() {
                 </Card>
 
                 {/* STYLE & HASHWA SECTION */}
-                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden">
-                    <CardHeader className="bg-muted/30 border-b p-6">
+                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden py-0 gap-0">
+                    <CardHeader className="bg-muted/30 border-b p-4">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
-                                <Package className="w-5 h-5" />
+                            <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
+                                <Package className="w-4 h-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-xl font-bold uppercase tracking-tight">Style & Detail Audit</CardTitle>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Cross-check style options and captures</p>
+                                <CardTitle className="text-lg font-bold uppercase tracking-tight">Style & Detail Audit</CardTitle>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Cross-check style options and captures</p>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-6">
-                       <div className="space-y-4">
-                            <div className="hidden md:grid grid-cols-12 gap-6 px-4 py-3 bg-muted/50 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground border border-border/40">
+                    <CardContent className="p-4">
+                       <div className="space-y-3">
+                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-xl text-[9px] font-black uppercase tracking-widest text-muted-foreground border border-border/40">
                                 <div className="col-span-3">Configuration Item</div>
-                                <div className="col-span-2">Reference</div>
-                                <div className="col-span-3">Checklist</div>
-                                <div className="col-span-2">Notes</div>
+                                <div className="col-span-2 text-center">Reference</div>
+                                <div className="col-span-3 text-center">Checklist</div>
+                                <div className="col-span-2 text-center">Notes</div>
                                 <div className="col-span-2 text-right">Evidence</div>
                             </div>
 
@@ -714,20 +714,20 @@ function ReceivingInterface() {
                                     <motion.div 
                                         key={opt.id} 
                                         layout
-                                        className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
+                                        className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
                                     >
                                         {/* Item Description */}
                                         <div className="col-span-3 space-y-1">
-                                            <div className="font-black text-sm uppercase tracking-tight text-foreground">{opt.label}</div>
-                                            <Badge variant="outline" className="font-black text-[9px] uppercase border-primary/20 bg-primary/5 text-primary h-5">
+                                            <div className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</div>
+                                            <Badge variant="outline" className="font-black text-[8px] uppercase border-primary/20 bg-primary/5 text-primary h-4 px-1.5">
                                                 {opt.mainValue}
                                             </Badge>
                                         </div>
 
                                         {/* Visual Reference */}
-                                        <div className="col-span-2">
+                                        <div className="col-span-2 flex justify-center">
                                             {opt.mainImage ? (
-                                                <div className="h-16 w-16 bg-white rounded-xl border-2 border-border/60 p-1.5 shadow-inner">
+                                                <div className="h-12 w-12 bg-white rounded-lg border-2 border-border/60 p-1 shadow-inner">
                                                     <img 
                                                         src={opt.mainImage} 
                                                         alt={opt.label} 
@@ -735,44 +735,44 @@ function ReceivingInterface() {
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="h-16 w-16 bg-muted/30 rounded-xl border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[10px] font-black uppercase text-center p-2 opacity-40">
+                                                <div className="h-12 w-12 bg-muted/30 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[8px] font-black uppercase text-center p-1 opacity-40 leading-tight">
                                                     NO REF
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Checklist */}
-                                        <div className="col-span-3 space-y-3">
+                                        <div className="col-span-3 space-y-2">
                                             <div 
                                                 className={cn(
-                                                    "flex items-center space-x-3 p-2.5 rounded-xl border-2 transition-all cursor-pointer",
-                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/10 border-transparent hover:border-border"
+                                                    "flex items-center space-x-2 p-1.5 rounded-lg border-2 transition-all cursor-pointer",
+                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/5 border-transparent hover:border-border"
                                                 )}
                                                 onClick={() => handleCheck(`${opt.id}-main`, !optionChecks[`${opt.id}-main`])}
                                             >
                                                 <Checkbox 
                                                     id={`check-${opt.id}-main`}
                                                     checked={optionChecks[`${opt.id}-main`] || false}
-                                                    className="size-4 pointer-events-none"
+                                                    className="size-3.5 pointer-events-none"
                                                 />
-                                                <Label className="cursor-pointer text-[11px] font-black uppercase tracking-tight flex-1 pointer-events-none">
+                                                <Label className="cursor-pointer text-[10px] font-black uppercase tracking-tight flex-1 pointer-events-none">
                                                     {opt.label} Verified
                                                 </Label>
                                             </div>
 
                                             {opt.hashwaValue && (
-                                                <div className="flex items-center gap-3 p-2.5 rounded-xl border-2 border-dashed bg-primary/5 border-primary/20">
+                                                <div className="flex items-center gap-2 p-1.5 rounded-lg border-2 border-dashed bg-primary/5 border-primary/20">
                                                     <Checkbox 
                                                         id={`check-${opt.id}-hashwa`}
                                                         checked={optionChecks[`${opt.id}-hashwa`] || false}
                                                         onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
-                                                        className="size-4"
+                                                        className="size-3.5"
                                                     />
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                                    <div className="flex items-center gap-1.5 flex-1">
+                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[9px] font-bold uppercase tracking-widest text-primary/80">
                                                             Hashwa:
                                                         </Label>
-                                                        <span className="font-black text-xs text-primary">{opt.hashwaValue}</span>
+                                                        <span className="font-black text-[10px] text-primary">{opt.hashwaValue}</span>
                                                     </div>
                                                 </div>
                                             )}
@@ -780,10 +780,10 @@ function ReceivingInterface() {
 
                                         {/* Local Notes for Style */}
                                         <div className="col-span-2">
-                                            <div className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 border-2 border-transparent focus-within:border-border focus-within:bg-background transition-all">
+                                            <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-2 border border-transparent focus-within:border-border focus-within:bg-background transition-all">
                                                 <MessageSquare className="size-3 text-muted-foreground/40" />
                                                 <Input 
-                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-10 p-0"
+                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[9px] font-bold h-8 p-0"
                                                     placeholder="Audit note..."
                                                     value={optionNotes[opt.id] || ""}
                                                     onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
@@ -794,7 +794,7 @@ function ReceivingInterface() {
                                         {/* Capture Actions */}
                                         <div className="col-span-2 flex justify-end gap-2">
                                             {evidence[opt.id] ? (
-                                                <div className="relative group size-16 rounded-xl overflow-hidden border-2 border-primary/30 shadow-lg">
+                                                <div className="relative group size-12 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
                                                     {evidence[opt.id]?.type === 'photo' ? (
                                                         <img src={evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
                                                     ) : (
@@ -804,18 +804,18 @@ function ReceivingInterface() {
                                                         onClick={() => setEvidence(prev => { const n = {...prev}; delete n[opt.id]; return n; })}
                                                         className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
-                                                        <X className="w-5 h-5 text-white" />
+                                                        <X className="w-4 h-4 text-white" />
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="flex flex-col gap-1.5 w-full">
+                                                <div className="flex flex-col gap-1 w-full">
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
-                                                        className="h-8 text-[9px] font-black uppercase tracking-widest border-2 w-full justify-start"
+                                                        className="h-7 text-[8px] font-black uppercase tracking-widest border-2 w-full justify-start px-2"
                                                         onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
                                                     >
-                                                        <Camera className="w-3.5 h-3.5 mr-2" />
+                                                        <Camera className="w-3 h-3 mr-1.5" />
                                                         Photo
                                                     </Button>
                                                     <input
@@ -836,31 +836,31 @@ function ReceivingInterface() {
                 </Card>
 
                 {/* FINAL ACTIONS CONTROL PANEL */}
-                <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
-                    <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-8">
+                <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden py-0 gap-0">
+                    <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-primary text-primary-foreground rounded-2xl shadow-lg">
-                                <Check className="w-6 h-6" />
+                            <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-lg">
+                                <Check className="w-5 h-5" />
                             </div>
                             <div>
-                                <CardTitle className="text-2xl font-black uppercase tracking-tight">Final QC Decision</CardTitle>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">Submit audit results to complete intake</p>
+                                <CardTitle className="text-xl font-black uppercase tracking-tight">Final QC Decision</CardTitle>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Submit audit results to complete intake</p>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-8 space-y-8">
+                    <CardContent className="p-6 space-y-8">
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             {/* QC Classification */}
-                            <div className="space-y-4">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Classification of Quality</Label>
+                            <div className="space-y-3">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Classification of Quality</Label>
                                 <Select value={qcStatus} onValueChange={setQcStatus}>
-                                    <SelectTrigger className="h-14 text-base font-bold border-2 rounded-2xl shadow-sm">
+                                    <SelectTrigger className="h-12 text-base font-bold border-2 rounded-xl shadow-sm">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl border-2">
                                         {QC_STATUS_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-3 rounded-lg mx-1">
+                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-2.5 rounded-lg mx-1">
                                                 <span className={cn("font-black uppercase tracking-tight text-sm", opt.color)}>{opt.label}</span>
                                             </SelectItem>
                                         ))}
@@ -869,31 +869,31 @@ function ReceivingInterface() {
                             </div>
 
                             {/* Receiving Action */}
-                            <div className="space-y-4">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Intake Decision</Label>
+                            <div className="space-y-3">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Intake Decision</Label>
                                 <RadioGroup 
                                     value={receivingAction} 
                                     onValueChange={(val) => setReceivingAction(val as "accept" | "reject")}
-                                    className="grid grid-cols-2 gap-4"
+                                    className="grid grid-cols-2 gap-3"
                                 >
                                     <div>
                                         <RadioGroupItem value="accept" id="action-accept" className="peer sr-only" />
                                         <Label
                                             htmlFor="action-accept"
-                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-emerald-50 hover:border-emerald-200 peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 cursor-pointer transition-all shadow-sm"
+                                            className="flex flex-col items-center justify-center h-20 rounded-2xl border-2 border-border bg-card p-3 hover:bg-emerald-50 hover:border-emerald-200 peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 cursor-pointer transition-all shadow-sm"
                                         >
-                                            <ThumbsUp className="mb-2 h-6 w-6" />
-                                            <span className="font-black uppercase tracking-widest text-[10px]">Accept Item</span>
+                                            <ThumbsUp className="mb-1.5 h-5 w-5" />
+                                            <span className="font-black uppercase tracking-widest text-[9px]">Accept Item</span>
                                         </Label>
                                     </div>
                                     <div>
                                         <RadioGroupItem value="reject" id="action-reject" className="peer sr-only" />
                                         <Label
                                             htmlFor="action-reject"
-                                            className="flex flex-col items-center justify-center h-24 rounded-2xl border-2 border-border bg-card p-4 hover:bg-red-50 hover:border-red-200 peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-destructive cursor-pointer transition-all shadow-sm"
+                                            className="flex flex-col items-center justify-center h-20 rounded-2xl border-2 border-border bg-card p-3 hover:bg-red-50 hover:border-red-200 peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-destructive cursor-pointer transition-all shadow-sm"
                                         >
-                                            <ThumbsDown className="mb-2 h-6 w-6" />
-                                            <span className="font-black uppercase tracking-widest text-[10px]">Reject Item</span>
+                                            <ThumbsDown className="mb-1.5 h-5 w-5" />
+                                            <span className="font-black uppercase tracking-widest text-[9px]">Reject Item</span>
                                         </Label>
                                     </div>
                                 </RadioGroup>
@@ -902,13 +902,13 @@ function ReceivingInterface() {
                         
                         <Separator />
                         
-                        <div className="flex justify-end pt-2">
+                        <div className="flex justify-end pt-1">
                             <Button 
                                 onClick={onConfirmClick} 
                                 disabled={!receivingAction || isSubmitting}
-                                className="w-full md:w-auto h-14 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base"
+                                className="w-full md:w-auto h-12 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base rounded-2xl"
                             >
-                                {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
+                                {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                 Finalize Audit
                             </Button>
                         </div>

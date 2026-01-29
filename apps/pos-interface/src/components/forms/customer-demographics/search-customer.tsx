@@ -225,7 +225,7 @@ export function SearchCustomer({
           subtitle="Checking for pending orders..." 
         />
       )}
-      <div ref={containerRef} className="bg-muted/40 p-6 rounded-2xl space-y-4 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">
+      <div ref={containerRef} className="bg-muted/40 px-5 py-4 rounded-2xl space-y-3 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">
         <div className="flex justify-between items-center px-1">
           <div className="flex items-center gap-3">
             <div className={cn(

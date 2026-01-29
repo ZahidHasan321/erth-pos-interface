@@ -881,7 +881,7 @@ function NewWorkOrder() {
             </div>
 
             {/* Step Content */}
-            <div className="flex flex-col items-center gap-10 md:gap-16 pt-20 pb-12 mx-[5%] md:mx-[10%] 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-10 2xl:gap-y-12 2xl:max-w-screen-2xl 2xl:mx-auto">
+            <div className="flex flex-col items-center gap-6 md:gap-10 pt-12 pb-8 mx-[5%] md:mx-[10%] 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-8 2xl:gap-y-10 2xl:max-w-screen-2xl 2xl:mx-auto">
                 {!isOrderClosed && (
                     <div className="w-full mt-0 2xl:col-span-2">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>

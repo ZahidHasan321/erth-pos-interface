@@ -60,22 +60,22 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
       className="group"
     >
       <Card className={cn(
-        "relative overflow-hidden transition-all duration-300 border-l-4",
+        "relative overflow-hidden transition-all duration-300 border-l-4 py-0 gap-0",
         isChecked 
           ? "border-l-primary bg-primary/5 shadow-md" 
           : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
       )}>
         <CardContent className="p-0">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center min-h-[100px]">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center min-h-[80px]">
             
             {/* 1. Identification Segment */}
-            <div className="flex-1 p-5 border-r border-border/40 min-w-[200px]">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1 px-5 py-3 border-r border-border/40 min-w-[200px]">
+              <div className="flex items-center gap-3 mb-1">
                 <div className={cn(
-                  "p-2 rounded-lg transition-colors",
+                  "p-1.5 rounded-lg transition-colors",
                   isChecked ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
                 )}>
-                  <Hash className="w-4 h-4" />
+                  <Hash className="w-3.5 h-3.5" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold">
@@ -84,7 +84,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium mt-0.5">
                     <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
                     <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                    <Clock className="w-3 h-3" />
+                    <Clock className="w-2.5 h-2.5" />
                     <span>{orderDate}</span>
                   </div>
                 </div>
@@ -95,11 +95,11 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
             </div>
 
             {/* 2. Customer Info Segment */}
-            <div className="flex-[1.5] p-5 border-r border-border/40 bg-muted/10">
-              <div className="space-y-2">
+            <div className="flex-[1.5] px-5 py-3 border-r border-border/40 bg-muted/10">
+              <div className="space-y-1.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-background rounded-full border border-border">
-                    <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  <div className="p-1 bg-background rounded-full border border-border">
+                    <User className="w-3 h-3 text-muted-foreground" />
                   </div>
                   <span className="text-sm font-bold text-foreground truncate">
                     {order.customer?.name || "Unknown Customer"}
@@ -107,7 +107,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 </div>
                 {order.customer?.phone && (
                   <div className="flex items-center gap-2.5 ml-1">
-                    <Phone className="w-3 h-3 text-muted-foreground" />
+                    <Phone className="w-2.5 h-2.5 text-muted-foreground" />
                     <span className="text-[11px] font-medium text-muted-foreground">{order.customer.phone}</span>
                   </div>
                 )}
@@ -115,8 +115,8 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
             </div>
 
             {/* 3. Verification Segment */}
-            <div className="flex-[1.2] p-5 border-r border-border/40">
-              <div className="flex flex-col gap-2">
+            <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
+              <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between px-1">
                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Verification</span>
                    <span className="text-[10px] font-bold text-primary">{numGarments} Pieces</span>
@@ -124,7 +124,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 <Button
                   variant={isChecked ? "default" : "outline"}
                   className={cn(
-                    "h-10 w-full text-xs font-bold uppercase transition-all",
+                    "h-9 w-full text-xs font-bold uppercase transition-all",
                     isChecked 
                       ? "bg-emerald-500 hover:bg-emerald-600 text-white border-none shadow-sm" 
                       : "border-2 border-dashed hover:border-primary/60 hover:bg-primary/5"
@@ -132,7 +132,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                   onClick={() => setIsChecked(!isChecked)}
                 >
                   {isChecked ? (
-                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Verified</>
+                    <><CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Verified</>
                   ) : (
                     `Check ${numGarments} garments`
                   )}
@@ -141,21 +141,21 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
             </div>
 
             {/* 4. Action Segment */}
-            <div className="w-full md:w-[180px] p-5 flex items-center justify-center bg-muted/5">
+            <div className="w-full md:w-[160px] px-5 py-3 flex items-center justify-center bg-muted/5">
               <Button
                 className={cn(
-                  "w-full h-12 md:h-14 font-bold uppercase tracking-wider shadow-md group-hover:scale-[1.02] transition-transform",
+                  "w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md group-hover:scale-[1.02] transition-transform",
                   !isChecked && "opacity-50 grayscale"
                 )}
                 onClick={handleDispatch}
                 disabled={!isChecked || isUpdating}
               >
                 {isUpdating ? (
-                   <RefreshCw className="w-4 h-4 animate-spin" />
+                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <>
                     <span>Dispatch</span>
-                    <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    <ChevronRight className="w-3.5 h-3.5 ml-2 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>

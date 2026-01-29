@@ -470,12 +470,12 @@ function BrovaFeedbackInterface() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="container mx-auto p-6 md:p-10 max-w-7xl space-y-8 pb-24"
+        className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6 pb-24"
     >
       
       {/* 1. Header & Search */}
-      <motion.div variants={itemVariants} className="space-y-6">
-        <div className="flex flex-col gap-1 border-b border-border pb-6">
+      <motion.div variants={itemVariants} className="space-y-4">
+        <div className="flex flex-col gap-1 border-b border-border pb-4">
             <h1 className="text-3xl font-bold text-foreground">
                 Brova <span className="text-primary">Feedback</span>
             </h1>
@@ -484,7 +484,7 @@ function BrovaFeedbackInterface() {
             </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
             <div className="lg:col-span-7">
                 <SearchCustomer 
                     onCustomerFound={handleCustomerFound}
@@ -512,19 +512,19 @@ function BrovaFeedbackInterface() {
         <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-8"
+            className="space-y-6"
         >
           {/* 2. Compact Order Context Bar */}
-          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20">
-            <CardContent className="p-4">
-              <div className="flex flex-wrap items-center justify-between gap-y-4 gap-x-8">
+          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20 py-0 gap-0">
+            <CardContent className="p-3">
+              <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-8">
                 {/* Customer Info */}
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <User className="w-4 h-4" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                    <User className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
                     <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
                   </div>
                   <div className="ml-2 pl-3 border-l border-border py-1">
@@ -532,16 +532,16 @@ function BrovaFeedbackInterface() {
                   </div>
                 </div>
 
-                <div className="hidden lg:block h-8 w-px bg-border/60" />
+                <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Order Details */}
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                      <Hash className="w-4 h-4" />
+                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                      <Hash className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
                       <div className="flex items-center gap-2 leading-none">
                         <span className="font-black text-sm">#{activeOrder.id}</span>
                         <span className="text-[10px] font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "—"}</span>
@@ -550,25 +550,25 @@ function BrovaFeedbackInterface() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                      <Package className="w-4 h-4" />
+                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                      <Package className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
                       <p className="font-bold text-sm leading-none">{activeOrder.garments?.length || 0} Pieces</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="hidden lg:block h-8 w-px bg-border/60" />
+                <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Delivery */}
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <Clock className="w-4 h-4" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                    <Clock className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
                     <p className="font-bold text-sm leading-none">
                       {activeOrder.delivery_date ? format(new Date(activeOrder.delivery_date), "PP") : "Not Set"}
                     </p>
@@ -581,21 +581,21 @@ function BrovaFeedbackInterface() {
           <Separator className="opacity-50" />
 
           {/* 3. Garment Selection Tabs */}
-          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-6">
+          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-4">
             <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
-                <TabsList className="h-auto flex-nowrap justify-start gap-3 bg-transparent p-0">
+                <TabsList className="h-auto flex-nowrap justify-start gap-2 bg-transparent p-0">
                 {activeOrder.garments?.map((garment) => (
                     <TabsTrigger 
                         key={garment.id} 
                         value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-4 py-2 h-14 min-w-[140px] rounded-xl transition-all"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
                     >
-                        <div className="text-left w-full space-y-1">
+                        <div className="text-left w-full space-y-0.5">
                             <div className="flex items-center justify-between gap-2">
-                                <span className="text-[9px] font-black uppercase tracking-widest opacity-70">Item</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest opacity-70">Item</span>
                                 <Badge 
                                     className={cn(
-                                        "h-3.5 px-1 text-[8px] font-black uppercase border-none",
+                                        "h-3 px-1 text-[7px] font-black uppercase border-none",
                                         garment.brova 
                                             ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white" 
                                             : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
@@ -604,29 +604,29 @@ function BrovaFeedbackInterface() {
                                     {garment.brova ? "Brova" : "Final"}
                                 </Badge>
                             </div>
-                            <div className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</div>
+                            <div className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</div>
                         </div>
                     </TabsTrigger>
                 ))}
                 </TabsList>
             </div>
 
-            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-8 focus-visible:ring-0">
+            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-6 focus-visible:ring-0">
                
                  {/* MEASUREMENT feedback SECTION */}
-                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl">
-                    <CardHeader className="bg-muted/30 border-b p-6">
+                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl py-0 gap-0">
+                    <CardHeader className="bg-muted/30 border-b p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
-                                    <Ruler className="w-5 h-5" />
+                                <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
+                                    <Ruler className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-xl font-bold uppercase tracking-tight">Adjustment Log</CardTitle>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Record required dimensional changes</p>
+                                    <CardTitle className="text-lg font-bold uppercase tracking-tight">Adjustment Log</CardTitle>
+                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Record required dimensional changes</p>
                                 </div>
                             </div>
-                            <Badge variant="outline" className="bg-background font-black text-[10px] h-7 px-3">
+                            <Badge variant="outline" className="bg-background font-black text-[9px] h-6 px-2">
                                 {isMeasurementLoading ? "REFRESHING SPECS..." : "SPECIFICATIONS SYNCED"}
                             </Badge>
                         </div>
@@ -635,14 +635,14 @@ function BrovaFeedbackInterface() {
                     <div className="relative overflow-x-auto">
                         <Table>
                             <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
-                                <TableRow className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                    <TableHead className="w-[12%] p-4">Dimension</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[10%]">Order (cm)</TableHead>
-                                    <TableHead className="text-center w-[10%] bg-muted/30">QC (cm)</TableHead>
-                                    <TableHead className="text-center w-[12%] bg-primary/5">Brova (cm)</TableHead>
-                                    <TableHead className="text-center w-[10%]">Delta</TableHead>
-                                    <TableHead className="text-center w-[15%]">Reason</TableHead>
-                                    <TableHead className="p-4">Adjustment Notes</TableHead>
+                                <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                    <TableHead className="w-[12%] p-3">Dimension</TableHead>
+                                    <TableHead className="text-center bg-muted/30 w-[10%] p-3">Order (cm)</TableHead>
+                                    <TableHead className="text-center w-[10%] bg-muted/30 p-3">QC (cm)</TableHead>
+                                    <TableHead className="text-center w-[12%] bg-primary/5 p-3">Brova (cm)</TableHead>
+                                    <TableHead className="text-center w-[10%] p-3">Delta</TableHead>
+                                    <TableHead className="text-center w-[15%] p-3">Reason</TableHead>
+                                    <TableHead className="p-3">Adjustment Notes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -663,27 +663,27 @@ function BrovaFeedbackInterface() {
 
                                     return (
                                         <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
-                                            <TableCell className="p-4">
-                                                <div className="font-bold text-sm uppercase tracking-tight">{row.type}</div>
-                                                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
+                                            <TableCell className="p-3">
+                                                <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
+                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
                                             </TableCell>
-                                            <TableCell className="text-center font-black text-base bg-muted/30">
+                                            <TableCell className="text-center font-black text-sm bg-muted/30">
                                                 {orderValue || "-"}
                                             </TableCell>
-                                            <TableCell className="p-2 bg-muted/30">
+                                            <TableCell className="p-1.5 bg-muted/30">
                                                 <Input 
                                                     type="number" 
-                                                    className="h-10 w-24 mx-auto text-center font-bold text-base border-transparent bg-transparent hover:border-border focus:bg-background transition-all"
+                                                    className="h-8 w-20 mx-auto text-center font-bold text-sm border-transparent bg-transparent hover:border-border focus:bg-background transition-all"
                                                     placeholder="0.0"
                                                     value={workshopValue ?? ""}
                                                     onChange={(e) => handleWorkshopMeasurementChange(row.key, e.target.value)}
                                                 />
                                             </TableCell>
-                                            <TableCell className="p-2 bg-primary/[0.02]">
+                                            <TableCell className="p-1.5 bg-primary/[0.02]">
                                                 <Input 
                                                     type="number" 
                                                     className={cn(
-                                                        "h-10 w-24 mx-auto text-center font-black text-base border-2 transition-all",
+                                                        "h-8 w-20 mx-auto text-center font-black text-sm border-2 transition-all",
                                                         statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
                                                         statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
                                                         statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
@@ -703,42 +703,42 @@ function BrovaFeedbackInterface() {
                                                             exit={{ opacity: 0, scale: 0.8 }}
                                                         >
                                                             <Badge variant="secondary" className={cn(
-                                                                "font-black text-xs h-7 px-2 shadow-sm",
+                                                                "font-black text-[10px] h-6 px-1.5 shadow-sm",
                                                                 statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
                                                                 statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
                                                                 statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
                                                             )}>
-                                                                {diffOrder > 0 ? `+${diffOrder}` : diffOrder} cm
+                                                                {diffOrder > 0 ? `+${diffOrder}` : diffOrder}
                                                             </Badge>
                                                         </motion.div>
                                                     ) : (
-                                                        <span className="text-muted-foreground font-black text-xs opacity-20">—</span>
+                                                        <span className="text-muted-foreground font-black text-[10px] opacity-20">—</span>
                                                     )}
                                                 </AnimatePresence>
                                             </TableCell>
-                                            <TableCell className="p-2">
+                                            <TableCell className="p-1.5">
                                                 <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
                                                     <SelectTrigger className={cn(
-                                                        "h-10 text-xs font-bold border-none shadow-none rounded-lg px-3 transition-colors",
+                                                        "h-8 text-[10px] font-bold border-none shadow-none rounded-lg px-2 transition-colors",
                                                         selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
                                                     )}>
                                                         <SelectValue placeholder="Reason..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {DIFFERENCE_REASONS.map(r => (
-                                                            <SelectItem key={r.label} value={r.label} className={cn("text-xs font-bold uppercase py-2.5", r.color)}>
+                                                            <SelectItem key={r.label} value={r.label} className={cn("text-[10px] font-bold uppercase py-2", r.color)}>
                                                                 {r.label}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
                                             </TableCell>
-                                            <TableCell className="p-2">
-                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-3 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
-                                                    <MessageSquare className="w-4 h-4 text-muted-foreground/40" />
+                                            <TableCell className="p-1.5">
+                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-2 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
+                                                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
                                                     <Input 
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-xs font-bold h-10"
-                                                        placeholder="Add adjustment note..."
+                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-8"
+                                                        placeholder="Adjustment note..."
                                                         value={noteValue}
                                                         onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
                                                     />
@@ -753,25 +753,25 @@ function BrovaFeedbackInterface() {
                 </Card>
 
                 {/* STYLE feedback SECTION */}
-                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden">
-                    <CardHeader className="bg-muted/30 border-b p-6">
+                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden py-0 gap-0">
+                    <CardHeader className="bg-muted/30 border-b p-4">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-sm">
-                                <Package className="w-5 h-5" />
+                            <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
+                                <Package className="w-4 h-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-xl font-bold uppercase tracking-tight">Style Feedback</CardTitle>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Collect feedback on style configurations</p>
+                                <CardTitle className="text-lg font-bold uppercase tracking-tight">Style Feedback</CardTitle>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Collect feedback on style configurations</p>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-6">
-                       <div className="space-y-4">
-                            <div className="hidden md:grid grid-cols-12 gap-6 px-4 py-3 bg-muted/50 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground border border-border/40">
+                    <CardContent className="p-4">
+                       <div className="space-y-3">
+                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-xl text-[9px] font-black uppercase tracking-widest text-muted-foreground border border-border/40">
                                 <div className="col-span-3">Configuration Item</div>
-                                <div className="col-span-2">Reference</div>
-                                <div className="col-span-3">Status</div>
-                                <div className="col-span-2">Notes</div>
+                                <div className="col-span-2 text-center">Reference</div>
+                                <div className="col-span-3 text-center">Status</div>
+                                <div className="col-span-2 text-center">Notes</div>
                                 <div className="col-span-2 text-right">Evidence</div>
                             </div>
 
@@ -780,20 +780,20 @@ function BrovaFeedbackInterface() {
                                     <motion.div 
                                         key={opt.id} 
                                         layout
-                                        className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
+                                        className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
                                     >
                                         {/* Item Description */}
                                         <div className="col-span-3 space-y-1">
-                                            <div className="font-black text-sm uppercase tracking-tight text-foreground">{opt.label}</div>
-                                            <Badge variant="outline" className="font-black text-[9px] uppercase border-primary/20 bg-primary/5 text-primary h-5">
+                                            <div className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</div>
+                                            <Badge variant="outline" className="font-black text-[8px] uppercase border-primary/20 bg-primary/5 text-primary h-4 px-1.5">
                                                 {opt.mainValue}
                                             </Badge>
                                         </div>
 
                                         {/* Visual Reference */}
-                                        <div className="col-span-2">
+                                        <div className="col-span-2 flex justify-center">
                                             {opt.mainImage ? (
-                                                <div className="h-16 w-16 bg-white rounded-xl border-2 border-border/60 p-1.5 shadow-inner">
+                                                <div className="h-12 w-12 bg-white rounded-lg border-2 border-border/60 p-1 shadow-inner">
                                                     <img 
                                                         src={opt.mainImage} 
                                                         alt={opt.label} 
@@ -801,44 +801,44 @@ function BrovaFeedbackInterface() {
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="h-16 w-16 bg-muted/30 rounded-xl border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[10px] font-black uppercase text-center p-2 opacity-40">
+                                                <div className="h-12 w-12 bg-muted/30 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[8px] font-black uppercase text-center p-1 opacity-40 leading-tight">
                                                     NO REF
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Checklist */}
-                                        <div className="col-span-3 space-y-3">
+                                        <div className="col-span-3 space-y-2">
                                             <div 
                                                 className={cn(
-                                                    "flex items-center space-x-3 p-2.5 rounded-xl border-2 transition-all cursor-pointer",
-                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/10 border-transparent hover:border-border"
+                                                    "flex items-center space-x-2 p-1.5 rounded-lg border-2 transition-all cursor-pointer",
+                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/5 border-transparent hover:border-border"
                                                 )}
                                                 onClick={() => handleCheck(`${opt.id}-main`, !optionChecks[`${opt.id}-main`])}
                                             >
                                                 <Checkbox 
                                                     id={`check-${opt.id}-main`}
                                                     checked={optionChecks[`${opt.id}-main`] || false}
-                                                    className="size-4 pointer-events-none"
+                                                    className="size-3.5 pointer-events-none"
                                                 />
-                                                <Label className="cursor-pointer text-[11px] font-black uppercase tracking-tight flex-1 pointer-events-none">
+                                                <Label className="cursor-pointer text-[10px] font-black uppercase tracking-tight flex-1 pointer-events-none">
                                                     {opt.label} Confirmed
                                                 </Label>
                                             </div>
 
                                             {opt.hashwaValue && (
-                                                <div className="flex items-center gap-3 p-2.5 rounded-xl border-2 border-dashed bg-primary/5 border-primary/20">
+                                                <div className="flex items-center gap-2 p-1.5 rounded-lg border-2 border-dashed bg-primary/5 border-primary/20">
                                                     <Checkbox 
                                                         id={`check-${opt.id}-hashwa`}
                                                         checked={optionChecks[`${opt.id}-hashwa`] || false}
                                                         onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
-                                                        className="size-4"
+                                                        className="size-3.5"
                                                     />
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                                    <div className="flex items-center gap-1.5 flex-1">
+                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[9px] font-bold uppercase tracking-widest text-primary/80">
                                                             Hashwa:
                                                         </Label>
-                                                        <span className="font-black text-xs text-primary">{opt.hashwaValue}</span>
+                                                        <span className="font-black text-[10px] text-primary">{opt.hashwaValue}</span>
                                                     </div>
                                                 </div>
                                             )}
@@ -846,11 +846,11 @@ function BrovaFeedbackInterface() {
 
                                         {/* Local Notes for Style */}
                                         <div className="col-span-2">
-                                            <div className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 border-2 border-transparent focus-within:border-border focus-within:bg-background transition-all">
+                                            <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-2 border border-transparent focus-within:border-border focus-within:bg-background transition-all">
                                                 <MessageSquare className="size-3 text-muted-foreground/40" />
                                                 <Input 
-                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-10 p-0"
-                                                    placeholder="Feedback note..."
+                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[9px] font-bold h-8 p-0"
+                                                    placeholder="Note..."
                                                     value={optionNotes[opt.id] || ""}
                                                     onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
                                                 />
@@ -860,7 +860,7 @@ function BrovaFeedbackInterface() {
                                         {/* Capture Actions */}
                                         <div className="col-span-2 flex justify-end gap-2">
                                             {evidence[opt.id] ? (
-                                                <div className="relative group size-16 rounded-xl overflow-hidden border-2 border-primary/30 shadow-lg">
+                                                <div className="relative group size-12 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
                                                     {evidence[opt.id]?.type === 'photo' ? (
                                                         <img src={evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
                                                     ) : (
@@ -870,18 +870,18 @@ function BrovaFeedbackInterface() {
                                                         onClick={() => setEvidence(prev => { const n = {...prev}; delete n[opt.id]; return n; })}
                                                         className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
-                                                        <X className="w-5 h-5 text-white" />
+                                                        <X className="w-4 h-4 text-white" />
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="flex flex-col gap-1.5 w-full">
+                                                <div className="flex flex-col gap-1 w-full">
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
-                                                        className="h-8 text-[9px] font-black uppercase tracking-widest border-2 w-full justify-start"
+                                                        className="h-7 text-[8px] font-black uppercase tracking-widest border-2 w-full justify-start px-2"
                                                         onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
                                                     >
-                                                        <Camera className="w-3.5 h-3.5 mr-2" />
+                                                        <Camera className="w-3 h-3 mr-1.5" />
                                                         Photo
                                                     </Button>
                                                     <input
@@ -905,60 +905,60 @@ function BrovaFeedbackInterface() {
           </Tabs>
 
           {/* FINAL ACTIONS CONTROL PANEL - ORDER LEVEL */}
-          <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
-              <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-8">
+          <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden py-0 gap-0">
+              <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-6">
                   <div className="flex items-center gap-4">
-                      <div className="p-3 bg-primary text-primary-foreground rounded-2xl shadow-lg">
-                          <Check className="w-6 h-6" />
+                      <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-lg">
+                          <Check className="w-5 h-5" />
                       </div>
                       <div>
-                          <CardTitle className="text-2xl font-black uppercase tracking-tight">Order Finalization</CardTitle>
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">Record overall feedback and decide next steps for the order</p>
+                          <CardTitle className="text-xl font-black uppercase tracking-tight">Order Finalization</CardTitle>
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Record overall feedback and decide next steps for the order</p>
                       </div>
                   </div>
               </CardHeader>
-              <CardContent className="p-8 space-y-10">
+              <CardContent className="p-6 space-y-8">
                   
                   {/* 1. Customer Satisfaction */}
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                       <div className="flex items-center gap-2">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Customer Satisfaction</Label>
+                          <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Customer Satisfaction</Label>
                           <Separator className="flex-1" />
                       </div>
                       <RadioGroup 
                           value={satisfaction || ""} 
                           onValueChange={setSatisfaction}
-                          className="flex flex-wrap gap-4 justify-between"
+                          className="flex flex-wrap gap-3 justify-between"
                       >
                           {SATISFACTION_LEVELS.map((level) => (
-                              <div key={level.value} className="flex-1 min-w-[120px]">
+                              <div key={level.value} className="flex-1 min-w-[100px]">
                                   <RadioGroupItem value={level.value} id={`sat-${level.value}`} className="peer sr-only" />
                                   <Label
                                       htmlFor={`sat-${level.value}`}
                                       className={cn(
-                                          "flex flex-col items-center justify-center gap-3 h-24 rounded-2xl border-2 border-border bg-card p-4 cursor-pointer transition-all shadow-sm",
+                                          "flex flex-col items-center justify-center gap-2 h-20 rounded-2xl border-2 border-border bg-card p-3 cursor-pointer transition-all shadow-sm",
                                           level.color
                                       )}
                                   >
-                                      <span className="text-3xl">{level.emoji}</span>
-                                      <span className="font-black uppercase tracking-widest text-[9px]">{level.label}</span>
+                                      <span className="text-2xl">{level.emoji}</span>
+                                      <span className="font-black uppercase tracking-widest text-[8px]">{level.label}</span>
                                   </Label>
                               </div>
                           ))}
                       </RadioGroup>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       {/* 2. Brova Action */}
-                      <div className="space-y-6">
+                      <div className="space-y-4">
                           <div className="flex items-center gap-2">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Brova Status</Label>
+                              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Brova Status</Label>
                               <Separator className="flex-1" />
                           </div>
                           <RadioGroup 
                               value={brovaAction || ""} 
                               onValueChange={setBrovaAction}
-                              className="grid grid-cols-2 gap-4"
+                              className="grid grid-cols-2 gap-3"
                           >
                               {BROVA_ACTION_OPTIONS.map((opt) => (
                                   <div key={opt.value}>
@@ -966,7 +966,7 @@ function BrovaFeedbackInterface() {
                                       <Label
                                           htmlFor={`brova-${opt.value}`}
                                           className={cn(
-                                              "flex items-center justify-center h-14 rounded-xl border-2 border-border bg-card px-4 cursor-pointer transition-all shadow-sm font-black uppercase tracking-tight text-xs text-center",
+                                              "flex items-center justify-center h-12 rounded-xl border-2 border-border bg-card px-3 cursor-pointer transition-all shadow-sm font-black uppercase tracking-tight text-[10px] text-center",
                                               opt.color
                                           )}
                                       >
@@ -976,11 +976,11 @@ function BrovaFeedbackInterface() {
                               ))}
                           </RadioGroup>
                           
-                          <div className="pt-2">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 block mb-2">Brova Notes*</Label>
+                          <div className="pt-1">
+                              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1 block mb-1.5">Brova Notes*</Label>
                               <Textarea 
                                   placeholder="Add specific notes about the brova session..."
-                                  className="min-h-[100px] rounded-xl border-2 resize-none font-bold text-sm"
+                                  className="min-h-[80px] rounded-xl border-2 resize-none font-bold text-sm"
                                   value={orderNotes}
                                   onChange={(e) => setOrderNotes(e.target.value)}
                               />
@@ -988,15 +988,15 @@ function BrovaFeedbackInterface() {
                       </div>
 
                       {/* 3. Order Distribution */}
-                      <div className="space-y-6">
+                      <div className="space-y-4">
                           <div className="flex items-center gap-2">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Brova - Order Action</Label>
+                              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Brova - Order Action</Label>
                               <Separator className="flex-1" />
                           </div>
                           <RadioGroup 
                               value={distributionAction || ""} 
                               onValueChange={setDistributionAction}
-                              className="flex flex-col gap-4"
+                              className="flex flex-col gap-3"
                           >
                               {ORDER_DISTRIBUTION_OPTIONS.map((opt) => {
                                   const isDisabled = !!(brovaAction && brovaAction !== "accepted" && opt.value !== "workshop");
@@ -1011,15 +1011,15 @@ function BrovaFeedbackInterface() {
                                           <Label
                                               htmlFor={`dist-${opt.value}`}
                                               className={cn(
-                                                  "flex items-center gap-4 h-16 rounded-xl border-2 border-border bg-card px-6 cursor-pointer transition-all shadow-sm peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5",
+                                                  "flex items-center gap-3 h-14 rounded-xl border-2 border-border bg-card px-4 cursor-pointer transition-all shadow-sm peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5",
                                                   isDisabled && "opacity-40 cursor-not-allowed grayscale"
                                               )}
                                           >
-                                              <div className="p-2 bg-muted rounded-lg group-peer-data-[state=checked]:bg-primary/10">
-                                                  <opt.icon className="w-5 h-5 text-muted-foreground" />
+                                              <div className="p-1.5 bg-muted rounded-lg group-peer-data-[state=checked]:bg-primary/10">
+                                                  <opt.icon className="w-4 h-4 text-muted-foreground" />
                                               </div>
-                                              <span className="font-black uppercase tracking-widest text-[11px] flex-1">{opt.label}</span>
-                                              {isDisabled && <Badge variant="secondary" className="text-[8px] font-black">UNAVAILABLE</Badge>}
+                                              <span className="font-black uppercase tracking-widest text-[10px] flex-1">{opt.label}</span>
+                                              {isDisabled && <Badge variant="secondary" className="text-[7px] font-black">UNAVAILABLE</Badge>}
                                           </Label>
                                       </div>
                                   );
@@ -1030,14 +1030,14 @@ function BrovaFeedbackInterface() {
                   
                   <Separator />
                   
-                  <div className="flex justify-end pt-2">
+                  <div className="flex justify-end pt-1">
                       <Button 
                           onClick={onConfirmClick} 
                           disabled={!satisfaction || !brovaAction || !distributionAction || isSubmitting}
-                          className="w-full md:w-auto h-16 min-w-[280px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base rounded-2xl"
+                          className="w-full md:w-auto h-14 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base rounded-2xl"
                       >
-                          {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
-                          Finalize Order Feedback
+                          {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                          Finalize Feedback
                       </Button>
                   </div>
 

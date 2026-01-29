@@ -1,133 +1,69 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export function TableSkeleton() {
   return (
-    <div className="rounded-xl border border-border shadow-sm overflow-hidden bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60">
-            {/* Checkbox */}
-            <TableHead className="w-10">
-              <Skeleton className="h-4 w-4" />
-            </TableHead>
-            {/* Expander */}
-            <TableHead className="w-8">
-               <Skeleton className="h-4 w-4" />
-            </TableHead>
-            {/* Order ID */}
-            <TableHead>
-              <Skeleton className="h-4 w-16" />
-            </TableHead>
-            {/* Customer */}
-            <TableHead>
-              <Skeleton className="h-4 w-24" />
-            </TableHead>
-            {/* Mobile */}
-            <TableHead>
-              <Skeleton className="h-4 w-20" />
-            </TableHead>
-             {/* Status */}
-            <TableHead>
-              <Skeleton className="h-4 w-16" />
-            </TableHead>
-            {/* Fatoura Stage */}
-            <TableHead>
-               <Skeleton className="h-4 w-20" />
-            </TableHead>
-            {/* Fatoura */}
-            <TableHead>
-               <Skeleton className="h-4 w-16" />
-            </TableHead>
-            {/* Delivery */}
-            <TableHead>
-              <Skeleton className="h-4 w-20" />
-            </TableHead>
-            {/* Total */}
-            <TableHead>
-              <Skeleton className="h-4 w-16" />
-            </TableHead>
-            {/* Paid */}
-             <TableHead>
-              <Skeleton className="h-4 w-16" />
-            </TableHead>
-            {/* Balance */}
-             <TableHead>
-              <Skeleton className="h-4 w-16" />
-            </TableHead>
-             {/* R1, R2, R3, Call, Escalated */}
-             {Array.from({ length: 5 }).map((_, i) => (
-                <TableHead key={i}>
-                  <Skeleton className="h-4 w-8" />
-                </TableHead>
-             ))}
-             {/* Open */}
-             <TableHead className="w-10">
-               <Skeleton className="h-4 w-4" />
-             </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <TableRow key={i} className="border-b border-border/40">
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-4" />
-               </TableCell>
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-4" />
-               </TableCell>
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-16" />
-               </TableCell>
-               <TableCell className="py-3">
-                 <div className="space-y-1">
-                   <Skeleton className="h-3 w-24" />
-                   <Skeleton className="h-2 w-16" />
-                 </div>
-               </TableCell>
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-20" />
-               </TableCell>
-                <TableCell className="py-3">
-                 <Skeleton className="h-5 w-16 rounded-full" />
-               </TableCell>
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-16" />
-               </TableCell>
-               <TableCell className="py-3">
-                 <Skeleton className="h-4 w-12" />
-               </TableCell>
-                <TableCell className="py-3">
-                 <Skeleton className="h-4 w-20" />
-               </TableCell>
-                <TableCell className="py-3">
-                 <Skeleton className="h-4 w-16" />
-               </TableCell>
-                <TableCell className="py-3">
-                 <Skeleton className="h-4 w-16" />
-               </TableCell>
-                <TableCell className="py-3">
-                 <Skeleton className="h-4 w-16" />
-               </TableCell>
-                {Array.from({ length: 5 }).map((_, j) => (
-                    <TableCell key={j} className="py-3">
-                      <Skeleton className="h-8 w-8 rounded-full" />
-                    </TableCell>
-                 ))}
-                 <TableCell className="py-3">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                 </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="w-full space-y-3">
+      {/* Skeleton Header */}
+      <div className="flex items-center gap-4 px-6 py-4 bg-muted/30 rounded-xl border border-border/40">
+        <Skeleton className="h-4 w-4" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-24" />
+        <div className="flex-1" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+
+      {/* Skeleton Rows */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div 
+          key={i} 
+          className="group relative flex items-center gap-4 p-4 px-6 bg-card/50 backdrop-blur-sm border border-border/60 rounded-2xl transition-all hover:border-primary/20"
+          style={{
+            opacity: 1 - (i * 0.1), // Fading effect for lower rows
+          }}
+        >
+          {/* Checkbox / Icon area */}
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-5 w-5 rounded-md opacity-60" />
+            <Skeleton className="h-5 w-5 rounded-md opacity-40" />
+          </div>
+
+          {/* Primary Info (Order ID & Customer) */}
+          <div className="flex flex-col gap-2 min-w-[120px]">
+            <Skeleton className="h-4 w-16 rounded-md" />
+            <Skeleton className="h-3 w-24 rounded-md opacity-70" />
+          </div>
+
+          {/* Customer Details */}
+          <div className="hidden md:flex flex-col gap-2 min-w-[180px]">
+            <Skeleton className="h-4 w-32 rounded-md" />
+            <Skeleton className="h-3 w-20 rounded-md opacity-60" />
+          </div>
+
+          {/* Main Content Bar (represents multiple columns) */}
+          <div className="flex-1 flex items-center gap-4">
+             <Skeleton className="h-2 w-full rounded-full opacity-30" />
+          </div>
+
+          {/* Status Badge */}
+          <div className="hidden sm:block">
+            <Skeleton className="h-7 w-24 rounded-full opacity-80" />
+          </div>
+
+          {/* Financials / Actions */}
+          <div className="flex items-center gap-3 ml-4">
+            <div className="flex flex-col items-end gap-1.5">
+              <Skeleton className="h-4 w-16 rounded-md" />
+              <Skeleton className="h-3 w-12 rounded-md opacity-60" />
+            </div>
+            <Skeleton className="h-10 w-10 rounded-xl opacity-40" />
+          </div>
+          
+          {/* Subtle Shimmer Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-shimmer pointer-events-none" />
+        </div>
+      ))}
     </div>
   );
 }

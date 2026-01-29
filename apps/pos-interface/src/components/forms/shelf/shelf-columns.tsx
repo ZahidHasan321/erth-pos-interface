@@ -131,133 +131,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     accessorKey: 'quantity',
     header: 'Quantity',
     minSize: 150,
-    cell: ({ row, table }) => {
-      const { updateData, isOrderDisabled, errors } = table.options.meta as any
-      const quantity = row.original.quantity
-      const maxStock = row.original.stock || 0
-      const [inputValue, setInputValue] = React.useState(String(quantity))
-      const error = errors?.[row.index]?.quantity
-
-      // Sync local state when quantity changes externally (e.g., via buttons)
-      React.useEffect(() => {
-        setInputValue(String(quantity))
-      }, [quantity])
-
-      const handleIncrement = (e: React.MouseEvent) => {
-        e.preventDefault()
-        if (maxStock === 0) {
-          return
-        }
-        if (quantity < maxStock) {
-          updateData(row.index, 'quantity', quantity + 1)
-        }
-      }
-
-      const handleDecrement = (e: React.MouseEvent) => {
-        e.preventDefault()
-        if (quantity > 1) {
-          updateData(row.index, 'quantity', quantity - 1)
-        }
-      }
-
-      const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value
-        setInputValue(value)
-
-        // Allow empty input
-        if (value === '') {
-          return
-        }
-
-        const numValue = parseInt(value)
-
-        // Only update if it's a valid number
-        if (isNaN(numValue)) {
-          return
-        }
-
-        // Clamp value between 1 and maxStock
-        if (numValue < 1) {
-          updateData(row.index, 'quantity', 1)
-          return
-        }
-
-        if (maxStock > 0 && numValue > maxStock) {
-          updateData(row.index, 'quantity', maxStock)
-          return
-        }
-
-        updateData(row.index, 'quantity', numValue)
-      }
-
-      const handleBlur = () => {
-        const numValue = parseInt(inputValue)
-
-        // On blur, ensure we have a valid value
-        if (isNaN(numValue) || inputValue === '' || numValue < 1) {
-          updateData(row.index, 'quantity', 1)
-          setInputValue('1')
-        }
-      }
-
-      const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        // Select all text on focus for easy replacement
-        e.target.select()
-      }
-
-      const isProductSelected = !!row.original.product_type && !!row.original.brand
-      const hasStockError = isProductSelected && (maxStock === 0 || quantity > maxStock)
-      const hasError = hasStockError || !!error
-
-      return (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="icon"
-              onClick={handleDecrement}
-              disabled={quantity <= 1 || isOrderDisabled}
-              variant="outline"
-            >
-              -
-            </Button>
-            <Input
-              type="number"
-              value={inputValue}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              onFocus={handleFocus}
-              className={`w-16 text-center ${hasError ? 'border-red-500' : ''}`}
-              max={maxStock}
-              min={1}
-              disabled={isOrderDisabled}
-            />
-            <Button
-              type="button"
-              size="icon"
-              onClick={handleIncrement}
-              disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
-              variant="outline"
-            >
-              +
-            </Button>
-          </div>
-          {isProductSelected && maxStock === 0 && (
-            <span className="text-xs text-red-600 font-semibold text-center">No stock available</span>
-          )}
-          {isProductSelected && quantity > maxStock && maxStock > 0 && (
-            <span className="text-xs text-red-600 font-semibold text-center">Exceeds stock ({maxStock})</span>
-          )}
-          {maxStock > 0 && maxStock < 5 && quantity <= maxStock && (
-            <span className="text-xs text-orange-600 font-semibold text-center">Low stock - Only {maxStock} available</span>
-          )}
-          {maxStock >= 5 && maxStock <= 11 && quantity <= maxStock && (
-            <span className="text-xs text-green-600 font-semibold text-center">Limited stock - {maxStock} available</span>
-          )}
-          {error && <span className="text-[10px] text-red-500 text-center">{error.message}</span>}
-        </div>
-      )
-    },
+    cell: QuantityCell,
   },
   {
     accessorKey: 'unit_price',
@@ -269,7 +143,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
         
         return (
             <div className="border rounded-md p-2">
-                {row.original.unit_price.toFixed(2)}
+                {Number(row.original.unit_price).toFixed(2)}
             </div>
         )
     }
@@ -299,3 +173,131 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     },
   },
 ]
+
+function QuantityCell({ row, table }: { row: any; table: any }) {
+  const { updateData, isOrderDisabled, errors } = table.options.meta as any
+  const quantity = row.original.quantity
+  const maxStock = row.original.stock || 0
+  const [inputValue, setInputValue] = React.useState(String(quantity))
+  const error = errors?.[row.index]?.quantity
+
+  // Sync local state when quantity changes externally (e.g., via buttons)
+  React.useEffect(() => {
+    setInputValue(String(quantity))
+  }, [quantity])
+
+  const handleIncrement = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (maxStock === 0) {
+      return
+    }
+    if (quantity < maxStock) {
+      updateData(row.index, 'quantity', quantity + 1)
+    }
+  }
+
+  const handleDecrement = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (quantity > 1) {
+      updateData(row.index, 'quantity', quantity - 1)
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setInputValue(value)
+
+    // Allow empty input
+    if (value === '') {
+      return
+    }
+
+    const numValue = parseInt(value)
+
+    // Only update if it's a valid number
+    if (isNaN(numValue)) {
+      return
+    }
+
+    // Clamp value between 1 and maxStock
+    if (numValue < 1) {
+      updateData(row.index, 'quantity', 1)
+      return
+    }
+
+    if (maxStock > 0 && numValue > maxStock) {
+      updateData(row.index, 'quantity', maxStock)
+      return
+    }
+
+    updateData(row.index, 'quantity', numValue)
+  }
+
+  const handleBlur = () => {
+    const numValue = parseInt(inputValue)
+
+    // On blur, ensure we have a valid value
+    if (isNaN(numValue) || inputValue === '' || numValue < 1) {
+      updateData(row.index, 'quantity', 1)
+      setInputValue('1')
+    }
+  }
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Select all text on focus for easy replacement
+    e.target.select()
+  }
+
+  const isProductSelected = !!row.original.product_type && !!row.original.brand
+  const hasStockError = isProductSelected && (maxStock === 0 || quantity > maxStock)
+  const hasError = hasStockError || !!error
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="icon"
+          onClick={handleDecrement}
+          disabled={quantity <= 1 || isOrderDisabled}
+          variant="outline"
+        >
+          -
+        </Button>
+        <Input
+          type="number"
+          value={inputValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onFocus={handleFocus}
+          className={`w-16 text-center ${hasError ? 'border-red-500' : ''}`}
+          max={maxStock}
+          min={1}
+          disabled={isOrderDisabled}
+        />
+        <Button
+          type="button"
+          size="icon"
+          onClick={handleIncrement}
+          disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
+          variant="outline"
+        >
+          +
+        </Button>
+      </div>
+      {isProductSelected && maxStock === 0 && (
+        <span className="text-xs text-red-600 font-semibold text-center">No stock available</span>
+      )}
+      {isProductSelected && quantity > maxStock && maxStock > 0 && (
+        <span className="text-xs text-red-600 font-semibold text-center">Exceeds stock ({maxStock})</span>
+      )}
+      {maxStock > 0 && maxStock < 5 && quantity <= maxStock && (
+        <span className="text-xs text-orange-600 font-semibold text-center">Low stock - Only {maxStock} available</span>
+      )}
+      {maxStock >= 5 && maxStock <= 11 && quantity <= maxStock && (
+        <span className="text-xs text-green-600 font-semibold text-center">Limited stock - {maxStock} available</span>
+      )}
+      {error && <span className="text-[10px] text-red-500 text-center">{error.message}</span>}
+    </div>
+  )
+}

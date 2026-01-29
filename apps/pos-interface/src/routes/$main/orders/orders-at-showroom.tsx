@@ -28,6 +28,37 @@ export const Route = createFileRoute("/$main/orders/orders-at-showroom")({
   }),
 });
 
+const CompactStat = ({
+  label,
+  value,
+  icon: Icon,
+  color,
+  className
+}: {
+  label: string;
+  value: number;
+  icon: any;
+  color: string;
+  className?: string;
+}) => (
+  <div className={cn(
+    "flex items-center gap-2.5 bg-card/50 backdrop-blur-sm border border-border/60 rounded-xl p-2 pr-4 min-w-[140px] transition-all hover:shadow-md hover:border-primary/20 group",
+    className
+  )}>
+     <div className={cn(
+       "p-2 rounded-lg transition-colors",
+       color.replace('bg-', 'text-'),
+       "bg-muted/50 group-hover:bg-primary/10 group-hover:text-primary"
+     )}>
+        <Icon className="w-4 h-4" />
+     </div>
+     <div>
+        <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{label}</p>
+        <p className="text-xl font-black leading-none tracking-tighter">{value}</p>
+     </div>
+  </div>
+);
+
 function RouteComponent() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   
@@ -128,60 +159,28 @@ function RouteComponent() {
             alterationIn: filtered.filter(o => o.order.production_stage === 'brova_alteration').length,
             alterationOut: 0,
           }
-        };
-      }, [orders, filters]);
-    
-      const handleFilterChange = (key: keyof FilterState, value: any) => {
-        setFilters((prev) => ({ ...prev, [key]: value }));
-      };
-    
-      const clearFilters = () => {
-        setFilters({
-          searchId: "",
-          customer: "",
-          stage: "all",
-          reminderStatuses: [],
-          deliveryDateStart: "",
-          deliveryDateEnd: "",
-          hasBalance: false,
-          sortBy: "created_desc",
-        });
-      };
-    
-      const CompactStat = ({
-        label,
-        value,
-        icon: Icon,
-        color,
-        className
-      }: {
-        label: string;
-        value: number;
-        icon: any;
-        color: string;
-        className?: string;
-      }) => (
-        <div className={cn(
-          "flex items-center gap-2.5 bg-card/50 backdrop-blur-sm border border-border/60 rounded-xl p-2 pr-4 min-w-[140px] transition-all hover:shadow-md hover:border-primary/20 group",
-          className
-        )}>
-           <div className={cn(
-             "p-2 rounded-lg transition-colors",
-             color.replace('bg-', 'text-'),
-             "bg-muted/50 group-hover:bg-primary/10 group-hover:text-primary"
-           )}>
-              <Icon className="w-4 h-4" />
-           </div>
-           <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{label}</p>
-              <p className="text-xl font-black leading-none tracking-tighter">{value}</p>
-           </div>
-        </div>
-      );
-    
-      return (
-        <div className="space-y-6 mx-4 lg:mx-8 my-8 max-w-[1600px] 2xl:mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-6">
+              };
+            }, [orders, filters]);
+          
+            const handleFilterChange = (key: keyof FilterState, value: any) => {
+              setFilters((prev) => ({ ...prev, [key]: value }));
+            };
+          
+            const clearFilters = () => {
+              setFilters({
+                searchId: "",
+                customer: "",
+                stage: "all",
+                reminderStatuses: [],
+                deliveryDateStart: "",
+                deliveryDateEnd: "",
+                hasBalance: false,
+                sortBy: "created_desc",
+              });
+            };
+          
+            return (
+              <div className="space-y-6 mx-4 lg:mx-8 my-8 max-w-[1600px] 2xl:mx-auto">          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-6">
             <div className="space-y-1">
               <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
                 Showroom <span className="text-primary">Inventory</span>

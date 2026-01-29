@@ -230,7 +230,7 @@ export function OrderDataTable({
   return (
     <div className="space-y-4">
       {/* Table */}
-      <div className="rounded-xl border border-border shadow-sm overflow-hidden bg-card">
+      <div className="rounded-xl border border-border shadow-sm overflow-hidden bg-card py-0 gap-0">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

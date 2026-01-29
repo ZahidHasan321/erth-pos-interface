@@ -109,7 +109,7 @@ function CustomersListComponent() {
         </div>
       </div>
 
-      <Card className="border-border/60 shadow-sm overflow-hidden">
+      <Card className="border-border/60 shadow-sm overflow-hidden py-0 gap-0">
         <CardContent className="p-0">
           <div className="relative">
             {isLoading && (

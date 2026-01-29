@@ -375,10 +375,10 @@ export default function LinkOrder() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-8 p-6 md:p-10 max-w-7xl mx-auto"
+      className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto"
     >
       {/* --- Page Header --- */}
-      <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-6">
+      <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-4">
         <h1 className="text-3xl font-bold text-foreground">
           Link <span className="text-primary">Orders</span>
         </h1>
@@ -391,7 +391,7 @@ export default function LinkOrder() {
       <ErrorBoundary>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
             {/* 1. Customer Search (Fuzzy) */}
-            <div className="lg:col-span-6 h-full min-h-[140px]">
+            <div className="lg:col-span-6 h-full min-h-[120px]">
                 <SearchCustomer 
                     onCustomerFound={handleCustomerFound}
                     onHandleClear={() => {}}
@@ -399,7 +399,7 @@ export default function LinkOrder() {
             </div>
             
             {/* 2. Direct Lookups (Exact) */}
-            <div className="lg:col-span-6 h-full min-h-[140px]">
+            <div className="lg:col-span-6 h-full min-h-[120px]">
                 <DirectLookupCard 
                     orderId={orderIdSearch}
                     fatoura={fatouraSearch}
@@ -416,14 +416,14 @@ export default function LinkOrder() {
         </div>
       </ErrorBoundary>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* --- LEFT: Orders List --- */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-4">
           <motion.div
             variants={itemVariants}
-            className="bg-card rounded-xl border border-border shadow-sm overflow-hidden h-full flex flex-col"
+            className="bg-card rounded-xl border border-border shadow-sm overflow-hidden h-full flex flex-col py-0 gap-0"
           >
-            <div className="bg-muted/30 px-6 py-4 border-b border-border flex justify-between items-center shrink-0">
+            <div className="bg-muted/30 px-5 py-3 border-b border-border flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Selected Orders</h3>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase mt-0.5">
@@ -439,7 +439,7 @@ export default function LinkOrder() {
 
             <div className="divide-y divide-border flex-1 overflow-y-auto min-h-[300px]">
               {!hasOrders ? (
-                <div className="p-16 text-center text-muted-foreground h-full flex flex-col items-center justify-center">
+                <div className="p-12 text-center text-muted-foreground h-full flex flex-col items-center justify-center">
                   <div className="flex flex-col items-center gap-4">
                     <div className="p-4 bg-muted/50 rounded-full border-2 border-dashed border-border">
                         <LinkIcon className="w-8 h-8 opacity-20" />
@@ -463,7 +463,7 @@ export default function LinkOrder() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className={cn(
-                          "flex flex-col sm:flex-row items-stretch sm:items-center p-4 transition-all border-l-4",
+                          "flex flex-col sm:flex-row items-stretch sm:items-center p-3 transition-all border-l-4",
                           isPrimary 
                             ? "border-l-primary bg-primary/5 shadow-inner" 
                             : "border-l-transparent hover:bg-muted/20"
@@ -543,16 +543,16 @@ export default function LinkOrder() {
         </div>
 
         {/* --- RIGHT: Link Configuration Panel --- */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-4">
            {/* Date Picker Card */}
            <motion.div
             variants={itemVariants}
             className={cn(
-              "bg-card p-6 rounded-xl border-2 shadow-sm transition-all sticky top-24",
+              "bg-card p-5 rounded-xl border-2 shadow-sm transition-all sticky top-24 py-0 gap-0",
               hasOrders ? "border-primary/30" : "border-border opacity-60"
             )}
           >
-            <div className="space-y-4">
+            <div className="space-y-3 py-5">
               <div className="flex items-center gap-3 border-b border-border pb-3">
                  <div className="p-2 bg-primary/10 rounded-lg">
                     <CalendarIcon className="w-4 h-4 text-primary" />
@@ -563,7 +563,7 @@ export default function LinkOrder() {
                  </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                  <Calendar
                   mode="single"
                   selected={reviseDate}
@@ -572,7 +572,7 @@ export default function LinkOrder() {
                   disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
                 />
 
-                <div className="space-y-3 pt-2">
+                <div className="space-y-2.5 pt-1">
                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
                       <span className="text-muted-foreground">Primary Order</span>
                       <span className={cn(primaryOrderId ? "text-primary" : "text-destructive")}>
@@ -589,7 +589,7 @@ export default function LinkOrder() {
                    <Separator />
 
                    <Button 
-                    className="w-full h-12 font-black uppercase tracking-widest shadow-lg shadow-primary/20"
+                    className="w-full h-11 font-black uppercase tracking-widest shadow-lg shadow-primary/20"
                     onClick={handleLinkOrders} 
                     disabled={!canSubmit}
                    >

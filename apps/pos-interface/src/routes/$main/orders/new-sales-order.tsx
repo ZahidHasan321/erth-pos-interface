@@ -452,7 +452,7 @@ function NewSalesOrder() {
             </div>
 
             {/* Step Content */}
-            <div className="flex flex-col items-center gap-10 md:gap-16 pt-20 pb-12 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
+            <div className="flex flex-col items-center gap-6 md:gap-10 pt-12 pb-8 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
                 {!isOrderClosed && (
                     <div className="w-full mt-0">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>

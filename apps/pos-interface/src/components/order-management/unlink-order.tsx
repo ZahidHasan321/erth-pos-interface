@@ -170,7 +170,7 @@ export default function UnlinkOrder() {
             {/* --- Groups List --- */}
             <div className="space-y-2">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <div className="flex flex-col items-center justify-center py-10 gap-4">
                         <RefreshCw className="w-10 h-10 text-primary/40 animate-spin" />
                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading link groups...</p>
                     </div>
@@ -272,7 +272,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
 
     return (
         <Card className={cn(
-            "overflow-hidden border-2 transition-all duration-300",
+            "overflow-hidden border-2 transition-all duration-300 py-0 gap-0",
             isExpanded ? "border-primary/30 shadow-lg" : "border-border/60 hover:border-primary/20 shadow-sm"
         )}>
             <div
@@ -286,7 +286,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                     <div className="size-11 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-sm border border-primary/5">
                         <Package className="w-5.5 h-5.5" />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
                             <h3 className="text-lg font-black uppercase tracking-tight leading-none">#{group.primaryId}</h3>
@@ -296,7 +296,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                             <div className="h-4 w-px bg-border/60 mx-1" />
                             <span className="text-base font-black text-foreground truncate uppercase tracking-tight">{customerName}</span>
                         </div>
-                        
+
                         <div className="flex items-center gap-4 flex-wrap">
                             {productionStage && (
                                 <Badge variant="secondary" className="h-5 px-2 text-[10px] font-black uppercase bg-blue-50 text-blue-700 border-blue-100 shadow-none">

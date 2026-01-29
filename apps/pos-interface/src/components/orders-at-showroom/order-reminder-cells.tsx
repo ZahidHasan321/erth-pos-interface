@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   MessageSquare, 
@@ -90,24 +90,14 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
   const [editDate, setEditDate] = useState("");
   const [editNote, setEditNote] = useState("");
 
-  // Local state for DISPLAY (Optimistic UI)
-  const [displayDate, setDisplayDate] = useState(date);
-  const [displayNote, setDisplayNote] = useState(note);
-
-  // Sync display state if props change (Background refresh caught up)
-  useEffect(() => {
-    setDisplayDate(date);
-    setDisplayNote(note);
-  }, [date, note]);
-  
   const updateMutation = useOrderUpdate();
 
   const handleOpen = (open: boolean) => {
     if (open) {
       // Ensure YYYY-MM-DD
-      const d = displayDate ? new Date(displayDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+      const d = date ? new Date(date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       setEditDate(d);
-      setEditNote(displayNote || "");
+      setEditNote(note || "");
     }
     setIsOpen(open);
   };
@@ -130,18 +120,14 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
 
     try {
       await updateMutation.mutateAsync({ id: orderId, updates });
-      
-      // OPTIMISTIC UPDATE: Update UI immediately
-      setDisplayDate(editDate);
-      setDisplayNote(editNote);
       setIsOpen(false);
     } catch (error) {
       // Error is handled by mutation hook
     }
   };
 
-  const formattedDate = formatDate(displayDate);
-  const hasData = !!displayDate;
+  const formattedDate = formatDate(date);
+  const hasData = !!date;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpen}>
@@ -160,7 +146,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
                 {hasData ? (
                   <div className="flex items-center gap-1.5">
                     <span>{formattedDate}</span>
-                    {displayNote && <MessageSquare className="h-3 w-3 opacity-70" />}
+                    {note && <MessageSquare className="h-3 w-3 opacity-70" />}
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
@@ -175,7 +161,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
              {hasData ? (
                <div className="space-y-1">
                  <p className="font-semibold text-xs">{type} Details</p>
-                 <p className="text-xs text-muted-foreground break-words">{displayNote || "No notes"}</p>
+                 <p className="text-xs text-muted-foreground break-words">{note || "No notes"}</p>
                  <p className="text-[10px] text-blue-500 pt-1">Click to edit</p>
                </div>
              ) : (
@@ -242,26 +228,14 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
   const [editStatus, setEditStatus] = useState("");
   const [editNote, setEditNote] = useState("");
 
-  // Display state (Optimistic)
-  const [displayDate, setDisplayDate] = useState(date);
-  const [displayStatus, setDisplayStatus] = useState(status);
-  const [displayNote, setDisplayNote] = useState(note);
-
-  // Sync props
-  useEffect(() => {
-    setDisplayDate(date);
-    setDisplayStatus(status);
-    setDisplayNote(note);
-  }, [date, status, note]);
-
   const updateMutation = useOrderUpdate();
 
   const handleOpen = (open: boolean) => {
     if (open) {
-      const d = displayDate ? new Date(displayDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+      const d = date ? new Date(date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       setEditDate(d);
-      setEditStatus(displayStatus || "");
-      setEditNote(displayNote || "");
+      setEditStatus(status || "");
+      setEditNote(note || "");
     }
     setIsOpen(open);
   };
@@ -275,19 +249,14 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
 
     try {
       await updateMutation.mutateAsync({ id: orderId, updates });
-      
-      // OPTIMISTIC UPDATE
-      setDisplayDate(editDate);
-      setDisplayStatus(editStatus);
-      setDisplayNote(editNote);
       setIsOpen(false);
     } catch (error) {
       // Error handled by hook
     }
   };
 
-  const formattedDate = formatDate(displayDate);
-  const hasData = !!displayDate || !!displayStatus;
+  const formattedDate = formatDate(date);
+  const hasData = !!date || !!status;
 
   const statusColors: Record<string, string> = {
     "Connected": "bg-green-100 text-green-700 border-green-200",
@@ -315,13 +284,13 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
                       <Phone className="h-3 w-3 text-muted-foreground" />
                       {formattedDate || <span className="text-muted-foreground">No Date</span>}
                     </span>
-                    {displayStatus && (
+                    {status && (
                       <span className={cn(
                         "text-[10px] px-1.5 py-0.5 rounded border font-medium flex items-center gap-1 whitespace-nowrap", 
-                        statusColors[displayStatus] || "bg-gray-100"
+                        statusColors[status] || "bg-gray-100"
                       )}>
-                        {displayStatus}
-                        {displayNote && <MessageSquare className="h-2.5 w-2.5 opacity-60 ml-0.5" />}
+                        {status}
+                        {note && <MessageSquare className="h-2.5 w-2.5 opacity-60 ml-0.5" />}
                       </span>
                     )}
                   </>
@@ -338,8 +307,8 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
             {hasData ? (
                <div className="space-y-1">
                  <p className="font-semibold text-xs">Call Log</p>
-                 <p className="text-xs">{displayStatus || "No Status"}</p>
-                 {displayNote && <p className="text-xs text-muted-foreground border-t pt-1 mt-1 break-words">{displayNote}</p>}
+                 <p className="text-xs">{status || "No Status"}</p>
+                 {note && <p className="text-xs text-muted-foreground border-t pt-1 mt-1 break-words">{note}</p>}
                  <p className="text-[10px] text-blue-500 pt-1">Click to update</p>
                </div>
              ) : (

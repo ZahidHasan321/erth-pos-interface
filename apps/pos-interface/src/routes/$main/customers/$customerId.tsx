@@ -213,9 +213,9 @@ function CustomerDetailComponent() {
     }
 
     return (
-        <div className="space-y-8 py-8 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+        <div className="space-y-6 py-6 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
             <div className="flex items-center justify-between">
-                <Button asChild variant="ghost" className="hover:bg-primary/10 text-primary gap-2">
+                <Button asChild variant="ghost" className="hover:bg-primary/10 text-primary gap-2 h-9 px-3">
                     <Link to="/$main/customers">
                         <ArrowLeft className="h-4 w-4" />
                         Back to Customer Directory
