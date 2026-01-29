@@ -104,136 +104,38 @@ async function seedEssentialData() {
 }
 
 async function main() {
-  console.log("🚀 Starting Migration...");
+  console.log("🚀 Starting Clean Seed...");
 
-  // 0. ESSENTIAL DATA (always seed these first)
+  // 1. ESSENTIAL DATA (Fabrics, Shelf, Prices)
   await seedEssentialData();
 
-  // 1. USERS
-  console.log("--> Migrating Employees...");
-  const users = readJson("Employees.json"); 
-  for (const u of users) {
-    const [res] = await db.insert(schema.users).values({
-      name: u.fields.Name,
-      email: u.fields.Email,
-    }).returning({ id: schema.users.id }).onConflictDoNothing();
-    if(res) idMap.set(u.id, res.id);
-  }
+  // 2. SINGLE TEST USER (Employee)
+  console.log("--> Seeding test employee...");
+  const [employee] = await db.insert(schema.users).values({
+    name: "Admin User",
+    email: "admin@erth.com",
+    role: "admin",
+  }).onConflictDoNothing().returning();
 
-  // 2. LOOKUPS (Styles, Fabrics, Campaigns)
-  console.log("--> Migrating Lookups...");
-  const lookups = [
-    { file: "Campaigns.json", table: schema.campaigns, name: "Name" },
-    { file: "Styles.json", table: schema.styles, name: "Name" },
-    { file: "Fabrics.json", table: schema.fabrics, name: "Name" },
-    { file: "Shelves.json", table: schema.shelf, name: "Type" } 
-  ];
-  for (const l of lookups) {
-    const data = readJson(l.file);
-    for (const item of data) {
-      const values: any = {};
-      
-      if (l.table === schema.shelf) {
-        values.type = item.fields[l.name];
-      } else {
-        values.name = item.fields[l.name];
-      }
+  // 3. SINGLE COMPREHENSIVE CUSTOMER
+  console.log("--> Seeding test customer...");
+  await db.insert(schema.customers).values({
+    name: "John Doe",
+    nick_name: "Johnny",
+    phone: "96512345678",
+    email: "john.doe@example.com",
+    country_code: "965",
+    city: "Kuwait City",
+    area: "Salmiya",
+    block: "4",
+    street: "123 Gulf Road",
+    house_no: "10",
+    address_note: "Near the grand mosque",
+    nationality: "Kuwaiti",
+    account_type: "Primary",
+  }).onConflictDoNothing();
 
-      // Add random prices for fabrics if not already present
-      if (l.file === "Fabrics.json") {
-        values.price_per_meter = Number((Math.random() * (12 - 3) + 3).toFixed(3));
-        values.color = item.fields.Color || "Standard";
-      }
-
-      // Add random prices for shelf items if not already present
-      if (l.file === "Shelves.json") {
-        values.price = Number((Math.random() * (50 - 1) + 1).toFixed(2));
-        values.brand = item.fields.Brand || "Generic";
-      }
-
-      const [res] = await db.insert(l.table as any).values(values).returning({ id: (l.table as any).id }).onConflictDoNothing();
-      if(res) idMap.set(item.id, res.id);
-    }
-  }
-
-  // 3. CUSTOMERS
-  console.log("--> Migrating Customers...");
-  const customers = readJson("Customers.json");
-  for (const c of customers) {
-    const [res] = await db.insert(schema.customers).values({
-      name: c.fields.Name || "Unknown",
-      phone: c.fields.Phone,
-      whatsapp: !!c.fields.Whatsapp,
-      email: c.fields.Email,
-      city: c.fields.City,
-      block: c.fields.Block,
-      street: c.fields.Street,
-      area: c.fields.Area,
-      customer_segment: c.fields.CustomerSegment,
-    }).returning({ id: schema.customers.id }).onConflictDoNothing();
-    if(res) idMap.set(c.id, res.id);
-  }
-
-  // 4. MEASUREMENTS
-  console.log("--> Migrating Measurements...");
-  const measurements = readJson("Measurements.json");
-  for (const m of measurements) {
-    const custId = m.fields.CustomerID ? idMap.get(m.fields.CustomerID[0]) : null;
-    if(!custId) continue;
-    
-    const [res] = await db.insert(schema.measurements).values({
-      customer_id: custId,
-      // map other fields as needed
-    }).returning({ id: schema.measurements.id }).onConflictDoNothing();
-    if(res) idMap.set(m.id, res.id);
-  }
-
-  // 5. ORDERS
-  console.log("--> Migrating Orders...");
-  const orders = readJson("Orders.json");
-  for (const o of orders) {
-    const custId = o.fields.CustomerID ? idMap.get(o.fields.CustomerID[0]) : null;
-    const takerId = o.fields.OrderTaker ? idMap.get(o.fields.OrderTaker[0]) : null;
-    const linkedId = o.fields.LinkedTo ? idMap.get(o.fields.LinkedTo[0]) : null;
-
-    let status = "draft";
-    if (o.fields.OrderStatus === "Completed") status = "confirmed";
-    if (o.fields.OrderStatus === "Cancelled") status = "cancelled";
-
-    const [res] = await db.insert(schema.orders).values({
-      customer_id: custId,
-      order_taker_id: takerId,
-      linked_order_id: linkedId,
-      checkout_status: status as any,
-      production_stage: (o.fields.FatouraStages || "order_at_shop").toLowerCase().replace(/ /g, "_") as any,
-      invoice_number: o.fields.Fatoura,
-      order_total: o.fields.OrderTotal ? String(o.fields.OrderTotal) : "0",
-    }).returning({ id: schema.orders.id }).onConflictDoNothing();
-    if(res) idMap.set(o.id, res.id);
-  }
-
-  // 6. GARMENTS
-  console.log("--> Migrating Garments...");
-  const garments = readJson("GARMENTS.json");
-  for (const g of garments) {
-    const orderId = g.fields.OrderId ? idMap.get(g.fields.OrderId[0]) : null;
-    const fabricId = g.fields.FabricId ? idMap.get(g.fields.FabricId[0]) : null;
-    const styleId = g.fields.StyleOptionId ? idMap.get(g.fields.StyleOptionId[0]) : null;
-    const measureId = g.fields.MeasurementId ? idMap.get(g.fields.MeasurementId[0]) : null;
-
-    if (!orderId) continue;
-
-    await db.insert(schema.garments).values({
-      order_id: orderId,
-      fabric_id: fabricId,
-      style_id: styleId,
-      measurement_id: measureId,
-      quantity: 1,
-      notes: g.fields.Note,
-    }).onConflictDoNothing();
-  }
-
-  console.log("✅ Migration Complete.");
+  console.log("✅ Seed Complete. Created 1 Admin, 1 Customer, and essential lookups.");
   process.exit(0);
 }
 

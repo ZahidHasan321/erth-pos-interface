@@ -61,6 +61,9 @@ export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 export const orderTypeEnum = pgEnum("order_type", ["WORK", "SALES"]);
 export type OrderType = (typeof orderTypeEnum.enumValues)[number];
 
+export const brandEnum = pgEnum("brand", ["ERTH", "SAKKBA"]);
+export type Brand = (typeof brandEnum.enumValues)[number];
+
 export const fabricSourceEnum = pgEnum("fabric_source", ["IN", "OUT"]);
 export type FabricSource = (typeof fabricSourceEnum.enumValues)[number];
 
@@ -223,17 +226,49 @@ export const measurements = pgTable("measurements", {
 export const orders = pgTable("orders", {
     id: serial("id").primaryKey(),
 
-    // The incremental Invoice Number (Fatoura)
-    invoice_number: integer("invoice_number"),
-
     customer_id: integer("customer_id").references(() => customers.id).notNull(),
-    campaign_id: integer("campaign_id").references(() => campaigns.id),
     order_taker_id: uuid("order_taker_id").references(() => users.id),
-
-    linked_order_id: integer("linked_order_id").references((): any => orders.id),
 
     // Dates
     order_date: timestamp("order_date").defaultNow(),
+    
+    // State
+    brand: brandEnum("brand"),
+    checkout_status: checkoutStatusEnum("checkout_status").default("draft"),
+    order_type: orderTypeEnum("order_type").default("WORK"),
+
+    // Financials
+    payment_type: paymentTypeEnum("payment_type"),
+    payment_ref_no: text("payment_ref_no"),
+    payment_note: text("payment_note"),
+    discount_type: discountTypeEnum("discount_type"),
+    discount_value: numeric("discount_value", { precision: 10, scale: 3 }),
+    discount_percentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
+    referral_code: text("referral_code"),
+    paid: numeric("paid", { precision: 10, scale: 3 }),
+
+    // Charges & Totals
+    delivery_charge: numeric("delivery_charge", { precision: 10, scale: 3 }),
+    shelf_charge: numeric("shelf_charge", { precision: 10, scale: 3 }),
+    order_total: numeric("order_total", { precision: 10, scale: 3 }),
+
+    // Meta
+    notes: text("notes"),
+}, (t) => ({
+    customerIdx: index("orders_customer_idx").on(t.customer_id),
+    dateIdx: index("orders_date_idx").on(t.order_date),
+}));
+
+// --- 5.5 WORK ORDERS ---
+export const workOrders = pgTable("work_orders", {
+    order_id: integer("order_id").primaryKey().references(() => orders.id, { onDelete: 'cascade' }),
+    
+    // Identity
+    invoice_number: integer("invoice_number"),
+    campaign_id: integer("campaign_id").references(() => campaigns.id),
+    linked_order_id: integer("linked_order_id").references(() => orders.id, { onDelete: 'set null' }),
+
+    // Dates
     delivery_date: timestamp("delivery_date"),
     linked_date: timestamp("linked_date"),
     unlinked_date: timestamp("unlinked_date"),
@@ -246,49 +281,28 @@ export const orders = pgTable("orders", {
     escalation_date: timestamp("escalation_date"),
 
     // State
-    checkout_status: checkoutStatusEnum("checkout_status").default("draft"),
     production_stage: productionStageEnum("production_stage"),
-    order_type: orderTypeEnum("order_type").default("WORK"),
+    call_status: text("call_status"),
 
     // Financials
-    payment_type: paymentTypeEnum("payment_type"),
-    payment_ref_no: text("payment_ref_no"),
-    payment_note: text("payment_note"),
-    discount_type: discountTypeEnum("discount_type"),
-    discount_value: numeric("discount_value", { precision: 10, scale: 3 }),
-    discount_percentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
-    referral_code: text("referral_code"),
-    paid: numeric("paid", { precision: 10, scale: 3 }),
     stitching_price: numeric("stitching_price", { precision: 10, scale: 3 }),
-
-    // Charges & Totals
     fabric_charge: numeric("fabric_charge", { precision: 10, scale: 3 }),
     stitching_charge: numeric("stitching_charge", { precision: 10, scale: 3 }),
     style_charge: numeric("style_charge", { precision: 10, scale: 3 }),
-    delivery_charge: numeric("delivery_charge", { precision: 10, scale: 3 }),
-    shelf_charge: numeric("shelf_charge", { precision: 10, scale: 3 }),
     advance: numeric("advance", { precision: 10, scale: 3 }),
-    order_total: numeric("order_total", { precision: 10, scale: 3 }),
-
+    
     // Meta
     num_of_fabrics: integer("num_of_fabrics"),
-    notes: text("notes"),
+    home_delivery: boolean("home_delivery").default(false),
     
+    // Notes
     r1_notes: text("r1_notes"),
     r2_notes: text("r2_notes"),
     r3_notes: text("r3_notes"),
     call_notes: text("call_notes"),
     escalation_notes: text("escalation_notes"),
-    
-    home_delivery: boolean("home_delivery").default(false),
-
-    // Workshop interaction
-    call_status: text("call_status"),
 }, (t) => ({
-    invoiceIdx: uniqueIndex("orders_invoice_idx").on(t.invoice_number),
-    customerIdx: index("orders_customer_idx").on(t.customer_id),
-    dateIdx: index("orders_date_idx").on(t.order_date),
-    linkedOrderIdx: index("orders_linked_idx").on(t.linked_order_id),
+    invoiceIdx: uniqueIndex("work_orders_invoice_idx").on(t.invoice_number),
 }));
 
 // --- 6. GARMENTS (Line Items) ---
@@ -296,7 +310,7 @@ export const garments = pgTable("garments", {
     id: uuid("id").defaultRandom().primaryKey(),
     garment_id: text("garment_id"), // e.g. 12-1, 12-2
 
-    order_id: integer("order_id").references(() => orders.id).notNull(),
+    order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
     fabric_id: integer("fabric_id").references(() => fabrics.id),
     style_id: integer("style_id").references(() => styles.id),
     style: text("style").default("kuwaiti"),
@@ -343,7 +357,7 @@ export const garments = pgTable("garments", {
 // --- 7. ORDER SHELF ITEMS (Work & Sales Orders) ---
 export const orderShelfItems = pgTable("order_shelf_items", {
     id: serial("id").primaryKey(),
-    order_id: integer("order_id").references(() => orders.id).notNull(),
+    order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
     shelf_id: integer("shelf_id").references(() => shelf.id).notNull(),
     quantity: integer("quantity").default(1),
     unit_price: numeric("unit_price", { precision: 10, scale: 3 }),
@@ -357,12 +371,16 @@ export const customersRelations = relations(customers, ({ many }) => ({
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
     customer: one(customers, { fields: [orders.customer_id], references: [customers.id] }),
+    workOrder: one(workOrders, { fields: [orders.id], references: [workOrders.order_id] }),
     garments: many(garments),
     shelfItems: many(orderShelfItems),
     taker: one(users, { fields: [orders.order_taker_id], references: [users.id] }),
-    campaign: one(campaigns, { fields: [orders.campaign_id], references: [campaigns.id] }),
-    linkedOrder: one(orders, { fields: [orders.linked_order_id], references: [orders.id], relationName: "linked_orders" }),
-    childOrders: many(orders, { relationName: "linked_orders" })
+}));
+
+export const workOrdersRelations = relations(workOrders, ({ one }) => ({
+    order: one(orders, { fields: [workOrders.order_id], references: [orders.id] }),
+    campaign: one(campaigns, { fields: [workOrders.campaign_id], references: [campaigns.id] }),
+    linkedOrder: one(orders, { fields: [workOrders.linked_order_id], references: [orders.id], relationName: "linked_orders" }),
 }));
 
 export const garmentsRelations = relations(garments, ({ one }) => ({
@@ -385,8 +403,23 @@ export type NewUser = InferInsertModel<typeof users>;
 export type Customer = InferSelectModel<typeof customers>;
 export type NewCustomer = InferInsertModel<typeof customers>;
 
-export type Order = InferSelectModel<typeof orders>;
+export type BaseOrder = InferSelectModel<typeof orders>;
+export type WorkOrder = InferSelectModel<typeof workOrders>;
+
+/**
+ * Unified Order type combining core transaction data and work order tailoring extension.
+ * Also includes optional relations for customer and items.
+ * This is the primary type used by the POS frontend.
+ */
+export type Order = BaseOrder & Partial<WorkOrder> & {
+    customer?: Customer;
+    garments?: Garment[];
+    shelf_items?: OrderShelfItem[];
+    child_orders?: BaseOrder[];
+};
+
 export type NewOrder = InferInsertModel<typeof orders>;
+export type NewWorkOrder = InferInsertModel<typeof workOrders>;
 
 export type Garment = InferSelectModel<typeof garments>;
 export type NewGarment = InferInsertModel<typeof garments>;

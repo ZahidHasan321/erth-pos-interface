@@ -28,6 +28,7 @@ import {
   FormMessage 
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
@@ -531,6 +532,31 @@ export function OrderSummaryAndPaymentForm({
                   )}
                 </AnimatePresence>
               </div>
+            </motion.section>
+
+            {/* Notes Section */}
+            <motion.section
+              className="bg-card rounded-xl border border-border shadow-sm p-6"
+            >
+              <h3 className="text-lg font-semibold mb-4">Order Notes</h3>
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Add any special instructions or internal notes for this order..."
+                        className="min-h-[120px] resize-none"
+                        disabled={isOrderClosed}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </motion.section>
           </div>
 

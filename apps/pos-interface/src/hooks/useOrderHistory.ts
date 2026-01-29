@@ -60,6 +60,7 @@ export function useOrderHistory({
         .from('orders')
         .select(`
           *,
+          workOrder:work_orders(*),
           customer:customers!inner(name, phone, nick_name),
           garments:garments(id),
           shelf_items:order_shelf_items(id)
@@ -89,7 +90,7 @@ export function useOrderHistory({
         if (term.startsWith('#')) {
           const idQuery = term.slice(1);
           if (idQuery && !isNaN(parseInt(idQuery))) {
-            query = query.or(`id.eq.${idQuery},invoice_number.eq.${idQuery}`);
+            query = query.or(`id.eq.${idQuery},workOrder.invoice_number.eq.${idQuery}`);
           }
         } else {
           // Complex OR condition across joined table
@@ -101,7 +102,7 @@ export function useOrderHistory({
           
           if (!isNaN(parseInt(term))) {
             orConditions.push(`id.eq.${term}`);
-            orConditions.push(`invoice_number.eq.${term}`);
+            orConditions.push(`workOrder.invoice_number.eq.${term}`);
           }
           
           query = query.or(orConditions.join(','));
@@ -117,35 +118,38 @@ export function useOrderHistory({
       }
 
       const items = (data || []).map((order: any): OrderHistoryItem => {
-        const fabricCharge = parseFloat(order.fabric_charge?.toString() || "0");
-        const stitchingCharge = parseFloat(order.stitching_charge?.toString() || "0");
-        const styleCharge = parseFloat(order.style_charge?.toString() || "0");
-        const deliveryCharge = parseFloat(order.delivery_charge?.toString() || "0");
-        const shelfCharge = parseFloat(order.shelf_charge?.toString() || "0");
-        const discountValue = parseFloat(order.discount_value?.toString() || "0");
+        const workData = Array.isArray(order.workOrder) ? order.workOrder[0] : order.workOrder;
+        const mergedOrder = { ...order, ...workData };
 
-        const total = order.order_total != null
-          ? parseFloat(order.order_total.toString())
+        const fabricCharge = parseFloat(mergedOrder.fabric_charge?.toString() || "0");
+        const stitchingCharge = parseFloat(mergedOrder.stitching_charge?.toString() || "0");
+        const styleCharge = parseFloat(mergedOrder.style_charge?.toString() || "0");
+        const deliveryCharge = parseFloat(mergedOrder.delivery_charge?.toString() || "0");
+        const shelfCharge = parseFloat(mergedOrder.shelf_charge?.toString() || "0");
+        const discountValue = parseFloat(mergedOrder.discount_value?.toString() || "0");
+
+        const total = mergedOrder.order_total != null
+          ? parseFloat(mergedOrder.order_total.toString())
           : (fabricCharge + stitchingCharge + styleCharge + deliveryCharge + shelfCharge - discountValue);
 
-        const paid = parseFloat(order.paid?.toString() || "0");
+        const paid = parseFloat(mergedOrder.paid?.toString() || "0");
 
         return {
-          id: order.id,
-          invoice_number: order.invoice_number,
-          order_date: order.order_date,
-          delivery_date: order.delivery_date,
-          order_type: order.order_type,
-          checkout_status: order.checkout_status,
-          home_delivery: !!order.home_delivery,
-          customer_name: order.customer?.nick_name || order.customer?.name || "Unknown Customer",
-          customer_phone: order.customer?.phone || "No Phone",
+          id: mergedOrder.id,
+          invoice_number: mergedOrder.invoice_number,
+          order_date: mergedOrder.order_date,
+          delivery_date: mergedOrder.delivery_date,
+          order_type: mergedOrder.order_type,
+          checkout_status: mergedOrder.checkout_status,
+          home_delivery: !!mergedOrder.home_delivery,
+          customer_name: mergedOrder.customer?.nick_name || mergedOrder.customer?.name || "Unknown Customer",
+          customer_phone: mergedOrder.customer?.phone || "No Phone",
           total_amount: total,
           paid_amount: paid,
           balance: total - paid,
-          fabric_count: order.garments?.length || 0,
-          shelf_item_count: order.shelf_items?.length || 0,
-          production_stage: order.production_stage,
+          fabric_count: mergedOrder.garments?.length || 0,
+          shelf_item_count: mergedOrder.shelf_items?.length || 0,
+          production_stage: mergedOrder.production_stage,
           charges: {
             fabric: fabricCharge,
             stitching: stitchingCharge,

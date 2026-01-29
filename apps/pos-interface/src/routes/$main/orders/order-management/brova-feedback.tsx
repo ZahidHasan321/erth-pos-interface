@@ -145,8 +145,8 @@ interface FeedbackMeasurements {
 }
 
 interface OrderWithDetails extends Order {
-    customer: Customer;
-    garments: Garment[];
+    customer?: Customer;
+    garments?: Garment[];
 }
 
 // --- Main Component ---

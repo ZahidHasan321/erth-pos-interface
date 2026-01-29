@@ -29,10 +29,9 @@ import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
 
 interface OrderWithDetails extends Order {
-  customer: Customer;
-  garments: Garment[];
+    customer?: Customer;
+    garments?: Garment[];
 }
-
 interface OrderCardProps {
   order: OrderWithDetails;
   onDispatch: (orderId: number) => Promise<void>;

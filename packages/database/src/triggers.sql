@@ -4,25 +4,30 @@ DROP FUNCTION IF EXISTS assign_invoice_number();
 
 -- 1. Create a sequence for Invoices starting at 1
 CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1;
--- Sync sequence with the current maximum invoice number in the orders table
-SELECT setval('invoice_seq', COALESCE((SELECT MAX(invoice_number) FROM orders), 0) + 1, false);
 
 -- 2. Transactional RPC for completing work order
 CREATE OR REPLACE FUNCTION complete_work_order(
   p_order_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, orderTotal, fabricCharge, stitchingCharge, styleCharge, deliveryCharge, shelfCharge, homeDelivery, deliveryDate, advance, stitchingPrice }
   p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
   p_fabric_items JSONB      -- [{ id: number, length: number }]
 )
 RETURNS JSONB AS $$
 DECLARE
   v_item JSONB;
-  v_order_row orders%ROWTYPE;
+  v_order_row RECORD;
+  v_work_order_row RECORD;
+  v_inv INT;
 BEGIN
-  -- 1. Update Order
+  -- 1. Get or Generate Invoice Number
+  SELECT invoice_number INTO v_inv FROM work_orders WHERE order_id = p_order_id;
+  IF v_inv IS NULL THEN
+     v_inv := nextval('invoice_seq');
+  END IF;
+
+  -- 2. Update Core Order
   UPDATE orders
   SET
-    invoice_number = CASE WHEN invoice_number IS NULL THEN nextval('invoice_seq') ELSE invoice_number END,
     checkout_status = 'confirmed',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
     paid = (p_checkout_details->>'paid')::decimal,
@@ -34,17 +39,47 @@ BEGIN
     discount_percentage = (p_checkout_details->>'discountPercentage')::decimal,
     referral_code = (p_checkout_details->>'referralCode'),
     order_total = (p_checkout_details->>'orderTotal')::decimal,
-    fabric_charge = (p_checkout_details->>'fabricCharge')::decimal,
-    stitching_charge = (p_checkout_details->>'stitchingCharge')::decimal,
-    style_charge = (p_checkout_details->>'styleCharge')::decimal,
     delivery_charge = (p_checkout_details->>'deliveryCharge')::decimal,
     shelf_charge = (p_checkout_details->>'shelfCharge')::decimal,
-    home_delivery = COALESCE((p_checkout_details->>'homeDelivery')::boolean, false),
+    notes = COALESCE(p_checkout_details->>'notes', notes),
     order_date = NOW()
   WHERE id = p_order_id
   RETURNING * INTO v_order_row;
 
-  -- 2. Deduct Shelf Stock & Record Items
+  -- 3. Upsert Work Order Extension
+  INSERT INTO work_orders (
+    order_id, 
+    invoice_number, 
+    delivery_date, 
+    advance, 
+    fabric_charge, 
+    stitching_charge, 
+    style_charge, 
+    stitching_price,
+    home_delivery
+  ) VALUES (
+    p_order_id, 
+    v_inv, 
+    (p_checkout_details->>'deliveryDate')::timestamp,
+    (p_checkout_details->>'advance')::decimal,
+    (p_checkout_details->>'fabricCharge')::decimal,
+    (p_checkout_details->>'stitchingCharge')::decimal,
+    (p_checkout_details->>'styleCharge')::decimal,
+    (p_checkout_details->>'stitchingPrice')::decimal,
+    COALESCE((p_checkout_details->>'homeDelivery')::boolean, false)
+  )
+  ON CONFLICT (order_id) DO UPDATE SET
+    invoice_number = EXCLUDED.invoice_number,
+    delivery_date = EXCLUDED.delivery_date,
+    advance = EXCLUDED.advance,
+    fabric_charge = EXCLUDED.fabric_charge,
+    stitching_charge = EXCLUDED.stitching_charge,
+    style_charge = EXCLUDED.style_charge,
+    stitching_price = EXCLUDED.stitching_price,
+    home_delivery = EXCLUDED.home_delivery
+  RETURNING * INTO v_work_order_row;
+
+  -- 4. Deduct Shelf Stock & Record Items
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
@@ -62,7 +97,7 @@ BEGIN
     );
   END LOOP;
 
-  -- 3. Deduct Fabric Stock
+  -- 5. Deduct Fabric Stock
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
   LOOP
     UPDATE fabrics 
@@ -70,7 +105,8 @@ BEGIN
     WHERE id = (v_item->>'id')::int;
   END LOOP;
 
-  RETURN to_jsonb(v_order_row);
+  -- 6. Return Flattened Result
+  RETURN to_jsonb(v_order_row) || to_jsonb(v_work_order_row);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -128,7 +164,7 @@ $$ LANGUAGE plpgsql;
 -- 4. NEW: Transactional RPC for creating AND completing a sales order in one go
 CREATE OR REPLACE FUNCTION create_complete_sales_order(
   p_customer_id INT,
-  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, homeDelivery }
+  p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, homeDelivery, brand }
   p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
 )
 RETURNS JSONB AS $$
@@ -156,7 +192,8 @@ BEGIN
     order_total,
     shelf_charge,
     delivery_charge,
-    home_delivery
+    home_delivery,
+    brand
   ) VALUES (
     p_customer_id,
     'confirmed',
@@ -175,7 +212,8 @@ BEGIN
     (p_checkout_details->>'total')::decimal,
     (p_checkout_details->>'shelfCharge')::decimal,
     (p_checkout_details->>'deliveryCharge')::decimal,
-    COALESCE((p_checkout_details->>'homeDelivery')::boolean, false)
+    COALESCE((p_checkout_details->>'homeDelivery')::boolean, false),
+    (p_checkout_details->>'brand')::brand
   ) RETURNING id INTO v_order_id;
 
   -- 2. Deduct Shelf Stock & Record Items
@@ -204,20 +242,39 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION save_work_order_garments(
   p_order_id INT,
   p_garments JSONB, -- Array of garment objects
-  p_order_updates JSONB -- { num_of_fabrics, fabric_charge, stitching_charge, style_charge, stitching_price }
+  p_order_updates JSONB -- { num_of_fabrics, fabric_charge, stitching_charge, style_charge, stitching_price, delivery_date, home_delivery }
 ) RETURNS JSONB AS $$
 DECLARE
   v_garment JSONB;
 BEGIN
-  -- 1. Update Order Totals (but not order_total yet)
-  UPDATE orders
-  SET
-    num_of_fabrics = (p_order_updates->>'num_of_fabrics')::INT,
-    fabric_charge = (p_order_updates->>'fabric_charge')::DECIMAL,
-    stitching_charge = (p_order_updates->>'stitching_charge')::DECIMAL,
-    style_charge = (p_order_updates->>'style_charge')::DECIMAL,
-    stitching_price = (p_order_updates->>'stitching_price')::DECIMAL
-  WHERE id = p_order_id;
+  -- 1. Update Work Order Totals
+  INSERT INTO work_orders (
+    order_id,
+    num_of_fabrics,
+    fabric_charge,
+    stitching_charge,
+    style_charge,
+    stitching_price,
+    delivery_date,
+    home_delivery
+  ) VALUES (
+    p_order_id,
+    (p_order_updates->>'num_of_fabrics')::INT,
+    (p_order_updates->>'fabric_charge')::DECIMAL,
+    (p_order_updates->>'stitching_charge')::DECIMAL,
+    (p_order_updates->>'style_charge')::DECIMAL,
+    (p_order_updates->>'stitching_price')::DECIMAL,
+    (p_order_updates->>'delivery_date')::TIMESTAMP,
+    COALESCE((p_order_updates->>'home_delivery')::BOOLEAN, false)
+  )
+  ON CONFLICT (order_id) DO UPDATE SET
+    num_of_fabrics = EXCLUDED.num_of_fabrics,
+    fabric_charge = EXCLUDED.fabric_charge,
+    stitching_charge = EXCLUDED.stitching_charge,
+    style_charge = EXCLUDED.style_charge,
+    stitching_price = EXCLUDED.stitching_price,
+    delivery_date = EXCLUDED.delivery_date,
+    home_delivery = EXCLUDED.home_delivery;
 
   -- 2. Clear and Re-insert Garments (Atomic Sync)
   DELETE FROM garments WHERE order_id = p_order_id;
@@ -271,6 +328,10 @@ BEGIN
   RETURN jsonb_build_object('status', 'success');
 END;
 $$ LANGUAGE plpgsql;
+
+-- 5. Cleanup defaults that shouldn't be there
+ALTER TABLE orders ALTER COLUMN paid DROP DEFAULT;
+ALTER TABLE orders ALTER COLUMN paid SET DEFAULT NULL;
 
 -- 5. Cleanup defaults that shouldn't be there
 ALTER TABLE orders ALTER COLUMN paid DROP DEFAULT;

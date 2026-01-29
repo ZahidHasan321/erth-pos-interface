@@ -11,27 +11,59 @@ const getBrand = (): "ERTH" | "SAKKBA" => {
     return user?.userType === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
 };
 
+/**
+ * Helper to flatten joined work_orders into the main order object
+ */
+function flattenOrder<T>(data: T[]): Order[];
+function flattenOrder<T>(data: T): Order;
+function flattenOrder(data: any): any {
+    if (!data) return null;
+    if (Array.isArray(data)) return data.map(flattenOrder);
+
+    const { workOrder, ...core } = data;
+    // workOrder might be an array if using .select('*, workOrder(*)') or an object
+    const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
+    
+    return {
+        ...core,
+        ...workData,
+    };
+}
+
+/**
+ * Map of frontend keys to DB paths for filtering
+ */
+const FILTER_MAP: Record<string, string> = {
+    invoice_number: 'workOrder.invoice_number',
+    delivery_date: 'workOrder.delivery_date',
+    production_stage: 'workOrder.production_stage',
+    campaign_id: 'workOrder.campaign_id',
+};
+
 export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
-        .select('*', { count: 'exact' })
+        .select('*, workOrder:work_orders(*)', { count: 'exact' })
         .eq('brand', getBrand());
 
     if (error) {
         console.error('Error fetching orders:', error);
         return { status: 'error', message: error.message, data: [], count: 0 };
     }
-    return { status: 'success', data: data as any, count: count || 0 };
+    return { status: 'success', data: flattenOrder(data), count: count || 0 };
 };
 
 export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
-    let builder = supabase.from(TABLE_NAME).select('*', { count: 'exact' }).eq('brand', getBrand());
+    let builder = supabase.from(TABLE_NAME)
+        .select('*, workOrder:work_orders!inner(*)', { count: 'exact' })
+        .eq('brand', getBrand());
 
     Object.entries(query).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-            builder = builder.eq(key, value);
+            const dbKey = FILTER_MAP[key] || key;
+            builder = builder.eq(dbKey, value);
         }
     });
 
@@ -40,47 +72,59 @@ export const searchOrders = async (
     if (error) {
         return { status: 'error', message: error.message, data: [], count: 0 };
     }
-    return { status: 'success', data: data as any, count: count || 0 };
+    return { status: 'success', data: flattenOrder(data), count: count || 0 };
 };
 
 const ORDER_DETAILS_QUERY = `
     *,
+    workOrder:work_orders(*),
     customer:customers(*),
     garments:garments(*),
-    shelf_items:order_shelf_items(*, shelf:shelf(*)),
-    child_orders:orders(*)
+    shelf_items:order_shelf_items(*, shelf:shelf(*))
 `;
 
-export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
+export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders(*)')
         .eq('id', id)
         .eq('brand', getBrand())
         .maybeSingle();
 
     if (error) return { status: 'error', message: error.message };
-    return { status: 'success', data: data as any };
+    return { status: 'success', data: flattenOrder(data) as Order };
 };
 
-export const getOrderByInvoice = async (invoiceNumber: number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
+export const getOrderByInvoice = async (invoiceNumber: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select(includeRelations ? ORDER_DETAILS_QUERY : '*')
-        .eq('invoice_number', invoiceNumber)
+        .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!inner(*)')
+        .eq('workOrder.invoice_number', invoiceNumber)
         .eq('brand', getBrand())
         .maybeSingle();
 
     if (error) return { status: 'error', message: error.message };
-    return { status: 'success', data: data as any };
+    return { status: 'success', data: flattenOrder(data) as Order };
 };
 
 export const createOrder = async (
     order: Partial<Order>,
 ): Promise<ApiResponse<Order>> => {
+    const WORK_FIELDS = ['invoice_number', 'delivery_date', 'advance', 'stitching_price', 'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 'num_of_fabrics', 'home_delivery'];
+    
+    const coreFields: any = { ...order, brand: getBrand() };
+    const workFields: any = {};
+    
+    WORK_FIELDS.forEach(f => {
+        if (f in coreFields) {
+            workFields[f] = coreFields[f];
+            delete coreFields[f];
+        }
+    });
+
     const { data, error } = await supabase
         .from(TABLE_NAME)
-        .insert({ ...order, brand: getBrand() })
+        .insert(coreFields)
         .select()
         .single();
 
@@ -88,26 +132,61 @@ export const createOrder = async (
         console.error('Error creating order:', error);
         return { status: 'error', message: error.message };
     }
-    return { status: 'success', data: data as any };
+
+    if (Object.keys(workFields).length > 0 || order.order_type === 'WORK') {
+        const { error: workError } = await supabase
+            .from('work_orders')
+            .insert({ order_id: data.id, ...workFields });
+        
+        if (workError) {
+            console.error('Error creating work order extension:', workError);
+        }
+    }
+
+    return getOrderById(data.id);
 };
 
 export const updateOrder = async (
     order: Partial<Order>,
     orderId: number,
 ): Promise<ApiResponse<Order>> => {
-    const { data, error } = await supabase
-        .from(TABLE_NAME)
-        .update(order)
-        .eq('id', orderId)
-        .eq('brand', getBrand())
-        .select()
-        .single();
+    const WORK_FIELDS = ['invoice_number', 'delivery_date', 'advance', 'stitching_price', 'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 'num_of_fabrics', 'production_stage', 'call_status', 'home_delivery'];
+    
+    const coreUpdates: any = { ...order };
+    const workUpdates: any = {};
+    
+    WORK_FIELDS.forEach(f => {
+        if (f in coreUpdates) {
+            workUpdates[f] = coreUpdates[f];
+            delete coreUpdates[f];
+        }
+    });
 
-    if (error) {
-        console.error('Error updating order:', error);
-        return { status: 'error', message: error.message };
+    if (Object.keys(coreUpdates).length > 0) {
+        const { error } = await supabase
+            .from(TABLE_NAME)
+            .update(coreUpdates)
+            .eq('id', orderId)
+            .eq('brand', getBrand());
+
+        if (error) {
+            console.error('Error updating order core:', error);
+            return { status: 'error', message: error.message };
+        }
     }
-    return { status: 'success', data: data as any };
+
+    if (Object.keys(workUpdates).length > 0) {
+        const { error } = await supabase
+            .from('work_orders')
+            .upsert({ order_id: orderId, ...workUpdates });
+        
+        if (error) {
+            console.error('Error updating work order extension:', error);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    return getOrderById(orderId);
 };
 
 export const deleteOrder = async (
@@ -134,8 +213,8 @@ export const getPendingOrdersByCustomer = async (
     limit: number = 5,
     checkoutStatus: string = "draft",
     includeRelations: boolean = false
-): Promise<ApiResponse<any[]>> => {
-    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, child_orders:orders(id)';
+): Promise<ApiResponse<Order[]>> => {
+    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders(*), child_orders:orders(id)';
 
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
@@ -154,7 +233,7 @@ export const getPendingOrdersByCustomer = async (
 
     return {
         status: 'success',
-        data: data as any,
+        data: flattenOrder(data),
         count: count || 0,
     };
 };
@@ -162,7 +241,7 @@ export const getPendingOrdersByCustomer = async (
 /**
  * Get detailed order information including customer and garments.
  */
-export const getOrderDetails = async (idOrInvoice: string | number, includeRelations: boolean = false): Promise<ApiResponse<any>> => {
+export const getOrderDetails = async (idOrInvoice: string | number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
     const numericVal = typeof idOrInvoice === 'string' ? parseInt(idOrInvoice) : idOrInvoice;
 
     if (isNaN(numericVal)) {
@@ -171,11 +250,11 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
 
     // Try ID first
     const resId = await getOrderById(numericVal, includeRelations);
-    if (resId.status === 'success' && resId.data) return resId;
+    if (resId.status === 'success' && resId.data) return resId as ApiResponse<Order>;
 
     // Try Invoice Number
     const resInv = await getOrderByInvoice(numericVal, includeRelations);
-    if (resInv.status === 'success' && resInv.data) return resInv;
+    if (resInv.status === 'success' && resInv.data) return resInv as ApiResponse<Order>;
     
     return { status: 'error', message: "Order not found" };
 };
@@ -183,23 +262,26 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
 /**
  * Get filtered list of orders with details.
  */
-export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<any[]>> => {
+export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<Order[]>> => {
     let builder = supabase.from(TABLE_NAME).select(`
     *,
+    workOrder:work_orders(*),
     customer:customers(*),
     garments:garments(*)
   `).eq('brand', getBrand());
 
     Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined) {
-            builder = builder.eq(key, value);
+            const dbKey = FILTER_MAP[key] || key;
+            builder = builder.eq(dbKey, value);
         }
     });
 
     const { data, error } = await builder;
     if (error) return { status: 'error', message: error.message, data: [] };
-    return { status: 'success', data: data as any[] };
+    return { status: 'success', data: flattenOrder(data) };
 };
+
 
 export const completeWorkOrder = async (
     orderId: number,
@@ -222,6 +304,7 @@ export const completeWorkOrder = async (
         shelfCharge?: number;
         homeDelivery?: boolean;
         deliveryDate?: string;
+        stitchingPrice?: number;
     },
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]

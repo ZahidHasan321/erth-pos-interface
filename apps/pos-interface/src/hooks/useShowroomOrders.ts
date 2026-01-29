@@ -37,7 +37,10 @@ export function calculateTotal(order: any): number {
 export function transformToOrderRows(ordersData: any[]): OrderRow[] {
   const orderRows: OrderRow[] = [];
 
-  for (const order of ordersData) {
+  for (const orderRaw of ordersData) {
+    const workData = Array.isArray(orderRaw.workOrder) ? orderRaw.workOrder[0] : orderRaw.workOrder;
+    const order = { ...orderRaw, ...workData };
+
     const customer = order.customer;
     const garments = order.garments || [];
 
@@ -134,10 +137,11 @@ export function useShowroomOrders() {
         .from('orders')
         .select(`
           *,
+          workOrder:work_orders!inner(*),
           customer:customers(*),
           garments:garments(*)
         `)
-        .in('production_stage', targetStages)
+        .in('workOrder.production_stage', targetStages)
         .eq('checkout_status', 'confirmed')
         .eq('order_type', 'WORK');
 
