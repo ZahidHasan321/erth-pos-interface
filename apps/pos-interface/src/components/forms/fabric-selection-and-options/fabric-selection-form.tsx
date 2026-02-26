@@ -316,8 +316,12 @@ export function FabricSelectionForm({
             setIsSaved(true);
             setIsEditing(false);
             
-            // Sync Pending Order list
+            // Sync lists
             queryClient.invalidateQueries({ queryKey: ["orders"] });
+            queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+            if (customerId) {
+                queryClient.invalidateQueries({ queryKey: ["customer-orders", customerId] });
+            }
 
             onSubmit?.({
                 garments: form.getValues("garments"),

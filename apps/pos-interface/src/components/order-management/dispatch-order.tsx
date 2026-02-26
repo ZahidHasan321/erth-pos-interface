@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   RefreshCw,
-  CheckCircle2,
   PackageCheck,
   User,
   Phone,
@@ -28,6 +27,8 @@ import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
 
+import { PAGE_VARIANTS, ITEM_VARIANTS } from "@/lib/constants/animations";
+
 interface OrderWithDetails extends Order {
     customer?: Customer;
     garments?: Garment[];
@@ -39,11 +40,10 @@ interface OrderCardProps {
 }
 
 function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
-  const [isChecked, setIsChecked] = useState(false);
   const numGarments = order.garments?.length || order.num_of_fabrics || 0;
   
   const handleDispatch = async () => {
-    if (isChecked && !isUpdating) {
+    if (!isUpdating) {
       await onDispatch(order.id);
     }
   };
@@ -53,17 +53,14 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      transition={{ duration: 0.3 }}
+      variants={ITEM_VARIANTS}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       className="group"
     >
       <Card className={cn(
-        "relative overflow-hidden transition-all duration-300 border-l-4 py-0 gap-0",
-        isChecked 
-          ? "border-l-primary bg-primary/5 shadow-md" 
-          : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
+        "relative overflow-hidden transition-all duration-300 border-l-4 py-0 gap-0 border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
       )}>
         <CardContent className="p-0">
           <div className="flex flex-col md:flex-row items-stretch md:items-center min-h-[80px]">
@@ -71,10 +68,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
             {/* 1. Identification Segment */}
             <div className="flex-1 px-5 py-3 border-r border-border/40 min-w-[200px]">
               <div className="flex items-center gap-3 mb-1">
-                <div className={cn(
-                  "p-1.5 rounded-lg transition-colors",
-                  isChecked ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-                )}>
+                <div className="p-1.5 rounded-lg transition-colors bg-primary/10 text-primary">
                   <Hash className="w-3.5 h-3.5" />
                 </div>
                 <div>
@@ -90,7 +84,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 </div>
               </div>
               <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0 border-primary/20 bg-primary/5 text-primary">
-                {order.production_stage?.replace(/_/g, " ")}
+                {order.production_stage?.replace(/_/g, " ") || "No Stage"}
               </Badge>
             </div>
 
@@ -114,41 +108,22 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
               </div>
             </div>
 
-            {/* 3. Verification Segment */}
+            {/* 3. Pieces Info Segment */}
             <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between px-1">
-                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Verification</span>
-                   <span className="text-[10px] font-bold text-primary">{numGarments} Pieces</span>
-                </div>
-                <Button
-                  variant={isChecked ? "default" : "outline"}
-                  className={cn(
-                    "h-9 w-full text-xs font-bold uppercase transition-all",
-                    isChecked 
-                      ? "bg-emerald-500 hover:bg-emerald-600 text-white border-none shadow-sm" 
-                      : "border-2 border-dashed hover:border-primary/60 hover:bg-primary/5"
-                  )}
-                  onClick={() => setIsChecked(!isChecked)}
-                >
-                  {isChecked ? (
-                    <><CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Verified</>
-                  ) : (
-                    `Check ${numGarments} garments`
-                  )}
-                </Button>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Workload</span>
+                <Badge variant="secondary" className="font-black text-[10px] px-2 py-0.5">{numGarments} Pieces</Badge>
               </div>
             </div>
 
             {/* 4. Action Segment */}
-            <div className="w-full md:w-[160px] px-5 py-3 flex items-center justify-center bg-muted/5">
+            <div className="w-full md:w-[160px] md:ml-auto px-5 py-3 flex items-center justify-center bg-muted/5">
               <Button
                 className={cn(
-                  "w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md group-hover:scale-[1.02] transition-transform",
-                  !isChecked && "opacity-50 grayscale"
+                  "w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md group-hover:scale-[1.02] transition-transform"
                 )}
                 onClick={handleDispatch}
-                disabled={!isChecked || isUpdating}
+                disabled={isUpdating}
               >
                 {isUpdating ? (
                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -173,6 +148,7 @@ export default function DispatchOrderPage() {
   const [updatingOrderIds, setUpdatingOrderIds] = useState<Set<number>>(
     new Set(),
   );
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   const {
     data: ordersResponse,
@@ -189,6 +165,8 @@ export default function DispatchOrderPage() {
       });
       return response as ApiResponse<OrderWithDetails[]>;
     },
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 
   const orders = ordersResponse?.data || [];
@@ -204,7 +182,7 @@ export default function DispatchOrderPage() {
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
     } catch (error) {
       console.error("Failed to dispatch order:", error);
-      toast.error("Failed to dispatch order.");
+      toast.error(`Failed to dispatch Order #${orderId}`);
     } finally {
       setUpdatingOrderIds((prev) => {
         const newSet = new Set(prev);
@@ -214,29 +192,41 @@ export default function DispatchOrderPage() {
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.08 },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
+  const handleBulkDispatch = async () => {
+    if (orders.length === 0 || isBulkUpdating) return;
+    setIsBulkUpdating(true);
+    const orderIds = orders.map(o => o.id);
+    
+    try {
+      toast.promise(
+        Promise.all(orderIds.map(id => updateOrder({ production_stage: "sent_to_workshop" }, id))),
+        {
+          loading: `Dispatching ${orders.length} orders to workshop...`,
+          success: () => {
+             queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+             return `All ${orders.length} orders dispatched successfully!`;
+          },
+          error: "Bulk dispatch failed for some orders."
+        }
+      );
+    } catch (error) {
+      console.error("Bulk dispatch error:", error);
+    } finally {
+      setIsBulkUpdating(false);
+    }
   };
 
   return (
     <ErrorBoundary showDetails={true}>
       <motion.div
-        variants={containerVariants}
+        variants={PAGE_VARIANTS}
         initial="hidden"
         animate="visible"
+        exit="exit"
         className="container mx-auto p-4 md:p-8 space-y-8 max-w-6xl"
       >
         <motion.div
-          variants={itemVariants}
+          variants={ITEM_VARIANTS}
           className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6"
         >
           <div className="space-y-1">
@@ -247,18 +237,29 @@ export default function DispatchOrderPage() {
                Waiting for Workshop Transmission • {orders.length} ACTIVE ORDERS
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="font-black uppercase tracking-widest border-2 hover:bg-primary hover:text-white transition-colors h-10 px-6"
-            onClick={() =>
-              queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })
-            }
-            disabled={isLoading}
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5 mr-2", isLoading && "animate-spin")} />
-            Sync Orders
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="font-black uppercase tracking-widest border-2 hover:bg-primary hover:text-white transition-colors h-10 px-6"
+              onClick={() =>
+                queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })
+              }
+              disabled={isLoading}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5 mr-2", isLoading && "animate-spin")} />
+              Sync
+            </Button>
+            <Button
+              size="sm"
+              className="font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-6 shadow-md"
+              onClick={handleBulkDispatch}
+              disabled={orders.length === 0 || isLoading || isBulkUpdating}
+            >
+              <PackageCheck className="w-4 h-4 mr-2" />
+              Dispatch All
+            </Button>
+          </div>
         </motion.div>
 
         {isLoading ? (

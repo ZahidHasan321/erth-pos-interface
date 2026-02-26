@@ -98,6 +98,8 @@ export function SearchCustomer({
       return fuzzySearchCustomers(debouncedSearch);
     },
     enabled: debouncedSearch.length >= 2 && !selectedCustomerId,
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60, // 1 minute
   });
 
   const fetchPendingOrders = useCallback(async (customer: Customer) => {

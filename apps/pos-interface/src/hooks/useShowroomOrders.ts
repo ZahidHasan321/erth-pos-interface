@@ -106,6 +106,7 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
       productionStage: order.production_stage
         ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
         : "Unknown",
+      productionStageKey: order.production_stage,
       fatouraStage: order.production_stage
         ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
         : "Unknown",
@@ -178,7 +179,7 @@ export function useShowroomOrders() {
 
       return transformToOrderRows(data || []);
     },
-    staleTime: Infinity,
-    gcTime: Infinity,
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60, // 1 minute
   });
 }

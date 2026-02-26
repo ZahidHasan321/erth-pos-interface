@@ -111,11 +111,15 @@ async function main() {
 
   // 2. SINGLE TEST USER (Employee)
   console.log("--> Seeding test employee...");
-  const [employee] = await db.insert(schema.users).values({
+  await db.insert(schema.users).values({
     name: "Admin User",
     email: "admin@erth.com",
     role: "admin",
-  }).onConflictDoNothing().returning();
+  }).onConflictDoNothing();
+
+  const employee = await db.query.users.findFirst({
+    where: (users, { eq }) => eq(users.email, "admin@erth.com"),
+  });
 
   // 3. SINGLE COMPREHENSIVE CUSTOMER
   console.log("--> Seeding test customer...");
@@ -135,7 +139,79 @@ async function main() {
     account_type: "Primary",
   }).onConflictDoNothing();
 
-  console.log("✅ Seed Complete. Created 1 Admin, 1 Customer, and essential lookups.");
+  const customer = await db.query.customers.findFirst({
+    where: (customers, { eq }) => eq(customers.email, "john.doe@example.com"),
+  });
+
+  // 4. DUMMY STYLE & ORDERS
+  if (employee && customer) {
+    console.log("--> Seeding dummy style...");
+    const [style] = await db.insert(schema.styles).values({
+      name: "Kuwaiti Standard",
+      type: "Dishdasha",
+      rate_per_item: "15.000",
+    }).returning();
+
+    const fabric = await db.query.fabrics.findFirst();
+
+    console.log("--> Seeding dummy orders in various stages...");
+    const stages = [
+      "order_at_shop",
+      "sent_to_workshop",
+      "order_at_workshop",
+      "brova_and_final_dispatched_to_shop",
+      "final_dispatched_to_shop",
+      "brova_at_shop",
+      "brova_accepted",
+      "brova_alteration",
+      "brova_repair_and_production",
+      "brova_alteration_and_production",
+      "final_at_shop",
+      "brova_and_final_at_shop",
+      "order_collected",
+      "order_delivered",
+      "waiting_cut",
+      "soaking",
+      "redo"
+    ] as const;
+
+    for (const [index, stage] of stages.entries()) {
+      // Create Order
+      const [order] = await db.insert(schema.orders).values({
+        customer_id: customer.id,
+        order_taker_id: employee.id,
+        checkout_status: "confirmed",
+        order_type: "WORK",
+        brand: "ERTH",
+        payment_type: "knet",
+        paid: "15.000",
+        order_total: "15.000",
+        notes: `Dummy order for stage: ${stage}`,
+      }).returning();
+
+      // Create Work Order
+      await db.insert(schema.workOrders).values({
+        order_id: order.id,
+        invoice_number: 10000 + index,
+        production_stage: stage,
+        num_of_fabrics: 1,
+        stitching_charge: "15.000",
+      }).onConflictDoNothing();
+
+      // Create Garment
+      await db.insert(schema.garments).values({
+        order_id: order.id,
+        quantity: 1,
+        style_id: style?.id,
+        fabric_id: fabric?.id,
+        style: "kuwaiti",
+        notes: `Garment for ${stage}`,
+      });
+    }
+    console.log(`    Added ${stages.length} dummy orders.`);
+  }
+
+  console.log("✅ Seed Complete. Created 1 Admin, 1 Customer, essential lookups, and dummy orders.");
   process.exit(0);
 }
 

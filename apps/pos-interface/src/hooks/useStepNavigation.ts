@@ -114,7 +114,7 @@ export function useStepNavigation({
         if (!el) return Number.POSITIVE_INFINITY;
         
         let elementTop = 0;
-        let elementHeight = el.offsetHeight;
+        const elementHeight = el.offsetHeight;
 
         if (isWindow) {
           const rect = el.getBoundingClientRect();

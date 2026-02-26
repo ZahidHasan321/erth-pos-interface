@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getOrdersList } from "@/api/orders";
 import { getCustomers } from "@/api/customers";
 import { cn } from "@/lib/utils";
+import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 
 export const Route = createFileRoute('/$main/')({
     component: DashboardPage,
@@ -34,11 +35,15 @@ function DashboardPage() {
     const { data: ordersRes, isLoading: isLoadingOrders } = useQuery({
         queryKey: ["dashboard-orders"],
         queryFn: () => getOrdersList({}),
+        staleTime: Infinity,
+        gcTime: 1000 * 60 * 60 * 24, // 24 hours
     });
 
     const { data: customersRes, isLoading: isLoadingCustomers } = useQuery({
         queryKey: ["dashboard-customers"],
         queryFn: () => getCustomers(),
+        staleTime: Infinity,
+        gcTime: 1000 * 60 * 60 * 24, // 24 hours
     });
 
     const orders = ordersRes?.data || [];
@@ -95,7 +100,7 @@ function DashboardPage() {
     }
 
     return (
-        <div className="p-6 md:p-10 max-w-[1600px] mx-auto space-y-10">
+        <div className={cn("p-6 md:p-10 max-w-[1600px] mx-auto space-y-10", ANIMATION_CLASSES.fadeInUp)}>
             {/* Header */}
             <div className="flex flex-col gap-1">
                 <h1 className="text-4xl font-black tracking-tight text-foreground uppercase">
@@ -115,6 +120,7 @@ function DashboardPage() {
                     color="text-blue-600"
                     bg="bg-blue-50"
                     trend={`${customers.length > 0 ? '+12%' : '0%'} from last month`}
+                    index={0}
                 />
                 <StatCard 
                     title="Active Work Orders" 
@@ -123,6 +129,7 @@ function DashboardPage() {
                     color="text-emerald-600"
                     bg="bg-emerald-50"
                     trend="Running production"
+                    index={1}
                 />
                 <StatCard 
                     title="Deliveries (Next 7d)" 
@@ -131,6 +138,7 @@ function DashboardPage() {
                     color="text-amber-600"
                     bg="bg-amber-50"
                     trend={stats.todayDeliveries.length > 0 ? `${stats.todayDeliveries.length} due today` : "Upcoming schedule"}
+                    index={2}
                 />
                 <StatCard 
                     title="Urgent Actions" 
@@ -139,12 +147,13 @@ function DashboardPage() {
                     color="text-rose-600"
                     bg="bg-rose-50"
                     trend="Needs attention"
+                    index={3}
                 />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Upcoming Deliveries Table */}
-                <Card className="lg:col-span-8 border-2 shadow-sm rounded-3xl overflow-hidden">
+                <Card className={cn("lg:col-span-8 border-2 shadow-sm rounded-3xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(4)}>
                     <CardHeader className="bg-muted/30 border-b pb-6">
                         <div className="flex items-center justify-between">
                             <div>
@@ -228,7 +237,7 @@ function DashboardPage() {
                 </Card>
 
                 {/* Workflow Summary */}
-                <Card className="lg:col-span-4 border-2 shadow-sm rounded-3xl overflow-hidden">
+                <Card className={cn("lg:col-span-4 border-2 shadow-sm rounded-3xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(5)}>
                     <CardHeader className="bg-muted/30 border-b pb-6">
                         <CardTitle className="text-xl font-black uppercase tracking-tight">Workflow Health</CardTitle>
                         <CardDescription className="font-bold uppercase text-[10px] tracking-widest mt-1">Status of ongoing production</CardDescription>
@@ -267,14 +276,14 @@ function DashboardPage() {
             </div>
 
             {/* Recent Customers Section */}
-            <div className="space-y-6">
+            <div className={cn("space-y-6", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(6)}>
                 <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-primary" />
                     <h2 className="text-xl font-black uppercase tracking-tight">Recently Joined Customers</h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {customers.slice(0, 5).sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()).map((customer) => (
-                        <Card key={customer.id} className="border-2 shadow-none hover:border-primary/20 transition-all group">
+                    {customers.slice(0, 5).sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()).map((customer, i) => (
+                        <Card key={customer.id} className={cn("border-2 shadow-none hover:border-primary/20 transition-all group", ANIMATION_CLASSES.zoomIn)} style={ANIMATION_CLASSES.staggerDelay(7 + i)}>
                             <CardContent className="p-4 flex items-center gap-4">
                                 <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm group-hover:bg-primary group-hover:text-white transition-colors">
                                     {customer.name?.charAt(0)}
@@ -291,9 +300,9 @@ function DashboardPage() {
         </div>
     );
 }
-function StatCard({ title, value, icon: Icon, color, bg, trend }: any) {
+function StatCard({ title, value, icon: Icon, color, bg, trend, index }: any) {
     return (
-        <Card className="border-2 shadow-none rounded-3xl overflow-hidden group hover:border-primary/30 transition-all">
+        <Card className={cn("border-2 shadow-none rounded-3xl overflow-hidden group hover:border-primary/30 transition-all", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(index)}>
             <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div className={cn("p-3 rounded-2xl", bg)}>

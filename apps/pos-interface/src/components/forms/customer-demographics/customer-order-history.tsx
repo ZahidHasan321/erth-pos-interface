@@ -42,7 +42,7 @@ const historyColumns: ColumnDef<OrderRow>[] = [
       return (
         <button
           onClick={() => row.toggleExpanded()}
-          className="p-1 hover:bg-muted rounded transition-colors"
+          className="p-1 hover:bg-muted rounded transition-colors cursor-pointer"
         >
           {row.getIsExpanded() ? (
             <ChevronDown className="h-4 w-4" />
@@ -150,7 +150,7 @@ const historyColumns: ColumnDef<OrderRow>[] = [
         <Link 
           to={to} 
           search={{ orderId: Number(order.orderId) }}
-          className="p-2 hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center text-primary"
+          className="p-2 hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center text-primary cursor-pointer"
           title="View Order"
         >
           <Eye className="h-4 w-4" />
@@ -184,6 +184,8 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
       return [];
     },
     enabled: !!customerId,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 
   if (isLoading) {

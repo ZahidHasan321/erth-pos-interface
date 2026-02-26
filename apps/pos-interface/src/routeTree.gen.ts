@@ -31,6 +31,7 @@ import { Route as MainOrdersOrderManagementUnlinkRouteImport } from './routes/$m
 import { Route as MainOrdersOrderManagementReceivingBrovaFinalRouteImport } from './routes/$main/orders/order-management/receiving-brova-final'
 import { Route as MainOrdersOrderManagementLinkRouteImport } from './routes/$main/orders/order-management/link'
 import { Route as MainOrdersOrderManagementFinalFeedbackRouteImport } from './routes/$main/orders/order-management/final-feedback'
+import { Route as MainOrdersOrderManagementFeedbackRouteImport } from './routes/$main/orders/order-management/feedback'
 import { Route as MainOrdersOrderManagementDispatchRouteImport } from './routes/$main/orders/order-management/dispatch'
 import { Route as MainOrdersOrderManagementChangeOptionsRouteImport } from './routes/$main/orders/order-management/change-options'
 import { Route as MainOrdersOrderManagementCancelOrderRouteImport } from './routes/$main/orders/order-management/cancel-order'
@@ -156,6 +157,12 @@ const MainOrdersOrderManagementFinalFeedbackRoute =
     path: '/orders/order-management/final-feedback',
     getParentRoute: () => MainRouteRoute,
   } as any)
+const MainOrdersOrderManagementFeedbackRoute =
+  MainOrdersOrderManagementFeedbackRouteImport.update({
+    id: '/orders/order-management/feedback',
+    path: '/orders/order-management/feedback',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
 const MainOrdersOrderManagementDispatchRoute =
   MainOrdersOrderManagementDispatchRouteImport.update({
     id: '/orders/order-management/dispatch',
@@ -211,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
   '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/feedback': typeof MainOrdersOrderManagementFeedbackRoute
   '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
@@ -239,6 +247,7 @@ export interface FileRoutesByTo {
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
   '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/feedback': typeof MainOrdersOrderManagementFeedbackRoute
   '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
@@ -269,6 +278,7 @@ export interface FileRoutesById {
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
   '/$main/orders/order-management/dispatch': typeof MainOrdersOrderManagementDispatchRoute
+  '/$main/orders/order-management/feedback': typeof MainOrdersOrderManagementFeedbackRoute
   '/$main/orders/order-management/final-feedback': typeof MainOrdersOrderManagementFinalFeedbackRoute
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
     | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/feedback'
     | '/$main/orders/order-management/final-feedback'
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
     | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/feedback'
     | '/$main/orders/order-management/final-feedback'
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
@@ -357,6 +369,7 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
     | '/$main/orders/order-management/dispatch'
+    | '/$main/orders/order-management/feedback'
     | '/$main/orders/order-management/final-feedback'
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
@@ -527,6 +540,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersOrderManagementFinalFeedbackRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/orders/order-management/feedback': {
+      id: '/$main/orders/order-management/feedback'
+      path: '/orders/order-management/feedback'
+      fullPath: '/$main/orders/order-management/feedback'
+      preLoaderRoute: typeof MainOrdersOrderManagementFeedbackRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
     '/$main/orders/order-management/dispatch': {
       id: '/$main/orders/order-management/dispatch'
       path: '/orders/order-management/dispatch'
@@ -584,6 +604,7 @@ interface MainRouteRouteChildren {
   MainOrdersOrderManagementCancelOrderRoute: typeof MainOrdersOrderManagementCancelOrderRoute
   MainOrdersOrderManagementChangeOptionsRoute: typeof MainOrdersOrderManagementChangeOptionsRoute
   MainOrdersOrderManagementDispatchRoute: typeof MainOrdersOrderManagementDispatchRoute
+  MainOrdersOrderManagementFeedbackRoute: typeof MainOrdersOrderManagementFeedbackRoute
   MainOrdersOrderManagementFinalFeedbackRoute: typeof MainOrdersOrderManagementFinalFeedbackRoute
   MainOrdersOrderManagementLinkRoute: typeof MainOrdersOrderManagementLinkRoute
   MainOrdersOrderManagementReceivingBrovaFinalRoute: typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
@@ -614,6 +635,8 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
     MainOrdersOrderManagementChangeOptionsRoute,
   MainOrdersOrderManagementDispatchRoute:
     MainOrdersOrderManagementDispatchRoute,
+  MainOrdersOrderManagementFeedbackRoute:
+    MainOrdersOrderManagementFeedbackRoute,
   MainOrdersOrderManagementFinalFeedbackRoute:
     MainOrdersOrderManagementFinalFeedbackRoute,
   MainOrdersOrderManagementLinkRoute: MainOrdersOrderManagementLinkRoute,

@@ -8,7 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Check, Link as LinkIcon, Trash2, Hash, User, Phone, Clock, RefreshCw } from "lucide-react";
+import { Check, Link as LinkIcon, Trash2, Hash, User, Phone, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // UI Components
@@ -21,14 +21,13 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { Checkbox } from "../ui/checkbox";
-import { Calendar } from "../ui/calendar";
 import { Badge } from "../ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DirectLookupCard } from "./order-search-form";
 import { ErrorBoundary } from "../global/error-boundary";
-import { Separator } from "../ui/separator";
 import { SearchCustomer } from "../forms/customer-demographics/search-customer";
+import { LinkConfigurationPanel } from "./link-configuration-panel";
 
 import type { Order, Customer } from "@repo/database";
 
@@ -59,7 +58,6 @@ export default function LinkOrder() {
   const [fatouraError, setFatouraError] = useState<string | undefined>();
 
   // --- Global State ---
-  const [reviseDate, setReviseDate] = useState<Date | undefined>();
   const [selectedOrders, setSelectedOrders] = useState<SelectedOrder[]>([]);
   const [primaryOrderId, setPrimaryOrderId] = useState<number | null>(null);
 
@@ -268,12 +266,7 @@ export default function LinkOrder() {
   }
 
   // --- Link Orders Handler ---
-  async function handleLinkOrders() {
-    if (!reviseDate) {
-      toast.error("Please select a revise date.");
-      return;
-    }
-
+  async function handleLinkOrders(reviseDate: Date) {
     if (!primaryOrderId) {
       toast.error("Please select a primary order.");
       return;
@@ -322,7 +315,6 @@ export default function LinkOrder() {
   function handleClear() {
     setSelectedOrders([]);
     setPrimaryOrderId(null);
-    setReviseDate(undefined);
     setOrderIdSearch(undefined);
     setFatouraSearch(undefined);
     setIdError(undefined);
@@ -332,7 +324,6 @@ export default function LinkOrder() {
   }
 
   const hasOrders = selectedOrders.length > 0;
-  const canSubmit = hasOrders && !!reviseDate && !!primaryOrderId && !isSubmitting;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -530,66 +521,12 @@ export default function LinkOrder() {
 
         {/* --- RIGHT: Link Configuration Panel --- */}
         <div className="lg:col-span-4 space-y-4">
-           {/* Date Picker Card */}
-           <motion.div
-            variants={itemVariants}
-            className={cn(
-              "bg-card p-5 rounded-xl border-2 shadow-sm transition-all sticky top-24 py-0 gap-0",
-              hasOrders ? "border-primary/30" : "border-border opacity-60"
-            )}
-          >
-            <div className="space-y-3 py-5">
-              <div className="flex items-center gap-3 border-b border-border pb-3">
-                 <div className="p-2 bg-primary/10 rounded-lg">
-                    <CalendarIcon className="w-4 h-4 text-primary" />
-                 </div>
-                 <div>
-                    <h3 className="text-xs font-black uppercase tracking-widest">Global Revise Date</h3>
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase">Sync all delivery dates</p>
-                 </div>
-              </div>
-
-              <div className="space-y-3">
-                 <Calendar
-                  mode="single"
-                  selected={reviseDate}
-                  onSelect={setReviseDate}
-                  className="rounded-md border-2 border-border/40 w-full"
-                  disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                />
-
-                <div className="space-y-2.5 pt-1">
-                   <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                      <span className="text-muted-foreground">Primary Order</span>
-                      <span className={cn(primaryOrderId ? "text-primary" : "text-destructive")}>
-                         {primaryOrderId ? `Order #${primaryOrderId}` : "Required"}
-                      </span>
-                   </div>
-                   <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                      <span className="text-muted-foreground">Revise Date</span>
-                      <span className={cn(reviseDate ? "text-primary" : "text-destructive")}>
-                         {reviseDate ? format(reviseDate, "PP") : "Required"}
-                      </span>
-                   </div>
-
-                   <Separator />
-
-                   <Button 
-                    className="w-full h-11 font-black uppercase tracking-widest shadow-lg shadow-primary/20"
-                    onClick={handleLinkOrders} 
-                    disabled={!canSubmit}
-                   >
-                     {isSubmitting ? (
-                        <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                     ) : (
-                        <LinkIcon className="w-4 h-4 mr-2" />
-                     )}
-                     Link & Update Group
-                   </Button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+           <LinkConfigurationPanel 
+            hasOrders={hasOrders}
+            primaryOrderId={primaryOrderId}
+            onLinkOrders={handleLinkOrders}
+            isSubmitting={isSubmitting}
+           />
         </div>
       </div>
 

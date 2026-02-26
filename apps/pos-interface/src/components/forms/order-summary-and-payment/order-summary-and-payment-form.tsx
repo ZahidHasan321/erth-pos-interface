@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, type Transition } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { 
   CheckIcon,
   AlertCircle,
@@ -47,6 +47,7 @@ import InstallmentsIcon from "@/assets/payment-assets/installments.png";
 
 import { orderSchema } from "./order-form.schema";
 import type { FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
+import { PAGE_VARIANTS, TRANSITIONS } from "@/lib/constants/animations";
 
 // ---------------- Constants ----------------
 const discountOptions = [
@@ -56,11 +57,7 @@ const discountOptions = [
   { value: "loyalty", label: "Loyalty" },
 ] as const;
 
-const smoothTransition: Transition = {
-  type: "spring",
-  stiffness: 200,
-  damping: 28,
-};
+const smoothTransition = TRANSITIONS.default;
 
 const paymentOptions = [
   { value: "knet", label: "K-Net", img: KNetLogo },
@@ -317,7 +314,12 @@ export function OrderSummaryAndPaymentForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <motion.div 
+          variants={PAGE_VARIANTS}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+        >
           {/* LEFT COLUMN: Delivery & Discounts */}
           <div className="space-y-6">
             {/* Delivery Section - Hidden for Sales Orders */}
@@ -943,7 +945,7 @@ export function OrderSummaryAndPaymentForm({
               </motion.section>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Hidden Invoice Component */}
         <div style={{ display: 'none' }}>

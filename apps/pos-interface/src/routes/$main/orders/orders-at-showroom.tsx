@@ -101,7 +101,7 @@ function RouteComponent() {
           }
     
           // Stage
-          if (filters.stage && filters.stage !== "all" && row.fatouraStage !== filters.stage) return false;
+          if (filters.stage && filters.stage !== "all" && row.productionStageKey !== filters.stage) return false;
     
           // Financial: Has Balance
           if (filters.hasBalance) {

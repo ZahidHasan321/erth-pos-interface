@@ -73,11 +73,6 @@ const data = {
           icon: ShoppingBag,
         },
         {
-          title: "New Alternation Order",
-          url: "orders/new-alteration-order",
-          icon: Edit,
-        },
-        {
           title: "Orders at Showroom",
           url: "orders/orders-at-showroom",
           icon: Store,
@@ -123,13 +118,8 @@ const data = {
               icon: Wrench,
             },
             {
-              title: "Brova Feedback",
-              url: "orders/order-management/brova-feedback",
-              icon: MessageSquare,
-            },
-            {
-              title: "Final Feedback",
-              url: "orders/order-management/final-feedback",
+              title: "Feedback",
+              url: "orders/order-management/feedback",
               icon: MessageSquare,
             },
             {

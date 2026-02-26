@@ -59,6 +59,7 @@ interface CustomerMeasurementsFormProps {
   customerId: number | null;
   onProceed?: () => void;
   isOrderClosed: boolean;
+  hideHeader?: boolean;
 }
 
 const unit = "in";
@@ -149,6 +150,7 @@ export function CustomerMeasurementsForm({
   customerId,
   onProceed,
   isOrderClosed,
+  hideHeader = false,
 }: CustomerMeasurementsFormProps) {
   const queryClient = useQueryClient();
   const [selectedMeasurementId, setSelectedMeasurementId] = React.useState<
@@ -466,16 +468,18 @@ export function CustomerMeasurementsForm({
           title={confirmationDialog.title}
           description={confirmationDialog.description}
         />
-        <div className="flex justify-between items-start mb-6">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-foreground bg-linear-to-r from-primary to-secondary bg-clip-text">
-              Measurement
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Customer body measurements and details
-            </p>
+        {!hideHeader && (
+          <div className="flex justify-between items-start mb-6">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold text-foreground bg-linear-to-r from-primary to-secondary bg-clip-text">
+                Measurement
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Customer body measurements and details
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Root Validation Error */}
         {form.formState.errors.root && (
@@ -494,7 +498,7 @@ export function CustomerMeasurementsForm({
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Form has errors</AlertTitle>
             <AlertDescription>
-              All measurement fields must be filled with valid values (greater than 0) before submission.
+              All measurement fields must be filled with valid values before submission.
             </AlertDescription>
           </Alert>
         )}
@@ -887,7 +891,7 @@ export function CustomerMeasurementsForm({
         {/* ---- Continue to Fabric Selection ---- */}
         <div className="flex flex-wrap justify-end gap-4 pt-4">
           {/* Continue to Fabric Selection */}
-          {!isEditing && !isOrderClosed && (
+          {!isEditing && !isOrderClosed && onProceed && (
             <Button
               type="button"
               onClick={onProceed}

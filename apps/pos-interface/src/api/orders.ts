@@ -301,7 +301,7 @@ export const getPendingOrdersByCustomer = async (
     checkoutStatus: string = "draft",
     includeRelations: boolean = false
 ): Promise<ApiResponse<Order[]>> => {
-    let selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)';
+    const selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)';
 
     const { data, error, count } = await supabase
         .from(TABLE_NAME)
@@ -350,12 +350,14 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
  * Get filtered list of orders with details.
  */
 export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<Order[]>> => {
+    const hasWorkOrderFilter = Object.keys(filters).some(key => key in FILTER_MAP);
+    
     let builder = supabase.from(TABLE_NAME).select(`
-    *,
-    workOrder:work_orders!order_id(*),
-    customer:customers(*),
-    garments:garments(*)
-  `).eq('brand', getBrand());
+        *,
+        workOrder:work_orders!order_id${hasWorkOrderFilter ? '!inner' : ''}(*),
+        customer:customers(*),
+        garments:garments(*)
+    `).eq('brand', getBrand());
 
     Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined) {

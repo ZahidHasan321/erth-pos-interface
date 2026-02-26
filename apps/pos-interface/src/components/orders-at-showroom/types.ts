@@ -10,6 +10,7 @@ export type OrderRow = {
   orderRecordId: string;
   invoiceNumber?: number;
   productionStage?: string;
+  productionStageKey?: string;
   fatoura?: number;
   fatouraStage: string;
   orderStatus: "Pending" | "Completed" | "Cancelled";

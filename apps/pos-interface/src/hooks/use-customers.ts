@@ -12,6 +12,8 @@ export function useCustomers(page: number, pageSize: number, search?: string) {
       return response;
     },
     placeholderData: (previousData) => previousData,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 }
 
@@ -27,5 +29,7 @@ export function useCustomer(id?: number) {
       return response.data;
     },
     enabled: !!id,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 }

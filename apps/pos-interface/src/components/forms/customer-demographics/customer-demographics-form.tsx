@@ -26,7 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getSortedCountries } from "@/lib/countries";
 import type { Customer } from "@repo/database";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
 import { useState } from "react";
@@ -178,6 +178,8 @@ export function CustomerDemographicsForm({
     }
   }, [AccountType, form]);
 
+  const queryClient = useQueryClient();
+
   const { mutate: createCustomerMutation, isPending: isCreating } = useMutation(
     {
       mutationFn: (customerToCreate: Partial<Customer>) =>
@@ -185,6 +187,12 @@ export function CustomerDemographicsForm({
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
           toast.success("Customer created successfully!");
+          
+          // Invalidate relevant queries
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
+          queryClient.invalidateQueries({ queryKey: ["customerFuzzySearch"] });
+
           const createdCustomer = mapCustomerToFormValues(response.data);
           onSave?.(createdCustomer);
           form.reset(createdCustomer);
@@ -210,6 +218,13 @@ export function CustomerDemographicsForm({
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
           toast.success("Customer updated successfully!");
+          
+          // Invalidate relevant queries
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
+          queryClient.invalidateQueries({ queryKey: ["customer", response.data.id] });
+          queryClient.invalidateQueries({ queryKey: ["customerFuzzySearch"] });
+
           const customer = mapCustomerToFormValues(response.data);
           onSave?.(customer);
           form.reset(customer);

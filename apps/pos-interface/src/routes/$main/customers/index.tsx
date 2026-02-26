@@ -8,7 +8,8 @@ import {
   Eye,
   Phone,
   MapPin,
-  Loader2
+  Loader2,
+  Ruler
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetDescription 
+} from "@/components/ui/sheet";
+import { CustomerMeasurementsStandalone } from "@/components/forms/customer-measurements";
 
 export const Route = createFileRoute("/$main/customers/")({
   component: CustomersListComponent,
@@ -47,6 +56,8 @@ function CustomersListComponent() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(20);
+  const [selectedCustomer, setSelectedCustomer] = useState<{id: number, name: string} | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const { data, isLoading } = useCustomers(page, pageSize, search);
 
@@ -61,6 +72,11 @@ function CustomersListComponent() {
   const handlePageSizeChange = (value: string) => {
     setPageSize(Number(value));
     setPage(1);
+  };
+
+  const openMeasurements = (id: number, name: string) => {
+    setSelectedCustomer({id, name});
+    setIsSheetOpen(true);
   };
 
   return (
@@ -171,12 +187,23 @@ function CustomersListComponent() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right py-4">
-                        <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary hover:bg-primary/10">
-                          <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            Details
-                          </Link>
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 px-2 text-secondary hover:text-secondary hover:bg-secondary/10"
+                            onClick={() => openMeasurements(customer.id, customer.name)}
+                          >
+                            <Ruler className="h-4 w-4 mr-2" />
+                            Measurements
+                          </Button>
+                          <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary hover:bg-primary/10">
+                            <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Details
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -192,6 +219,28 @@ function CustomersListComponent() {
           </div>
         </CardContent>
       </Card>
+
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-10">
+          <SheetHeader className="mb-8 p-0">
+            <SheetTitle className="text-4xl font-black uppercase tracking-tighter">
+              <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
+              {selectedCustomer?.name}
+            </SheetTitle>
+            <SheetDescription className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
+              manage and update body measurements for this profile
+            </SheetDescription>
+          </SheetHeader>
+          {selectedCustomer && (
+            <div className="mt-4">
+              <CustomerMeasurementsStandalone 
+                customerId={selectedCustomer.id} 
+                hideHeader={true}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 bg-muted/30 p-4 rounded-xl border border-border/50">

@@ -78,7 +78,7 @@ export function OrderDataTable({
     }
 
     // 1. Filter
-    let result = data.filter((row) => {
+    const result = data.filter((row) => {
       try {
         const order = row.order;
 
@@ -100,7 +100,7 @@ export function OrderDataTable({
         }
 
         // Stage (FatouraStage)
-        if (filters.stage && filters.stage !== "all" && row.fatouraStage !== filters.stage) return false;
+        if (filters.stage && filters.stage !== "all" && row.productionStageKey !== filters.stage) return false;
 
         // Financial: Has Balance (Balance > 0)
         if (filters.hasBalance) {

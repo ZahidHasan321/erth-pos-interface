@@ -12,9 +12,18 @@ import {
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pencil, Phone, MapPin, Users, User, Mail, MessageSquare, ArrowLeft, Loader2 } from 'lucide-react';
+import { Pencil, Phone, MapPin, Users, User, Mail, MessageSquare, ArrowLeft, Loader2, Ruler } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCustomer } from '@/hooks/use-customers';
+import { 
+    Sheet, 
+    SheetContent, 
+    SheetHeader, 
+    SheetTitle, 
+    SheetDescription 
+} from "@/components/ui/sheet";
+import { CustomerMeasurementsStandalone } from "@/components/forms/customer-measurements";
+import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 
 export const Route = createFileRoute('/$main/customers/$customerId')({
     component: CustomerDetailComponent,
@@ -27,13 +36,15 @@ export const Route = createFileRoute('/$main/customers/$customerId')({
 
 function CustomerSummaryCard({ 
     customer, 
-    onEdit 
+    onEdit,
+    onShowMeasurements
 }: { 
     customer: CustomerDemographicsSchema, 
-    onEdit: () => void 
+    onEdit: () => void,
+    onShowMeasurements: () => void
 }) {
     return (
-        <Card className="overflow-hidden border-primary/20 bg-linear-to-br from-card to-primary/5 shadow-md">
+        <Card className={cn("overflow-hidden border-primary/20 bg-linear-to-br from-card to-primary/5 shadow-md", ANIMATION_CLASSES.fadeInUp)}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-4">
                     <div className="bg-primary/10 p-3 rounded-full">
@@ -50,10 +61,16 @@ function CustomerSummaryCard({
                         )}
                     </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={onEdit} className="gap-2 border-primary/30 hover:bg-primary/10">
-                    <Pencil className="h-4 w-4 text-primary" />
-                    Edit Profile
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={onShowMeasurements} className="gap-2 border-secondary/30 hover:bg-secondary/10">
+                        <Ruler className="h-4 w-4 text-secondary" />
+                        Measurements
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onEdit} className="gap-2 border-primary/30 hover:bg-primary/10">
+                        <Pencil className="h-4 w-4 text-primary" />
+                        Edit Profile
+                    </Button>
+                </div>
             </CardHeader>
             <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
@@ -151,6 +168,7 @@ function CustomerSummaryCard({
 function CustomerDetailComponent() {
     const { customerId } = Route.useParams();
     const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
 
     const { data: customerData, isLoading, isError } = useCustomer(parseInt(customerId));
 
@@ -224,14 +242,15 @@ function CustomerDetailComponent() {
             </div>
 
             {!isEditingProfile ? (
-                <section className="w-full animate-in fade-in slide-in-from-top-4 duration-500">
+                <section className={cn("w-full", ANIMATION_CLASSES.fadeInUp)}>
                     <CustomerSummaryCard 
                         customer={watchedCustomer} 
                         onEdit={() => setIsEditingProfile(true)} 
+                        onShowMeasurements={() => setIsSheetOpen(true)}
                     />
                 </section>
             ) : (
-                <section className="w-full animate-in fade-in zoom-in-95 duration-300">
+                <section className={cn("w-full", ANIMATION_CLASSES.zoomIn)}>
                     <CustomerDemographicsForm
                         form={form}
                         onSave={handleSave}
@@ -246,10 +265,30 @@ function CustomerDetailComponent() {
             )}
 
             {!isEditingProfile && (
-                <section className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <section className={cn("w-full", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(1)}>
                     <CustomerOrderHistory customerId={parseInt(customerId)} />
                 </section>
             )}
+
+            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-10">
+                    <SheetHeader className="mb-8 p-0">
+                        <SheetTitle className="text-4xl font-black uppercase tracking-tighter">
+                            <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
+                            {watchedCustomer.name}
+                        </SheetTitle>
+                        <SheetDescription className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
+                            manage and update body measurements for this profile
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-4">
+                        <CustomerMeasurementsStandalone 
+                            customerId={parseInt(customerId)} 
+                            hideHeader={true}
+                        />
+                    </div>
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }

@@ -121,6 +121,18 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             if (response.data) {
                 const order = response.data;
                 const formattedOrder = mapOrderToFormValues(order);
+                
+                // Invalidate relevant queries
+                queryClient.invalidateQueries({ queryKey: ["orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+                queryClient.invalidateQueries({ queryKey: ["order-history"] });
+                queryClient.invalidateQueries({ queryKey: ["customers"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
+                if (order.customer_id) {
+                    queryClient.invalidateQueries({ queryKey: ["customer-orders", order.customer_id] });
+                }
+
                 options.onOrderCreated?.(formattedOrder.id, formattedOrder);
                 toast.success("New order created successfully!");
             }
@@ -148,6 +160,16 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             } else if (action === "cancelled") {
                 toast.success("Order cancelled");
             }
+
+            // Invalidate relevant queries
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+            queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
+            if (response.data?.customer_id) {
+                queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
+            }
+
             options.onOrderUpdated?.(action);
         },
         onError: () => toast.error("Failed to update order"),
@@ -306,8 +328,16 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             }
 
             queryClient.invalidateQueries({ queryKey: ["orders"] });
+            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
             queryClient.invalidateQueries({ queryKey: ["fabrics"] });
             queryClient.invalidateQueries({ queryKey: ["products"] });
+            if (response.data?.customer_id) {
+                queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
+            }
             options.onOrderUpdated?.("updated", response.data);
         },
         onError: () => {
@@ -315,187 +345,113 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         }
     });
 
-    const completeSalesOrderMutation = useMutation({
-
-        mutationFn: ({
-
-            orderId,
-
-            checkoutDetails,
-
-            shelfItems
-
-        }: {
-
-            orderId: number;
-
-                        checkoutDetails: {
-
-                            paymentType: string;
-
-                            paid: number | null | undefined;
-
-                            paymentRefNo?: string;
-
-                            paymentNote?: string;
-
-                            orderTaker?: string;
-
-                            discountType?: string;
-
-                            discountValue?: number;
-
-                            discountPercentage?: number;
-
-                            referralCode?: string;
-
-                            total: number;
-
-                            shelfCharge: number;
-
-                            deliveryCharge?: number;
-
-                        };
-
-            shelfItems: { id: number; quantity: number; unitPrice: number }[];
-
-        }) => {
-
-            return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
-
-        },
-
-        onSuccess: (response) => {
-
-            if (response.status === "error") {
-
-                toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
-
-                return;
-
-            }
-
-            toast.success("Sales order completed successfully! ✅");
-
-
-
-            // Show notification if invoice number was just generated
-
-            if (response.data?.invoice_number) {
-
-                showFatouraNotification(response.data.invoice_number);
-
-            }
-
-
-
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-            queryClient.invalidateQueries({ queryKey: ["products"] });
-
-            options.onOrderUpdated?.("updated", response.data);
-
-        },
-
-        onError: () => {
-
-            toast.error("An error occurred while completing the sales order");
-
-        }
-
-    });
-
-
-
-    const createCompleteSalesOrderMutation = useMutation({
-
-        mutationFn: ({
-
-            customerId,
-
-            checkoutDetails,
-
-            shelfItems
-
-        }: {
-
-            customerId: number;
-
-            checkoutDetails: {
-
-                paymentType: string;
-
-                paid: number | null | undefined;
-
-                paymentRefNo?: string;
-
-                paymentNote?: string;
-
-                orderTaker?: string;
-
-                discountType?: string;
-
-                discountValue?: number;
-
-                discountPercentage?: number;
-
-                referralCode?: string;
-
-                                notes?: string;
-
+        const completeSalesOrderMutation = useMutation({
+            mutationFn: ({
+                orderId,
+                checkoutDetails,
+                shelfItems
+            }: {
+                orderId: number;
+                            checkoutDetails: {
+                                paymentType: string;
+                                paid: number | null | undefined;
+                                paymentRefNo?: string;
+                                paymentNote?: string;
+                                orderTaker?: string;
+                                discountType?: string;
+                                discountValue?: number;
+                                discountPercentage?: number;
+                                referralCode?: string;
                                 total: number;
-
                                 shelfCharge: number;
-
                                 deliveryCharge?: number;
-
                             };
-
-            shelfItems: { id: number; quantity: number; unitPrice: number }[];
-
-        }) => {
-
-            return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
-
-        },
-
-        onSuccess: (response) => {
-
-            if (response.status === "error") {
-
-                toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
-
-                return;
-
+                shelfItems: { id: number; quantity: number; unitPrice: number }[];
+            }) => {
+                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
+            },
+            onSuccess: (response) => {
+                if (response.status === "error") {
+                    toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
+                    return;
+                }
+                toast.success("Sales order completed successfully! ✅");
+    
+                // Show notification if invoice number was just generated
+                if (response.data?.invoice_number) {
+                    showFatouraNotification(response.data.invoice_number);
+                }
+    
+                queryClient.invalidateQueries({ queryKey: ["orders"] });
+                queryClient.invalidateQueries({ queryKey: ["order-history"] });
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+                queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
+                if (response.data?.customer_id) {
+                    queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
+                }
+                options.onOrderUpdated?.("updated", response.data);
+            },
+            onError: () => {
+                toast.error("An error occurred while completing the sales order");
             }
-
-            toast.success("Sales order created and completed! ✅");
-
+        });
 
 
-            if (response.data?.invoice_number) {
 
-                showFatouraNotification(response.data.invoice_number);
-
+        const createCompleteSalesOrderMutation = useMutation({
+            mutationFn: ({
+                customerId,
+                checkoutDetails,
+                shelfItems
+            }: {
+                customerId: number;
+                checkoutDetails: {
+                    paymentType: string;
+                    paid: number | null | undefined;
+                    paymentRefNo?: string;
+                    paymentNote?: string;
+                    orderTaker?: string;
+                    discountType?: string;
+                    discountValue?: number;
+                    discountPercentage?: number;
+                    referralCode?: string;
+                                    notes?: string;
+                                    total: number;
+                                    shelfCharge: number;
+                                    deliveryCharge?: number;
+                                };
+                shelfItems: { id: number; quantity: number; unitPrice: number }[];
+            }) => {
+                return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
+            },
+            onSuccess: (response) => {
+                if (response.status === "error") {
+                    toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
+                    return;
+                }
+                toast.success("Sales order created and completed! ✅");
+    
+                if (response.data?.invoice_number) {
+                    showFatouraNotification(response.data.invoice_number);
+                }
+    
+                queryClient.invalidateQueries({ queryKey: ["orders"] });
+                queryClient.invalidateQueries({ queryKey: ["order-history"] });
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+                queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
+                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
+                if (response.data?.customer_id) {
+                    queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
+                }
+                options.onOrderUpdated?.("updated", response.data);
+            },
+            onError: () => {
+                toast.error("An error occurred while creating the sales order");
             }
-
-
-
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-            queryClient.invalidateQueries({ queryKey: ["products"] });
-
-            options.onOrderUpdated?.("updated", response.data);
-
-        },
-
-        onError: () => {
-
-            toast.error("An error occurred while creating the sales order");
-
-        }
-
-    });
+        });
 
 
 
