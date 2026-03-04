@@ -936,7 +936,7 @@ export function FabricSelectionForm({
                                     fabricId: currentRowData.fabric_id ?? "",
                                     fabricLength: currentRowData.fabric_length ?? 0,
                                     measurementId: measurementDisplay ?? "",
-                                    brova: currentRowData.brova ?? false,
+                                    garment_type: currentRowData.garment_type ?? 'final',
                                     express: currentRowData.express ?? false,
                                     deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
                                 };

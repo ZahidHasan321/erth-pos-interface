@@ -155,7 +155,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
             meters: 0,
             fabricName: getFabricName(key, fabrics),
             express: sel.express,
-            brova: sel.brova,
+            brova: sel.garment_type === 'brova',
           };
         }
         acc[key].qty += 1;

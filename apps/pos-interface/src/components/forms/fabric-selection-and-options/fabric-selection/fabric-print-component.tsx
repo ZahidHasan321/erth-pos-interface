@@ -18,7 +18,7 @@ interface FabricLabelProps {
     fabricId: number | string | null;
     fabricLength: number | string;
     measurementId: string;
-    brova: boolean;
+    garment_type: 'brova' | 'final';
     express: boolean;
     deliveryDate: Date | null;
   };
@@ -169,7 +169,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               borderRight: '1px solid #ccc'
             }}>
               <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Status</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.brova ? 'Brova' : 'Final'}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.garment_type === 'brova' ? 'Brova' : 'Final'}</div>
             </div>
             <div style={{
               textAlign: 'center',

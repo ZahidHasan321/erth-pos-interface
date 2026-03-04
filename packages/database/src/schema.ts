@@ -32,11 +32,30 @@ export type CheckoutStatus = (typeof checkoutStatusEnum.enumValues)[number];
 
 // "FatouraStages" from Airtable (The actual workshop lifecycle)
 export const productionStageEnum = pgEnum("production_stage", [
+    // --- Shop & Transit ---
     "order_at_shop",
     "sent_to_workshop",
     "order_at_workshop",
-    "brova_and_final_dispatched_to_shop",
+
+    // --- Pre-Production ---
+    "waiting_cut",
+    "soaking",
+
+    // --- Core Production (piece_stage) ---
+    "cutting",
+    "post_cutting",
+    "sewing",
+    "finishing",
+    "ironing",
+    "quality_check",
+
+    // --- Waiting (Final garments parked while Brova is in production/fitting) ---
+    "waiting_for_acceptance",
+
+    // --- Dispatch & Shop ---
+    "brova_dispatched_to_shop",
     "final_dispatched_to_shop",
+    "brova_and_final_dispatched_to_shop",
     "brova_at_shop",
     "brova_accepted",
     "brova_alteration",
@@ -44,10 +63,12 @@ export const productionStageEnum = pgEnum("production_stage", [
     "brova_alteration_and_production",
     "final_at_shop",
     "brova_and_final_at_shop",
+
+    // --- Completion ---
     "order_collected",
     "order_delivered",
-    "waiting_cut",
-    "soaking",
+
+    // --- Re-work ---
     "redo"
 ]);
 export type ProductionStage = (typeof productionStageEnum.enumValues)[number];
@@ -61,7 +82,7 @@ export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 export const orderTypeEnum = pgEnum("order_type", ["WORK", "SALES"]);
 export type OrderType = (typeof orderTypeEnum.enumValues)[number];
 
-export const brandEnum = pgEnum("brand", ["ERTH", "SAKKBA"]);
+export const brandEnum = pgEnum("brand", ["ERTH", "SAKKBA", "QASS"]);
 export type Brand = (typeof brandEnum.enumValues)[number];
 
 export const fabricSourceEnum = pgEnum("fabric_source", ["IN", "OUT"]);
@@ -75,6 +96,9 @@ export type MeasurementType = (typeof measurementTypeEnum.enumValues)[number];
 
 export const jabzourTypeEnum = pgEnum("jabzour_type", ["BUTTON", "ZIPPER"]);
 export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
+
+export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final"]);
+export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
 // --- 0. PRICES ---
 export const prices = pgTable("prices", {
@@ -347,7 +371,7 @@ export const garments = pgTable("garments", {
 
     notes: text("notes"),
     express: boolean("express").default(false),
-    brova: boolean("brova").default(false),
+    garment_type: garmentTypeEnum("garment_type").default("final"),
     delivery_date: timestamp("delivery_date"),
     piece_stage: productionStageEnum("piece_stage"),
 }, (t) => ({

@@ -89,7 +89,7 @@ export const MeasurementIdCell = ({
     );
 };
 
-export const BrovaCell = ({
+export const GarmentTypeCell = ({
     row,
     table,
 }: CellContext<GarmentSchema, unknown>) => {
@@ -99,18 +99,30 @@ export const BrovaCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
     return (
-        <div className="w-full flex flex-col items-center min-w-20">
+        <div className="w-full flex flex-col items-center min-w-[150px]">
             <Controller
-                name={`garments.${row.index}.brova`}
+                name={`garments.${row.index}.garment_type`}
                 control={control}
                 render={({ field, fieldState: { error } }) => (
                     <div className="flex flex-col gap-1 items-center">
-                        <Checkbox
-                            checked={field.value || false}
-                            onCheckedChange={field.onChange}
+                        <Select
+                            onValueChange={field.onChange}
+                            value={field.value || "final"}
                             disabled={isFormDisabled}
-                            className={cn(error && "border-destructive")}
-                        />
+                        >
+                            <SelectTrigger
+                                className={cn(
+                                    "w-[150px] min-w-[150px] bg-background border-border/60",
+                                    error && "border-destructive",
+                                )}
+                            >
+                                <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="final">Final</SelectItem>
+                                <SelectItem value="brova">Brova</SelectItem>
+                            </SelectContent>
+                        </Select>
                         {error && (
                             <span className="text-xs text-destructive text-center">
                                 {error.message}

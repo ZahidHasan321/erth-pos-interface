@@ -47,7 +47,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         jabzour_thickness: g.jabzour_thickness,
         notes: g.notes,
         express: g.express === true,
-        brova: g.brova === true,
+        garment_type: g.garment_type || 'final',
         piece_stage: g.piece_stage as any,
         delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
         lines: g.lines ?? 1,

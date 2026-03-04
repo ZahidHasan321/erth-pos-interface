@@ -46,7 +46,7 @@ export const garmentSchema = z.object({
   lines: z.number().default(1),
 
   express: z.boolean().default(false),
-  brova: z.boolean().default(false),
+  garment_type: z.enum(['brova', 'final']).default('final'),
   piece_stage: z.string().optional().nullable(),
   delivery_date: z.string().nullable().refine(val => val !== null && val !== "", {
     message: "Delivery date is required"
@@ -104,7 +104,7 @@ export const garmentDefaults: GarmentSchema = {
   stitching_price_snapshot: 0,
   style_price_snapshot: 0,
   express: false,
-  brova: false,
+  garment_type: 'final',
   piece_stage: 'order_at_shop',
   delivery_date: new Date().toISOString(),
   notes: '',

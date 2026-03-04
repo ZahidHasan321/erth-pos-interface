@@ -77,7 +77,7 @@ function DashboardPage() {
         }),
         brovaNeeded: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            return o.garments?.some((g: any) => g.brova && g.piece_stage !== 'brova_accepted');
+            return o.garments?.some((g: any) => g.garment_type === 'brova' && g.piece_stage !== 'brova_accepted');
         })
     };
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { getEmployees } from "@/api/employees";
-import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import {
     customerDemographicsDefaults,
     customerDemographicsSchema,
@@ -14,11 +13,9 @@ import { shelfFormSchema, type ShelfFormValues } from "@/components/forms/shelf/
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
 import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
-import { useStepNavigation } from "@/hooks/useStepNavigation";
 import { usePricing } from "@/hooks/usePricing";
 import {
     orderDefaults,
@@ -34,8 +31,8 @@ import * as React from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { getOrderDetails } from "@/api/orders";
+import { SimplifiedCustomerForm } from "@/components/forms/customer-demographics/simplified-customer-form";
 
 type OrderSearch = {
     orderId?: number;
@@ -60,12 +57,6 @@ export const Route = createFileRoute("/$main/orders/new-sales-order")({
         meta: [{ title: "New Sales Order" }],
     }),
 });
-
-const steps = [
-    { title: "Demographics", id: "step-0" },
-    { title: "Shelf Products", id: "step-1" },
-    { title: "Review & Payment", id: "step-2" },
-];
 
 const useCurrentSalesOrderStore = createSalesOrderStore("main");
 
@@ -111,14 +102,6 @@ function NewSalesOrder() {
     const employees = employeesResponse?.data || [];
 
     // Store selectors
-    const currentStep = useCurrentSalesOrderStore((s) => s.currentStep);
-    const setCurrentStep = useCurrentSalesOrderStore((s) => s.setCurrentStep);
-    const savedSteps = useCurrentSalesOrderStore((s) => s.savedSteps);
-    const addSavedStep = useCurrentSalesOrderStore((s) => s.addSavedStep);
-    const removeSavedStep = useCurrentSalesOrderStore((s) => s.removeSavedStep);
-    const customerDemographics = useCurrentSalesOrderStore(
-        (s) => s.customerDemographics,
-    );
     const setCustomerDemographics = useCurrentSalesOrderStore(
         (s) => s.setCustomerDemographics,
     );
@@ -138,23 +121,19 @@ function NewSalesOrder() {
             resetSalesOrder();
 
             const response = await getOrderDetails(orderIdToLoad, true);
-            console.log("Order details response:", response);
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
-                console.log("Order Data retrieved:", orderData);
 
                 // 1. Load Customer
                 if (orderData.customer) {
                     const customerFormValues = mapCustomerToFormValues(orderData.customer);
                     demographicsForm.reset(customerFormValues);
                     setCustomerDemographics(customerFormValues);
-                    addSavedStep(0);
                 }
 
                 // 2. Load Shelf Items
                 let mappedShelfProducts: any[] = [];
                 if (orderData.shelf_items && orderData.shelf_items.length > 0) {
-                    console.log("Found shelf items:", orderData.shelf_items);
                     mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
                         id: si.shelf_id.toString(),
                         serial_number: si.shelf?.serial_number || "",
@@ -164,11 +143,8 @@ function NewSalesOrder() {
                         stock: si.shelf?.stock || 0,
                         unit_price: Number(si.unit_price),
                     }));
-                    console.log("Mapped shelf products for reset:", mappedShelfProducts);
                     shelfForm.reset({ products: mappedShelfProducts });
-                    addSavedStep(1);
                 } else {
-                    console.log("No shelf items found in orderData");
                     shelfForm.reset({ products: [] });
                 }
 
@@ -177,7 +153,6 @@ function NewSalesOrder() {
                 OrderForm.reset(mappedOrder);
                 setOrderId(orderData.id);
                 setOrder(mappedOrder);
-                addSavedStep(2);
 
                 toast.success("Order loaded successfully");
             } else {
@@ -189,7 +164,7 @@ function NewSalesOrder() {
         } finally {
             setIsLoadingOrderData(false);
         }
-    }, [setOrderId, setCustomerDemographics, addSavedStep, setOrder, demographicsForm, shelfForm, OrderForm, resetSalesOrder]);
+    }, [setOrderId, setCustomerDemographics, setOrder, demographicsForm, shelfForm, OrderForm, resetSalesOrder]);
 
     // Load order from search params if provided
     React.useEffect(() => {
@@ -220,15 +195,9 @@ function NewSalesOrder() {
         ) ?? 0;
 
     // ============================================================================
-    // NAVIGATION & UI HOOKS
+    // UI HOOKS
     // ============================================================================
     const { dialog, openDialog, closeDialog } = useConfirmationDialog();
-
-    const { sectionRefs, handleStepChange, handleProceed, visibleSteps } = useStepNavigation({
-        steps,
-        setCurrentStep,
-        addSavedStep,
-    });
 
     const fatoura = order.invoice_number;
 
@@ -247,8 +216,6 @@ function NewSalesOrder() {
                     setOrder(updatedOrderSchema);
                     OrderForm.reset(updatedOrderSchema);
                 }
-                // Mark the final step as completed
-                addSavedStep(2);
             }
         },
     });
@@ -260,36 +227,14 @@ function NewSalesOrder() {
         const formValues = mapCustomerToFormValues(customer);
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
+        OrderForm.setValue("customer_id", customer.id);
         toast.success(`Customer loaded: ${customer.name}`);
     };
 
-    // ============================================================================
-    // DEMOGRAPHICS FORM HANDLERS
-    // ============================================================================
-    const handleDemographicsProceed = () => {
-        const recordID = demographicsForm.getValues("id");
-        const customerData = demographicsForm.getValues();
-
-        if (!recordID) {
-            toast.error("Please save customer information first");
-            return;
-        }
-
-        // Update OrderForm with customer_id
-        OrderForm.setValue("customer_id", recordID);
-
-        // Update store with customer demographics
-        setCustomerDemographics(customerData);
-
-        // Proceed to next step (Shelf Products)
-        handleProceed(0);
-    };
-
-    // ============================================================================
-    // Shelf FORM HANDLERS
-    // ============================================================================
-    const handleShelfProceed = () => {
-        handleProceed(1);
+    const handleClearCustomer = () => {
+        demographicsForm.reset(customerDemographicsDefaults);
+        setCustomerDemographics(customerDemographicsDefaults);
+        OrderForm.setValue("customer_id", undefined as any);
     };
 
     // ============================================================================
@@ -298,7 +243,8 @@ function NewSalesOrder() {
     const handleOrderConfirmation = (data: OrderSchema) => {
         const customerId = OrderForm.getValues("customer_id");
         if (!customerId) {
-            toast.error("No customer selected");
+            toast.error("Please select a customer first");
+            document.getElementById("customer-section")?.scrollIntoView({ behavior: "smooth" });
             return;
         }
 
@@ -309,6 +255,12 @@ function NewSalesOrder() {
                 quantity: p.quantity!,
                 unitPrice: p.unit_price ?? 0
             }));
+
+        if (shelfItems.length === 0) {
+            toast.error("Please add at least one item to the order");
+            document.getElementById("items-section")?.scrollIntoView({ behavior: "smooth" });
+            return;
+        }
 
         const checkoutDetails = {
             paymentType: data.payment_type!,
@@ -322,7 +274,7 @@ function NewSalesOrder() {
             referralCode: data.referral_code ?? undefined,
             notes: data.notes ?? undefined,
             total: data.order_total,
-            shelf_charge: data.shelf_charge, // Use snake_case if mutation handles it, else camelCase
+            shelf_charge: data.shelf_charge,
             deliveryCharge: data.delivery_charge
         };
 
@@ -331,7 +283,7 @@ function NewSalesOrder() {
                 orderId,
                 checkoutDetails: {
                     ...checkoutDetails,
-                    shelfCharge: data.shelf_charge // mutation expects camelCase
+                    shelfCharge: data.shelf_charge
                 },
                 shelfItems
             });
@@ -440,79 +392,46 @@ function NewSalesOrder() {
                 description={dialog.description}
             />
 
-            {/* Sticky Header with Stepper */}
-            <div className="sticky top-0 z-50 bg-background">
-                <HorizontalStepper
-                    steps={steps}
-                    completedSteps={savedSteps}
-                    currentStep={currentStep}
-                    activeSteps={visibleSteps}
-                    onStepChange={handleStepChange}
-                />
+            {/* Page Header */}
+            <div className="bg-background pt-8 pb-4 border-b">
+                <div className="mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
+                    <h1 className="text-4xl font-black uppercase tracking-tight text-foreground">
+                        Sales <span className="text-primary">Order</span>
+                    </h1>
+                    <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs opacity-70 mt-1">
+                        Direct sales from inventory shelf
+                    </p>
+                </div>
             </div>
 
-            {/* Step Content */}
-            <div className="flex flex-col items-center gap-6 md:gap-10 pt-12 pb-8 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
-                {!isOrderClosed && (
-                    <div className="w-full mt-0">
-                        <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
-                            <SearchCustomer
-                                onCustomerFound={handleCustomerFound}
-                                onHandleClear={() => {
-                                    demographicsForm.reset(customerDemographicsDefaults);
-                                    setCustomerDemographics(customerDemographicsDefaults);
-                                }}
-                                checkPendingOrders={false} // No pending orders for sales
-                            />
-                        </ErrorBoundary>
-                    </div>
-                )}
-
-                {/* STEP 0: Demographics */}
-                <div
-                    id={steps[0].id}
-                    ref={(el) => { sectionRefs.current[0] = el; }}
-                    className="w-full flex flex-col items-center"
-                >
-                    <CustomerDemographicsForm
-                        form={demographicsForm}
-                        isOrderClosed={isOrderClosed}
-                        orderId={null} // Pass null to hide "Change Customer" and show "Proceed" instead
-                        onCustomerChange={handleCustomerFound}
-                        onSave={(data) => {
-                            setCustomerDemographics(data);
-                        }}
-                        onEdit={() => removeSavedStep(0)}
-                        onCancel={() => { }}
-                        onProceed={handleDemographicsProceed}
-                        onClear={() => {
-                            removeSavedStep(0);
-                        }}
-                        proceedButtonText="Continue to Products"
-                    />
-                </div>
-
-                {/* STEP 1: Shelf Products */}
-                <div
-                    id={steps[1].id}
-                    ref={(el) => { sectionRefs.current[1] = el; }}
-                    className="w-full flex flex-col items-center"
-                >
+            {/* Main Content Flow */}
+            <div className="flex flex-col gap-12 pt-8 pb-20 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
+                
+                {/* 1. Items Section */}
+                <div id="items-section" className="w-full">
                     <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
                         <ShelfForm
                             form={shelfForm}
                             isOrderDisabled={isOrderClosed}
-                            onProceed={handleShelfProceed}
+                            showHeader={false}
                         />
                     </ErrorBoundary>
                 </div>
 
-                {/* STEP 2: Review & Payment */}
-                <div
-                    id={steps[2].id}
-                    ref={(el) => { sectionRefs.current[2] = el; }}
-                    className="w-full flex flex-col items-center"
-                >
+                {/* 2. Customer Section */}
+                <div id="customer-section" className="w-full">
+                    <ErrorBoundary fallback={<div>Customer selection crashed</div>}>
+                        <SimplifiedCustomerForm 
+                            form={demographicsForm}
+                            onCustomerFound={handleCustomerFound}
+                            onClear={handleClearCustomer}
+                            isOrderClosed={isOrderClosed}
+                        />
+                    </ErrorBoundary>
+                </div>
+
+                {/* 3. Payment & Review Section */}
+                <div id="payment-section" className="w-full">
                     <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
                         <OrderSummaryAndPaymentForm
                             form={OrderForm}
@@ -523,12 +442,12 @@ function NewSalesOrder() {
                             fatoura={fatoura}
                             isLoadingFatoura={completeSalesOrderMutation.isPending}
                             customerAddress={{
-                                city: customerDemographics?.city ?? undefined,
-                                area: customerDemographics?.area ?? undefined,
-                                block: customerDemographics?.block ?? undefined,
-                                street: customerDemographics?.street ?? undefined,
-                                house_no: customerDemographics?.house_no ?? undefined,
-                                address_note: customerDemographics?.address_note ?? undefined,
+                                city: demographicsForm.getValues("city") ?? undefined,
+                                area: demographicsForm.getValues("area") ?? undefined,
+                                block: demographicsForm.getValues("block") ?? undefined,
+                                street: demographicsForm.getValues("street") ?? undefined,
+                                house_no: demographicsForm.getValues("house_no") ?? undefined,
+                                address_note: demographicsForm.getValues("address_note") ?? undefined,
                             }}
                             orderType="SALES"
                             onConfirm={(data) => {
@@ -542,8 +461,6 @@ function NewSalesOrder() {
                                 );
                             }}
                             onCancel={() => {
-                                // For sales orders, since we don't create it early, 
-                                // cancel just resets the state or navigates away
                                 navigate({ to: "/orders" });
                             }}
                         />

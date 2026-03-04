@@ -76,7 +76,7 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
         pieceStage: garment.piece_stage
           ? PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || "Unknown"
           : "Unknown",
-        isBrova: garment.brova || false,
+        isBrova: garment.garment_type === 'brova',
         deliveryDate: garment.delivery_date || "",
         delayInDays: calculateDelay(garment.delivery_date || new Date().toISOString()),
         fabricSource: garment.fabric_source || undefined,

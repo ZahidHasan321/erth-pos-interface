@@ -69,10 +69,10 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   },
   // Order Details
   {
-    accessorKey: "brova",
-    header: "Brova",
-    size: 100,
-    cell: FabricCells.BrovaCell,
+    accessorKey: "garment_type",
+    header: "Garment Type",
+    size: 150,
+    cell: FabricCells.GarmentTypeCell,
   },
   {
     accessorKey: "express",
@@ -161,7 +161,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
     fabricId: currentRowData.fabric_id?.toString() || "",
     fabricLength: currentRowData.fabric_length?.toString() ?? "0",
     measurementId: measurementDisplay || "",
-    brova: currentRowData.brova || false,
+    garment_type: currentRowData.garment_type || 'final',
     express: currentRowData.express || false,
     deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
   };

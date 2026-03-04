@@ -1,5 +1,6 @@
 'use client'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useWatch, useFieldArray, type UseFormReturn } from 'react-hook-form'
@@ -15,9 +16,10 @@ interface ShelfFormProps {
   form: UseFormReturn<ShelfFormValues, any, any>
   onProceed?: () => void
   isOrderDisabled: boolean
+  showHeader?: boolean
 }
 
-export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) {
+export function ShelfForm({ form, onProceed, isOrderDisabled, showHeader = true }: ShelfFormProps) {
   // Fetch products from server
   const { data: serverProducts, isLoading, error } = useQuery({
     queryKey: ['products'],
@@ -185,51 +187,84 @@ export function ShelfForm({ form, onProceed, isOrderDisabled }: ShelfFormProps) 
 
   return (
     <div className="space-y-6 w-full">
-      {/* Title Section */}
-      <div className="flex justify-between items-start mb-2">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-foreground">
-            Shelf Products
-          </h1>
-          <p className="text-sm text-muted-foreground">Select products from inventory shelf</p>
+      {/* Title & Action Section (Work Order Version) */}
+      {showHeader && (
+        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
+            <div className="space-y-1">
+            <h1 className="text-3xl font-black uppercase tracking-tight text-foreground">
+                Shelf <span className="text-primary">Products</span>
+            </h1>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Inventory items for direct sales</p>
+            </div>
         </div>
-      </div>
+      )}
 
       {/* Content Section */}
-      <div className="bg-card p-6 rounded-xl border border-border shadow-sm space-y-6">
-        <DataTable
-          columns={columns}
-          data={watchedProducts}
-          updateData={updateData}
-          removeRow={removeRow}
-          serverProducts={serverProducts?.data}
-          selectedProducts={getSelectedProducts()}
-          isOrderDisabled={isOrderDisabled}
-          errors={form.formState.errors.products as any}
-        />
-
-        <div className="flex justify-between items-center pt-4 border-t border-border">
+      <div className="bg-card rounded-2xl border-2 border-border shadow-sm overflow-hidden">
+        {/* Card Header for Table Actions */}
+        <div className="bg-muted/20 border-b p-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="p-1.5 bg-primary rounded-lg text-primary-foreground">
+                <Plus className="size-4" />
+             </div>
+             <span className="text-sm font-black uppercase tracking-widest text-foreground">Order Items</span>
+          </div>
           {!isOrderDisabled && (
-            <Button type="button" variant="outline" onClick={addRow}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Item
+            <Button 
+              type="button" 
+              onClick={addRow}
+              variant="outline"
+              className="h-9 px-4 font-black uppercase tracking-widest text-[10px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+            >
+              <Plus className="size-3.5" />
+              Add New Item
             </Button>
           )}
-          <div className="text-lg font-semibold">
-            Total Amount: <span className="text-primary">{totalAmount.toFixed(2)} KWD</span>
+        </div>
+
+        <div className="p-1">
+          <DataTable
+            columns={columns}
+            data={watchedProducts}
+            updateData={updateData}
+            removeRow={removeRow}
+            serverProducts={serverProducts?.data}
+            selectedProducts={getSelectedProducts()}
+            isOrderDisabled={isOrderDisabled}
+            errors={form.formState.errors.products as any}
+          />
+        </div>
+
+        {/* Summary Footer */}
+        <div className="bg-muted/30 border-t-2 border-border p-6 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="hidden md:block">
+             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-white border-border text-muted-foreground">
+                {watchedProducts.length} Items Selected
+             </Badge>
+          </div>
+          
+          <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
+            <div className="flex flex-col items-center md:items-end">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">Grand Total</span>
+              <div className="text-3xl font-black text-primary tracking-tighter">
+                {totalAmount.toFixed(2)} <span className="text-sm font-bold uppercase ml-1">KWD</span>
+              </div>
+            </div>
+
+            {!isOrderDisabled && (
+              <Button 
+                type="button" 
+                onClick={handleProceed}
+                size="lg"
+                className="h-14 px-8 font-black uppercase tracking-widest text-xs gap-3 shadow-xl shadow-primary/30 w-full md:w-auto"
+              >
+                Proceed to Payment
+                <ArrowRight className="size-5" />
+              </Button>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Action Buttons */}
-      {!isOrderDisabled && (
-        <div className="flex gap-4 justify-end">
-          <Button type="button" onClick={handleProceed}>
-            Continue to Order & Payment
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

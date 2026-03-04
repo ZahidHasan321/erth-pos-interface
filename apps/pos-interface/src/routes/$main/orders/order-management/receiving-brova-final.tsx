@@ -1,1069 +1,391 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import {
-  Ruler,
-  Camera,
-  Package,
-  Save,
-  Check,
-  X,
-  ThumbsUp,
-  ThumbsDown,
-  Hash,
-  User,
-
-  Clock,
-  RefreshCw,
-  MessageSquare
+    Package,
+    Search,
+    RefreshCw,
+    ChevronDown,
+    ExternalLink,
+    CheckCircle2,
+    Phone,
+    Clock,
+    Check
 } from "lucide-react";
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { DirectLookupCard } from "@/components/order-management/order-search-form";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
-import { ErrorBoundary } from "@/components/global/error-boundary";
 
-// API and Types
-import { getOrderById, getOrderByInvoice, getPendingOrdersByCustomer } from "@/api/orders";
-import { getMeasurementById } from "@/api/measurements";
-import type { Measurement, Order, Garment, Customer } from "@repo/database";
-
-// Assets & Constants
-import {
-  collarTypes,
-  collarButtons,
-  jabzourTypes,
-  topPocketTypes,
-  cuffTypes,
-  type BaseOption
-} from "@/components/forms/fabric-selection-and-options/constants";
+// API and Hooks
+import { updateOrder } from "@/api/orders";
+import { updateGarment } from "@/api/garments";
+import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
+import { PieceStageLabels } from "@/lib/constants";
+import type { Order, Garment } from "@repo/database";
 
 // Route Definition
 export const Route = createFileRoute(
-  "/$main/orders/order-management/receiving-brova-final"
+    "/$main/orders/order-management/receiving-brova-final"
 )({
-  component: ReceivingInterface,
-  head: () => ({
-    meta: [{ title: "Workshop QC & Receive" }],
-  }),
+    component: ReceivingInterface,
+    head: () => ({
+        meta: [{ title: "Receiving Brova & Final" }],
+    }),
 });
 
-// --- Constants & Config ---
-
-const MEASUREMENT_ROWS = [
-  { type: "Collar", subType: "Width", key: "collar_width" },
-  { type: "Collar", subType: "Height", key: "collar_height" },
-  { type: "Length", subType: "Front", key: "length_front" },
-  { type: "Length", subType: "Back", key: "length_back" },
-  { type: "Top Pocket", subType: "Length", key: "top_pocket_length" },
-  { type: "Top Pocket", subType: "Width", key: "top_pocket_width" },
-  { type: "Top Pocket", subType: "Distance", key: "top_pocket_distance" },
-  { type: "Side Pocket", subType: "Length", key: "side_pocket_length" },
-  { type: "Side Pocket", subType: "Width", key: "side_pocket_width" },
-  { type: "Side Pocket", subType: "Distance", key: "side_pocket_distance" },
-  { type: "Side Pocket", subType: "Opening", key: "side_pocket_opening" },
-  { type: "Waist", subType: "Front", key: "waist_front" },
-  { type: "Waist", subType: "Back", key: "waist_back" },
-  { type: "Arm Hole", subType: "Arm Hole", key: "armhole" },
-  { type: "Chest", subType: "Upper", key: "chest_upper" },
-  { type: "Chest", subType: "Full", key: "chest_full" },
-  { type: "Chest", subType: "Half", key: "chest_front" },
-  { type: "Elbow", subType: "Elbow", key: "elbow" },
-  { type: "Sleeves", subType: "Sleeves", key: "sleeve_length" },
-  { type: "Bottom", subType: "Bottom", key: "bottom" },
-] as const;
-
-const QC_STATUS_OPTIONS = [
-  { value: "no-diff", label: "No Differences", color: "text-green-600" },
-  { value: "minor-diff", label: "Minor Differences", color: "text-yellow-600" },
-  { value: "major-diff", label: "Major Differences", color: "text-orange-600" },
-  { value: "unacceptable", label: "Unacceptable", color: "text-red-600" },
-];
-
-// --- Types ---
-
-interface ShopMeasurements {
-  [key: string]: number | "";
-}
-
-interface OrderWithDetails extends Order {
-    customer?: Customer;
-    garments?: Garment[];
-}
-
-// --- Main Component ---
-
 function ReceivingInterface() {
-  // Search State
-  const [orderIdSearch, setOrderIdSearch] = useState<number | undefined>(undefined);
-  const [fatouraSearch, setFatouraSearch] = useState<number | undefined>(undefined);
-  const [isSearchingId, setIsSearchingId] = useState(false);
-  const [isSearchingFatoura, setIsSearchingFatoura] = useState(false);
-  const [, setIsSearchingCustomer] = useState(false);
-  const [idError, setIdError] = useState<string | undefined>();
-  const [fatouraError, setFatouraError] = useState<string | undefined>();
+    const queryClient = useQueryClient();
+    const { data: orders = [], isLoading } = useDispatchedOrders();
+    const [searchQuery, setSearchQuery] = useState("");
 
-  // Active Data State
-  const [activeOrder, setActiveOrder] = useState<OrderWithDetails | null>(null);
-  const [selectedGarmentId, setSelectedGarmentId] = useState<string | null>(null);
-  
-  // QC State
-  const [shopMeasurements, setShopMeasurements] = useState<ShopMeasurements>({});
-  const [measurementNotes, setMeasurementNotes] = useState<Record<string, string>>({});
-  const [optionNotes, setOptionNotes] = useState<Record<string, string>>({});
-  const [qcStatus, setQcStatus] = useState<string>("no-diff");
-  const [optionChecks, setOptionChecks] = useState<Record<string, boolean>>({});
-  const [receivingAction, setReceivingAction] = useState<"accept" | "reject" | "">("");
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [evidence, setEvidence] = useState<Record<string, { type: "photo" | "video", url: string } | null>>({});
+    // Mutations
+    const receiveMutation = useMutation({
+        mutationFn: async ({ garment, order }: { garment: Garment; order: Order }) => {
+            let nextStage = garment.piece_stage;
+            if (garment.piece_stage === 'brova_dispatched_to_shop') nextStage = 'brova_at_shop';
+            else if (garment.piece_stage === 'final_dispatched_to_shop') nextStage = 'final_at_shop';
 
-  // Dialog State for Customer Orders
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [customerOrders, setCustomerOrders] = useState<OrderWithDetails[]>([]);
-  const [selectedDialogOrderId, setSelectedDialogOrderId] = useState<number | null>(null);
+            // 1. Update Garment
+            const gRes = await updateGarment(garment.id, { piece_stage: nextStage as any });
+            if (gRes.status === 'error') throw new Error(gRes.message);
 
-  // 1. Garment Selection Effect
-  useEffect(() => {
-    if (activeOrder?.garments?.length) {
-      // Automatically select the first garment
-      const firstGarment = activeOrder.garments[0];
-      setSelectedGarmentId(firstGarment.id);
-      
-      // Reset QC state for new order
-      setShopMeasurements({});
-      setMeasurementNotes({});
-      setOptionNotes({});
-      setOptionChecks({});
-      setEvidence({});
-      setQcStatus("no-diff");
-      setReceivingAction("");
-    }
-  }, [activeOrder]);
+            // 2. Check if order-level update is needed
+            const updatedGarments = order.garments?.map(g => 
+                g.id === garment.id ? { ...g, piece_stage: nextStage } : g
+            ) || [];
 
-  const activeGarment = useMemo(() => 
-    activeOrder?.garments?.find(g => g.id === selectedGarmentId),
-    [activeOrder, selectedGarmentId]
-  );
+            const allAtShop = updatedGarments.every(g => 
+                ['brova_at_shop', 'final_at_shop', 'brova_accepted', 'brova_collected', 'order_collected', 'order_delivered'].includes(g.piece_stage!)
+            );
 
-  // 2. Measurement Query
-  const measurementId = activeGarment?.measurement_id;
-  const { data: measurementData, isLoading: isMeasurementLoading } = useQuery({
-    queryKey: ["measurement", measurementId],
-    queryFn: () => getMeasurementById(measurementId!),
-    enabled: !!measurementId,
-  });
-
-  const measurement = measurementData?.data;
-
-  // --- Search Logic ---
-
-  const handleIdSearch = async () => {
-    if (!orderIdSearch) return;
-    setIdError(undefined);
-    setIsSearchingId(true);
-    try {
-        const res = await getOrderById(orderIdSearch, true);
-        if (res.status === "error" || !res.data) {
-            setIdError("Order not found");
-            toast.error("Order ID not found");
-        } else {
-            setActiveOrder(res.data);
-            setOrderIdSearch(undefined);
+            if (allAtShop) {
+                let orderStage = 'final_at_shop';
+                const hasBrova = updatedGarments.some(g => g.garment_type === 'brova');
+                if (hasBrova) orderStage = 'brova_and_final_at_shop';
+                
+                await updateOrder({ production_stage: orderStage as any }, order.id);
+            }
+            
+            return { garmentId: garment.garment_id, nextStage };
+        },
+        onSuccess: (data) => {
+            toast.success(`Garment ${data.garmentId} marked as received!`, {
+                description: `New status: ${PieceStageLabels[data.nextStage as keyof typeof PieceStageLabels]}`
+            });
+            queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+        },
+        onError: (err: any) => {
+            toast.error("Failed to receive garment", { description: err.message });
         }
-    } catch (err) {
-        toast.error("Search failed");
-    } finally {
-        setIsSearchingId(false);
-    }
-  };
+    });
 
-  const handleFatouraSearch = async () => {
-    if (!fatouraSearch) return;
-    setFatouraError(undefined);
-    setIsSearchingFatoura(true);
-    try {
-        const res = await getOrderByInvoice(fatouraSearch, true);
-        if (res.status === "error" || !res.data) {
-            setFatouraError("Invoice not found");
-            toast.error("Invoice Number not found");
-        } else {
-            setActiveOrder(res.data);
-            setFatouraSearch(undefined);
-        }
-    } catch (err) {
-        toast.error("Search failed");
-    } finally {
-        setIsSearchingFatoura(false);
-    }
-  };
+    // Filter Logic
+    const filteredOrders = useMemo(() => {
+        if (!searchQuery) return orders;
+        const q = searchQuery.toLowerCase();
+        return orders.filter(order => 
+            order.id.toString().includes(q) ||
+            order.invoice_number?.toString().includes(q) ||
+            order.customer?.name.toLowerCase().includes(q) ||
+            order.customer?.phone?.includes(q)
+        );
+    }, [orders, searchQuery]);
 
-  const handleCustomerFound = async (customer: Customer) => {
-    setIsSearchingCustomer(true);
-    try {
-      const ordersResponse = await getPendingOrdersByCustomer(
-        customer.id,
-        20,
-        "confirmed",
-        true // Include relations
-      );
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.1 },
+        },
+    };
 
-      if (ordersResponse.data && ordersResponse.data.length > 0) {
-        setCustomerOrders(ordersResponse.data as OrderWithDetails[]);
-        setSelectedDialogOrderId(null);
-        setIsDialogOpen(true);
-      } else {
-        toast.info(`No confirmed orders found for ${customer.name}.`);
-      }
-    } catch (error) {
-      console.error("Failed to fetch customer orders", error);
-      toast.error("Failed to fetch customer orders.");
-    } finally {
-      setIsSearchingCustomer(false);
-    }
-  };
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1 },
+    };
 
-  const handleDialogConfirm = () => {
-    if (!selectedDialogOrderId) return;
-    const order = customerOrders.find(o => o.id === selectedDialogOrderId);
-    if (order) {
-        setActiveOrder(order);
-        setIsDialogOpen(false);
-    }
-  };
-
-  // --- Handlers ---
-
-  const handleMeasurementChange = (key: string, value: string) => {
-    const numValue = value === "" ? "" : parseFloat(value);
-    setShopMeasurements(prev => ({
-      ...prev,
-      [key]: numValue
-    }));
-  };
-
-  const handleMeasurementNoteChange = (key: string, value: string) => {
-    setMeasurementNotes(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const handleOptionNoteChange = (key: string, value: string) => {
-    setOptionNotes(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const handleCheck = (key: string, checked: boolean) => {
-    setOptionChecks(prev => ({ ...prev, [key]: checked }));
-  };
-
-  const handleCapture = (optionId: string, type: "photo" | "video", file: File | null) => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setEvidence(prev => ({ ...prev, [optionId]: { type, url } }));
-    toast.success(`${type === 'photo' ? 'Photo' : 'Video'} captured`);
-  };
-
-  const onConfirmClick = () => {
-    if (!receivingAction) {
-        toast.error("Please select an action (Accept or Reject)");
-        return;
-    }
-    setIsConfirmDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    setIsConfirmDialogOpen(false);
-    setIsSubmitting(true);
-    
-    try {
-        // Prepare next stage based on current piece stage and action
-        // For now just implementing the UI feedback as requested
-        toast.success(`Order ${receivingAction === 'accept' ? 'Accepted' : 'Rejected'}`, {
-            description: `Garment ${activeGarment?.garment_id} processed with status: ${QC_STATUS_OPTIONS.find(o => o.value === qcStatus)?.label}`
-        });
-        
-        // Potential DB Update:
-        // if (receivingAction === 'accept') { ... }
-        
-        // Clear active order to reset
-        setActiveOrder(null);
-    } catch (err) {
-        toast.error("Failed to save QC results");
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
-
-  // --- Helpers ---
-
-  const getDifference = (targetVal: number | undefined | null, shopVal: number | "" | undefined) => {
-    if (targetVal === null || targetVal === undefined || shopVal === "" || shopVal === undefined) return null;
-    return Number((shopVal - targetVal).toFixed(2));
-  };
-
-  const getDiffStatus = (diff: number | null) => {
-    if (diff === null) return "neutral";
-    if (Math.abs(diff) === 0) return "success";
-    if (Math.abs(diff) <= 0.5) return "warning";
-    return "error";
-  };
-
-  // Option Helper
-  const findOptionImage = (list: BaseOption[], val: string | undefined | null) => {
-    if (!val) return null;
-    return list.find(o => o.value === val || o.displayText === val)?.image;
-  };
-
-  // Build the specific rows for "Collar, Collar Button, Tabbagi, Jabzour, Front Pocket, Cuff"
-  const optionRows = useMemo(() => {
-    if (!activeGarment) return [];
-    const g = activeGarment;
-    
-    // Define the specific structure based on schema
-    return [
-      {
-        id: "collar",
-        label: "Collar",
-        mainValue: g.collar_type,
-        mainImage: findOptionImage(collarTypes, g.collar_type),
-        hashwaLabel: null,
-        hashwaValue: null
-      },
-      {
-        id: "collarBtn",
-        label: "Collar Button",
-        mainValue: g.collar_button,
-        mainImage: findOptionImage(collarButtons, g.collar_button),
-        hashwaLabel: null,
-        hashwaValue: null,
-        extraCheckLabel: g.small_tabaggi ? "Small Tabbagi" : null,
-        extraCheckValue: g.small_tabaggi
-      },
-      {
-        id: "jabzour1",
-        label: "Jabzour 1",
-        mainValue: g.jabzour_1,
-        mainImage: findOptionImage(jabzourTypes, g.jabzour_1),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.jabzour_thickness
-      },
-      {
-        id: "jabzour2",
-        label: "Jabzour 2",
-        mainValue: g.jabzour_2,
-        mainImage: findOptionImage(jabzourTypes, g.jabzour_2),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.jabzour_thickness
-      },
-      {
-        id: "frontPocket",
-        label: "Front Pocket",
-        mainValue: g.front_pocket_type,
-        mainImage: findOptionImage(topPocketTypes, g.front_pocket_type),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.front_pocket_thickness
-      },
-      {
-        id: "cuff",
-        label: "Cuff",
-        mainValue: g.cuffs_type,
-        mainImage: findOptionImage(cuffTypes, g.cuffs_type),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.cuffs_thickness
-      }
-    ].filter(r => r.mainValue && r.mainValue !== "None");
-  }, [activeGarment]);
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
-  };
-
-  return (
-    <motion.div 
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6 pb-24"
-    >
-      
-      {/* 1. Header & Search */}
-      <motion.div variants={itemVariants} className="space-y-4">
-        <div className="flex flex-col gap-1 border-b border-border pb-4">
-            <h1 className="text-3xl font-bold text-foreground">
-                Receiving <span className="text-primary">Brova & Final</span>
-            </h1>
-            <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
-                Process finished garments from workshop and perform quality control audit
-            </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-            <div className="lg:col-span-7">
-                <SearchCustomer 
-                    onCustomerFound={handleCustomerFound}
-                    onHandleClear={() => {}}
-                />
-            </div>
-            <div className="lg:col-span-5">
-                <DirectLookupCard 
-                    orderId={orderIdSearch}
-                    fatoura={fatouraSearch}
-                    onOrderIdChange={(val) => { setOrderIdSearch(val); setIdError(undefined); }}
-                    onFatouraChange={(val) => { setFatouraSearch(val); setFatouraError(undefined); }}
-                    onOrderIdSubmit={handleIdSearch}
-                    onFatouraSubmit={handleFatouraSearch}
-                    isSearchingId={isSearchingId}
-                    isSearchingFatoura={isSearchingFatoura}
-                    idError={idError}
-                    fatouraError={fatouraError}
-                />
-            </div>
-        </div>
-      </motion.div>
-
-      {activeOrder ? (
+    return (
         <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="container mx-auto p-4 md:p-6 max-w-6xl space-y-6"
         >
-          {/* 2. Compact Order Context Bar */}
-          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20 py-0 gap-0">
-            <CardContent className="p-3">
-              <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-8">
-                {/* Customer Info */}
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                    <User className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
-                    <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
-                  </div>
-                  <div className="ml-2 pl-3 border-l border-border py-1">
-                    <p className="text-[10px] font-bold text-muted-foreground font-mono leading-none">{activeOrder.customer?.phone}</p>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block h-6 w-px bg-border/60" />
-
-                {/* Order Details */}
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                      <Hash className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
-                      <div className="flex items-center gap-2 leading-none">
-                        <span className="font-black text-sm">#{activeOrder.id}</span>
-                        <span className="text-[10px] font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                      <Package className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Garments</p>
-                      <p className="font-bold text-sm leading-none">{activeOrder.garments?.length || 0} Pieces</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block h-6 w-px bg-border/60" />
-
-                {/* Delivery */}
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                    <Clock className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery Date</p>
-                    <p className="font-bold text-sm leading-none">
-                      {activeOrder.delivery_date ? format(new Date(activeOrder.delivery_date), "PP") : "Not Set"}
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
+                <motion.div variants={itemVariants} className="space-y-1">
+                    <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
+                        Receiving <span className="text-primary">Brova & Final</span>
+                    </h1>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+                        Log workshop deliveries and mark garments as received at the shop
                     </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </motion.div>
 
-          <Separator className="opacity-50" />
-
-          {/* 3. Garment Selection Tabs */}
-          <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-4">
-            <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
-                <TabsList className="h-auto flex-nowrap justify-start gap-2 bg-transparent p-0">
-                {activeOrder.garments?.map((garment) => (
-                    <TabsTrigger 
-                        key={garment.id} 
-                        value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
-                    >
-                        <div className="text-left w-full space-y-0.5">
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-[8px] font-black uppercase tracking-widest opacity-70">Item</span>
-                                <Badge 
-                                    className={cn(
-                                        "h-3 px-1 text-[7px] font-black uppercase border-none",
-                                        garment.brova 
-                                            ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white" 
-                                            : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-                                    )}
-                                >
-                                    {garment.brova ? "Brova" : "Final"}
-                                </Badge>
-                            </div>
-                            <div className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</div>
-                        </div>
-                    </TabsTrigger>
-                ))}
-                </TabsList>
-            </div>
-
-            <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-6 focus-visible:ring-0">
-               
-                 {/* MEASUREMENT QC SECTION */}
-                <Card className="border-2 border-border shadow-md overflow-hidden rounded-2xl py-0 gap-0">
-                    <CardHeader className="bg-muted/30 border-b p-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
-                                    <Ruler className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <CardTitle className="text-lg font-bold uppercase tracking-tight">Measurement Verification</CardTitle>
-                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Validate physical garment dimensions</p>
-                                </div>
-                            </div>
-                            <Badge variant="outline" className="bg-background font-black text-[9px] h-6 px-2">
-                                {isMeasurementLoading ? "REFRESHING SPECS..." : "SPECIFICATIONS SYNCED"}
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    
-                    <div className="relative overflow-x-auto">
-                        <Table>
-                            <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
-                                <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                    <TableHead className="w-[15%] p-3">Dimension</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[12%] p-3">Target (cm)</TableHead>
-                                    <TableHead className="text-center w-[15%] bg-primary/5 p-3">Actual Shop (cm)</TableHead>
-                                    <TableHead className="text-center w-[12%] p-3">Variance</TableHead>
-                                    <TableHead className="p-3">Verification Notes</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {MEASUREMENT_ROWS.map((row) => {
-                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                    const shopValue = shopMeasurements[row.key];
-                                    const noteValue = measurementNotes[row.key] || "";
-                                    
-                                    const diffOrder = getDifference(orderValue, shopValue);
-                                    const statusOrder = getDiffStatus(diffOrder);
-                                    const isMissing = orderValue === null || orderValue === undefined || orderValue === 0;
-
-                                    if (isMissing) return null;
-
-                                    return (
-                                        <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
-                                            <TableCell className="p-3">
-                                                <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
-                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
-                                            </TableCell>
-                                            <TableCell className="text-center font-black text-sm bg-muted/30">
-                                                {orderValue || "-"}
-                                            </TableCell>
-                                            <TableCell className="p-1.5 bg-primary/[0.02]">
-                                                <Input 
-                                                    type="number" 
-                                                    className={cn(
-                                                        "h-8 w-24 mx-auto text-center font-black text-sm border-2 transition-all",
-                                                        statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
-                                                        statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
-                                                        statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
-                                                        !shopValue && "border-border hover:border-primary/40"
-                                                    )}
-                                                    placeholder="0.0"
-                                                    value={shopValue ?? ""}
-                                                    onChange={(e) => handleMeasurementChange(row.key, e.target.value)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <AnimatePresence mode="wait">
-                                                    {diffOrder !== null ? (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, scale: 0.8 }}
-                                                            animate={{ opacity: 1, scale: 1 }}
-                                                            exit={{ opacity: 0, scale: 0.8 }}
-                                                        >
-                                                            <Badge variant="secondary" className={cn(
-                                                                "font-black text-[10px] h-6 px-1.5 shadow-sm",
-                                                                statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
-                                                                statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
-                                                                statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
-                                                            )}>
-                                                                {diffOrder > 0 ? `+${diffOrder}` : diffOrder} cm
-                                                                {statusOrder === 'success' && <Check className="w-3 h-3 ml-1" />}
-                                                                {statusOrder === 'error' && <X className="w-3 h-3 ml-1" />}
-                                                            </Badge>
-                                                        </motion.div>
-                                                    ) : (
-                                                        <span className="text-muted-foreground font-black text-[10px] opacity-20">—</span>
-                                                    )}
-                                                </AnimatePresence>
-                                            </TableCell>
-                                            <TableCell className="p-1.5">
-                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-2 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
-                                                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
-                                                    <Input 
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-8"
-                                                        placeholder="Add dimension note..."
-                                                        value={noteValue}
-                                                        onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
-                                                    />
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                <motion.div variants={itemVariants} className="w-full md:w-80">
+                    <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input
+                            placeholder="Search ID, Invoice or Customer..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10 h-10 bg-card border-2 border-border focus-visible:ring-primary/20"
+                        />
                     </div>
-                </Card>
-
-                {/* STYLE & HASHWA SECTION */}
-                <Card className="border-2 border-border shadow-md rounded-2xl overflow-hidden py-0 gap-0">
-                    <CardHeader className="bg-muted/30 border-b p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
-                                <Package className="w-4 h-4" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-lg font-bold uppercase tracking-tight">Style & Detail Audit</CardTitle>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Cross-check style options and captures</p>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-4">
-                       <div className="space-y-3">
-                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-xl text-[9px] font-black uppercase tracking-widest text-muted-foreground border border-border/40">
-                                <div className="col-span-3">Configuration Item</div>
-                                <div className="col-span-2 text-center">Reference</div>
-                                <div className="col-span-3 text-center">Checklist</div>
-                                <div className="col-span-2 text-center">Notes</div>
-                                <div className="col-span-2 text-right">Evidence</div>
-                            </div>
-
-                            <AnimatePresence mode="popLayout">
-                                {optionRows.map((opt) => (
-                                    <motion.div 
-                                        key={opt.id} 
-                                        layout
-                                        className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-2xl border-2 border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all shadow-sm"
-                                    >
-                                        {/* Item Description */}
-                                        <div className="col-span-3 space-y-1">
-                                            <div className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</div>
-                                            <Badge variant="outline" className="font-black text-[8px] uppercase border-primary/20 bg-primary/5 text-primary h-4 px-1.5">
-                                                {opt.mainValue}
-                                            </Badge>
-                                        </div>
-
-                                        {/* Visual Reference */}
-                                        <div className="col-span-2 flex justify-center">
-                                            {opt.mainImage ? (
-                                                <div className="h-12 w-12 bg-white rounded-lg border-2 border-border/60 p-1 shadow-inner">
-                                                    <img 
-                                                        src={opt.mainImage} 
-                                                        alt={opt.label} 
-                                                        className="w-full h-full object-contain" 
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="h-12 w-12 bg-muted/30 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[8px] font-black uppercase text-center p-1 opacity-40 leading-tight">
-                                                    NO REF
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Checklist */}
-                                        <div className="col-span-3 space-y-2">
-                                            <div 
-                                                className={cn(
-                                                    "flex items-center space-x-2 p-1.5 rounded-lg border-2 transition-all cursor-pointer",
-                                                    optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/5 border-transparent hover:border-border"
-                                                )}
-                                                onClick={() => handleCheck(`${opt.id}-main`, !optionChecks[`${opt.id}-main`])}
-                                            >
-                                                <Checkbox 
-                                                    id={`check-${opt.id}-main`}
-                                                    checked={optionChecks[`${opt.id}-main`] || false}
-                                                    className="size-3.5 pointer-events-none"
-                                                />
-                                                <Label className="cursor-pointer text-[10px] font-black uppercase tracking-tight flex-1 pointer-events-none">
-                                                    {opt.label} Verified
-                                                </Label>
-                                            </div>
-
-                                            {opt.hashwaValue && (
-                                                <div className="flex items-center gap-2 p-1.5 rounded-lg border-2 border-dashed bg-primary/5 border-primary/20">
-                                                    <Checkbox 
-                                                        id={`check-${opt.id}-hashwa`}
-                                                        checked={optionChecks[`${opt.id}-hashwa`] || false}
-                                                        onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
-                                                        className="size-3.5"
-                                                    />
-                                                    <div className="flex items-center gap-1.5 flex-1">
-                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[9px] font-bold uppercase tracking-widest text-primary/80">
-                                                            Hashwa:
-                                                        </Label>
-                                                        <span className="font-black text-[10px] text-primary">{opt.hashwaValue}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Local Notes for Style */}
-                                        <div className="col-span-2">
-                                            <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-2 border border-transparent focus-within:border-border focus-within:bg-background transition-all">
-                                                <MessageSquare className="size-3 text-muted-foreground/40" />
-                                                <Input 
-                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[9px] font-bold h-8 p-0"
-                                                    placeholder="Audit note..."
-                                                    value={optionNotes[opt.id] || ""}
-                                                    onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Capture Actions */}
-                                        <div className="col-span-2 flex justify-end gap-2">
-                                            {evidence[opt.id] ? (
-                                                <div className="relative group size-12 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
-                                                    {evidence[opt.id]?.type === 'photo' ? (
-                                                        <img src={evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <video src={evidence[opt.id]?.url} className="w-full h-full object-cover" />
-                                                    )}
-                                                    <button 
-                                                        onClick={() => setEvidence(prev => { const n = {...prev}; delete n[opt.id]; return n; })}
-                                                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    >
-                                                        <X className="w-4 h-4 text-white" />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col gap-1 w-full">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className="h-7 text-[8px] font-black uppercase tracking-widest border-2 w-full justify-start px-2"
-                                                        onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
-                                                    >
-                                                        <Camera className="w-3 h-3 mr-1.5" />
-                                                        Photo
-                                                    </Button>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        className="hidden"
-                                                        id={`file-photo-${opt.id}`}
-                                                        onChange={(e) => handleCapture(opt.id, 'photo', e.target.files?.[0] || null)}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
-                       </div>
-                    </CardContent>
-                </Card>
-
-                {/* FINAL ACTIONS CONTROL PANEL */}
-                <Card className="border-2 border-primary shadow-xl shadow-primary/5 rounded-3xl overflow-hidden py-0 gap-0">
-                    <CardHeader className="bg-primary/5 border-b-2 border-primary/10 p-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-lg">
-                                <Check className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-xl font-black uppercase tracking-tight">Final QC Decision</CardTitle>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Submit audit results to complete intake</p>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-6 space-y-8">
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {/* QC Classification */}
-                            <div className="space-y-3">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Classification of Quality</Label>
-                                <Select value={qcStatus} onValueChange={setQcStatus}>
-                                    <SelectTrigger className="h-12 text-base font-bold border-2 rounded-xl shadow-sm">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-2">
-                                        {QC_STATUS_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-2.5 rounded-lg mx-1">
-                                                <span className={cn("font-black uppercase tracking-tight text-sm", opt.color)}>{opt.label}</span>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Receiving Action */}
-                            <div className="space-y-3">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-1">Intake Decision</Label>
-                                <RadioGroup 
-                                    value={receivingAction} 
-                                    onValueChange={(val) => setReceivingAction(val as "accept" | "reject")}
-                                    className="grid grid-cols-2 gap-3"
-                                >
-                                    <div>
-                                        <RadioGroupItem value="accept" id="action-accept" className="peer sr-only" />
-                                        <Label
-                                            htmlFor="action-accept"
-                                            className="flex flex-col items-center justify-center h-20 rounded-2xl border-2 border-border bg-card p-3 hover:bg-emerald-50 hover:border-emerald-200 peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 cursor-pointer transition-all shadow-sm"
-                                        >
-                                            <ThumbsUp className="mb-1.5 h-5 w-5" />
-                                            <span className="font-black uppercase tracking-widest text-[9px]">Accept Item</span>
-                                        </Label>
-                                    </div>
-                                    <div>
-                                        <RadioGroupItem value="reject" id="action-reject" className="peer sr-only" />
-                                        <Label
-                                            htmlFor="action-reject"
-                                            className="flex flex-col items-center justify-center h-20 rounded-2xl border-2 border-border bg-card p-3 hover:bg-red-50 hover:border-red-200 peer-data-[state=checked]:border-destructive peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-destructive cursor-pointer transition-all shadow-sm"
-                                        >
-                                            <ThumbsDown className="mb-1.5 h-5 w-5" />
-                                            <span className="font-black uppercase tracking-widest text-[9px]">Reject Item</span>
-                                        </Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                        </div>
-                        
-                        <Separator />
-                        
-                        <div className="flex justify-end pt-1">
-                            <Button 
-                                onClick={onConfirmClick} 
-                                disabled={!receivingAction || isSubmitting}
-                                className="w-full md:w-auto h-12 min-w-[240px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-base rounded-2xl"
-                            >
-                                {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                                Finalize Audit
-                            </Button>
-                        </div>
-
-                    </CardContent>
-                </Card>
-
-                <ConfirmationDialog
-                    isOpen={isConfirmDialogOpen}
-                    onClose={() => setIsConfirmDialogOpen(false)}
-                    onConfirm={handleSave}
-                    title={receivingAction === 'accept' ? "Confirm Intake" : "Confirm Rejection"}
-                    description={receivingAction === 'accept' 
-                        ? `You are accepting garment ${activeGarment?.garment_id}. This will proceed to the next production stage.` 
-                        : `You are rejecting garment ${activeGarment?.garment_id}. This will flag the item for workshop correction.`
-                    }
-                    confirmText={receivingAction === 'accept' ? "Yes, Confirm Intake" : "Yes, Reject Item"}
-                    cancelText="Go Back"
-                />
-
-            </TabsContent>
-          </Tabs>
-
-        </motion.div>
-      ) : (
-        /* Empty State */
-        <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-32 text-center"
-        >
-            <div className="size-24 bg-muted/30 rounded-full flex items-center justify-center mb-8 border-2 border-dashed border-border shadow-inner">
-                <Package className="w-10 h-10 text-muted-foreground/40" />
+                </motion.div>
             </div>
-            <h3 className="text-2xl font-black text-foreground uppercase tracking-tight">System Ready</h3>
-            <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-2">Enter an identifier or search for a customer to begin auditing</p>
+
+            {/* List */}
+            <div className="space-y-3">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <RefreshCw className="w-10 h-10 text-primary/40 animate-spin" />
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading dispatched orders...</p>
+                    </div>
+                ) : filteredOrders.length === 0 ? (
+                    <div className="bg-muted/30 rounded-3xl border-2 border-dashed border-border p-20 text-center">
+                        <div className="size-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Package className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground uppercase tracking-tight">No Dispatched Items</h3>
+                        <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">
+                            {searchQuery ? "No orders match your search" : "There are currently no garments dispatched from the workshop"}
+                        </p>
+                    </div>
+                ) : (
+                    filteredOrders.map((order) => (
+                        <OrderCard 
+                            key={order.id} 
+                            order={order} 
+                            onReceive={(garment) => receiveMutation.mutate({ garment, order })}
+                            isSubmitting={receiveMutation.isPending}
+                        />
+                    ))
+                )}
+            </div>
         </motion.div>
-      )}
+    );
+}
 
-      {/* Customer Selection Dialog */}
-      <ErrorBoundary>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
-            <DialogHeader className="border-b border-border pb-4 px-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-                  <RefreshCw className="w-6 h-6" />
-                </div>
-                <div>
-                  <DialogTitle className="text-2xl font-black uppercase tracking-tight">
-                    Select Order for QC
-                  </DialogTitle>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
-                    Confirmed workshop orders for this customer
-                  </p>
-                </div>
-              </div>
-            </DialogHeader>
+function OrderCard({ order, onReceive, isSubmitting }: { 
+    order: Order; 
+    onReceive: (g: Garment) => void;
+    isSubmitting: boolean;
+}) {
+    const [isExpanded, setIsExpanded] = useState(false);
 
-            <RadioGroup
-              value={selectedDialogOrderId?.toString()}
-              onValueChange={(val) => setSelectedDialogOrderId(parseInt(val))}
-              className="overflow-y-auto max-h-[50vh] px-1"
+    const dispatchedGarments = useMemo(() => 
+        order.garments?.filter(g => 
+            ['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
+        ) || [],
+    [order.garments]);
+
+    const otherGarments = useMemo(() =>
+        order.garments?.filter(g => 
+            !['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
+        ) || [],
+    [order.garments]);
+
+    return (
+        <Card className={cn(
+            "overflow-hidden border-2 transition-all duration-300",
+            isExpanded ? "border-primary/30 shadow-lg" : "border-border/60 hover:border-primary/20 shadow-sm"
+        )}>
+            <div
+                className={cn(
+                    "px-5 py-4 cursor-pointer flex items-center justify-between transition-colors",
+                    isExpanded ? "bg-primary/5" : "bg-card hover:bg-muted/30"
+                )}
+                onClick={() => setIsExpanded(!isExpanded)}
             >
-              <div className="border rounded-xl bg-muted/5 overflow-hidden">
-                <table className="w-full text-sm min-w-[700px]">
-                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
-                    <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      <th className="p-4 w-12 text-center">Select</th>
-                      <th className="p-4 text-left">Identity</th>
-                      <th className="p-4 text-left">Production Stage</th>
-                      <th className="p-4 text-left">Delivery Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {customerOrders.map((order) => (
-                        <tr
-                          key={order.id}
-                          className={cn(
-                            "transition-colors group cursor-pointer",
-                            selectedDialogOrderId === order.id
-                                ? "bg-primary/5 hover:bg-primary/10"
-                                : "hover:bg-muted/20",
-                          )}
-                          onClick={() => setSelectedDialogOrderId(order.id)}
-                        >
-                          <td className="p-4">
-                            <div className="flex items-center justify-center">
-                                <RadioGroupItem
-                                    value={order.id.toString()}
-                                    id={`dialog-order-${order.id}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="space-y-1">
-                              <h4 className="font-black text-xs uppercase">
-                                  #{order.id}
-                              </h4>
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase">
-                                Inv: {order.invoice_number ?? "—"}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-wider h-5 px-2">
-                              {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
-                            </Badge>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-xs font-bold whitespace-nowrap">
-                                    {order.delivery_date ? format(new Date(order.delivery_date), "PP") : "Not Set"}
-                                </span>
-                            </div>
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </RadioGroup>
+                <div className="flex items-center gap-5 flex-1 min-w-0">
+                    <div className="size-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-sm border border-primary/5">
+                        <Package className="w-6 h-6" />
+                    </div>
 
-            <DialogFooter className="border-t border-border pt-6 px-2">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                <div className="flex items-center gap-2">
-                   <div className={cn("h-2 w-2 rounded-full bg-primary", selectedDialogOrderId && "animate-pulse")} />
-                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    {selectedDialogOrderId ? `Order #${selectedDialogOrderId} Selected` : "Select an order"}
-                  </p>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-xl font-black uppercase tracking-tight leading-none">#{order.id}</h3>
+                            {order.invoice_number && (
+                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md uppercase tracking-widest leading-none">INV {order.invoice_number}</span>
+                            )}
+                            <div className="h-4 w-px bg-border/60 mx-1" />
+                            <span className="text-base font-black text-foreground truncate uppercase tracking-tight">{order.customer?.name}</span>
+                        </div>
+
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <Badge variant="secondary" className="h-5 px-2 text-[10px] font-black uppercase bg-amber-50 text-amber-700 border-amber-100 shadow-none">
+                                {order.production_stage?.replace(/_/g, " ")}
+                            </Badge>
+                            <div className="flex items-center gap-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                                <div className="flex items-center gap-1.5">
+                                    <Phone className="size-3 text-primary/60" />
+                                    <span className="font-mono">{order.customer?.phone || "N/A"}</span>
+                                </div>
+                                {order.delivery_date && (
+                                    <div className="flex items-center gap-1.5 text-primary">
+                                        <Clock className="size-3" />
+                                        <span>{format(new Date(order.delivery_date), "PP")}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    className="font-black uppercase tracking-widest text-[10px]"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleDialogConfirm}
-                    disabled={!selectedDialogOrderId}
-                    className="font-black uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Start Audit
-                  </Button>
+
+                <div className="flex items-center gap-6">
+                    <div className="hidden lg:flex flex-col items-end">
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Items To Receive</span>
+                        <div className="flex items-center gap-2">
+                             <Badge className="bg-primary text-primary-foreground font-black text-xs px-2 h-6">
+                                {dispatchedGarments.length} Pending
+                             </Badge>
+                        </div>
+                    </div>
+                    <motion.div
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        className="p-2 bg-muted/50 rounded-xl"
+                    >
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    </motion.div>
                 </div>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </ErrorBoundary>
-    </motion.div>
-  );
+            </div>
+
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                    >
+                        <CardContent className="p-0 border-t border-border/40 bg-muted/5">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/60 bg-muted/10">
+                                            <th className="py-3 px-6 text-left">Garment Identity</th>
+                                            <th className="py-3 px-6 text-left">Type</th>
+                                            <th className="py-3 px-6 text-left">Current Stage</th>
+                                            <th className="py-3 px-6 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/40">
+                                        {dispatchedGarments.map((garment) => (
+                                            <tr key={garment.id} className="group hover:bg-muted/20 transition-colors">
+                                                <td className="py-4 px-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-1.5 bg-primary/5 rounded-lg border border-primary/10">
+                                                            <Package className="size-4 text-primary/70" />
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <div className="font-bold text-sm uppercase">{garment.garment_id}</div>
+                                                            <div className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">{garment.style}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={cn(
+                                                            "font-black text-[10px] uppercase h-5 px-2",
+                                                            garment.garment_type === 'brova' ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700"
+                                                        )}
+                                                    >
+                                                        {garment.garment_type === 'brova' ? "Brova" : "Final"}
+                                                    </Badge>
+                                                </td>
+                                                <td className="py-4 px-6">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                        <span className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                                                            {PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || garment.piece_stage}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6 text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-9 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm"
+                                                        onClick={() => onReceive(garment)}
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        {isSubmitting ? <RefreshCw className="size-3.5 mr-2 animate-spin" /> : <CheckCircle2 className="size-3.5 mr-2" />}
+                                                        Mark Received
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
+
+                                        {/* Show other garments that are already received or at other stages */}
+                                        {otherGarments.length > 0 && (
+                                            <tr className="bg-muted/30">
+                                                <td colSpan={4} className="py-2 px-6 text-[10px] font-black uppercase text-muted-foreground/60 tracking-widest">
+                                                    Other Garments in this Order ({otherGarments.length})
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {otherGarments.map((garment) => (
+                                            <tr key={garment.id} className="opacity-60 bg-muted/5">
+                                                <td className="py-2 px-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="size-2 rounded-full bg-muted-foreground/20" />
+                                                        <div className="font-bold text-xs uppercase">{garment.garment_id}</div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-2 px-6">
+                                                    <span className="text-[10px] font-bold uppercase">{garment.garment_type === 'brova' ? "Brova" : "Final"}</span>
+                                                </td>
+                                                <td className="py-2 px-6">
+                                                    <Badge variant="outline" className="text-[10px] font-bold uppercase h-5 px-2">
+                                                        {PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || garment.piece_stage}
+                                                    </Badge>
+                                                </td>
+                                                <td className="py-2 px-6 text-right">
+                                                    <div className="flex items-center justify-end text-emerald-600 gap-1.5 font-bold text-[10px] uppercase">
+                                                        <Check className="size-3" />
+                                                        Processed
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div className="p-4 bg-muted/10 border-t border-border/40 flex justify-between items-center">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                    Total Garments: {order.garments?.length || 0}
+                                </p>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary hover:bg-primary/10"
+                                    asChild
+                                >
+                                    <Link
+                                        to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                                        search={{ orderId: order.id }}
+                                    >
+                                        <ExternalLink className="size-3.5 mr-1.5" />
+                                        Full Details
+                                    </Link>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </Card>
+    );
 }

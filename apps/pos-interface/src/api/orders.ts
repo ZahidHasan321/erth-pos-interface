@@ -180,6 +180,29 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
     return { status: 'error', message: "Order not found" };
 };
 
+/**
+ * Fetch orders that have garments dispatched from workshop.
+ */
+export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
+    const { data, error, count } = await supabase
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id!inner(*),
+            customer:customers(*),
+            garments:garments!inner(*, fabric:fabrics(*))
+        `, { count: 'exact' })
+        .in('garments.piece_stage', ['brova_dispatched_to_shop', 'final_dispatched_to_shop'])
+        .eq('brand', getBrand())
+        .eq('checkout_status', 'confirmed');
+
+    if (error) {
+        console.error('Error fetching dispatched orders:', error);
+        return { status: 'error', message: error.message, data: [], count: 0 };
+    }
+    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+};
+
 export const createOrder = async (
     order: Partial<Order>,
 ): Promise<ApiResponse<Order>> => {

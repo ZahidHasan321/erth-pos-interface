@@ -82,26 +82,29 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                     <SelectContent>
                         {uniqueBrands.map((brand: string, idx: number) => {
                             const combination = `${selectedType}-${brand}`
-                            const isAlreadySelected = selectedProducts?.includes(combination)
+                            // Allow the brand if it's the one currently selected in this row
+                            const isCurrentlySelectedInThisRow = row.original.brand === brand
+                            const isAlreadySelectedElsewhere = selectedProducts?.includes(combination) && !isCurrentlySelectedInThisRow
 
                             // Check if product has stock
                             const product = serverProducts?.find(
                                 (p: any) => p.brand === brand && p.type === selectedType
                             )
-                            const hasStock = product?.stock && product.stock > 0
+                            const hasStock = (product?.stock && product.stock > 0) || isCurrentlySelectedInThisRow
+
+                            if (isAlreadySelectedElsewhere) return null;
 
                             return (
                                 <SelectItem
                                     key={`brand-${idx}-${brand}`}
                                     value={brand}
-                                    disabled={isAlreadySelected || !hasStock}
+                                    disabled={!hasStock}
                                 >
                                     {brand}
-                                    {isAlreadySelected && ' (Already selected)'}
-                                    {!hasStock && !isAlreadySelected && ' (OUT of stock)'}
+                                    {!hasStock && ' (OUT of stock)'}
                                 </SelectItem>
                             )
-                        })}
+                        }).filter(Boolean)}
                     </SelectContent>
                 </Select>
                 {error && <span className="text-[10px] text-red-500 text-left">{error.message}</span>}

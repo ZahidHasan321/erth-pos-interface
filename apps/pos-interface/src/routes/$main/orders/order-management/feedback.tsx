@@ -649,12 +649,12 @@ function UnifiedFeedbackInterface() {
                                 <Badge 
                                     className={cn(
                                         "h-3 px-1 text-[7px] font-black uppercase border-none",
-                                        garment.brova 
+                                        garment.garment_type === 'brova' 
                                             ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white" 
                                             : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
                                     )}
                                 >
-                                    {garment.brova ? "Brova" : "Final"}
+                                    {garment.garment_type === 'brova' ? "Brova" : "Final"}
                                 </Badge>
                             </div>
                             <div className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</div>
