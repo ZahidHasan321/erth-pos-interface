@@ -9,8 +9,6 @@ import { getCampaigns } from "@/api/campaigns";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
     Select,
     SelectContent,
@@ -19,6 +17,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { SignaturePad } from "@/components/forms/signature-pad";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -33,9 +33,7 @@ import { toast } from "sonner";
 import {
     AlertCircle,
     Package,
-    DollarSign,
     Sparkles,
-    Loader2,
     Plus,
     Copy,
     Save,
@@ -43,6 +41,7 @@ import {
     X,
     Printer,
     ArrowRight,
+    Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFabricValue } from "@/lib/utils/fabric-utils";
@@ -122,7 +121,6 @@ export function FabricSelectionForm({
     >(null);
     const [fabricMeter, setFabricMeter] = React.useState<number | null>(null);
     const [qallabi, setQallabi] = React.useState<number | null>(null);
-    const [cuffs, setCuffs] = React.useState<number | null>(null);
 
     const [tempStockUsage, setTempStockUsage] = React.useState<
         Map<string, number>
@@ -382,7 +380,7 @@ export function FabricSelectionForm({
             ? campaignsResponse.data
             : [];
 
-    const { data: measurementQuery, isLoading: isLoadingMeasurements } = useQuery({
+    const { data: measurementQuery } = useQuery({
         queryKey: ["measurements", customerId],
         queryFn: () => {
             if (!customerId) {
@@ -410,22 +408,18 @@ export function FabricSelectionForm({
                     if (meter) {
                         setFabricMeter(meter);
                         setQallabi(meter + 0.25);
-                        setCuffs(meter + 0.5);
                     } else {
                         setFabricMeter(null);
                         setQallabi(null);
-                        setCuffs(null);
                     }
                 } else {
                     setFabricMeter(null);
                     setQallabi(null);
-                    setCuffs(null);
                 }
             }
         } else {
             setFabricMeter(null);
             setQallabi(null);
-            setCuffs(null);
         }
     }, [selectedMeasurementId, measurements]);
 
@@ -544,341 +538,192 @@ export function FabricSelectionForm({
                     </Alert>
                 )}
 
-                <div className="p-6 border border-border rounded-xl bg-card w-full overflow-hidden shadow-sm space-y-6">
-                    {/* Unified Error Alert */}
-                    {hasErrors && form.formState.isSubmitted && (
-                        <Alert
-                            id="validation-errors"
-                            variant="destructive"
-                            className="mb-4 border-2 border-red-500"
-                        >
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle className="font-bold">
-                                Form Validation Errors
-                            </AlertTitle>
-                            <AlertDescription>
-                                <ul className="list-disc pl-5 mt-2 space-y-1">
-                                    {form.formState.errors.signature && (
-                                        <li className="text-sm font-semibold">Signature: {form.formState.errors.signature.message}</li>
-                                    )}
-                                    {errorEntries.map(([index, error]: [string, any]) => {
-                                        const rowNum = parseInt(index) + 1;
-                                        // Collect all error messages for this row
-                                        const messages = Object.values(error).map((e: any) => e.message).filter(Boolean);
-                                        return messages.map((msg, i) => (
-                                            <li key={`${index}-${i}`} className="text-sm">
-                                                Row {rowNum}: {msg}
-                                            </li>
-                                        ));
-                                    })}
-                                </ul>
-                            </AlertDescription>
-                        </Alert>
-                    )}
-
-                    <div className="flex flex-wrap justify-between gap-4">
-                        <div className="flex flex-wrap gap-4">
-                            <div className="flex flex-col gap-3 border-2 border-accent/50 w-fit p-5 rounded-xl bg-linear-to-br from-accent/10 to-muted/20 shadow-md">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Package className="w-5 h-5 text-accent-foreground" />
-                                    <Label className="text-lg font-bold text-accent-foreground">
-                                        Add Pieces
-                                    </Label>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Label
-                                        htmlFor="num-fabrics"
-                                        className="text-sm font-medium text-muted-foreground"
-                                    >
-                                        Number of pieces
-                                    </Label>
+                <div className="p-0 border border-border rounded-2xl bg-card w-full overflow-hidden shadow-sm space-y-0">
+                    {/* NEW COMMAND BAR HEADER */}
+                    <div className="bg-muted/30 border-b p-5 space-y-6">
+                        <div className="flex flex-wrap items-end gap-6">
+                            {/* 1. PIECE MANAGEMENT */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Pieces Count</label>
+                                <div className="flex items-center gap-2 bg-background border border-border/60 rounded-xl p-1.5 shadow-xs">
                                     <Input
-                                        id="num-fabrics"
                                         type="number"
-                                        placeholder="e.g., 2"
-                                        onChange={(e) =>
-                                            setNumRowsToAdd(parseInt(e.target.value, 10))
-                                        }
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (numRowsToAdd > 0) {
-                                                    syncRows(numRowsToAdd, garmentFields, {
-                                                        addRow: addGarmentRow,
-                                                        removeRow: removeGarmentRow,
-                                                    });
-                                                }
-                                            }
-                                        }}
-                                        className="w-32 bg-background border-border/60"
+                                        placeholder="Qty"
+                                        onChange={(e) => setNumRowsToAdd(parseInt(e.target.value, 10))}
+                                        className="w-20 h-9 font-black text-center bg-transparent border-none shadow-none focus-visible:ring-0"
                                         disabled={isFormDisabled}
                                     />
+                                    <Button
+                                        type="button"
+                                        onClick={() => numRowsToAdd > 0 && syncRows(numRowsToAdd, garmentFields, { addRow: addGarmentRow, removeRow: removeGarmentRow })}
+                                        disabled={isFormDisabled}
+                                        size="sm"
+                                        className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 rounded-lg"
+                                    >
+                                        <Plus className="size-3.5" /> Sync
+                                    </Button>
                                 </div>
-                                <Button
-                                    type="button"
-                                    onClick={() => {
-                                        if (numRowsToAdd > 0) {
-                                            syncRows(numRowsToAdd, garmentFields, {
-                                                addRow: addGarmentRow,
-                                                removeRow: removeGarmentRow,
-                                            });
-                                        }
-                                    }}
-                                    disabled={isFormDisabled}
-                                    size="sm"
-                                    className="w-full"
+                            </div>
+
+                            {/* 2. STITCHING PRICE */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Stitching Price</label>
+                                <Tabs 
+                                    value={stitchingPrice.toString()} 
+                                    onValueChange={(val) => setStitchingPrice(parseInt(val))}
+                                    className="w-fit"
                                 >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Add / Sync
-                                </Button>
+                                    <TabsList className="h-12 bg-background border border-border/60 p-1 rounded-xl shadow-xs">
+                                        <TabsTrigger value="7" disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">7 KWD</TabsTrigger>
+                                        <TabsTrigger value="9" disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">9 KWD</TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
                             </div>
 
-                            <div className="flex flex-col gap-3 border-2 border-secondary/30 w-fit p-5 rounded-xl bg-linear-to-br from-secondary/5 to-primary/5 shadow-md">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <DollarSign className="w-5 h-5 text-secondary" />
-                                    <Label className="text-lg font-bold text-secondary">
-                                        Stitching Price
-                                    </Label>
-                                </div>
-                                <div className="space-y-2">
-                                    <label
-                                        htmlFor="price-9"
-                                        className={cn(
-                                            "flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer",
-                                            stitchingPrice === 9
-                                                ? "border-secondary bg-secondary/10 shadow-sm"
-                                                : "border-border/50 bg-background hover:border-secondary/50 hover:bg-accent/20",
-                                        )}
-                                    >
-                                        <Checkbox
-                                            id="price-9"
-                                            checked={stitchingPrice === 9}
-                                            onCheckedChange={(checked) =>
-                                                checked ? setStitchingPrice(9) : null
-                                            }
-                                            disabled={isFormDisabled}
-                                        />
-                                        <span
-                                            className={cn(
-                                                "font-medium text-sm",
-                                                stitchingPrice === 9
-                                                    ? "text-secondary"
-                                                    : "text-foreground",
-                                            )}
-                                        >
-                                            9 KWD
-                                        </span>
-                                    </label>
-
-                                    <label
-                                        htmlFor="price-7"
-                                        className={cn(
-                                            "flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer",
-                                            stitchingPrice === 7
-                                                ? "border-secondary bg-secondary/10 shadow-sm"
-                                                : "border-border/50 bg-background hover:border-secondary/50 hover:bg-accent/20",
-                                        )}
-                                    >
-                                        <Checkbox
-                                            id="price-7"
-                                            checked={stitchingPrice === 7}
-                                            onCheckedChange={(checked) =>
-                                                checked ? setStitchingPrice(7) : null
-                                            }
-                                            disabled={isFormDisabled}
-                                        />
-                                        <span
-                                            className={cn(
-                                                "font-medium text-sm",
-                                                stitchingPrice === 7
-                                                    ? "text-secondary"
-                                                    : "text-foreground",
-                                            )}
-                                        >
-                                            7 KWD
-                                        </span>
-                                    </label>
+                            {/* 3. DELIVERY DATE */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Delivery Date</label>
+                                <div className="h-12 w-48 bg-background border border-border/60 rounded-xl shadow-xs overflow-hidden flex flex-col justify-center">
+                                    <DatePicker
+                                        placeholder={new Date().toISOString()}
+                                        value={deliveryDate ? new Date(deliveryDate) : new Date()}
+                                        onChange={(value) => value && setDeliveryDate(value.toISOString())}
+                                        disabled={isFormDisabled}
+                                        className="border-none shadow-none w-full h-full font-bold focus:ring-0 px-4 flex items-center bg-transparent"
+                                    />
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-3 border-2 border-muted/50 w-fit min-w-50 p-5 rounded-xl bg-linear-to-br from-muted/10 to-accent/10 shadow-md">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Label className="text-lg font-bold text-foreground">
-                                        Delivery Date
-                                    </Label>
-                                </div>
-                                <div className="space-y-3">
-                                    <div className="flex flex-col gap-2">
-                                        <Label className="text-sm font-medium text-muted-foreground">
-                                            Actual Delivery
-                                        </Label>
-                                        <DatePicker
-                                            placeholder={new Date().toISOString()}
-                                            value={deliveryDate ? new Date(deliveryDate) : new Date()}
-                                            onChange={(value) => {
-                                                if (value) setDeliveryDate(value.toISOString());
-                                            }}
-                                            disabled={isFormDisabled}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <Label className="text-sm font-medium text-muted-foreground">
-                                            Dummy Delivery
-                                        </Label>
-                                        <DatePicker
-                                            placeholder="Pick a date"
-                                            value={undefined}
-                                            onChange={() => { }}
-                                            disabled
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            {/* SPACER to push measurement to right */}
+                            <div className="flex-1" />
 
-                            <div className="flex flex-col gap-3 border-2 border-primary/30 w-fit p-5 rounded-xl bg-linear-to-br from-primary/5 to-secondary/5 shadow-md">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Sparkles className="w-5 h-5 text-primary" />
-                                    <Label className="text-lg font-bold text-primary">
-                                        Campaign Offers
-                                    </Label>
-                                </div>
-                                {activeCampaigns.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {activeCampaigns.map((campaign) => (
-                                            <label
-                                                key={campaign.id}
-                                                htmlFor={campaign.id.toString()}
-                                                className={cn(
-                                                    "flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer",
-                                                    selectedCampaigns.includes(campaign.id.toString())
-                                                        ? "border-primary bg-primary/10 shadow-sm"
-                                                        : "border-border/50 bg-background hover:border-primary/50 hover:bg-accent/20",
-                                                )}
-                                            >
-                                                <Checkbox
-                                                    id={campaign.id.toString()}
-                                                    checked={selectedCampaigns.includes(campaign.id.toString())}
-                                                    onCheckedChange={(checked) => {
-                                                        const updatedCampaigns = checked
-                                                            ? Array.from(
-                                                                new Set([...selectedCampaigns, campaign.id.toString()]),
-                                                            )
-                                                            : selectedCampaigns.filter(
-                                                                (id) => id !== campaign.id.toString(),
-                                                            );
-
-                                                        setSelectedCampaigns(updatedCampaigns);
-                                                        onCampaignsChange(updatedCampaigns);
-                                                    }}
-                                                    disabled={isFormDisabled}
-                                                />
-                                                <span
-                                                    className={cn(
-                                                        "font-medium text-sm",
-                                                        selectedCampaigns.includes(campaign.id.toString())
-                                                            ? "text-primary"
-                                                            : "text-foreground",
-                                                    )}
-                                                >
-                                                    {campaign.name}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground italic">
-                                        No active campaigns
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-3 border-2 border-primary/30 w-fit p-5 rounded-xl bg-linear-to-br from-primary/5 to-secondary/5 shadow-md">
-                            <Label className="text-lg font-bold text-primary">
-                                Measurement Helper
-                            </Label>
-
-                            {isLoadingMeasurements ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Loading measurements...</span>
-                                </div>
-                            ) : measurements.length === 0 ? (
-                                <div className="text-sm text-muted-foreground italic">
-                                    No measurements available. Please add measurements first.
-                                </div>
-                            ) : (
-                                <>
-                                    <Select
-                                        onValueChange={setSelectedMeasurementId}
-                                        value={selectedMeasurementId || ""}
-                                    >
-                                        <SelectTrigger className="w-50 bg-background border-border/60">
-                                            <SelectValue placeholder="Select Measurement ID" />
+                            {/* 4. MEASUREMENT HELPER (Far Right) */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Measurement Assistant</label>
+                                <div className="flex gap-4 h-12 items-center bg-background border border-border/60 rounded-xl px-4 shadow-xs">
+                                    <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
+                                        <SelectTrigger className="w-40 border-none shadow-none font-bold h-9 bg-muted/40 hover:bg-muted/60 transition-colors">
+                                            <SelectValue placeholder="Select ID" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {measurements.map((m) => (
-                                                <SelectItem key={m.id} value={m.id ?? ""}>
-                                                    {m.measurement_id}
-                                                </SelectItem>
+                                                <SelectItem key={m.id} value={m.id ?? ""}>{m.measurement_id}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    
+                                    <div className="h-6 w-px bg-border/60" />
 
-                                    {selectedMeasurementId ? (
-                                        fabricMeter !== null ? (
-                                            <div className="mt-2 p-3 bg-primary/10 rounded-lg border border-primary/30 space-y-1">
-                                                <p className="text-sm">
-                                                    <strong className="text-foreground">Fabric Meter:</strong>{" "}
-                                                    <span className="text-primary font-semibold">{fabricMeter}m</span>
-                                                </p>
-                                                <p className="text-sm">
-                                                    <strong className="text-foreground">Qallabi:</strong>{" "}
-                                                    <span className="text-primary font-semibold">{qallabi}m</span>
-                                                </p>
-                                                <p className="text-sm">
-                                                    <strong className="text-foreground">Cuffs:</strong>{" "}
-                                                    <span className="text-primary font-semibold">{cuffs}m</span>
-                                                </p>
+                                    {selectedMeasurementId && fabricMeter !== null ? (
+                                        <div className="flex items-center gap-5 animate-in fade-in slide-in-from-right-2 duration-300">
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Meter</span>
+                                                <span className="text-sm font-black text-primary leading-none">{fabricMeter}m</span>
                                             </div>
-                                        ) : (
-                                            <div className="text-sm text-muted-foreground italic mt-2">
-                                                Invalid values
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Qallabi</span>
+                                                <span className="text-sm font-black text-primary leading-none">{qallabi}m</span>
                                             </div>
-                                        )
-                                    ) : (
-                                        <div className="text-sm text-muted-foreground italic mt-2">
-                                            Select a measurement to see fabric calculations
                                         </div>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tight italic">No calculation</span>
                                     )}
-                                </>
-                            )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* CAMPAIGN OFFERS (CHIPS STYLE) */}
+                        <div className="flex items-center gap-4 bg-primary/5 rounded-xl p-3 border border-primary/10">
+                            <div className="flex items-center gap-2 px-2 border-r border-primary/20 shrink-0">
+                                <Sparkles className="size-3.5 text-primary" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Offers</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {activeCampaigns.length > 0 ? (
+                                    activeCampaigns.map((campaign) => {
+                                        const isSelected = selectedCampaigns.includes(campaign.id.toString());
+                                        return (
+                                            <Badge
+                                                key={campaign.id}
+                                                variant={isSelected ? "default" : "outline"}
+                                                className={cn(
+                                                    "cursor-pointer px-3 py-1 text-[10px] font-black uppercase tracking-tighter transition-all",
+                                                    isSelected ? "bg-primary shadow-md shadow-primary/20" : "bg-white hover:bg-primary/5 hover:border-primary/30"
+                                                )}
+                                                onClick={() => {
+                                                    if (isFormDisabled) return;
+                                                    const updated = isSelected 
+                                                        ? selectedCampaigns.filter(id => id !== campaign.id.toString())
+                                                        : Array.from(new Set([...selectedCampaigns, campaign.id.toString()]));
+                                                    setSelectedCampaigns(updated);
+                                                    onCampaignsChange(updated);
+                                                }}
+                                            >
+                                                {campaign.name}
+                                                {isSelected && <Check className="size-2.5 ml-1.5" />}
+                                            </Badge>
+                                        );
+                                    })
+                                ) : (
+                                    <span className="text-[10px] font-bold text-muted-foreground italic">No active campaigns available</span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-end">
-                            <div className="space-y-1">
-                                <h2 className="text-2xl font-bold text-foreground">
-                                    Garment Selections
-                                </h2>
-                                <p className="text-sm text-muted-foreground">
-                                    Select fabric source, type, and measurements for each garment
-                                </p>
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={copyGarmentToAll}
-                                disabled={isFormDisabled || garmentFields.length < 2}
-                                title="Copy first row's data to all other rows"
+                    <div className="p-6 space-y-6">
+                        {/* Unified Error Alert */}
+                        {hasErrors && form.formState.isSubmitted && (
+                            <Alert
+                                id="validation-errors"
+                                variant="destructive"
+                                className="mb-4 border-2 border-red-500 rounded-2xl bg-red-50"
                             >
-                                <Copy className="w-4 h-4 mr-2" />
-                                Copy First Row
-                            </Button>
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle className="font-black uppercase tracking-widest text-xs">Form Validation Errors</AlertTitle>
+                                <AlertDescription>
+                                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                                        {form.formState.errors.signature && (
+                                            <li className="text-sm font-semibold">Signature: {form.formState.errors.signature.message}</li>
+                                        )}
+                                        {errorEntries.map(([index, error]: [string, any]) => {
+                                            const rowNum = parseInt(index) + 1;
+                                            const messages = Object.values(error).map((e: any) => e.message).filter(Boolean);
+                                            return messages.map((msg, i) => (
+                                                <li key={`${index}-${i}`} className="text-sm">Row {rowNum}: {msg}</li>
+                                            ));
+                                        })}
+                                    </ul>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end">
+                                <div className="space-y-1">
+                                    <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                                        <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                                            <Package className="size-4" />
+                                        </div>
+                                        Garment <span className="text-primary">Selections</span>
+                                    </h2>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                        Select fabric source, type, and measurements
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={copyGarmentToAll}
+                                    disabled={isFormDisabled || garmentFields.length < 2}
+                                    className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+                                >
+                                    <Copy className="size-3.5" />
+                                    Copy First Row
+                                </Button>
+                            </div>
                         </div>
-                    </div>
 
                     <DataTable
                         columns={fabricSelectionColumns}
@@ -959,10 +804,13 @@ export function FabricSelectionForm({
 
                     <div className="flex justify-between items-end pt-4">
                         <div className="space-y-1">
-                            <h2 className="text-2xl font-bold text-foreground">
-                                Style Options
+                            <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                                <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                                    <Pencil className="size-4" />
+                                </div>
+                                Style <span className="text-primary">Options</span>
                             </h2>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
                                 Customize collar, pockets, buttons, and other style details
                             </p>
                         </div>
@@ -1050,6 +898,7 @@ export function FabricSelectionForm({
                             )}
                         />
                     </div>
+                </div>
                 </div>
 
                 <div className="flex gap-4 justify-end pt-4">

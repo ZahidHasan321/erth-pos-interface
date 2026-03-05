@@ -382,7 +382,7 @@ export const JabzourCell = ({
           </div>
         )}
       />
-      <Plus className="min-w-5 h-6 mt-2" />
+      <Plus className="min-w-4 h-4 text-muted-foreground/60" />
       <Controller
         name={`garments.${row.index}.jabzour_2`}
         control={control}
@@ -633,7 +633,7 @@ export const AccessoriesCell = ({
               <img
                 src={walletIcon}
                 alt="Wallet Pocket"
-                className="min-w-14 h-20 object-contain"
+                className="min-w-10 h-10 object-contain"
               />
             </label>
           </div>
@@ -660,7 +660,7 @@ export const AccessoriesCell = ({
               <img
                 src={penIcon}
                 alt="Pen Holder"
-                className="min-w-14 h-20 object-contain"
+                className="min-w-10 h-10 object-contain"
               />
             </label>
           </div>

@@ -191,10 +191,9 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
             workOrder:work_orders!order_id!inner(*),
             customer:customers(*),
             garments:garments!inner(*, fabric:fabrics(*))
-        `, { count: 'exact' })
-        .in('garments.piece_stage', ['brova_dispatched_to_shop', 'final_dispatched_to_shop'])
-        .eq('brand', getBrand())
-        .eq('checkout_status', 'confirmed');
+            `, { count: 'exact' })
+            .in('production_stage', ['brova_dispatched_to_shop', 'final_dispatched_to_shop', 'brova_and_final_dispatched_to_shop'])
+            .eq('brand', getBrand())        .eq('checkout_status', 'confirmed');
 
     if (error) {
         console.error('Error fetching dispatched orders:', error);

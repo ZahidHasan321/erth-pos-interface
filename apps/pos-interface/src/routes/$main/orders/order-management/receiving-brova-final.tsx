@@ -187,13 +187,13 @@ function OrderCard({ order, onReceive, isSubmitting }: {
     const dispatchedGarments = useMemo(() => 
         order.garments?.filter(g => 
             ['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
-        ) || [],
+        ).sort((a, b) => a.id - b.id) || [],
     [order.garments]);
 
     const otherGarments = useMemo(() =>
         order.garments?.filter(g => 
             !['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
-        ) || [],
+        ).sort((a, b) => a.id - b.id) || [],
     [order.garments]);
 
     return (
