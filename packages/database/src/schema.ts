@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb } from "drizzle-orm/pg-core";
 import { relations, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 
 // --- CUSTOM TYPES ---
@@ -30,18 +30,22 @@ export const checkoutStatusEnum = pgEnum("checkout_status", [
 ]);
 export type CheckoutStatus = (typeof checkoutStatusEnum.enumValues)[number];
 
-// "FatouraStages" from Airtable (The actual workshop lifecycle)
-export const productionStageEnum = pgEnum("production_stage", [
-    // --- Shop & Transit ---
-    "order_at_shop",
-    "sent_to_workshop",
-    "order_at_workshop",
+export const orderPhaseEnum = pgEnum("order_phase", [
+    "new",            // Created at shop, not dispatched yet
+    "in_progress",    // Any garment beyond pre-dispatch stages
+    "completed",      // All garments completed
+]);
+export type OrderPhase = (typeof orderPhaseEnum.enumValues)[number];
+
+export const pieceStageEnum = pgEnum("piece_stage", [
+    // --- Waiting ---
+    "waiting_for_acceptance",    // Finals parked, brova not tried yet
 
     // --- Pre-Production ---
-    "waiting_cut",
-    "soaking",
+    "waiting_cut",               // Queued at workshop
+    "soaking",                   // Fabric prep
 
-    // --- Core Production (piece_stage) ---
+    // --- Core Production (6 workshop terminals) ---
     "cutting",
     "post_cutting",
     "sewing",
@@ -49,29 +53,35 @@ export const productionStageEnum = pgEnum("production_stage", [
     "ironing",
     "quality_check",
 
-    // --- Waiting (Final garments parked while Brova is in production/fitting) ---
-    "waiting_for_acceptance",
+    // --- Post-QC ---
+    "ready_for_dispatch",        // Passed QC, dispatch queue
 
-    // --- Dispatch & Shop ---
-    "brova_dispatched_to_shop",
-    "final_dispatched_to_shop",
-    "brova_and_final_dispatched_to_shop",
-    "brova_at_shop",
-    "brova_accepted",
-    "brova_alteration",
-    "brova_repair_and_production",
-    "brova_alteration_and_production",
-    "final_at_shop",
-    "brova_and_final_at_shop",
+    // --- Shop ---
+    "at_shop",                   // At shop, pending customer action
+    "accepted",                  // Tried & approved, parked
 
-    // --- Completion ---
-    "order_collected",
-    "order_delivered",
+    // --- Needs Work ---
+    "needs_repair",              // Needs fix (acceptance_status says accepted or rejected)
+    "needs_redo",                // Full redo from scratch
 
-    // --- Re-work ---
-    "redo"
+    // --- Terminal ---
+    "completed",                 // Done (fulfillment_type says collected vs delivered)
 ]);
-export type ProductionStage = (typeof productionStageEnum.enumValues)[number];
+export type PieceStage = (typeof pieceStageEnum.enumValues)[number];
+
+export const locationEnum = pgEnum("location", [
+    "shop",
+    "workshop",
+    "transit_to_shop",
+    "transit_to_workshop",
+]);
+export type Location = (typeof locationEnum.enumValues)[number];
+
+export const fulfillmentTypeEnum = pgEnum("fulfillment_type", [
+    "collected",   // Customer picked up
+    "delivered",   // Home delivery
+]);
+export type FulfillmentType = (typeof fulfillmentTypeEnum.enumValues)[number];
 
 export const paymentTypeEnum = pgEnum("payment_type", ["knet", "cash", "link_payment", "installments", "others"]);
 export type PaymentType = (typeof paymentTypeEnum.enumValues)[number];
@@ -99,6 +109,9 @@ export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
 
 export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final"]);
 export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
+
+export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refund"]);
+export type TransactionType = (typeof transactionTypeEnum.enumValues)[number];
 
 // --- 0. PRICES ---
 export const prices = pgTable("prices", {
@@ -305,7 +318,7 @@ export const workOrders = pgTable("work_orders", {
     escalation_date: timestamp("escalation_date"),
 
     // State
-    production_stage: productionStageEnum("production_stage"),
+    order_phase: orderPhaseEnum("order_phase").default("new"),
     call_status: text("call_status"),
 
     // Financials
@@ -370,13 +383,101 @@ export const garments = pgTable("garments", {
     lines: integer("lines").default(1),
 
     notes: text("notes"),
+    soaking: boolean("soaking").default(false),
     express: boolean("express").default(false),
     garment_type: garmentTypeEnum("garment_type").default("final"),
     delivery_date: timestamp("delivery_date"),
-    piece_stage: productionStageEnum("piece_stage"),
+    piece_stage: pieceStageEnum("piece_stage"),
+    location: locationEnum("location").default("shop"),
+    acceptance_status: boolean("acceptance_status"),
+    fulfillment_type: fulfillmentTypeEnum("fulfillment_type"),
+    trip_number: integer("trip_number").default(1),
+
+    // --- Workshop Production Fields ---
+    in_production: boolean("in_production").default(false).notNull(),
+    production_plan: jsonb("production_plan"),
+    worker_history: jsonb("worker_history"),
+    assigned_date: date("assigned_date"),
+    assigned_unit: text("assigned_unit"),
+    assigned_person: text("assigned_person"),
+    start_time: timestamp("start_time", { withTimezone: true }),
+    completion_time: timestamp("completion_time", { withTimezone: true }),
+    quality_check_ratings: jsonb("quality_check_ratings"),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
 }));
+
+// --- 6.5 GARMENT FEEDBACK ---
+export const garmentFeedback = pgTable("garment_feedback", {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    // --- Links ---
+    garment_id: uuid("garment_id").references(() => garments.id, { onDelete: 'cascade' }).notNull(),
+    order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+    staff_id: uuid("staff_id").references(() => users.id),
+
+    // --- Context ---
+    feedback_type: text("feedback_type").notNull(),
+        // "brova_trial" | "final_collection" | "post_collection" | "post_delivery"
+    trip_number: integer("trip_number").default(1),
+        // 1st time = 1, after repair comes back = 2, etc.
+
+    // --- Feedback Action ---
+    action: text("action").notNull(),
+        // "accepted" | "needs_repair_accepted" | "needs_repair_rejected" | "needs_redo" | "collected" | "delivered"
+    previous_stage: text("previous_stage"),
+        // What piece_stage was BEFORE this feedback (for audit trail)
+
+    // --- Satisfaction ---
+    satisfaction_level: integer("satisfaction_level"),
+        // 1-5 scale (1=angry, 5=very happy) — emoji-based in UI
+
+    // --- Measurement Comparison ---
+    measurement_diffs: text("measurement_diffs"),
+        // JSON: array of { field, original_value, actual_value, difference, reason }
+        // reason: "customer_request" | "workshop_error" | "shop_error"
+
+    // --- Options Verification ---
+    options_checklist: text("options_checklist"),
+        // JSON: array of { option_name, expected_value, actual_correct: boolean, notes }
+        // e.g., { option_name: "collar_type", expected_value: "kuwaiti", actual_correct: true }
+
+    // --- Evidence ---
+    customer_signature: text("customer_signature"),
+        // Base64 or blob URL of digital signature
+    photo_urls: text("photo_urls"),
+        // JSON array of photo/video URLs (uploaded to storage)
+    voice_note_urls: text("voice_note_urls"),
+        // JSON array of voice note URLs
+
+    // --- Notes ---
+    notes: text("notes"),
+    difference_reasons: text("difference_reasons"),
+        // JSON: summary of why measurements differ
+
+    // --- Timestamps ---
+    created_at: timestamp("created_at").defaultNow(),
+}, (t) => ({
+    garmentIdx: index("feedback_garment_idx").on(t.garment_id),
+    orderIdx: index("feedback_order_idx").on(t.order_id),
+    typeIdx: index("feedback_type_idx").on(t.feedback_type),
+}));
+
+// --- 6.6 RESOURCES (Workshop Workers & Units) ---
+export const resources = pgTable("resources", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    brand: brandEnum("brand"),
+    responsibility: text("responsibility"),
+    resource_name: text("resource_name").notNull(),
+    unit: text("unit"),
+    resource_type: text("resource_type"),
+    rating: integer("rating"),
+    daily_target: integer("daily_target"),
+    overtime_target: integer("overtime_target"),
+    target_from: date("target_from"),
+    target_to: date("target_to"),
+    created_at: timestamp("created_at").defaultNow(),
+});
 
 // --- 7. ORDER SHELF ITEMS (Work & Sales Orders) ---
 export const orderShelfItems = pgTable("order_shelf_items", {
@@ -386,6 +487,22 @@ export const orderShelfItems = pgTable("order_shelf_items", {
     quantity: integer("quantity").default(1),
     unit_price: numeric("unit_price", { precision: 10, scale: 3 }),
 });
+
+// --- 8. PAYMENT TRANSACTIONS ---
+export const paymentTransactions = pgTable("payment_transactions", {
+    id: serial("id").primaryKey(),
+    order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+    amount: numeric("amount", { precision: 10, scale: 3 }).notNull(),
+    payment_type: paymentTypeEnum("payment_type"),
+    payment_ref_no: text("payment_ref_no"),
+    payment_note: text("payment_note"),
+    cashier_id: uuid("cashier_id").references(() => users.id),
+    transaction_type: transactionTypeEnum("transaction_type").notNull(),
+    refund_reason: text("refund_reason"),
+    created_at: timestamp("created_at").defaultNow(),
+}, (t) => ({
+    orderIdx: index("payment_transactions_order_idx").on(t.order_id),
+}));
 
 // --- RELATIONS ---
 export const customersRelations = relations(customers, ({ many }) => ({
@@ -398,6 +515,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     workOrder: one(workOrders, { fields: [orders.id], references: [workOrders.order_id] }),
     garments: many(garments),
     shelfItems: many(orderShelfItems),
+    paymentTransactions: many(paymentTransactions),
     taker: one(users, { fields: [orders.order_taker_id], references: [users.id] }),
 }));
 
@@ -407,16 +525,28 @@ export const workOrdersRelations = relations(workOrders, ({ one }) => ({
     linkedOrder: one(orders, { fields: [workOrders.linked_order_id], references: [orders.id], relationName: "linked_orders" }),
 }));
 
-export const garmentsRelations = relations(garments, ({ one }) => ({
+export const garmentsRelations = relations(garments, ({ one, many }) => ({
     order: one(orders, { fields: [garments.order_id], references: [orders.id] }),
     fabric: one(fabrics, { fields: [garments.fabric_id], references: [fabrics.id] }),
     style: one(styles, { fields: [garments.style_id], references: [styles.id] }),
     measurement: one(measurements, { fields: [garments.measurement_id], references: [measurements.id] }),
+    feedback: many(garmentFeedback),
+}));
+
+export const garmentFeedbackRelations = relations(garmentFeedback, ({ one }) => ({
+    garment: one(garments, { fields: [garmentFeedback.garment_id], references: [garments.id] }),
+    order: one(orders, { fields: [garmentFeedback.order_id], references: [orders.id] }),
+    staff: one(users, { fields: [garmentFeedback.staff_id], references: [users.id] }),
 }));
 
 export const orderShelfItemsRelations = relations(orderShelfItems, ({ one }) => ({
     order: one(orders, { fields: [orderShelfItems.order_id], references: [orders.id] }),
     shelf: one(shelf, { fields: [orderShelfItems.shelf_id], references: [shelf.id] }),
+}));
+
+export const paymentTransactionsRelations = relations(paymentTransactions, ({ one }) => ({
+    order: one(orders, { fields: [paymentTransactions.order_id], references: [orders.id] }),
+    cashier: one(users, { fields: [paymentTransactions.cashier_id], references: [users.id] }),
 }));
 
 // --- TYPE EXPORTS ---
@@ -440,6 +570,7 @@ export type Order = BaseOrder & Partial<WorkOrder> & {
     garments?: Garment[];
     shelf_items?: OrderShelfItem[];
     child_orders?: BaseOrder[];
+    payment_transactions?: PaymentTransaction[];
 };
 
 export type NewOrder = InferInsertModel<typeof orders>;
@@ -447,6 +578,9 @@ export type NewWorkOrder = InferInsertModel<typeof workOrders>;
 
 export type Garment = InferSelectModel<typeof garments>;
 export type NewGarment = InferInsertModel<typeof garments>;
+
+export type GarmentFeedback = InferSelectModel<typeof garmentFeedback>;
+export type NewGarmentFeedback = InferInsertModel<typeof garmentFeedback>;
 
 export type OrderShelfItem = InferSelectModel<typeof orderShelfItems>;
 export type NewOrderShelfItem = InferInsertModel<typeof orderShelfItems>;
@@ -471,3 +605,9 @@ export type NewShelf = InferInsertModel<typeof shelf>;
 
 export type Price = InferSelectModel<typeof prices>;
 export type NewPrice = InferInsertModel<typeof prices>;
+
+export type PaymentTransaction = InferSelectModel<typeof paymentTransactions>;
+export type NewPaymentTransaction = InferInsertModel<typeof paymentTransactions>;
+
+export type Resource = InferSelectModel<typeof resources>;
+export type NewResource = InferInsertModel<typeof resources>;

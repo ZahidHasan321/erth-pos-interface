@@ -1,7 +1,5 @@
 import postgres from "postgres";
 import * as dotenv from "dotenv";
-import fs from "fs";
-import path from "path";
 
 dotenv.config();
 
@@ -13,8 +11,10 @@ async function main() {
   // Drop all tables in reverse dependency order
   console.log("Dropping tables...");
   await client.unsafe(`
+    DROP TABLE IF EXISTS garment_feedback CASCADE;
     DROP TABLE IF EXISTS order_shelf_items CASCADE;
     DROP TABLE IF EXISTS garments CASCADE;
+    DROP TABLE IF EXISTS work_orders CASCADE;
     DROP TABLE IF EXISTS measurements CASCADE;
     DROP TABLE IF EXISTS orders CASCADE;
     DROP TABLE IF EXISTS customers CASCADE;
@@ -31,14 +31,17 @@ async function main() {
   await client.unsafe(`
     DROP TYPE IF EXISTS role CASCADE;
     DROP TYPE IF EXISTS checkout_status CASCADE;
-    DROP TYPE IF EXISTS production_stage CASCADE;
+    DROP TYPE IF EXISTS order_phase CASCADE;
+    DROP TYPE IF EXISTS piece_stage CASCADE;
     DROP TYPE IF EXISTS payment_type CASCADE;
     DROP TYPE IF EXISTS discount_type CASCADE;
     DROP TYPE IF EXISTS order_type CASCADE;
+    DROP TYPE IF EXISTS brand CASCADE;
     DROP TYPE IF EXISTS fabric_source CASCADE;
     DROP TYPE IF EXISTS account_type CASCADE;
     DROP TYPE IF EXISTS measurement_type CASCADE;
     DROP TYPE IF EXISTS jabzour_type CASCADE;
+    DROP TYPE IF EXISTS garment_type CASCADE;
   `);
 
   // Drop sequences
@@ -52,7 +55,9 @@ async function main() {
   await client.unsafe(`
     DROP FUNCTION IF EXISTS complete_work_order CASCADE;
     DROP FUNCTION IF EXISTS complete_sales_order CASCADE;
+    DROP FUNCTION IF EXISTS create_complete_sales_order CASCADE;
     DROP FUNCTION IF EXISTS save_work_order_garments CASCADE;
+    DROP FUNCTION IF EXISTS recompute_order_phase CASCADE;
   `);
 
   console.log("\n✅ Database cleared successfully!");

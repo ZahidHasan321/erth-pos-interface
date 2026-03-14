@@ -16,7 +16,7 @@ export type OrderHistoryItem = {
   balance: number;
   fabric_count: number;
   shelf_item_count: number;
-  production_stage?: string;
+  order_phase?: string;
   // Pricing breakdown
   charges: {
     fabric: number;
@@ -36,6 +36,7 @@ export function useOrderHistory({
   pageSize = 20,
   searchTerm = "",
   statusFilter = "all",
+  phaseFilter = "all",
   typeFilter = "all",
   sortOrder = "newest",
   dateFilter = null
@@ -44,12 +45,13 @@ export function useOrderHistory({
   pageSize?: number;
   searchTerm?: string;
   statusFilter?: string;
+  phaseFilter?: string;
   typeFilter?: string;
   sortOrder?: "newest" | "oldest";
   dateFilter?: Date | null;
 } = {}) {
   return useQuery({
-    queryKey: ["order-history", page, pageSize, searchTerm, statusFilter, typeFilter, sortOrder, dateFilter],
+    queryKey: ["order-history", page, pageSize, searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter],
     queryFn: async () => {
       const from = page * pageSize;
       const to = from + pageSize - 1;
@@ -60,7 +62,7 @@ export function useOrderHistory({
         .from('orders')
         .select(`
           *,
-          workOrder:work_orders!order_id(*),
+          workOrder:work_orders!order_id${phaseFilter !== 'all' ? '!inner' : ''}(*),
           customer:customers!inner(name, phone, nick_name),
           garments:garments(id),
           shelf_items:order_shelf_items(id)
@@ -69,6 +71,10 @@ export function useOrderHistory({
       // Apply Filters
       if (statusFilter !== "all") {
         query = query.eq('checkout_status', statusFilter);
+      }
+
+      if (phaseFilter !== "all") {
+        query = query.eq('workOrder.order_phase', phaseFilter);
       }
       
       if (typeFilter !== "all") {
@@ -149,7 +155,7 @@ export function useOrderHistory({
           balance: total - paid,
           fabric_count: mergedOrder.garments?.length || 0,
           shelf_item_count: mergedOrder.shelf_items?.length || 0,
-          production_stage: mergedOrder.production_stage,
+          order_phase: mergedOrder.order_phase,
           charges: {
             fabric: fabricCharge,
             stitching: stitchingCharge,

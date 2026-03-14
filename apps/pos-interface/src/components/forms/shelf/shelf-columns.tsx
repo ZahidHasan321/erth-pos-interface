@@ -11,24 +11,27 @@ import { Trash2 } from 'lucide-react'
 export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'serial_number',
-    header: 'Serial Number',
-    minSize: 80,
-    cell: ({ row }) => <span>{row.index + 1}</span>,
+    header: '#',
+    size: 50,
+    minSize: 50,
+    cell: ({ row }) => (
+      <span className="text-xs font-black text-muted-foreground">{row.index + 1}</span>
+    ),
   },
   {
     accessorKey: 'product_type',
     header: 'Product Type',
     size: 200,
-    minSize: 200,
+    minSize: 180,
     cell: ({ row, table }) => {
         const { updateData, serverProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.product_type
-        
+
         // Get unique product types from server data
         const productTypes: string[] = Array.from(
           new Set(serverProducts?.map((p: any) => p.type).filter(Boolean) || [])
         )
-        
+
         return (
             <div className="flex flex-col gap-1">
                 <Select
@@ -36,8 +39,8 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                     onValueChange={(value) => updateData(row.index, 'product_type', value)}
                     disabled={isOrderDisabled}
                 >
-                    <SelectTrigger className={error ? 'border-red-500' : ''}>
-                        <SelectValue placeholder="Select Product Type" />
+                    <SelectTrigger className={`bg-background border-border/60 ${error ? 'border-red-500' : ''}`}>
+                        <SelectValue placeholder="Select Type" />
                     </SelectTrigger>
                     <SelectContent>
                         {productTypes.map((type: string, idx: number) => (
@@ -52,15 +55,15 @@ export const columns: ColumnDef<ShelfProduct>[] = [
         )
     }
   },
-{
+  {
     accessorKey: 'brand',
     header: 'Brand',
-    size: 220,
-    minSize: 220,
+    size: 200,
+    minSize: 180,
     cell: ({ row, table }) => {
         const { updateData, serverProducts, selectedProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.brand
-        
+
         // Filter brands based on selected product type
         const selectedType = row.original.product_type
         const brands: string[] = serverProducts
@@ -68,7 +71,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
             .map((p: any) => p.brand)
             .filter(Boolean) || []
         const uniqueBrands: string[] = Array.from(new Set(brands))
-        
+
         return (
             <div className="flex flex-col gap-1">
                 <Select
@@ -76,17 +79,15 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                     onValueChange={(value) => updateData(row.index, 'brand', value)}
                     disabled={!selectedType || isOrderDisabled}
                 >
-                    <SelectTrigger className={error ? 'border-red-500' : ''}>
+                    <SelectTrigger className={`bg-background border-border/60 ${error ? 'border-red-500' : ''}`}>
                         <SelectValue placeholder="Select Brand" />
                     </SelectTrigger>
                     <SelectContent>
                         {uniqueBrands.map((brand: string, idx: number) => {
                             const combination = `${selectedType}-${brand}`
-                            // Allow the brand if it's the one currently selected in this row
                             const isCurrentlySelectedInThisRow = row.original.brand === brand
                             const isAlreadySelectedElsewhere = selectedProducts?.includes(combination) && !isCurrentlySelectedInThisRow
 
-                            // Check if product has stock
                             const product = serverProducts?.find(
                                 (p: any) => p.brand === brand && p.type === selectedType
                             )
@@ -101,7 +102,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                                     disabled={!hasStock}
                                 >
                                     {brand}
-                                    {!hasStock && ' (OUT of stock)'}
+                                    {!hasStock && ' (Out of stock)'}
                                 </SelectItem>
                             )
                         }).filter(Boolean)}
@@ -114,63 +115,75 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   },
   {
     accessorKey: 'stock',
-    header: 'Available Stock',
-    minSize: 100,
+    header: 'Stock',
+    size: 80,
+    minSize: 80,
     cell: ({ row }) => {
       const isProductSelected = !!row.original.product_type && !!row.original.brand
-      if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground text-center">-</div>
+      if (!isProductSelected) return <span className="text-muted-foreground">-</span>
 
       const stock = row.original.stock || 0;
-      const getStockColorClass = () => {
-        if (stock <= 0) return "text-red-600 font-semibold"; // OUT of stock
-        if (stock < 5) return "text-orange-600 font-semibold"; // Less than 5
-        if (stock >= 5 && stock <= 11) return "text-green-600 font-semibold"; // 5-11
-        return "text-foreground"; // More than 11
-      };
-      return <div className={`border rounded-md p-2 ${getStockColorClass()}`}>{stock}</div>
+      const colorClass =
+        stock <= 0 ? "text-red-600 font-black" :
+        stock < 5 ? "text-orange-600 font-black" :
+        stock <= 11 ? "text-green-600 font-bold" :
+        "text-foreground font-bold";
+
+      return <span className={colorClass}>{stock}</span>
     },
   },
   {
     accessorKey: 'quantity',
     header: 'Quantity',
-    minSize: 150,
+    size: 150,
+    minSize: 140,
     cell: QuantityCell,
   },
   {
     accessorKey: 'unit_price',
     header: 'Unit Price',
-    minSize: 120,
+    size: 100,
+    minSize: 90,
     cell: ({ row }) => {
         const isProductSelected = !!row.original.product_type && !!row.original.brand
-        if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground">-</div>
-        
+        if (!isProductSelected) return <span className="text-muted-foreground">-</span>
+
         return (
-            <div className="border rounded-md p-2">
+            <span className="font-bold">
                 {Number(row.original.unit_price).toFixed(2)}
-            </div>
+            </span>
         )
     }
   },
   {
     id: 'totalAmount',
-    header: 'Total Amount',
-    minSize: 120,
+    header: 'Total',
+    size: 100,
+    minSize: 90,
     cell: ({ row }) => {
       const isProductSelected = !!row.original.product_type && !!row.original.brand
-      if (!isProductSelected) return <div className="border rounded-md p-2 text-muted-foreground">-</div>
+      if (!isProductSelected) return <span className="text-muted-foreground">-</span>
 
       const total = row.original.quantity * row.original.unit_price
-      return <div className="border rounded-md p-2"><span>{total.toFixed(2)}</span></div>
+      return <span className="font-black text-primary">{total.toFixed(2)}</span>
     },
   },
   {
     id: 'actions',
-    minSize: 80,
+    size: 50,
+    minSize: 50,
     cell: ({ row, table }) => {
-      const { removeRow } = table.options.meta as any
+      const { removeRow, isOrderDisabled } = table.options.meta as any
+      if (isOrderDisabled) return null
       return (
-        <Button type="button" variant="ghost" onClick={() => removeRow(row.index)}>
-          <Trash2 className="h-4 w-4 text-red-500"/>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => removeRow(row.index)}
+          className="size-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="size-3.5" />
         </Button>
       )
     },
@@ -184,16 +197,13 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
   const [inputValue, setInputValue] = React.useState(String(quantity))
   const error = errors?.[row.index]?.quantity
 
-  // Sync local state when quantity changes externally (e.g., via buttons)
   React.useEffect(() => {
     setInputValue(String(quantity))
   }, [quantity])
 
   const handleIncrement = (e: React.MouseEvent) => {
     e.preventDefault()
-    if (maxStock === 0) {
-      return
-    }
+    if (maxStock === 0) return
     if (quantity < maxStock) {
       updateData(row.index, 'quantity', quantity + 1)
     }
@@ -209,20 +219,11 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setInputValue(value)
-
-    // Allow empty input
-    if (value === '') {
-      return
-    }
+    if (value === '') return
 
     const numValue = parseInt(value)
+    if (isNaN(numValue)) return
 
-    // Only update if it's a valid number
-    if (isNaN(numValue)) {
-      return
-    }
-
-    // Clamp value between 1 and maxStock
     if (numValue < 1) {
       updateData(row.index, 'quantity', 1)
       return
@@ -238,8 +239,6 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
 
   const handleBlur = () => {
     const numValue = parseInt(inputValue)
-
-    // On blur, ensure we have a valid value
     if (isNaN(numValue) || inputValue === '' || numValue < 1) {
       updateData(row.index, 'quantity', 1)
       setInputValue('1')
@@ -247,7 +246,6 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
   }
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    // Select all text on focus for easy replacement
     e.target.select()
   }
 
@@ -257,13 +255,14 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Button
           type="button"
           size="icon"
           onClick={handleDecrement}
           disabled={quantity <= 1 || isOrderDisabled}
           variant="outline"
+          className="size-8"
         >
           -
         </Button>
@@ -273,7 +272,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           onChange={handleChange}
           onBlur={handleBlur}
           onFocus={handleFocus}
-          className={`w-16 text-center ${hasError ? 'border-red-500' : ''}`}
+          className={`w-14 text-center font-bold ${hasError ? 'border-red-500' : 'border-border/60'}`}
           max={maxStock}
           min={1}
           disabled={isOrderDisabled}
@@ -284,21 +283,16 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           onClick={handleIncrement}
           disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
           variant="outline"
+          className="size-8"
         >
           +
         </Button>
       </div>
       {isProductSelected && maxStock === 0 && (
-        <span className="text-xs text-red-600 font-semibold text-center">No stock available</span>
+        <span className="text-[10px] text-red-600 font-bold text-center">No stock</span>
       )}
       {isProductSelected && quantity > maxStock && maxStock > 0 && (
-        <span className="text-xs text-red-600 font-semibold text-center">Exceeds stock ({maxStock})</span>
-      )}
-      {maxStock > 0 && maxStock < 5 && quantity <= maxStock && (
-        <span className="text-xs text-orange-600 font-semibold text-center">Low stock - Only {maxStock} available</span>
-      )}
-      {maxStock >= 5 && maxStock <= 11 && quantity <= maxStock && (
-        <span className="text-xs text-green-600 font-semibold text-center">Limited stock - {maxStock} available</span>
+        <span className="text-[10px] text-red-600 font-bold text-center">Exceeds stock ({maxStock})</span>
       )}
       {error && <span className="text-[10px] text-red-500 text-center">{error.message}</span>}
     </div>

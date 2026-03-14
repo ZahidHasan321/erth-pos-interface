@@ -9,7 +9,8 @@ import type { ShelfProduct, ShelfFormValues } from './shelf-form.schema'
 import { getShelf } from '@/api/shelf'
 import { columns } from './shelf-columns'
 import { toast } from 'sonner'
-import { Plus, ArrowRight } from 'lucide-react'
+import { Plus, Package, Loader2, AlertCircle } from 'lucide-react'
+
 
 interface ShelfFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,7 +20,7 @@ interface ShelfFormProps {
   showHeader?: boolean
 }
 
-export function ShelfForm({ form, onProceed, isOrderDisabled, showHeader = true }: ShelfFormProps) {
+export function ShelfForm({ form, isOrderDisabled }: ShelfFormProps) {
   // Fetch products from server
   const { data: serverProducts, isLoading, error } = useQuery({
     queryKey: ['products'],
@@ -55,13 +56,6 @@ export function ShelfForm({ form, onProceed, isOrderDisabled, showHeader = true 
     return watchedProducts
       .filter((row, index) => index !== currentRowIndex && row.product_type && row.brand)
       .map(row => `${row.product_type}-${row.brand}`)
-  }
-
-  const handleProceed = async () => {
-    const isValid = await form.trigger('products')
-    if (isValid) {
-      onProceed?.()
-    }
   }
 
   const addRow = () => {
@@ -173,95 +167,81 @@ export function ShelfForm({ form, onProceed, isOrderDisabled, showHeader = true 
     update(rowIndex, updatedRow)
   }
 
-  const totalAmount = useMemo(() => 
+  const totalAmount = useMemo(() =>
     watchedProducts.reduce((acc, row) => acc + (row.quantity || 0) * (row.unit_price || 0), 0)
   , [watchedProducts])
 
   if (isLoading) {
-    return <div className='p-4'>Loading products...</div>
+    return (
+      <div className="flex items-center justify-center p-12 text-muted-foreground gap-3">
+        <Loader2 className="size-5 animate-spin" />
+        <span className="text-sm font-bold uppercase tracking-widest">Loading products...</span>
+      </div>
+    )
   }
 
   if (error) {
-    return <div className='p-4 text-red-500'>Error loading products: {error.message}</div>
+    return (
+      <div className="flex items-center justify-center p-12 text-destructive gap-3">
+        <AlertCircle className="size-5" />
+        <span className="text-sm font-bold">Error loading products: {error.message}</span>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6 w-full">
-      {/* Title & Action Section (Work Order Version) */}
-      {showHeader && (
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
-            <div className="space-y-1">
-            <h1 className="text-3xl font-black uppercase tracking-tight text-foreground">
-                Shelf <span className="text-primary">Products</span>
-            </h1>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Inventory items for direct sales</p>
+    <div className="space-y-4 w-full">
+      {/* Section Header */}
+      <div className="flex justify-between items-end">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+            <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+              <Package className="size-4" />
             </div>
+            Shelf <span className="text-primary">Products</span>
+          </h2>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+            Select inventory items for direct sales
+          </p>
         </div>
-      )}
-
-      {/* Content Section */}
-      <div className="bg-card rounded-2xl border-2 border-border shadow-sm overflow-hidden">
-        {/* Card Header for Table Actions */}
-        <div className="bg-muted/20 border-b p-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-             <div className="p-1.5 bg-primary rounded-lg text-primary-foreground">
-                <Plus className="size-4" />
-             </div>
-             <span className="text-sm font-black uppercase tracking-widest text-foreground">Order Items</span>
-          </div>
+        <div className="flex items-center gap-3">
           {!isOrderDisabled && (
-            <Button 
-              type="button" 
+            <Button
+              type="button"
               onClick={addRow}
               variant="outline"
-              className="h-9 px-4 font-black uppercase tracking-widest text-[10px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+              size="sm"
+              className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
             >
               <Plus className="size-3.5" />
-              Add New Item
+              Add Item
             </Button>
           )}
         </div>
+      </div>
 
-        <div className="p-1">
-          <DataTable
-            columns={columns}
-            data={watchedProducts}
-            updateData={updateData}
-            removeRow={removeRow}
-            serverProducts={serverProducts?.data}
-            selectedProducts={getSelectedProducts()}
-            isOrderDisabled={isOrderDisabled}
-            errors={form.formState.errors.products as any}
-          />
-        </div>
+      {/* Data Table */}
+      <DataTable
+        columns={columns}
+        data={watchedProducts}
+        updateData={updateData}
+        removeRow={removeRow}
+        serverProducts={serverProducts?.data}
+        selectedProducts={getSelectedProducts()}
+        isOrderDisabled={isOrderDisabled}
+        errors={form.formState.errors.products as any}
+      />
 
-        {/* Summary Footer */}
-        <div className="bg-muted/30 border-t-2 border-border p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="hidden md:block">
-             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-white border-border text-muted-foreground">
-                {watchedProducts.length} Items Selected
-             </Badge>
-          </div>
-          
-          <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
-            <div className="flex flex-col items-center md:items-end">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">Grand Total</span>
-              <div className="text-3xl font-black text-primary tracking-tighter">
-                {totalAmount.toFixed(2)} <span className="text-sm font-bold uppercase ml-1">KWD</span>
-              </div>
-            </div>
+      {/* Summary Footer */}
+      <div className="flex justify-between items-center pt-2">
+        <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-background border-border text-muted-foreground">
+          {watchedProducts.length} {watchedProducts.length === 1 ? 'Item' : 'Items'}
+        </Badge>
 
-            {!isOrderDisabled && (
-              <Button 
-                type="button" 
-                onClick={handleProceed}
-                size="lg"
-                className="h-14 px-8 font-black uppercase tracking-widest text-xs gap-3 shadow-xl shadow-primary/30 w-full md:w-auto"
-              >
-                Proceed to Payment
-                <ArrowRight className="size-5" />
-              </Button>
-            )}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Total</span>
+          <div className="text-2xl font-black text-primary tracking-tighter">
+            {totalAmount.toFixed(2)} <span className="text-xs font-bold uppercase ml-0.5">KWD</span>
           </div>
         </div>
       </div>

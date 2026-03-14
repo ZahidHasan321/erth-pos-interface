@@ -43,7 +43,7 @@ function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): P
     if (schema.checkout_status) order.checkout_status = schema.checkout_status;
     if (schema.order_date && schema.order_date !== "") order.order_date = new Date(schema.order_date);
     if (schema.delivery_date && schema.delivery_date !== "") order.delivery_date = new Date(schema.delivery_date);
-    if (schema.production_stage) order.production_stage = schema.production_stage as Order["production_stage"];
+    if (schema.order_phase) order.order_phase = schema.order_phase as Order["order_phase"];
     if (schema.customer_id) order.customer_id = schema.customer_id;
     if (schema.notes !== undefined) order.notes = cleanValue(schema.notes) as string;
     if (schema.campaign_id) order.campaign_id = schema.campaign_id;
@@ -65,7 +65,7 @@ function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): P
     if (schema.shelf_charge !== undefined) order.shelf_charge = schema.shelf_charge;
 
     if (schema.advance !== undefined) order.advance = schema.advance;
-    if (schema.paid !== undefined) order.paid = schema.paid;
+    // Note: `paid` is managed by the payment_transactions sync trigger, not set directly
     if (schema.order_total !== undefined) order.order_total = schema.order_total;
     if (schema.num_of_fabrics !== undefined) order.num_of_fabrics = schema.num_of_fabrics;
 
@@ -102,7 +102,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 checkout_status: "draft",
                 order_date: new Date(),
                 order_type: orderType,
-                ...(orderType === "WORK" && { production_stage: "order_at_shop" }),
+                ...(orderType === "WORK" && { order_phase: "new" }),
             };
 
             if (additionalFields) {
@@ -165,6 +165,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
             queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
             if (response.data?.customer_id) {
                 queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });

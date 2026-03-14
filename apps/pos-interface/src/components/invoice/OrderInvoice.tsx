@@ -97,7 +97,6 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
       customerName,
       customerPhone,
       fabricSelections = [],
-      styleOptions = [],
       shelfProducts = [],
       fabrics = [],
       charges,
@@ -134,68 +133,44 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
     /* ---------- Build Table Rows ---------- */
     type Row = Record<ArabicKey, React.ReactNode>;
 
+    const collarMap: Record<string, string> = {
+      COL_QALLABI: "قلابي",
+      COL_JAPANESE: "ياباني",
+      COL_DOWN_COLLAR: "عادي",
+    };
+    const jabzourMap: Record<string, string> = {
+      JAB_BAIN_MURABBA: "بين مربع",
+      JAB_MAGFI_MURABBA: "مغفي مربع",
+      JAB_BAIN_MUSALLAS: "بين مثلث",
+      JAB_MAGFI_MUSALLAS: "مغفي مثلث",
+      JAB_SHAAB: "شعاب",
+    };
+    const cuffMap: Record<string, string> = {
+      CUF_DOUBLE_GUMSHA: "دبل كمشة",
+      CUF_MURABBA_KABAK: "مربع كبك",
+      CUF_MUSALLAS_KABBAK: "مثلث كبك",
+      CUF_MUDAWAR_KABBAK: "مدور كبك",
+      CUF_NO_CUFF: "بدون",
+    };
+    const thicknessMap: Record<string, string> = {
+      SINGLE: "خط واحد",
+      DOUBLE: "خطين",
+      TRIPLE: "ثلاثي",
+      "NO HASHWA": "بدون",
+    };
+
     const rows: Row[] = React.useMemo(() => {
-      const r: Row[] = [];
-      const grouped = (fabricSelections || []).reduce<
-        Record<
-          string,
-          {
-            qty: number;
-            meters: number;
-            fabricName: string;
-            express: boolean;
-            brova: boolean;
-          }
-        >
-      >((acc, sel) => {
-        const key = String(sel.fabric_id || "");
-        if (!acc[key]) {
-          acc[key] = {
-            qty: 0,
-            meters: 0,
-            fabricName: getFabricName(key, fabrics),
-            express: sel.express,
-            brova: sel.garment_type === 'brova',
-          };
-        }
-        acc[key].qty += 1;
-        acc[key].meters += sel.fabric_length || 0;
-        return acc;
-      }, {});
+      return (fabricSelections || []).map((sel, idx) => {
+        const isKuwaiti = sel.style === "kuwaiti";
+        const model = isKuwaiti ? "كلاسيك" : "ديزاين";
+        const collar = collarMap[sel.collar_type || ""] || "عادي";
+        const buttons = sel.collar_button === "COL_TABBAGI" ? "تبقي" : sel.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
+        const jabzour = jabzourMap[sel.jabzour_1 || ""] || "بدون";
+        const cuff = cuffMap[sel.cuffs_type || ""] || "عادي";
+        const thickness = thicknessMap[sel.jabzour_thickness || ""] || "خط واحد";
+        const fabricName = getFabricName(String(sel.fabric_id || ""), fabrics);
 
-      Object.values(grouped).forEach((g, idx) => {
-        const styleOpt = styleOptions[idx] || {};
-        const isKuwaiti = styleOpt.style === "kuwaiti";
-        const model = isKuwaiti ? `كلاسيك ٩` : `ديزاين ١٥`;
-        const collarMap: Record<string, string> = {
-          COL_QALLABI: "قلابي ٣",
-          COL_JAPANESE: "ياباني",
-          COL_DOWN_COLLAR: "عادي",
-        };
-        const collar = collarMap[styleOpt.collar?.collar_type || ""] || "عادي";
-        const buttons =
-          styleOpt.collar?.collar_button === "COL_TABBAGI" ? "سحاب ١" : "زرارات";
-        const jabzourMap: Record<string, string> = {
-          JAB_BAIN_MURABBA: "بين مربع",
-          JAB_MAGFI_MURABBA: "مغفي مربع",
-          JAB_SHAAB: "شعاب",
-        };
-        const jabzour = jabzourMap[styleOpt.jabzour?.jabzour_1 || ""] || "بدون";
-        const cuffMap: Record<string, string> = {
-          CUF_DOUBLE_GUMSHA: "دبل كمشة",
-          CUF_NO_CUFF: "بدون",
-        };
-        const cuff = cuffMap[styleOpt.cuffs?.cuffs_type || ""] || "عادي";
-        const thicknessMap: Record<string, string> = {
-          SINGLE: "خط واحد",
-          DOUBLE: "خطين",
-          TRIPLE: "ثلاثي",
-          "NO HASHWA": "بدون",
-        };
-        const thickness =
-          thicknessMap[styleOpt?.jabzour?.jabzour_thickness || ""] || "خط واحد";
-
-        r.push({
+        return {
           "#": idx + 1,
           الموديل: model,
           الغولة: collar,
@@ -203,22 +178,21 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
           الجبزور: jabzour,
           بزمات: buttons,
           "الخط الجانبي": thickness,
-          "عدد الأمتار": fmt(g.meters),
-          القماش: g.fabricName,
-          بروفه: g.brova ? "نعم" : "لا",
-          استعجال: g.express ? "نعم" : "لا",
+          "عدد الأمتار": fmt(sel.fabric_length || 0),
+          القماش: fabricName,
+          بروفه: sel.garment_type === "brova" ? "نعم" : "لا",
+          استعجال: sel.express ? "نعم" : "لا",
           "خدمة التوصيل": homeDelivery ? "منزلي" : "استلام",
-          الإجمالي: `${fmt((charges?.stitching || 0) + (charges?.fabric || 0))} د.ك`,
-        });
+          الإجمالي: `${fmt((sel.stitching_price_snapshot || 0) + (sel.fabric_amount || 0) + (sel.style_price_snapshot || 0))} د.ك`,
+        };
       });
-      return r;
-    }, [fabricSelections, styleOptions, fabrics, charges, homeDelivery]);
+    }, [fabricSelections, fabrics, homeDelivery]);
 
     return (
       <div
         ref={ref}
         className="bg-white text-black p-6 max-w-5xl mx-auto text-sm print:bg-white print:text-black"
-        style={{ direction: "rtl" }}
+        style={{ direction: "rtl", fontFamily: "'Cairo', 'IBM Plex Sans Arabic', sans-serif" }}
       >
         {/* Header */}
         <div className="mb-4 pb-3 border-b border-gray-700">

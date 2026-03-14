@@ -36,7 +36,7 @@ export function mapOrderToFormValues(order: Order): OrderSchema {
         order_date: toISOString(order.order_date),
         delivery_date: toISOString(order.delivery_date),
         checkout_status: order.checkout_status ?? "draft",
-        production_stage: order.production_stage ?? (order.order_type === "WORK" ? "order_at_shop" : undefined),
+        order_phase: order.order_phase ?? (order.order_type === "WORK" ? "new" : undefined),
         order_type: order.order_type ?? "WORK",
         fabric_charge: parseNumeric(order.fabric_charge) ?? 0,
         stitching_charge: parseNumeric(order.stitching_charge) ?? 0,
@@ -67,7 +67,7 @@ export function mapFormValuesToOrder(formValues: OrderSchema): Partial<Order> {
     return {
         ...formValues,
         checkout_status: formValues.checkout_status as any,
-        production_stage: formValues.production_stage as any,
+        order_phase: formValues.order_phase as any,
         order_type: formValues.order_type as any,
         payment_type: formValues.payment_type as any,
         discount_type: formValues.discount_type as any,

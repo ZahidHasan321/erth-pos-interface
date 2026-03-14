@@ -95,17 +95,12 @@ export const AmountCell = ({
   const stylePrice = React.useMemo(() => {
     if (!garment) return 0;
 
-    // Designer style: always 15, regardless of prices being loaded (includes stitching)
-    if (garment.style === "design") {
-      return 15;
-    }
-
-    // For kuwaiti/other styles: calculate style options price if prices are available
+    // Calculate style options price from styles table
     const baseStylePrice = styles.length > 0
       ? calculateGarmentStylePrice(garment, styles)
       : 0;
 
-    // Add stitching price (7 or 9 KWD from the checkboxes)
+    // Add stitching price (child or adult from DB)
     return baseStylePrice + stitchingPrice;
   }, [garment, styles, stitchingPrice]);
 
@@ -611,7 +606,7 @@ export const AccessoriesCell = ({
   };
 
   return (
-    <div className="min-w-[280px] flex flex-row space-x-4 items-center">
+    <div className="min-w-[160px] flex flex-row space-x-4 items-center">
       <Controller
         name={`garments.${row.index}.wallet_pocket`}
         control={control}
@@ -686,7 +681,7 @@ export const CuffsCell = ({
   });
 
   return (
-    <div className="min-w-[380px] flex flex-row space-x-2 items-center">
+    <div className="min-w-[220px] flex flex-row space-x-2 items-center">
       <Controller
         name={`garments.${row.index}.cuffs_type`}
         control={control}

@@ -1,26 +1,35 @@
-import type { Price } from "@repo/database";
+import type { Style } from "@repo/database";
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import { type GarmentSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
+
+/**
+ * Build a lookup map from styles: image_url (code) -> rate_per_item
+ */
+function buildStylePriceMap(styles: Style[]): Map<string, number> {
+    const map = new Map<string, number>();
+    styles.forEach((s) => {
+        if (s.image_url) {
+            map.set(s.image_url, s.rate_per_item ?? 0);
+        }
+    });
+    return map;
+}
 
 /**
  * Calculate the total price for style options based on selected codes from GarmentSchema
  */
 export function calculateGarmentStylePrice(
     garment: GarmentSchema,
-    prices: Price[]
+    styles: Style[]
 ): number {
-    if (!prices || prices.length === 0) {
+    if (!styles || styles.length === 0) {
         return 0;
     }
 
-    // Create a lookup map for faster access: Key -> Value
-    const priceMap = new Map<string, number>();
-    prices.forEach((p) => {
-        priceMap.set(p.key, parseFloat(p.value?.toString() || "0"));
-    });
+    const priceMap = buildStylePriceMap(styles);
 
     // Designer style edge case: Use DB price (usually 6)
-    if (garment.style === "design") return priceMap.get("STY_DESIGN") || 6;
+    if (garment.style === "design") return priceMap.get("STY_DESIGNER") || 6;
 
     let total = 0;
 
@@ -129,25 +138,21 @@ export function assignMatchingStyleIds(
 /**
  * Calculate the total price for style options based on selected codes
  * @param styleOptions - The style options data for a single row
- * @param prices - The array of all available prices
- * @returns The total price calculated from Value for all selected styles
+ * @param styles - The array of all available styles from the styles table
+ * @returns The total price calculated from rate_per_item for all selected styles
  */
 export function calculateStylePrice(
     styleOptions: StyleOptionsSchema,
-    prices: Price[]
+    styles: Style[]
 ): number {
-    if (!prices || prices.length === 0) {
+    if (!styles || styles.length === 0) {
         return 0;
     }
 
-    // Create a lookup map for faster access: Key -> Value
-    const priceMap = new Map<string, number>();
-    prices.forEach((p) => {
-        priceMap.set(p.key, parseFloat(p.value?.toString() || "0"));
-    });
+    const priceMap = buildStylePriceMap(styles);
 
     // Designer style edge case: Use DB price (usually 6)
-    if (styleOptions.style === "design") return priceMap.get("STY_DESIGN") || 6;
+    if (styleOptions.style === "design") return priceMap.get("STY_DESIGNER") || 6;
 
     let total = 0;
 

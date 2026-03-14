@@ -14,7 +14,7 @@ export const orderSchema = z.object({
   delivery_date: z.string().optional().nullable(),
 
   checkout_status: z.enum(['draft', 'confirmed', 'cancelled']),
-  production_stage: z.string().optional().nullable(),
+  order_phase: z.enum(['new', 'sent', 'in_progress', 'ready', 'partial', 'completed']).optional().nullable(),
   order_type: z.enum(['WORK', 'SALES']).optional().nullable(),
 
   payment_type: z.enum(['knet', 'cash', 'link_payment', 'installments', 'others'], {
@@ -90,7 +90,7 @@ export const orderDefaults: OrderSchema = {
   checkout_status: "draft",
   order_date: new Date().toISOString(),
   delivery_date: new Date().toISOString(),
-  production_stage: undefined,
+  order_phase: "new",
   payment_type: "cash",
   order_type: "WORK",
   home_delivery: false,

@@ -172,32 +172,22 @@ export function OrderSummaryAndPaymentForm({
   });
 
   // Delivery logic
-  const hasAnyHomeDelivery = React.useMemo(() => {
-    return fabricSelections.some((fabric) => fabric.home_delivery);
-  }, [fabricSelections]);
-
   const hasAnyExpressDelivery = React.useMemo(() => {
     return fabricSelections.some((fabric) => fabric.express);
   }, [fabricSelections]);
 
   React.useEffect(() => {
-    if (hasAnyHomeDelivery && !home_delivery) {
-      form.setValue("home_delivery", true, { shouldDirty: false });
-    }
-  }, [hasAnyHomeDelivery, home_delivery, form]);
-
-  React.useEffect(() => {
     let newDeliveryCharge = 0;
-    if (hasAnyHomeDelivery || home_delivery) {
-      newDeliveryCharge += getPrice("HOME_DELIVERY") || 5; 
+    if (home_delivery) {
+      newDeliveryCharge += getPrice("HOME_DELIVERY") || 5;
     }
-    
+
     if (hasAnyExpressDelivery) {
-      newDeliveryCharge += (getPrice("EXPRESS_SURCHARGE") || 2); 
+      newDeliveryCharge += (getPrice("EXPRESS_SURCHARGE") || 2);
     }
-    
+
     form.setValue("delivery_charge", newDeliveryCharge, { shouldDirty: false });
-  }, [home_delivery, hasAnyHomeDelivery, hasAnyExpressDelivery, form, getPrice]);
+  }, [home_delivery, hasAnyExpressDelivery, form, getPrice]);
 
   // Pricing logic
   const totalDue = (Number(fabric_charge) || 0) + 
@@ -253,6 +243,22 @@ export function OrderSummaryAndPaymentForm({
   const safePaid = typeof paid === 'number' ? paid : 0;
   const finalAmount = totalDue - safeDiscountValue;
   const balance = finalAmount - safePaid;
+
+  // Advance = 50% of stitching charge + full fabric + full shelf + full style + full delivery
+  const advance = React.useMemo(() => {
+    const halfStitching = (Number(stitching_charge) || 0) * 0.5;
+    const fullFabric = Number(fabric_charge) || 0;
+    const fullShelf = Number(shelf_charge) || 0;
+    const fullStyle = Number(style_charge) || 0;
+    const fullDelivery = Number(delivery_charge) || 0;
+    return parseFloat((halfStitching + fullFabric + fullShelf + fullStyle + fullDelivery).toFixed(3));
+  }, [stitching_charge, fabric_charge, shelf_charge, style_charge, delivery_charge]);
+
+  React.useEffect(() => {
+    if (form.getValues("advance") !== advance) {
+      form.setValue("advance", advance, { shouldDirty: false });
+    }
+  }, [advance, form]);
 
   React.useEffect(() => {
     const validTotal = finalAmount < 0 ? 0 : finalAmount;
@@ -328,15 +334,6 @@ export function OrderSummaryAndPaymentForm({
                 className="bg-card rounded-xl border border-border shadow-sm p-6"
               >
                 <h3 className="text-lg font-semibold mb-4">Delivery Option</h3>
-                {hasAnyHomeDelivery && (
-                  <Alert className="mb-4 border-primary/50 bg-primary/5">
-                    <AlertCircle className="h-4 w-4 text-primary" />
-                    <AlertTitle className="text-primary font-semibold">Home Delivery Required</AlertTitle>
-                    <AlertDescription>
-                      One or more fabrics have home delivery selected.
-                    </AlertDescription>
-                  </Alert>
-                )}
                 <FormField
                   control={form.control}
                   name="home_delivery"
@@ -345,10 +342,10 @@ export function OrderSummaryAndPaymentForm({
                       onValueChange={(value) => field.onChange(value === "true")}
                       value={field.value ? "true" : "false"}
                       className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                      disabled={isOrderClosed || hasAnyHomeDelivery}
+                      disabled={isOrderClosed}
                     >
                       {deliveryOptions.map((option) => {
-                        const isDisabled = isOrderClosed || (hasAnyHomeDelivery && !option.value);
+                        const isDisabled = isOrderClosed;
                         const isSelected = field.value === option.value;
                         return (
                           <label
@@ -822,7 +819,7 @@ export function OrderSummaryAndPaymentForm({
                   )}
                   <div className="flex justify-between">
                     <span>Home Delivery</span>
-                    <span>{((hasAnyHomeDelivery || home_delivery) ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
+                    <span>{(home_delivery ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
                   </div>
                   {(order_type === "WORK" || hasAnyExpressDelivery) && (
                     <div className="flex justify-between">
@@ -839,6 +836,10 @@ export function OrderSummaryAndPaymentForm({
                   <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                     <span>Final Total</span>
                     <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-medium text-muted-foreground pt-1">
+                    <span>Advance (min. required)</span>
+                    <span>{advance.toFixed(3)} KWD</span>
                   </div>
                 </div>
 

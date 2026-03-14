@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrderRow, GarmentRowData } from "@/components/orders-at-showroom/types";
-import { PieceStageLabels, ProductionStageLabels } from "@/lib/constants";
+import { ORDER_PHASE_LABELS, PIECE_STAGE_LABELS, LOCATION_LABELS } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
+import { getBrand } from "@/api/orders";
+import { getShowroomStatus } from "@repo/database";
 
 /**
  * Calculate delay in days between promised delivery date and today
@@ -46,36 +48,24 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
 
     // Transform garments for this order
     const garmentRowsData: GarmentRowData[] = garments.map((garment: any) => {
-      // Construct a better style description
       const styleParts = [];
-      
-      // Fabric Info
       if (garment.fabric?.name) {
         styleParts.push(garment.fabric.name + (garment.color ? ` (${garment.color})` : ""));
       } else if (garment.color) {
         styleParts.push(garment.color);
       }
-
-      // Style Name
       if (garment.style) styleParts.push(garment.style.charAt(0).toUpperCase() + garment.style.slice(1));
-      
-      // Collar
-      if (garment.collar_type) {
-        const collarMap: Record<string, string> = {
-          'COL_QALLABI': 'Qallabi',
-          'COL_DOWN_COLLAR': 'Round',
-          'COL_JAPANESE': 'Japanese'
-        };
-        styleParts.push(collarMap[garment.collar_type] || garment.collar_type);
-      }
       
       const styleDesc = styleParts.length > 0 ? styleParts.join(" • ") : "Standard";
 
       return {
         garmentId: garment.garment_id,
+        garmentRecordId: garment.id?.toString() || garment.garment_id || crypto.randomUUID(),
         pieceStage: garment.piece_stage
-          ? PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || "Unknown"
+          ? PIECE_STAGE_LABELS[garment.piece_stage as keyof typeof PIECE_STAGE_LABELS] || "Unknown"
           : "Unknown",
+        locationKey: garment.location,
+        locationLabel: LOCATION_LABELS[garment.location as keyof typeof LOCATION_LABELS] || garment.location,
         isBrova: garment.garment_type === 'brova',
         deliveryDate: garment.delivery_date || "",
         delayInDays: calculateDelay(garment.delivery_date || new Date().toISOString()),
@@ -85,82 +75,71 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
       };
     });
 
-    // Get customer info
     const customerName = customer?.name || "Unknown";
     const customerNickName = customer?.nick_name;
     const mobileNumber = customer
       ? `${customer.country_code} ${customer.phone}`
       : "N/A";
 
-    // Calculate total
     const totalAmount = parseFloat(order.order_total?.toString() || "0") || (calculateTotal(order) - (parseFloat(order.discount_value?.toString() || "0")));
 
+    // Use central utility for status logic
+    const showroomStatus = getShowroomStatus(garments);
+
+    // Calculate max trip number for items at shop to determine alteration cycle
+    // Prioritize unaccepted items to reflect the ACTIVE alteration status
+    const shopItems = garments.filter((g: any) => g.location === 'shop' && g.piece_stage !== 'completed');
+    const activeItems = shopItems.filter((g: any) => g.acceptance_status !== true);
+    
+    // If there are unaccepted items, use their trip numbers. Otherwise (e.g. all ready), use all shop items.
+    const sourceItems = activeItems.length > 0 ? activeItems : shopItems;
+
+    const maxTripNumber = sourceItems.length > 0 
+        ? Math.max(...sourceItems.map((g: any) => g.trip_number || 1)) 
+        : 1;
+
     const orderRow: OrderRow = {
-      // Order info
       orderId: order.id.toString(),
       orderRecordId: order.id.toString(),
-      // fatoura is alias for invoice_number
       invoiceNumber: order.invoice_number,
       fatoura: order.invoice_number,
-      
-      productionStage: order.production_stage
-        ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
-        : "Unknown",
-      productionStageKey: order.production_stage,
-      fatouraStage: order.production_stage
-        ? ProductionStageLabels[order.production_stage as keyof typeof ProductionStageLabels] || "Unknown"
-        : "Unknown",
-      
+      productionStage: order.order_phase ? ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || "Unknown" : "Unknown",
+      productionStageKey: order.order_phase,
+      fatouraStage: order.order_phase ? ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || "Unknown" : "Unknown",
       orderStatus: order.checkout_status === "confirmed" ? "Completed" : order.checkout_status === "cancelled" ? "Cancelled" : "Pending",
       checkoutStatus: order.checkout_status,
-      
       orderDate: order.order_date,
       deliveryDate: order.delivery_date,
-
-      // Customer info
       customerId: customer?.id?.toString() || "0",
       customerName,
       customerNickName,
       mobileNumber,
-
-      // Order type and delivery
       orderType: order.order_type,
       homeDelivery: order.home_delivery,
-
-      // Financial info
       totalAmount,
       advance: parseFloat(order.advance?.toString() || "0") || 0,
       balance: totalAmount - (parseFloat(order.paid?.toString() || "0") || 0),
-
-      // Garments
       garmentsCount: garments.length,
+      maxTripNumber,
       garments: garmentRowsData,
-
-      // Full records
+      showroomStatus,
       order: order as any,
       customer,
     };
 
-    orderRows.push(orderRow);
+    // Filter for Showroom page: Must meet at least one showroom operational condition
+    if (showroomStatus.label) {
+      orderRows.push(orderRow);
+    }
   }
 
   return orderRows;
 }
 
-/**
- * Hook to fetch orders at showroom with specific production stages.
- */
 export function useShowroomOrders() {
   return useQuery({
     queryKey: ["showroom-orders"],
     queryFn: async () => {
-      const targetStages = [
-        "brova_at_shop",
-        "final_at_shop",
-        "brova_alteration",
-        "brova_and_final_at_shop"
-      ];
-
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -169,9 +148,10 @@ export function useShowroomOrders() {
           customer:customers(*),
           garments:garments(*, fabric:fabrics(*))
         `)
-        .in('workOrder.production_stage', targetStages)
+        .eq('brand', getBrand())
         .eq('checkout_status', 'confirmed')
-        .eq('order_type', 'WORK');
+        .eq('order_type', 'WORK')
+        .eq('workOrder.order_phase', 'in_progress');
 
       if (error) {
         throw new Error(`Failed to fetch showroom orders: ${error.message}`);
@@ -179,7 +159,7 @@ export function useShowroomOrders() {
 
       return transformToOrderRows(data || []);
     },
-    staleTime: 1000 * 60, // 1 minute
-    gcTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60,
+    gcTime: 1000 * 60,
   });
 }

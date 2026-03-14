@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import {
     Package,
@@ -12,12 +11,12 @@ import {
     ChevronDown,
     ExternalLink,
     CheckCircle2,
-    Phone,
     Clock,
-    Check
+    Phone,
+    Hash,
+    User,
 } from "lucide-react";
 
-// UI Components
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,14 +24,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// API and Hooks
-import { updateOrder } from "@/api/orders";
 import { updateGarment } from "@/api/garments";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
-import { PieceStageLabels } from "@/lib/constants";
+import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import type { Order, Garment } from "@repo/database";
 
-// Route Definition
 export const Route = createFileRoute(
     "/$main/orders/order-management/receiving-brova-final"
 )({
@@ -42,350 +38,325 @@ export const Route = createFileRoute(
     }),
 });
 
+const PHASE_STYLE: Record<string, string> = {
+    new: "bg-gray-100 text-gray-700",
+    in_progress: "bg-amber-100 text-amber-700",
+    completed: "bg-emerald-100 text-emerald-700",
+};
+
 function ReceivingInterface() {
     const queryClient = useQueryClient();
     const { data: orders = [], isLoading } = useDispatchedOrders();
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Mutations
     const receiveMutation = useMutation({
-        mutationFn: async ({ garment, order }: { garment: Garment; order: Order }) => {
-            let nextStage = garment.piece_stage;
-            if (garment.piece_stage === 'brova_dispatched_to_shop') nextStage = 'brova_at_shop';
-            else if (garment.piece_stage === 'final_dispatched_to_shop') nextStage = 'final_at_shop';
-
-            // 1. Update Garment
-            const gRes = await updateGarment(garment.id, { piece_stage: nextStage as any });
-            if (gRes.status === 'error') throw new Error(gRes.message);
-
-            // 2. Check if order-level update is needed
-            const updatedGarments = order.garments?.map(g => 
-                g.id === garment.id ? { ...g, piece_stage: nextStage } : g
-            ) || [];
-
-            const allAtShop = updatedGarments.every(g => 
-                ['brova_at_shop', 'final_at_shop', 'brova_accepted', 'brova_collected', 'order_collected', 'order_delivered'].includes(g.piece_stage!)
+        mutationFn: async ({ garments, orderId }: { garments: Garment[]; orderId: number }) => {
+            const promises = garments.map((garment) =>
+                updateGarment(garment.id, {
+                    piece_stage: "at_shop" as any,
+                    location: "shop",
+                })
             );
-
-            if (allAtShop) {
-                let orderStage = 'final_at_shop';
-                const hasBrova = updatedGarments.some(g => g.garment_type === 'brova');
-                if (hasBrova) orderStage = 'brova_and_final_at_shop';
-                
-                await updateOrder({ production_stage: orderStage as any }, order.id);
-            }
-            
-            return { garmentId: garment.garment_id, nextStage };
+            const results = await Promise.all(promises);
+            const error = results.find((r) => r.status === "error");
+            if (error) throw new Error(error.message);
+            return { count: garments.length, orderId };
         },
         onSuccess: (data) => {
-            toast.success(`Garment ${data.garmentId} marked as received!`, {
-                description: `New status: ${PieceStageLabels[data.nextStage as keyof typeof PieceStageLabels]}`
-            });
+            toast.success(`Received ${data.count} items for #${data.orderId}`);
             queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
         },
         onError: (err: any) => {
-            toast.error("Failed to receive garment", { description: err.message });
-        }
+            toast.error("Failed to mark as received", { description: err.message });
+        },
     });
 
-    // Filter Logic
     const filteredOrders = useMemo(() => {
         if (!searchQuery) return orders;
         const q = searchQuery.toLowerCase();
-        return orders.filter(order => 
-            order.id.toString().includes(q) ||
-            order.invoice_number?.toString().includes(q) ||
-            order.customer?.name.toLowerCase().includes(q) ||
-            order.customer?.phone?.includes(q)
+        return orders.filter(
+            (order) =>
+                order.id.toString().includes(q) ||
+                order.invoice_number?.toString().includes(q) ||
+                order.customer?.name.toLowerCase().includes(q)
         );
     }, [orders, searchQuery]);
 
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: { staggerChildren: 0.1 },
-        },
-    };
-
-    const itemVariants = {
-        hidden: { y: 20, opacity: 0 },
-        visible: { y: 0, opacity: 1 },
-    };
-
     return (
-        <motion.div 
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="container mx-auto p-4 md:p-6 max-w-6xl space-y-6"
-        >
+        <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-6xl">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
-                <motion.div variants={itemVariants} className="space-y-1">
-                    <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
-                        Receiving <span className="text-primary">Brova & Final</span>
+            <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-bold text-foreground">
+                        Receiving Inventory
                     </h1>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
-                        Log workshop deliveries and mark garments as received at the shop
+                    <p className="text-sm text-muted-foreground">
+                        Mark workshop deliveries as received at showroom
+                        {" "}&bull;{" "}{filteredOrders.length} ORDER{filteredOrders.length !== 1 ? "S" : ""} IN TRANSIT
                     </p>
-                </motion.div>
-
-                <motion.div variants={itemVariants} className="w-full md:w-80">
-                    <div className="relative group">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input
-                            placeholder="Search ID, Invoice or Customer..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 h-10 bg-card border-2 border-border focus-visible:ring-primary/20"
-                        />
-                    </div>
-                </motion.div>
+                </div>
+                <div className="relative w-full md:w-80 group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                        placeholder="Search order, invoice, customer..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 h-10 bg-card border-2 border-border/60 rounded-xl text-sm focus-visible:ring-primary/20"
+                    />
+                </div>
             </div>
 
             {/* List */}
-            <div className="space-y-3">
+            <div className="space-y-4">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4">
-                        <RefreshCw className="w-10 h-10 text-primary/40 animate-spin" />
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading dispatched orders...</p>
+                        <RefreshCw className="size-8 text-primary/40 animate-spin" />
+                        <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Syncing with server...</p>
                     </div>
                 ) : filteredOrders.length === 0 ? (
-                    <div className="bg-muted/30 rounded-3xl border-2 border-dashed border-border p-20 text-center">
-                        <div className="size-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Package className="w-8 h-8 text-muted-foreground" />
+                    <div className="py-20 text-center">
+                        <div className="inline-flex p-6 bg-muted/30 rounded-full mb-6 border-2 border-dashed border-border">
+                            <Package className="size-12 text-muted-foreground/40" />
                         </div>
-                        <h3 className="text-lg font-bold text-foreground uppercase tracking-tight">No Dispatched Items</h3>
-                        <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">
-                            {searchQuery ? "No orders match your search" : "There are currently no garments dispatched from the workshop"}
+                        <h2 className="text-xl font-bold text-muted-foreground">Queue is Empty</h2>
+                        <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
+                            No garments are currently in transit from the workshop
                         </p>
                     </div>
                 ) : (
                     filteredOrders.map((order) => (
-                        <OrderCard 
-                            key={order.id} 
-                            order={order} 
-                            onReceive={(garment) => receiveMutation.mutate({ garment, order })}
-                            isSubmitting={receiveMutation.isPending}
+                        <OrderCard
+                            key={order.id}
+                            order={order}
+                            onReceive={(garments) => receiveMutation.mutate({ garments, orderId: order.id })}
+                            isSubmitting={receiveMutation.isPending && receiveMutation.variables?.orderId === order.id}
                         />
                     ))
                 )}
             </div>
-        </motion.div>
+        </div>
     );
 }
 
-function OrderCard({ order, onReceive, isSubmitting }: { 
-    order: Order; 
-    onReceive: (g: Garment) => void;
+function OrderCard({
+    order,
+    onReceive,
+    isSubmitting,
+}: {
+    order: Order;
+    onReceive: (garments: Garment[]) => void;
     isSubmitting: boolean;
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const dispatchedGarments = useMemo(() => 
-        order.garments?.filter(g => 
-            ['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
-        ).sort((a, b) => a.id - b.id) || [],
-    [order.garments]);
+    const dispatchedGarments = useMemo(
+        () => order.garments?.filter((g) => g.location === "transit_to_shop") || [],
+        [order.garments]
+    );
 
-    const otherGarments = useMemo(() =>
-        order.garments?.filter(g => 
-            !['brova_dispatched_to_shop', 'final_dispatched_to_shop'].includes(g.piece_stage!)
-        ).sort((a, b) => a.id - b.id) || [],
-    [order.garments]);
+    const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
+    const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
+    const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString() : "No Date";
 
     return (
         <Card className={cn(
-            "overflow-hidden border-2 transition-all duration-300",
-            isExpanded ? "border-primary/30 shadow-lg" : "border-border/60 hover:border-primary/20 shadow-sm"
+            "relative overflow-hidden transition-all duration-300 py-0 gap-0 border-l-4",
+            isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
         )}>
-            <div
-                className={cn(
-                    "px-5 py-4 cursor-pointer flex items-center justify-between transition-colors",
-                    isExpanded ? "bg-primary/5" : "bg-card hover:bg-muted/30"
-                )}
-                onClick={() => setIsExpanded(!isExpanded)}
-            >
-                <div className="flex items-center gap-5 flex-1 min-w-0">
-                    <div className="size-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-sm border border-primary/5">
-                        <Package className="w-6 h-6" />
+            <CardContent className="p-0">
+                {/* Main row */}
+                <div
+                    className="flex flex-col md:flex-row items-stretch md:items-center min-h-[80px] cursor-pointer"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    {/* 1. Identification */}
+                    <div className="flex-1 px-5 py-3 border-r border-border/40 min-w-[200px]">
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                                <Hash className="size-3.5" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold">Order #{order.id}</h3>
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium mt-0.5">
+                                    <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
+                                    <span className="size-1 rounded-full bg-muted-foreground/30" />
+                                    <Clock className="size-2.5" />
+                                    <span>{orderDate}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {order.order_phase && (
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "text-[9px] uppercase font-black px-2 py-0.5 border-none shadow-xs",
+                                    PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground"
+                                )}
+                            >
+                                {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                            </Badge>
+                        )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-xl font-black uppercase tracking-tight leading-none">#{order.id}</h3>
-                            {order.invoice_number && (
-                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md uppercase tracking-widest leading-none">INV {order.invoice_number}</span>
-                            )}
-                            <div className="h-4 w-px bg-border/60 mx-1" />
-                            <span className="text-base font-black text-foreground truncate uppercase tracking-tight">{order.customer?.name}</span>
-                        </div>
-
-                        <div className="flex items-center gap-4 flex-wrap">
-                            <Badge variant="secondary" className="h-5 px-2 text-[10px] font-black uppercase bg-amber-50 text-amber-700 border-amber-100 shadow-none">
-                                {order.production_stage?.replace(/_/g, " ")}
-                            </Badge>
-                            <div className="flex items-center gap-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                                <div className="flex items-center gap-1.5">
-                                    <Phone className="size-3 text-primary/60" />
-                                    <span className="font-mono">{order.customer?.phone || "N/A"}</span>
+                    {/* 2. Customer */}
+                    <div className="flex-[1.5] px-5 py-3 border-r border-border/40 bg-muted/10">
+                        <div className="space-y-1.5">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-1 bg-background rounded-full border border-border">
+                                    <User className="size-3 text-muted-foreground" />
                                 </div>
-                                {order.delivery_date && (
-                                    <div className="flex items-center gap-1.5 text-primary">
-                                        <Clock className="size-3" />
-                                        <span>{format(new Date(order.delivery_date), "PP")}</span>
-                                    </div>
+                                <span className="text-sm font-bold text-foreground truncate">
+                                    {order.customer?.name || "Unknown Customer"}
+                                </span>
+                            </div>
+                            {order.customer?.phone && (
+                                <div className="flex items-center gap-2.5 ml-1">
+                                    <Phone className="size-2.5 text-muted-foreground" />
+                                    <span className="text-[11px] font-medium text-muted-foreground">{order.customer.phone}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 3. Garment summary */}
+                    <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Incoming</span>
+                                <Badge variant="secondary" className="font-black text-[10px] px-2 py-0.5">
+                                    {dispatchedGarments.length} Pieces
+                                </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {brovaCount > 0 && (
+                                    <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                        {brovaCount} Brova
+                                    </span>
+                                )}
+                                {finalCount > 0 && (
+                                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                                        {finalCount} Final
+                                    </span>
                                 )}
                             </div>
+                            {order.delivery_date && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                                    <Clock className="size-2.5" />
+                                    <span>Due {format(new Date(order.delivery_date), "d MMM yyyy")}</span>
+                                </div>
+                            )}
                         </div>
+                    </div>
+
+                    {/* 4. Action */}
+                    <div className="w-full md:w-[180px] md:ml-auto px-5 py-3 flex items-center justify-center gap-3 bg-muted/5">
+                        <Button
+                            className="w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md hover:scale-[1.02] transition-transform"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onReceive(dispatchedGarments);
+                            }}
+                            disabled={isSubmitting || dispatchedGarments.length === 0}
+                        >
+                            {isSubmitting ? (
+                                <RefreshCw className="size-3.5 animate-spin" />
+                            ) : (
+                                <>
+                                    <CheckCircle2 className="size-4 mr-2" />
+                                    Receive
+                                </>
+                            )}
+                        </Button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsExpanded(!isExpanded);
+                            }}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors shrink-0"
+                        >
+                            <ChevronDown className={cn(
+                                "size-4 text-muted-foreground transition-transform duration-300",
+                                isExpanded && "rotate-180"
+                            )} />
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                    <div className="hidden lg:flex flex-col items-end">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Items To Receive</span>
-                        <div className="flex items-center gap-2">
-                             <Badge className="bg-primary text-primary-foreground font-black text-xs px-2 h-6">
-                                {dispatchedGarments.length} Pending
-                             </Badge>
-                        </div>
-                    </div>
-                    <motion.div
-                        animate={{ rotate: isExpanded ? 180 : 0 }}
-                        className="p-2 bg-muted/50 rounded-xl"
-                    >
-                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                    </motion.div>
-                </div>
-            </div>
-
-            <AnimatePresence>
+                {/* Expanded garment table */}
                 {isExpanded && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                    >
-                        <CardContent className="p-0 border-t border-border/40 bg-muted/5">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/60 bg-muted/10">
-                                            <th className="py-3 px-6 text-left">Garment Identity</th>
-                                            <th className="py-3 px-6 text-left">Type</th>
-                                            <th className="py-3 px-6 text-left">Current Stage</th>
-                                            <th className="py-3 px-6 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/40">
-                                        {dispatchedGarments.map((garment) => (
-                                            <tr key={garment.id} className="group hover:bg-muted/20 transition-colors">
-                                                <td className="py-4 px-6">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-1.5 bg-primary/5 rounded-lg border border-primary/10">
-                                                            <Package className="size-4 text-primary/70" />
-                                                        </div>
-                                                        <div className="space-y-0.5">
-                                                            <div className="font-bold text-sm uppercase">{garment.garment_id}</div>
-                                                            <div className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">{garment.style}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-6">
-                                                    <Badge 
-                                                        variant="outline" 
-                                                        className={cn(
-                                                            "font-black text-[10px] uppercase h-5 px-2",
-                                                            garment.garment_type === 'brova' ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700"
-                                                        )}
-                                                    >
-                                                        {garment.garment_type === 'brova' ? "Brova" : "Final"}
-                                                    </Badge>
-                                                </td>
-                                                <td className="py-4 px-6">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                        <span className="text-xs font-bold uppercase tracking-wide text-amber-700">
-                                                            {PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || garment.piece_stage}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-6 text-right">
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-9 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm"
-                                                        onClick={() => onReceive(garment)}
-                                                        disabled={isSubmitting}
-                                                    >
-                                                        {isSubmitting ? <RefreshCw className="size-3.5 mr-2 animate-spin" /> : <CheckCircle2 className="size-3.5 mr-2" />}
-                                                        Mark Received
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                    <div className="border-t-2 border-border/40 bg-muted/5">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                                    <th className="text-left py-2.5 px-5">Garment</th>
+                                    <th className="text-left py-2.5 px-5">Type</th>
+                                    <th className="text-left py-2.5 px-5">Style</th>
+                                    <th className="text-left py-2.5 px-5">Fabric</th>
+                                    <th className="text-left py-2.5 px-5">Trip</th>
+                                    <th className="text-left py-2.5 px-5">Stage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {dispatchedGarments.map((g) => (
+                                    <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors">
+                                        <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
+                                        <td className="py-2.5 px-5">
+                                            <span className={cn(
+                                                "inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded",
+                                                g.garment_type === "brova"
+                                                    ? "bg-blue-50 text-blue-700"
+                                                    : "bg-emerald-50 text-emerald-700"
+                                            )}>
+                                                {g.garment_type}
+                                            </span>
+                                        </td>
+                                        <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
+                                        <td className="py-2.5 px-5">
+                                            {(g as any).fabric ? (
+                                                <div className="flex items-center gap-2">
+                                                    {(g as any).fabric.color && (
+                                                        <span
+                                                            className="size-3.5 rounded-full border border-border/60 shrink-0"
+                                                            style={{ backgroundColor: (g as any).fabric.color }}
+                                                        />
+                                                    )}
+                                                    <span className="font-medium truncate max-w-[150px]">{(g as any).fabric.name}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground/40">—</span>
+                                            )}
+                                        </td>
+                                        <td className="py-2.5 px-5 font-mono text-muted-foreground">
+                                            {g.trip_number && g.trip_number > 1 ? `#${g.trip_number}` : "1st"}
+                                        </td>
+                                        <td className="py-2.5 px-5">
+                                            <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded capitalize">
+                                                {g.piece_stage?.replace(/_/g, " ")}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
 
-                                        {/* Show other garments that are already received or at other stages */}
-                                        {otherGarments.length > 0 && (
-                                            <tr className="bg-muted/30">
-                                                <td colSpan={4} className="py-2 px-6 text-[10px] font-black uppercase text-muted-foreground/60 tracking-widest">
-                                                    Other Garments in this Order ({otherGarments.length})
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {otherGarments.map((garment) => (
-                                            <tr key={garment.id} className="opacity-60 bg-muted/5">
-                                                <td className="py-2 px-6">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="size-2 rounded-full bg-muted-foreground/20" />
-                                                        <div className="font-bold text-xs uppercase">{garment.garment_id}</div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-2 px-6">
-                                                    <span className="text-[10px] font-bold uppercase">{garment.garment_type === 'brova' ? "Brova" : "Final"}</span>
-                                                </td>
-                                                <td className="py-2 px-6">
-                                                    <Badge variant="outline" className="text-[10px] font-bold uppercase h-5 px-2">
-                                                        {PieceStageLabels[garment.piece_stage as keyof typeof PieceStageLabels] || garment.piece_stage}
-                                                    </Badge>
-                                                </td>
-                                                <td className="py-2 px-6 text-right">
-                                                    <div className="flex items-center justify-end text-emerald-600 gap-1.5 font-bold text-[10px] uppercase">
-                                                        <Check className="size-3" />
-                                                        Processed
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <div className="p-4 bg-muted/10 border-t border-border/40 flex justify-between items-center">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                                    Total Garments: {order.garments?.length || 0}
-                                </p>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary hover:bg-primary/10"
-                                    asChild
-                                >
-                                    <Link
-                                        to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
-                                        search={{ orderId: order.id }}
-                                    >
-                                        <ExternalLink className="size-3.5 mr-1.5" />
-                                        Full Details
-                                    </Link>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </motion.div>
+                        <div className="px-5 py-3 flex justify-between items-center border-t border-border/40">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                Verify items before marking received
+                            </span>
+                            <Link
+                                to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                                search={{ orderId: order.id }}
+                                className="text-xs font-bold text-primary/60 hover:text-primary transition-colors flex items-center gap-1.5"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                View Full Details
+                                <ExternalLink className="size-3" />
+                            </Link>
+                        </div>
+                    </div>
                 )}
-            </AnimatePresence>
+            </CardContent>
         </Card>
     );
 }

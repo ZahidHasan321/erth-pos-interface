@@ -59,7 +59,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
         className="bg-white text-black"
         style={{
           width: '450px',
-          fontFamily: 'Arial, sans-serif',
+          fontFamily: "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
           fontSize: '16px',
           padding: '0',
           margin: '0 auto'

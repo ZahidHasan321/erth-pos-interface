@@ -392,46 +392,33 @@ function NewSalesOrder() {
                 description={dialog.description}
             />
 
-            {/* Page Header */}
-            <div className="bg-background pt-8 pb-4 border-b">
-                <div className="mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
-                    <h1 className="text-4xl font-black uppercase tracking-tight text-foreground">
-                        Sales <span className="text-primary">Order</span>
-                    </h1>
-                    <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs opacity-70 mt-1">
-                        Direct sales from inventory shelf
-                    </p>
-                </div>
-            </div>
-
             {/* Main Content Flow */}
-            <div className="flex flex-col gap-12 pt-8 pb-20 mx-[5%] md:mx-[10%] 2xl:max-w-screen-2xl 2xl:mx-auto">
-                
-                {/* 1. Items Section */}
-                <div id="items-section" className="w-full">
+            <div className="flex flex-col gap-12 pt-10 pb-20 mx-[5%] md:mx-[10%]">
+
+                {/* Step 1: Shelf Products */}
+                <section id="items-section" className="w-full">
                     <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
                         <ShelfForm
                             form={shelfForm}
                             isOrderDisabled={isOrderClosed}
-                            showHeader={false}
                         />
                     </ErrorBoundary>
-                </div>
+                </section>
 
-                {/* 2. Customer Section */}
-                <div id="customer-section" className="w-full">
+                {/* Step 2: Customer */}
+                <section id="customer-section" className="w-full">
                     <ErrorBoundary fallback={<div>Customer selection crashed</div>}>
-                        <SimplifiedCustomerForm 
+                        <SimplifiedCustomerForm
                             form={demographicsForm}
                             onCustomerFound={handleCustomerFound}
                             onClear={handleClearCustomer}
                             isOrderClosed={isOrderClosed}
                         />
                     </ErrorBoundary>
-                </div>
+                </section>
 
-                {/* 3. Payment & Review Section */}
-                <div id="payment-section" className="w-full">
+                {/* Step 3: Payment & Review */}
+                <section id="payment-section" className="w-full">
                     <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
                         <OrderSummaryAndPaymentForm
                             form={OrderForm}
@@ -465,7 +452,7 @@ function NewSalesOrder() {
                             }}
                         />
                     </ErrorBoundary>
-                </div>
+                </section>
             </div>
         </>
     );

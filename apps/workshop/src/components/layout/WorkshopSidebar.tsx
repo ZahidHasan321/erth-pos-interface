@@ -1,0 +1,180 @@
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
+import { useSidebarCounts } from "@/hooks/useSidebarCounts";
+import { Link } from "@tanstack/react-router";
+import {
+  Inbox,
+  ParkingSquare,
+  CalendarDays,
+  ClipboardList,
+  Droplets,
+  Scissors,
+  Layers,
+  Shirt,
+  Sparkles,
+  Wind,
+  CheckCircle,
+  Truck,
+  Users,
+  LogOut,
+  LayoutDashboard,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+interface WorkshopSidebarProps {
+  onLogout: () => void;
+}
+
+export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
+  const { data: counts } = useSidebarCounts();
+
+  const operationItems = [
+    { label: "Receiving",       icon: Inbox,           href: "/receiving",  count: counts?.receiving,  badgeColor: "bg-blue-100 text-blue-700" },
+    { label: "Parking",         icon: ParkingSquare,   href: "/parking",    count: counts?.parking,    badgeColor: "bg-amber-100 text-amber-700" },
+    { label: "Scheduler",       icon: CalendarDays,    href: "/scheduler",  count: counts?.scheduler,  badgeColor: "bg-purple-100 text-purple-700" },
+    { label: "Assigned Orders", icon: ClipboardList,   href: "/assigned" },
+  ];
+
+  const postProductionItems = [
+    { label: "Dispatch",        icon: Truck,           href: "/dispatch",   count: counts?.dispatch,   badgeColor: "bg-green-100 text-green-700" },
+  ];
+
+  const terminalItems = [
+    { label: "Soaking",       icon: Droplets,     href: "/terminals/soaking",       count: counts?.soaking,       color: "text-blue-500" },
+    { label: "Cutting",       icon: Scissors,     href: "/terminals/cutting",       count: counts?.cutting,       color: "text-amber-500" },
+    { label: "Post-Cutting",  icon: Layers,       href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
+    { label: "Sewing",        icon: Shirt,        href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-500" },
+    { label: "Finishing",     icon: Sparkles,     href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-500" },
+    { label: "Ironing",       icon: Wind,         href: "/terminals/ironing",       count: counts?.ironing,       color: "text-red-500" },
+    { label: "Quality Check", icon: CheckCircle,  href: "/terminals/quality-check", count: counts?.quality_check, color: "text-indigo-500" },
+  ];
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="p-4 border-b">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
+            W
+          </div>
+          <span className="font-bold text-sm uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+            Workshop
+          </span>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {/* Dashboard — standalone at top */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link to="/dashboard">
+                    <LayoutDashboard className="w-4 h-4" />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {operationItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {!!item.count && (
+                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                      {item.count}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Terminals</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {terminalItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild>
+                    <Link to={item.href}>
+                      <item.icon className={cn("w-4 h-4", item.color)} />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {!!item.count && (
+                    <SidebarMenuBadge className="font-bold">
+                      {item.count}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Dispatch + Resources after terminals */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {postProductionItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {!!item.count && (
+                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                      {item.count}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link to="/resources">
+                    <Users className="w-4 h-4" />
+                    <span>Resources</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="p-2">
+        <Button variant="ghost" size="sm" onClick={onLogout} className="w-full justify-start gap-2">
+          <LogOut className="w-4 h-4" />
+          <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}

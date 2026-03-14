@@ -176,25 +176,25 @@ export function CustomerMeasurementsForm({
   >(form.getValues("reference") ?? undefined);
   useAutoProvision(form);
 
-  // Track previous customerId to detect changes
-  const prevCustomerIdRef = React.useRef<number | null>(null);
-  const customerChanged = customerId !== prevCustomerIdRef.current;
+  // Track previous customerId to detect changes and reset internal state
+  // Only track non-null IDs so transient null (from store reset) doesn't cause a reset cycle
+  const prevCustomerIdRef = React.useRef<number | null>(customerId);
+  // Track what query data we've already processed to avoid re-running the populate effect
+  const lastProcessedDataRef = React.useRef<string | null>(null);
 
-  // Update ref after render
   React.useEffect(() => {
+    // Ignore transient null — only reset when we get a genuinely different customer
+    if (customerId === null) return;
+    if (customerId === prevCustomerIdRef.current) return;
+
     prevCustomerIdRef.current = customerId;
-  }, [customerId]);
-
-  // Reset internal state when customerId changes
-  React.useEffect(() => {
-    if (customerChanged) {
-      // Customer changed, reset internal state
-      setSelectedMeasurementId(null);
-      setMeasurements(new Map());
-      setIsEditing(false);
-      setIsCreatingNew(false);
-    }
-  }, [customerId]); // Use customerId as dependency, not the computed customerChanged boolean
+    lastProcessedDataRef.current = null;
+    setSelectedMeasurementId(null);
+    setMeasurements(new Map());
+    setIsEditing(false);
+    setIsCreatingNew(false);
+    form.reset(customerMeasurementsDefaults);
+  }, [customerId, form]);
 
   // Auto-navigation for electric tape
   const { getFieldRef, getEnterHandler, focusFirstField } = useAutoNavigation();
@@ -241,6 +241,8 @@ export function CustomerMeasurementsForm({
         if (response.status === "success") {
           setIsEditing(false);
           setIsCreatingNew(false);
+          // Reset the processed data ref so the populate effect picks up new data
+          lastProcessedDataRef.current = null;
           toast.success("Measurement created successfully!");
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
@@ -268,6 +270,7 @@ export function CustomerMeasurementsForm({
         if (response.status === "success") {
           setIsEditing(false);
           setIsCreatingNew(false);
+          lastProcessedDataRef.current = null;
           toast.success("Measurement updated successfully!");
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
@@ -288,7 +291,6 @@ export function CustomerMeasurementsForm({
     data: measurementQuery,
     isSuccess,
     isFetching,
-    refetch,
   } = useQuery({
     queryKey: ["measurements", customerId],
     queryFn: () => {
@@ -298,41 +300,40 @@ export function CustomerMeasurementsForm({
       return getMeasurementsByCustomerId(customerId);
     },
     enabled: !!customerId,
-    staleTime: Infinity,
-    gcTime: Infinity,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 10,
   });
 
-  // Refetch measurements when customerId changes to ensure fresh data
+  // Populate measurements when query data arrives
   React.useEffect(() => {
-    if (customerId && customerChanged) {
-      refetch();
-    }
-  }, [customerId, customerChanged, refetch]);
+    if (!customerId || !isSuccess || isFetching) return;
 
-  // Populate measurements when data is loaded
-  React.useEffect(() => {
-    if (customerId && isSuccess && !isFetching) {
-      if (measurementQuery?.data?.length) {
-        const newMap = new Map<string, CustomerMeasurementsSchema>();
-        measurementQuery.data.forEach((m) => {
-          const displayId = m.measurement_id || m.id;
-          if (displayId) {
-            newMap.set(displayId, mapMeasurementToFormValues(m));
-          }
-        });
-        setMeasurements(newMap);
+    // Create a stable key from the data to detect actual changes
+    const dataKey = JSON.stringify(measurementQuery?.data?.map(m => m.id) ?? []);
+    if (dataKey === lastProcessedDataRef.current) return;
+    lastProcessedDataRef.current = dataKey;
 
-        // Select the first measurement by default
-        const firstMeasurementId = measurementQuery.data[0]?.measurement_id || measurementQuery.data[0]?.id || null;
-        setSelectedMeasurementId(firstMeasurementId);
-      } else {
-        // No measurements for this customer, so reset everything.
-        setMeasurements(new Map());
-        setSelectedMeasurementId(null);
-        form.reset();
+    if (measurementQuery?.data?.length) {
+      const newMap = new Map<string, CustomerMeasurementsSchema>();
+      measurementQuery.data.forEach((m) => {
+        const displayId = m.measurement_id || m.id;
+        if (displayId) {
+          newMap.set(displayId, mapMeasurementToFormValues(m));
+        }
+      });
+      setMeasurements(newMap);
+
+      // Only auto-select if nothing is currently selected (or selection is invalid)
+      if (!selectedMeasurementId || !newMap.has(selectedMeasurementId)) {
+        const firstId = measurementQuery.data[0]?.measurement_id || measurementQuery.data[0]?.id || null;
+        setSelectedMeasurementId(firstId);
       }
+    } else {
+      setMeasurements(new Map());
+      setSelectedMeasurementId(null);
+      form.reset(customerMeasurementsDefaults);
     }
-  }, [customerId, isSuccess, isFetching, measurementQuery?.data, form]);
+  }, [customerId, isSuccess, isFetching, measurementQuery?.data, form, selectedMeasurementId]);
 
   // Reset form when selected measurement changes
   React.useEffect(() => {
@@ -340,11 +341,13 @@ export function CustomerMeasurementsForm({
       const selected = measurements.get(selectedMeasurementId);
       if (selected) {
         form.reset(selected);
+        setSelectedReference(selected.reference ?? undefined);
       }
-    } else {
-      form.reset();
+    } else if (!isCreatingNew) {
+      form.reset(customerMeasurementsDefaults);
+      setSelectedReference(undefined);
     }
-  }, [selectedMeasurementId, measurements, form]);
+  }, [selectedMeasurementId, measurements, form, isCreatingNew]);
 
   // ---------------------------------------
   // Handlers
@@ -352,15 +355,17 @@ export function CustomerMeasurementsForm({
   const handleFormSubmit = (
     values: CustomerMeasurementsSchema,
   ) => {
-    const onConfirm = () => {
-      if (!customerId) {
-        toast.error("Customer ID is required.");
-        return;
-      }
+    if (!customerId) {
+      toast.error("Customer ID is required.");
+      return;
+    }
 
+    const onConfirm = () => {
       const data = mapFormValuesToMeasurement(values, customerId);
 
       if (isCreatingNew) {
+        // Remove the DB id for new measurements — let the server generate it
+        delete (data as any).id;
         createMeasurementMutation(data);
       } else {
         if (!selectedMeasurementId) {
@@ -368,15 +373,15 @@ export function CustomerMeasurementsForm({
           return;
         }
 
-        const id = measurements.get(
-          selectedMeasurementId,
-        )?.id;
-        if (!id) {
-          toast.error("No measurement selected for updating.");
+        // Look up the actual DB UUID from the stored measurement data
+        const storedMeasurement = measurements.get(selectedMeasurementId);
+        const dbId = storedMeasurement?.id;
+        if (!dbId) {
+          toast.error("Cannot find measurement record for updating.");
           return;
         }
         updateMeasurementMutation({
-          id: id,
+          id: dbId,
           data: data,
         });
       }
@@ -400,28 +405,33 @@ export function CustomerMeasurementsForm({
         "This will create a copy of the currently selected measurement. Are you sure you want to proceed? Unsaved changes will be lost.",
       onConfirm: () => {
         setPreviousMeasurementId(selectedMeasurementId);
-        setIsCreatingNew(true);
-        setIsEditing(true);
 
+        // Generate the next measurement ID based on existing ones
         const existingIds = Array.from(measurements.keys());
         const nextNumber =
           existingIds
             .map((id) => {
               const parts = id.split("-");
               if (parts.length < 2) return 0;
-              // Only count IDs that belong to this customer and follow the pattern
               if (parts[0] !== String(customerId)) return 0;
-              const num = parseInt(parts[1], 10);
+              const num = parseInt(parts[parts.length - 1], 10);
               return isNaN(num) ? 0 : num;
             })
             .reduce((a, b) => Math.max(a, b), 0) + 1;
 
         const newId = `${customerId}-${nextNumber}`;
-        form.setValue("measurement_id", newId);
-        const baseMeasurement = form.getValues();
+
+        // Take a snapshot of the current form values as the base for the copy
+        const baseMeasurement = { ...form.getValues() };
+        // Clear the DB id so it's treated as new, set the new display ID
+        delete (baseMeasurement as any).id;
+        baseMeasurement.measurement_id = newId;
+        baseMeasurement.measurement_date = new Date().toISOString();
 
         addMeasurement(newId, baseMeasurement);
         setSelectedMeasurementId(newId);
+        setIsCreatingNew(true);
+        setIsEditing(true);
 
         setConfirmationDialog((d) => ({ ...d, isOpen: false }));
       },
@@ -436,16 +446,21 @@ export function CustomerMeasurementsForm({
   };
 
   const handleCancel = () => {
+    const wasCreatingNew = isCreatingNew;
+    const currentMeasurementId = form.getValues("measurement_id");
+
     setIsEditing(false);
     setIsCreatingNew(false);
-    const measurementId = form.getValues("measurement_id");
-    if (isCreatingNew && measurementId) {
-      removeMeasurement(measurementId);
+
+    if (wasCreatingNew && currentMeasurementId) {
+      // Remove the temp measurement entry and restore previous selection
+      removeMeasurement(currentMeasurementId);
       setSelectedMeasurementId(previousMeasurementId);
     } else if (
       selectedMeasurementId &&
       measurements.has(selectedMeasurementId)
     ) {
+      // Revert to the saved version of the current measurement
       form.reset(measurements.get(selectedMeasurementId));
     }
   };
@@ -737,8 +752,9 @@ export function CustomerMeasurementsForm({
           </div>
         </div>
         {/* ---- Measurement Groups ---- */}
-        <div className="flex flex-col 2xl:flex-row 2xl:flex-wrap gap-4 items-stretch pt-8">
-          <div className="flex flex-row gap-6 flex-wrap w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-8">
+          {/* Row 1: Collar + Lengths + Arm */}
+          <div className="flex flex-row gap-6 flex-wrap lg:col-span-2">
             <GroupedMeasurementFields
               form={form}
               title="Collar"
@@ -748,7 +764,7 @@ export function CustomerMeasurementsForm({
                 { name: "collar_width", label: "Length" },
                 { name: "collar_height", label: "Height" },
               ]}
-              wrapperClassName="flex-1"
+              wrapperClassName="flex-1 min-w-[200px]"
               getFieldRef={getFieldRef}
               getEnterHandler={getEnterHandler}
             />
@@ -761,12 +777,13 @@ export function CustomerMeasurementsForm({
                 { name: "length_front", label: "Front" },
                 { name: "length_back", label: "Back" },
               ]}
-              wrapperClassName="flex-1"
+              wrapperClassName="flex-1 min-w-[200px]"
               getFieldRef={getFieldRef}
               getEnterHandler={getEnterHandler}
             />
           </div>
 
+          {/* Row 2: Arm | Body side by side */}
           <GroupedMeasurementFields
             form={form}
             title="Arm"
@@ -787,7 +804,6 @@ export function CustomerMeasurementsForm({
                 },
               ],
             ]}
-            wrapperClassName="w-full"
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
@@ -821,51 +837,52 @@ export function CustomerMeasurementsForm({
               ],
               { name: "bottom", label: "Bottom" },
             ]}
-            wrapperClassName="w-full gap-y-12"
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
-        </div>
-        <div className="flex flex-row gap-6 flex-wrap">
-          <GroupedMeasurementFields
-            form={form}
-            title="Top Pocket"
-            unit={unit}
-            isDisabled={!isEditing}
-            fields={[
-              { name: "top_pocket_distance", label: "Distance" },
-              { name: "top_pocket_length", label: "Length" },
-              { name: "top_pocket_width", label: "Width" },
-            ]}
-            getFieldRef={getFieldRef}
-            getEnterHandler={getEnterHandler}
-          />
-          <GroupedMeasurementFields
-            form={form}
-            title="Jabzour"
-            unit={unit}
-            isDisabled={!isEditing}
-            fields={[
-              { name: "jabzour_length", label: "Length" },
-              { name: "jabzour_width", label: "Width" },
-            ]}
-            getFieldRef={getFieldRef}
-            getEnterHandler={getEnterHandler}
-          />
-          <GroupedMeasurementFields
-            form={form}
-            title="Side Pocket"
-            unit={unit}
-            isDisabled={!isEditing}
-            fields={[
-              { name: "side_pocket_length", label: "Length" },
-              { name: "side_pocket_width", label: "Width" },
-              { name: "side_pocket_distance", label: "Distance" },
-              { name: "side_pocket_opening", label: "Opening" },
-            ]}
-            getFieldRef={getFieldRef}
-            getEnterHandler={getEnterHandler}
-          />
+
+          {/* Row 3: Accessories - all three side by side */}
+          <div className="flex flex-row gap-6 flex-wrap lg:col-span-2">
+            <GroupedMeasurementFields
+              form={form}
+              title="Top Pocket"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                { name: "top_pocket_distance", label: "Distance" },
+                { name: "top_pocket_length", label: "Length" },
+                { name: "top_pocket_width", label: "Width" },
+              ]}
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+            <GroupedMeasurementFields
+              form={form}
+              title="Jabzour"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                { name: "jabzour_length", label: "Length" },
+                { name: "jabzour_width", label: "Width" },
+              ]}
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+            <GroupedMeasurementFields
+              form={form}
+              title="Side Pocket"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                { name: "side_pocket_length", label: "Length" },
+                { name: "side_pocket_width", label: "Width" },
+                { name: "side_pocket_distance", label: "Distance" },
+                { name: "side_pocket_opening", label: "Opening" },
+              ]}
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+          </div>
         </div>
         <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
           <FormField

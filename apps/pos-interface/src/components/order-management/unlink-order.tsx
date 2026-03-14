@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { DatePicker } from "../ui/date-picker";
 import { cn } from "@/lib/utils";
 import { Input } from "../ui/input";
+import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 
 import type { Order } from "@repo/database";
 
@@ -268,7 +269,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
     const customerPhone = getCustomerPhone(primary) || getCustomerPhone(group.children[0]);
     const invoice = primary?.invoice_number;
     const deliveryDate = primary?.delivery_date;
-    const productionStage = primary?.production_stage;
+    const orderPhase = primary?.order_phase;
 
     return (
         <Card className={cn(
@@ -298,9 +299,16 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                         </div>
 
                         <div className="flex items-center gap-4 flex-wrap">
-                            {productionStage && (
-                                <Badge variant="secondary" className="h-5 px-2 text-[10px] font-black uppercase bg-blue-50 text-blue-700 border-blue-100 shadow-none">
-                                    {productionStage.replace(/_/g, " ")}
+                            {orderPhase && (
+                                <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                        "h-5 px-2 text-[10px] font-black uppercase border-none shadow-xs",
+                                        `bg-${ORDER_PHASE_COLORS[orderPhase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
+                                        `text-${ORDER_PHASE_COLORS[orderPhase as keyof typeof ORDER_PHASE_COLORS]}-600`
+                                    )}
+                                >
+                                    {ORDER_PHASE_LABELS[orderPhase as keyof typeof ORDER_PHASE_LABELS]}
                                 </Badge>
                             )}
                             <div className="flex items-center gap-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -380,9 +388,20 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                                                     </div>
                                                 </td>
                                                 <td className="py-2 px-4">
-                                                    <Badge variant="secondary" className="font-bold text-xs uppercase tracking-widest px-2 h-6">
-                                                        {child.production_stage?.replace(/_/g, " ") || "Pending"}
-                                                    </Badge>
+                                                    {child.order_phase ? (
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className={cn(
+                                                                "text-[9px] font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
+                                                                `bg-${ORDER_PHASE_COLORS[child.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
+                                                                `text-${ORDER_PHASE_COLORS[child.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
+                                                            )}
+                                                        >
+                                                            {ORDER_PHASE_LABELS[child.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
+                                                    )}
                                                 </td>
                                                 <td className="py-2 px-4 text-right">
                                                     <div className="flex justify-end gap-2">

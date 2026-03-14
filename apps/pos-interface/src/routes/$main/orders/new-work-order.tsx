@@ -98,7 +98,7 @@ function NewWorkOrder() {
     // NAVIGATION
     // ============================================================================
     const navigate = useNavigate();
-    const { prices } = usePricing();
+    const { styles, stitchingAdult, stitchingChild } = usePricing();
 
     // ============================================================================
     // DATA FETCHING & STORE
@@ -380,7 +380,7 @@ function NewWorkOrder() {
                     const mappedOrder = mapOrderToFormValues(orderData);
 
                     // Sync the stitching price to the store so the UI reflects it
-                    const dbStitchingPrice = mappedOrder.stitching_price ?? 9;
+                    const dbStitchingPrice = mappedOrder.stitching_price ?? stitchingAdult;
                     setStitchPrice(dbStitchingPrice);
 
                     OrderForm.reset(mappedOrder);
@@ -507,11 +507,10 @@ function NewWorkOrder() {
      */
     const calculateStitchingPrice = (
         garments: GarmentSchema[],
-        stitchingPrice: number = 9.0,
+        stitchingPriceOverride: number = stitchingAdult,
     ) => {
-        return garments.reduce((acc, g) => {
-            const price = g.style === "design" ? 9 : stitchingPrice;
-            return acc + price;
+        return garments.reduce((acc, _g) => {
+            return acc + stitchingPriceOverride;
         }, 0);
     };
 
@@ -522,7 +521,7 @@ function NewWorkOrder() {
         let totalStyle = 0;
 
         garments.forEach((garment) => {
-            totalStyle += calculateGarmentStylePrice(garment, (prices || []) as any);
+            totalStyle += calculateGarmentStylePrice(garment, styles || []);
         });
 
         return totalStyle;
@@ -658,13 +657,8 @@ function NewWorkOrder() {
         OrderForm.setValue("shelf_charge", totalShelfAmount, { shouldDirty: false });
     }, [totalShelfAmount]);
 
-    // Reset measurements when customer changes
-    React.useEffect(() => {
-        measurementsForm.reset({
-            ...customerMeasurementsDefaults,
-            measurement_date: new Date().toISOString(),
-        });
-    }, [customerDemographics.id]);
+    // Note: measurement form resets are handled internally by CustomerMeasurementsForm
+    // when its customerId prop changes — no parent reset needed here.
 
 
     // Cleanup on unmount
@@ -881,9 +875,9 @@ function NewWorkOrder() {
             </div>
 
             {/* Step Content */}
-            <div className="flex flex-col items-center gap-6 md:gap-10 pt-12 pb-8 mx-[5%] md:mx-[10%] 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-8 2xl:gap-y-10 2xl:max-w-screen-2xl 2xl:mx-auto">
+            <div className="flex flex-col items-center gap-6 md:gap-10 pt-12 pb-8 mx-[5%] md:mx-[10%]">
                 {!isOrderClosed && (
-                    <div className="w-full mt-0 2xl:col-span-2">
+                    <div className="w-full mt-0">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
                             <SearchCustomer
                                 onCustomerFound={handleTopLevelCustomerFound}
@@ -963,7 +957,7 @@ function NewWorkOrder() {
                     ref={(el) => {
                         sectionRefs.current[2] = el;
                     }}
-                    className="w-full flex flex-col items-center 2xl:col-span-2"
+                    className="w-full flex flex-col items-center"
                 >
                     <ErrorBoundary fallback={<div>Fabric Selection crashed</div>}>
                         <FabricSelectionForm
@@ -993,6 +987,8 @@ function NewWorkOrder() {
                             orderDate={order.order_date ?? undefined}
                             stitchingPrice={stitchingPrice}
                             setStitchingPrice={setStitchPrice}
+                            stitchingAdult={stitchingAdult}
+                            stitchingChild={stitchingChild}
                             initialCampaigns={order.campaign_id ? [order.campaign_id.toString()] : []}
                         />
                     </ErrorBoundary>
@@ -1004,7 +1000,7 @@ function NewWorkOrder() {
                     ref={(el) => {
                         sectionRefs.current[3] = el;
                     }}
-                    className="w-full flex flex-col items-center 2xl:col-span-2"
+                    className="w-full flex flex-col items-center"
                 >
                     <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
                         <ShelfForm
@@ -1021,7 +1017,7 @@ function NewWorkOrder() {
                     ref={(el) => {
                         sectionRefs.current[4] = el;
                     }}
-                    className="w-full flex flex-col items-center 2xl:col-span-2"
+                    className="w-full flex flex-col items-center"
                 >
                     <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
                         <OrderSummaryAndPaymentForm

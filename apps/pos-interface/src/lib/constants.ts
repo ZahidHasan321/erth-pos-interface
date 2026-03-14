@@ -3,57 +3,70 @@ export const BRAND_NAMES = {
   fromHome: "sakkba",
 } as const;
 
-export const ProductionStageLabels = {
-  "order_at_shop": "Order At Shop",
-  "sent_to_workshop": "Sent To Workshop",
-  "order_at_workshop": "Order At Workshop",
-  "waiting_cut": "Waiting Cut",
-  "soaking": "Soaking",
-  "cutting": "Cutting",
-  "post_cutting": "Post Cutting",
-  "sewing": "Sewing",
-  "finishing": "Finishing",
-  "ironing": "Ironing",
-  "quality_check": "Quality Check",
-  "waiting_for_acceptance": "Waiting For Acceptance",
-  "brova_dispatched_to_shop": "Brova Dispatched to Shop",
-  "final_dispatched_to_shop": "Final Dispatched to Shop",
-  "brova_and_final_dispatched_to_shop": "Brova & Final Dispatched to Shop",
-  "brova_at_shop": "Brova At Shop",
-  "brova_accepted": "Brova Accepted",
-  "brova_alteration": "Brova Alteration",
-  "brova_repair_and_production": "Brova Repair & Production",
-  "brova_alteration_and_production": "Brova Alteration & Production",
-  "final_at_shop": "Final At Shop",
-  "brova_and_final_at_shop": "Brova & Final At Shop",
-  "order_collected": "Order Collected",
-  "order_delivered": "Order Delivered",
-  "redo": "Redo"
+export const ORDER_PHASE_LABELS = {
+    new: "New",
+    in_progress: "In Progress",
+    completed: "Completed",
 } as const;
 
-export const PieceStageLabels = {
-  "order_at_shop": "Garment At Shop",
-  "sent_to_workshop": "Sent to Workshop",
-  "order_at_workshop": "Garment At Workshop",
-  "waiting_cut": "Waiting Cut",
-  "soaking": "Soaking",
-  "cutting": "Cutting",
-  "post_cutting": "Post Cutting",
-  "sewing": "Sewing",
-  "finishing": "Finishing",
-  "ironing": "Ironing",
-  "quality_check": "Quality Check",
-  "waiting_for_acceptance": "Waiting For Acceptance",
-  "brova_dispatched_to_shop": "Brova Dispatched to Shop",
-  "final_dispatched_to_shop": "Final Dispatched to Shop",
-  "brova_at_shop": "Brova At Shop",
-  "brova_collected": "Brova Collected",
-  "brova_accepted": "Confirmed Brova At Shop",
-  "brova_alteration": "Brova Alteration",
-  "brova_repair_and_production": "Brova Repair",
-  "brova_alteration_and_production": "Brova Alteration & Production",
-  "final_at_shop": "Final At Shop",
-  "order_collected": "Order Collected",
-  "order_delivered": "Order Delivered",
-  "redo": "Redo"
+export const ORDER_PHASE_COLORS = {
+    new: "gray",
+    in_progress: "amber",
+    completed: "emerald",
+} as const;
+
+export const PIECE_STAGE_LABELS = {
+    waiting_for_acceptance: "Waiting for Acceptance",
+    waiting_cut: "Waiting for Cut",
+    soaking: "Soaking",
+    cutting: "Cutting",
+    post_cutting: "Post-Cutting",
+    sewing: "Sewing",
+    finishing: "Finishing",
+    ironing: "Ironing",
+    quality_check: "Quality Check",
+    ready_for_dispatch: "Ready for Dispatch",
+    at_shop: "At Shop",
+    accepted: "Accepted",
+    needs_repair: "Needs Repair",
+    needs_redo: "Needs Redo",
+    completed: "Completed",
+} as const;
+
+export const PIECE_STAGE_COLORS = {
+    waiting_for_acceptance: "gray",
+    waiting_cut: "gray",
+    soaking: "blue",
+    cutting: "amber",
+    post_cutting: "amber",
+    sewing: "amber",
+    finishing: "amber",
+    ironing: "amber",
+    quality_check: "amber",
+    ready_for_dispatch: "green",
+    at_shop: "green",
+    accepted: "emerald",
+    needs_repair: "red",
+    needs_redo: "red",
+    completed: "slate",
+} as const;
+
+export const LOCATION_LABELS = {
+    shop: "At Shop",
+    workshop: "At Workshop",
+    transit_to_shop: "In Transit to Shop",
+    transit_to_workshop: "In Transit to Workshop",
+} as const;
+
+export const TRANSACTION_TYPE_LABELS = {
+    payment: "Payment",
+    refund: "Refund",
+} as const;
+
+export const PAYMENT_TYPE_LABELS = {
+    knet: "K-Net",
+    cash: "Cash",
+    link_payment: "Link Payment",
+    installments: "Installments",
+    others: "Others",
 } as const;

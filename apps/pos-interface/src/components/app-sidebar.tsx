@@ -15,7 +15,6 @@ import {
   Unlink,
   PackageCheck,
   Wrench,
-  MessageSquare,
   Edit,
   XCircle,
   BarChart,
@@ -23,6 +22,7 @@ import {
   FileText,
   Menu,
   History,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -88,6 +88,11 @@ const data = {
           icon: History,
         },
         {
+          title: "Cashier",
+          url: "cashier",
+          icon: Banknote,
+        },
+        {
           title: "Order Management",
           isCollapsible: true,
           icon: Settings,
@@ -116,11 +121,6 @@ const data = {
               title: "Change Options",
               url: "orders/order-management/change-options",
               icon: Wrench,
-            },
-            {
-              title: "Feedback",
-              url: "orders/order-management/feedback",
-              icon: MessageSquare,
             },
             {
               title: "Alterations",

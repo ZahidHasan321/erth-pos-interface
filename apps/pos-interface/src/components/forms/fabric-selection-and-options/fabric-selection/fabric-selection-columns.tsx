@@ -51,7 +51,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   },
   {
     accessorKey: "color",
-    header: "Color / اللون",
+    header: "Color",
     size: 150,
     cell: FabricCells.ColorCell,
   },
@@ -63,7 +63,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   },
   {
     accessorKey: "fabric_amount",
-    header: "Amount / سعر القماش",
+    header: "Amount",
     size: 180,
     cell: FabricCells.FabricAmountCell,
   },
@@ -75,22 +75,22 @@ export const columns: ColumnDef<GarmentSchema>[] = [
     cell: FabricCells.GarmentTypeCell,
   },
   {
+    accessorKey: "soaking",
+    header: "Soaking",
+    size: 120,
+    cell: FabricCells.SoakingCell,
+  },
+  {
     accessorKey: "express",
-    header: "Express / مستعجل",
+    header: "Express",
     size: 180,
     cell: FabricCells.ExpressCell,
   },
   {
     accessorKey: "delivery_date",
-    header: "Delivery Date / موعد التسليم",
+    header: "Delivery Date",
     size: 220,
     cell: FabricCells.DeliveryDateCell,
-  },
-  {
-    accessorKey: "home_delivery",
-    header: "Home Delivery",
-    size: 180,
-    cell: FabricCells.HomeDeliveryCell,
   },
   {
     accessorKey: "notes",

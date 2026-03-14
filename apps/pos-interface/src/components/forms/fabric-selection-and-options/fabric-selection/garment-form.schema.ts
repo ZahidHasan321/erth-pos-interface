@@ -45,9 +45,14 @@ export const garmentSchema = z.object({
 
   lines: z.number().default(1),
 
+  soaking: z.boolean().default(false),
   express: z.boolean().default(false),
   garment_type: z.enum(['brova', 'final']).default('final'),
   piece_stage: z.string().optional().nullable(),
+  location: z.string().optional().default('shop'),
+  acceptance_status: z.boolean().optional().nullable(),
+  fulfillment_type: z.string().optional().nullable(),
+  trip_number: z.number().default(1),
   delivery_date: z.string().nullable().refine(val => val !== null && val !== "", {
     message: "Delivery date is required"
   }),
@@ -100,12 +105,17 @@ export const garmentDefaults: GarmentSchema = {
   jabzour_2: null,
   jabzour_thickness: 'SINGLE',
   lines: 1,
+  soaking: false,
   fabric_amount: 0,
   stitching_price_snapshot: 0,
   style_price_snapshot: 0,
   express: false,
   garment_type: 'final',
-  piece_stage: 'order_at_shop',
+  piece_stage: 'waiting_cut',
+  location: 'shop',
+  acceptance_status: null,
+  fulfillment_type: null,
+  trip_number: 1,
   delivery_date: new Date().toISOString(),
   notes: '',
 };

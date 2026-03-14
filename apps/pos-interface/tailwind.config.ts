@@ -9,8 +9,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Montserrat', ...fontFamily.sans],
-        heading: ['Marcellus', 'serif'],
+        sans: ['Montserrat', 'Cairo', ...fontFamily.sans],
+        arabic: ['Cairo', 'IBM Plex Sans Arabic', 'sans-serif'],
+        heading: ['Marcellus', 'Cairo', 'serif'],
         brand: ['Hidayatullah', 'cursive'],
       },
       keyframes: {

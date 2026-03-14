@@ -1,7 +1,6 @@
 "use client";
 
 import { getFabrics } from "@/api/fabrics";
-import { getPrices } from "@/api/prices";
 import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
@@ -85,6 +84,8 @@ interface FabricSelectionFormProps {
     homeDelivery?: boolean;
     stitchingPrice: number;
     setStitchingPrice: (price: number) => void;
+    stitchingAdult: number;
+    stitchingChild: number;
     initialCampaigns?: string[];
 }
 
@@ -107,6 +108,8 @@ export function FabricSelectionForm({
     homeDelivery,
     stitchingPrice,
     setStitchingPrice,
+    stitchingAdult,
+    stitchingChild,
     initialCampaigns = [],
 }: FabricSelectionFormProps) {
     const queryClient = useQueryClient();
@@ -171,21 +174,14 @@ export function FabricSelectionForm({
 
     const fabrics = fabricsResponse?.data || [];
 
-    const { data: pricesResponse } = useQuery({
-        queryKey: ["prices"],
-        queryFn: getPrices,
-        staleTime: Infinity,
-        gcTime: Infinity,
-    });
-
-    const prices = pricesResponse?.data || [];
-
-    const { data: _stylesResponse } = useQuery({
+    const { data: stylesResponse } = useQuery({
         queryKey: ["styles"],
         queryFn: getStyles,
         staleTime: Infinity,
         gcTime: Infinity,
     });
+
+    const styles = stylesResponse?.data || [];
 
     const {
         fields: garmentFields,
@@ -268,16 +264,38 @@ export function FabricSelectionForm({
             let totalStitchingCharge = 0;
             let totalStyleCharge = 0;
 
+            const hasBrova = data.garments.some(g => g.garment_type === 'brova');
+
             const garmentsToSave = data.garments.map((garment) => {
-                const stitchingSnapshot = garment.style === "design" ? 9 : stitchingPrice;
-                const styleSnapshot = calculateGarmentStylePrice(garment, prices || []);
+                const stitchingSnapshot = stitchingPrice;
+                const styleSnapshot = calculateGarmentStylePrice(garment, styles || []);
                 const fabricSnapshot = garment.fabric_amount || 0;
 
                 totalFabricCharge += fabricSnapshot;
                 totalStitchingCharge += stitchingSnapshot;
                 totalStyleCharge += styleSnapshot;
 
-                return mapFormValuesToGarment(garment, orderId, {
+                // Determine initial piece stage if not already set or if it's a new garment
+                let pieceStage = garment.piece_stage;
+                let location = garment.location;
+                let tripNumber = garment.trip_number;
+
+                if (!garment.id) {
+                    location = "shop";
+                    tripNumber = 1;
+                    if (garment.garment_type === "brova") {
+                        pieceStage = "waiting_cut";
+                    } else {
+                        pieceStage = hasBrova ? "waiting_for_acceptance" : "waiting_cut";
+                    }
+                }
+
+                return mapFormValuesToGarment({
+                    ...garment,
+                    piece_stage: pieceStage,
+                    location: location as any,
+                    trip_number: tripNumber
+                }, orderId, {
                     stitching_price_snapshot: stitchingSnapshot,
                     style_price_snapshot: styleSnapshot,
                     fabric_price_snapshot: fabricSnapshot,
@@ -313,7 +331,7 @@ export function FabricSelectionForm({
 
             setIsSaved(true);
             setIsEditing(false);
-            
+
             // Sync lists
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
@@ -404,7 +422,7 @@ export function FabricSelectionForm({
                 const bottom = selectedMeasurement.bottom;
 
                 if (length && bottom) {
-                    const meter = getFabricValue(Number(length), Number(bottom)); 
+                    const meter = getFabricValue(Number(length), Number(bottom));
                     if (meter) {
                         setFabricMeter(meter);
                         setQallabi(meter + 0.25);
@@ -494,14 +512,28 @@ export function FabricSelectionForm({
 
             return {
                 ...garment,
-                ...firstRow,
-                id: garment.id, 
-                garment_id: garment.garment_id, 
+                // Only copy style options from first row
+                style_id: firstRow.style_id,
+                style: firstRow.style,
+                collar_type: firstRow.collar_type,
+                collar_button: firstRow.collar_button,
+                cuffs_type: firstRow.cuffs_type,
+                cuffs_thickness: firstRow.cuffs_thickness,
+                front_pocket_type: firstRow.front_pocket_type,
+                front_pocket_thickness: firstRow.front_pocket_thickness,
+                wallet_pocket: firstRow.wallet_pocket,
+                pen_holder: firstRow.pen_holder,
+                small_tabaggi: firstRow.small_tabaggi,
+                jabzour_1: firstRow.jabzour_1,
+                jabzour_2: firstRow.jabzour_2,
+                jabzour_thickness: firstRow.jabzour_thickness,
+                lines: firstRow.lines,
             };
         });
 
         form.setValue("garments", updatedGarments);
-        toast.success("Copied first row's data to all rows");
+        form.trigger("garments");
+        toast.success("Copied first row's style options to all rows");
     };
 
     // Unified Error Summary Logic
@@ -568,14 +600,14 @@ export function FabricSelectionForm({
                             {/* 2. STITCHING PRICE */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Stitching Price</label>
-                                <Tabs 
-                                    value={stitchingPrice.toString()} 
-                                    onValueChange={(val) => setStitchingPrice(parseInt(val))}
+                                <Tabs
+                                    value={stitchingPrice.toString()}
+                                    onValueChange={(val) => setStitchingPrice(parseFloat(val))}
                                     className="w-fit"
                                 >
                                     <TabsList className="h-12 bg-background border border-border/60 p-1 rounded-xl shadow-xs">
-                                        <TabsTrigger value="7" disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">7 KWD</TabsTrigger>
-                                        <TabsTrigger value="9" disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">9 KWD</TabsTrigger>
+                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Child</TabsTrigger>
+                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Adult</TabsTrigger>
                                     </TabsList>
                                 </Tabs>
                             </div>
@@ -611,7 +643,7 @@ export function FabricSelectionForm({
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    
+
                                     <div className="h-6 w-px bg-border/60" />
 
                                     {selectedMeasurementId && fabricMeter !== null ? (
@@ -652,7 +684,7 @@ export function FabricSelectionForm({
                                                 )}
                                                 onClick={() => {
                                                     if (isFormDisabled) return;
-                                                    const updated = isSelected 
+                                                    const updated = isSelected
                                                         ? selectedCampaigns.filter(id => id !== campaign.id.toString())
                                                         : Array.from(new Set([...selectedCampaigns, campaign.id.toString()]));
                                                     setSelectedCampaigns(updated);
@@ -711,194 +743,194 @@ export function FabricSelectionForm({
                                         Select fabric source, type, and measurements
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={copyGarmentToAll}
-                                    disabled={isFormDisabled || garmentFields.length < 2}
-                                    className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
-                                >
-                                    <Copy className="size-3.5" />
-                                    Copy First Row
-                                </Button>
                             </div>
                         </div>
 
-                    <DataTable
-                        columns={fabricSelectionColumns}
-                        data={garmentFields}
-                        removeRow={removeGarmentRow}
-                        measurementOptions={measurementOptions}
-                        updateData={(rowIndex, columnId, value) =>
-                            form.setValue(
-                                `garments.${rowIndex}.${columnId}` as any,
-                                value,
-                            )
-                        }
-                        isFormDisabled={isFormDisabled}
-                        checkoutStatus={checkoutStatus}
-                        fatoura={fatoura}
-                        orderDate={orderDate}
-                        orderID={orderId || undefined}
-                        customerId={customerId || undefined}
-                        customerName={customerName || undefined}
-                        customerMobile={customerMobile || undefined}
-                        tempStockUsage={tempStockUsage}
-                    />
+                        <DataTable
+                            columns={fabricSelectionColumns}
+                            data={garmentFields}
+                            removeRow={removeGarmentRow}
+                            measurementOptions={measurementOptions}
+                            updateData={(rowIndex, columnId, value) =>
+                                form.setValue(
+                                    `garments.${rowIndex}.${columnId}` as any,
+                                    value,
+                                )
+                            }
+                            isFormDisabled={isFormDisabled}
+                            checkoutStatus={checkoutStatus}
+                            fatoura={fatoura}
+                            orderDate={orderDate}
+                            orderID={orderId || undefined}
+                            customerId={customerId || undefined}
+                            customerName={customerName || undefined}
+                            customerMobile={customerMobile || undefined}
+                            tempStockUsage={tempStockUsage}
+                        />
 
-                    <div className="flex justify-end pt-4">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={handlePrintAll}
-                            disabled={garmentFields.length === 0}
-                        >
-                            <Printer className="w-4 h-4 mr-2" />
-                            Print All Labels
-                        </Button>
-                    </div>
+                        <div className="flex justify-end pt-4">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={handlePrintAll}
+                                disabled={garmentFields.length === 0}
+                            >
+                                <Printer className="w-4 h-4 mr-2" />
+                                Print All Labels
+                            </Button>
+                        </div>
 
-                    <div style={{ display: "none" }}>
-                        <div ref={printAllRef}>
-                            {garmentFields.map((_, index) => {
-                                const currentRowData = form.getValues(
-                                    `garments.${index}`,
-                                ) as GarmentSchema;
-                                const measurementDisplay =
-                                    measurementOptions.find(
-                                        (m) => m.id === currentRowData.measurement_id,
-                                    )?.id || currentRowData.measurement_id;
+                        <div style={{ display: "none" }}>
+                            <div ref={printAllRef}>
+                                {garmentFields.map((_, index) => {
+                                    const currentRowData = form.getValues(
+                                        `garments.${index}`,
+                                    ) as GarmentSchema;
+                                    const measurementDisplay =
+                                        measurementOptions.find(
+                                            (m) => m.id === currentRowData.measurement_id,
+                                        )?.id || currentRowData.measurement_id;
 
-                                const fabricData = {
-                                    orderId: orderId || "N/A",
-                                    customerId: customerId ?? "N/A",
-                                    customerName: customerName ?? "N/A",
-                                    customerMobile: customerMobile ?? "N/A",
-                                    garmentId: currentRowData.garment_id ?? "",
-                                    fabricSource: currentRowData.fabric_source ?? "",
-                                    fabricId: currentRowData.fabric_id ?? "",
-                                    fabricLength: currentRowData.fabric_length ?? 0,
-                                    measurementId: measurementDisplay ?? "",
-                                    garment_type: currentRowData.garment_type ?? 'final',
-                                    express: currentRowData.express ?? false,
-                                    deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
-                                };
+                                    const fabricData = {
+                                        orderId: orderId || "N/A",
+                                        customerId: customerId ?? "N/A",
+                                        customerName: customerName ?? "N/A",
+                                        customerMobile: customerMobile ?? "N/A",
+                                        garmentId: currentRowData.garment_id ?? "",
+                                        fabricSource: currentRowData.fabric_source ?? "",
+                                        fabricId: currentRowData.fabric_id ?? "",
+                                        fabricLength: currentRowData.fabric_length ?? 0,
+                                        measurementId: measurementDisplay ?? "",
+                                        garment_type: currentRowData.garment_type ?? 'final',
+                                        express: currentRowData.express ?? false,
+                                        deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
+                                    };
 
-                                return (
-                                    <div
-                                        key={index}
-                                        className={
-                                            index < garmentFields.length - 1
-                                                ? "page-break"
-                                                : ""
-                                        }
-                                    >
-                                        <FabricLabel fabricData={fabricData} />
+                                    return (
+                                        <div
+                                            key={index}
+                                            className={
+                                                index < garmentFields.length - 1
+                                                    ? "page-break"
+                                                    : ""
+                                            }
+                                        >
+                                            <FabricLabel fabricData={fabricData} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-end pt-4">
+                            <div className="space-y-1">
+                                <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                                    <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                                        <Pencil className="size-4" />
                                     </div>
-                                );
-                            })}
+                                    Style <span className="text-primary">Options</span>
+                                </h2>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                    Customize collar, pockets, buttons, and other style details
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={copyGarmentToAll}
+                                disabled={isFormDisabled || garmentFields.length < 2}
+                                className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+                            >
+                                <Copy className="size-3.5" />
+                                Copy First Row
+                            </Button>
                         </div>
-                    </div>
+                        <DataTable
+                            columns={styleOptionsColumns}
+                            measurementOptions={measurementOptions}
+                            data={garmentFields}
+                            removeRow={removeGarmentRow}
+                            updateData={(rowIndex, columnId, value) =>
+                                form.setValue(
+                                    `garments.${rowIndex}.${columnId}` as any,
+                                    value,
+                                )
+                            }
+                            isFormDisabled={isFormDisabled}
+                            styles={styles}
+                            stitchingPrice={stitchingPrice}
+                        />
 
-                    <div className="flex justify-between items-end pt-4">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
-                                <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                                    <Pencil className="size-4" />
-                                </div>
-                                Style <span className="text-primary">Options</span>
-                            </h2>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
-                                Customize collar, pockets, buttons, and other style details
-                            </p>
-                        </div>
-                    </div>
-                    <DataTable
-                        columns={styleOptionsColumns}
-                        measurementOptions={measurementOptions}
-                        data={garmentFields}
-                        removeRow={removeGarmentRow}
-                        updateData={(rowIndex, columnId, value) =>
-                            form.setValue(
-                                `garments.${rowIndex}.${columnId}` as any,
-                                value,
-                            )
-                        }
-                        isFormDisabled={isFormDisabled}
-                        styles={prices}
-                        stitchingPrice={stitchingPrice}
-                    />
-
-                    <div className="space-y-2 pt-4">
-                        <h3 className="text-lg font-semibold text-foreground">
-                            Customer Signature
-                            <span className="text-destructive"> *</span>
-                        </h3>
-                        <Controller
-                            name="signature"
-                            control={form.control}
-                            render={({ field, fieldState }) => (
-                                <div className="space-y-2">
-                                    <div className="w-fit">
-                                        {field.value ? (
-                                            <div className="space-y-2">
-                                                <div className="border rounded-lg bg-white/70">
-                                                    <img
-                                                        src={field.value}
-                                                        alt="Customer signature"
-                                                        style={{
-                                                            width: "500px",
-                                                            height: "200px",
-                                                            display: "block",
-                                                        }}
-                                                    />
+                        <div className="space-y-2 pt-4">
+                            <h3 className="text-lg font-semibold text-foreground">
+                                Customer Signature
+                                <span className="text-destructive"> *</span>
+                            </h3>
+                            <Controller
+                                name="signature"
+                                control={form.control}
+                                render={({ field, fieldState }) => (
+                                    <div className="space-y-2">
+                                        <div className="w-fit">
+                                            {field.value ? (
+                                                <div className="space-y-2">
+                                                    <div className="border rounded-lg bg-white/70">
+                                                        <img
+                                                            src={field.value}
+                                                            alt="Customer signature"
+                                                            style={{
+                                                                width: "500px",
+                                                                height: "200px",
+                                                                display: "block",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    {!isFormDisabled && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => field.onChange("")}
+                                                        >
+                                                            <X className="w-4 h-4 mr-2" />
+                                                            Clear Signature
+                                                        </Button>
+                                                    )}
                                                 </div>
-                                                {!isFormDisabled && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => field.onChange("")}
-                                                    >
-                                                        <X className="w-4 h-4 mr-2" />
-                                                        Clear Signature
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        ) : !isFormDisabled ? (
-                                            <SignaturePad
-                                                onSave={(signature) => {
-                                                    field.onChange(signature);
-                                                    toast.success("Signature saved");
-                                                }}
-                                            />
-                                        ) : (
-                                            <div
-                                                className="border rounded-lg bg-muted text-center text-muted-foreground"
-                                                style={{
-                                                    width: "500px",
-                                                    height: "200px",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                }}
-                                            >
-                                                No signature provided
-                                            </div>
+                                            ) : !isFormDisabled ? (
+                                                <SignaturePad
+                                                    onSave={(signature) => {
+                                                        field.onChange(signature);
+                                                        toast.success("Signature saved");
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div
+                                                    className="border rounded-lg bg-muted text-center text-muted-foreground"
+                                                    style={{
+                                                        width: "500px",
+                                                        height: "200px",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                    }}
+                                                >
+                                                    No signature provided
+                                                </div>
+                                            )}
+                                        </div>
+                                        {fieldState.error && (
+                                            <p className="text-sm text-destructive">
+                                                {fieldState.error.message}
+                                            </p>
                                         )}
                                     </div>
-                                    {fieldState.error && (
-                                        <p className="text-sm text-destructive">
-                                            {fieldState.error.message}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        />
+                                )}
+                            />
+                        </div>
                     </div>
-                </div>
                 </div>
 
                 <div className="flex gap-4 justify-end pt-4">

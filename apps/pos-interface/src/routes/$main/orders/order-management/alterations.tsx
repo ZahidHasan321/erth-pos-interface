@@ -1,138 +1,205 @@
-"use client";
-
-import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import {
-  Package,
-  Search,
-  ExternalLink,
-  PlusCircle,
-  Truck,
-} from "lucide-react";
-
-// UI Components
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { getBrand } from "@/api/orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import { Truck, Package, RotateCcw } from "lucide-react";
+import type { Garment, Order } from "@repo/database";
 
-// Route Definition
 export const Route = createFileRoute("/$main/orders/order-management/alterations")({
-  component: AlterationsManagementInterface,
+  component: AlterationsPage,
   head: () => ({
-    meta: [{ title: "Alterations Management" }],
+    meta: [{ title: "Alterations" }],
   }),
 });
 
-function AlterationsManagementInterface() {
-  const [searchId, setSearchId] = useState("");
+type AlterationGarment = Garment & {
+  order?: Pick<Order, "id" | "customer_id"> & { customer?: { name: string; phone?: string | null } };
+  invoice_number?: number;
+};
 
-  const handleCreateAlteration = () => {
-    toast.info("Opening New Alteration (Out) Flow...");
-    // Logic to open new alteration wizard
-  };
+async function getAlterationGarments(): Promise<AlterationGarment[]> {
+  const brand = getBrand();
+  const { data, error } = await supabase
+    .from("garments")
+    .select(`
+      *,
+      order:orders!order_id(
+        id, customer_id,
+        customer:customers!customer_id(name, phone),
+        workOrder:work_orders!order_id(invoice_number)
+      )
+    `)
+    .in("piece_stage", ["needs_repair", "needs_redo"])
+    .eq("location", "shop")
+    .eq("order.brand", brand)
+    .eq("order.checkout_status", "confirmed");
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .filter((g: any) => g.order?.brand === brand || true) // brand filtered by join
+    .map((g: any) => {
+      const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
+      const cust = Array.isArray(g.order?.customer) ? g.order.customer[0] : g.order?.customer;
+      return { ...g, order: { ...g.order, customer: cust }, invoice_number: wo?.invoice_number };
+    });
+}
+
+async function sendToWorkshop(garmentId: string, currentTripNumber: number): Promise<void> {
+  const { error } = await supabase
+    .from("garments")
+    .update({
+      location: "transit_to_workshop",
+      in_production: false,
+      piece_stage: "waiting_cut",
+      trip_number: currentTripNumber + 1,
+    })
+    .eq("id", garmentId);
+  if (error) throw new Error(error.message);
+}
+
+function AlterationsPage() {
+  const qc = useQueryClient();
+  const { data: garments = [], isLoading } = useQuery({
+    queryKey: ["alteration-garments"],
+    queryFn: getAlterationGarments,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const sendMut = useMutation({
+    mutationFn: ({ id, trip }: { id: string; trip: number }) => sendToWorkshop(id, trip),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alteration-garments"] });
+      toast.success("Garment sent to workshop");
     },
-  };
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error"),
+  });
 
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
-  };
+  // Group by order
+  const grouped = new Map<number, AlterationGarment[]>();
+  for (const g of garments) {
+    const orderId = g.order_id;
+    const arr = grouped.get(orderId) ?? [];
+    arr.push(g);
+    grouped.set(orderId, arr);
+  }
 
   return (
-    <motion.div 
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8 pb-24"
-    >
+    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-8 pb-24 animate-fade-in">
       {/* Header */}
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
-          <div>
-              <h1 className="text-4xl font-black text-foreground uppercase tracking-tight">
-                  Alterations <span className="text-primary">Center</span>
-              </h1>
-              <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest mt-1">
-                  Manage external alterations and customer requests
-              </p>
-          </div>
-          <Button 
-            onClick={handleCreateAlteration}
-            className="h-12 px-8 font-black uppercase tracking-widest shadow-lg shadow-primary/20 rounded-2xl"
-          >
-              <PlusCircle className="w-5 h-5 mr-2" />
-              New Alteration (Out)
-          </Button>
-      </motion.div>
-
-      {/* Quick Search & Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <motion.div variants={itemVariants} className="lg:col-span-7">
-              <Card className="border-2 shadow-md rounded-3xl overflow-hidden h-full">
-                  <CardHeader className="bg-muted/30 border-b p-6">
-                      <div className="flex items-center gap-3">
-                          <Search className="w-5 h-5 text-primary" />
-                          <CardTitle className="text-lg font-black uppercase">Find Alteration Order</CardTitle>
-                      </div>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                      <SearchCustomer onCustomerFound={(c) => toast.info(`Viewing alterations for ${c.name}`)} onHandleClear={() => {}} />
-                  </CardContent>
-              </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="lg:col-span-5">
-              <Card className="border-2 shadow-md rounded-3xl overflow-hidden h-full">
-                  <CardHeader className="bg-muted/30 border-b p-6">
-                      <div className="flex items-center gap-3">
-                          <Truck className="w-5 h-5 text-primary" />
-                          <CardTitle className="text-lg font-black uppercase">Quick Status Check</CardTitle>
-                      </div>
-                  </CardHeader>
-                  <CardContent className="p-6 flex flex-col gap-4">
-                      <div className="flex gap-2">
-                          <Input 
-                            placeholder="Enter Order ID or Invoice..." 
-                            className="h-12 rounded-xl font-bold"
-                            value={searchId}
-                            onChange={(e) => setSearchId(e.target.value)}
-                          />
-                          <Button className="h-12 px-6 rounded-xl" variant="secondary">
-                              <ExternalLink className="w-4 h-4" />
-                          </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline" className="px-3 py-1 font-black text-[10px] uppercase">Pending (12)</Badge>
-                          <Badge variant="outline" className="px-3 py-1 font-black text-[10px] uppercase">At Workshop (5)</Badge>
-                          <Badge variant="outline" className="px-3 py-1 font-black text-[10px] uppercase">Ready (8)</Badge>
-                      </div>
-                  </CardContent>
-              </Card>
-          </motion.div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
+        <div>
+          <h1 className="text-4xl font-black text-foreground uppercase tracking-tight">
+            Alterations <span className="text-primary">Center</span>
+          </h1>
+          <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest mt-1">
+            Garments needing repair or redo
+          </p>
+        </div>
+        <Badge variant="outline" className="text-base px-4 py-2 font-bold">
+          {garments.length} garment{garments.length !== 1 ? "s" : ""} pending
+        </Badge>
       </div>
 
-      {/* Main View - Empty State */}
-      <motion.div 
-          variants={itemVariants}
-          className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-border rounded-[3rem] bg-muted/5"
-      >
+      {/* Content */}
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+        </div>
+      ) : garments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-border rounded-3xl bg-muted/5">
           <div className="size-20 bg-muted/30 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <Package className="w-8 h-8 text-muted-foreground/30" />
+            <Package className="w-8 h-8 text-muted-foreground/30" />
           </div>
-          <h3 className="text-xl font-black text-foreground uppercase tracking-tight">Queue Analysis</h3>
+          <h3 className="text-xl font-black text-foreground uppercase tracking-tight">All Clear</h3>
           <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-1 max-w-xs">
-              Search for a customer or order to view active alteration lifecycles
+            No garments currently need alteration
           </p>
-      </motion.div>
-    </motion.div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {[...grouped.entries()].map(([orderId, items], oi) => {
+            const first = items[0];
+            const customer = first?.order?.customer;
+            const invoiceNo = first?.invoice_number;
+            return (
+              <Card
+                key={orderId}
+                className="border-2 rounded-2xl overflow-hidden animate-fade-in"
+                style={{ animationDelay: `${oi * 40}ms` }}
+              >
+                <CardHeader className="bg-muted/20 border-b px-6 py-4">
+                  <CardTitle className="flex items-center justify-between">
+                    <div>
+                      <span className="text-base font-black uppercase">
+                        {customer?.name ?? "Unknown Customer"}
+                      </span>
+                      {invoiceNo && (
+                        <span className="text-sm text-muted-foreground font-mono ml-2">
+                          #{invoiceNo}
+                        </span>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="font-bold">
+                      {items.length} item{items.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 divide-y">
+                  {items.map((g, gi) => (
+                    <div
+                      key={g.id}
+                      className="flex items-center justify-between px-6 py-4 hover:bg-muted/10 transition-colors animate-fade-in"
+                      style={{ animationDelay: `${(oi * 3 + gi) * 25}ms` }}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                          <Badge
+                            variant="outline"
+                            className={
+                              g.piece_stage === "needs_repair"
+                                ? "border-amber-300 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase"
+                                : "border-red-300 bg-red-50 text-red-700 text-[10px] font-bold uppercase"
+                            }
+                          >
+                            {g.piece_stage === "needs_repair" ? "Needs Repair" : "Needs Redo"}
+                          </Badge>
+                          {(g.trip_number ?? 1) > 1 && (
+                            <Badge variant="outline" className="text-[10px] font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
+                              <RotateCcw className="w-2.5 h-2.5 mr-1" />
+                              Trip #{g.trip_number}
+                            </Badge>
+                          )}
+                        </div>
+                        {g.notes && (
+                          <p className="text-xs text-muted-foreground max-w-xs truncate">{g.notes}</p>
+                        )}
+                      </div>
+
+                      <Button
+                        size="sm"
+                        className="gap-2"
+                        disabled={sendMut.isPending}
+                        onClick={() => sendMut.mutate({ id: g.id, trip: g.trip_number ?? 1 })}
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        Send to Workshop
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

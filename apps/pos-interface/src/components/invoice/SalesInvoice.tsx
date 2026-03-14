@@ -50,7 +50,7 @@ export const SalesInvoice = React.forwardRef<HTMLDivElement, SalesInvoiceProps>(
       <div
         ref={ref}
         className="bg-white text-black p-6 max-w-5xl mx-auto text-sm print:bg-white print:text-black"
-        style={{ direction: "rtl" }}
+        style={{ direction: "rtl", fontFamily: "'Cairo', 'IBM Plex Sans Arabic', sans-serif" }}
       >
         {/* Header */}
         <div className="mb-4 pb-3 border-b border-gray-700">

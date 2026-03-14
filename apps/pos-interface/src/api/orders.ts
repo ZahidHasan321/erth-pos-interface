@@ -5,9 +5,10 @@ import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
 
-const getBrand = (): "ERTH" | "SAKKBA" => {
+export const getBrand = (): "ERTH" | "SAKKBA" | "QASS" => {
     const raw = localStorage.getItem('tanstack.auth.user');
     const user = raw ? JSON.parse(raw) : null;
+    if (user?.userType === 'qass') return "QASS";
     return user?.userType === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
 };
 
@@ -41,7 +42,7 @@ function flattenOrder(data: any): any {
 const FILTER_MAP: Record<string, string> = {
     invoice_number: 'workOrder.invoice_number',
     delivery_date: 'workOrder.delivery_date',
-    production_stage: 'workOrder.production_stage',
+    order_phase: 'workOrder.order_phase',
     campaign_id: 'workOrder.campaign_id',
 };
 
@@ -192,8 +193,9 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
             customer:customers(*),
             garments:garments!inner(*, fabric:fabrics(*))
             `, { count: 'exact' })
-            .in('production_stage', ['brova_dispatched_to_shop', 'final_dispatched_to_shop', 'brova_and_final_dispatched_to_shop'])
-            .eq('brand', getBrand())        .eq('checkout_status', 'confirmed');
+            .eq('garments.location', 'transit_to_shop')
+            .eq('brand', getBrand())
+            .eq('checkout_status', 'confirmed');
 
     if (error) {
         console.error('Error fetching dispatched orders:', error);
@@ -202,13 +204,31 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
     return { status: 'success', data: flattenOrder(data), count: count || 0 };
 };
 
+export const dispatchOrder = async (orderId: number): Promise<ApiResponse<Order>> => {
+    // 1. Update work order phase
+    const res = await updateOrder({ order_phase: "in_progress" }, orderId);
+    if (res.status === 'error') return res;
+
+    // 2. Update all garments of this order
+    const { error } = await supabase
+        .from('garments')
+        .update({ location: 'transit_to_workshop' })
+        .eq('order_id', orderId);
+
+    if (error) {
+        console.error('Error updating garments location:', error);
+    }
+
+    return res;
+};
+
 export const createOrder = async (
     order: Partial<Order>,
 ): Promise<ApiResponse<Order>> => {
     const WORK_FIELDS = [
         'invoice_number', 'delivery_date', 'advance', 'stitching_price', 
         'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 
-        'num_of_fabrics', 'home_delivery', 'production_stage', 'call_status', 
+        'num_of_fabrics', 'home_delivery', 'order_phase', 'call_status', 
         'linked_order_id', 'linked_date', 'unlinked_date',
         'r1_date', 'r2_date', 'r3_date', 'call_reminder_date', 'escalation_date',
         'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
@@ -255,7 +275,7 @@ export const updateOrder = async (
     const WORK_FIELDS = [
         'invoice_number', 'delivery_date', 'advance', 'stitching_price', 
         'fabric_charge', 'stitching_charge', 'style_charge', 'campaign_id', 
-        'num_of_fabrics', 'home_delivery', 'production_stage', 'call_status', 
+        'num_of_fabrics', 'home_delivery', 'order_phase', 'call_status', 
         'linked_order_id', 'linked_date', 'unlinked_date',
         'r1_date', 'r2_date', 'r3_date', 'call_reminder_date', 'escalation_date',
         'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
@@ -578,7 +598,7 @@ export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
             .select(`
                 *,
                 customer:customers!customer_id(name, phone),
-                workOrder:work_orders!order_id(invoice_number, delivery_date, production_stage)
+                workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase)
             `)
             .in('id', primaryIds);
 

@@ -1,5 +1,5 @@
 /* Import fonts - MUST be first before Tailwind imports */
-@import url('https://fonts.googleapis.com/css2?family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -56,9 +56,9 @@
 :root {
   --radius: 0.75rem;
 
-  /* Base surface and text - white background as requested */
-  --background: oklch(1 0 0);
-  /* pure white background */
+  /* Base surface and text - subtle off-white so cards stand out */
+  --background: oklch(0.965 0.005 100);
+  /* warm off-white background */
   --foreground: oklch(0.15 0.03 100);
   /* deep neutral text */
 
@@ -213,20 +213,20 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Montserrat', 'Cairo', sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Marcellus', serif;
+    font-family: 'Marcellus', 'Cairo', serif;
   }
 
   button {
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 600;
   }
 
   label {
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 500;
   }
 }
@@ -247,4 +247,14 @@ input[type="number"] {
   font-family: 'Hidayatullah', cursive;
   font-weight: 400;
   letter-spacing: 0.05em;
+}
+
+/* CSS animation utilities (replacing framer-motion in alteration pages) */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
 }

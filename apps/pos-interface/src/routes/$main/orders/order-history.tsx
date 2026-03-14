@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { OrderHistorySearch } from "@/components/order-management/order-history-search";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 
 export const Route = createFileRoute("/$main/orders/order-history")({
     component: OrderHistoryPage,
@@ -48,6 +49,7 @@ function OrderHistoryPage() {
     // Filter states
     const [searchTerm, setSearchTerm] = React.useState("");
     const [statusFilter, setStatusFilter] = React.useState<string>("all");
+    const [phaseFilter, setPhaseFilter] = React.useState<string>("all");
     const [typeFilter, setTypeFilter] = React.useState<string>("all");
     const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest">("newest");
     const [dateFilter, setDateFilter] = React.useState<Date | null>(null);
@@ -57,6 +59,7 @@ function OrderHistoryPage() {
         pageSize,
         searchTerm,
         statusFilter,
+        phaseFilter,
         typeFilter,
         sortOrder,
         dateFilter
@@ -69,7 +72,7 @@ function OrderHistoryPage() {
     // Reset to page 0 when filters change
     React.useEffect(() => {
         setPage(0);
-    }, [searchTerm, statusFilter, typeFilter, sortOrder, dateFilter, pageSize]);
+    }, [searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter, pageSize]);
 
     return (
         <div className="container mx-auto py-4 px-4 lg:px-8 space-y-3 max-w-7xl">
@@ -84,24 +87,9 @@ function OrderHistoryPage() {
                         Manage your previous work and sales orders
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows per page</span>
-                        <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
-                            <SelectTrigger className="h-9 w-20 bg-white border-border/80">
-                                <SelectValue placeholder={pageSize.toString()} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="20">20</SelectItem>
-                                <SelectItem value="50">50</SelectItem>
-                                <SelectItem value="100">100</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 text-primary font-bold text-sm">
-                        <Package className="w-4 h-4" />
-                        <span>{totalCount} {totalCount === 1 ? 'Order' : 'Orders'} Total</span>
-                    </div>
+                <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 text-primary font-bold text-sm">
+                    <Package className="w-4 h-4" />
+                    <span>{totalCount} {totalCount === 1 ? 'Order' : 'Orders'} Total</span>
                 </div>
             </div>
 
@@ -115,7 +103,7 @@ function OrderHistoryPage() {
                     />
 
                     {/* Filter Row */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {/* Date Filter */}
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Date</label>
@@ -147,12 +135,12 @@ function OrderHistoryPage() {
 
                         {/* Status Filter */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Status</label>
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Checkout</label>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
                                 <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
                                     <div className="flex items-center gap-2">
                                         <Filter className="size-4 text-primary shrink-0" />
-                                        <SelectValue placeholder="Status" />
+                                        <SelectValue placeholder="Checkout" />
                                     </div>
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl shadow-xl">
@@ -160,6 +148,25 @@ function OrderHistoryPage() {
                                     <SelectItem value="confirmed" className="rounded-lg">Confirmed</SelectItem>
                                     <SelectItem value="draft" className="rounded-lg">Drafts</SelectItem>
                                     <SelectItem value="cancelled" className="rounded-lg">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Phase Filter */}
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Phase</label>
+                            <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+                                <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="size-4 text-primary shrink-0" />
+                                        <SelectValue placeholder="Phase" />
+                                    </div>
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl shadow-xl">
+                                    <SelectItem value="all" className="rounded-lg">All Phases</SelectItem>
+                                    <SelectItem value="new" className="rounded-lg">New</SelectItem>
+                                    <SelectItem value="in_progress" className="rounded-lg">In Progress</SelectItem>
+                                    <SelectItem value="completed" className="rounded-lg">Completed</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -208,7 +215,7 @@ function OrderHistoryPage() {
                         <div className="space-y-0.5">
                             <h3 className="font-bold text-lg text-muted-foreground">No orders found</h3>
                         </div>
-                        <Button size="sm" variant="outline" className="h-9 px-4" onClick={() => { setSearchTerm(""); setStatusFilter("all"); setTypeFilter("all"); setDateFilter(null); }}>
+                        <Button size="sm" variant="outline" className="h-9 px-4" onClick={() => { setSearchTerm(""); setStatusFilter("all"); setPhaseFilter("all"); setTypeFilter("all"); setDateFilter(null); }}>
                             Clear filters
                         </Button>
                     </div>) : (
@@ -220,18 +227,33 @@ function OrderHistoryPage() {
                         </div>
 
                         {/* Pagination Controls */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between px-2 py-6">
-                                <div className="text-sm text-muted-foreground">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-6">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows</span>
+                                    <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
+                                        <SelectTrigger className="h-8 w-16 bg-white border-border/80 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <span className="text-sm text-muted-foreground">
                                     {totalCount > 0 ? (
                                         <>
-                                            Showing <span className="font-bold text-foreground">{orders.length}</span> out of{" "}
-                                            <span className="font-bold text-foreground">{totalCount}</span> orders
+                                            Showing <span className="font-bold text-foreground">{orders.length}</span> of{" "}
+                                            <span className="font-bold text-foreground">{totalCount}</span>
                                         </>
                                     ) : (
-                                        "No orders to show"
+                                        "No orders"
                                     )}
-                                </div>
+                                </span>
+                            </div>
+                            {totalPages > 1 && (
                                 <div className="flex items-center gap-3">
                                     <Button
                                         variant="outline"
@@ -257,8 +279,8 @@ function OrderHistoryPage() {
                                         <ChevronRight className="w-4 h-4" />
                                     </Button>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </>
                 )}
             </div>
@@ -409,6 +431,18 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                 <div className="hidden sm:block">
                                     {getStatusBadge(order.checkout_status)}
                                 </div>
+                                {order.order_phase && (
+                                    <Badge 
+                                        variant="outline" 
+                                        className={cn(
+                                            "hidden sm:flex h-6 px-2 text-[10px] font-black uppercase border-none shadow-xs",
+                                            `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
+                                            `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
+                                        )}
+                                    >
+                                        {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                                    </Badge>
+                                )}
                                 <ChevronRight className="w-5 h-5 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-1 transition-all" />
                             </div>
                         </div>

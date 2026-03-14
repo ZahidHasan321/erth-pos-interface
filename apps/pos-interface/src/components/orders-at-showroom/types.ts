@@ -36,8 +36,22 @@ export type OrderRow = {
   // Garments count
   garmentsCount: number;
 
+  // Track max trip number for alteration cycles
+  maxTripNumber: number;
+
   // Expandable garments
   garments: GarmentRowData[];
+
+  // Derived status info from @repo/database/utils
+  showroomStatus: {
+    isBrovaTrial: boolean;
+    isReadyForPickup: boolean;
+    isPickupWaitingFinals: boolean;
+    isWaitingFinals: boolean;
+    isAlterationIn: boolean;
+    label: "brova_trial" | "alteration_in" | "ready_for_pickup" | "pickup_waiting_finals" | null;
+    hasPhysicalItems: boolean;
+  };
 
   // Full records for reference
   order: Order;
@@ -51,6 +65,8 @@ export type GarmentRowData = {
   garmentId: string | null;
   garmentRecordId: string;
   pieceStage: string;
+  locationKey?: string;
+  locationLabel?: string;
   isBrova: boolean;
   deliveryDate: string | null;
   delayInDays: number;
@@ -70,6 +86,8 @@ export type GarmentRow = {
   mobileNumber: string;
   orderType: string;
   pieceStage: string;
+  locationKey?: string;
+  locationLabel?: string;
   fatouraStage: string;
   promisedDeliveryDate?: string;
   delayInDays: number;

@@ -46,9 +46,14 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         jabzour_2: frontendJabzour2 ?? null,
         jabzour_thickness: g.jabzour_thickness,
         notes: g.notes,
+        soaking: g.soaking === true,
         express: g.express === true,
         garment_type: g.garment_type || 'final',
         piece_stage: g.piece_stage as any,
+        location: g.location || 'shop',
+        acceptance_status: g.acceptance_status,
+        fulfillment_type: g.fulfillment_type,
+        trip_number: g.trip_number || 1,
         delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
         lines: g.lines ?? 1,
         color: g.color || "",
@@ -95,6 +100,10 @@ export function mapFormValuesToGarment(
         style_price_snapshot: snapshots?.style_price_snapshot ?? formValues.style_price_snapshot,
         delivery_date: formValues.delivery_date ? new Date(formValues.delivery_date) : null,
         piece_stage: formValues.piece_stage as Garment["piece_stage"],
+        location: formValues.location as Garment["location"],
+        acceptance_status: formValues.acceptance_status,
+        fulfillment_type: formValues.fulfillment_type as Garment["fulfillment_type"],
+        trip_number: formValues.trip_number,
     };
 
     // Clean up any fields that shouldn't be in the DB record or need conversion

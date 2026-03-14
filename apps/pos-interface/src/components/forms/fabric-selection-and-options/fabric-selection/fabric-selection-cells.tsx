@@ -469,6 +469,35 @@ export const FabricLengthCell = ({
     );
 };
 
+export const SoakingCell = ({
+    row,
+    table,
+}: CellContext<GarmentSchema, unknown>) => {
+    const { control } = useFormContext();
+    const meta = table.options.meta as {
+        isFormDisabled?: boolean;
+    };
+    const isFormDisabled = meta?.isFormDisabled || false;
+
+    return (
+        <div className="w-full flex flex-col justify-center items-center min-w-20">
+            <Controller
+                name={`garments.${row.index}.soaking`}
+                control={control}
+                render={({ field }) => (
+                    <div className="flex flex-col gap-1 items-center">
+                        <Checkbox
+                            checked={field.value || false}
+                            onCheckedChange={field.onChange}
+                            disabled={isFormDisabled}
+                        />
+                    </div>
+                )}
+            />
+        </div>
+    );
+};
+
 export const ExpressCell = ({
     row,
     table,

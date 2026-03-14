@@ -77,7 +77,7 @@ export function SearchCustomer({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchValue);
-    }, 250);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchValue]);
 
@@ -100,6 +100,7 @@ export function SearchCustomer({
     enabled: debouncedSearch.length >= 2 && !selectedCustomerId,
     staleTime: 1000 * 60, // 1 minute
     gcTime: 1000 * 60, // 1 minute
+    placeholderData: (prev) => prev, // Keep previous results while fetching
   });
 
   const fetchPendingOrders = useCallback(async (customer: Customer) => {

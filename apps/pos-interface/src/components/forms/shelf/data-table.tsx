@@ -62,17 +62,16 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="rounded-lg border bg-card overflow-x-auto w-full shadow">
-      <Table className="">
-        {/* Optional: use colgroup if needed for borders */}
+    <div className="rounded-2xl border-2 border-border bg-card overflow-x-auto w-full">
+      <Table>
         <colgroup>
           {table.getHeaderGroups()[0]?.headers.map((header) => (
             <col key={header.id} span={header.colSpan} />
           ))}
         </colgroup>
-        <TableHeader className="bg-primary-foreground">
+        <TableHeader className="bg-muted/30">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="divide-x divide-border">
+            <TableRow key={headerGroup.id} className="border-b-2 border-border">
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
@@ -81,7 +80,7 @@ export function DataTable<TData, TValue>({
                     minWidth: header.column.columnDef.minSize,
                     width: header.column.columnDef.size,
                   }}
-                  className="px-4 py-2 text-center font-semibold text-foreground transition-colors hover:bg-primary/10"
+                  className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground"
                 >
                   {header.isPlaceholder
                     ? null
@@ -94,13 +93,13 @@ export function DataTable<TData, TValue>({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody className="bg-card">
+        <TableBody>
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() && "selected"}
-                className="bg-white/50 hover:bg-muted/40 transition-colors"
+                className="hover:bg-muted/20 transition-colors border-b border-border/50"
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
@@ -109,12 +108,7 @@ export function DataTable<TData, TValue>({
                       minWidth: cell.column.columnDef.minSize,
                       width: cell.column.columnDef.size,
                     }}
-                    className={`px-4 py-2 text-center ${
-                      cell.column.parent === undefined &&
-                      cell.column.getIndex() > 0
-                        ? "ml-4"
-                        : ""
-                    }`}
+                    className="px-4 py-3 text-center"
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
@@ -125,9 +119,12 @@ export function DataTable<TData, TValue>({
             <TableRow>
               <TableCell
                 colSpan={columns.length}
-                className="h-24 text-center text-muted-foreground"
+                className="h-32 text-center"
               >
-                No products added yet.
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <span className="text-sm font-bold uppercase tracking-widest opacity-60">No items added</span>
+                  <span className="text-xs opacity-40">Click "Add Item" to get started</span>
+                </div>
               </TableCell>
             </TableRow>
           )}

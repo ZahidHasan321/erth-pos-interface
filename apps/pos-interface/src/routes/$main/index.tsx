@@ -20,7 +20,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getOrdersList } from "@/api/orders";
 import { getCustomers } from "@/api/customers";
 import { cn } from "@/lib/utils";
+import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
+import { getShowroomStatus } from "@repo/database";
 
 export const Route = createFileRoute('/$main/')({
     component: DashboardPage,
@@ -60,24 +62,29 @@ function DashboardPage() {
         pendingOrders: orders.filter(o => o.checkout_status === 'draft').length,
         upcomingDeliveries: orders.filter(o => {
             if (!o.delivery_date || o.checkout_status !== 'confirmed') return false;
-            if (o.production_stage === 'order_delivered' || o.production_stage === 'order_collected') return false;
+            if (o.order_phase === 'completed') return false;
             const deliveryDate = new Date(o.delivery_date);
             return deliveryDate >= today && deliveryDate <= sevenDaysFromNow;
         }),
         todayDeliveries: orders.filter(o => {
             if (!o.delivery_date || o.checkout_status !== 'confirmed') return false;
-            if (o.production_stage === 'order_delivered' || o.production_stage === 'order_collected') return false;
+            if (o.order_phase === 'completed') return false;
             const deliveryDate = new Date(o.delivery_date);
             return deliveryDate >= today && deliveryDate <= endOfDay(today);
         }),
-        urgentOrders: orders.filter(o => {
+        readyForPickup: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            if (o.production_stage === 'order_delivered' || o.production_stage === 'order_collected') return false;
-            return o.garments?.some((g: any) => g.express);
+            const status = getShowroomStatus(o.garments || []);
+            return status.isReadyForPickup;
         }),
-        brovaNeeded: orders.filter(o => {
+        brovaTrials: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            return o.garments?.some((g: any) => g.garment_type === 'brova' && g.piece_stage !== 'brova_accepted');
+            const status = getShowroomStatus(o.garments || []);
+            return status.isBrovaTrial;
+        }),
+        needsAction: orders.filter(o => {
+            if (o.checkout_status !== 'confirmed') return false;
+            return o.garments?.some((g: any) => (g.piece_stage === 'needs_repair' || g.piece_stage === 'needs_redo') && g.location === 'shop');
         })
     };
 
@@ -121,6 +128,7 @@ function DashboardPage() {
                     bg="bg-blue-50"
                     trend={`${customers.length > 0 ? '+12%' : '0%'} from last month`}
                     index={0}
+                    to="/$main/customers"
                 />
                 <StatCard 
                     title="Active Work Orders" 
@@ -130,6 +138,8 @@ function DashboardPage() {
                     bg="bg-emerald-50"
                     trend="Running production"
                     index={1}
+                    to="/$main/orders/order-history"
+                    search={{ statusFilter: "confirmed", phaseFilter: "in_progress" }}
                 />
                 <StatCard 
                     title="Deliveries (Next 7d)" 
@@ -139,15 +149,19 @@ function DashboardPage() {
                     bg="bg-amber-50"
                     trend={stats.todayDeliveries.length > 0 ? `${stats.todayDeliveries.length} due today` : "Upcoming schedule"}
                     index={2}
+                    to="/$main/orders/order-history"
+                    search={{ statusFilter: "confirmed" }}
                 />
                 <StatCard 
-                    title="Urgent Actions" 
-                    value={stats.urgentOrders.length + stats.brovaNeeded.length} 
-                    icon={AlertCircle}
-                    color="text-rose-600"
-                    bg="bg-rose-50"
-                    trend="Needs attention"
+                    title="Ready for Pickup" 
+                    value={stats.readyForPickup.length} 
+                    icon={Package}
+                    color="text-emerald-600"
+                    bg="bg-emerald-50"
+                    trend="Awaiting customer"
                     index={3}
+                    to="/$main/orders/orders-at-showroom"
+                    search={{ stage: "ready_for_pickup" }}
                 />
             </div>
 
@@ -189,9 +203,20 @@ function DashboardPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <Badge variant="secondary" className="text-[10px] font-black uppercase tracking-tight bg-primary/5 text-primary border-none">
-                                                        {order.production_stage?.replace(/_/g, ' ') || 'Pending'}
-                                                    </Badge>
+                                                    {order.order_phase ? (
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className={cn(
+                                                                "text-[10px] font-black uppercase tracking-tight border-none",
+                                                                `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
+                                                                `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
+                                                            )}
+                                                        >
+                                                            {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pending</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
@@ -244,32 +269,40 @@ function DashboardPage() {
                     </CardHeader>
                     <CardContent className="p-6 space-y-6">
                         <WorkflowItem 
-                            label="Express Orders" 
-                            count={stats.urgentOrders.length} 
-                            icon={TrendingUp} 
-                            color="text-rose-600" 
-                            bg="bg-rose-50"
+                            label="Ready for Pickup" 
+                            count={stats.readyForPickup.length} 
+                            icon={Package} 
+                            color="text-emerald-600" 
+                            bg="bg-emerald-50"
+                            to="/$main/orders/orders-at-showroom"
+                            search={{ stage: "ready_for_pickup" }}
                         />
                         <WorkflowItem 
-                            label="Brova Required" 
-                            count={stats.brovaNeeded.length} 
+                            label="Brova Trials" 
+                            count={stats.brovaTrials.length} 
                             icon={Scissors} 
                             color="text-amber-600" 
                             bg="bg-amber-50"
+                            to="/$main/orders/orders-at-showroom"
+                            search={{ stage: "brova_trial" }}
                         />
                         <WorkflowItem 
-                            label="Drafts / Pending" 
-                            count={stats.pendingOrders} 
-                            icon={Clock} 
-                            color="text-blue-600" 
-                            bg="bg-blue-50"
+                            label="Needs Action" 
+                            count={stats.needsAction.length} 
+                            icon={AlertCircle} 
+                            color="text-rose-600" 
+                            bg="bg-rose-50"
+                            to="/$main/orders/orders-at-showroom"
+                            search={{ stage: "needs_action" }}
                         />
                         <WorkflowItem 
                             label="Completed & Closed" 
-                            count={orders.filter(o => o.production_stage === 'order_delivered').length} 
+                            count={orders.filter(o => o.order_phase === 'completed').length} 
                             icon={CheckCircle2} 
                             color="text-emerald-600" 
                             bg="bg-emerald-50" 
+                            to="/$main/orders/order-history"
+                            search={{ phaseFilter: "completed" }}
                         />
                     </CardContent>
                 </Card>
@@ -300,31 +333,39 @@ function DashboardPage() {
         </div>
     );
 }
-function StatCard({ title, value, icon: Icon, color, bg, trend, index }: any) {
+function StatCard({ title, value, icon: Icon, color, bg, trend, index, to, search }: any) {
+    const content = (
+        <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+                <div className={cn("p-3 rounded-2xl", bg)}>
+                    <Icon className={cn("w-6 h-6", color)} />
+                </div>
+                <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-[0.1em] opacity-60">Live</Badge>
+            </div>
+            <div className="space-y-1">
+                <h3 className="text-3xl font-black tracking-tighter">{value}</h3>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+            </div>
+            <div className="mt-4 pt-4 border-t border-dashed flex items-center justify-between">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">{trend}</span>
+                <TrendingUp className="w-3 h-3 text-muted-foreground opacity-30" />
+            </div>
+        </CardContent>
+    );
+
     return (
         <Card className={cn("border-2 shadow-none rounded-3xl overflow-hidden group hover:border-primary/30 transition-all", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(index)}>
-            <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div className={cn("p-3 rounded-2xl", bg)}>
-                        <Icon className={cn("w-6 h-6", color)} />
-                    </div>
-                    <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-[0.1em] opacity-60">Live</Badge>
-                </div>
-                <div className="space-y-1">
-                    <h3 className="text-3xl font-black tracking-tighter">{value}</h3>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-                </div>
-                <div className="mt-4 pt-4 border-t border-dashed flex items-center justify-between">
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">{trend}</span>
-                    <TrendingUp className="w-3 h-3 text-muted-foreground opacity-30" />
-                </div>
-            </CardContent>
+            {to ? (
+                <Link to={to} search={search}>
+                    {content}
+                </Link>
+            ) : content}
         </Card>
     );
 }
 
-function WorkflowItem({ label, count, icon: Icon, color, bg }: any) {
-    return (
+function WorkflowItem({ label, count, icon: Icon, color, bg, to, search }: any) {
+    const content = (
         <div className="flex items-center justify-between p-4 rounded-2xl border-2 border-transparent hover:border-border hover:bg-muted/5 transition-all">
             <div className="flex items-center gap-4">
                 <div className={cn("p-2.5 rounded-xl", bg)}>
@@ -338,5 +379,15 @@ function WorkflowItem({ label, count, icon: Icon, color, bg }: any) {
             </div>
         </div>
     );
+
+    if (to) {
+        return (
+            <Link to={to} search={search} className="block">
+                {content}
+            </Link>
+        );
+    }
+
+    return content;
 }
 

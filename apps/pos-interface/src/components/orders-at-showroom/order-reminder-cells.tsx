@@ -18,9 +18,9 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -85,35 +85,35 @@ interface ReminderCellProps {
 
 export function ReminderCell({ orderId, type, date, note, colorClass }: ReminderCellProps) {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   // Local state for the form
-  const [editDate, setEditDate] = useState("");
+  const [editDate, setEditDate] = useState<Date | null>(null);
   const [editNote, setEditNote] = useState("");
 
   const updateMutation = useOrderUpdate();
 
   const handleOpen = (open: boolean) => {
     if (open) {
-      // Ensure YYYY-MM-DD
-      const d = date ? new Date(date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-      setEditDate(d);
+      setEditDate(date ? new Date(date) : new Date());
       setEditNote(note || "");
     }
     setIsOpen(open);
   };
 
   const handleSave = async () => {
+    if (!editDate) return;
+    const dateStr = editDate.toISOString().split("T")[0];
     let updates: Record<string, any> = {};
-    
+
     if (type === "Escalation") {
       updates = {
-        escalation_date: editDate,
+        escalation_date: dateStr,
         escalation_notes: editNote,
       };
     } else {
       const fieldPrefix = type.toLowerCase(); // r1, r2, r3
       updates = {
-        [`${fieldPrefix}_date`]: editDate,
+        [`${fieldPrefix}_date`]: dateStr,
         [`${fieldPrefix}_notes`]: editNote,
       };
     }
@@ -177,13 +177,8 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="date">Date</Label>
-            <Input
-              id="date"
-              type="date"
-              value={editDate}
-              onChange={(e) => setEditDate(e.target.value)}
-            />
+            <Label>Date</Label>
+            <DatePicker value={editDate} onChange={(d) => setEditDate(d)} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="notes">Notes</Label>
@@ -224,7 +219,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
   const [isOpen, setIsOpen] = useState(false);
   
   // Local form state
-  const [editDate, setEditDate] = useState("");
+  const [editDate, setEditDate] = useState<Date | null>(null);
   const [editStatus, setEditStatus] = useState("");
   const [editNote, setEditNote] = useState("");
 
@@ -232,8 +227,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
 
   const handleOpen = (open: boolean) => {
     if (open) {
-      const d = date ? new Date(date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-      setEditDate(d);
+      setEditDate(date ? new Date(date) : new Date());
       setEditStatus(status || "");
       setEditNote(note || "");
     }
@@ -241,8 +235,9 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
   };
 
   const handleSave = async () => {
+    if (!editDate) return;
     const updates = {
-      call_reminder_date: editDate,
+      call_reminder_date: editDate.toISOString().split("T")[0],
       call_status: editStatus,
       call_notes: editNote
     };
@@ -324,13 +319,8 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="call-date">Date</Label>
-            <Input
-              id="call-date"
-              type="date"
-              value={editDate}
-              onChange={(e) => setEditDate(e.target.value)}
-            />
+            <Label>Date</Label>
+            <DatePicker value={editDate} onChange={(d) => setEditDate(d)} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="call-status">Status</Label>

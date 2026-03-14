@@ -62,8 +62,9 @@ export const fuzzySearchCustomers = async (
 ): Promise<ApiResponse<Customer[]>> => {
   const { data, error, count } = await supabase
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
+    .select('*', { count: 'estimated' })
     .or(`name.ilike.%${query}%,phone.ilike.%${query}%,arabic_name.ilike.%${query}%,nick_name.ilike.%${query}%`)
+    .order('name', { ascending: true })
     .limit(10);
 
   if (error) {

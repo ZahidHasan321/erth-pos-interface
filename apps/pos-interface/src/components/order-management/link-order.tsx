@@ -8,7 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
-import { Check, Link as LinkIcon, Trash2, Hash, User, Phone, Clock } from "lucide-react";
+import { Check, Link as LinkIcon, Trash2, User, Phone, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // UI Components
@@ -28,6 +28,7 @@ import { DirectLookupCard } from "./order-search-form";
 import { ErrorBoundary } from "../global/error-boundary";
 import { SearchCustomer } from "../forms/customer-demographics/search-customer";
 import { LinkConfigurationPanel } from "./link-configuration-panel";
+import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 
 import type { Order, Customer } from "@repo/database";
 
@@ -39,7 +40,7 @@ type SelectedOrder = {
   customerId?: number;
   customerName?: string;
   customerPhone?: string;
-  productionStage?: string | null;
+  orderPhase?: string | null;
   isExistingPrimary?: boolean;
   isExistingChild?: boolean;
 };
@@ -176,7 +177,7 @@ export default function LinkOrder() {
             customerId: order.customer_id,
             customerName: order.customer?.name,
             customerPhone: order.customer?.phone ?? undefined,
-            productionStage: order.production_stage,
+            orderPhase: order.order_phase,
             isExistingPrimary: order.child_orders && order.child_orders.length > 0,
             isExistingChild: !!order.linked_order_id
         };
@@ -217,7 +218,7 @@ export default function LinkOrder() {
                     customerId: order.customer_id,
                     customerName: order.customer?.name,
                     customerPhone: order.customer?.phone ?? undefined,
-                    productionStage: order.production_stage,
+                    orderPhase: order.order_phase,
                     isExistingPrimary: order.child_orders && order.child_orders.length > 0,
                     isExistingChild: !!order.linked_order_id
                 });
@@ -437,79 +438,63 @@ export default function LinkOrder() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                         className={cn(
-                          "flex flex-col sm:flex-row items-stretch sm:items-center p-3 transition-all border-l-4",
-                          isPrimary 
-                            ? "border-l-primary bg-primary/5 shadow-inner" 
+                          "flex items-center gap-3 p-3 transition-all border-l-4",
+                          isPrimary
+                            ? "border-l-primary bg-primary/5"
                             : "border-l-transparent hover:bg-muted/20"
                         )}
                       >
-                        {/* Radio Checkbox */}
-                        <div className="flex items-center justify-center px-2 mr-2">
-                           <div 
-                             className={cn(
-                               "w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all",
-                               isPrimary ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary/50"
-                             )}
-                             onClick={() => setPrimaryOrderId(order.id)}
-                           >
-                             {isPrimary && <div className="w-2 h-2 rounded-full bg-white" />}
-                           </div>
+                        {/* Primary Radio */}
+                        <div
+                          className={cn(
+                            "size-5 rounded-full border-2 flex items-center justify-center cursor-pointer shrink-0 transition-all",
+                            isPrimary ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary/50"
+                          )}
+                          onClick={() => setPrimaryOrderId(order.id)}
+                        >
+                          {isPrimary && <div className="size-2 rounded-full bg-white" />}
                         </div>
 
-                        {/* Order Identity */}
-                        <div className="flex-1 min-w-[150px] space-y-1">
-                           <div className="flex items-center gap-2">
-                              <h4 className="text-xs font-black uppercase tracking-tighter">Order #{order.id}</h4>
-                              {isPrimary && (
-                                <Badge variant="default" className="text-[8px] font-black h-4 px-1 rounded-sm">PRIMARY</Badge>
-                              )}
-                              {order.isExistingPrimary && !isPrimary && (
-                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
-                              )}
-                              {order.isExistingChild && !isPrimary && (
-                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600 opacity-60">EXISTING CHILD</Badge>
-                              )}
-                           </div>
-                           <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                              <Hash className="w-2.5 h-2.5" />
-                              <span>Inv: {order.invoiceNumber || "—"}</span>
-                           </div>
-                        </div>
-
-                        {/* Customer Info */}
-                        <div className="flex-[1.5] py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-border/40 px-4 space-y-1">
-                            <div className="flex items-center gap-1.5">
-                                <User className="w-3 h-3 text-primary" />
-                                <span className="text-xs font-bold truncate">{order.customerName}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <Phone className="w-2.5 h-2.5 text-muted-foreground" />
-                                <span className="text-[10px] font-medium text-muted-foreground">{order.customerPhone || "N/A"}</span>
-                            </div>
-                        </div>
-
-                        {/* Delivery Info */}
-                        <div className="flex-1 py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-border/40 px-4 space-y-1">
-                            <div className="flex items-center gap-1.5">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-[10px] font-black text-muted-foreground uppercase">Current Delivery</span>
-                            </div>
-                            <span className="text-[11px] font-bold block">
-                                {order.deliveryDate ? format(new Date(order.deliveryDate), "PP") : "Not Set"}
+                        {/* Main Info */}
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-sm tracking-tight">#{order.id}</span>
+                            {order.invoiceNumber && (
+                              <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">INV {order.invoiceNumber}</span>
+                            )}
+                            {isPrimary && <Badge variant="default" className="text-[8px] font-black h-4 px-1.5 rounded-sm">PRIMARY</Badge>}
+                            {order.isExistingPrimary && !isPrimary && (
+                              <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
+                            )}
+                            {order.isExistingChild && (
+                              <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600">CHILD</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-1 font-bold truncate">
+                              <User className="size-2.5 shrink-0" />
+                              {order.customerName || "—"}
                             </span>
+                            <span className="flex items-center gap-1">
+                              <Phone className="size-2.5 shrink-0" />
+                              {order.customerPhone || "N/A"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="size-2.5 shrink-0" />
+                              {order.deliveryDate ? format(new Date(order.deliveryDate), "PP") : "No date"}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Action */}
-                        <div className="flex items-center justify-end px-2 ml-auto">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeOrder(order.id)}
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+                        {/* Remove */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeOrder(order.id)}
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </motion.div>
                     );
                   })
@@ -640,9 +625,20 @@ export default function LinkOrder() {
                            )}
                         </td>
                         <td className="p-4">
-                          <Badge variant="outline" className="text-[9px] font-black uppercase tracking-wider h-5 px-2">
-                            {order.production_stage?.replace(/_/g, " ") ?? "N/A"}
-                          </Badge>
+                          {order.order_phase ? (
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "text-[9px] font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
+                                `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
+                                `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
+                              )}
+                            >
+                              {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
+                          )}
                         </td>
                       </tr>
                     );

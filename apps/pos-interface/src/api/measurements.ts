@@ -16,15 +16,16 @@ export const getMeasurements = async (): Promise<ApiResponse<Measurement[]>> => 
 };
 
 export const getMeasurementsByCustomerId = async (customerId: number): Promise<ApiResponse<Measurement[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
-    .eq('customer_id', customerId);
+    .select('*')
+    .eq('customer_id', customerId)
+    .order('measurement_date', { ascending: false });
 
   if (error) {
     return { status: 'error', message: error.message, data: [], count: 0 };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+  return { status: 'success', data: data as any, count: data?.length || 0 };
 };
 
 export const getMeasurementById = async (id: string): Promise<ApiResponse<Measurement>> => {
@@ -51,7 +52,7 @@ export const createMeasurement = async (
 
   if (error) {
     console.error('Error creating measurement:', error);
-    throw error;
+    return { status: 'error', message: error.message };
   }
   return { status: 'success', data: data as any };
 };
@@ -69,7 +70,7 @@ export const updateMeasurement = async (
 
   if (error) {
     console.error('Error updating measurement:', error);
-    throw error;
+    return { status: 'error', message: error.message };
   }
   return { status: 'success', data: data as any };
 };
