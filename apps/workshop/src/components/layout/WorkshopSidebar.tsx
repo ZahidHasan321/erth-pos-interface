@@ -26,6 +26,7 @@ import {
   Wind,
   CheckCircle,
   Truck,
+  CheckCircle2,
   Users,
   LogOut,
   LayoutDashboard,
@@ -44,11 +45,12 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
     { label: "Receiving",       icon: Inbox,           href: "/receiving",  count: counts?.receiving,  badgeColor: "bg-blue-100 text-blue-700" },
     { label: "Parking",         icon: ParkingSquare,   href: "/parking",    count: counts?.parking,    badgeColor: "bg-amber-100 text-amber-700" },
     { label: "Scheduler",       icon: CalendarDays,    href: "/scheduler",  count: counts?.scheduler,  badgeColor: "bg-purple-100 text-purple-700" },
-    { label: "Assigned Orders", icon: ClipboardList,   href: "/assigned" },
+    { label: "Production Tracker", icon: ClipboardList, href: "/assigned" },
   ];
 
   const postProductionItems = [
     { label: "Dispatch",        icon: Truck,           href: "/dispatch",   count: counts?.dispatch,   badgeColor: "bg-green-100 text-green-700" },
+    { label: "Completed",       icon: CheckCircle2,    href: "/completed" },
   ];
 
   const terminalItems = [

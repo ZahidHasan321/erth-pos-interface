@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import {
     Package,
     Search,
@@ -53,7 +54,7 @@ function ReceivingInterface() {
         mutationFn: async ({ garments, orderId }: { garments: Garment[]; orderId: number }) => {
             const promises = garments.map((garment) =>
                 updateGarment(garment.id, {
-                    piece_stage: "at_shop" as any,
+                    piece_stage: (garment.garment_type === "brova" ? "awaiting_trial" : "ready_for_pickup") as any,
                     location: "shop",
                 })
             );
@@ -328,11 +329,11 @@ function OrderCard({
                                             )}
                                         </td>
                                         <td className="py-2.5 px-5 font-mono text-muted-foreground">
-                                            {g.trip_number && g.trip_number > 1 ? `#${g.trip_number}` : "1st"}
+                                            {g.trip_number && g.trip_number > 1 ? `Alt ${g.trip_number - 1}` : "1st"}
                                         </td>
                                         <td className="py-2.5 px-5">
                                             <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded capitalize">
-                                                {g.piece_stage?.replace(/_/g, " ")}
+                                                {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
                                             </span>
                                         </td>
                                     </tr>

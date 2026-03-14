@@ -1,19 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments, useBrovaStatus, useBrovaPlans } from "@/hooks/useWorkshopGarments";
 import {
   useSendToScheduler,
   useSendReturnToProduction,
-  useReleaseFinals,
   useReleaseFinalsWithPlan,
 } from "@/hooks/useGarmentMutations";
-import { PlanDialog } from "@/components/shared/PlanDialog";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -25,8 +25,14 @@ import {
 import { BrandBadge, ExpressBadge, StageBadge } from "@/components/shared/StageBadge";
 import { cn, formatDate } from "@/lib/utils";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { useResources } from "@/hooks/useResources";
 import { toast } from "sonner";
-import { ParkingSquare, Clock, RotateCcw, Zap, Unlock, ChevronDown, ChevronUp, Package, Home, AlertTriangle } from "lucide-react";
+import {
+  ParkingSquare, Clock, RotateCcw, Zap, Unlock, ChevronDown, ChevronUp,
+  Package, Home, AlertTriangle, ClipboardList, Check,
+  CalendarDays, Pencil, Scissors, Shirt, Sparkles, Flame, ShieldCheck, Droplets,
+  type LucideIcon,
+} from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 import type { PieceStage } from "@repo/database";
 
@@ -83,19 +89,49 @@ function garmentSummary(garments: WorkshopGarment[]): string {
 const isAllWaitingAcceptance = (garments: WorkshopGarment[]) =>
   garments.every((g) => g.piece_stage === "waiting_for_acceptance");
 
-const hasWaitingFinals = (garments: WorkshopGarment[]) =>
-  garments.some((g) => g.piece_stage === "waiting_for_acceptance" && g.garment_type === "final");
+/** Finals needing release: either still at waiting_for_acceptance, or POS released to waiting_cut but no plan yet */
+const hasReleasableFinals = (garments: WorkshopGarment[]) =>
+  garments.some((g) =>
+    g.garment_type === "final" && (
+      g.piece_stage === "waiting_for_acceptance" ||
+      (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+    ),
+  );
+
+/** Stages that mean "still being produced" (not yet dispatched/trialed) */
+const PRODUCTION_STAGES: PieceStage[] = [
+  "waiting_for_acceptance", "waiting_cut", "soaking", "cutting", "post_cutting",
+  "sewing", "finishing", "ironing", "quality_check", "ready_for_dispatch",
+];
+
+/** Determine what's really happening with the brovas in an order.
+ *  Pass ALL garments for the order (not just parked ones) since brovas may be in_production. */
+function getBrovaBlockReason(allOrderGarments: WorkshopGarment[]): "in_production" | "awaiting_trial" | null {
+  const brovas = allOrderGarments.filter((g) => g.garment_type === "brova");
+  if (brovas.length === 0) return null;
+
+  // If any brova is still in production stages at the workshop, it's "in production"
+  const brovasInProduction = brovas.some(
+    (g) => PRODUCTION_STAGES.includes(g.piece_stage as PieceStage),
+  );
+  if (brovasInProduction) return "in_production";
+
+  // Otherwise brovas have been dispatched/at shop — waiting for customer trial
+  return "awaiting_trial";
+}
 
 // ── OrderCard (order-level for Orders tab) ───────────────────────────────────
 
 function ParkingOrderCard({
   group,
+  allOrderGarments,
   selected,
   onToggle,
   onSendToScheduler,
   isSending,
 }: {
   group: OrderGroup;
+  allOrderGarments: WorkshopGarment[];
   selected: boolean;
   onToggle: (checked: boolean) => void;
   onSendToScheduler: () => void;
@@ -103,6 +139,7 @@ function ParkingOrderCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const allParked = isAllWaitingAcceptance(group.garments);
+  const brovaBlock = getBrovaBlockReason(allOrderGarments);
   const deliveryDate = group.garments[0]?.delivery_date_order;
 
   return (
@@ -144,7 +181,15 @@ function ParkingOrderCard({
                   Delivery
                 </span>
               )}
-              {allParked && (
+              {allParked && brovaBlock === "in_production" && (
+                <Badge
+                  variant="outline"
+                  className="border-0 bg-purple-500 text-white text-[10px] font-semibold uppercase"
+                >
+                  Brova in production
+                </Badge>
+              )}
+              {allParked && brovaBlock === "awaiting_trial" && (
                 <Badge
                   variant="outline"
                   className="border-0 bg-amber-500 text-white text-[10px] font-semibold uppercase"
@@ -248,10 +293,14 @@ function WaitingFinalsCard({
   brovaStatus?: { total: number; trialed: number; accepted: number };
 }) {
   const [expanded, setExpanded] = useState(false);
-  const waitingGarments = group.garments.filter(
-    (g) => g.piece_stage === "waiting_for_acceptance",
+  const releasableGarments = group.garments.filter(
+    (g) => g.garment_type === "final" && (
+      g.piece_stage === "waiting_for_acceptance" ||
+      (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+    ),
   );
   const deliveryDate = group.garments[0]?.delivery_date_order;
+  const posReleased = releasableGarments.some((g) => g.piece_stage === "waiting_cut");
 
   // Determine readiness from brova status
   const noBrovas = !brovaStatus || brovaStatus.total === 0;
@@ -310,6 +359,14 @@ function WaitingFinalsCard({
                   Awaiting trial ({brovaStatus!.trialed}/{brovaStatus!.total} trialed)
                 </Badge>
               )}
+              {posReleased && (
+                <Badge
+                  variant="outline"
+                  className="border-0 bg-blue-100 text-blue-800 text-[10px] font-semibold uppercase"
+                >
+                  Shop approved
+                </Badge>
+              )}
             </div>
             <div className="flex items-center flex-wrap gap-1.5">
               {group.invoice_number && (
@@ -322,7 +379,7 @@ function WaitingFinalsCard({
                 {garmentSummary(group.garments)}
               </span>
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                {waitingGarments.length} final{waitingGarments.length !== 1 ? "s" : ""}
+                {releasableGarments.length} final{releasableGarments.length !== 1 ? "s" : ""}
               </span>
               {deliveryDate && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
@@ -425,6 +482,348 @@ function ReturnGarmentCard({
 
 // ── EmptyState / LoadingSkeleton ─────────────────────────────────────────────
 
+// ── Release Finals Dialog ────────────────────────────────────────────────────
+
+const RELEASE_PLAN_STEPS = [
+  { key: "soaker",          label: "Soaking",      responsibility: "soaking",       icon: Droplets,    color: "text-sky-600",    accent: "bg-sky-100" },
+  { key: "cutter",          label: "Cutting",      responsibility: "cutting",       icon: Scissors,    color: "text-amber-600",  accent: "bg-amber-100" },
+  { key: "post_cutter",     label: "Post-Cutting", responsibility: "post_cutting",  icon: Package,     color: "text-orange-600", accent: "bg-orange-100" },
+  { key: "sewer",           label: "Sewing",       responsibility: "sewing",        icon: Shirt,       color: "text-purple-600", accent: "bg-purple-100" },
+  { key: "finisher",        label: "Finishing",     responsibility: "finishing",     icon: Sparkles,    color: "text-emerald-600",accent: "bg-emerald-100" },
+  { key: "ironer",          label: "Ironing",       responsibility: "ironing",      icon: Flame,       color: "text-red-600",    accent: "bg-red-100" },
+  { key: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: ShieldCheck, color: "text-indigo-600", accent: "bg-indigo-100" },
+];
+
+function ReleaseFinalsDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  garmentCount,
+  defaultPlan,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (plan: Record<string, string>, date: string) => void;
+  garmentCount: number;
+  defaultPlan: Record<string, string> | null;
+  isPending: boolean;
+}) {
+  const { data: resources = [] } = useResources();
+  const { data: allGarmentsForWorkload = [] } = useWorkshopGarments();
+  const [plan, setPlan] = useState<Record<string, string>>({});
+  const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [editingStep, setEditingStep] = useState<string | null>(null);
+
+  // Compute workload: per plan-key → worker name → garment count
+  const workload: Record<string, Record<string, number>> = {};
+  for (const step of RELEASE_PLAN_STEPS) {
+    workload[step.key] = {};
+  }
+  for (const g of allGarmentsForWorkload) {
+    if (!g.production_plan || !g.in_production) continue;
+    const pp = g.production_plan as Record<string, string>;
+    for (const step of RELEASE_PLAN_STEPS) {
+      const workerName = pp[step.key];
+      if (workerName) {
+        workload[step.key][workerName] = (workload[step.key][workerName] ?? 0) + 1;
+      }
+    }
+  }
+
+  // Per-step: unique units
+  const stageUnits: Record<string, string[]> = {};
+  for (const step of RELEASE_PLAN_STEPS) {
+    const set = new Set<string>();
+    for (const r of resources) {
+      if (r.responsibility === step.responsibility && r.unit) set.add(r.unit);
+    }
+    stageUnits[step.key] = Array.from(set).sort();
+  }
+
+  // Reset when dialog opens or defaultPlan changes
+  useEffect(() => {
+    if (open) {
+      setPlan(defaultPlan ? { ...defaultPlan } : {});
+      setDate(new Date().toISOString().slice(0, 10));
+      setEditingStep(null);
+      // Auto-detect units from default plan workers
+      const units: Record<string, string> = {};
+      for (const step of RELEASE_PLAN_STEPS) {
+        const stepUnits = stageUnits[step.key] ?? [];
+        if (stepUnits.length === 1) {
+          units[step.key] = stepUnits[0];
+        } else if (defaultPlan?.[step.key]) {
+          const match = resources.find(
+            (r) => r.resource_name === defaultPlan[step.key] && r.responsibility === step.responsibility,
+          );
+          if (match?.unit) units[step.key] = match.unit;
+        }
+      }
+      setUnitSelections(units);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultPlan]);
+
+  // Filter steps (hide soaking if not in plan)
+  const visibleSteps = RELEASE_PLAN_STEPS.filter(
+    (s) => s.key !== "soaker" || plan.soaker || defaultPlan?.soaker,
+  );
+
+  // Get workers for a responsibility, filtered by selected unit
+  const getWorkers = (stepKey: string, responsibility: string) => {
+    let filtered = resources.filter((r) => r.responsibility === responsibility);
+    if (unitSelections[stepKey]) {
+      filtered = filtered.filter((r) => r.unit === unitSelections[stepKey]);
+    }
+    return filtered;
+  };
+
+  const handleUnitChange = (stepKey: string, unit: string) => {
+    setUnitSelections((prev) => ({ ...prev, [stepKey]: unit }));
+    // Clear worker if not in new unit
+    const step = RELEASE_PLAN_STEPS.find((s) => s.key === stepKey)!;
+    const workers = resources.filter((r) => r.responsibility === step.responsibility && r.unit === unit);
+    if (plan[stepKey] && !workers.some((w) => w.resource_name === plan[stepKey])) {
+      setPlan((prev) => ({ ...prev, [stepKey]: "" }));
+    }
+  };
+
+  const allRequiredFilled = visibleSteps
+    .filter((s) => s.key !== "soaker")
+    .every((s) => !!plan[s.key]);
+
+  const canSubmit = !!date && allRequiredFilled;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 border-b bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Unlock className="w-5 h-5 text-green-600" />
+              Release Finals
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {garmentCount} final{garmentCount !== 1 ? "s" : ""} will enter production
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[65vh] overflow-y-auto">
+          {/* Assigned Date — prominent */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1.5">
+            <Label className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5" />
+              Assigned Date <span className="text-red-500">*</span>
+            </Label>
+            <DatePicker
+              value={date}
+              onChange={(d) => setDate(d ? d.toISOString().slice(0, 10) : "")}
+              className="h-9 text-sm font-semibold bg-white"
+            />
+          </div>
+
+          {/* Production Plan — step rows */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Production Plan
+              </Label>
+              {defaultPlan && (
+                <span className="text-[10px] text-muted-foreground">from brova</span>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              {visibleSteps.map((step) => {
+                const Icon = step.icon;
+                const worker = plan[step.key] ?? "";
+                const isEditing = editingStep === step.key;
+                const units = stageUnits[step.key] ?? [];
+                const stepWorkload = workload[step.key] ?? {};
+                const hasMultipleUnits = units.length > 1;
+                const selectedUnit = unitSelections[step.key] ?? "";
+                const workers = getWorkers(step.key, step.responsibility);
+                const workerUnit = worker
+                  ? resources.find((r) => r.resource_name === worker && r.responsibility === step.responsibility)?.unit
+                  : null;
+
+                return (
+                  <div key={step.key} className={cn(
+                    "border rounded-lg transition-all",
+                    isEditing ? "border-primary bg-primary/5" : "border-zinc-200 bg-white",
+                  )}>
+                    {/* Row: icon + label + unit + worker + edit button */}
+                    <div
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-colors rounded-lg",
+                        isEditing
+                          ? "bg-primary/5"
+                          : "hover:bg-muted/40 active:bg-muted/60",
+                      )}
+                      onClick={() => setEditingStep(isEditing ? null : step.key)}
+                    >
+                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm", step.accent)}>
+                        <Icon className={cn("w-4 h-4", step.color)} />
+                      </div>
+                      <span className="text-sm font-medium flex-1">{step.label}</span>
+                      {worker ? (() => {
+                        const wLoad = stepWorkload[worker] ?? 0;
+                        const wRes = resources.find((r) => r.resource_name === worker && r.responsibility === step.responsibility);
+                        const wCap = wRes?.daily_target ?? 0;
+                        const wOver = wCap > 0 && wLoad >= wCap;
+                        return (
+                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                            {hasMultipleUnits && workerUnit && (
+                              <span className="text-[10px] text-muted-foreground font-normal">{workerUnit} ·</span>
+                            )}
+                            {worker}
+                            <span className={cn(
+                              "text-[10px] font-bold tabular-nums",
+                              wOver ? "text-red-500" : wLoad > 0 ? "text-orange-500" : "text-emerald-500",
+                            )}>
+                              {wCap > 0 ? `${wLoad}/${wCap}` : wLoad > 0 ? String(wLoad) : "0"}
+                            </span>
+                          </span>
+                        );
+                      })() : (
+                        <span className="text-xs text-red-400 italic">not set</span>
+                      )}
+                      <div className={cn(
+                        "w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors",
+                        isEditing ? "bg-primary/10 text-primary" : "text-muted-foreground/30 hover:text-muted-foreground/60",
+                      )}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* Expanded: unit picker + worker select */}
+                    {isEditing && (
+                      <div className="px-3 pb-2.5 pt-0.5 space-y-2">
+                        {/* Unit picker — only when multiple units */}
+                        {hasMultipleUnits && (
+                          <div>
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1.5 block">
+                              Unit
+                            </Label>
+                            <div className="flex gap-2">
+                              {units.map((u) => (
+                                <button
+                                  key={u}
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleUnitChange(step.key, u); }}
+                                  className={cn(
+                                    "px-4 py-2 rounded-lg text-sm font-semibold border-2 transition-all shadow-sm",
+                                    "active:scale-95",
+                                    selectedUnit === u
+                                      ? "border-primary bg-primary text-white shadow-md"
+                                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:shadow-md",
+                                  )}
+                                >
+                                  {u}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Worker chips */}
+                        {hasMultipleUnits && !selectedUnit ? (
+                          <p className="text-xs text-muted-foreground italic py-1">Select a unit first</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {workers.map((r) => {
+                              const load = stepWorkload[r.resource_name] ?? 0;
+                              const cap = r.daily_target ?? 0;
+                              const isOver = cap > 0 && load >= cap;
+                              const isSelected = r.resource_name === worker;
+                              return (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPlan((prev) => ({
+                                      ...prev,
+                                      [step.key]: isSelected ? "" : r.resource_name,
+                                    }));
+                                    if (!isSelected) setEditingStep(null);
+                                  }}
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 border-2 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all shadow-sm",
+                                    "active:scale-95",
+                                    isSelected
+                                      ? "border-primary bg-primary text-white shadow-md"
+                                      : isOver
+                                        ? "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:shadow-md"
+                                        : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:shadow-md",
+                                  )}
+                                >
+                                  {r.resource_name}
+                                  {r.resource_type === "Senior" && (
+                                    <span className={cn(
+                                      "text-[10px] font-bold uppercase",
+                                      isSelected ? "text-white/80" : "text-amber-500",
+                                    )}>Sr</span>
+                                  )}
+                                  <span className={cn(
+                                    "text-[10px] font-bold tabular-nums",
+                                    isSelected
+                                      ? "text-white/70"
+                                      : isOver
+                                        ? "text-red-500"
+                                        : load > 0
+                                          ? "text-orange-500"
+                                          : "text-emerald-500",
+                                  )}>
+                                    {cap > 0 ? `${load}/${cap}` : load > 0 ? String(load) : "0"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                            {workers.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No workers for this stage</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t bg-white px-5 py-3 flex items-center justify-between gap-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            className="bg-green-600 hover:bg-green-700 flex-1 max-w-[200px]"
+            disabled={!canSubmit || isPending}
+            onClick={() => {
+              const finalPlan: Record<string, string> = {};
+              for (const step of visibleSteps) {
+                if (plan[step.key]) finalPlan[step.key] = plan[step.key];
+              }
+              onConfirm(finalPlan, date);
+              onOpenChange(false);
+            }}
+          >
+            <Unlock className="w-4 h-4 mr-1" />
+            Release Finals
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── EmptyState / LoadingSkeleton ─────────────────────────────────────────────
+
 function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-2xl">
@@ -450,7 +849,6 @@ function ParkingPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const sendMut = useSendToScheduler();
   const sendReturnMut = useSendReturnToProduction();
-  const releaseMut = useReleaseFinals();
   const releaseWithPlanMut = useReleaseFinalsWithPlan();
 
   // Split data
@@ -459,8 +857,16 @@ function ParkingPage() {
   const returnsGarments = parked.filter((g) => (g.trip_number ?? 1) > 1);
   const orderGroups = groupByOrder(ordersGarments);
 
+  // Build lookup of ALL garments per order (including in_production ones) for brova status
+  const allGarmentsByOrder = new Map<number, WorkshopGarment[]>();
+  for (const g of allGarments) {
+    const list = allGarmentsByOrder.get(g.order_id) ?? [];
+    list.push(g);
+    allGarmentsByOrder.set(g.order_id, list);
+  }
+
   // Separate: orders with waiting finals (for Release Finals tab)
-  const waitingFinalsGroups = orderGroups.filter((og) => hasWaitingFinals(og.garments));
+  const waitingFinalsGroups = orderGroups.filter((og) => hasReleasableFinals(og.garments));
 
   // Fetch brova acceptance status and production plans for orders with waiting finals
   const waitingOrderIds = waitingFinalsGroups.map((og) => og.order_id);
@@ -481,11 +887,95 @@ function ParkingPage() {
     const s = brovaStatusMap[og.order_id];
     return !s || s.total === 0 || (s.trialed === s.total && s.accepted > 0);
   }).length;
-  // KPIs
-  const totalOrders = orderGroups.length;
+  // Orders tab: only show orders that have schedulable garments (not fully waiting_for_acceptance)
+  // Fully-blocked orders belong exclusively in the Release Finals tab
+  const ordersTabGroups = orderGroups.filter((og) =>
+    og.garments.some((g) => g.piece_stage !== "waiting_for_acceptance"),
+  );
+
+  // KPIs & classifications
   const waitingForBrova = waitingFinalsGroups.length;
   const returnCount = returnsGarments.length;
-  const expressOrders = orderGroups.filter((og) => og.express).length;
+  const expressOrderGroups = ordersTabGroups.filter((og) => og.express);
+
+  // Orders tab: overdue (past delivery date)
+  const overdueOrderGroups = ordersTabGroups.filter((og) => {
+    const dd = og.garments[0]?.delivery_date_order;
+    if (!dd) return false;
+    return new Date(dd).getTime() < Date.now();
+  });
+
+  // Orders with mixed garments (some schedulable, some waiting_for_acceptance)
+  const mixedOrders = ordersTabGroups.filter((og) =>
+    og.garments.some((g) => g.piece_stage === "waiting_for_acceptance"),
+  );
+
+  // Release finals: not-ready count
+  const notReadyCount = sortedWaitingGroups.length - readyCount;
+
+  // Filter state
+  const [activeTab, setActiveTab] = useState("orders");
+  const [orderFilter, setOrderFilter] = useState("all");
+  const [finalsFilter, setFinalsFilter] = useState("all");
+  const [returnFilter, setReturnFilter] = useState("all");
+
+  // Stats per tab
+  const orderStats: StatCard[] = [
+    { label: "Total", value: ordersTabGroups.length, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: ClipboardList },
+    { label: "Overdue", value: overdueOrderGroups.length, key: "overdue", color: "bg-red-50 text-red-700 border-red-200", icon: AlertTriangle },
+    { label: "Has Finals", value: mixedOrders.length, key: "has-finals", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Clock },
+    { label: "Express", value: expressOrderGroups.length, key: "express", color: "bg-orange-50 text-orange-700 border-orange-200", icon: Zap },
+  ];
+
+  const finalsStats: StatCard[] = [
+    { label: "Total", value: sortedWaitingGroups.length, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: ClipboardList },
+    { label: "Ready", value: readyCount, key: "ready", color: "bg-green-50 text-green-700 border-green-200", icon: Check },
+    { label: "Awaiting Trial", value: notReadyCount, key: "awaiting", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Clock },
+  ];
+
+  const returnStats: StatCard[] = [
+    { label: "Total", value: returnCount, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: RotateCcw },
+    { label: "Express", value: returnsGarments.filter((g) => g.express).length, key: "express", color: "bg-orange-50 text-orange-700 border-orange-200", icon: Zap },
+  ];
+
+  // Filtered data
+  const filteredOrders = (() => {
+    switch (orderFilter) {
+      case "overdue": return overdueOrderGroups;
+      case "has-finals": return mixedOrders;
+      case "express": return expressOrderGroups;
+      default: return ordersTabGroups;
+    }
+  })();
+
+  const filteredWaitingGroups = (() => {
+    switch (finalsFilter) {
+      case "ready": return sortedWaitingGroups.filter((og) => {
+        const s = brovaStatusMap[og.order_id];
+        return !s || s.total === 0 || (s.trialed === s.total && s.accepted > 0);
+      });
+      case "awaiting": return sortedWaitingGroups.filter((og) => {
+        const s = brovaStatusMap[og.order_id];
+        return s && s.total > 0 && !(s.trialed === s.total && s.accepted > 0);
+      });
+      default: return sortedWaitingGroups;
+    }
+  })();
+
+  const filteredReturns = (() => {
+    switch (returnFilter) {
+      case "express": return returnsGarments.filter((g) => g.express);
+      default: return returnsGarments;
+    }
+  })();
+
+  // Reset filter when switching tabs
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setOrderFilter("all");
+    setFinalsFilter("all");
+    setReturnFilter("all");
+  };
 
   // Orders tab selection (by order_id)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
@@ -582,37 +1072,43 @@ function ParkingPage() {
     return warnings.length > 0 ? warnings.join("\n") : null;
   };
 
-  // Proceed to open the plan dialog for a set of garment IDs
-  const openPlanDialog = (ids: string[], orderId?: number) => {
+  // Helper: get releasable final IDs from a group
+  const getReleasableFinalIds = (group: OrderGroup) =>
+    group.garments
+      .filter((g) =>
+        g.garment_type === "final" && (
+          g.piece_stage === "waiting_for_acceptance" ||
+          (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+        ),
+      )
+      .map((g) => g.id);
+
+  // Proceed to open the release dialog — pre-fill plan from brova's worker_history
+  const openReleaseDialog = (ids: string[], orderId?: number) => {
     setReleaseTargetIds(ids);
+    // Pre-fill from brova plans lookup (which now merges worker_history + production_plan)
     setReleaseDefaultPlan(orderId ? (brovaPlansMap[orderId] ?? null) : null);
     setReleasePlanOpen(true);
   };
 
-  // Release finals — opens plan dialog, or warning first if brovas not accepted
+  // Release finals — opens release dialog, or warning first if brovas not accepted
   const handleReleaseFinals = (group: OrderGroup) => {
-    const ids = group.garments
-      .filter((g) => g.piece_stage === "waiting_for_acceptance" && g.garment_type === "final")
-      .map((g) => g.id);
+    const ids = getReleasableFinalIds(group);
     if (!ids.length) return;
 
     if (!isOrderReady(group.order_id)) {
       const warning = getBrovaWarning([group.order_id]);
       setWarningMessage(warning ?? "Brovas have not been accepted for this order.");
-      setPendingReleaseAction(() => () => openPlanDialog(ids, group.order_id));
+      setPendingReleaseAction(() => () => openReleaseDialog(ids, group.order_id));
       setWarningOpen(true);
     } else {
-      openPlanDialog(ids, group.order_id);
+      openReleaseDialog(ids, group.order_id);
     }
   };
 
   const handleReleaseFinalsBatch = () => {
     const selectedGroups = waitingFinalsGroups.filter((og) => selectedWaitingIds.has(og.order_id));
-    const ids = selectedGroups.flatMap((og) =>
-      og.garments
-        .filter((g) => g.piece_stage === "waiting_for_acceptance" && g.garment_type === "final")
-        .map((g) => g.id),
-    );
+    const ids = selectedGroups.flatMap((og) => getReleasableFinalIds(og));
     if (!ids.length) return;
 
     const notReadyIds = selectedGroups.filter((og) => !isOrderReady(og.order_id)).map((og) => og.order_id);
@@ -621,15 +1117,15 @@ function ParkingPage() {
     if (notReadyIds.length > 0) {
       const warning = getBrovaWarning(notReadyIds);
       setWarningMessage(warning ?? "Some orders have brovas that haven't been accepted.");
-      setPendingReleaseAction(() => () => openPlanDialog(ids, firstOrderId));
+      setPendingReleaseAction(() => () => openReleaseDialog(ids, firstOrderId));
       setWarningOpen(true);
     } else {
-      openPlanDialog(ids, firstOrderId);
+      openReleaseDialog(ids, firstOrderId);
     }
   };
 
-  const handleReleaseConfirm = async (plan: Record<string, string>, date: string, unit: string) => {
-    await releaseWithPlanMut.mutateAsync({ ids: releaseTargetIds, plan, date, unit: unit || undefined });
+  const handleReleaseConfirm = async (plan: Record<string, string>, date: string) => {
+    await releaseWithPlanMut.mutateAsync({ ids: releaseTargetIds, plan, date });
     toast.success(`${releaseTargetIds.length} final(s) released with plan`);
     setSelectedWaitingIds(new Set());
     setReleaseTargetIds([]);
@@ -661,40 +1157,12 @@ function ParkingPage() {
         </p>
       </div>
 
-      {/* KPI bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <KpiCard
-          icon={<ParkingSquare className="w-4 h-4 text-blue-700" />}
-          label="Orders Parked"
-          value={totalOrders}
-          color="bg-blue-50 text-blue-700 border-blue-200"
-        />
-        <KpiCard
-          icon={<Clock className="w-4 h-4 text-amber-700" />}
-          label="Waiting Brova Trial"
-          value={waitingForBrova}
-          color="bg-amber-50 text-amber-700 border-amber-200"
-        />
-        <KpiCard
-          icon={<RotateCcw className="w-4 h-4 text-orange-700" />}
-          label="Return Garments"
-          value={returnCount}
-          color="bg-orange-50 text-orange-700 border-orange-200"
-        />
-        <KpiCard
-          icon={<Zap className="w-4 h-4 text-red-700" />}
-          label="Express Orders"
-          value={expressOrders}
-          color="bg-red-50 text-red-700 border-red-200"
-        />
-      </div>
-
-      <Tabs defaultValue="orders">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="mb-4 h-auto flex-wrap gap-1">
           <TabsTrigger value="orders">
             Orders{" "}
             <Badge variant="secondary" className="ml-1 text-xs">
-              {totalOrders}
+              {ordersTabGroups.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="waiting-finals">
@@ -717,21 +1185,33 @@ function ParkingPage() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Tab-aware KPIs */}
+        {activeTab === "orders" && (
+          <StatsBar stats={orderStats} filter={orderFilter} onFilter={setOrderFilter} />
+        )}
+        {activeTab === "waiting-finals" && (
+          <StatsBar stats={finalsStats} filter={finalsFilter} onFilter={setFinalsFilter} />
+        )}
+        {activeTab === "returns" && (
+          <StatsBar stats={returnStats} filter={returnFilter} onFilter={setReturnFilter} />
+        )}
+
         {/* ── ORDERS tab — order level ── */}
         <TabsContent value="orders">
           {isLoading ? (
             <LoadingSkeleton />
-          ) : orderGroups.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <EmptyState
               icon={<ParkingSquare className="w-10 h-10" />}
-              message="Parking bay empty"
+              message={orderFilter === "all" ? "Parking bay empty" : "No orders match this filter"}
             />
           ) : (
             <div className="space-y-3">
-              {orderGroups.map((group) => (
+              {filteredOrders.map((group) => (
                 <ParkingOrderCard
                   key={group.order_id}
                   group={group}
+                  allOrderGarments={allGarmentsByOrder.get(group.order_id) ?? group.garments}
                   selected={selectedOrderIds.has(group.order_id)}
                   onToggle={(checked) => toggleOrder(group.order_id, checked)}
                   onSendToScheduler={() => handleSendSingleOrder(group)}
@@ -754,10 +1234,10 @@ function ParkingPage() {
         <TabsContent value="waiting-finals">
           {isLoading ? (
             <LoadingSkeleton />
-          ) : sortedWaitingGroups.length === 0 ? (
+          ) : filteredWaitingGroups.length === 0 ? (
             <EmptyState
               icon={<Unlock className="w-10 h-10" />}
-              message="No finals waiting for release"
+              message={finalsFilter === "all" ? "No finals waiting for release" : "No finals match this filter"}
             />
           ) : (
             <>
@@ -765,14 +1245,14 @@ function ParkingPage() {
                 Orders with finals awaiting release. Green = brovas trialed &amp; accepted, ready to release.
               </p>
               <div className="space-y-3">
-                {sortedWaitingGroups.map((group) => (
+                {filteredWaitingGroups.map((group) => (
                   <WaitingFinalsCard
                     key={group.order_id}
                     group={group}
                     selected={selectedWaitingIds.has(group.order_id)}
                     onToggle={(checked) => toggleWaiting(group.order_id, checked)}
                     onRelease={() => handleReleaseFinals(group)}
-                    isReleasing={releaseMut.isPending}
+                    isReleasing={releaseWithPlanMut.isPending}
                     brovaStatus={brovaStatusMap[group.order_id]}
                   />
                 ))}
@@ -799,14 +1279,14 @@ function ParkingPage() {
         <TabsContent value="returns">
           {isLoading ? (
             <LoadingSkeleton />
-          ) : returnsGarments.length === 0 ? (
+          ) : filteredReturns.length === 0 ? (
             <EmptyState
               icon={<RotateCcw className="w-10 h-10" />}
-              message="No returns in parking"
+              message={returnFilter === "all" ? "No returns in parking" : "No returns match this filter"}
             />
           ) : (
             <div className="space-y-3">
-              {returnsGarments.map((g, i) => (
+              {filteredReturns.map((g, i) => (
                 <ReturnGarmentCard
                   key={g.id}
                   garment={g}
@@ -834,14 +1314,13 @@ function ParkingPage() {
         </TabsContent>
       </Tabs>
 
-      <PlanDialog
+      <ReleaseFinalsDialog
         open={releasePlanOpen}
         onOpenChange={setReleasePlanOpen}
         onConfirm={handleReleaseConfirm}
         garmentCount={releaseTargetIds.length}
         defaultPlan={releaseDefaultPlan}
-        title="Release Finals — Confirm Plan"
-        confirmLabel="Release Finals"
+        isPending={releaseWithPlanMut.isPending}
       />
 
       {/* Warning dialog for releasing finals without brova acceptance */}
@@ -890,24 +1369,50 @@ function ParkingPage() {
   );
 }
 
-function KpiCard({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode;
+// ── StatsBar (clickable filterable KPIs) ─────────────────────
+
+interface StatCard {
   label: string;
   value: number;
-  color?: string;
+  key: string;
+  color: string;
+  icon: LucideIcon;
+}
+
+function StatsBar({
+  stats,
+  filter,
+  onFilter,
+}: {
+  stats: StatCard[];
+  filter: string;
+  onFilter: (key: string) => void;
 }) {
   return (
-    <div className={cn("border rounded-xl p-3 flex items-center gap-3", color ?? "bg-white")}>
-      <div className="p-2 rounded-lg bg-white/60 shrink-0">{icon}</div>
-      <div>
-        <p className="text-xl font-black leading-none">{value}</p>
-        <p className="text-xs mt-0.5 opacity-80">{label}</p>
-      </div>
+    <div className={cn(
+      "grid gap-2 mb-5",
+      stats.length <= 5 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3 sm:grid-cols-6",
+    )}>
+      {stats.map((s) => {
+        const Icon = s.icon;
+        return (
+          <button
+            key={s.key}
+            onClick={() => onFilter(s.key)}
+            className={cn(
+              "border rounded-xl p-2 text-center transition-all",
+              s.color,
+              filter === s.key
+                ? "ring-2 ring-primary/40 shadow-md scale-[1.02]"
+                : "shadow-sm hover:shadow-md",
+            )}
+          >
+            <Icon className="w-3.5 h-3.5 mx-auto mb-0.5 opacity-60" />
+            <p className="text-lg font-black leading-none">{s.value}</p>
+            <p className="text-[9px] mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -79,7 +79,7 @@ export const searchPrimaryAccountByPhone = async (
   const { data, error, count } = await supabase
     .from(TABLE_NAME)
     .select('*', { count: 'exact' })
-    .ilike('phone', `%${phone}%`)
+    .eq('phone', phone)
     .eq('account_type', 'Primary');
 
   if (error) {

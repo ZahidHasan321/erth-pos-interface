@@ -431,16 +431,32 @@ function ReceivingPage() {
                   selected={selectedBrova.has(g.id)}
                   onSelect={toggleGarment(setSelectedBrova)}
                   showPipeline={false}
+
+
                   index={i}
                   actions={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleReceiveSingle(g.id)}
-                      disabled={receiveMut.isPending}
-                    >
-                      Receive
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReceiveSingle(g.id)}
+                        disabled={receiveMut.isPending}
+                        className="text-xs h-7"
+                      >
+                        Receive
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await receiveStartMut.mutateAsync([g.id]);
+                          toast.success(`Brova ${g.garment_id ?? g.id.slice(0, 8)} received → Scheduler`);
+                        }}
+                        disabled={receiveStartMut.isPending}
+                        className="text-xs h-7"
+                      >
+                        Receive & Start
+                      </Button>
+                    </div>
                   }
                 />
               ))}
@@ -452,12 +468,24 @@ function ReceivingPage() {
           >
             <Button
               size="sm"
+              variant="secondary"
               onClick={() =>
                 handleReceiveBatch(selectedBrova, () => setSelectedBrova(new Set()))
               }
               disabled={receiveMut.isPending}
             >
-              Receive All
+              Receive
+            </Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                await receiveStartMut.mutateAsync([...selectedBrova]);
+                toast.success(`${selectedBrova.size} brova(s) received → Scheduler`);
+                setSelectedBrova(new Set());
+              }}
+              disabled={receiveStartMut.isPending}
+            >
+              Receive & Start
             </Button>
           </BatchActionBar>
         </TabsContent>
@@ -477,16 +505,32 @@ function ReceivingPage() {
                   selected={selectedAltIn.has(g.id)}
                   onSelect={toggleGarment(setSelectedAltIn)}
                   showPipeline={false}
+
+
                   index={i}
                   actions={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleReceiveSingle(g.id)}
-                      disabled={receiveMut.isPending}
-                    >
-                      Receive
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReceiveSingle(g.id)}
+                        disabled={receiveMut.isPending}
+                        className="text-xs h-7"
+                      >
+                        Receive
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await receiveStartMut.mutateAsync([g.id]);
+                          toast.success(`Garment ${g.garment_id ?? g.id.slice(0, 8)} received → Scheduler`);
+                        }}
+                        disabled={receiveStartMut.isPending}
+                        className="text-xs h-7"
+                      >
+                        Receive & Start
+                      </Button>
+                    </div>
                   }
                 />
               ))}
@@ -498,12 +542,24 @@ function ReceivingPage() {
           >
             <Button
               size="sm"
+              variant="secondary"
               onClick={() =>
                 handleReceiveBatch(selectedAltIn, () => setSelectedAltIn(new Set()))
               }
               disabled={receiveMut.isPending}
             >
-              Receive All
+              Receive
+            </Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                await receiveStartMut.mutateAsync([...selectedAltIn]);
+                toast.success(`${selectedAltIn.size} garment(s) received → Scheduler`);
+                setSelectedAltIn(new Set());
+              }}
+              disabled={receiveStartMut.isPending}
+            >
+              Receive & Start
             </Button>
           </BatchActionBar>
         </TabsContent>

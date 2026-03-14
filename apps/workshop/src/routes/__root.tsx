@@ -1,4 +1,4 @@
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import { createRootRouteWithContext, HeadContent, Outlet } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import type { AuthContext } from "@/context/auth";
 
@@ -13,6 +13,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
   return (
     <>
+      <HeadContent />
       <Outlet />
       <Toaster position="bottom-right" richColors closeButton expand />
     </>

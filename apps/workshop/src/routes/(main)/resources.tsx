@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useResources, useCreateResource, useDeleteResource } from "@/hooks/useResources";
+import { useResources, useCreateResource, useUpdateResource, useDeleteResource } from "@/hooks/useResources";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Users, Plus, Trash2, Droplets, Scissors, Package,
-  Shirt, Sparkles, Flame, ShieldCheck, Star,
+  Shirt, Sparkles, Flame, ShieldCheck, Star, Pencil,
 } from "lucide-react";
 import type { NewResource, Resource } from "@repo/database";
 
@@ -30,11 +30,26 @@ const STAGES = [
   { key: "quality_check", label: "Quality Check",  icon: ShieldCheck, bg: "bg-indigo-50",  border: "border-indigo-200",  iconColor: "text-indigo-600",  headerBg: "bg-indigo-100" },
 ] as const;
 
+type FormData = Partial<Omit<NewResource, 'id' | 'created_at'>>;
+
 // ── Worker Row ──────────────────────────────────────────────────────────────
 
-function WorkerRow({ worker, onDelete, deleting }: { worker: Resource; onDelete: () => void; deleting: boolean }) {
+function WorkerRow({
+  worker,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  worker: Resource;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   return (
-    <div className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-white/80 hover:shadow-sm transition-colors group">
+    <div
+      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-white/80 hover:shadow-sm transition-colors group cursor-pointer"
+      onClick={onEdit}
+    >
       <div className="w-8 h-8 rounded-full bg-white border flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
         {worker.resource_name.charAt(0)}
       </div>
@@ -61,13 +76,21 @@ function WorkerRow({ worker, onDelete, deleting }: { worker: Resource; onDelete:
           )}
         </div>
       </div>
-      <button
-        onClick={onDelete}
-        disabled={deleting}
-        className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          disabled={deleting}
+          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -77,11 +100,13 @@ function WorkerRow({ worker, onDelete, deleting }: { worker: Resource; onDelete:
 function StageCard({
   stage,
   workers,
+  onEdit,
   onDelete,
   deleting,
 }: {
   stage: typeof STAGES[number];
   workers: Resource[];
+  onEdit: (worker: Resource) => void;
   onDelete: (id: string) => void;
   deleting: boolean;
 }) {
@@ -112,25 +137,185 @@ function StageCard({
         {workers.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">No workers assigned</p>
         ) : hasMultipleUnits ? (
-          // Show grouped by unit
           Array.from(units.entries()).map(([unitName, unitWorkers]) => (
             <div key={unitName} className="mb-1 last:mb-0">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 pt-2 pb-1">
                 {unitName}
               </p>
               {unitWorkers.map((w) => (
-                <WorkerRow key={w.id} worker={w} onDelete={() => onDelete(w.id)} deleting={deleting} />
+                <WorkerRow
+                  key={w.id}
+                  worker={w}
+                  onEdit={() => onEdit(w)}
+                  onDelete={() => onDelete(w.id)}
+                  deleting={deleting}
+                />
               ))}
             </div>
           ))
         ) : (
-          // Single unit, just list workers
           workers.map((w) => (
-            <WorkerRow key={w.id} worker={w} onDelete={() => onDelete(w.id)} deleting={deleting} />
+            <WorkerRow
+              key={w.id}
+              worker={w}
+              onEdit={() => onEdit(w)}
+              onDelete={() => onDelete(w.id)}
+              deleting={deleting}
+            />
           ))
         )}
       </div>
     </div>
+  );
+}
+
+// ── Worker Form Dialog (Add / Edit) ─────────────────────────────────────────
+
+function WorkerFormDialog({
+  open,
+  onOpenChange,
+  mode,
+  form,
+  setForm,
+  onSubmit,
+  isPending,
+  existingUnits,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  mode: "add" | "edit";
+  form: FormData;
+  setForm: React.Dispatch<React.SetStateAction<FormData>>;
+  onSubmit: () => void;
+  isPending: boolean;
+  existingUnits: string[];
+}) {
+  const [newUnit, setNewUnit] = useState(false);
+
+  const handleOpenChange = (v: boolean) => {
+    if (!v) setNewUnit(false);
+    onOpenChange(v);
+  };
+
+  // When switching responsibility, check if unit should reset
+  const handleResponsibilityChange = (v: string) => {
+    setForm((p) => ({ ...p, responsibility: v, unit: "" }));
+    setNewUnit(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{mode === "add" ? "Add Worker" : "Edit Worker"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>Name <span className="text-red-500">*</span></Label>
+            <Input
+              placeholder="Worker name"
+              value={form.resource_name ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, resource_name: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Stage <span className="text-red-500">*</span></Label>
+            <Select
+              value={form.responsibility ?? ""}
+              onValueChange={handleResponsibilityChange}
+            >
+              <SelectTrigger><SelectValue placeholder="Select production stage" /></SelectTrigger>
+              <SelectContent>
+                {STAGES.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <SelectItem key={s.key} value={s.key}>
+                      <span className="flex items-center gap-2">
+                        <Icon className={cn("w-3.5 h-3.5", s.iconColor)} />
+                        {s.label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Unit</Label>
+                {existingUnits.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setNewUnit(!newUnit); setForm((p) => ({ ...p, unit: "" })); }}
+                    className="text-[10px] text-primary font-semibold hover:underline"
+                  >
+                    {newUnit ? "Pick existing" : "+ New unit"}
+                  </button>
+                )}
+              </div>
+              {existingUnits.length > 0 && !newUnit ? (
+                <Select value={form.unit ?? ""} onValueChange={(v) => setForm((p) => ({ ...p, unit: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectContent>
+                    {existingUnits.map((u) => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="e.g. Sewing 1"
+                  value={form.unit ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}
+                />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={form.resource_type ?? ""} onValueChange={(v) => setForm((p) => ({ ...p, resource_type: v }))}>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Senior">Senior</SelectItem>
+                  <SelectItem value="Junior">Junior</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Daily Target</Label>
+              <Input
+                type="number"
+                placeholder="e.g. 10"
+                value={form.daily_target ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, daily_target: Number(e.target.value) || undefined }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rating (1-5)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                placeholder="1-5"
+                value={form.rating ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, rating: Number(e.target.value) || undefined }))}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={onSubmit}
+            disabled={!form.resource_name || !form.responsibility || isPending}
+          >
+            {mode === "add" ? "Add Worker" : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -139,16 +324,49 @@ function StageCard({
 function ResourcesPage() {
   const { data: resources = [], isLoading } = useResources();
   const createMut = useCreateResource();
+  const updateMut = useUpdateResource();
   const deleteMut = useDeleteResource();
-  const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState<Partial<Omit<NewResource, 'id' | 'created_at'>>>({});
 
-  const handleCreate = async () => {
-    if (!form.resource_name || !form.responsibility) return;
-    await createMut.mutateAsync(form as Omit<NewResource, 'id' | 'created_at'>);
-    toast.success(`${form.resource_name} added`);
-    setAddOpen(false);
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"add" | "edit">("add");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormData>({});
+
+  const openAdd = () => {
+    setDialogMode("add");
+    setEditingId(null);
     setForm({});
+    setDialogOpen(true);
+  };
+
+  const openEdit = (worker: Resource) => {
+    setDialogMode("edit");
+    setEditingId(worker.id);
+    setForm({
+      resource_name: worker.resource_name,
+      responsibility: worker.responsibility ?? undefined,
+      unit: worker.unit ?? undefined,
+      resource_type: worker.resource_type ?? undefined,
+      daily_target: worker.daily_target ?? undefined,
+      rating: worker.rating ?? undefined,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.resource_name || !form.responsibility) return;
+
+    if (dialogMode === "add") {
+      await createMut.mutateAsync(form as Omit<NewResource, 'id' | 'created_at'>);
+      toast.success(`${form.resource_name} added`);
+    } else if (editingId) {
+      await updateMut.mutateAsync({ id: editingId, updates: form });
+      toast.success(`${form.resource_name} updated`);
+    }
+    setDialogOpen(false);
+    setForm({});
+    setEditingId(null);
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -156,9 +374,14 @@ function ResourcesPage() {
     toast.success(`${name} removed`);
   };
 
-  // Get existing units for the selected responsibility (for unit dropdown suggestions)
+  // Get existing units for the selected responsibility
   const existingUnits = form.responsibility
-    ? [...new Set(resources.filter((r) => r.responsibility === form.responsibility).map((r) => r.unit).filter(Boolean))]
+    ? [...new Set(
+        resources
+          .filter((r) => r.responsibility === form.responsibility)
+          .map((r) => r.unit)
+          .filter((u): u is string => !!u),
+      )]
     : [];
 
   return (
@@ -172,7 +395,7 @@ function ResourcesPage() {
             {resources.length} worker{resources.length !== 1 ? "s" : ""} across {STAGES.length} production stages
           </p>
         </div>
-        <Button className="shadow-sm" onClick={() => setAddOpen(true)}>
+        <Button className="shadow-sm" onClick={openAdd}>
           <Plus className="w-4 h-4 mr-2" /> Add Worker
         </Button>
       </div>
@@ -190,6 +413,7 @@ function ResourcesPage() {
                 key={stage.key}
                 stage={stage}
                 workers={workers}
+                onEdit={openEdit}
                 onDelete={(id) => {
                   const w = workers.find((r) => r.id === id);
                   if (w) handleDelete(id, w.resource_name);
@@ -201,103 +425,16 @@ function ResourcesPage() {
         </div>
       )}
 
-      {/* Add Worker Dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Add Worker</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label>Name <span className="text-red-500">*</span></Label>
-              <Input
-                placeholder="Worker name"
-                value={form.resource_name ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, resource_name: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Stage <span className="text-red-500">*</span></Label>
-              <Select
-                value={form.responsibility ?? ""}
-                onValueChange={(v) => setForm((p) => ({ ...p, responsibility: v, unit: "" }))}
-              >
-                <SelectTrigger><SelectValue placeholder="Select production stage" /></SelectTrigger>
-                <SelectContent>
-                  {STAGES.map((s) => {
-                    const Icon = s.icon;
-                    return (
-                      <SelectItem key={s.key} value={s.key}>
-                        <span className="flex items-center gap-2">
-                          <Icon className={cn("w-3.5 h-3.5", s.iconColor)} />
-                          {s.label}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Unit</Label>
-                {existingUnits.length > 0 ? (
-                  <Select value={form.unit ?? ""} onValueChange={(v) => setForm((p) => ({ ...p, unit: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
-                    <SelectContent>
-                      {existingUnits.map((u) => (
-                        <SelectItem key={u} value={u!}>{u}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    placeholder="e.g. Sewing 1"
-                    value={form.unit ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}
-                  />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <Select value={form.resource_type ?? ""} onValueChange={(v) => setForm((p) => ({ ...p, resource_type: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Senior">Senior</SelectItem>
-                    <SelectItem value="Junior">Junior</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Daily Target</Label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 10"
-                  value={form.daily_target ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, daily_target: Number(e.target.value) || undefined }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Rating (1-5)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={5}
-                  placeholder="1-5"
-                  value={form.rating ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, rating: Number(e.target.value) || undefined }))}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!form.resource_name || !form.responsibility || createMut.isPending}>
-              Add Worker
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <WorkerFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={dialogMode}
+        form={form}
+        setForm={setForm}
+        onSubmit={handleSubmit}
+        isPending={createMut.isPending || updateMut.isPending}
+        existingUnits={existingUnits}
+      />
     </div>
   );
 }

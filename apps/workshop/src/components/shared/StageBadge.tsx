@@ -15,6 +15,8 @@ const STAGE_COLOR: Record<string, string> = {
   quality_check:          "bg-yellow-200 text-yellow-900",
   ready_for_dispatch:     "bg-emerald-200 text-emerald-900",
   at_shop:                "bg-emerald-200 text-emerald-900",
+  awaiting_trial:         "bg-blue-200 text-blue-900",
+  ready_for_pickup:       "bg-emerald-200 text-emerald-900",
   accepted:               "bg-emerald-300 text-emerald-950",
   needs_repair:           "bg-red-200 text-red-900",
   needs_redo:             "bg-red-300 text-red-950",
@@ -45,13 +47,45 @@ export function StageBadge({ stage, className }: StageBadgeProps) {
 }
 
 export function AlterationBadge({ tripNumber }: { tripNumber: number | null | undefined }) {
-  if (!tripNumber || tripNumber <= 1) return null;
+  if (!tripNumber || tripNumber < 3) return null;
   return (
     <Badge
       variant="outline"
       className="border-0 bg-orange-500 text-white font-semibold text-[10px] uppercase tracking-wide"
     >
-      Alt #{tripNumber}
+      Alt {tripNumber - 2}
+    </Badge>
+  );
+}
+
+/** Shows which trial cycle the garment is on (e.g. "Trial 1", "Trial 2") */
+export function TrialBadge({ tripNumber }: { tripNumber: number | null | undefined }) {
+  const trip = tripNumber ?? 1;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-0 font-semibold text-[10px] uppercase tracking-wide",
+        trip === 1
+          ? "bg-purple-100 text-purple-800"
+          : trip === 2
+            ? "bg-amber-100 text-amber-800"
+            : "bg-red-100 text-red-800",
+      )}
+    >
+      Trial {trip}
+    </Badge>
+  );
+}
+
+/** Badge for garments at shop with needs_repair/needs_redo — incoming for alteration */
+export function AlterationInBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="border-0 bg-orange-600 text-white font-bold text-[10px] uppercase tracking-wide animate-pulse"
+    >
+      Alteration (In)
     </Badge>
   );
 }

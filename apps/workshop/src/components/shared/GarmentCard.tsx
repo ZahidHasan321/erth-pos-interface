@@ -4,9 +4,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatDate } from "@/lib/utils";
 import { StageBadge, AlterationBadge, ExpressBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
-import { MeasurementGrid } from "./MeasurementGrid";
+
 import type { WorkshopGarment } from "@repo/database";
-import { ChevronDown, ChevronUp, Clock, Timer, Package, Home } from "lucide-react";
+import { ChevronDown, ChevronUp, Home } from "lucide-react";
 
 interface GarmentCardProps {
   garment: WorkshopGarment;
@@ -17,6 +17,8 @@ interface GarmentCardProps {
   /** Terminal mode: hides customer/business details, shows only what workers need */
   compact?: boolean;
   index?: number;
+  /** Makes the card clickable — uses full-width row layout, hides expand */
+  onClick?: () => void;
 }
 
 export function GarmentCard({
@@ -27,23 +29,88 @@ export function GarmentCard({
   showPipeline = true,
   compact = false,
   index = 0,
+  onClick,
 }: GarmentCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // In compact/terminal mode, notes are shown inline (not hidden behind expand)
   const hasNotes = !!garment.notes;
   const hasSoaking = !!garment.soaking;
 
+  // ── Grid tile card (terminal list) — large, worker-friendly ──
+  if (onClick && compact) {
+    return (
+      <Card
+        className={cn(
+          "border-2 transition-all duration-200 ease-in-out shadow-sm py-0 gap-0",
+          "cursor-pointer hover:border-primary/50 hover:shadow-lg active:scale-[0.97]",
+          garment.express && "border-orange-300",
+          garment.start_time
+            ? "bg-emerald-50/50 border-emerald-300"
+            : "bg-white",
+        )}
+        onClick={onClick}
+      >
+        <CardContent className="p-4 flex flex-col h-full min-h-[120px]">
+          {/* Top: type + express */}
+          <div className="flex items-start justify-between gap-1">
+            <div className={cn(
+              "px-2.5 py-1 rounded-lg text-sm font-black uppercase",
+              garment.garment_type === "brova"
+                ? "bg-purple-100 text-purple-800"
+                : "bg-blue-100 text-blue-800",
+            )}>
+              {garment.garment_type === "brova" ? "Brova" : "Final"}
+            </div>
+            {garment.express && <ExpressBadge />}
+          </div>
+
+          {/* Garment ID — hero text */}
+          <p className="font-mono font-black text-3xl mt-2 leading-tight">
+            {garment.garment_id ?? garment.id.slice(0, 8)}
+          </p>
+
+          {/* Style */}
+          {garment.style_name && (
+            <p className="text-base text-muted-foreground capitalize mt-1 truncate">{garment.style_name}</p>
+          )}
+
+          {/* Badges row */}
+          <div className="flex items-center gap-2 mt-auto pt-3 flex-wrap">
+            {garment.start_time && (
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
+                Started
+              </span>
+            )}
+            {hasSoaking && (
+              <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-lg">
+                Soak
+              </span>
+            )}
+            <AlterationBadge tripNumber={garment.trip_number} />
+            {hasNotes && (
+              <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg" title={garment.notes ?? ""}>
+                Note
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Standard card (non-clickable or non-compact) ─────────────
   return (
     <Card
       className={cn(
-        "border transition-all duration-200 ease-in-out animate-fade-in shadow-sm",
+        "border transition-all duration-200 ease-in-out shadow-sm py-0 gap-0",
         selected && "border-primary ring-1 ring-primary/30",
         garment.express && "border-l-4 border-l-orange-400",
+        onClick && "cursor-pointer hover:border-primary/50 hover:shadow-md",
       )}
       style={{ animationDelay: `${index * 25}ms` }}
+      onClick={onClick}
     >
-      <CardContent className="px-4 py-3">
+      <CardContent className={cn("px-4", compact ? "py-2" : "py-3")}>
         <div className="flex items-start gap-3">
           {onSelect && (
             <Checkbox
@@ -82,12 +149,6 @@ export function GarmentCard({
             {/* Compact mode: show only production-relevant info */}
             {compact ? (
               <div className="flex items-center flex-wrap gap-1.5">
-                {garment.assigned_unit && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                    <Package className="w-3 h-3" />
-                    {garment.assigned_unit}
-                  </span>
-                )}
                 {hasSoaking && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
                     Needs soaking
@@ -114,20 +175,12 @@ export function GarmentCard({
                 )}
                 {garment.assigned_date && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                    <Timer className="w-3 h-3" />
-                    {formatDate(garment.assigned_date)}
+                    Assigned {formatDate(garment.assigned_date)}
                   </span>
                 )}
                 {garment.delivery_date_order && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                    <Clock className="w-3 h-3" />
-                    {formatDate(garment.delivery_date_order)}
-                  </span>
-                )}
-                {garment.assigned_unit && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                    <Package className="w-3 h-3" />
-                    {garment.assigned_unit}
+                    Due {formatDate(garment.delivery_date_order)}
                   </span>
                 )}
                 {garment.home_delivery_order && (
@@ -155,18 +208,22 @@ export function GarmentCard({
           </div>
 
           {/* Actions + expand */}
-          <div className="flex items-center gap-2 shrink-0">
-            {actions}
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className={cn(
-                "p-1.5 rounded-md hover:bg-muted transition-colors",
-                expanded && "bg-muted",
+          {(actions || !onClick) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {actions}
+              {!onClick && (
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className={cn(
+                    "p-1.5 rounded-md hover:bg-muted transition-colors",
+                    expanded && "bg-muted",
+                  )}
+                >
+                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
               )}
-            >
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Expanded: measurements + notes */}
@@ -180,12 +237,34 @@ export function GarmentCard({
                 <p className="text-sm text-amber-900">{garment.notes}</p>
               </div>
             )}
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                Measurements
-              </p>
-              <MeasurementGrid measurement={garment.measurement} />
+            {/* Order & garment details */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Customer</p>
+                <p className="font-medium">{garment.customer_name ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Phone</p>
+                <p className="font-medium">{garment.customer_mobile ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Invoice</p>
+                <p className="font-medium">{garment.invoice_number ? `INV-${garment.invoice_number}` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery Date</p>
+                <p className="font-medium">{garment.delivery_date_order ? formatDate(garment.delivery_date_order) : "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Style</p>
+                <p className="font-medium capitalize">{garment.style_name ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fabric</p>
+                <p className="font-medium">{garment.fabric_name ?? "—"}</p>
+              </div>
             </div>
+
           </div>
         )}
       </CardContent>

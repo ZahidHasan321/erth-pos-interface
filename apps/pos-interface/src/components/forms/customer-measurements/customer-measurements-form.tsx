@@ -6,7 +6,6 @@ import { type UseFormReturn, useWatch } from "react-hook-form";
 
 
 import { Button } from "@/components/ui/button";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Form,
   FormControl,
@@ -164,12 +163,6 @@ export function CustomerMeasurementsForm({
   const [previousMeasurementId, setPreviousMeasurementId] = React.useState<
     string | null
   >(null);
-  const [confirmationDialog, setConfirmationDialog] = React.useState({
-    isOpen: false,
-    title: "",
-    description: "",
-    onConfirm: () => {},
-  });
 
   const [selectedReference, setSelectedReference] = React.useState<
     string | undefined
@@ -360,82 +353,61 @@ export function CustomerMeasurementsForm({
       return;
     }
 
-    const onConfirm = () => {
-      const data = mapFormValuesToMeasurement(values, customerId);
+    const data = mapFormValuesToMeasurement(values, customerId);
 
-      if (isCreatingNew) {
-        // Remove the DB id for new measurements — let the server generate it
-        delete (data as any).id;
-        createMeasurementMutation(data);
-      } else {
-        if (!selectedMeasurementId) {
-          toast.error("No measurement selected for updating.");
-          return;
-        }
-
-        // Look up the actual DB UUID from the stored measurement data
-        const storedMeasurement = measurements.get(selectedMeasurementId);
-        const dbId = storedMeasurement?.id;
-        if (!dbId) {
-          toast.error("Cannot find measurement record for updating.");
-          return;
-        }
-        updateMeasurementMutation({
-          id: dbId,
-          data: data,
-        });
+    if (isCreatingNew) {
+      // Remove the DB id for new measurements — let the server generate it
+      delete (data as any).id;
+      createMeasurementMutation(data);
+    } else {
+      if (!selectedMeasurementId) {
+        toast.error("No measurement selected for updating.");
+        return;
       }
 
-      setConfirmationDialog((d) => ({ ...d, isOpen: false }));
-    };
-
-    setConfirmationDialog({
-      isOpen: true,
-      title: `Confirm ${isCreatingNew ? "New" : "Update"}`,
-      description: `Are you sure you want to ${isCreatingNew ? "create this new" : "update this"} measurement?`,
-      onConfirm: onConfirm,
-    });
+      // Look up the actual DB UUID from the stored measurement data
+      const storedMeasurement = measurements.get(selectedMeasurementId);
+      const dbId = storedMeasurement?.id;
+      if (!dbId) {
+        toast.error("Cannot find measurement record for updating.");
+        return;
+      }
+      updateMeasurementMutation({
+        id: dbId,
+        data: data,
+      });
+    }
   };
 
   const handleNewMeasurement = () => {
-    setConfirmationDialog({
-      isOpen: true,
-      title: "Confirm New Measurement",
-      description:
-        "This will create a copy of the currently selected measurement. Are you sure you want to proceed? Unsaved changes will be lost.",
-      onConfirm: () => {
-        setPreviousMeasurementId(selectedMeasurementId);
+    setPreviousMeasurementId(selectedMeasurementId);
 
-        // Generate the next measurement ID based on existing ones
-        const existingIds = Array.from(measurements.keys());
-        const nextNumber =
-          existingIds
-            .map((id) => {
-              const parts = id.split("-");
-              if (parts.length < 2) return 0;
-              if (parts[0] !== String(customerId)) return 0;
-              const num = parseInt(parts[parts.length - 1], 10);
-              return isNaN(num) ? 0 : num;
-            })
-            .reduce((a, b) => Math.max(a, b), 0) + 1;
+    // Generate the next measurement ID based on existing ones
+    const existingIds = Array.from(measurements.keys());
+    const nextNumber =
+      existingIds
+        .map((id) => {
+          const parts = id.split("-");
+          if (parts.length < 2) return 0;
+          if (parts[0] !== String(customerId)) return 0;
+          const num = parseInt(parts[parts.length - 1], 10);
+          return isNaN(num) ? 0 : num;
+        })
+        .reduce((a, b) => Math.max(a, b), 0) + 1;
 
-        const newId = `${customerId}-${nextNumber}`;
+    const newId = `${customerId}-${nextNumber}`;
 
-        // Take a snapshot of the current form values as the base for the copy
-        const baseMeasurement = { ...form.getValues() };
-        // Clear the DB id so it's treated as new, set the new display ID
-        delete (baseMeasurement as any).id;
-        baseMeasurement.measurement_id = newId;
-        baseMeasurement.measurement_date = new Date().toISOString();
+    // Take a snapshot of the current form values as the base for the copy
+    const baseMeasurement = { ...form.getValues() };
+    // Clear the DB id so it's treated as new, set the new display ID
+    delete (baseMeasurement as any).id;
+    baseMeasurement.measurement_id = newId;
+    baseMeasurement.measurement_date = new Date().toISOString();
 
-        addMeasurement(newId, baseMeasurement);
-        setSelectedMeasurementId(newId);
-        setIsCreatingNew(true);
-        setIsEditing(true);
-
-        setConfirmationDialog((d) => ({ ...d, isOpen: false }));
-      },
-    });
+    addMeasurement(newId, baseMeasurement);
+    setSelectedMeasurementId(newId);
+    setIsCreatingNew(true);
+    setIsEditing(true);
   };
 
   const handleClear = () => {
@@ -474,15 +446,6 @@ export function CustomerMeasurementsForm({
         })}
         className="space-y-8 w-full"
       >
-        <ConfirmationDialog
-          isOpen={confirmationDialog.isOpen}
-          onClose={() =>
-            setConfirmationDialog((d) => ({ ...d, isOpen: false }))
-          }
-          onConfirm={confirmationDialog.onConfirm}
-          title={confirmationDialog.title}
-          description={confirmationDialog.description}
-        />
         {!hideHeader && (
           <div className="flex justify-between items-start mb-6">
             <div className="space-y-1">

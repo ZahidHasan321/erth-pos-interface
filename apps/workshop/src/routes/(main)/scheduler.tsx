@@ -4,6 +4,7 @@ import { useSchedulerGarments, useBrovaPlans, useWorkshopGarments } from "@/hook
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { PlanDialog } from "@/components/shared/PlanDialog";
+import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { Button } from "@/components/ui/button";
@@ -158,25 +159,34 @@ function SchedulerOrderCard({
       </div>
       {expanded && (
         <div className="border-t px-4 py-2.5 space-y-1.5 bg-muted/20">
-          {group.garments.map((g) => (
-            <div key={g.id} className="flex items-center gap-2 flex-wrap bg-white rounded-lg border p-2">
-              <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
-                {g.garment_id ?? g.id.slice(0, 8)}
-              </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "border-0 font-semibold text-[10px] uppercase",
-                  g.garment_type === "brova"
-                    ? "bg-purple-200 text-purple-900"
-                    : "bg-blue-200 text-blue-900",
+          {group.garments.map((g) => {
+            const isParked = g.piece_stage === "waiting_for_acceptance";
+            return (
+              <div key={g.id} className={cn(
+                "flex items-center gap-2 flex-wrap rounded-lg border p-2",
+                isParked ? "bg-zinc-50 opacity-60" : "bg-white",
+              )}>
+                <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
+                  {g.garment_id ?? g.id.slice(0, 8)}
+                </span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "border-0 font-semibold text-[10px] uppercase",
+                    g.garment_type === "brova"
+                      ? "bg-purple-200 text-purple-900"
+                      : "bg-blue-200 text-blue-900",
+                  )}
+                >
+                  {g.garment_type}
+                </Badge>
+                {g.express && <ExpressBadge />}
+                {isParked && (
+                  <span className="text-[10px] text-muted-foreground italic">parked — will get same plan</span>
                 )}
-              >
-                {g.garment_type}
-              </Badge>
-              {g.express && <ExpressBadge />}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -323,7 +333,16 @@ function SchedulerPage() {
   const firstTrip = schedulable.filter(
     (g) => !g.trip_number || g.trip_number === 1,
   );
-  const orders = groupByOrder(firstTrip);
+
+  // Also include waiting_for_acceptance finals from the same orders (for display context)
+  const schedulableOrderIds = new Set(firstTrip.map((g) => g.order_id));
+  const waitingFinals = allGarments.filter(
+    (g) =>
+      schedulableOrderIds.has(g.order_id) &&
+      g.piece_stage === "waiting_for_acceptance" &&
+      g.garment_type === "final",
+  );
+  const orders = groupByOrder([...firstTrip, ...waitingFinals]);
 
   // Brova tab: 2nd-trip returns (garment-level)
   const brovaReturns = schedulable.filter(
@@ -367,6 +386,7 @@ function SchedulerPage() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [planOpen, setPlanOpen] = useState(false);
+  const [returnPlanOpen, setReturnPlanOpen] = useState(false);
 
   const toggleOrderInSet = (
     setFn: React.Dispatch<React.SetStateAction<Set<number>>>,
@@ -396,15 +416,29 @@ function SchedulerPage() {
   const selectAllAltIn = () => setSelectedAltInIds(new Set(alterationIn.map((g) => g.id)));
 
   // Collect garment IDs to schedule from all active selections
-  const getSelectedGarmentIds = (): string[] => {
-    const ids: string[] = [];
+  const getSelectedGarments = (): WorkshopGarment[] => {
+    const selected: WorkshopGarment[] = [];
     for (const og of orders) {
-      if (selectedOrderIds.has(og.order_id)) ids.push(...og.garments.map((g) => g.id));
+      if (selectedOrderIds.has(og.order_id)) {
+        // Only schedule garments that are actually schedulable (not waiting_for_acceptance)
+        selected.push(...og.garments.filter((g) => g.piece_stage !== "waiting_for_acceptance"));
+      }
     }
-    for (const id of selectedBrovaReturnIds) ids.push(id);
-    for (const id of selectedAltInIds) ids.push(id);
-    return ids;
+    for (const id of selectedBrovaReturnIds) {
+      const g = brovaReturns.find((g) => g.id === id);
+      if (g) selected.push(g);
+    }
+    for (const id of selectedAltInIds) {
+      const g = alterationIn.find((g) => g.id === id);
+      if (g) selected.push(g);
+    }
+    return selected;
   };
+
+  const getSelectedGarmentIds = (): string[] => getSelectedGarments().map((g) => g.id);
+
+  // Check if any selected garment needs soaking
+  const selectedHasSoaking = getSelectedGarments().some((g) => g.soaking);
 
   const totalSelected =
     selectedOrderIds.size + selectedBrovaReturnIds.size + selectedAltInIds.size;
@@ -439,10 +473,28 @@ function SchedulerPage() {
     return null;
   };
 
-  const handleSchedule = async (plan: Record<string, string>, date: string, unit: string, reentryStage?: string) => {
-    const ids = getSelectedGarmentIds();
-    await scheduleMut.mutateAsync({ ids, plan, date, unit, reentryStage: reentryStage as any });
-    toast.success(`${ids.length} garment(s) scheduled`);
+  const getReturnWorkerHistory = (): Record<string, string> | null => {
+    if (selectedBrovaReturnIds.size > 0) {
+      for (const id of selectedBrovaReturnIds) {
+        const g = brovaReturns.find((g) => g.id === id);
+        if (g?.worker_history) return g.worker_history as Record<string, string>;
+      }
+    }
+    if (selectedAltInIds.size > 0) {
+      for (const id of selectedAltInIds) {
+        const g = alterationIn.find((g) => g.id === id);
+        if (g?.worker_history) return g.worker_history as Record<string, string>;
+      }
+    }
+    return null;
+  };
+
+  const handleSchedule = async (plan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
+    const selected = getSelectedGarments();
+    const soakingIds = selected.filter((g) => g.soaking).map((g) => g.id);
+    const nonSoakingIds = selected.filter((g) => !g.soaking).map((g) => g.id);
+    await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), soakingIds, nonSoakingIds, plan, date, reentryStage: reentryStage as any });
+    toast.success(`${selected.length} garment(s) scheduled`);
     setSelectedOrderIds(new Set());
     setSelectedBrovaReturnIds(new Set());
     setSelectedAltInIds(new Set());
@@ -572,6 +624,7 @@ function SchedulerPage() {
                       selected={selectedBrovaReturnIds.has(g.id)}
                       onSelect={(id, checked) => toggleGarmentInSet(setSelectedBrovaReturnIds, id, checked)}
                       showPipeline={false}
+
                       index={i}
                     />
                   ))}
@@ -594,6 +647,7 @@ function SchedulerPage() {
                       selected={selectedAltInIds.has(g.id)}
                       onSelect={(id, checked) => toggleGarmentInSet(setSelectedAltInIds, id, checked)}
                       showPipeline={false}
+
                       index={i}
                     />
                   ))}
@@ -662,7 +716,7 @@ function SchedulerPage() {
             <Button
               className="w-full h-10 font-bold"
               disabled={totalSelected === 0 || !selectedDate || scheduleMut.isPending}
-              onClick={() => setPlanOpen(true)}
+              onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
             >
               Create Plan
             </Button>
@@ -682,7 +736,7 @@ function SchedulerPage() {
         <Button
           size="sm"
           disabled={!selectedDate || scheduleMut.isPending}
-          onClick={() => setPlanOpen(true)}
+          onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
         >
           Create Plan ({getSelectedGarmentIds().length} garments)
         </Button>
@@ -694,8 +748,18 @@ function SchedulerPage() {
         onConfirm={handleSchedule}
         garmentCount={getSelectedGarmentIds().length}
         defaultDate={selectedDate}
-        isAlteration={isSchedulingReturns}
+        isAlteration={false}
         defaultPlan={getDefaultPlanForSelection()}
+        hasSoaking={selectedHasSoaking}
+      />
+
+      <ReturnPlanDialog
+        open={returnPlanOpen}
+        onOpenChange={setReturnPlanOpen}
+        onConfirm={handleSchedule}
+        garmentCount={getSelectedGarmentIds().length}
+        defaultDate={selectedDate}
+        workerHistory={getReturnWorkerHistory()}
       />
     </div>
   );

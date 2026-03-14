@@ -22,10 +22,11 @@ function DispatchPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const dispatchMut = useDispatchGarments();
 
-  // Ready garments at workshop
+  // Ready garments at workshop — includes accepted/completed garments that ended up back here
+  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "accepted", "completed", "ready_for_pickup"]);
   const readyGarments = useMemo(
     () => allGarments.filter(
-      (g) => g.piece_stage === "ready_for_dispatch" && g.location === "workshop",
+      (g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""),
     ),
     [allGarments],
   );

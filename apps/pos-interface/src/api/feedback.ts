@@ -49,3 +49,40 @@ export const getFeedbackByOrderId = async (
   }
   return { status: "success", data: data as any, count: data?.length || 0 };
 };
+
+export const updateFeedback = async (
+  feedbackId: string,
+  data: Partial<GarmentFeedback>
+): Promise<ApiResponse<GarmentFeedback>> => {
+  const { data: updated, error } = await supabase
+    .from(TABLE_NAME)
+    .update(data)
+    .eq("id", feedbackId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating feedback:", error);
+    return { status: "error", message: error.message };
+  }
+  return { status: "success", data: updated as any };
+};
+
+export const getFeedbackByGarmentAndTrip = async (
+  garmentId: string,
+  tripNumber: number
+): Promise<ApiResponse<GarmentFeedback | null>> => {
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("garment_id", garmentId)
+    .eq("trip_number", tripNumber)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { status: "error", message: error.message };
+  }
+  return { status: "success", data: data as any };
+};

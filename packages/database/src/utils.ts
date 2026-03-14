@@ -65,7 +65,7 @@ const PRODUCTION: PieceStage[] = [
     "sewing", "finishing", "ironing", "quality_check", "ready_for_dispatch"
 ];
 const NEEDS_WORK: PieceStage[] = ["needs_repair", "needs_redo"];
-const SHOP: PieceStage[] = ["at_shop", "accepted"];
+const SHOP: PieceStage[] = ["at_shop", "awaiting_trial", "ready_for_pickup", "accepted"];
 
 function isBrovaAccepted(g: GarmentInfo): boolean {
     const stage = g.piece_stage as PieceStage;
@@ -95,7 +95,7 @@ export function getOrderSummary(garments: GarmentInfo[]): OrderSummary {
         totalGarments: garments.length,
 
         brovaTotal: brovas.length,
-        brovaAtShop: count(brovas, ["at_shop"]),
+        brovaAtShop: count(brovas, ["at_shop", "awaiting_trial"]),
         brovaAccepted: brovas.filter(isBrovaAccepted).length,
         brovaNeedsWork: count(brovas, NEEDS_WORK),
         brovaInPipeline: count(brovas, PRODUCTION),
@@ -104,12 +104,12 @@ export function getOrderSummary(garments: GarmentInfo[]): OrderSummary {
         finalTotal: finals.length,
         finalWaiting: count(finals, ["waiting_for_acceptance"]),
         finalInProduction: count(finals, PRODUCTION),
-        finalAtShop: count(finals, ["at_shop"]),
+        finalAtShop: count(finals, ["at_shop", "ready_for_pickup"]),
         finalNeedsWork: count(finals, NEEDS_WORK),
         finalCompleted: count(finals, ["completed"]),
 
         hasBrovaReadyForTrial:
-            brovas.some(g => g.piece_stage === "at_shop") &&
+            brovas.some(g => g.piece_stage === "at_shop" || g.piece_stage === "awaiting_trial") &&
             finals.some(g => g.piece_stage === "waiting_for_acceptance"),
 
         hasBlockedFinals:
@@ -234,14 +234,19 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
     const finalsNotAtShop = finals.filter(g => g.location !== 'shop');
     const isWaitingFinals = finalsNotAtShop.length > 0;
 
-    // 4. Ready for pickup: everything at shop is accepted AND no finals outstanding
+    // 4. Check if a shop item is "done" — accepted brovas OR finals at ready_for_pickup
+    const isShopItemDone = (g: GarmentInfo) =>
+        g.acceptance_status === true ||
+        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup');
+
+    // Ready for pickup: everything at shop is done AND no finals outstanding
     const isReadyForPickup = shopItems.length > 0
-        && shopItems.every(g => g.acceptance_status === true)
+        && shopItems.every(isShopItemDone)
         && !isWaitingFinals;
 
-    // 5. Pickup + Waiting Finals: shop items accepted but finals still out
+    // 5. Pickup + Waiting Finals: shop items done but finals still out
     const isPickupWaitingFinals = shopItems.length > 0
-        && shopItems.every(g => g.acceptance_status === true)
+        && shopItems.every(isShopItemDone)
         && isWaitingFinals;
 
     // 6. Determine priority label

@@ -20,7 +20,7 @@ function isEligibleForCollection(g: Garment): boolean {
     return (
         g.acceptance_status === true &&
         g.location === "shop" &&
-        (g.piece_stage === "accepted" || g.piece_stage === "at_shop")
+        (g.piece_stage === "accepted" || g.piece_stage === "at_shop" || g.piece_stage === "ready_for_pickup")
     );
 }
 

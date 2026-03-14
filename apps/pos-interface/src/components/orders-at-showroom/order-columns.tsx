@@ -123,7 +123,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
         label = "Brova Trial";
         colorClass = "bg-amber-100 text-amber-700 border-amber-200";
       } else if (showroomStatus.isPickupWaitingFinals) {
-        label = "Brova Accepted · Waiting Finals";
+        label = "Awaiting Finals";
         colorClass = "bg-violet-100 text-violet-700 border-violet-200";
       } else if (showroomStatus.isReadyForPickup) {
         label = "Ready for Pickup";

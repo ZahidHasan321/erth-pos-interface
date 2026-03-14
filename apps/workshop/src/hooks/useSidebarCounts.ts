@@ -44,7 +44,7 @@ async function fetchCounts(): Promise<SidebarCounts> {
     finishing:     data.filter((g) => g.piece_stage === 'finishing').length,
     ironing:       data.filter((g) => g.piece_stage === 'ironing').length,
     quality_check: data.filter((g) => g.piece_stage === 'quality_check').length,
-    dispatch:      data.filter((g) => g.piece_stage === 'ready_for_dispatch').length,
+    dispatch:      data.filter((g) => g.location === 'workshop' && ['ready_for_dispatch', 'accepted', 'completed', 'ready_for_pickup'].includes(g.piece_stage ?? '')).length,
   };
 }
 

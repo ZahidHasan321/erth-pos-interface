@@ -574,7 +574,7 @@ BEGIN
       AND order_id = p_order_id
       AND acceptance_status = true
       AND location = 'shop'
-      AND piece_stage IN ('accepted', 'at_shop');
+      AND piece_stage IN ('accepted', 'at_shop', 'awaiting_trial', 'ready_for_pickup');
 
     IF FOUND THEN
       v_updated_count := v_updated_count + 1;

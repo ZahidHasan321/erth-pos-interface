@@ -1,17 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments, useWorkshopGarments } from "@/hooks/useWorkshopGarments";
-import { useCompleteAndAdvance, useStartGarment } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { Droplets, Clock, AlertCircle, CheckCircle2, Play, ArrowRight } from "lucide-react";
+import { Droplets, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/terminals/soaking")({
@@ -48,13 +43,20 @@ function ElapsedTimer({ startTime }: { startTime: string | null | undefined }) {
   );
 }
 
+/** Group garments by order_id */
+function groupByOrder(garments: WorkshopGarment[]) {
+  const map = new Map<number, WorkshopGarment[]>();
+  for (const g of garments) {
+    if (!map.has(g.order_id)) map.set(g.order_id, []);
+    map.get(g.order_id)!.push(g);
+  }
+  return Array.from(map.entries());
+}
+
 function SoakingTerminal() {
   const { data: garments = [], isLoading } = useTerminalGarments("soaking");
   const { data: allGarments = [] } = useWorkshopGarments();
-  const completeMut = useCompleteAndAdvance();
-  const startMut = useStartGarment();
-  const [completeDialog, setCompleteDialog] = useState<WorkshopGarment | null>(null);
-  const [worker, setWorker] = useState("");
+  const navigate = useNavigate();
 
   const today = useMemo(() => {
     const d = new Date();
@@ -63,13 +65,12 @@ function SoakingTerminal() {
   }, []);
   const todayStr = today.toISOString().slice(0, 10);
 
-  // Split into queue/pending
   const { queue, pending } = useMemo(() => {
     const q: WorkshopGarment[] = [];
     const p: WorkshopGarment[] = [];
     for (const g of garments) {
       if (g.start_time) {
-        q.push(g); // started = active
+        q.push(g);
       } else if (g.assigned_date && g.assigned_date < todayStr) {
         p.push(g);
       } else {
@@ -79,7 +80,6 @@ function SoakingTerminal() {
     return { queue: q, pending: p };
   }, [garments, todayStr]);
 
-  // Completed today
   const completedToday = useMemo(() => {
     return allGarments.filter((g) => {
       if (g.location !== "workshop") return false;
@@ -94,15 +94,11 @@ function SoakingTerminal() {
 
   const completedPagination = usePagination(completedToday, 15);
 
-  const handleComplete = async () => {
-    if (!completeDialog || !worker) return;
-    await completeMut.mutateAsync({ id: completeDialog.id, worker, stage: "soaking", nextStage: "cutting" });
-    toast.success(`${completeDialog.garment_id} → Cutting`);
-    setCompleteDialog(null);
-    setWorker("");
+  const handleCardClick = (g: WorkshopGarment) => {
+    navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
   };
 
-  const renderList = (list: WorkshopGarment[], showActions: boolean) => {
+  const renderGrouped = (list: WorkshopGarment[], showTimer: boolean) => {
     if (list.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl">
@@ -111,28 +107,49 @@ function SoakingTerminal() {
         </div>
       );
     }
+
+    const groups = groupByOrder(list);
     return (
-      <div className="space-y-3">
-        {list.map((g, i) => (
-          <GarmentCard key={g.id} garment={g} showPipeline compact index={i}
-            actions={showActions ? (
-              <div className="flex items-center gap-2">
-                <ElapsedTimer startTime={g.start_time?.toString()} />
-                {!g.start_time && (
-                  <Button size="sm" variant="outline" className="h-9 px-4 text-sm font-bold" onClick={() => startMut.mutate(g.id)} disabled={startMut.isPending}><Play className="w-3.5 h-3.5 mr-1" />Start</Button>
-                )}
-                <Button size="sm" className="h-9 px-4 text-sm font-bold bg-emerald-600 hover:bg-emerald-700" onClick={() => { setCompleteDialog(g); setWorker(""); }}>Done<ArrowRight className="w-3.5 h-3.5 ml-1" /></Button>
-              </div>
-            ) : undefined}
-          />
+      <div className="space-y-5">
+        {groups.map(([orderId, orderGarments]) => (
+          <div key={orderId} className="space-y-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs font-bold text-muted-foreground">
+                #{orderGarments[0].invoice_number ?? orderId}
+              </span>
+              {orderGarments[0].customer_name && (
+                <span className="text-xs text-muted-foreground">
+                  {orderGarments[0].customer_name}
+                </span>
+              )}
+              <span className="text-[10px] text-muted-foreground/60">
+                {orderGarments.length} piece{orderGarments.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {orderGarments.map((g, i) => (
+              <GarmentCard
+                key={g.id}
+                garment={g}
+                showPipeline
+                compact
+                index={i}
+                onClick={() => handleCardClick(g)}
+                actions={
+                  showTimer && g.start_time ? (
+                    <ElapsedTimer startTime={g.start_time?.toString()} />
+                  ) : undefined
+                }
+              />
+            ))}
+          </div>
         ))}
       </div>
     );
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <div className="mb-5">
         <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
           <Droplets className="w-6 h-6 text-blue-500" /> Soaking
         </h1>
@@ -149,8 +166,8 @@ function SoakingTerminal() {
           <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 opacity-70">Started</p>
         </div>
         <div className={`${pending.length > 0 ? "bg-red-50 border-red-200" : "bg-zinc-50 border-zinc-200"} border rounded-xl p-2.5 text-center`}>
-          <p className={`text-xl font-black ${pending.length > 0 ? "text-red-700" : "text-zinc-700"}`}>{pending.length}</p>
-          <p className={`text-[10px] font-bold uppercase tracking-wider ${pending.length > 0 ? "text-red-600 opacity-70" : "text-zinc-600 opacity-70"}`}>Overdue</p>
+          <p className={`text-xl font-black ${pending.length > 0 ? "text-red-700" : "text-zinc-400"}`}>{pending.length}</p>
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${pending.length > 0 ? "text-red-600 opacity-70" : "text-zinc-400"}`}>Overdue</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 text-center">
           <p className="text-xl font-black text-green-700">{completedToday.length}</p>
@@ -159,7 +176,7 @@ function SoakingTerminal() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : (
         <Tabs defaultValue="queue">
           <TabsList className="mb-4">
@@ -182,10 +199,10 @@ function SoakingTerminal() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="queue">{renderList(queue, true)}</TabsContent>
-          <TabsContent value="pending">{renderList(pending, true)}</TabsContent>
+          <TabsContent value="queue">{renderGrouped(queue, true)}</TabsContent>
+          <TabsContent value="pending">{renderGrouped(pending, true)}</TabsContent>
           <TabsContent value="completed">
-            {renderList(completedPagination.paged, false)}
+            {renderGrouped(completedPagination.paged, false)}
             <Pagination
               page={completedPagination.page}
               totalPages={completedPagination.totalPages}
@@ -196,24 +213,6 @@ function SoakingTerminal() {
           </TabsContent>
         </Tabs>
       )}
-
-      <Dialog open={!!completeDialog} onOpenChange={(v) => !v && setCompleteDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Complete Soaking</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="bg-muted/40 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Garment</p>
-              <p className="font-bold text-lg">{completeDialog?.garment_id}</p>
-              {completeDialog?.customer_name && <p className="text-sm text-muted-foreground">{completeDialog.customer_name}</p>}
-            </div>
-            <WorkerDropdown responsibility="soaking" value={worker} onChange={setWorker} placeholder="Who soaked this?" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleteDialog(null)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleComplete} disabled={!worker || completeMut.isPending}>Advance → Cutting</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -10,6 +10,12 @@ const PIPELINE_STAGES = [
   { key: "quality_check", label: "QC" },
 ];
 
+/** Stages that come AFTER the production pipeline — all steps should show as done */
+const POST_PRODUCTION_STAGES = new Set([
+  "ready_for_dispatch", "at_shop", "awaiting_trial",
+  "ready_for_pickup", "accepted", "completed",
+]);
+
 
 interface ProductionPipelineProps {
   currentStage: string | null | undefined;
@@ -20,7 +26,8 @@ interface ProductionPipelineProps {
 export function ProductionPipeline({ currentStage, compact = false, hasSoaking }: ProductionPipelineProps) {
   const stages = hasSoaking ? PIPELINE_STAGES : PIPELINE_STAGES.filter((s) => s.key !== "soaking");
   const order = stages.map((s) => s.key);
-  const current = currentStage ? order.indexOf(currentStage) : -1;
+  const isPostProduction = currentStage ? POST_PRODUCTION_STAGES.has(currentStage) : false;
+  const current = isPostProduction ? stages.length : (currentStage ? order.indexOf(currentStage) : -1);
 
   return (
     <div className={cn("flex items-center gap-0.5", compact ? "text-[9px]" : "text-[10px]")}>

@@ -110,36 +110,37 @@ async function main() {
     measurement_id: `${customerId}-1`,
     type: "Body",
     notes: "Standard measurements",
-    collar_width: 6.50,
-    collar_height: 2.75,
-    shoulder: 18.00,
-    armhole: 10.50,
-    chest_upper: 42.00,
-    chest_full: 44.00,
-    sleeve_length: 25.00,
-    sleeve_width: 7.50,
-    elbow: 13.00,
-    top_pocket_length: 5.50,
-    top_pocket_width: 4.50,
-    top_pocket_distance: 8.00,
-    side_pocket_length: 7.00,
-    side_pocket_width: 6.00,
-    side_pocket_distance: 12.00,
-    side_pocket_opening: 6.50,
-    waist_front: 18.50,
-    waist_back: 19.00,
-    waist_full: 37.50,
-    length_front: 42.00,
-    length_back: 43.00,
-    bottom: 22.00,
+    collar_width: 6.75,
+    collar_height: 2.50,
+    shoulder: 19.25,
+    armhole: 11.00,
+    chest_upper: 43.50,
+    chest_full: 46.00,
+    sleeve_length: 25.75,
+    sleeve_width: 7.75,
+    elbow: 13.50,
+    top_pocket_length: 5.75,
+    top_pocket_width: 4.25,
+    top_pocket_distance: 8.50,
+    side_pocket_length: 7.25,
+    side_pocket_width: 6.25,
+    side_pocket_distance: 11.50,
+    side_pocket_opening: 6.75,
+    waist_front: 19.25,
+    waist_back: 19.75,
+    waist_full: 39.00,
+    length_front: 43.50,
+    length_back: 44.25,
+    bottom: 23.50,
     chest_provision: 2.00,
     waist_provision: 2.00,
     armhole_provision: 1.00,
-    jabzour_width: 2.50,
-    jabzour_length: 8.00,
-    chest_front: 21.00,
-    chest_back: 23.00,
-    armhole_front: 5.25,
+    jabzour_width: 2.75,
+    jabzour_length: 8.25,
+    chest_front: 22.25,
+    chest_back: 23.75,
+    armhole_front: 5.50,
+    degree: 1.25,
   }).returning();
 
   const measurementId = measurement1?.id;
@@ -209,7 +210,7 @@ async function main() {
   });
 
   await db.insert(schema.garments).values([
-    { order_id: orderB.id, garment_id: `${orderB.id}-1`, garment_type: "brova", piece_stage: "at_shop", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateB, acceptance_status: null, measurement_id: measurementId, ...garmentStyleOptions },
+    { order_id: orderB.id, garment_id: `${orderB.id}-1`, garment_type: "brova", piece_stage: "awaiting_trial", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateB, acceptance_status: null, measurement_id: measurementId, ...garmentStyleOptions },
     { order_id: orderB.id, garment_id: `${orderB.id}-2`, garment_type: "final", piece_stage: "waiting_for_acceptance", location: "workshop", style_id: styleId, fabric_id: fabricId, delivery_date: dateB, measurement_id: measurementId, ...garmentStyleOptions },
   ]);
 
@@ -237,7 +238,7 @@ async function main() {
 
   await db.insert(schema.garments).values([
     { order_id: orderC.id, garment_id: `${orderC.id}-1`, garment_type: "brova", piece_stage: "accepted", location: "shop", acceptance_status: true, style_id: styleId, fabric_id: fabricId, delivery_date: dateC, measurement_id: measurementId, ...garmentStyleOptions },
-    { order_id: orderC.id, garment_id: `${orderC.id}-2`, garment_type: "brova", piece_stage: "at_shop", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateC, acceptance_status: null, measurement_id: measurementId, ...garmentStyleOptions },
+    { order_id: orderC.id, garment_id: `${orderC.id}-2`, garment_type: "brova", piece_stage: "awaiting_trial", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateC, acceptance_status: null, measurement_id: measurementId, ...garmentStyleOptions },
     { order_id: orderC.id, garment_id: `${orderC.id}-3`, garment_type: "final", piece_stage: "waiting_for_acceptance", location: "workshop", style_id: styleId, fabric_id: fabricId, delivery_date: dateC, measurement_id: measurementId, ...garmentStyleOptions },
     { order_id: orderC.id, garment_id: `${orderC.id}-4`, garment_type: "final", piece_stage: "waiting_for_acceptance", location: "workshop", style_id: styleId, fabric_id: fabricId, delivery_date: dateC, measurement_id: measurementId, ...garmentStyleOptions },
   ]);
@@ -265,8 +266,8 @@ async function main() {
   });
 
   await db.insert(schema.garments).values([
-    { order_id: orderD.id, garment_id: `${orderD.id}-1`, garment_type: "final", piece_stage: "at_shop", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateD, acceptance_status: true, measurement_id: measurementId, ...garmentStyleOptions },
-    { order_id: orderD.id, garment_id: `${orderD.id}-2`, garment_type: "final", piece_stage: "at_shop", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateD, acceptance_status: true, measurement_id: measurementId, ...garmentStyleOptions },
+    { order_id: orderD.id, garment_id: `${orderD.id}-1`, garment_type: "final", piece_stage: "ready_for_pickup", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateD, acceptance_status: true, measurement_id: measurementId, ...garmentStyleOptions },
+    { order_id: orderD.id, garment_id: `${orderD.id}-2`, garment_type: "final", piece_stage: "ready_for_pickup", location: "shop", style_id: styleId, fabric_id: fabricId, delivery_date: dateD, acceptance_status: true, measurement_id: measurementId, ...garmentStyleOptions },
     { order_id: orderD.id, garment_id: `${orderD.id}-3`, garment_type: "final", piece_stage: "accepted", location: "shop", acceptance_status: true, style_id: styleId, fabric_id: fabricId, delivery_date: dateD, measurement_id: measurementId, ...garmentStyleOptions },
   ]);
 
@@ -293,7 +294,7 @@ async function main() {
   });
 
   await db.insert(schema.garments).values([
-    { order_id: orderE.id, garment_id: `${orderE.id}-1`, garment_type: "brova", piece_stage: "at_shop", location: "shop", trip_number: 3, acceptance_status: false, style_id: styleId, fabric_id: fabricId, delivery_date: dateE, measurement_id: measurementId, ...garmentStyleOptions },
+    { order_id: orderE.id, garment_id: `${orderE.id}-1`, garment_type: "brova", piece_stage: "awaiting_trial", location: "shop", trip_number: 3, acceptance_status: false, style_id: styleId, fabric_id: fabricId, delivery_date: dateE, measurement_id: measurementId, ...garmentStyleOptions },
     { order_id: orderE.id, garment_id: `${orderE.id}-2`, garment_type: "final", piece_stage: "waiting_for_acceptance", location: "workshop", trip_number: 1, style_id: styleId, fabric_id: fabricId, delivery_date: dateE, measurement_id: measurementId, ...garmentStyleOptions },
   ]);
 

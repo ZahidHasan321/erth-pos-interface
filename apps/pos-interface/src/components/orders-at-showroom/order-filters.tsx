@@ -139,7 +139,7 @@ export function OrderFilters({
             <SelectContent className="rounded-xl shadow-xl">
               <SelectItem value="all">All Showroom Orders</SelectItem>
               <SelectItem value="brova_trial">Brova Trial</SelectItem>
-              <SelectItem value="pickup_waiting_finals">Brova Accepted · Waiting Finals</SelectItem>
+              <SelectItem value="pickup_waiting_finals">Awaiting Finals</SelectItem>
               <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
               <SelectItem value="alteration_in">Alteration (In)</SelectItem>
             </SelectContent>

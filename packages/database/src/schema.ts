@@ -57,7 +57,9 @@ export const pieceStageEnum = pgEnum("piece_stage", [
     "ready_for_dispatch",        // Passed QC, dispatch queue
 
     // --- Shop ---
-    "at_shop",                   // At shop, pending customer action
+    "at_shop",                   // DEPRECATED — use awaiting_trial or ready_for_pickup
+    "awaiting_trial",            // Brova at shop, waiting for customer trial
+    "ready_for_pickup",          // Final at shop, ready for customer collection
     "accepted",                  // Tried & approved, parked
 
     // --- Needs Work ---
@@ -249,6 +251,9 @@ export const measurements = pgTable("measurements", {
     waist_provision: numeric("waist_provision", { precision: 5, scale: 2 }),
     armhole_provision: numeric("armhole_provision", { precision: 5, scale: 2 }),
 
+    // Degree (size grade adjustment — subtracted from real measurements)
+    degree: numeric("degree", { precision: 5, scale: 2 }),
+
     // Specifics
     jabzour_width: numeric("jabzour_width", { precision: 5, scale: 2 }),
     jabzour_length: numeric("jabzour_length", { precision: 5, scale: 2 }),
@@ -342,6 +347,26 @@ export const workOrders = pgTable("work_orders", {
     invoiceIdx: uniqueIndex("work_orders_invoice_idx").on(t.invoice_number),
 }));
 
+// --- Trip History (stored as JSONB array on garments) ---
+export interface QcAttempt {
+    inspector: string;
+    ratings: Record<string, number> | null;
+    result: "pass" | "fail";
+    fail_reason: string | null;
+    return_stage: string | null;
+    date: string;
+}
+
+export interface TripHistoryEntry {
+    trip: number;
+    reentry_stage: string | null;
+    production_plan: Record<string, string> | null;
+    worker_history: Record<string, string> | null;
+    assigned_date: string | null;
+    completed_date: string | null;
+    qc_attempts: QcAttempt[];
+}
+
 // --- 6. GARMENTS (Line Items) ---
 export const garments = pgTable("garments", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -403,6 +428,7 @@ export const garments = pgTable("garments", {
     start_time: timestamp("start_time", { withTimezone: true }),
     completion_time: timestamp("completion_time", { withTimezone: true }),
     quality_check_ratings: jsonb("quality_check_ratings"),
+    trip_history: jsonb("trip_history").$type<TripHistoryEntry[]>(),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
 }));
@@ -427,6 +453,11 @@ export const garmentFeedback = pgTable("garment_feedback", {
         // "accepted" | "needs_repair_accepted" | "needs_repair_rejected" | "needs_redo" | "collected" | "delivered"
     previous_stage: text("previous_stage"),
         // What piece_stage was BEFORE this feedback (for audit trail)
+
+    // --- Distribution Request ---
+    distribution: text("distribution"),
+        // "pickup" | "workshop" | "shop"
+        // Requested next location — dispatch page reads this to know what to move
 
     // --- Satisfaction ---
     satisfaction_level: integer("satisfaction_level"),

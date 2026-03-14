@@ -18,6 +18,8 @@ export const PIECE_STAGE_LABELS = {
   quality_check: "Quality Check",
   ready_for_dispatch: "Ready for Dispatch",
   at_shop: "At Shop",
+  awaiting_trial: "Awaiting Trial",
+  ready_for_pickup: "Ready for Pickup",
   accepted: "Accepted",
   needs_repair: "Needs Repair",
   needs_redo: "Needs Redo",

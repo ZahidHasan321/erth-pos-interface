@@ -1,6 +1,16 @@
 import { supabase } from '@/lib/supabase';
-import type { WorkshopGarment } from '@repo/database';
+import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
+
+/** Safely parse trip_history — handles string, array, or null from Supabase */
+function parseTripHistory(raw: unknown): TripHistoryEntry[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+  return [];
+}
 
 const WORKSHOP_QUERY = `
   *,
@@ -13,11 +23,13 @@ const WORKSHOP_QUERY = `
   customer:orders!order_id(
     customer:customers!customer_id(name, phone)
   ),
-  measurement:measurements!measurement_id(*)
+  measurement:measurements!measurement_id(*),
+  style_ref:styles!style_id(name, image_url),
+  fabric_ref:fabrics!fabric_id(name, color)
 `;
 
 function flattenGarment(raw: any): WorkshopGarment {
-  const { order, customer, measurement, ...garment } = raw;
+  const { order, customer, measurement, style_ref, fabric_ref, ...garment } = raw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
   const cust = Array.isArray(customer?.customer) ? customer.customer[0] : customer?.customer;
 
@@ -33,6 +45,10 @@ function flattenGarment(raw: any): WorkshopGarment {
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
+    style_name: style_ref?.name ?? garment.style ?? undefined,
+    style_image_url: style_ref?.image_url ?? undefined,
+    fabric_name: fabric_ref?.name ?? undefined,
+    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
   };
 }
 
@@ -49,6 +65,98 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
   }
   // Filter out any rows where the order join returned nothing (mismatched RLS etc.)
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+};
+
+/**
+ * Fetch ALL garments from orders that have any production activity.
+ * Used by Assigned Orders — the "holy grail" view that shows every garment
+ * regardless of location (shop, workshop, transit) or stage.
+ */
+export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
+  // Step 1: find order_ids with at least one garment that has a production_plan
+  const { data: planned, error: e1 } = await supabase
+    .from('garments')
+    .select('order_id')
+    .not('production_plan', 'is', null);
+
+  if (e1 || !planned?.length) return [];
+
+  const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
+
+  // Step 2: fetch ALL garments from those orders (no location filter)
+  const { data, error } = await supabase
+    .from('garments')
+    .select(WORKSHOP_QUERY)
+    .in('order_id', orderIds)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    console.error('getAssignedViewGarments error:', error);
+    return [];
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+};
+
+/**
+ * Fetch a single garment by ID — no location filter.
+ */
+export const getGarmentById = async (id: string): Promise<WorkshopGarment | null> => {
+  const { data, error } = await supabase
+    .from('garments')
+    .select(WORKSHOP_QUERY)
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    console.error('getGarmentById error:', error);
+    return null;
+  }
+  return flattenGarment(data);
+};
+
+/**
+ * Fetch garments from orders where ALL garments are completed (back at shop or piece_stage=completed).
+ */
+export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> => {
+  // Step 1: find order_ids with at least one garment that has a production_plan
+  const { data: planned, error: e1 } = await supabase
+    .from('garments')
+    .select('order_id')
+    .not('production_plan', 'is', null);
+
+  if (e1 || !planned?.length) return [];
+
+  const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
+
+  // Step 2: fetch ALL garments from those orders
+  const { data, error } = await supabase
+    .from('garments')
+    .select(WORKSHOP_QUERY)
+    .in('order_id', orderIds)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    console.error('getCompletedOrderGarments error:', error);
+    return [];
+  }
+
+  const all = (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+
+  // Step 3: group by order and keep only orders where ALL garments are completed/at shop
+  const byOrder = new Map<number, WorkshopGarment[]>();
+  for (const g of all) {
+    if (!byOrder.has(g.order_id)) byOrder.set(g.order_id, []);
+    byOrder.get(g.order_id)!.push(g);
+  }
+
+  const result: WorkshopGarment[] = [];
+  for (const garments of byOrder.values()) {
+    const allDone = garments.every(
+      (g) => g.piece_stage === 'completed' || g.location === 'shop',
+    );
+    if (allDone) result.push(...garments);
+  }
+  return result;
 };
 
 export const receiveGarments = async (ids: string[]): Promise<void> => {
@@ -107,29 +215,76 @@ export const scheduleGarments = async (
   ids: string[],
   plan: Record<string, string>,
   assignedDate: string,
-  assignedUnit?: string,
+  _assignedUnit?: string,
   reentryStage?: PieceStage,
+  soakingIds?: string[],
+  nonSoakingIds?: string[],
 ): Promise<void> => {
-  // For alterations, use the specified re-entry stage
-  // For regular orders, determine based on whether a soaker is assigned
-  let firstStage: PieceStage;
+  const baseUpdate = {
+    production_plan: plan,
+    assigned_date: assignedDate,
+    in_production: true,
+  };
+
   if (reentryStage) {
-    firstStage = reentryStage;
+    const { error } = await supabase
+      .from('garments')
+      .update({ ...baseUpdate, piece_stage: reentryStage })
+      .in('id', ids);
+    if (error) throw new Error(error.message);
+  } else if (soakingIds?.length && nonSoakingIds?.length) {
+    const [r1, r2] = await Promise.all([
+      supabase.from('garments').update({ ...baseUpdate, piece_stage: 'soaking' as PieceStage }).in('id', soakingIds),
+      supabase.from('garments').update({ ...baseUpdate, piece_stage: 'cutting' as PieceStage }).in('id', nonSoakingIds),
+    ]);
+    if (r1.error) throw new Error(r1.error.message);
+    if (r2.error) throw new Error(r2.error.message);
   } else {
-    firstStage = plan.soaker ? 'soaking' : 'cutting';
+    const firstStage: PieceStage = (soakingIds?.length && plan.soaker) ? 'soaking' : 'cutting';
+    const { error } = await supabase
+      .from('garments')
+      .update({ ...baseUpdate, piece_stage: firstStage })
+      .in('id', ids);
+    if (error) throw new Error(error.message);
   }
 
-  const { error } = await supabase
+  // Append trip_history entry for each garment
+  const { data: garments } = await supabase
     .from('garments')
-    .update({
-      production_plan: plan,
-      assigned_date: assignedDate,
-      assigned_unit: assignedUnit ?? null,
-      piece_stage: firstStage,
-      in_production: true,
-    })
+    .select('id, trip_number, trip_history')
     .in('id', ids);
-  if (error) throw new Error(error.message);
+
+  if (garments?.length) {
+    await Promise.all(garments.map((g: any) => {
+      const history = parseTripHistory(g.trip_history);
+      history.push({
+        trip: g.trip_number ?? 1,
+        reentry_stage: reentryStage ?? null,
+        production_plan: plan,
+        worker_history: null,
+        assigned_date: assignedDate,
+        completed_date: null,
+        qc_attempts: [],
+      });
+      return supabase.from('garments').update({ trip_history: history }).eq('id', g.id);
+    }));
+  }
+
+  // Also save production_plan to waiting_for_acceptance finals in the same orders
+  if (!reentryStage) {
+    const { data: scheduled } = await supabase
+      .from('garments')
+      .select('order_id')
+      .in('id', ids);
+    if (scheduled?.length) {
+      const orderIds = [...new Set(scheduled.map((g: any) => g.order_id))];
+      await supabase
+        .from('garments')
+        .update({ production_plan: plan })
+        .in('order_id', orderIds)
+        .eq('piece_stage', 'waiting_for_acceptance');
+    }
+  }
 };
 
 export const startGarment = async (id: string): Promise<void> => {
@@ -177,7 +332,7 @@ export const qcPass = async (
 ): Promise<void> => {
   const { data: existing, error: fetchErr } = await supabase
     .from('garments')
-    .select('worker_history')
+    .select('worker_history, trip_history, trip_number')
     .eq('id', id)
     .single();
 
@@ -186,14 +341,32 @@ export const qcPass = async (
   const history = (existing?.worker_history as Record<string, string>) ?? {};
   history['quality_checker'] = worker;
 
+  const now = new Date().toISOString();
+  const tripHistory = parseTripHistory(existing?.trip_history);
+  const currentTrip = existing?.trip_number ?? 1;
+  const tripEntry = tripHistory.find((t) => t.trip === currentTrip);
+  if (tripEntry) {
+    tripEntry.worker_history = history;
+    tripEntry.completed_date = now.slice(0, 10);
+    tripEntry.qc_attempts.push({
+      inspector: worker,
+      ratings,
+      result: "pass",
+      fail_reason: null,
+      return_stage: null,
+      date: now.slice(0, 10),
+    });
+  }
+
   const { error } = await supabase
     .from('garments')
     .update({
       piece_stage: 'ready_for_dispatch' as PieceStage,
       quality_check_ratings: ratings,
       worker_history: history,
-      completion_time: new Date().toISOString(),
+      completion_time: now,
       start_time: null,
+      trip_history: tripHistory,
     })
     .eq('id', id);
   if (error) throw new Error(error.message);
@@ -202,7 +375,7 @@ export const qcPass = async (
 export const qcFail = async (id: string, returnStage: PieceStage, reason: string): Promise<void> => {
   const { data: existing, error: fetchErr } = await supabase
     .from('garments')
-    .select('notes')
+    .select('notes, trip_history, trip_number, worker_history')
     .eq('id', id)
     .single();
 
@@ -210,9 +383,24 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
 
   const notes = existing?.notes ? `${existing.notes}\nQC Fail: ${reason}` : `QC Fail: ${reason}`;
 
+  const tripHistory = parseTripHistory(existing?.trip_history);
+  const currentTrip = existing?.trip_number ?? 1;
+  const tripEntry = tripHistory.find((t) => t.trip === currentTrip);
+  if (tripEntry) {
+    tripEntry.worker_history = (existing?.worker_history as Record<string, string>) ?? null;
+    tripEntry.qc_attempts.push({
+      inspector: "",
+      ratings: null,
+      result: "fail",
+      fail_reason: reason,
+      return_stage: returnStage,
+      date: new Date().toISOString().slice(0, 10),
+    });
+  }
+
   const { error } = await supabase
     .from('garments')
-    .update({ piece_stage: returnStage, notes, start_time: null })
+    .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory })
     .eq('id', id);
   if (error) throw new Error(error.message);
 };
@@ -235,12 +423,13 @@ export const releaseFinals = async (ids: string[]): Promise<void> => {
   if (error) throw new Error(error.message);
 };
 
-/** Release finals with a production plan + assigned date — skips scheduler step */
+/** Release finals with a production plan + assigned date — skips scheduler step.
+ *  Handles finals at waiting_for_acceptance (not yet POS-released) or waiting_cut (POS-released, no plan). */
 export const releaseFinalsWithPlan = async (
   ids: string[],
   plan: Record<string, string>,
   assignedDate: string,
-  assignedUnit?: string,
+  _assignedUnit?: string,
 ): Promise<void> => {
   const firstStage: PieceStage = plan.soaker ? 'soaking' : 'cutting';
   const { error } = await supabase
@@ -250,20 +439,17 @@ export const releaseFinalsWithPlan = async (
       in_production: true,
       production_plan: plan,
       assigned_date: assignedDate,
-      assigned_unit: assignedUnit ?? null,
     })
-    .in('id', ids)
-    .eq('piece_stage', 'waiting_for_acceptance');
+    .in('id', ids);
   if (error) throw new Error(error.message);
 };
 
-/** Update garment details (dates, unit, production plan) — used by Assigned Orders inline editing */
+/** Update garment details (dates, production plan) — used by Assigned Orders editing */
 export const updateGarmentDetails = async (
   id: string,
   updates: {
     assigned_date?: string | null;
     delivery_date?: string | null;
-    assigned_unit?: string | null;
     production_plan?: Record<string, string> | null;
   },
 ): Promise<void> => {
@@ -291,26 +477,42 @@ export const updateOrderDeliveryDate = async (orderId: number, date: string): Pr
   }
 };
 
-/** Fetch brova production plans for given order IDs (to pre-populate finals scheduling) */
+/** Fetch brova production plans for given order IDs (to pre-populate finals scheduling).
+ *  Uses worker_history (actual workers per stage) merged with production_plan as fallback,
+ *  since worker_history has the complete picture after production. */
 export const getBrovaPlansForOrders = async (
   orderIds: number[],
 ): Promise<Record<number, Record<string, string>>> => {
   if (!orderIds.length) return {};
+  // Fetch all brovas for these orders — filter for plan/history in JS to avoid PostgREST OR issues
   const { data, error } = await supabase
     .from('garments')
-    .select('order_id, production_plan')
+    .select('order_id, production_plan, worker_history')
     .in('order_id', orderIds)
-    .eq('garment_type', 'brova')
-    .not('production_plan', 'is', null);
+    .eq('garment_type', 'brova');
   if (error) {
     console.error('getBrovaPlansForOrders error:', error);
     return {};
   }
-  // Return the first brova's plan for each order
+  // Return merged plan: worker_history (complete) takes precedence, production_plan fills gaps
+  // Remap worker_history keys (stage names) to plan keys (role names)
+  const HISTORY_TO_PLAN: Record<string, string> = {
+    soaking: 'soaker', cutting: 'cutter', post_cutting: 'post_cutter',
+    sewing: 'sewer', finishing: 'finisher', ironing: 'ironer', quality_checker: 'quality_checker',
+  };
   const result: Record<number, Record<string, string>> = {};
   for (const g of data ?? []) {
-    if (!result[g.order_id] && g.production_plan) {
-      result[g.order_id] = g.production_plan as Record<string, string>;
+    if (result[g.order_id]) continue;
+    const plan = (g.production_plan ?? {}) as Record<string, string>;
+    const history = (g.worker_history ?? {}) as Record<string, string>;
+    // Build merged plan: start with production_plan, overlay with worker_history
+    const merged: Record<string, string> = { ...plan };
+    for (const [historyKey, worker] of Object.entries(history)) {
+      const planKey = HISTORY_TO_PLAN[historyKey] ?? historyKey;
+      if (worker) merged[planKey] = worker;
+    }
+    if (Object.keys(merged).length > 0) {
+      result[g.order_id] = merged;
     }
   }
   return result;

@@ -236,8 +236,9 @@ export function FabricSelectionForm({
         }
 
         const isoDate = date.toISOString();
+        const garments = form.getValues("garments");
 
-        garmentFields.forEach((_, index) => {
+        garments.forEach((_, index) => {
             form.setValue(
                 `garments.${index}.delivery_date`,
                 isoDate,
@@ -459,6 +460,7 @@ export function FabricSelectionForm({
             ...garmentDefaults,
             garment_id: currentOrderId + "-" + (index + 1),
             measurement_id: latestMeasurement?.id ?? null as any,
+            delivery_date: deliveryDate || garmentDefaults.delivery_date,
         });
     };
 

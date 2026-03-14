@@ -1,18 +1,14 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
-import { useCompleteAndAdvance, useStartGarment } from "@/hooks/useGarmentMutations";
-import { GarmentCard } from "@/components/shared/GarmentCard";
+import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { STAGE_NEXT, PIECE_STAGE_LABELS } from "@/lib/constants";
-import { Clock, AlertCircle, CheckCircle2, Play, ArrowRight } from "lucide-react";
+import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 interface ProductionTerminalProps {
@@ -26,17 +22,26 @@ function isSameDay(d1: Date, d2: Date) {
     d1.getDate() === d2.getDate();
 }
 
+const HISTORY_KEY_MAP: Record<string, string> = {
+  soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
+  sewing: "sewer", finishing: "finisher", ironing: "ironer",
+  quality_check: "quality_checker",
+};
+
+const STAGE_NEXT: Record<string, string> = {
+  soaking: "cutting", cutting: "post_cutting", post_cutting: "sewing",
+  sewing: "finishing", finishing: "ironing", ironing: "quality_check",
+  quality_check: "ready_for_dispatch",
+};
+
 export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalProps) {
   const { data: stageGarments = [], isLoading } = useTerminalGarments(terminalStage);
   const { data: allGarments = [] } = useWorkshopGarments();
-  const completeMut = useCompleteAndAdvance();
-  const startMut = useStartGarment();
-
-  const [completeDialog, setCompleteDialog] = useState<WorkshopGarment | null>(null);
-  const [worker, setWorker] = useState("");
+  const navigate = useNavigate();
 
   const stageLabel = PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ?? terminalStage;
   const nextStage = STAGE_NEXT[terminalStage];
+  const historyKey = HISTORY_KEY_MAP[terminalStage] ?? terminalStage;
 
   const today = useMemo(() => {
     const d = new Date();
@@ -44,15 +49,6 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
     return d;
   }, []);
   const todayStr = today.toISOString().slice(0, 10);
-
-  const historyKey = useMemo(() => {
-    const map: Record<string, string> = {
-      soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
-      sewing: "sewer", finishing: "finisher", ironing: "ironer",
-      quality_check: "quality_checker",
-    };
-    return map[terminalStage] ?? terminalStage;
-  }, [terminalStage]);
 
   const { queue, pending } = useMemo(() => {
     const q: WorkshopGarment[] = [];
@@ -84,69 +80,12 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
     });
   }, [allGarments, nextStage, today, historyKey]);
 
-  const handleComplete = async () => {
-    if (!completeDialog || !worker || !nextStage) return;
-    await completeMut.mutateAsync({ id: completeDialog.id, worker, stage: terminalStage, nextStage });
-    toast.success(`${completeDialog.garment_id ?? "Garment"} → ${PIECE_STAGE_LABELS[nextStage as keyof typeof PIECE_STAGE_LABELS] ?? nextStage}`);
-    setCompleteDialog(null);
-    setWorker("");
-  };
-
-  const renderGarmentList = (garments: WorkshopGarment[], showActions: boolean) => {
-    if (garments.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl bg-muted/10">
-          <div className="opacity-30 mb-3">{icon}</div>
-          <p className="font-semibold text-muted-foreground">No garments</p>
-        </div>
-      );
-    }
-    return (
-      <div className="space-y-2">
-        {garments.map((g, i) => (
-          <GarmentCard
-            key={g.id}
-            garment={g}
-            showPipeline
-            compact
-            index={i}
-            actions={
-              showActions ? (
-                <div className="flex gap-2">
-                  {!g.start_time && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startMut.mutate(g.id)}
-                      disabled={startMut.isPending}
-                      className="h-9 px-4 text-sm font-bold"
-                    >
-                      <Play className="w-3.5 h-3.5 mr-1" />
-                      Start
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    onClick={() => { setCompleteDialog(g); setWorker(""); }}
-                    className="h-9 px-4 text-sm font-bold bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    Done
-                    <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                  </Button>
-                </div>
-              ) : undefined
-            }
-          />
-        ))}
-      </div>
-    );
-  };
-
-  // Paginate completed list
   const completedPagination = usePagination(completedToday, 15);
-
-  // Stats for the header
   const started = queue.filter((g) => g.start_time).length;
+
+  const handleCardClick = (g: WorkshopGarment) => {
+    navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
@@ -181,7 +120,7 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : (
         <Tabs defaultValue="queue">
           <TabsList className="mb-4">
@@ -204,10 +143,14 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="queue">{renderGarmentList(queue, true)}</TabsContent>
-          <TabsContent value="pending">{renderGarmentList(pending, true)}</TabsContent>
+          <TabsContent value="queue">
+            <GroupedGarmentList garments={queue} onCardClick={handleCardClick} emptyIcon={icon} />
+          </TabsContent>
+          <TabsContent value="pending">
+            <GroupedGarmentList garments={pending} onCardClick={handleCardClick} emptyIcon={icon} emptyText="No overdue garments" />
+          </TabsContent>
           <TabsContent value="completed">
-            {renderGarmentList(completedPagination.paged, false)}
+            <GroupedGarmentList garments={completedPagination.paged} onCardClick={handleCardClick} emptyIcon={icon} emptyText="No completions today" />
             <Pagination
               page={completedPagination.page}
               totalPages={completedPagination.totalPages}
@@ -218,32 +161,6 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
           </TabsContent>
         </Tabs>
       )}
-
-      <Dialog open={!!completeDialog} onOpenChange={(v) => !v && setCompleteDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Complete {stageLabel}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="bg-muted/40 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Garment</p>
-              <p className="font-bold text-lg">{completeDialog?.garment_id}</p>
-              {completeDialog?.customer_name && (
-                <p className="text-sm text-muted-foreground">{completeDialog.customer_name}</p>
-              )}
-            </div>
-            <WorkerDropdown responsibility={terminalStage} value={worker} onChange={setWorker} placeholder="Who completed this?" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleteDialog(null)}>Cancel</Button>
-            <Button
-              onClick={handleComplete}
-              disabled={!worker || completeMut.isPending}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              Advance <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

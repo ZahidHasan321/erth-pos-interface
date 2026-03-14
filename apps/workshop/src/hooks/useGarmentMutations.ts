@@ -16,14 +16,17 @@ import {
   updateOrderDeliveryDate,
   updateOrderAssignedDate,
 } from '@/api/garments';
-import { WORKSHOP_GARMENTS_KEY } from './useWorkshopGarments';
+import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
 import type { PieceStage } from '@repo/database';
 
 function useMut<TArgs>(fn: (args: TArgs) => Promise<void>) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
+      qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
+    },
   });
 }
 
@@ -46,8 +49,8 @@ export function useSendReturnToProduction() {
 }
 
 export function useScheduleGarments() {
-  return useMut((args: { ids: string[]; plan: Record<string, string>; date: string; unit?: string; reentryStage?: PieceStage }) =>
-    scheduleGarments(args.ids, args.plan, args.date, args.unit, args.reentryStage),
+  return useMut((args: { ids: string[]; soakingIds?: string[]; nonSoakingIds?: string[]; plan: Record<string, string>; date: string; reentryStage?: PieceStage }) =>
+    scheduleGarments(args.ids, args.plan, args.date, undefined, args.reentryStage, args.soakingIds, args.nonSoakingIds),
   );
 }
 
@@ -82,13 +85,13 @@ export function useReleaseFinals() {
 }
 
 export function useReleaseFinalsWithPlan() {
-  return useMut((args: { ids: string[]; plan: Record<string, string>; date: string; unit?: string }) =>
-    releaseFinalsWithPlan(args.ids, args.plan, args.date, args.unit),
+  return useMut((args: { ids: string[]; plan: Record<string, string>; date: string }) =>
+    releaseFinalsWithPlan(args.ids, args.plan, args.date),
   );
 }
 
 export function useUpdateGarmentDetails() {
-  return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; assigned_unit?: string | null; production_plan?: Record<string, string> | null } }) =>
+  return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null } }) =>
     updateGarmentDetails(args.id, args.updates),
   );
 }

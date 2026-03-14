@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ruler,
   Camera,
@@ -44,7 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -72,7 +71,7 @@ import { SignaturePad } from "@/components/forms/signature-pad";
 import { getOrderById, updateOrder } from "@/api/orders";
 import { getMeasurementById } from "@/api/measurements";
 import { updateGarment } from "@/api/garments";
-import { createFeedback, getFeedbackByGarmentId } from "@/api/feedback";
+import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip, getFeedbackByOrderId } from "@/api/feedback";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
 import { evaluateBrovaFeedback } from "@repo/database";
 
@@ -83,6 +82,9 @@ import {
   jabzourTypes,
   topPocketTypes,
   cuffTypes,
+  walletIcon,
+  penIcon,
+  smallTabaggiImage,
   type BaseOption
 } from "@/components/forms/fabric-selection-and-options/constants";
 
@@ -169,6 +171,8 @@ interface GarmentFeedbackState {
   customerSignature: string | null;
   notes: string;
   submitted: boolean;
+  existingFeedbackId: string | null;
+  isEditing: boolean;
 }
 
 const createEmptyGarmentState = (): GarmentFeedbackState => ({
@@ -187,6 +191,8 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   customerSignature: null,
   notes: "",
   submitted: false,
+  existingFeedbackId: null,
+  isEditing: false,
 });
 
 interface OrderWithDetails extends Order {
@@ -201,6 +207,7 @@ function UnifiedFeedbackInterface() {
   const { garmentId: deepLinkGarmentId } = Route.useSearch();
   const paramOrderId = Number(rawOrderId);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Active Data State
   const [activeOrder, setActiveOrder] = useState<OrderWithDetails | null>(null);
@@ -248,10 +255,30 @@ function UnifiedFeedbackInterface() {
   // Derive activeTab from garment type
   const activeTab = activeGarment?.garment_type === "brova" ? "brova" : "final";
 
+  // Order-level feedback for determining eligible garments
+  const { data: orderFeedbackData } = useQuery({
+    queryKey: ["order-feedback", paramOrderId],
+    queryFn: () => getFeedbackByOrderId(paramOrderId),
+    enabled: !!paramOrderId,
+  });
+  const orderFeedback = orderFeedbackData?.data || [];
+
+  // Eligible garments: at shop (any stage including completed), or dispatched but with editable feedback
+  const eligibleGarments = useMemo(() => {
+    if (!activeOrder?.garments) return [];
+    return activeOrder.garments.filter(g => {
+      // Garments at shop are always eligible
+      if (g.location === 'shop') return true;
+      // Garments in transit/workshop that have feedback for previous trip are visible (read-only or editable)
+      const fb = orderFeedback.find(f => f.garment_id === g.id && f.trip_number === (g.trip_number || 1) - 1);
+      return !!fb;
+    });
+  }, [activeOrder?.garments, orderFeedback]);
+
   // 1. Garment Selection Effect
   useEffect(() => {
     if (activeOrder?.garments?.length) {
-      // Honour deep-link garmentId if provided and garment is at shop
+      // Honour deep-link garmentId if provided
       if (deepLinkGarmentId) {
         const linked = activeOrder.garments.find(g => g.id === deepLinkGarmentId);
         if (linked) {
@@ -260,9 +287,7 @@ function UnifiedFeedbackInterface() {
         }
       }
 
-      const shopGarments = activeOrder.garments.filter(g =>
-        g.location === 'shop' && g.piece_stage !== 'completed'
-      );
+      const shopGarments = activeOrder.garments.filter(g => g.location === 'shop');
 
       if (shopGarments.length > 0) {
           setSelectedGarmentId(shopGarments[0].id);
@@ -271,6 +296,30 @@ function UnifiedFeedbackInterface() {
       }
     }
   }, [activeOrder, deepLinkGarmentId]);
+
+  // Pre-populate form when selecting a garment with existing feedback for current trip
+  useEffect(() => {
+    if (!selectedGarmentId || !activeGarment) return;
+    // Don't re-populate if we already have state for this garment
+    if (garmentStates[selectedGarmentId]) return;
+
+    const tripNumber = activeGarment.trip_number || 1;
+    getFeedbackByGarmentAndTrip(selectedGarmentId, tripNumber).then(res => {
+      if (res.status === 'success' && res.data) {
+        const fb = res.data;
+        const satLevel = SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level);
+        updateGarmentState(selectedGarmentId, {
+          feedbackAction: fb.action || null,
+          satisfaction: satLevel?.value || null,
+          notes: fb.notes || "",
+          customerSignature: fb.customer_signature || null,
+          existingFeedbackId: fb.id,
+          isEditing: true,
+          submitted: true,
+        });
+      }
+    });
+  }, [selectedGarmentId, activeGarment]);
 
   // Auto-set distribution when feedbackAction changes
   useEffect(() => {
@@ -444,7 +493,7 @@ function UnifiedFeedbackInterface() {
         toast.error("Please complete all feedback sections");
         return;
     }
-    if (activeTab === "brova" && !currentState.customerSignature) {
+    if (activeGarment?.garment_type === "brova" && !currentState.customerSignature) {
         toast.error("Customer signature is required for Brova feedback");
         return;
     }
@@ -468,19 +517,10 @@ function UnifiedFeedbackInterface() {
                 activeGarment.id
             );
 
-            const updatePayload: any = {
+            await updateGarment(activeGarment.id, {
                 piece_stage: result.newStage,
                 acceptance_status: result.acceptanceStatus,
-            };
-
-            if (state.distributionAction === "workshop") {
-                updatePayload.location = "transit_to_workshop";
-                updatePayload.trip_number = (activeGarment.trip_number || 1) + 1;
-            } else {
-                updatePayload.location = "shop";
-            }
-
-            await updateGarment(activeGarment.id, updatePayload);
+            });
 
             if (result.message) {
                 toast.info(result.message);
@@ -489,7 +529,6 @@ function UnifiedFeedbackInterface() {
             const updatePayload: any = {};
 
             if (state.feedbackAction === "accepted") {
-                // Final accepted — mark completed, fulfillment from order-level delivery type
                 const isHomeDelivery = (activeOrder as any).home_delivery;
                 updatePayload.piece_stage = "completed";
                 updatePayload.fulfillment_type = isHomeDelivery ? "delivered" : "collected";
@@ -497,13 +536,6 @@ function UnifiedFeedbackInterface() {
             } else {
                 updatePayload.piece_stage = state.feedbackAction;
                 updatePayload.acceptance_status = false;
-            }
-
-            if (state.distributionAction === "workshop") {
-                updatePayload.location = "transit_to_workshop";
-                updatePayload.trip_number = (activeGarment.trip_number || 1) + 1;
-            } else {
-                updatePayload.location = "shop";
             }
 
             await updateGarment(activeGarment.id, updatePayload);
@@ -541,14 +573,14 @@ function UnifiedFeedbackInterface() {
         // Determine feedback type
         const feedbackType = activeGarment.garment_type === "brova" ? "brova_trial" : "final_collection";
 
-        // Save feedback record to DB
-        await createFeedback({
+        const feedbackPayload = {
           garment_id: activeGarment.id,
           order_id: activeOrder.id,
           feedback_type: feedbackType,
           trip_number: activeGarment.trip_number || 1,
           action: state.feedbackAction ?? undefined,
           previous_stage: (activeGarment.piece_stage ?? undefined) as string | undefined,
+          distribution: state.distributionAction || null,
           satisfaction_level: satLevel?.numericValue || null,
           measurement_diffs: measurementDiffs.length > 0 ? JSON.stringify(measurementDiffs) : null,
           options_checklist: optionsChecklist.length > 0 ? JSON.stringify(optionsChecklist) : null,
@@ -561,13 +593,35 @@ function UnifiedFeedbackInterface() {
           difference_reasons: Object.keys(state.differenceReasons).length > 0
             ? JSON.stringify(state.differenceReasons)
             : null,
-        });
+        };
+
+        // Upsert: update existing feedback or create new one
+        if (state.existingFeedbackId) {
+          await updateFeedback(state.existingFeedbackId, feedbackPayload);
+        } else {
+          const fbResult = await createFeedback(feedbackPayload);
+          if (fbResult.status === 'success' && fbResult.data) {
+            updateGarmentState(selectedGarmentId, { existingFeedbackId: fbResult.data.id });
+          }
+        }
 
         // Mark garment as submitted in local state
-        updateGarmentState(selectedGarmentId, { submitted: true });
+        updateGarmentState(selectedGarmentId, { submitted: true, isEditing: true });
 
-        toast.success(`Feedback Logged`, {
-            description: `Garment ${activeGarment.garment_id || activeGarment.id} submitted`
+        // Refresh order data so garment pills reflect updated piece_stage
+        const refreshed = await getOrderById(activeOrder.id, true);
+        if (refreshed.status === 'success' && refreshed.data) {
+          setActiveOrder(refreshed.data);
+        }
+
+        // Invalidate dispatch queries so "Return to Workshop" tab is fresh
+        if (state.distributionAction === "workshop") {
+          queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
+          queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+        }
+
+        toast.success(state.existingFeedbackId ? `Feedback Updated` : `Feedback Logged`, {
+            description: `Garment ${activeGarment.garment_id || activeGarment.id} ${state.existingFeedbackId ? 'updated' : 'submitted'}`
         });
 
         // Balance check for final collection
@@ -607,15 +661,47 @@ function UnifiedFeedbackInterface() {
     return list.find(o => o.value === val || o.displayText === val)?.image;
   };
 
+  const findDisplayText = (list: BaseOption[], val: string | undefined | null) => {
+    if (!val) return val;
+    return list.find(o => o.value === val || o.displayText === val)?.displayText ?? val;
+  };
+
   const optionRows = useMemo(() => {
     if (!activeGarment) return [];
     const g = activeGarment;
 
-    return [
+    // Reverse-map jabzour from DB values to frontend display values
+    // DB stores: jabzour_1 = "ZIPPER" for Shaab, "BUTTON" for others (actual style in jabzour_2)
+    const isShaab = g.jabzour_1 === "ZIPPER";
+    let displayJabzour1: string | null | undefined;
+    let displayJabzour2: string | null | undefined = null;
+
+    if (isShaab) {
+      displayJabzour1 = "JAB_SHAAB";
+      displayJabzour2 = g.jabzour_2; // secondary jabzour style
+    } else if (g.jabzour_1 === "BUTTON") {
+      displayJabzour1 = g.jabzour_2; // actual style stored in jabzour_2
+      displayJabzour2 = null;
+    } else {
+      displayJabzour1 = g.jabzour_1;
+    }
+
+    const rows: Array<{
+      id: string;
+      label: string;
+      mainValue: string | null | undefined;
+      displayText?: string | null;
+      mainImage: string | null | undefined;
+      hashwaLabel: string | null;
+      hashwaValue: string | null | undefined;
+      extraCheckLabel?: string | null;
+      extraCheckValue?: boolean | null;
+    }> = [
       {
         id: "collar",
         label: "Collar",
         mainValue: g.collar_type,
+        displayText: findDisplayText(collarTypes, g.collar_type),
         mainImage: findOptionImage(collarTypes, g.collar_type),
         hashwaLabel: null,
         hashwaValue: null
@@ -624,32 +710,40 @@ function UnifiedFeedbackInterface() {
         id: "collarBtn",
         label: "Collar Button",
         mainValue: g.collar_button,
+        displayText: findDisplayText(collarButtons, g.collar_button),
         mainImage: findOptionImage(collarButtons, g.collar_button),
         hashwaLabel: null,
         hashwaValue: null,
-        extraCheckLabel: g.small_tabaggi ? "Small Tabbagi" : null,
-        extraCheckValue: g.small_tabaggi
       },
-      {
-        id: "jabzour1",
-        label: "Jabzour 1",
-        mainValue: g.jabzour_1,
-        mainImage: findOptionImage(jabzourTypes, g.jabzour_1),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.jabzour_thickness
-      },
-      {
-        id: "jabzour2",
-        label: "Jabzour 2",
-        mainValue: g.jabzour_2,
-        mainImage: findOptionImage(jabzourTypes, g.jabzour_2),
-        hashwaLabel: "Hashwa",
-        hashwaValue: g.jabzour_thickness
-      },
+      // Small Tabbagi
+      ...(g.small_tabaggi ? [{
+        id: "smallTabaggi",
+        label: "Small Tabbagi",
+        mainValue: "Yes",
+        displayText: "Small Tabbagi",
+        mainImage: smallTabaggiImage as string | null,
+        hashwaLabel: null as string | null,
+        hashwaValue: null as string | null
+      }] : []),
+      // Combined jabzour row: shows closure type (Zipper/Button) + style
+      ...(g.jabzour_1 ? [{
+        id: "jabzour",
+        label: "Jabzour",
+        mainValue: displayJabzour1 || g.jabzour_1,
+        displayText: isShaab
+          ? `Shaab (Zipper)${displayJabzour2 ? ` · ${findDisplayText(jabzourTypes, displayJabzour2) || displayJabzour2}` : ""}`
+          : `${findDisplayText(jabzourTypes, displayJabzour1) || displayJabzour1} (Button)`,
+        mainImage: isShaab
+          ? findOptionImage(jabzourTypes, "JAB_SHAAB")
+          : findOptionImage(jabzourTypes, displayJabzour1),
+        hashwaLabel: "Hashwa" as string | null,
+        hashwaValue: g.jabzour_thickness as string | null | undefined
+      }] : []),
       {
         id: "frontPocket",
         label: "Front Pocket",
         mainValue: g.front_pocket_type,
+        displayText: findDisplayText(topPocketTypes, g.front_pocket_type),
         mainImage: findOptionImage(topPocketTypes, g.front_pocket_type),
         hashwaLabel: "Hashwa",
         hashwaValue: g.front_pocket_thickness
@@ -658,11 +752,33 @@ function UnifiedFeedbackInterface() {
         id: "cuff",
         label: "Cuff",
         mainValue: g.cuffs_type,
+        displayText: findDisplayText(cuffTypes, g.cuffs_type),
         mainImage: findOptionImage(cuffTypes, g.cuffs_type),
         hashwaLabel: "Hashwa",
         hashwaValue: g.cuffs_thickness
-      }
-    ].filter(r => r.mainValue && r.mainValue !== "None");
+      },
+      // Accessories
+      ...(g.wallet_pocket ? [{
+        id: "walletPocket",
+        label: "Wallet Pocket",
+        mainValue: "Yes",
+        displayText: "Wallet Pocket",
+        mainImage: walletIcon as string | null,
+        hashwaLabel: null as string | null,
+        hashwaValue: null as string | null
+      }] : []),
+      ...(g.pen_holder ? [{
+        id: "penHolder",
+        label: "Pen Holder",
+        mainValue: "Yes",
+        displayText: "Pen Holder",
+        mainImage: penIcon as string | null,
+        hashwaLabel: null as string | null,
+        hashwaValue: null as string | null
+      }] : []),
+    ];
+
+    return rows.filter(r => r.mainValue && r.mainValue !== "None");
   }, [activeGarment]);
 
   if (isLoadingOrder) {
@@ -705,11 +821,14 @@ function UnifiedFeedbackInterface() {
           <span className="text-sm text-muted-foreground font-medium">
             #{activeOrder.id} &bull; {activeOrder.customer?.name || "Guest"}
           </span>
-          {activeTab === "brova" && (
+          {activeGarment?.garment_type === "brova" && (
             <Badge variant="outline" className="text-[9px] font-black uppercase bg-amber-50 text-amber-700 border-amber-200">Brova Trial</Badge>
           )}
-          {activeTab === "final" && (
+          {activeGarment?.garment_type === "final" && (
             <Badge variant="outline" className="text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border-emerald-200">Final / Pickup</Badge>
+          )}
+          {currentState.isEditing && (
+            <Badge variant="outline" className="text-[9px] font-black uppercase bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
           )}
         </div>
       </div>
@@ -807,118 +926,33 @@ function UnifiedFeedbackInterface() {
             </CardContent>
           </Card>
 
-          {/* ═══ ORDER-LEVEL ACTIONS ═══ */}
-          {/* ORDER-LEVEL: START PRODUCTION */}
-          {(() => {
-            const blockedFinals = activeOrder.garments?.filter(
-              g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
-            ) || [];
-            const anyBrovaAccepted = activeOrder.garments?.some(
-              g => g.garment_type === "brova" && (g.acceptance_status === true || g.piece_stage === "accepted")
-            );
-            if (blockedFinals.length === 0) return null;
-            return (
-              <Card className="border border-primary/20 bg-primary/5 rounded-xl overflow-hidden">
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 text-primary rounded-lg shrink-0">
-                    <Package className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-xs uppercase tracking-tight leading-none">Start Final Production</p>
-                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">
-                      {blockedFinals.length} final(s) waiting &bull; {anyBrovaAccepted ? "Ready" : "Awaiting brova"}
-                    </p>
-                  </div>
-                  <Button
-                    disabled={!anyBrovaAccepted || isStartingProduction}
-                    onClick={() => setIsProductionConfirmOpen(true)}
-                    className="font-bold uppercase tracking-widest shrink-0 h-9 text-xs"
-                    size="sm"
-                  >
-                    {isStartingProduction ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-                    Release
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* ORDER-LEVEL: DELIVERY TYPE */}
-          <Card className="border border-indigo-200 bg-indigo-50/30 rounded-xl overflow-hidden">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className={cn(
-                "p-1.5 rounded-lg shrink-0",
-                (activeOrder as any).home_delivery ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"
-              )}>
-                {(activeOrder as any).home_delivery ? <Home className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-xs uppercase tracking-tight leading-none">Delivery Type</p>
-                <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">Order level</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={async () => {
-                    if ((activeOrder as any).home_delivery) {
-                      await updateOrder({ home_delivery: false } as any, activeOrder.id);
-                      setActiveOrder(prev => prev ? { ...prev, home_delivery: false } as any : prev);
-                      toast.success("Switched to Customer Pickup");
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 h-9 px-3 rounded-lg border font-bold uppercase tracking-tight text-[10px] transition-all",
-                    !(activeOrder as any).home_delivery
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted/30"
-                  )}
-                >
-                  <MapPin className="w-3 h-3" />
-                  Pickup
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!(activeOrder as any).home_delivery) {
-                      await updateOrder({ home_delivery: true } as any, activeOrder.id);
-                      setActiveOrder(prev => prev ? { ...prev, home_delivery: true } as any : prev);
-                      toast.success("Switched to Home Delivery. Delivery charge will be added.");
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 h-9 px-3 rounded-lg border font-bold uppercase tracking-tight text-[10px] transition-all",
-                    (activeOrder as any).home_delivery
-                      ? "border-indigo-500 bg-indigo-100 text-indigo-700"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted/30"
-                  )}
-                >
-                  <Home className="w-3 h-3" />
-                  Delivery
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Separator className="opacity-50" />
-
           {/* ═══ GARMENT-LEVEL FEEDBACK ═══ */}
           {/* 3. Garment Selection Tabs */}
           <Tabs value={selectedGarmentId || ""} onValueChange={setSelectedGarmentId} className="w-full space-y-4">
             <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
                 <TabsList className="h-auto flex-nowrap justify-start gap-2 bg-transparent p-0">
-                {activeOrder.garments?.filter(g =>
-                    g.location === 'shop' && g.piece_stage !== 'completed'
-                ).map((garment) => {
+                {eligibleGarments.map((garment) => {
                     const gState = garmentStates[garment.id];
                     const isSubmitted = gState?.submitted;
+                    const isNotAtShop = garment.location !== 'shop';
                     return (
                     <TabsTrigger
                         key={garment.id}
                         value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
+                        className={cn(
+                          "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all",
+                          isNotAtShop && "opacity-60"
+                        )}
                     >
                         <div className="text-left w-full space-y-0.5">
                             <div className="flex items-center justify-between gap-2">
                                 <span className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</span>
                                 <div className="flex items-center gap-1">
+                                    {isNotAtShop && (
+                                        <Badge className="h-3 px-1 text-[6px] font-black uppercase border-none bg-purple-100 text-purple-700 data-[state=active]:bg-purple-500 data-[state=active]:text-white">
+                                            {garment.location === 'transit_to_workshop' ? "In Transit" : "At Workshop"}
+                                        </Badge>
+                                    )}
                                     {isSubmitted && (
                                         <div className="size-3.5 rounded-full bg-emerald-500 flex items-center justify-center">
                                             <Check className="size-2 text-white" />
@@ -1082,38 +1116,37 @@ function UnifiedFeedbackInterface() {
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center gap-2.5">
                             <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
-                                <Package className="w-4 h-4" />
+                                <PenTool className="w-4 h-4" />
                             </div>
                             <CardTitle className="text-base font-bold uppercase tracking-tight">Style Feedback</CardTitle>
+                            <Badge variant="secondary" className="ml-auto text-xs font-bold">
+                                {optionRows.filter(o => currentState.optionChecks[`${o.id}-main`]).length}/{optionRows.length} Confirmed
+                            </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-3">
+                    <CardContent className="p-4">
                        <div className="space-y-3">
-                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-muted/50 rounded-xl text-[9px] font-black uppercase tracking-widest text-muted-foreground border border-border/40">
-                                <div className="col-span-3">Configuration Item</div>
-                                <div className="col-span-2 text-center">Reference</div>
-                                <div className="col-span-3 text-center">Status</div>
-                                <div className="col-span-2 text-center">Notes</div>
-                                <div className="col-span-2 text-right">Evidence</div>
-                            </div>
-
-                                {optionRows.map((opt) => (
+                                {optionRows.map((opt) => {
+                                    const isConfirmed = currentState.optionChecks[`${opt.id}-main`] || false;
+                                    const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] || false;
+                                    return (
                                     <div
                                         key={opt.id}
-                                        className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 rounded-xl border border-border/40 bg-card items-start md:items-center hover:border-primary/20 transition-all"
+                                        className={cn(
+                                            "rounded-xl border-2 p-4 transition-all",
+                                            isConfirmed
+                                                ? "border-emerald-300 bg-emerald-50/50"
+                                                : "border-border bg-card hover:border-primary/30"
+                                        )}
                                     >
-                                        {/* Item Description */}
-                                        <div className="col-span-3 space-y-1">
-                                            <div className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</div>
-                                            <Badge variant="outline" className="font-black text-[8px] uppercase border-primary/20 bg-primary/5 text-primary h-4 px-1.5">
-                                                {opt.mainValue}
-                                            </Badge>
-                                        </div>
-
-                                        {/* Visual Reference */}
-                                        <div className="col-span-2 flex justify-center">
+                                        {/* Top row: image + label + value + confirm toggle */}
+                                        <div className="flex items-center gap-4">
+                                            {/* Image reference */}
                                             {opt.mainImage ? (
-                                                <div className="h-12 w-12 bg-white rounded-lg border-2 border-border/60 p-1 shadow-inner">
+                                                <div className={cn(
+                                                    "h-16 w-16 shrink-0 rounded-xl border-2 p-1.5 shadow-sm bg-white",
+                                                    isConfirmed ? "border-emerald-300" : "border-border"
+                                                )}>
                                                     <img
                                                         src={opt.mainImage}
                                                         alt={opt.label}
@@ -1121,67 +1154,90 @@ function UnifiedFeedbackInterface() {
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="h-12 w-12 bg-muted/30 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground text-[8px] font-black uppercase text-center p-1 opacity-40 leading-tight">
-                                                    NO REF
+                                                <div className="h-16 w-16 shrink-0 bg-muted/20 rounded-xl border-2 border-dashed border-border flex items-center justify-center">
+                                                    <Package className="w-5 h-5 text-muted-foreground/30" />
                                                 </div>
                                             )}
-                                        </div>
 
-                                        {/* Checklist */}
-                                        <div className="col-span-3 space-y-2">
-                                            <div
-                                                className={cn(
-                                                    "flex items-center space-x-2 p-1.5 rounded-lg border-2 transition-all cursor-pointer",
-                                                    currentState.optionChecks[`${opt.id}-main`] ? "bg-emerald-50 border-emerald-500/30" : "bg-muted/5 border-transparent hover:border-border"
+                                            {/* Label + value */}
+                                            <div className="flex-1 min-w-0 space-y-1">
+                                                <p className="font-black text-sm uppercase tracking-tight text-foreground">{opt.label}</p>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "font-bold text-xs px-2.5 py-0.5",
+                                                        isConfirmed
+                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                            : "bg-primary/5 text-primary border-primary/20"
+                                                    )}
+                                                >
+                                                    {opt.displayText || opt.mainValue}
+                                                </Badge>
+                                                {opt.hashwaValue && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "ml-1.5 font-bold text-xs px-2 py-0.5",
+                                                            hashwaConfirmed
+                                                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                                        )}
+                                                    >
+                                                        Hashwa: {opt.hashwaValue}
+                                                    </Badge>
                                                 )}
-                                                onClick={() => handleCheck(`${opt.id}-main`, !currentState.optionChecks[`${opt.id}-main`])}
-                                            >
-                                                <Checkbox
-                                                    id={`check-${opt.id}-main`}
-                                                    checked={currentState.optionChecks[`${opt.id}-main`] || false}
-                                                    className="size-3.5 pointer-events-none"
-                                                />
-                                                <Label className="cursor-pointer text-[10px] font-black uppercase tracking-tight flex-1 pointer-events-none">
-                                                    {opt.label} Confirmed
-                                                </Label>
                                             </div>
 
-                                            {opt.hashwaValue && (
-                                                <div className="flex items-center gap-2 p-1.5 rounded-lg border-2 border-dashed bg-primary/5 border-primary/20">
-                                                    <Checkbox
-                                                        id={`check-${opt.id}-hashwa`}
-                                                        checked={currentState.optionChecks[`${opt.id}-hashwa`] || false}
-                                                        onCheckedChange={(c) => handleCheck(`${opt.id}-hashwa`, c as boolean)}
-                                                        className="size-3.5"
+                                            {/* Confirm button */}
+                                            <div className="shrink-0 flex flex-col items-end gap-1.5">
+                                                <button
+                                                    onClick={() => handleCheck(`${opt.id}-main`, !isConfirmed)}
+                                                    className={cn(
+                                                        "flex items-center gap-2 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
+                                                        isConfirmed
+                                                            ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
+                                                            : "bg-background border-border text-muted-foreground hover:border-primary hover:text-primary"
+                                                    )}
+                                                >
+                                                    {isConfirmed ? <Check className="w-4 h-4" /> : <X className="w-4 h-4 opacity-40" />}
+                                                    {isConfirmed ? "Confirmed" : "Confirm"}
+                                                </button>
+                                                {opt.hashwaValue && (
+                                                    <button
+                                                        onClick={() => handleCheck(`${opt.id}-hashwa`, !hashwaConfirmed)}
+                                                        className={cn(
+                                                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
+                                                            hashwaConfirmed
+                                                                ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
+                                                                : "bg-background border-amber-200 text-amber-600 hover:border-amber-400"
+                                                        )}
+                                                    >
+                                                        {hashwaConfirmed ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5 opacity-40" />}
+                                                        Hashwa
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Bottom row: notes + evidence (collapsed when confirmed, unless has content) */}
+                                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
+                                            {/* Notes input */}
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-1 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
+                                                    <MessageSquare className="size-4 text-muted-foreground/40 shrink-0" />
+                                                    <Input
+                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-xs font-medium h-8 p-0"
+                                                        placeholder="Add a note..."
+                                                        value={currentState.optionNotes[opt.id] || ""}
+                                                        onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
                                                     />
-                                                    <div className="flex items-center gap-1.5 flex-1">
-                                                        <Label htmlFor={`check-${opt.id}-hashwa`} className="cursor-pointer text-[9px] font-bold uppercase tracking-widest text-primary/80">
-                                                            Hashwa:
-                                                        </Label>
-                                                        <span className="font-black text-[10px] text-primary">{opt.hashwaValue}</span>
-                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-
-                                        {/* Local Notes for Style */}
-                                        <div className="col-span-2">
-                                            <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-2 border border-transparent focus-within:border-border focus-within:bg-background transition-all">
-                                                <MessageSquare className="size-3 text-muted-foreground/40" />
-                                                <Input
-                                                    className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[9px] font-bold h-8 p-0"
-                                                    placeholder="Note..."
-                                                    value={currentState.optionNotes[opt.id] || ""}
-                                                    onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
-                                                />
                                             </div>
-                                        </div>
 
-                                        {/* Capture Actions (Photo + Voice) */}
-                                        <div className="col-span-2 space-y-2">
-                                            <div className="flex justify-end gap-2">
+                                            {/* Evidence capture */}
+                                            <div className="shrink-0 flex items-center gap-2">
                                                 {currentState.evidence[opt.id] ? (
-                                                    <div className="relative group size-12 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
+                                                    <div className="relative group size-10 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
                                                         {currentState.evidence[opt.id]?.type === 'photo' ? (
                                                             <img src={currentState.evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
                                                         ) : (
@@ -1193,36 +1249,30 @@ function UnifiedFeedbackInterface() {
                                                             })}
                                                             className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
-                                                            <X className="w-4 h-4 text-white" />
+                                                            <X className="w-3.5 h-3.5 text-white" />
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex flex-col gap-1 w-full">
+                                                    <>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className="h-7 text-[8px] font-black uppercase tracking-widest border-2 w-full justify-start px-2"
+                                                            className="h-8 text-xs font-bold px-3"
                                                             onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
                                                         >
-                                                            <Camera className="w-3 h-3 mr-1.5" />
+                                                            <Camera className="w-3.5 h-3.5 mr-1.5" />
                                                             Photo
                                                         </Button>
                                                         <Button
                                                             variant={recordingOptionId === opt.id ? "destructive" : "outline"}
                                                             size="sm"
-                                                            className="h-7 text-[8px] font-black uppercase tracking-widest border-2 w-full justify-start px-2"
+                                                            className="h-8 text-xs font-bold px-3"
                                                             onClick={recordingOptionId === opt.id ? stopRecording : () => startRecording(opt.id)}
                                                         >
                                                             {recordingOptionId === opt.id ? (
-                                                                <>
-                                                                    <MicOff className="w-3 h-3 mr-1.5" />
-                                                                    Stop
-                                                                </>
+                                                                <><MicOff className="w-3.5 h-3.5 mr-1.5" />Stop</>
                                                             ) : (
-                                                                <>
-                                                                    <Mic className="w-3 h-3 mr-1.5" />
-                                                                    Voice
-                                                                </>
+                                                                <><Mic className="w-3.5 h-3.5 mr-1.5" />Voice</>
                                                             )}
                                                         </Button>
                                                         <input
@@ -1232,30 +1282,32 @@ function UnifiedFeedbackInterface() {
                                                             id={`file-photo-${opt.id}`}
                                                             onChange={(e) => handleCapture(opt.id, 'photo', e.target.files?.[0] || null)}
                                                         />
-                                                    </div>
+                                                    </>
                                                 )}
                                             </div>
-                                            {/* Per-option voice note playback */}
-                                            {recordingOptionId === opt.id && (
-                                                <div className="flex items-center gap-2 p-1.5 bg-red-50 rounded-lg border border-red-200">
-                                                    <div className="size-2 rounded-full bg-red-500 animate-pulse" />
-                                                    <span className="text-[8px] font-black uppercase tracking-widest text-red-700">Recording...</span>
-                                                </div>
-                                            )}
-                                            {currentState.voiceNotes[opt.id] && (
-                                                <div className="flex items-center gap-1">
-                                                    <audio src={currentState.voiceNotes[opt.id]!} controls className="flex-1 h-6" />
-                                                    <button
-                                                        onClick={() => removeVoiceNote(opt.id)}
-                                                        className="text-muted-foreground hover:text-destructive p-0.5"
-                                                    >
-                                                        <X className="size-3" />
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
+
+                                        {/* Recording indicator */}
+                                        {recordingOptionId === opt.id && (
+                                            <div className="flex items-center gap-2 mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                                <div className="size-2.5 rounded-full bg-red-500 animate-pulse" />
+                                                <span className="text-xs font-bold uppercase tracking-wide text-red-700">Recording...</span>
+                                            </div>
+                                        )}
+                                        {currentState.voiceNotes[opt.id] && (
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <audio src={currentState.voiceNotes[opt.id]!} controls className="flex-1 h-8" />
+                                                <button
+                                                    onClick={() => removeVoiceNote(opt.id)}
+                                                    className="text-muted-foreground hover:text-destructive p-1"
+                                                >
+                                                    <X className="size-4" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                ))}
+                                    );
+                                })}
 
                        </div>
                     </CardContent>
@@ -1338,7 +1390,7 @@ function UnifiedFeedbackInterface() {
               <CardHeader className="bg-muted/30 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                          <MessageSquare className="w-4 h-4" />
+                          <User className="w-4 h-4" />
                       </div>
                       <CardTitle className="text-base font-black uppercase tracking-tight">Customer Sentiments</CardTitle>
                   </div>
@@ -1371,45 +1423,53 @@ function UnifiedFeedbackInterface() {
 
                   {/* Signature (Brova only) */}
                   {activeTab === "brova" && (
-                      <div className="flex items-center gap-3 pt-3 border-t border-border/60">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Signature*</Label>
-                              {currentState.customerSignature && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px]">SIGNED</Badge>}
+                      <div className="pt-3 border-t border-border/60 space-y-3">
+                          <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Signature *</Label>
+                              {currentState.customerSignature && (
+                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px]">SIGNED</Badge>
+                              )}
                           </div>
-                          <Dialog>
-                              <DialogTrigger asChild>
-                                  <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className={cn(
-                                          "h-9 border-2 border-dashed gap-2",
-                                          currentState.customerSignature ? "border-emerald-500/50 bg-emerald-50/30" : "hover:border-primary/50"
-                                      )}
+
+                          {currentState.customerSignature ? (
+                              <div className="relative rounded-xl border-2 border-emerald-300 bg-white p-3">
+                                  <img
+                                      src={currentState.customerSignature}
+                                      alt="Customer signature"
+                                      className="w-full h-24 object-contain"
+                                  />
+                                  <button
+                                      onClick={() => updateGarmentState(selectedGarmentId, { customerSignature: null })}
+                                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-muted/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
                                   >
-                                      {currentState.customerSignature ? (
-                                          <img src={currentState.customerSignature} alt="Signature" className="h-7 object-contain" />
-                                      ) : (
-                                          <>
-                                              <PenTool className="w-3.5 h-3.5 text-muted-foreground/40" />
-                                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
-                                          </>
-                                      )}
-                                  </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-[550px]">
-                                  <DialogHeader>
-                                      <DialogTitle className="text-xl font-black uppercase tracking-tight">Customer Signature</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="flex flex-col items-center justify-center p-4">
-                                      <SignaturePad
-                                        onSave={(sig) => {
-                                            updateGarmentState(selectedGarmentId, { customerSignature: sig });
-                                            toast.success("Signature saved successfully");
-                                        }}
-                                      />
-                                  </div>
-                              </DialogContent>
-                          </Dialog>
+                                      <X className="size-3.5" />
+                                  </button>
+                              </div>
+                          ) : (
+                              <Dialog>
+                                  <DialogTrigger asChild>
+                                      <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
+                                          <div className="p-2.5 rounded-full bg-muted/30">
+                                              <PenTool className="size-5 text-muted-foreground/50" />
+                                          </div>
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
+                                      </button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-[95vw] sm:max-w-[550px] p-0 overflow-hidden">
+                                      <DialogHeader className="px-4 pt-4 pb-2">
+                                          <DialogTitle className="text-base font-black uppercase tracking-tight">Customer Signature</DialogTitle>
+                                      </DialogHeader>
+                                      <div className="px-4 pb-4">
+                                          <SignaturePad
+                                              onSave={(sig) => {
+                                                  updateGarmentState(selectedGarmentId, { customerSignature: sig });
+                                                  toast.success("Signature saved");
+                                              }}
+                                          />
+                                      </div>
+                                  </DialogContent>
+                              </Dialog>
+                          )}
                       </div>
                   )}
               </CardContent>
@@ -1420,7 +1480,7 @@ function UnifiedFeedbackInterface() {
               <CardHeader className="bg-primary/5 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
-                          <Check className="w-4 h-4" />
+                          <RefreshCw className="w-4 h-4" />
                       </div>
                       <CardTitle className="text-base font-black uppercase tracking-tight">Garment Action</CardTitle>
                   </div>
@@ -1515,12 +1575,92 @@ function UnifiedFeedbackInterface() {
                       />
                       <Button
                           onClick={onConfirmClick}
-                          disabled={!currentState.satisfaction || !currentState.feedbackAction || !currentState.distributionAction || isSubmitting || currentState.submitted}
+                          disabled={!currentState.satisfaction || !currentState.feedbackAction || !currentState.distributionAction || isSubmitting || (currentState.submitted && !currentState.isEditing)}
                           className="w-full h-11 font-black uppercase tracking-widest shadow-md text-sm rounded-xl"
                       >
-                          {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : currentState.submitted ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                          {currentState.submitted ? "Submitted" : "Submit Feedback"}
+                          {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : currentState.submitted && !currentState.isEditing ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                          {currentState.existingFeedbackId ? "Update Feedback" : "Submit Feedback"}
                       </Button>
+                  </div>
+              </CardContent>
+          </Card>
+
+          {/* ═══ ORDER-LEVEL ACTIONS ═══ */}
+          <Card className="border border-border shadow-sm rounded-xl overflow-hidden py-0 gap-0">
+              <CardHeader className="bg-muted/30 border-b px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                          <Clock className="w-4 h-4" />
+                      </div>
+                      <CardTitle className="text-base font-black uppercase tracking-tight">Order Actions</CardTitle>
+                  </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                  <div className="grid grid-cols-2 gap-3">
+                      {/* Delivery Type */}
+                      <div className="space-y-1.5">
+                          <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Delivery</Label>
+                          <button
+                              onClick={async () => {
+                                  const newVal = !(activeOrder as any).home_delivery;
+                                  await updateOrder({ home_delivery: newVal } as any, activeOrder.id);
+                                  setActiveOrder(prev => prev ? { ...prev, home_delivery: newVal } as any : prev);
+                                  toast.success(newVal ? "Switched to Home Delivery" : "Switched to Pickup");
+                              }}
+                              className={cn(
+                                  "w-full flex items-center justify-center gap-2 h-10 rounded-lg border-2 font-bold uppercase tracking-tight text-[10px] transition-all cursor-pointer active:scale-[0.97] shadow-sm hover:shadow-md",
+                                  (activeOrder as any).home_delivery
+                                      ? "border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                                      : "border-primary/30 bg-card text-foreground hover:bg-primary/5 hover:border-primary/50"
+                              )}
+                          >
+                              {(activeOrder as any).home_delivery
+                                  ? <><Home className="size-3.5" />Home Delivery</>
+                                  : <><MapPin className="size-3.5" />Pickup</>
+                              }
+                              <ChevronDown className="size-3 text-muted-foreground/60 ml-0.5" />
+                          </button>
+                      </div>
+
+                      {/* Release Finals */}
+                      {(() => {
+                          const blockedFinals = activeOrder.garments?.filter(
+                              g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
+                          ) || [];
+                          const anyBrovaAccepted = activeOrder.garments?.some(
+                              g => g.garment_type === "brova" && (g.acceptance_status === true || g.piece_stage === "accepted")
+                          );
+                          if (blockedFinals.length === 0) return null;
+                          return (
+                              <div className="space-y-1.5">
+                                  <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                                      Finals ({blockedFinals.length})
+                                  </Label>
+                                  <Button
+                                      disabled={!anyBrovaAccepted || isStartingProduction}
+                                      onClick={() => setIsProductionConfirmOpen(true)}
+                                      variant={anyBrovaAccepted ? "default" : "outline"}
+                                      className={cn(
+                                          "w-full h-10 font-bold uppercase tracking-tight text-[10px] rounded-lg shadow-sm",
+                                          anyBrovaAccepted && "hover:shadow-md active:scale-[0.97]",
+                                          !anyBrovaAccepted && "border-2 border-amber-300 text-amber-600 bg-amber-50/50 cursor-not-allowed opacity-70"
+                                      )}
+                                  >
+                                      {isStartingProduction ? (
+                                          <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                                      ) : !anyBrovaAccepted ? (
+                                          <AlertCircle className="size-3.5 mr-1.5" />
+                                      ) : (
+                                          <RefreshCw className="size-3.5 mr-1.5" />
+                                      )}
+                                      {anyBrovaAccepted ? "Start Production" : "Accept Brova First"}
+                                  </Button>
+                                  {anyBrovaAccepted && (
+                                      <p className="text-[9px] font-bold text-emerald-600 text-center">Ready to release</p>
+                                  )}
+                              </div>
+                          );
+                      })()}
                   </div>
               </CardContent>
           </Card>
