@@ -8,7 +8,7 @@ import {
 } from "@/hooks/useGarmentMutations";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
-import { BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
+import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -160,20 +160,37 @@ function AssignedOrderDetailPage() {
         />
       )}
 
-      {/* Garments */}
-      <div className="mt-4 space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Garments ({garments.length})
-        </h3>
-        {garments.map((g) => (
-          <GarmentPlanCard
-            key={g.id}
-            garment={g}
-            updateMut={updateMut}
-            sharedPlan={sharedPlan}
-          />
-        ))}
-      </div>
+      {/* Garments — grouped: brovas first, then finals */}
+      {(() => {
+        const brovas = garments.filter((g) => g.garment_type === "brova");
+        const finals = garments.filter((g) => g.garment_type === "final");
+        return (
+          <div className="mt-4 space-y-4">
+            {brovas.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-[10px]">Brova</span>
+                  {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
+                </h3>
+                {brovas.map((g) => (
+                  <GarmentPlanCard key={g.id} garment={g} updateMut={updateMut} sharedPlan={sharedPlan} />
+                ))}
+              </div>
+            )}
+            {finals.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px]">Final</span>
+                  {finals.length} garment{finals.length !== 1 ? "s" : ""}
+                </h3>
+                {finals.map((g) => (
+                  <GarmentPlanCard key={g.id} garment={g} updateMut={updateMut} sharedPlan={sharedPlan} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -514,27 +531,28 @@ function GarmentPlanCard({
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </Link>
           {garment.express && <ExpressBadge />}
-          <TrialBadge tripNumber={garment.trip_number} />
+          {(garment.trip_number ?? 1) > 1 && <TrialBadge tripNumber={garment.trip_number} />}
           {isAlterationIn && <AlterationInBadge />}
           {isBrovaReturn && (
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
               Brova Return
             </span>
           )}
-          {garment.location !== "workshop" && !needsRepairAtShop && (
-            <span className={cn(
-              "text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded",
-              garment.location === "shop" ? "bg-green-100 text-green-800"
-                : garment.location === "transit_to_shop" ? "bg-cyan-100 text-cyan-800"
-                : garment.location === "transit_to_workshop" ? "bg-orange-100 text-orange-800"
-                : "bg-zinc-100 text-zinc-800",
-            )}>
-              {garment.location === "shop" ? "At Shop"
-                : garment.location === "transit_to_shop" ? "In Transit"
-                : garment.location === "transit_to_workshop" ? "In Transit"
-                : garment.location}
-            </span>
-          )}
+          <StageBadge stage={garment.piece_stage} />
+          <span className={cn(
+            "text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded",
+            garment.location === "shop" ? "bg-green-100 text-green-800"
+              : garment.location === "workshop" ? "bg-blue-100 text-blue-800"
+              : garment.location === "transit_to_shop" ? "bg-cyan-100 text-cyan-800"
+              : garment.location === "transit_to_workshop" ? "bg-orange-100 text-orange-800"
+              : "bg-zinc-100 text-zinc-800",
+          )}>
+            {garment.location === "shop" ? "At Shop"
+              : garment.location === "workshop" ? "Workshop"
+              : garment.location === "transit_to_shop" ? "Transit to Shop"
+              : garment.location === "transit_to_workshop" ? "Transit to Workshop"
+              : garment.location}
+          </span>
         </div>
 
         <button

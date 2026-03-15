@@ -26,6 +26,8 @@ function useMut<TArgs>(fn: (args: TArgs) => Promise<void>) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
       qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
+      // Also invalidate individual garment detail queries
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
     },
   });
 }

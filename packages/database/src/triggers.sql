@@ -348,7 +348,7 @@ BEGIN
       style_price_snapshot, collar_type, collar_button, cuffs_type, cuffs_thickness,
       front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder,
       small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, notes,
-      express, garment_type, delivery_date, piece_stage, style, shop_name,
+      soaking, express, garment_type, delivery_date, piece_stage, style, shop_name,
       home_delivery, color, location, trip_number, acceptance_status, fulfillment_type
     ) VALUES (
       p_order_id,
@@ -376,6 +376,7 @@ BEGIN
       v_garment->>'jabzour_thickness',
       COALESCE((v_garment->>'lines')::INT, 1),
       v_garment->>'notes',
+      COALESCE((v_garment->>'soaking')::BOOLEAN, false),
       COALESCE((v_garment->>'express')::BOOLEAN, false),
       COALESCE(v_garment->>'garment_type', 'final')::garment_type,
       (v_garment->>'delivery_date')::TIMESTAMP,

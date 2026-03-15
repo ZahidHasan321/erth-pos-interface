@@ -2,6 +2,13 @@ import { supabase } from '@/lib/supabase';
 import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
+/** Map piece_stage → worker_history key (role-based) */
+const HISTORY_KEY_MAP: Record<string, string> = {
+  soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
+  sewing: "sewer", finishing: "finisher", ironing: "ironer",
+  quality_check: "quality_checker",
+};
+
 /** Safely parse trip_history — handles string, array, or null from Supabase */
 function parseTripHistory(raw: unknown): TripHistoryEntry[] {
   if (!raw) return [];
@@ -311,7 +318,8 @@ export const completeAndAdvance = async (
   if (fetchErr) throw new Error(fetchErr.message);
 
   const history = (existing?.worker_history as Record<string, string>) ?? {};
-  history[stage] = workerName;
+  const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
+  history[historyKey] = workerName;
 
   const { error } = await supabase
     .from('garments')

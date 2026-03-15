@@ -198,6 +198,7 @@ export function CustomerDemographicsForm({
           form.reset(createdCustomer);
           setTimeout(() => {
             setIsEditing(false);
+            onProceed?.();
           }, 0);
         } else {
           toast.error(response.message || "Failed to create customer.");
@@ -256,10 +257,10 @@ export function CustomerDemographicsForm({
 
     setConfirmationDialog({
       isOpen: true,
-      title: id ? "Update Customer" : "Create Customer",
-      description: `Are you sure you want to ${
-        id ? "update" : "create"
-      } this customer?`,
+      title: id ? "Update Customer" : "Confirm Customer",
+      description: id
+        ? "Are you sure you want to update this customer?"
+        : "This will create the customer and start a new order.",
       onConfirm,
     });
   };
@@ -694,9 +695,10 @@ export function CustomerDemographicsForm({
                         <FormLabel className="font-medium">DOB</FormLabel>
                         <FormControl>
                           <DatePicker
-                            value={field.value}
-                            onChange={field.onChange}
+                            value={field.value ? new Date(field.value) : null}
+                            onChange={(date) => field.onChange(date ? date.toISOString() : null)}
                             disabled={isReadOnly}
+                            clearable
                           />
                         </FormControl>
                         <FormMessage />
@@ -1046,7 +1048,7 @@ export function CustomerDemographicsForm({
                 </Button>
                 <Button type="submit" disabled={isCreating}>
                   <Check className="w-4 h-4 mr-2" />
-                  {isCreating ? "Creating..." : "Create Customer"}
+                  {isCreating ? "Creating..." : "Confirm Customer"}
                 </Button>
               </>
             )}

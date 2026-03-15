@@ -178,13 +178,6 @@ export const CollarCell = ({
     isFormDisabled?: boolean;
   };
   const isFormDisabled = meta?.isFormDisabled || false;
-  const [collar_type, collar_button, _small_tabaggi] = useWatch({
-    name: [
-      `garments.${row.index}.collar_type`,
-      `garments.${row.index}.collar_button`,
-      `garments.${row.index}.small_tabaggi`,
-    ],
-  });
 
   return (
     <div className="min-w-[350px] flex flex-row space-x-2">
@@ -198,13 +191,13 @@ export const CollarCell = ({
             disabled={isFormDisabled}
           >
             <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
-              {collar_type ? (
+              {field.value ? (
                 <img
                   src={
-                    collarTypes.find((c) => c.value === collar_type)?.image ||
+                    collarTypes.find((c) => c.value === field.value)?.image ||
                     undefined
                   }
-                  alt={collarTypes.find((c) => c.value === collar_type)?.alt}
+                  alt={collarTypes.find((c) => c.value === field.value)?.alt}
                   className="min-w-10 h-10 object-contain"
                 />
               ) : (
@@ -238,13 +231,13 @@ export const CollarCell = ({
             disabled={isFormDisabled}
           >
             <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
-              {collar_button ? (
+              {field.value ? (
                 <img
                   src={
-                    collarButtons.find((b) => b.value === collar_button)
+                    collarButtons.find((b) => b.value === field.value)
                       ?.image || undefined
                   }
-                  alt={collarButtons.find((b) => b.value === collar_button)?.alt}
+                  alt={collarButtons.find((b) => b.value === field.value)?.alt}
                   className="min-w-10 h-10 object-contain"
                 />
               ) : (
@@ -302,26 +295,17 @@ export const JabzourCell = ({
     isFormDisabled?: boolean;
   };
   const isFormDisabled = meta?.isFormDisabled || false;
-  const [jabzour_1, jabzour_2] = useWatch({
-    name: [
-      `garments.${row.index}.jabzour_1`,
-      `garments.${row.index}.jabzour_2`,
-    ],
+  const jabzour_1 = useWatch({
+    name: `garments.${row.index}.jabzour_1`,
   });
 
   React.useEffect(() => {
     if (jabzour_1 === "JAB_SHAAB") {
-      if (!jabzour_2) {
-        setValue(
-          `garments.${row.index}.jabzour_2`,
-          "JAB_MAGFI_MURABBA",
-        );
-      }
       setValue(`garments.${row.index}.jabzour_thickness`, "DOUBLE");
     } else {
       setValue(`garments.${row.index}.jabzour_2`, null);
     }
-  }, [jabzour_1, jabzour_2, setValue, row.index]);
+  }, [jabzour_1, setValue, row.index]);
 
   return (
     <div className="min-w-[420px] flex flex-row space-x-2">
@@ -341,13 +325,13 @@ export const JabzourCell = ({
                   fieldState.error && "border-destructive",
                 )}
               >
-                {jabzour_1 ? (
+                {field.value ? (
                   <img
                     src={
-                      jabzourTypes.find((j) => j.value === jabzour_1)?.image ||
+                      jabzourTypes.find((j) => j.value === field.value)?.image ||
                       undefined
                     }
-                    alt={jabzourTypes.find((j) => j.value === jabzour_1)?.alt}
+                    alt={jabzourTypes.find((j) => j.value === field.value)?.alt}
                     className="min-w-10 h-10 object-contain"
                   />
                 ) : (
@@ -384,7 +368,9 @@ export const JabzourCell = ({
         render={({ field, fieldState }) => (
           <div className="flex flex-col space-y-1">
             <Select
-              onValueChange={field.onChange}
+              onValueChange={(val) => {
+                field.onChange(val);
+              }}
               value={field.value || ""}
               disabled={isFormDisabled || jabzour_1 !== "JAB_SHAAB"}
             >
@@ -394,13 +380,13 @@ export const JabzourCell = ({
                   fieldState.error && "border-destructive",
                 )}
               >
-                {jabzour_2 ? (
+                {field.value ? (
                   <img
                     src={
-                      jabzourTypes.find((j) => j.value === jabzour_2)?.image ||
+                      jabzourTypes.find((j) => j.value === field.value)?.image ||
                       undefined
                     }
-                    alt={jabzourTypes.find((j) => j.value === jabzour_2)?.alt}
+                    alt={jabzourTypes.find((j) => j.value === field.value)?.alt}
                     className="min-w-10 h-10 object-contain"
                   />
                 ) : (
@@ -517,14 +503,14 @@ export const FrontPocketCell = ({
             disabled={isFormDisabled}
           >
             <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
-              {front_pocket_type ? (
+              {field.value ? (
                 <img
                   src={
-                    topPocketTypes.find((j) => j.value === front_pocket_type)
+                    topPocketTypes.find((j) => j.value === field.value)
                       ?.image || undefined
                   }
                   alt={
-                    topPocketTypes.find((j) => j.value === front_pocket_type)?.alt
+                    topPocketTypes.find((j) => j.value === field.value)?.alt
                   }
                   className="min-w-7 h-7 object-contain"
                 />
@@ -674,10 +660,8 @@ export const CuffsCell = ({
     isFormDisabled?: boolean;
   };
   const isFormDisabled = meta?.isFormDisabled || false;
-  const [cuffs_type] = useWatch({
-    name: [
-      `garments.${row.index}.cuffs_type`,
-    ],
+  const cuffs_type = useWatch({
+    name: `garments.${row.index}.cuffs_type`,
   });
 
   return (
@@ -692,21 +676,21 @@ export const CuffsCell = ({
             disabled={isFormDisabled}
           >
             <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
-              {cuffs_type ? (
-                cuffTypes.find((c) => c.value === cuffs_type)?.image ? (
+              {field.value ? (
+                cuffTypes.find((c) => c.value === field.value)?.image ? (
                   <img
                     src={
-                      cuffTypes.find((c) => c.value === cuffs_type)?.image ||
+                      cuffTypes.find((c) => c.value === field.value)?.image ||
                       undefined
                     }
                     alt={
-                      cuffTypes.find((c) => c.value === cuffs_type)?.alt ?? ""
+                      cuffTypes.find((c) => c.value === field.value)?.alt ?? ""
                     }
                     className="min-w-10 h-10 object-contain"
                   />
                 ) : (
                   <span>
-                    {cuffTypes.find((c) => c.value === cuffs_type)?.displayText}
+                    {cuffTypes.find((c) => c.value === field.value)?.displayText}
                   </span>
                 )
               ) : (

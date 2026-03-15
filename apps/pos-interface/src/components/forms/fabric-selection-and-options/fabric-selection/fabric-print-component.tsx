@@ -97,7 +97,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               fontSize: '16px',
               fontWeight: 'bold'
             }}>
-              Order ID: {fabricData.orderId}
+              Order ID: {fabricData.orderId || "N/A"}
             </div>
             <div style={{
               textAlign: 'center',
@@ -105,7 +105,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               fontSize: '16px',
               fontWeight: 'bold'
             }}>
-              Mobile: {fabricData.customerMobile}
+              Mobile: {fabricData.customerMobile || "N/A"}
             </div>
           </div>
 
@@ -121,14 +121,14 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               borderRight: '1px solid #ccc'
             }}>
               <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Customer ID</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.customerId}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.customerId || "N/A"}</div>
             </div>
             <div style={{
               textAlign: 'center',
               padding: '5px 4px'
             }}>
               <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Customer Name</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.customerName}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.customerName || "N/A"}</div>
             </div>
           </div>
 
@@ -144,7 +144,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               borderRight: '1px solid #ccc'
             }}>
               <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Garment ID</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.garmentId}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.garmentId || "N/A"}</div>
             </div>
             <div style={{
               textAlign: 'center',

@@ -163,7 +163,7 @@ export const createFabricSelectionFormSchema = (fabrics: any[] = []) => {
 // Base schema for initial setup
 export const fabricSelectionFormSchema = z.object({
   garments: z.array(garmentSchema).min(1, "At least one garment is required"),
-  signature: z.string().min(1, "Customer signature is required"),
+  signature: z.string().optional().default(""),
 });
 
 export type FabricSelectionFormSchema = z.infer<typeof fabricSelectionFormSchema>;

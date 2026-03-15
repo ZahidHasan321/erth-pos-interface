@@ -190,9 +190,13 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
   const handleComplete = async () => {
     if (!worker) return;
     setConfirmOpen(false);
-    await completeMut.mutateAsync({ id: garment.id, worker, stage, nextStage });
-    toast.success(`${garment.garment_id ?? "Garment"} advanced to ${nextLabel}`);
-    router.history.back();
+    try {
+      await completeMut.mutateAsync({ id: garment.id, worker, stage, nextStage });
+      toast.success(`${garment.garment_id ?? "Garment"} advanced to ${nextLabel}`);
+      router.history.back();
+    } catch (err: any) {
+      toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`);
+    }
   };
 
   return (
@@ -224,7 +228,12 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
               <Button
                 variant="outline"
                 className="h-12 px-5 text-base font-bold"
-                onClick={() => startMut.mutate(garment.id)}
+                onClick={() => {
+                  startMut.mutate(garment.id, {
+                    onSuccess: () => toast.success(`Started working on ${garment.garment_id ?? "garment"}`),
+                    onError: (err) => toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`),
+                  });
+                }}
                 disabled={startMut.isPending}
               >
                 <Play className="w-5 h-5 mr-1.5" />

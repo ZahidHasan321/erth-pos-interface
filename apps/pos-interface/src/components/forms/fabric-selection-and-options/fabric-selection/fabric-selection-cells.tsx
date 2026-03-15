@@ -254,8 +254,10 @@ export const IfInsideCell = ({
     const { control, setValue } = useFormContext();
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
+        tempStockUsage?: Map<string, number>;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
+    const tempStockUsage = meta?.tempStockUsage;
 
     const [fabricSourceWatch, fabricIdWatch] = useWatch({
         name: [
@@ -316,24 +318,30 @@ export const IfInsideCell = ({
             ? fuse.search(searchQuery).map((r) => r.item)
             : fabrics;
 
-        return results.map((fabric) => ({
-            value: fabric.id.toString(),
-            label: `${fabric.name} - ${fabric.color} - ${fabric.price_per_meter} - ${fabric.real_stock}`,
-            node: (
-                <div className="flex justify-between w-full">
-                    <span
-                        className={getStockColorClass(fabric.real_stock ?? 0)}
-                    >{`${fabric.name} - ${fabric.color}`}</span>
-                    <div className="flex gap-1">
-                        <span className="text-muted-foreground">{`Price: ${fabric.price_per_meter}`}</span>
+        return results.map((fabric) => {
+            const baseStock = fabric.real_stock ?? 0;
+            const used = tempStockUsage?.get(fabric.id.toString()) ?? 0;
+            const availableStock = baseStock - used;
+
+            return {
+                value: fabric.id.toString(),
+                label: `${fabric.name} - ${fabric.color} - ${fabric.price_per_meter} - ${availableStock.toFixed(2)}`,
+                node: (
+                    <div className="flex justify-between w-full">
                         <span
-                            className={getStockColorClass(fabric.real_stock ?? 0)}
-                        >{`Stock: ${(fabric.real_stock ?? 0).toFixed(2)}`}</span>
+                            className={getStockColorClass(availableStock)}
+                        >{`${fabric.name} - ${fabric.color}`}</span>
+                        <div className="flex gap-1">
+                            <span className="text-muted-foreground">{`Price: ${fabric.price_per_meter}`}</span>
+                            <span
+                                className={getStockColorClass(availableStock)}
+                            >{`Stock: ${availableStock.toFixed(2)}`}</span>
+                        </div>
                     </div>
-                </div>
-            ),
-        }));
-    }, [fabrics, fuse, searchQuery]);
+                ),
+            };
+        });
+    }, [fabrics, fuse, searchQuery, tempStockUsage]);
 
     return (
         <div className="flex flex-col space-y-1 w-[200px] min-w-[200px]">

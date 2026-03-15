@@ -538,12 +538,6 @@ export function FabricSelectionForm({
         toast.success("Copied first row's style options to all rows");
     };
 
-    // Unified Error Summary Logic
-    const errorEntries = Object.entries(form.formState.errors.garments || {}).filter(
-        ([key, value]) => /^\d+$/.test(key) && value != null && typeof value === 'object'
-    );
-    const hasErrors = errorEntries.length > 0 || form.formState.errors.signature;
-
     return (
         <FormProvider {...form}>
             <form
@@ -706,32 +700,6 @@ export function FabricSelectionForm({
                     </div>
 
                     <div className="p-6 space-y-6">
-                        {/* Unified Error Alert */}
-                        {hasErrors && form.formState.isSubmitted && (
-                            <Alert
-                                id="validation-errors"
-                                variant="destructive"
-                                className="mb-4 border-2 border-red-500 rounded-2xl bg-red-50"
-                            >
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle className="font-black uppercase tracking-widest text-xs">Form Validation Errors</AlertTitle>
-                                <AlertDescription>
-                                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                                        {form.formState.errors.signature && (
-                                            <li className="text-sm font-semibold">Signature: {form.formState.errors.signature.message}</li>
-                                        )}
-                                        {errorEntries.map(([index, error]: [string, any]) => {
-                                            const rowNum = parseInt(index) + 1;
-                                            const messages = Object.values(error).map((e: any) => e.message).filter(Boolean);
-                                            return messages.map((msg, i) => (
-                                                <li key={`${index}-${i}`} className="text-sm">Row {rowNum}: {msg}</li>
-                                            ));
-                                        })}
-                                    </ul>
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
                         <div className="space-y-3">
                             <div className="flex justify-between items-end">
                                 <div className="space-y-1">
@@ -796,14 +764,14 @@ export function FabricSelectionForm({
 
                                     const fabricData = {
                                         orderId: orderId || "N/A",
-                                        customerId: customerId ?? "N/A",
-                                        customerName: customerName ?? "N/A",
-                                        customerMobile: customerMobile ?? "N/A",
-                                        garmentId: currentRowData.garment_id ?? "",
-                                        fabricSource: currentRowData.fabric_source ?? "",
+                                        customerId: customerId || "N/A",
+                                        customerName: customerName || "N/A",
+                                        customerMobile: customerMobile || "N/A",
+                                        garmentId: currentRowData.garment_id || "N/A",
+                                        fabricSource: currentRowData.fabric_source || "",
                                         fabricId: currentRowData.fabric_id ?? "",
                                         fabricLength: currentRowData.fabric_length ?? 0,
-                                        measurementId: measurementDisplay ?? "",
+                                        measurementId: measurementDisplay || "N/A",
                                         garment_type: currentRowData.garment_type ?? 'final',
                                         express: currentRowData.express ?? false,
                                         deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
@@ -865,132 +833,134 @@ export function FabricSelectionForm({
                             stitchingPrice={stitchingPrice}
                         />
 
-                        <div className="space-y-2 pt-4">
-                            <h3 className="text-lg font-semibold text-foreground">
-                                Customer Signature
-                                <span className="text-destructive"> *</span>
-                            </h3>
-                            <Controller
-                                name="signature"
-                                control={form.control}
-                                render={({ field, fieldState }) => (
-                                    <div className="space-y-2">
-                                        <div className="w-fit">
-                                            {field.value ? (
-                                                <div className="space-y-2">
-                                                    <div className="border rounded-lg bg-white/70">
-                                                        <img
-                                                            src={field.value}
-                                                            alt="Customer signature"
-                                                            style={{
-                                                                width: "500px",
-                                                                height: "200px",
-                                                                display: "block",
-                                                            }}
-                                                        />
+                        <div className="flex items-end justify-between gap-6 pt-4">
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-semibold text-foreground">
+                                    Customer Signature
+                                    <span className="text-destructive"> *</span>
+                                </h3>
+                                <Controller
+                                    name="signature"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <div className="space-y-2">
+                                            <div className="w-fit">
+                                                {field.value ? (
+                                                    <div className="space-y-2">
+                                                        <div className="border rounded-lg bg-white/70">
+                                                            <img
+                                                                src={field.value}
+                                                                alt="Customer signature"
+                                                                style={{
+                                                                    width: "500px",
+                                                                    height: "200px",
+                                                                    display: "block",
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        {!isFormDisabled && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => field.onChange("")}
+                                                            >
+                                                                <X className="w-4 h-4 mr-2" />
+                                                                Clear Signature
+                                                            </Button>
+                                                        )}
                                                     </div>
-                                                    {!isFormDisabled && (
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => field.onChange("")}
-                                                        >
-                                                            <X className="w-4 h-4 mr-2" />
-                                                            Clear Signature
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            ) : !isFormDisabled ? (
-                                                <SignaturePad
-                                                    onSave={(signature) => {
-                                                        field.onChange(signature);
-                                                        toast.success("Signature saved");
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div
-                                                    className="border rounded-lg bg-muted text-center text-muted-foreground"
-                                                    style={{
-                                                        width: "500px",
-                                                        height: "200px",
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                    }}
-                                                >
-                                                    No signature provided
-                                                </div>
+                                                ) : !isFormDisabled ? (
+                                                    <SignaturePad
+                                                        onSave={(signature) => {
+                                                            field.onChange(signature);
+                                                            toast.success("Signature saved");
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        className="border rounded-lg bg-muted text-center text-muted-foreground"
+                                                        style={{
+                                                            width: "500px",
+                                                            height: "200px",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                        }}
+                                                    >
+                                                        No signature provided
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {fieldState.error && (
+                                                <p className="text-sm text-destructive">
+                                                    {fieldState.error.message}
+                                                </p>
                                             )}
                                         </div>
-                                        {fieldState.error && (
-                                            <p className="text-sm text-destructive">
-                                                {fieldState.error.message}
-                                            </p>
+                                    )}
+                                />
+                            </div>
+
+                            <div className="flex gap-4 shrink-0">
+                                {isOrderClosed ? null : !isSaved || isEditing ? (
+                                    <>
+                                        {isEditing && isSaved && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setIsEditing(false);
+                                                }}
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Cancel
+                                            </Button>
                                         )}
-                                    </div>
+                                        <Button
+                                            type="submit"
+                                            disabled={isSaving || !orderId}
+                                            title={
+                                                !orderId
+                                                    ? "Please create an order first (Demographics step)"
+                                                    : ""
+                                            }
+                                        >
+                                            <Save className="w-4 h-4 mr-2" />
+                                            {isSaving
+                                                ? "Saving..."
+                                                : !orderId
+                                                    ? "Order Required"
+                                                    : "Save Selections"}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setTimeout(() => setIsEditing(true), 0);
+                                            }}
+                                        >
+                                            <Pencil className="w-4 h-4 mr-2" />
+                                            Edit Selections
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={onProceed}
+                                            disabled={isProceedDisabled}
+                                        >
+                                            Continue to Review & Payment
+                                            <ArrowRight className="w-4 h-4 ml-2" />
+                                        </Button>
+                                    </>
                                 )}
-                            />
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div className="flex gap-4 justify-end pt-4">
-                    {isOrderClosed ? null : !isSaved || isEditing ? (
-                        <>
-                            {isEditing && isSaved && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                        setIsEditing(false);
-                                    }}
-                                >
-                                    <X className="w-4 h-4 mr-2" />
-                                    Cancel
-                                </Button>
-                            )}
-                            <Button
-                                type="submit"
-                                disabled={isSaving || !orderId}
-                                title={
-                                    !orderId
-                                        ? "Please create an order first (Demographics step)"
-                                        : ""
-                                }
-                            >
-                                <Save className="w-4 h-4 mr-2" />
-                                {isSaving
-                                    ? "Saving..."
-                                    : !orderId
-                                        ? "Order Required"
-                                        : "Save Selections"}
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setTimeout(() => setIsEditing(true), 0);
-                                }}
-                            >
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Edit Selections
-                            </Button>
-                            <Button
-                                type="button"
-                                onClick={onProceed}
-                                disabled={isProceedDisabled}
-                            >
-                                Continue to Review & Payment
-                                <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                        </>
-                    )}
                 </div>
             </form>
         </FormProvider>

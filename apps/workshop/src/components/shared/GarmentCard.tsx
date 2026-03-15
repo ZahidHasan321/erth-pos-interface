@@ -33,7 +33,6 @@ export function GarmentCard({
 }: GarmentCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const hasNotes = !!garment.notes;
   const hasSoaking = !!garment.soaking;
 
   // ── Grid tile card (terminal list) — large, worker-friendly ──
@@ -87,11 +86,6 @@ export function GarmentCard({
               </span>
             )}
             <AlterationBadge tripNumber={garment.trip_number} />
-            {hasNotes && (
-              <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg" title={garment.notes ?? ""}>
-                Note
-              </span>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -102,10 +96,15 @@ export function GarmentCard({
   return (
     <Card
       className={cn(
-        "border transition-all duration-200 ease-in-out shadow-sm py-0 gap-0",
-        selected && "border-primary ring-1 ring-primary/30",
-        garment.express && "border-l-4 border-l-orange-400",
-        onClick && "cursor-pointer hover:border-primary/50 hover:shadow-md",
+        "border transition-all duration-200 ease-in-out shadow-sm py-0 gap-0 rounded-xl overflow-hidden",
+        "hover:shadow-md hover:-translate-y-[1px]",
+        selected
+          ? "border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent ring-2 ring-primary/25 shadow-md"
+          : cn(
+              "bg-white",
+              garment.express && "border-l-[5px] border-l-orange-400",
+              onClick ? "cursor-pointer hover:border-primary/50" : "border-border/60 hover:border-border",
+            ),
       )}
       style={{ animationDelay: `${index * 25}ms` }}
       onClick={onClick}
@@ -125,19 +124,19 @@ export function GarmentCard({
             <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={cn(
-                  "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md border",
+                  "text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-md border",
                   garment.garment_type === "brova"
-                    ? "bg-purple-100 text-purple-800 border-purple-200"
-                    : "bg-blue-100 text-blue-800 border-blue-200",
+                    ? "bg-purple-50 text-purple-800 border-purple-200"
+                    : "bg-blue-50 text-blue-800 border-blue-200",
                 )}
               >
                 {garment.garment_type}
               </span>
-              <span className="font-mono font-bold text-sm shrink-0">
+              <span className="font-mono font-black text-base shrink-0">
                 {garment.garment_id ?? garment.id.slice(0, 8)}
               </span>
               {!compact && (
-                <span className="font-semibold text-sm truncate">
+                <span className="font-medium text-sm text-muted-foreground truncate">
                   {garment.customer_name ?? "—"}
                 </span>
               )}
@@ -189,13 +188,6 @@ export function GarmentCard({
                     Delivery
                   </span>
                 )}
-              </div>
-            )}
-
-            {/* Notes shown inline in compact mode */}
-            {compact && hasNotes && (
-              <div className="bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                <p className="text-xs text-amber-900">{garment.notes}</p>
               </div>
             )}
 

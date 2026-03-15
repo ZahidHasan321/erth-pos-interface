@@ -1007,6 +1007,7 @@ function NewWorkOrder() {
                             form={shelfForm}
                             isOrderDisabled={isOrderClosed}
                             onProceed={handleShelfProceed}
+                            hasOrder={!!orderId}
                         />
                     </ErrorBoundary>
                 </div>

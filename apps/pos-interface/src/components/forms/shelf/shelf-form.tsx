@@ -18,9 +18,10 @@ interface ShelfFormProps {
   onProceed?: () => void
   isOrderDisabled: boolean
   showHeader?: boolean
+  hasOrder?: boolean
 }
 
-export function ShelfForm({ form, isOrderDisabled }: ShelfFormProps) {
+export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }: ShelfFormProps) {
   // Fetch products from server
   const { data: serverProducts, isLoading, error } = useQuery({
     queryKey: ['products'],
@@ -245,6 +246,15 @@ export function ShelfForm({ form, isOrderDisabled }: ShelfFormProps) {
           </div>
         </div>
       </div>
+
+      {/* Proceed Button */}
+      {onProceed && (
+        <div className="flex justify-end pt-2">
+          <Button type="button" onClick={onProceed} disabled={isOrderDisabled || !hasOrder}>
+            Proceed to Review & Payment
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

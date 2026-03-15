@@ -302,6 +302,11 @@ function WaitingFinalsCard({
   const deliveryDate = group.garments[0]?.delivery_date_order;
   const posReleased = releasableGarments.some((g) => g.piece_stage === "waiting_cut");
 
+  // Brova's old assigned date — PM needs to set a new one for finals
+  const brovaAssignedDate = group.garments
+    .filter((g) => g.garment_type === "brova" && g.assigned_date)
+    .map((g) => g.assigned_date!)[0];
+
   // Determine readiness from brova status
   const noBrovas = !brovaStatus || brovaStatus.total === 0;
   const isReady = noBrovas || (brovaStatus.trialed === brovaStatus.total && brovaStatus.accepted > 0);
@@ -388,6 +393,17 @@ function WaitingFinalsCard({
                 </span>
               )}
             </div>
+            {brovaAssignedDate && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md line-through">
+                  <CalendarDays className="w-3 h-3" />
+                  Brova: {formatDate(brovaAssignedDate)}
+                </span>
+                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200">
+                  Set new date on release
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
             <Button

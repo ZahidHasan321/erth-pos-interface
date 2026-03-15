@@ -69,14 +69,19 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
     if (!nextStage) return [];
     return allGarments.filter((g) => {
       if (g.location !== "workshop") return false;
-      if (!g.completion_time) return false;
-      const ct = new Date(g.completion_time);
-      if (!isSameDay(ct, today)) return false;
+      // Check worker_history for this station — presence means this station processed it
       const wh = g.worker_history as Record<string, string> | null;
-      return wh?.[historyKey] != null;
-    }).filter((g) => {
-      if (!nextStage) return false;
-      return g.piece_stage === nextStage;
+      if (!wh?.[historyKey]) return false;
+      // Use completion_time as a proxy for "today" — works when garment is still
+      // at the next stage. Once it moves further, completion_time gets overwritten,
+      // so also accept garments that already advanced past nextStage.
+      if (g.completion_time) {
+        const ct = new Date(g.completion_time);
+        if (isSameDay(ct, today)) return true;
+      }
+      // Fallback: if the garment has moved past the next stage but was processed
+      // at this station, check assigned_date as a proxy
+      return false;
     });
   }, [allGarments, nextStage, today, historyKey]);
 

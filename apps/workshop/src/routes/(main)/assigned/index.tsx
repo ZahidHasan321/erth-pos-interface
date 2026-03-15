@@ -98,29 +98,47 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
   const urgency = getDeliveryUrgency(group.delivery_date);
   const brovas = group.garments.filter((g) => g.garment_type === "brova");
   const finals = group.garments.filter((g) => g.garment_type === "final");
-  const allReady = group.garments.every((g) => g.piece_stage === "ready_for_dispatch");
-
-  const brovasAtShop = brovas.filter((g) => g.location === "shop");
-  const brovasNeedRepair = brovas.filter(
-    (g) => g.location === "shop" && (g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo"),
-  );
-  const brovasInWorkshop = brovas.filter((g) => g.location === "workshop" || g.location === "transit_to_workshop");
   const maxTrip = Math.max(...group.garments.map((g) => g.trip_number ?? 1));
 
   const statusLabel = (() => {
-    if (allReady) return { text: "Ready for dispatch", cls: "bg-emerald-100 text-emerald-800" };
-    // Alteration (In) only for trip 3+ (went back twice already)
-    if (brovasNeedRepair.length > 0 && maxTrip >= 3) return { text: "Alteration (In)", cls: "bg-orange-100 text-orange-800" };
-    // Trip 2 at shop needing repair = brova return
-    if (brovasNeedRepair.length > 0 && maxTrip === 2) return { text: "Brova Return", cls: "bg-amber-100 text-amber-800" };
-    // Trip 1 at shop needing repair = needs changes after 1st trial
-    if (brovasNeedRepair.length > 0) return { text: "Needs Changes", cls: "bg-amber-100 text-amber-800" };
-    if (brovas.length > 0 && brovasAtShop.length === brovas.length && finals.length === 0)
-      return { text: `At shop — Trial ${maxTrip}`, cls: "bg-green-100 text-green-800" };
-    if (brovas.length > 0 && brovasInWorkshop.length > 0 && finals.length === 0)
-      return { text: maxTrip >= 3 ? `Alt #${maxTrip - 1} in production` : maxTrip === 2 ? "Brova return in production" : "Brova in production", cls: "bg-purple-100 text-purple-800" };
-    if (brovas.length === 0 && finals.length > 0) return { text: "Finals in production", cls: "bg-blue-100 text-blue-800" };
-    if (brovas.length > 0 && finals.length > 0) return { text: "Brova + Finals", cls: "bg-purple-100 text-purple-800" };
+    const workshopSide = (g: WorkshopGarment) =>
+      g.location === "workshop" || g.location === "transit_to_workshop";
+    const atShop = (g: WorkshopGarment) => g.location === "shop";
+
+    const allAtShop = group.garments.every(atShop);
+    const workshopGarments = group.garments.filter((g) => g.location === "workshop");
+    const allWorkshopReady =
+      workshopGarments.length > 0 &&
+      workshopGarments.every((g) => g.piece_stage === "ready_for_dispatch");
+    const inTransitToShop = group.garments.filter((g) => g.location === "transit_to_shop");
+    const finalsAtWorkshop = finals.filter(workshopSide);
+    const brovasAtWorkshop = brovas.filter(workshopSide);
+    const brovasAllAtShop = brovas.length > 0 && brovas.every(atShop);
+
+    // Everything delivered back to shop — workshop side done
+    if (allAtShop)
+      return { text: "At shop", cls: "bg-green-100 text-green-800" };
+
+    // Everything still at workshop is ready to go
+    if (allWorkshopReady)
+      return { text: "Ready for dispatch", cls: "bg-emerald-100 text-emerald-800" };
+
+    // Shipped back, nothing left at workshop
+    if (inTransitToShop.length > 0 && workshopGarments.length === 0)
+      return { text: "In transit to shop", cls: "bg-sky-100 text-sky-800" };
+
+    // Finals actively at workshop
+    if (finalsAtWorkshop.length > 0)
+      return { text: "Finals in production", cls: "bg-blue-100 text-blue-800" };
+
+    // All brovas at shop awaiting trial — no workshop activity
+    if (brovasAllAtShop && finalsAtWorkshop.length === 0)
+      return { text: `At shop — Trial ${maxTrip}`, cls: "bg-teal-100 text-teal-800" };
+
+    // Brovas being produced at workshop
+    if (brovasAtWorkshop.length > 0)
+      return { text: "Brovas in production", cls: "bg-purple-100 text-purple-800" };
+
     return { text: "In production", cls: "bg-zinc-100 text-zinc-800" };
   })();
 
@@ -267,79 +285,6 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
           <ProductionPipeline currentStage={garment.piece_stage} compact hasSoaking={!!garment.soaking} />
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Stage Distribution Bar ──────────────────────────────────────
-
-const STAGE_LABELS: Record<string, { label: string; color: string }> = {
-  waiting_cut: { label: "Wait", color: "bg-zinc-400" },
-  soaking: { label: "Soak", color: "bg-cyan-400" },
-  cutting: { label: "Cut", color: "bg-blue-400" },
-  post_cutting: { label: "Post-Cut", color: "bg-blue-500" },
-  sewing: { label: "Sew", color: "bg-violet-500" },
-  finishing: { label: "Finish", color: "bg-purple-500" },
-  ironing: { label: "Iron", color: "bg-amber-500" },
-  quality_check: { label: "QC", color: "bg-orange-500" },
-  ready_for_dispatch: { label: "Ready", color: "bg-emerald-500" },
-  needs_repair: { label: "Repair", color: "bg-red-400" },
-  needs_redo: { label: "Redo", color: "bg-red-500" },
-};
-
-function StageDistributionBar({ garments }: { garments: WorkshopGarment[] }) {
-  const total = garments.length;
-  if (total === 0) return null;
-
-  const counts = new Map<string, number>();
-  for (const g of garments) {
-    const stage = g.piece_stage ?? "waiting_cut";
-    counts.set(stage, (counts.get(stage) ?? 0) + 1);
-  }
-
-  const segments = Array.from(counts.entries())
-    .sort(([a], [b]) => (STAGE_ORDER[a] ?? 99) - (STAGE_ORDER[b] ?? 99))
-    .filter(([, count]) => count > 0);
-
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          Stage Distribution
-        </span>
-        <span className="text-[10px] text-muted-foreground">({total} garments)</span>
-      </div>
-      <div className="flex rounded-lg overflow-hidden h-6 bg-muted/30 border">
-        {segments.map(([stage, count]) => {
-          const info = STAGE_LABELS[stage] ?? { label: stage, color: "bg-zinc-300" };
-          const pct = (count / total) * 100;
-          return (
-            <div
-              key={stage}
-              className={cn(info.color, "flex items-center justify-center transition-all relative group")}
-              style={{ width: `${pct}%`, minWidth: pct > 3 ? undefined : "12px" }}
-              title={`${info.label}: ${count}`}
-            >
-              {pct > 8 && (
-                <span className="text-[9px] font-bold text-white drop-shadow-sm truncate px-1">
-                  {info.label} {count}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
-        {segments.map(([stage, count]) => {
-          const info = STAGE_LABELS[stage] ?? { label: stage, color: "bg-zinc-300" };
-          return (
-            <span key={stage} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <span className={cn("w-2 h-2 rounded-sm", info.color)} />
-              {info.label}: <span className="font-bold text-foreground">{count}</span>
-            </span>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -509,16 +454,6 @@ function AssignedPage() {
     }
   })();
 
-  // Garments for stage distribution (based on active tab)
-  const stageGarments = (() => {
-    switch (activeTab) {
-      case "orders": return regular;
-      case "brova-returns": return brovaReturns;
-      case "alterations": return alterations;
-      default: return regular;
-    }
-  })();
-
   const ordersPagination = usePagination(filteredOrders, 20);
   const returnsPagination = usePagination(filteredReturns, 20);
   const alterationsPagination = usePagination(filteredAlterations, 20);
@@ -576,8 +511,6 @@ function AssignedPage() {
           <StatsBar stats={alterationStats} filter={alterationFilter} onFilter={setAlterationFilter} />
         )}
 
-        {/* Stage distribution */}
-        <StageDistributionBar garments={stageGarments} />
 
         <TabsContent value="orders" className="mt-0">
           {isLoading ? (
