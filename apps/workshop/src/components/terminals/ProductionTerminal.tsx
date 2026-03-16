@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -36,20 +37,13 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
   };
   const thisStageOrder = STAGE_ORDER[terminalStage] ?? 0;
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = useMemo(() => getLocalDateStr(), []);
 
   const { queue, pending } = useMemo(() => {
     const q: WorkshopGarment[] = [];
     const p: WorkshopGarment[] = [];
     for (const g of stageGarments) {
-      const dateStr = g.assigned_date
-        ? (typeof g.assigned_date === "string" ? g.assigned_date.slice(0, 10) : new Date(g.assigned_date).toISOString().slice(0, 10))
-        : null;
+      const dateStr = toLocalDateStr(g.assigned_date);
       if (g.start_time) {
         // Already started — always show in queue
         q.push(g);

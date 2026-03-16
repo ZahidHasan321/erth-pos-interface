@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getLocalMidnightUtc } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
@@ -76,13 +77,10 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
 
 /** Fetch garments completed today (any location) for terminal "Done" counts */
 export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> => {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
   const { data, error } = await supabase
     .from('garments')
     .select(WORKSHOP_QUERY)
-    .gte('completion_time', todayStart.toISOString())
+    .gte('completion_time', getLocalMidnightUtc())
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {

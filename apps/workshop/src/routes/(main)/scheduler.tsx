@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
@@ -373,16 +373,14 @@ function SchedulerPage() {
     const map: Record<string, number> = {};
     for (const g of allGarments) {
       if (!g.assigned_date || !g.in_production) continue;
-      const dateStr = typeof g.assigned_date === "string"
-        ? g.assigned_date.slice(0, 10)
-        : new Date(g.assigned_date).toISOString().slice(0, 10);
-      map[dateStr] = (map[dateStr] ?? 0) + 1;
+      const dateStr = toLocalDateStr(g.assigned_date);
+      if (dateStr) map[dateStr] = (map[dateStr] ?? 0) + 1;
     }
     return map;
   }, [allGarments]);
 
   // Shared date (declared early — used by workload memo)
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [planOpen, setPlanOpen] = useState(false);
   const [returnPlanOpen, setReturnPlanOpen] = useState(false);
@@ -406,9 +404,7 @@ function SchedulerPage() {
 
     for (const g of allGarments) {
       if (!g.assigned_date || !g.in_production || !g.production_plan) continue;
-      const dateStr = typeof g.assigned_date === "string"
-        ? g.assigned_date.slice(0, 10)
-        : new Date(g.assigned_date).toISOString().slice(0, 10);
+      const dateStr = toLocalDateStr(g.assigned_date);
       if (dateStr !== selectedDate) continue;
 
       const plan = g.production_plan as Record<string, string>;
