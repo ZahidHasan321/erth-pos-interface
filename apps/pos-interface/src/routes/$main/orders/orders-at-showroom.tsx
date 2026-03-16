@@ -10,6 +10,7 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Phone,
   MessageSquare,
   Loader2,
@@ -543,6 +544,7 @@ function RouteComponent() {
         total: filtered.length,
         ready: filtered.filter(o => o.showroomStatus.isReadyForPickup).length,
         brovaTrial: filtered.filter(o => o.showroomStatus.isBrovaTrial).length,
+        needsAction: filtered.filter(o => o.showroomStatus.hasNeedsAction).length,
         alterationIn: filtered.filter(o => o.showroomStatus.isAlterationIn).length,
       }
     };
@@ -584,6 +586,7 @@ function RouteComponent() {
         <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-2">
           <CompactStat label="Total" value={stats.total} icon={Store} color="bg-slate-500" />
           <CompactStat label="Trial" value={stats.brovaTrial} icon={RefreshCw} color="bg-amber-500" />
+          <CompactStat label="Needs Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
           <CompactStat label="Ready" value={stats.ready} icon={CheckCircle} color="bg-emerald-500" />
           <CompactStat label="Alt (In)" value={stats.alterationIn} icon={Package} color="bg-blue-500" />
           <CompactStat label="Alt (Out)" value={0} icon={ExternalLink} color="bg-rose-500" className="opacity-50" />

@@ -21,6 +21,7 @@ type Option = {
   value: string;
   label: string;
   node?: React.ReactNode;
+  selectedNode?: React.ReactNode;
 };
 
 interface ComboboxProps {
@@ -62,7 +63,7 @@ export function Combobox({
           )}
         >
           {selectedOption
-            ? (selectedOption.node || selectedOption.label)
+            ? (selectedOption.selectedNode || selectedOption.node || selectedOption.label)
             : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

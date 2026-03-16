@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { PIECE_STAGE_LABELS } from "@/lib/constants";
+
 import {
     Package,
     Search,
@@ -54,7 +54,9 @@ function ReceivingInterface() {
         mutationFn: async ({ garments, orderId }: { garments: Garment[]; orderId: number }) => {
             const promises = garments.map((garment) =>
                 updateGarment(garment.id, {
-                    piece_stage: (garment.garment_type === "brova" ? "awaiting_trial" : "ready_for_pickup") as any,
+                    piece_stage: (garment.garment_type === "brova"
+                        ? "awaiting_trial"
+                        : "ready_for_pickup") as any,
                     location: "shop",
                 })
             );
@@ -295,7 +297,7 @@ function OrderCard({
                                     <th className="text-left py-2.5 px-5">Style</th>
                                     <th className="text-left py-2.5 px-5">Fabric</th>
                                     <th className="text-left py-2.5 px-5">Trip</th>
-                                    <th className="text-left py-2.5 px-5">Stage</th>
+                                    <th className="text-left py-2.5 px-5">Location</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -329,11 +331,19 @@ function OrderCard({
                                             )}
                                         </td>
                                         <td className="py-2.5 px-5 font-mono text-muted-foreground">
-                                            {g.trip_number && g.trip_number > 1 ? `Alt ${g.trip_number - 1}` : "1st"}
+                                            {(() => {
+                                                const trip = g.trip_number ?? 1;
+                                                const altNum = g.garment_type === "final" && trip >= 2
+                                                    ? trip - 1
+                                                    : g.garment_type === "brova" && trip >= 4
+                                                        ? trip - 3
+                                                        : null;
+                                                return altNum !== null ? `Alt ${altNum}` : "1st";
+                                            })()}
                                         </td>
                                         <td className="py-2.5 px-5">
-                                            <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded capitalize">
-                                                {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
+                                            <span className="text-[10px] font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
+                                                In Transit to Shop
                                             </span>
                                         </td>
                                     </tr>

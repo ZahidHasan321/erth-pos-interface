@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import Fuse from "fuse.js";
 import type { CellContext } from "@tanstack/react-table";
 import type { GarmentSchema } from "./garment-form.schema";
+import { Banknote, Package } from "lucide-react";
 
 export const GarmentIdCell = ({
     row,
@@ -50,7 +51,7 @@ export const MeasurementIdCell = ({
         meta?.measurementOptions || [];
     const isFormDisabled = meta?.isFormDisabled || false;
     return (
-        <div className="min-w-[150px]">
+        <div>
             <Controller
                 name={`garments.${row.index}.measurement_id`}
                 control={control}
@@ -63,7 +64,7 @@ export const MeasurementIdCell = ({
                         >
                             <SelectTrigger
                                 className={cn(
-                                    "w-[150px] min-w-[150px] bg-background border-border/60",
+                                    "w-full bg-background border-border/60",
                                     error && "border-destructive",
                                 )}
                             >
@@ -99,7 +100,7 @@ export const GarmentTypeCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
     return (
-        <div className="w-full flex flex-col items-center min-w-[150px]">
+        <div className="w-full flex flex-col items-center">
             <Controller
                 name={`garments.${row.index}.garment_type`}
                 control={control}
@@ -112,7 +113,7 @@ export const GarmentTypeCell = ({
                         >
                             <SelectTrigger
                                 className={cn(
-                                    "w-[150px] min-w-[150px] bg-background border-border/60",
+                                    "w-full bg-background border-border/60",
                                     error && "border-destructive",
                                 )}
                             >
@@ -166,7 +167,7 @@ export const FabricSourceCell = ({
     }, [fabricSource, row.index, setValue]);
 
     return (
-        <div className="flex flex-col space-y-1 w-[200px] min-w-[180px]">
+        <div className="flex flex-col space-y-1">
             <Controller
                 name={`garments.${row.index}.fabric_source`}
                 control={control}
@@ -220,7 +221,7 @@ export const ShopNameCell = ({
     const isDisabled = fabricSource !== "OUT";
 
     return (
-        <div className="min-w-[150px]">
+        <div>
             <Controller
                 name={`garments.${row.index}.shop_name`}
                 control={control}
@@ -229,7 +230,7 @@ export const ShopNameCell = ({
                     <div className="flex flex-col gap-1">
                         <Input
                             className={cn(
-                                "min-w-[150px] bg-background border-border/60",
+                                "w-full bg-background border-border/60",
                                 error && "border-destructive",
                             )}
                             placeholder="Enter shop name"
@@ -325,17 +326,44 @@ export const IfInsideCell = ({
 
             return {
                 value: fabric.id.toString(),
-                label: `${fabric.name} - ${fabric.color} - ${fabric.price_per_meter} - ${availableStock.toFixed(2)}`,
-                node: (
-                    <div className="flex justify-between w-full">
-                        <span
-                            className={getStockColorClass(availableStock)}
-                        >{`${fabric.name} - ${fabric.color}`}</span>
-                        <div className="flex gap-1">
-                            <span className="text-muted-foreground">{`Price: ${fabric.price_per_meter}`}</span>
+                label: fabric.name,
+                selectedNode: (
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                        {fabric.color_hex && (
                             <span
-                                className={getStockColorClass(availableStock)}
-                            >{`Stock: ${availableStock.toFixed(2)}`}</span>
+                                className="w-3 h-3 rounded-full border border-border/60 shrink-0"
+                                style={{ backgroundColor: fabric.color_hex }}
+                            />
+                        )}
+                        <span className="truncate text-sm">{fabric.name}</span>
+                        <span className={cn("flex items-center gap-0.5 ml-auto shrink-0 text-[10px]", getStockColorClass(availableStock))}>
+                            <Package className="w-3 h-3" />{availableStock.toFixed(1)}
+                        </span>
+                    </div>
+                ),
+                node: (
+                    <div className="flex items-center justify-between w-full gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {fabric.color_hex && (
+                                <span
+                                    className="w-3.5 h-3.5 rounded-full border border-border/60 shrink-0"
+                                    style={{ backgroundColor: fabric.color_hex }}
+                                />
+                            )}
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{fabric.name}</p>
+                                {fabric.color && (
+                                    <p className="text-[10px] text-muted-foreground">{fabric.color}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0 text-xs">
+                            <span className="flex items-center gap-0.5 text-muted-foreground">
+                                <Banknote className="w-3 h-3" />{fabric.price_per_meter}
+                            </span>
+                            <span className={cn("flex items-center gap-0.5 font-medium", getStockColorClass(availableStock))}>
+                                <Package className="w-3 h-3" />{availableStock.toFixed(1)}
+                            </span>
                         </div>
                     </div>
                 ),
@@ -344,7 +372,7 @@ export const IfInsideCell = ({
     }, [fabrics, fuse, searchQuery, tempStockUsage]);
 
     return (
-        <div className="flex flex-col space-y-1 w-[200px] min-w-[200px]">
+        <div className="flex flex-col space-y-1 w-full">
             {!isInternal ? (
                 <Input
                     placeholder="N/A"
@@ -444,34 +472,76 @@ export const FabricLengthCell = ({
     const { control } = useFormContext();
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
+        tempStockUsage?: Map<string, number>;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
+    const tempStockUsage = meta?.tempStockUsage;
+
+    const [fabricSourceWatch, fabricIdWatch] = useWatch({
+        name: [
+            `garments.${row.index}.fabric_source`,
+            `garments.${row.index}.fabric_id`,
+        ],
+    });
+
+    const { data: fabricsResponse } = useQuery({
+        queryKey: ["fabrics"],
+        queryFn: getFabrics,
+        staleTime: Infinity,
+        gcTime: Infinity,
+    });
+    const fabrics = fabricsResponse?.data || [];
+
+    const isInternal = fabricSourceWatch === "IN";
+    const selectedFabric = isInternal && fabricIdWatch
+        ? fabrics.find((f) => f.id === fabricIdWatch)
+        : null;
+
+    // Available stock for THIS garment = base - what OTHER garments used (exclude current row)
+    const currentLength = useWatch({ name: `garments.${row.index}.fabric_length` }) ?? 0;
+    const baseStock = selectedFabric?.real_stock ?? 0;
+    const totalUsed = tempStockUsage?.get(String(fabricIdWatch)) ?? 0;
+    const othersUsed = totalUsed - Number(currentLength);
+    const available = baseStock - othersUsed;
 
     return (
-        <div className="min-w-30">
+        <div>
             <Controller
                 name={`garments.${row.index}.fabric_length`}
                 control={control}
-                render={({ field, fieldState: { error } }) => (
-                    <div className="flex flex-col gap-1">
-                        <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            className={cn(
-                                "min-w-30 bg-background border-border/60",
-                                error && "border-destructive",
+                render={({ field, fieldState: { error } }) => {
+                    const exceedsStock = isInternal && selectedFabric && (field.value ?? 0) > available;
+                    return (
+                        <div className="flex flex-col gap-1">
+                            <Input
+                                ref={field.ref}
+                                name={field.name}
+                                onBlur={field.onBlur}
+                                value={field.value ?? ""}
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                className={cn(
+                                    "bg-background border-border/60",
+                                    (error || exceedsStock) && "border-destructive",
+                                )}
+                                disabled={isFormDisabled}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.onChange(val === "" ? null : Number(val));
+                                }}
+                            />
+                            {exceedsStock && !error && (
+                                <span className="text-[10px] text-destructive">
+                                    Exceeds stock ({available.toFixed(1)}m)
+                                </span>
                             )}
-                            readOnly={isFormDisabled}
-                            onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-                        />
-                        {error && (
-                            <span className="text-xs text-destructive">{error.message}</span>
-                        )}
-                    </div>
-                )}
+                            {error && (
+                                <span className="text-xs text-destructive">{error.message}</span>
+                            )}
+                        </div>
+                    );
+                }}
             />
         </div>
     );
@@ -627,20 +697,14 @@ export const FabricAmountCell = ({
     }, [fabricId, fabricLength, fabricSource, fabrics, row.index, setValue]);
 
     return (
-        <div className="min-w-40">
+        <div>
             <Controller
                 name={`garments.${row.index}.fabric_amount`}
                 control={control}
                 render={({ field }) => (
-                    <Input
-                        type="text"
-                        {...field}
-                        value={
-                            typeof field.value === "number" ? field.value.toFixed(2) : "0.00"
-                        }
-                        readOnly
-                        className="w-40 min-w-40 bg-muted border-border/60"
-                    />
+                    <span className="text-sm font-semibold whitespace-nowrap">
+                        {typeof field.value === "number" ? field.value.toFixed(3) : "0.000"} <span className="text-muted-foreground text-xs">KWD</span>
+                    </span>
                 )}
             />
         </div>

@@ -963,7 +963,7 @@ function NewWorkOrder() {
                         <FabricSelectionForm
                             customerId={customerDemographics.id || null}
                             customerName={
-                                customerDemographics.nick_name ?? customerDemographics.name ?? undefined
+                                customerDemographics.nick_name || customerDemographics.name || undefined
                             }
                             customerMobile={customerDemographics.phone ?? undefined}
                             form={fabricSelectionForm}

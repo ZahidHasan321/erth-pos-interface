@@ -123,6 +123,8 @@ export const dispatchGarmentToWorkshop = async (
     .from(TABLE_NAME)
     .update({
       location: 'transit_to_workshop',
+      piece_stage: 'waiting_cut',
+      in_production: false,
       trip_number: currentTripNumber + 1,
     })
     .eq('id', garmentId)

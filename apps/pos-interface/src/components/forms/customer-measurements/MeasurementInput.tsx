@@ -5,7 +5,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
@@ -75,8 +74,9 @@ export const MeasurementInput = forwardRef<
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => {
+      render={({ field, fieldState }) => {
         const { ref: fieldRef, ...fieldProps } = field;
+        const hasError = !!fieldState.error;
         return (
           <FormItem className={className}>
             <div className="flex items-center gap-4 flex-nowrap">
@@ -113,7 +113,7 @@ export const MeasurementInput = forwardRef<
                             onEnterPress?.();
                           }
                         }}
-                        className="w-26 bg-white border-black pr-7 focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                        className={`w-26 bg-white pr-7 focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${hasError ? "border-red-500 ring-1 ring-red-500" : "border-black"}`}
                         disabled={isDisabled}
                         placeholder="xx"
                       />
@@ -129,7 +129,7 @@ export const MeasurementInput = forwardRef<
                         </span>
                       )}
                   </div>
-                  <FormMessage className="text-[10px]" />
+                  {/* Error indicated by red border only — no text to avoid layout shift */}
                 </div>
               </FormControl>
             </div>

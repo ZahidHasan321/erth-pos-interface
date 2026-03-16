@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatDate } from "@/lib/utils";
-import { StageBadge, AlterationBadge, ExpressBadge } from "./StageBadge";
+import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
 
 import type { WorkshopGarment } from "@repo/database";
@@ -49,43 +49,67 @@ export function GarmentCard({
         )}
         onClick={onClick}
       >
-        <CardContent className="p-4 flex flex-col h-full min-h-[120px]">
-          {/* Top: type + express */}
-          <div className="flex items-start justify-between gap-1">
-            <div className={cn(
-              "px-2.5 py-1 rounded-lg text-sm font-black uppercase",
-              garment.garment_type === "brova"
-                ? "bg-purple-100 text-purple-800"
-                : "bg-blue-100 text-blue-800",
-            )}>
-              {garment.garment_type === "brova" ? "Brova" : "Final"}
+        <CardContent className="p-3 flex flex-col h-full min-h-[100px]">
+          {/* Top: type + ID + express */}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "px-2 py-0.5 rounded-md text-xs font-black uppercase",
+                garment.garment_type === "brova"
+                  ? "bg-purple-100 text-purple-800"
+                  : "bg-blue-100 text-blue-800",
+              )}>
+                {garment.garment_type === "brova" ? "B" : "F"}
+              </div>
+              <span className="font-mono font-black text-xl leading-tight">
+                {garment.garment_id ?? garment.id.slice(0, 8)}
+              </span>
             </div>
-            {garment.express && <ExpressBadge />}
+            <div className="flex items-center gap-1">
+              {garment.express && <ExpressBadge />}
+              {garment.start_time && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                  Started
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Garment ID — hero text */}
-          <p className="font-mono font-black text-3xl mt-2 leading-tight">
-            {garment.garment_id ?? garment.id.slice(0, 8)}
-          </p>
-
-          {/* Style */}
+          {/* Fabric + style */}
+          <div className="mt-2 min-w-0">
+            {garment.fabric_name ? (
+              <>
+                <p className="text-sm font-medium text-foreground truncate">{garment.fabric_name}</p>
+                {garment.fabric_color && (
+                  <p className="text-[11px] text-muted-foreground truncate">{garment.fabric_color}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">Source: Outside</p>
+                {garment.fabric_color && (
+                  <p className="text-[11px] text-muted-foreground truncate">{garment.fabric_color}</p>
+                )}
+              </>
+            )}
+          </div>
           {garment.style_name && (
-            <p className="text-base text-muted-foreground capitalize mt-1 truncate">{garment.style_name}</p>
+            <p className="text-xs text-muted-foreground capitalize mt-0.5 truncate">{garment.style_name}</p>
           )}
 
-          {/* Badges row */}
-          <div className="flex items-center gap-2 mt-auto pt-3 flex-wrap">
-            {garment.start_time && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
-                Started
-              </span>
-            )}
+          {/* Bottom badges */}
+          <div className="flex items-center gap-1.5 mt-auto pt-2 flex-wrap">
             {hasSoaking && (
-              <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-lg">
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
                 Soak
               </span>
             )}
-            <AlterationBadge tripNumber={garment.trip_number} />
+            <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
+            {garment.invoice_number && (
+              <span className="text-[10px] font-medium text-muted-foreground ml-auto">
+                #{garment.invoice_number}
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -140,21 +164,22 @@ export function GarmentCard({
                   {garment.customer_name ?? "—"}
                 </span>
               )}
-              <StageBadge stage={garment.piece_stage} />
+              {!compact && <StageBadge stage={garment.piece_stage} />}
+              {!compact && <FeedbackStatusBadge status={garment.feedback_status} />}
               {garment.express && <ExpressBadge />}
-              <AlterationBadge tripNumber={garment.trip_number} />
+              <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             </div>
 
-            {/* Compact mode: show only production-relevant info */}
+            {/* Compact mode: minimal badges */}
             {compact ? (
               <div className="flex items-center flex-wrap gap-1.5">
                 {hasSoaking && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-                    Needs soaking
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-md">
+                    Soak
                   </span>
                 )}
                 {garment.invoice_number && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
+                  <span className="inline-flex items-center text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md">
                     #{garment.invoice_number}
                   </span>
                 )}
@@ -200,22 +225,18 @@ export function GarmentCard({
           </div>
 
           {/* Actions + expand */}
-          {(actions || !onClick) && (
-            <div className="flex items-center gap-2 shrink-0">
-              {actions}
-              {!onClick && (
-                <button
-                  onClick={() => setExpanded((v) => !v)}
-                  className={cn(
-                    "p-1.5 rounded-md hover:bg-muted transition-colors",
-                    expanded && "bg-muted",
-                  )}
-                >
-                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {actions}
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              className={cn(
+                "p-1.5 rounded-md hover:bg-muted transition-colors",
+                expanded && "bg-muted",
               )}
-            </div>
-          )}
+            >
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Expanded: measurements + notes */}

@@ -4,7 +4,7 @@ import type { WorkshopGarment } from "@repo/database";
 
 interface GroupedGarmentListProps {
   garments: WorkshopGarment[];
-  onCardClick: (garment: WorkshopGarment) => void;
+  onCardClick?: (garment: WorkshopGarment) => void;
   emptyIcon?: React.ReactNode;
   emptyText?: string;
 }
@@ -58,7 +58,7 @@ export function GroupedGarmentList({
                 showPipeline={false}
                 compact
                 index={i}
-                onClick={() => onCardClick(g)}
+                onClick={onCardClick ? () => onCardClick(g) : undefined}
               />
             ))}
           </div>

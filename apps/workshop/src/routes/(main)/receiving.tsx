@@ -239,11 +239,15 @@ function ReceivingPage() {
   // Split by tab
   const inTransit = allGarments.filter((g) => g.location === "transit_to_workshop");
   const incoming = inTransit.filter((g) => (g.trip_number ?? 1) === 1);
+  // Brova returns: trip 2 or 3 (after first/second trial, before alteration threshold)
   const brovaReturns = inTransit.filter(
-    (g) => (g.trip_number ?? 1) > 1 && g.garment_type === "brova",
+    (g) => g.garment_type === "brova" && (g.trip_number === 2 || g.trip_number === 3),
   );
+  // Alterations: brova trip >= 4, final trip >= 2
   const alterationIn = inTransit.filter(
-    (g) => (g.trip_number ?? 1) > 1 && g.garment_type === "final",
+    (g) =>
+      ((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
+      ((g.trip_number ?? 0) >= 2 && g.garment_type === "final"),
   );
   const incomingOrders = groupByOrder(incoming);
 

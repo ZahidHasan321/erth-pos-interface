@@ -51,7 +51,7 @@ export const StyleCell = ({
   const isFormDisabled = meta?.isFormDisabled || false;
 
   return (
-    <div className="min-w-[150px]">
+    <div>
       <Controller
         name={`garments.${row.index}.style`}
         control={control}
@@ -105,9 +105,9 @@ export const AmountCell = ({
   }, [garment, styles, stitchingPrice]);
 
   return (
-    <div className="min-w-[100px] flex items-center justify-center">
-      <span className="text-sm font-semibold text-foreground">
-        {stylePrice > 0 ? `${stylePrice.toFixed(3)} KD` : "0.000 KD"}
+    <div className="flex items-center justify-center">
+      <span className="text-sm font-semibold text-foreground whitespace-nowrap">
+        {stylePrice > 0 ? stylePrice.toFixed(3) : "0.000"} <span className="text-muted-foreground text-xs">KWD</span>
       </span>
     </div>
   );
@@ -124,7 +124,7 @@ export const LinesCell = ({
   const isFormDisabled = meta?.isFormDisabled || false;
 
   return (
-    <div className="min-w-[180px] flex items-center space-x-6 px-2">
+    <div className="flex items-center space-x-4 px-1">
       <Controller
         name={`garments.${row.index}.lines`}
         control={control}
@@ -143,7 +143,7 @@ export const LinesCell = ({
                 htmlFor={`line1-${row.index}`}
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                1 Line
+                1
               </label>
             </div>
             <div className="flex items-center space-x-2">
@@ -159,7 +159,7 @@ export const LinesCell = ({
                 htmlFor={`line2-${row.index}`}
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                2 Lines
+                2
               </label>
             </div>
           </>
@@ -180,7 +180,7 @@ export const CollarCell = ({
   const isFormDisabled = meta?.isFormDisabled || false;
 
   return (
-    <div className="min-w-[350px] flex flex-row space-x-2">
+    <div className="flex flex-row space-x-2">
       <Controller
         name={`garments.${row.index}.collar_type`}
         control={control}
@@ -190,7 +190,7 @@ export const CollarCell = ({
             value={field.value || ""}
             disabled={isFormDisabled}
           >
-            <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
+            <SelectTrigger className="bg-background border-border/60">
               {field.value ? (
                 <img
                   src={
@@ -230,7 +230,7 @@ export const CollarCell = ({
             value={field.value || ""}
             disabled={isFormDisabled}
           >
-            <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
+            <SelectTrigger className="bg-background border-border/60">
               {field.value ? (
                 <img
                   src={
@@ -308,7 +308,7 @@ export const JabzourCell = ({
   }, [jabzour_1, setValue, row.index]);
 
   return (
-    <div className="min-w-[420px] flex flex-row space-x-2">
+    <div className="flex flex-row space-x-2">
       <Controller
         name={`garments.${row.index}.jabzour_1`}
         control={control}
@@ -321,7 +321,7 @@ export const JabzourCell = ({
             >
               <SelectTrigger
                 className={cn(
-                  "bg-background border-border/60 min-w-[120px]",
+                  "bg-background border-border/60",
                   fieldState.error && "border-destructive",
                 )}
               >
@@ -376,7 +376,7 @@ export const JabzourCell = ({
             >
               <SelectTrigger
                 className={cn(
-                  "bg-background border-border/60 min-w-[120px]",
+                  "bg-background border-border/60",
                   fieldState.error && "border-destructive",
                 )}
               >
@@ -492,7 +492,7 @@ export const FrontPocketCell = ({
   }, [front_pocket_type, setValue, getValues, row.index]);
 
   return (
-    <div className="min-w-[300px] flex flex-row space-x-2 justify-center items-center">
+    <div className="flex flex-row space-x-2 items-center">
       <Controller
         name={`garments.${row.index}.front_pocket_type`}
         control={control}
@@ -502,7 +502,7 @@ export const FrontPocketCell = ({
             value={field.value || ""}
             disabled={isFormDisabled}
           >
-            <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
+            <SelectTrigger className="bg-background border-border/60">
               {field.value ? (
                 <img
                   src={
@@ -592,7 +592,7 @@ export const AccessoriesCell = ({
   };
 
   return (
-    <div className="min-w-[160px] flex flex-row space-x-4 items-center">
+    <div className="flex flex-row space-x-3 items-center">
       <Controller
         name={`garments.${row.index}.wallet_pocket`}
         control={control}
@@ -665,7 +665,7 @@ export const CuffsCell = ({
   });
 
   return (
-    <div className="min-w-[220px] flex flex-row space-x-2 items-center">
+    <div className="flex flex-row space-x-2 items-center">
       <Controller
         name={`garments.${row.index}.cuffs_type`}
         control={control}
@@ -675,7 +675,7 @@ export const CuffsCell = ({
             value={field.value || ""}
             disabled={isFormDisabled}
           >
-            <SelectTrigger className="bg-background border-border/60 min-w-[120px]">
+            <SelectTrigger className="bg-background border-border/60">
               {field.value ? (
                 cuffTypes.find((c) => c.value === field.value)?.image ? (
                   <img

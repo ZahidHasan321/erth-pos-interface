@@ -493,10 +493,6 @@ function UnifiedFeedbackInterface() {
         toast.error("Please complete all feedback sections");
         return;
     }
-    if (activeGarment?.garment_type === "brova" && !currentState.customerSignature) {
-        toast.error("Customer signature is required for Brova feedback");
-        return;
-    }
     setIsConfirmDialogOpen(true);
   };
 
@@ -513,13 +509,14 @@ function UnifiedFeedbackInterface() {
             const allBrovas = activeOrder.garments?.filter(g => g.garment_type === "brova") || [];
             const result = evaluateBrovaFeedback(
                 state.feedbackAction as any,
-                allBrovas.map(b => ({ id: b.id, piece_stage: b.piece_stage as any, acceptance_status: (b as any).acceptance_status })),
+                allBrovas.map(b => ({ id: b.id, piece_stage: b.piece_stage as any, acceptance_status: (b as any).acceptance_status, feedback_status: (b as any).feedback_status })),
                 activeGarment.id
             );
 
             await updateGarment(activeGarment.id, {
                 piece_stage: result.newStage,
                 acceptance_status: result.acceptanceStatus,
+                feedback_status: result.feedbackStatus,
             });
 
             if (result.message) {
@@ -533,8 +530,10 @@ function UnifiedFeedbackInterface() {
                 updatePayload.piece_stage = "completed";
                 updatePayload.fulfillment_type = isHomeDelivery ? "delivered" : "collected";
                 updatePayload.acceptance_status = true;
+                updatePayload.feedback_status = "accepted";
             } else {
-                updatePayload.piece_stage = state.feedbackAction;
+                updatePayload.piece_stage = "brova_trialed";
+                updatePayload.feedback_status = state.feedbackAction;
                 updatePayload.acceptance_status = false;
             }
 
@@ -563,7 +562,11 @@ function UnifiedFeedbackInterface() {
         const optionsChecklist = optionRows.map(opt => ({
           option_name: opt.id,
           expected_value: opt.mainValue,
-          actual_correct: state.optionChecks[`${opt.id}-main`] || false,
+          actual_correct: state.optionChecks[`${opt.id}-main`] === true,
+          rejected: state.optionChecks[`${opt.id}-main`] === false,
+          hashwa_correct: opt.hashwaValue ? state.optionChecks[`${opt.id}-hashwa`] === true : null,
+          hashwa_rejected: opt.hashwaValue ? state.optionChecks[`${opt.id}-hashwa`] === false : null,
+          hashwa_notes: opt.hashwaValue ? (state.optionNotes[`${opt.id}-hashwa`] || null) : null,
           notes: state.optionNotes[opt.id] || null,
         }));
 
@@ -961,16 +964,19 @@ function UnifiedFeedbackInterface() {
                                     <Badge
                                         className={cn(
                                             "h-3 px-1 text-[7px] font-black uppercase border-none",
-                                            garment.garment_type === 'brova' && (garment.trip_number || 1) >= 3
+                                            (garment.garment_type === 'brova' && (garment.trip_number || 1) >= 4) ||
+                                            (garment.garment_type === 'final' && (garment.trip_number || 1) >= 2)
                                                 ? "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
                                                 : garment.garment_type === 'brova'
                                                     ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white"
                                                     : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
                                         )}
                                     >
-                                        {garment.garment_type === 'brova' && (garment.trip_number || 1) >= 3
-                                            ? `Alt #${(garment.trip_number || 1) - 2}`
-                                            : garment.garment_type === 'brova' ? "Brova" : "Final"}
+                                        {garment.garment_type === 'brova' && (garment.trip_number || 1) >= 4
+                                            ? `Alt ${(garment.trip_number || 1) - 3}`
+                                            : garment.garment_type === 'final' && (garment.trip_number || 1) >= 2
+                                                ? `Alt ${(garment.trip_number || 1) - 1}`
+                                                : garment.garment_type === 'brova' ? "Brova" : "Final"}
                                     </Badge>
                                 </div>
                             </div>
@@ -1127,8 +1133,10 @@ function UnifiedFeedbackInterface() {
                     <CardContent className="p-4">
                        <div className="space-y-3">
                                 {optionRows.map((opt) => {
-                                    const isConfirmed = currentState.optionChecks[`${opt.id}-main`] || false;
-                                    const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] || false;
+                                    const isConfirmed = currentState.optionChecks[`${opt.id}-main`] === true;
+                                    const isRejected = currentState.optionChecks[`${opt.id}-main`] === false;
+                                    const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] === true;
+                                    const hashwaRejected = currentState.optionChecks[`${opt.id}-hashwa`] === false;
                                     return (
                                     <div
                                         key={opt.id}
@@ -1136,7 +1144,9 @@ function UnifiedFeedbackInterface() {
                                             "rounded-xl border-2 p-4 transition-all",
                                             isConfirmed
                                                 ? "border-emerald-300 bg-emerald-50/50"
-                                                : "border-border bg-card hover:border-primary/30"
+                                                : isRejected
+                                                    ? "border-red-300 bg-red-50/50"
+                                                    : "border-border bg-card hover:border-primary/30"
                                         )}
                                     >
                                         {/* Top row: image + label + value + confirm toggle */}
@@ -1168,7 +1178,9 @@ function UnifiedFeedbackInterface() {
                                                         "font-bold text-xs px-2.5 py-0.5",
                                                         isConfirmed
                                                             ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                            : "bg-primary/5 text-primary border-primary/20"
+                                                            : isRejected
+                                                                ? "bg-red-100 text-red-800 border-red-300"
+                                                                : "bg-primary/5 text-primary border-primary/20"
                                                     )}
                                                 >
                                                     {opt.displayText || opt.mainValue}
@@ -1180,7 +1192,9 @@ function UnifiedFeedbackInterface() {
                                                             "ml-1.5 font-bold text-xs px-2 py-0.5",
                                                             hashwaConfirmed
                                                                 ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                                                : hashwaRejected
+                                                                    ? "bg-red-100 text-red-800 border-red-300"
+                                                                    : "bg-amber-50 text-amber-700 border-amber-200"
                                                         )}
                                                     >
                                                         Hashwa: {opt.hashwaValue}
@@ -1188,33 +1202,77 @@ function UnifiedFeedbackInterface() {
                                                 )}
                                             </div>
 
-                                            {/* Confirm button */}
+                                            {/* Confirm / Reject buttons */}
                                             <div className="shrink-0 flex flex-col items-end gap-1.5">
-                                                <button
-                                                    onClick={() => handleCheck(`${opt.id}-main`, !isConfirmed)}
-                                                    className={cn(
-                                                        "flex items-center gap-2 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
-                                                        isConfirmed
-                                                            ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
-                                                            : "bg-background border-border text-muted-foreground hover:border-primary hover:text-primary"
-                                                    )}
-                                                >
-                                                    {isConfirmed ? <Check className="w-4 h-4" /> : <X className="w-4 h-4 opacity-40" />}
-                                                    {isConfirmed ? "Confirmed" : "Confirm"}
-                                                </button>
-                                                {opt.hashwaValue && (
+                                                <div className="flex gap-1.5">
                                                     <button
-                                                        onClick={() => handleCheck(`${opt.id}-hashwa`, !hashwaConfirmed)}
+                                                        onClick={() => handleCheck(`${opt.id}-main`, true)}
                                                         className={cn(
-                                                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
-                                                            hashwaConfirmed
+                                                            "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
+                                                            isConfirmed
                                                                 ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
-                                                                : "bg-background border-amber-200 text-amber-600 hover:border-amber-400"
+                                                                : "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
                                                         )}
                                                     >
-                                                        {hashwaConfirmed ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5 opacity-40" />}
-                                                        Hashwa
+                                                        <Check className="w-4 h-4" />
+                                                        {isConfirmed ? "Confirmed" : "Confirm"}
                                                     </button>
+                                                    <button
+                                                        onClick={() => handleCheck(`${opt.id}-main`, false)}
+                                                        className={cn(
+                                                            "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
+                                                            isRejected
+                                                                ? "bg-red-500 border-red-500 text-white shadow-sm"
+                                                                : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600"
+                                                        )}
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                                {opt.hashwaValue && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <button
+                                                            onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
+                                                            className={cn(
+                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
+                                                                hashwaConfirmed
+                                                                    ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
+                                                                    : "bg-background border-amber-200 text-amber-600 hover:border-emerald-400"
+                                                            )}
+                                                        >
+                                                            <Check className="w-3.5 h-3.5" />
+                                                            Hashwa
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
+                                                            className={cn(
+                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
+                                                                hashwaRejected
+                                                                    ? "bg-red-500 border-red-500 text-white shadow-sm"
+                                                                    : "bg-background border-amber-200 text-amber-600 hover:border-red-400"
+                                                            )}
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                            Reject
+                                                        </button>
+                                                        {hashwaRejected && (
+                                                            <Select
+                                                                value={currentState.optionNotes[`${opt.id}-hashwa`] || ""}
+                                                                onValueChange={(val) => handleOptionNoteChange(`${opt.id}-hashwa`, val)}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs w-32 border-red-200" onClick={(e) => e.stopPropagation()}>
+                                                                    <SelectValue placeholder="Request..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="SINGLE">Single</SelectItem>
+                                                                    <SelectItem value="DOUBLE">Double</SelectItem>
+                                                                    <SelectItem value="TRIPLE">Triple</SelectItem>
+                                                                    <SelectItem value="NO HASHWA">No Hashwa</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -1425,7 +1483,7 @@ function UnifiedFeedbackInterface() {
                   {activeTab === "brova" && (
                       <div className="pt-3 border-t border-border/60 space-y-3">
                           <div className="flex items-center justify-between">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Signature *</Label>
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
                               {currentState.customerSignature && (
                                   <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px]">SIGNED</Badge>
                               )}
@@ -1628,7 +1686,7 @@ function UnifiedFeedbackInterface() {
                               g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
                           ) || [];
                           const anyBrovaAccepted = activeOrder.garments?.some(
-                              g => g.garment_type === "brova" && (g.acceptance_status === true || g.piece_stage === "accepted")
+                              g => g.garment_type === "brova" && g.acceptance_status === true
                           );
                           if (blockedFinals.length === 0) return null;
                           return (

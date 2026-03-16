@@ -21,7 +21,7 @@ async function fetchCounts(): Promise<SidebarCounts> {
     .select('piece_stage, location, in_production, production_plan')
     .in('location', ['workshop', 'transit_to_workshop'])
     .in('piece_stage', [
-      'transit_to_workshop', 'waiting_cut', 'needs_repair', 'needs_redo',
+      'transit_to_workshop', 'waiting_cut',
       'soaking', 'cutting', 'post_cutting', 'sewing', 'finishing', 'ironing',
       'quality_check', 'ready_for_dispatch',
     ]);
@@ -36,7 +36,7 @@ async function fetchCounts(): Promise<SidebarCounts> {
   return {
     receiving:     data.filter((g) => g.location === 'transit_to_workshop').length,
     parking:       data.filter((g) => g.location === 'workshop' && !g.in_production).length,
-    scheduler:     data.filter((g) => g.location === 'workshop' && g.in_production && !g.production_plan && ['waiting_cut', 'needs_repair', 'needs_redo'].includes(g.piece_stage)).length,
+    scheduler:     data.filter((g) => g.location === 'workshop' && g.in_production && !g.production_plan && g.piece_stage === 'waiting_cut').length,
     soaking:       data.filter((g) => g.piece_stage === 'soaking').length,
     cutting:       data.filter((g) => g.piece_stage === 'cutting').length,
     post_cutting:  data.filter((g) => g.piece_stage === 'post_cutting').length,
@@ -44,7 +44,7 @@ async function fetchCounts(): Promise<SidebarCounts> {
     finishing:     data.filter((g) => g.piece_stage === 'finishing').length,
     ironing:       data.filter((g) => g.piece_stage === 'ironing').length,
     quality_check: data.filter((g) => g.piece_stage === 'quality_check').length,
-    dispatch:      data.filter((g) => g.location === 'workshop' && ['ready_for_dispatch', 'accepted', 'completed', 'ready_for_pickup'].includes(g.piece_stage ?? '')).length,
+    dispatch:      data.filter((g) => g.location === 'workshop' && ['ready_for_dispatch', 'brova_trialed', 'completed', 'ready_for_pickup'].includes(g.piece_stage ?? '')).length,
   };
 }
 

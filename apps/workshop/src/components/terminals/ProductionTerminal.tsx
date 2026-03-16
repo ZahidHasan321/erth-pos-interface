@@ -1,25 +1,18 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useTerminalGarments, useCompletedTodayGarments } from "@/hooks/useWorkshopGarments";
 import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 interface ProductionTerminalProps {
   terminalStage: string;
   icon: React.ReactNode;
-}
-
-function isSameDay(d1: Date, d2: Date) {
-  return d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
 }
 
 const HISTORY_KEY_MAP: Record<string, string> = {
@@ -28,20 +21,20 @@ const HISTORY_KEY_MAP: Record<string, string> = {
   quality_check: "quality_checker",
 };
 
-const STAGE_NEXT: Record<string, string> = {
-  soaking: "cutting", cutting: "post_cutting", post_cutting: "sewing",
-  sewing: "finishing", finishing: "ironing", ironing: "quality_check",
-  quality_check: "ready_for_dispatch",
-};
-
 export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalProps) {
   const { data: stageGarments = [], isLoading } = useTerminalGarments(terminalStage);
-  const { data: allGarments = [] } = useWorkshopGarments();
+  const { data: completedTodayAll = [] } = useCompletedTodayGarments();
   const navigate = useNavigate();
 
   const stageLabel = PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ?? terminalStage;
-  const nextStage = STAGE_NEXT[terminalStage];
   const historyKey = HISTORY_KEY_MAP[terminalStage] ?? terminalStage;
+
+  // Stage order for "done" detection — garment is past this stage if its order > ours
+  const STAGE_ORDER: Record<string, number> = {
+    soaking: 0, cutting: 1, post_cutting: 2, sewing: 3,
+    finishing: 4, ironing: 5, quality_check: 6, ready_for_dispatch: 7,
+  };
+  const thisStageOrder = STAGE_ORDER[terminalStage] ?? 0;
 
   const today = useMemo(() => {
     const d = new Date();
@@ -54,36 +47,34 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
     const q: WorkshopGarment[] = [];
     const p: WorkshopGarment[] = [];
     for (const g of stageGarments) {
+      const dateStr = g.assigned_date
+        ? (typeof g.assigned_date === "string" ? g.assigned_date.slice(0, 10) : new Date(g.assigned_date).toISOString().slice(0, 10))
+        : null;
       if (g.start_time) {
+        // Already started — always show in queue
         q.push(g);
-      } else if (g.assigned_date && g.assigned_date < todayStr) {
+      } else if (dateStr && dateStr < todayStr) {
+        // Past due
         p.push(g);
       } else {
+        // Today, future, or no date — show in queue
         q.push(g);
       }
     }
     return { queue: q, pending: p };
   }, [stageGarments, todayStr]);
 
+  // "Done" = garments completed today that passed through this station
   const completedToday = useMemo(() => {
-    if (!nextStage) return [];
-    return allGarments.filter((g) => {
-      if (g.location !== "workshop") return false;
-      // Check worker_history for this station — presence means this station processed it
+    return completedTodayAll.filter((g) => {
       const wh = g.worker_history as Record<string, string> | null;
-      if (!wh?.[historyKey]) return false;
-      // Use completion_time as a proxy for "today" — works when garment is still
-      // at the next stage. Once it moves further, completion_time gets overwritten,
-      // so also accept garments that already advanced past nextStage.
-      if (g.completion_time) {
-        const ct = new Date(g.completion_time);
-        if (isSameDay(ct, today)) return true;
-      }
-      // Fallback: if the garment has moved past the next stage but was processed
-      // at this station, check assigned_date as a proxy
-      return false;
+      if (!wh?.[terminalStage] && !wh?.[historyKey]) return false;
+      // Must be beyond this stage
+      const gStageOrder = STAGE_ORDER[g.piece_stage ?? ""] ?? 99;
+      if (g.location === "workshop" && gStageOrder <= thisStageOrder) return false;
+      return true;
     });
-  }, [allGarments, nextStage, today, historyKey]);
+  }, [completedTodayAll, terminalStage, historyKey, thisStageOrder]);
 
   const completedPagination = usePagination(completedToday, 15);
   const started = queue.filter((g) => g.start_time).length;
@@ -95,13 +86,19 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          {icon} {stageLabel}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {stageGarments.length} garment{stageGarments.length !== 1 ? "s" : ""} at this station
-        </p>
+      <div className="mb-5 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
+            {icon} {stageLabel}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {stageGarments.length} garment{stageGarments.length !== 1 ? "s" : ""} at this station
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-lg">
+          <CalendarDays className="w-4 h-4" />
+          {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+        </div>
       </div>
 
       {/* Quick stats */}
@@ -155,7 +152,7 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
             <GroupedGarmentList garments={pending} onCardClick={handleCardClick} emptyIcon={icon} emptyText="No overdue garments" />
           </TabsContent>
           <TabsContent value="completed">
-            <GroupedGarmentList garments={completedPagination.paged} onCardClick={handleCardClick} emptyIcon={icon} emptyText="No completions today" />
+            <GroupedGarmentList garments={completedPagination.paged} emptyIcon={icon} emptyText="No completions today" />
             <Pagination
               page={completedPagination.page}
               totalPages={completedPagination.totalPages}

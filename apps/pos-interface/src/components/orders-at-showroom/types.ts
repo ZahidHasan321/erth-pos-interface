@@ -49,7 +49,8 @@ export type OrderRow = {
     isPickupWaitingFinals: boolean;
     isWaitingFinals: boolean;
     isAlterationIn: boolean;
-    label: "brova_trial" | "alteration_in" | "ready_for_pickup" | "pickup_waiting_finals" | null;
+    hasNeedsAction: boolean;
+    label: "brova_trial" | "alteration_in" | "needs_action" | "ready_for_pickup" | "pickup_waiting_finals" | null;
     hasPhysicalItems: boolean;
   };
 

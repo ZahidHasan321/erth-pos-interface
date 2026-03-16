@@ -74,6 +74,24 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
 };
 
+/** Fetch garments completed today (any location) for terminal "Done" counts */
+export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> => {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { data, error } = await supabase
+    .from('garments')
+    .select(WORKSHOP_QUERY)
+    .gte('completion_time', todayStart.toISOString())
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    console.error('getCompletedTodayGarments error:', error);
+    return [];
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+};
+
 /**
  * Fetch ALL garments from orders that have any production activity.
  * Used by Assigned Orders — the "holy grail" view that shows every garment
@@ -174,6 +192,15 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .update({ location: 'workshop' as any, in_production: false })
     .in('id', ids);
   if (error) throw new Error(error.message);
+
+  // For return garments with feedback_status, set piece_stage to waiting_cut
+  const { error: e2 } = await supabase
+    .from('garments')
+    .update({ piece_stage: 'waiting_cut' as PieceStage })
+    .in('id', ids)
+    .not('feedback_status', 'is', null)
+    .eq('piece_stage', 'brova_trialed');
+  if (e2) throw new Error(e2.message);
 };
 
 export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
@@ -192,6 +219,16 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .in('id', ids)
     .neq('piece_stage', 'waiting_for_acceptance');
   if (e2) throw new Error(e2.message);
+
+  // For return brovas with feedback_status, reset piece_stage to waiting_cut
+  // so they appear in the scheduler (mirrors receiveGarments logic)
+  const { error: e3 } = await supabase
+    .from('garments')
+    .update({ piece_stage: 'waiting_cut' as PieceStage })
+    .in('id', ids)
+    .not('feedback_status', 'is', null)
+    .eq('piece_stage', 'brova_trialed');
+  if (e3) throw new Error(e3.message);
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
@@ -204,15 +241,15 @@ export const sendToScheduler = async (ids: string[]): Promise<void> => {
 
 export const sendReturnToProduction = async (id: string, _reentryStage: PieceStage): Promise<void> => {
   // Set in_production so it appears in Scheduler's alteration tab.
-  // Keep piece_stage as needs_repair/needs_redo so Scheduler filter picks it up.
+  // Set piece_stage to waiting_cut (feedback_status already has the context).
   // Clear old production_plan so Scheduler knows it needs a new plan.
-  // Store the intended re-entry stage in the notes for the Scheduler to use.
   const { error } = await supabase
     .from('garments')
     .update({
       in_production: true,
       location: 'workshop' as any,
       production_plan: null,
+      piece_stage: 'waiting_cut' as PieceStage,
     })
     .eq('id', id);
   if (error) throw new Error(error.message);
@@ -416,7 +453,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
 export const dispatchGarments = async (ids: string[]): Promise<void> => {
   const { error } = await supabase
     .from('garments')
-    .update({ location: 'transit_to_shop', in_production: false })
+    .update({ location: 'transit_to_shop', in_production: false, feedback_status: null })
     .in('id', ids);
   if (error) throw new Error(error.message);
 };
@@ -545,7 +582,7 @@ export const getBrovaStatusForOrders = async (
     if (!result[g.order_id]) result[g.order_id] = { total: 0, trialed: 0, accepted: 0 };
     const entry = result[g.order_id];
     entry.total++;
-    const trialedStages = ['accepted', 'needs_repair', 'needs_redo', 'completed'];
+    const trialedStages = ['brova_trialed', 'completed'];
     if (trialedStages.includes(g.piece_stage ?? '')) entry.trialed++;
     if (g.acceptance_status === true) entry.accepted++;
   }

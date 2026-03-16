@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { PIECE_STAGE_LABELS, FEEDBACK_STATUS_LABELS, FEEDBACK_STATUS_COLORS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PieceStage } from "@repo/database";
 
@@ -14,12 +14,9 @@ const STAGE_COLOR: Record<string, string> = {
   ironing:                "bg-rose-200 text-rose-900",
   quality_check:          "bg-yellow-200 text-yellow-900",
   ready_for_dispatch:     "bg-emerald-200 text-emerald-900",
-  at_shop:                "bg-emerald-200 text-emerald-900",
   awaiting_trial:         "bg-blue-200 text-blue-900",
   ready_for_pickup:       "bg-emerald-200 text-emerald-900",
-  accepted:               "bg-emerald-300 text-emerald-950",
-  needs_repair:           "bg-red-200 text-red-900",
-  needs_redo:             "bg-red-300 text-red-950",
+  brova_trialed:          "bg-purple-200 text-purple-900",
   completed:              "bg-slate-200 text-slate-800",
 };
 
@@ -46,14 +43,39 @@ export function StageBadge({ stage, className }: StageBadgeProps) {
   );
 }
 
-export function AlterationBadge({ tripNumber }: { tripNumber: number | null | undefined }) {
-  if (!tripNumber || tripNumber < 3) return null;
+export function FeedbackStatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+  if (!status) return null;
+  const color = FEEDBACK_STATUS_COLORS[status as keyof typeof FEEDBACK_STATUS_COLORS] ?? "bg-zinc-200 text-zinc-800";
+  const label = FEEDBACK_STATUS_LABELS[status as keyof typeof FEEDBACK_STATUS_LABELS] ?? status;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-0 font-semibold text-[10px] uppercase tracking-wide",
+        color,
+        className,
+      )}
+    >
+      {label}
+    </Badge>
+  );
+}
+
+export function AlterationBadge({ tripNumber, garmentType }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
+  const trip = tripNumber ?? 1;
+  // Brova: alteration starts at trip 4, Final: alteration starts at trip 2
+  const altNum = garmentType === "final" && trip >= 2
+    ? trip - 1
+    : trip >= 4
+      ? trip - 3
+      : null;
+  if (altNum === null) return null;
   return (
     <Badge
       variant="outline"
       className="border-0 bg-orange-500 text-white font-semibold text-[10px] uppercase tracking-wide"
     >
-      Alt {tripNumber - 2}
+      Alt {altNum}
     </Badge>
   );
 }

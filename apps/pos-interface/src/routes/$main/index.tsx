@@ -84,7 +84,7 @@ function DashboardPage() {
         }),
         needsAction: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            return o.garments?.some((g: any) => (g.piece_stage === 'needs_repair' || g.piece_stage === 'needs_redo') && g.location === 'shop');
+            return o.garments?.some((g: any) => (g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo') && g.location === 'shop');
         })
     };
 

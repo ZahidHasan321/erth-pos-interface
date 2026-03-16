@@ -24,7 +24,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
-import { DatePicker } from "@/components/ui/date-picker";
 import { GroupedMeasurementFields } from "./GroupedMeasurementFields";
 import { useAutoNavigation } from "./useAutoNavigation";
 
@@ -46,8 +45,7 @@ import {
 import { getEmployees } from "@/api/employees";
 import { toast } from "sonner";
 import type { Measurement } from "@repo/database";
-import { Pencil, X, Save, Plus, ArrowRight, RotateCcw, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Pencil, X, Save, Plus, ArrowRight, RotateCcw } from "lucide-react";
 
 // ---------------------------------------
 // Type definitions
@@ -459,28 +457,6 @@ export function CustomerMeasurementsForm({
           </div>
         )}
 
-        {/* Root Validation Error */}
-        {form.formState.errors.root && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Validation Error</AlertTitle>
-            <AlertDescription>
-              {form.formState.errors.root.message}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Display generic error if refine fails without a specific path */}
-        {form.formState.isSubmitted && Object.keys(form.formState.errors).length > 0 && (
-           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Form has errors</AlertTitle>
-            <AlertDescription>
-              All measurement fields must be filled with valid values before submission.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* ---- Top Controls ---- */}
         <div className="flex flex-wrap justify-between items-start gap-6 bg-card p-6 rounded-xl border border-border shadow-sm">
           {/* Left side: all existing fields wrapped in one flex row */}
@@ -628,30 +604,9 @@ export function CustomerMeasurementsForm({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="measurement_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="font-medium">
-                    Measurement Date
-                  </FormLabel>
-                  <FormControl>
-                    <DatePicker
-                      value={field.value ? new Date(field.value) : null}
-                      onChange={(date) => field.onChange(date?.toISOString())}
-                      placeholder="Select date"
-                      disabled={!isEditing}
-                      className="w-auto min-w-48"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </div>
 
-          {/* Right edge: action buttons (moved from bottom) */}
+          {/* Right edge: top-level actions (Edit, New) */}
           <div className="flex items-center gap-3 self-end">
             {!isOrderClosed && !isEditing && !isCreatingNew && (
               <Button
@@ -665,30 +620,6 @@ export function CustomerMeasurementsForm({
               </Button>
             )}
 
-            {(isEditing || isCreatingNew) && !isOrderClosed && (
-              <>
-                <Button type="button" variant="outline" onClick={handleCancel}>
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? (
-                    <>
-                      <div className="mr-2">
-                        <SmallSpinner />
-                      </div>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Save
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
-
             {!isEditing && !isOrderClosed && (
               <Button
                 type="button"
@@ -698,18 +629,6 @@ export function CustomerMeasurementsForm({
               >
                 <Plus className="w-4 h-4 mr-2" />
                 New
-              </Button>
-            )}
-
-            {isCreatingNew && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClear}
-                className="border-border/40 text-muted-foreground hover:bg-muted"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Clear
               </Button>
             )}
           </div>
@@ -868,9 +787,42 @@ export function CustomerMeasurementsForm({
             )}
           />
         </div>
-        {/* ---- Continue to Fabric Selection ---- */}
+        {/* ---- Bottom Actions ---- */}
         <div className="flex flex-wrap justify-end gap-4 pt-4">
-          {/* Continue to Fabric Selection */}
+          {(isEditing || isCreatingNew) && !isOrderClosed && (
+            <>
+              {isCreatingNew && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClear}
+                  className="border-border/40 text-muted-foreground hover:bg-muted"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Clear
+                </Button>
+              )}
+              <Button type="button" variant="outline" onClick={handleCancel}>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <div className="mr-2">
+                      <SmallSpinner />
+                    </div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </>
+                )}
+              </Button>
+            </>
+          )}
           {!isEditing && !isOrderClosed && onProceed && (
             <Button
               type="button"

@@ -68,7 +68,7 @@ The system thinks in **garments, not orders**. An order is a container; garment 
 Key tables and relationships:
 - **orders** → parent container with `order_type` (WORK/SALES), `checkout_status` (draft/confirmed/cancelled), `brand` (ERTH/SAKKBA/QASS), payment info
 - **work_orders** → extends orders for tailoring: `order_phase` (new/in_progress/completed), delivery dates, campaign
-- **garments** → individual pieces: `garment_type` (brova=trial/final), `piece_stage` (15-value enum tracking production), `location` (shop/workshop/transit), fabric/style specs
+- **garments** → individual pieces: `garment_type` (brova=trial/final), `piece_stage` (11-value enum tracking production — see Order Lifecycle below), `location` (shop/workshop/transit), `feedback_status`, `acceptance_status`, fabric/style specs
 - **garment_feedback** → QC and customer trial records with satisfaction levels and measurement diffs (JSON)
 - **measurements** → 30+ body dimension fields per customer
 - **customers** → profiles with demographics, phone, addresses
@@ -76,14 +76,111 @@ Key tables and relationships:
 - **shelf / order_shelf_items** → pre-made items for sales orders
 - **prices** → dynamic key-value pricing lookup
 
-Key enums: `piece_stage` has 15 values (waiting_for_acceptance → completed), `location` tracks physical whereabouts separately from production stage.
+Key enums: `piece_stage` has 11 values (see Order Lifecycle below), `location` tracks physical whereabouts separately from production stage.
 
 ### Order Lifecycle
 
-1. **Work Order:** Customer measured → garments created as brova (trial) → dispatched to workshop → production stages → returned to shop → customer trial/feedback → finals produced → collection
-2. **Sales Order:** Select shelf items → payment → collection/delivery
-3. Order status is **derived from garment stages** — order_phase updates based on constituent garment progress
-4. **Finals release rule:** All brovas must be trialed with ≥1 accepted before finals can progress
+> **IMPORTANT:** If any flow changes, update this section. This is the source of truth for how garments move through the system.
+
+#### Garment Tracking Fields
+
+| Field | Purpose |
+|-------|---------|
+| `piece_stage` | Where in production/lifecycle (enum) |
+| `feedback_status` | Trial/collection outcome: `accepted` / `needs_repair` / `needs_redo` / `null` |
+| `acceptance_status` | `true` = design approved (finals can proceed). NOT the same as piece_stage |
+| `location` | Physical location: `shop` / `workshop` / `transit_to_shop` / `transit_to_workshop` |
+| `trip_number` | Increments each time garment is sent back to workshop (starts at 1) |
+| `garment_type` | `brova` (trial garment) or `final` |
+
+#### Piece Stage Enum (clean set, no deprecated values)
+
+```
+waiting_for_acceptance → waiting_cut → soaking → cutting → post_cutting →
+sewing → finishing → ironing → quality_check → ready_for_dispatch →
+awaiting_trial / ready_for_pickup → brova_trialed → completed
+```
+
+#### Alteration Thresholds (trip number)
+
+- **Brova:** trip 1 = initial, trip 2-3 = brova returns, trip 4+ = alteration (alt# = trip - 3)
+- **Final:** trip 1 = initial, trip 2+ = alteration (alt# = trip - 1). Finals have no trial step.
+- Helper functions `isAlteration()` and `getAlterationNumber()` in `packages/database/src/utils.ts`.
+
+#### Step-by-Step Flow
+
+**1. Order Created** (`new-work-order` page → `save_work_order_garments` RPC)
+- Brovas: `piece_stage: waiting_cut`, `location: shop`, `trip_number: 1`
+- Finals: auto-set to `piece_stage: waiting_for_acceptance` if any brova exists (parked until brova accepted)
+- Order: `checkout_status: confirmed`, `order_phase: new`
+
+**2. Dispatch to Workshop** (`dispatch-order` page → `dispatchOrder()`)
+- All garments → `location: transit_to_workshop`
+- Order → `order_phase: in_progress`
+- Finals stay at `waiting_for_acceptance` (parked at workshop)
+
+**3. Workshop Receives** (`workshop/receiving` page → `receiveGarments()`)
+- Garments → `location: workshop`
+- "Receive" = park (`in_production: false`), "Receive & Start" = schedule (`in_production: true`)
+- Finals at `waiting_for_acceptance` never get `in_production: true`
+
+**4. Workshop Production** (`workshop/scheduler` → `ProductionTerminal`)
+- Scheduler assigns date + production plan → garment moves through terminals
+- Stages: `waiting_cut → soaking → cutting → post_cutting → sewing → finishing → ironing → quality_check → ready_for_dispatch`
+
+**5. Workshop Dispatches to Shop** (`workshop/dispatch` → `dispatchGarments()`)
+- Sets `location: transit_to_shop`, `in_production: false`, `feedback_status: null` (cleared)
+
+**6. Shop Receives** (`receiving-brova-final` page)
+- Brovas → `piece_stage: awaiting_trial`, `location: shop`
+- Finals → `piece_stage: ready_for_pickup`, `location: shop`
+
+**7. Brova Trial** (`feedback/$orderId` page → `evaluateBrovaFeedback()`)
+- All outcomes set `piece_stage: brova_trialed`. The difference is in `feedback_status` and `acceptance_status`:
+
+| Action | feedback_status | acceptance_status | Goes back to workshop? |
+|--------|----------------|-------------------|----------------------|
+| Accept | `accepted` | `true` | No |
+| Accept with Fix | `needs_repair` | `true` | Yes (later) |
+| Reject - Repair | `needs_repair` | `false` | Yes |
+| Reject - Redo | `needs_redo` | `false` | Yes |
+
+**8. Finals Release** (manual "Start Production" button on feedback page)
+- Enabled as soon as ANY brova has `acceptance_status: true` (no need to wait for all brovas)
+- Moves finals from `waiting_for_acceptance` → `waiting_cut`
+
+**9. Sending Garments Back** (`alterations` page or `dispatch > Return to Workshop` tab)
+- Both paths set: `piece_stage: waiting_cut`, `location: transit_to_workshop`, `trip_number += 1`, `in_production: false`
+
+**10. Workshop Re-receives** (workshop receiving page, tabs by trip)
+- Brova Returns tab: trip 2-3 brovas
+- Alteration In tab: brova trip 4+, final trip 2+
+- Resets `piece_stage: waiting_cut` if still `brova_trialed` with feedback
+
+**11. Final Collection** (feedback page, final tab)
+- Accepted → `piece_stage: completed`, `fulfillment_type: collected/delivered`
+- Rejected → `piece_stage: brova_trialed`, `feedback_status: needs_repair/needs_redo` → goes through alteration cycle
+
+#### Showroom Status Labels (`getShowroomStatus()` in `packages/database/src/utils.ts`)
+
+Determines what shows on the "Orders at Showroom" page. Only orders with garments physically at `location: shop` appear.
+
+| Label | Condition |
+|-------|-----------|
+| `alteration_in` | Shop item at alteration trip threshold, not accepted |
+| `brova_trial` | Brova at shop, not accepted |
+| `needs_action` | Garment at shop with `feedback_status: needs_repair/needs_redo` |
+| `pickup_waiting_finals` | All shop items done, but finals still in production/transit |
+| `ready_for_pickup` | All shop items done, no outstanding finals |
+
+Priority order: alteration_in > brova_trial > needs_action > pickup_waiting_finals > ready_for_pickup.
+
+#### Order-Level Status
+
+- `order_phase: new` → not dispatched yet
+- `order_phase: in_progress` → at least one garment beyond pre-dispatch
+- `order_phase: completed` → all garments completed
+- Order history page shows only `order_phase`. No garment-level detail needed there.
 
 ### Environment Variables
 

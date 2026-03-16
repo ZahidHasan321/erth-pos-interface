@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWorkshopGarments, getGarmentById, getAssignedViewGarments, getCompletedOrderGarments, getBrovaStatusForOrders, getBrovaPlansForOrders } from '@/api/garments';
+import { getWorkshopGarments, getCompletedTodayGarments, getGarmentById, getAssignedViewGarments, getCompletedOrderGarments, getBrovaStatusForOrders, getBrovaPlansForOrders } from '@/api/garments';
 import type { WorkshopGarment } from '@repo/database';
 
 export const WORKSHOP_GARMENTS_KEY = ['workshop-garments'] as const;
@@ -49,9 +49,7 @@ export function useSchedulerGarments() {
           g.location === 'workshop' &&
           g.in_production &&
           !g.production_plan &&
-          (g.piece_stage === 'waiting_cut' ||
-            g.piece_stage === 'needs_repair' ||
-            g.piece_stage === 'needs_redo'),
+          g.piece_stage === 'waiting_cut',
       ),
   });
 }
@@ -95,6 +93,15 @@ export function useTerminalGarments(stage: string) {
   });
 }
 
+export function useCompletedTodayGarments() {
+  return useQuery({
+    queryKey: ['completed-today-garments'],
+    queryFn: getCompletedTodayGarments,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useBrovaPlans(orderIds: number[]) {
   return useQuery({
     queryKey: ['brova-plans', ...orderIds.sort()],
@@ -114,7 +121,7 @@ export function useBrovaStatus(orderIds: number[]) {
   });
 }
 
-const DISPATCH_STAGES = new Set(['ready_for_dispatch', 'accepted', 'completed', 'ready_for_pickup']);
+const DISPATCH_STAGES = new Set(['ready_for_dispatch', 'brova_trialed', 'completed', 'ready_for_pickup']);
 
 export function useDispatchGarments() {
   return useQuery({

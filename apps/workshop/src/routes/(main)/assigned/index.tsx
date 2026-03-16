@@ -80,7 +80,7 @@ function garmentSummary(garments: WorkshopGarment[]): string {
 const STAGE_ORDER: Record<string, number> = {
   waiting_cut: 0, soaking: 1, cutting: 2, post_cutting: 3,
   sewing: 4, finishing: 5, ironing: 6, quality_check: 7,
-  ready_for_dispatch: 8, needs_repair: 2, needs_redo: 1,
+  ready_for_dispatch: 8,
 };
 
 function getDeliveryUrgency(date?: string) {
@@ -111,7 +111,9 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
       workshopGarments.length > 0 &&
       workshopGarments.every((g) => g.piece_stage === "ready_for_dispatch");
     const inTransitToShop = group.garments.filter((g) => g.location === "transit_to_shop");
-    const finalsAtWorkshop = finals.filter(workshopSide);
+    // Exclude parked finals (waiting_for_acceptance) from "active" counts
+    const finalsActiveAtWorkshop = finals.filter((g) => workshopSide(g) && g.piece_stage !== "waiting_for_acceptance");
+    const finalsParked = finals.filter((g) => g.piece_stage === "waiting_for_acceptance");
     const brovasAtWorkshop = brovas.filter(workshopSide);
     const brovasAllAtShop = brovas.length > 0 && brovas.every(atShop);
 
@@ -127,13 +129,13 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
     if (inTransitToShop.length > 0 && workshopGarments.length === 0)
       return { text: "In transit to shop", cls: "bg-sky-100 text-sky-800" };
 
-    // Finals actively at workshop
-    if (finalsAtWorkshop.length > 0)
-      return { text: "Finals in production", cls: "bg-blue-100 text-blue-800" };
+    // All brovas at shop awaiting trial — finals parked, no active workshop work
+    if (brovasAllAtShop && finalsActiveAtWorkshop.length === 0)
+      return { text: finalsParked.length > 0 ? "Awaiting brova trial" : `At shop — Trial ${maxTrip}`, cls: "bg-teal-100 text-teal-800" };
 
-    // All brovas at shop awaiting trial — no workshop activity
-    if (brovasAllAtShop && finalsAtWorkshop.length === 0)
-      return { text: `At shop — Trial ${maxTrip}`, cls: "bg-teal-100 text-teal-800" };
+    // Finals actively in production at workshop
+    if (finalsActiveAtWorkshop.length > 0)
+      return { text: "Finals in production", cls: "bg-blue-100 text-blue-800" };
 
     // Brovas being produced at workshop
     if (brovasAtWorkshop.length > 0)
@@ -216,31 +218,46 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
 
 function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; onClick: () => void }) {
   const tripNum = garment.trip_number ?? 1;
-  const needsRepairAtShop =
+  const feedbackStatus = garment.feedback_status;
+  const needsWorkAtShop =
     garment.location === "shop" &&
-    (garment.piece_stage === "needs_repair" || garment.piece_stage === "needs_redo");
-  // Alteration (In) only for trip 3+ (already went back twice)
-  const isAlterationIn = needsRepairAtShop && tripNum >= 3;
-  const isBrovaReturn = needsRepairAtShop && tripNum === 2;
+    (feedbackStatus === "needs_repair" || feedbackStatus === "needs_redo");
+  const isBrovaReturn = needsWorkAtShop && (tripNum === 2 || tripNum === 3) && garment.garment_type === "brova";
+  const isAlterationIn = needsWorkAtShop &&
+    ((tripNum >= 4 && garment.garment_type === "brova") ||
+     (tripNum >= 2 && garment.garment_type === "final"));
   const isAtShopPostProduction =
-    garment.location === "shop" && !needsRepairAtShop;
+    garment.location === "shop" && !needsWorkAtShop;
+
+  const locationLabel = garment.location === "shop" ? "At Shop"
+    : garment.location === "workshop" ? "Workshop"
+    : garment.location === "transit_to_shop" ? "Transit to Shop"
+    : garment.location === "transit_to_workshop" ? "Transit to Workshop"
+    : garment.location;
+
+  const locationCls = garment.location === "shop" ? "bg-green-100 text-green-800"
+    : garment.location === "workshop" ? "bg-blue-100 text-blue-800"
+    : garment.location === "transit_to_shop" ? "bg-cyan-100 text-cyan-800"
+    : garment.location === "transit_to_workshop" ? "bg-orange-100 text-orange-800"
+    : "bg-zinc-100 text-zinc-800";
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        "bg-white border rounded-xl px-3 py-2 shadow-sm cursor-pointer transition-all",
+        "bg-white border rounded-xl px-4 py-3 shadow-sm cursor-pointer transition-all",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
         garment.express && "border-orange-200",
         isAlterationIn && "border-l-4 border-l-orange-500",
         isBrovaReturn && "border-l-4 border-l-amber-400",
       )}
     >
+      {/* Row 1: ID + type + status badges */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 flex-wrap flex-1">
+        <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
-              "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border",
+              "text-[10px] font-bold uppercase px-2 py-0.5 rounded border shrink-0",
               garment.garment_type === "brova"
                 ? "bg-purple-100 text-purple-800 border-purple-200"
                 : "bg-blue-100 text-blue-800 border-blue-200",
@@ -248,40 +265,50 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
           >
             {garment.garment_type}
           </span>
-          <span className="font-mono font-bold text-sm">{garment.garment_id}</span>
-          <TrialBadge tripNumber={garment.trip_number} />
-          {isAlterationIn ? (
-            <AlterationInBadge />
-          ) : isBrovaReturn ? (
-            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
-              Brova Return
-            </span>
-          ) : (
-            <StageBadge stage={garment.piece_stage} />
-          )}
-          {isAtShopPostProduction && (
-            <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
-              Production Complete
-            </span>
-          )}
+          <span className="font-mono font-black text-base">{garment.garment_id}</span>
           {garment.customer_name && (
-            <span className="text-xs text-muted-foreground">{garment.customer_name}</span>
-          )}
-          {garment.assigned_date && (
-            <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
-              <Timer className="w-3 h-3 inline mr-0.5" />{formatDate(garment.assigned_date)}
-            </span>
+            <span className="text-sm text-muted-foreground truncate">{garment.customer_name}</span>
           )}
         </div>
         <ChevronDown className="w-4 h-4 -rotate-90 text-muted-foreground/40 shrink-0" />
       </div>
-      {garment.in_production && (
-        <div className="mt-1.5">
-          <ProductionPipeline currentStage={garment.piece_stage} compact hasSoaking={!!garment.soaking} />
-        </div>
-      )}
-      {isAtShopPostProduction && garment.production_plan && (
-        <div className="mt-1.5">
+
+      {/* Row 2: badges */}
+      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+        <TrialBadge tripNumber={garment.trip_number} />
+        {isAlterationIn ? (
+          <AlterationInBadge />
+        ) : isBrovaReturn ? (
+          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
+            Brova Return
+          </span>
+        ) : (
+          <StageBadge stage={garment.piece_stage} />
+        )}
+        <span className={cn("text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded", locationCls)}>
+          {locationLabel}
+        </span>
+        {garment.express && <ExpressBadge />}
+        {isAtShopPostProduction && (
+          <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
+            Production Complete
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: metadata */}
+      <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+        {garment.invoice_number && <span>INV-{garment.invoice_number}</span>}
+        {garment.assigned_date && (
+          <span className="flex items-center gap-0.5">
+            <Timer className="w-3 h-3" /> {formatDate(garment.assigned_date)}
+          </span>
+        )}
+      </div>
+
+      {/* Pipeline */}
+      {(garment.in_production || (isAtShopPostProduction && garment.production_plan)) && (
+        <div className="mt-2">
           <ProductionPipeline currentStage={garment.piece_stage} compact hasSoaking={!!garment.soaking} />
         </div>
       )}
@@ -349,8 +376,18 @@ function AssignedPage() {
 
   // Split by trip number
   const regular = all.filter((g) => (g.trip_number ?? 1) === 1);
-  const brovaReturns = all.filter((g) => (g.trip_number ?? 1) === 2 && isWorkshopSide(g));
-  const alterations = all.filter((g) => (g.trip_number ?? 1) > 2 && isWorkshopSide(g));
+  // Brova returns: trip 2-3 (before alteration threshold)
+  const brovaReturns = all.filter((g) =>
+    g.garment_type === "brova" &&
+    ((g.trip_number ?? 1) === 2 || (g.trip_number ?? 1) === 3) &&
+    isWorkshopSide(g),
+  );
+  // Alterations: brova trip >= 4, final trip >= 2
+  const alterations = all.filter((g) =>
+    isWorkshopSide(g) &&
+    (((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
+     ((g.trip_number ?? 0) >= 2 && g.garment_type === "final")),
+  );
   const orderGroups = groupByOrder(regular);
 
   // Order-level classifications

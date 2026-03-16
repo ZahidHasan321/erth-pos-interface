@@ -349,7 +349,7 @@ BEGIN
       front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder,
       small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, notes,
       soaking, express, garment_type, delivery_date, piece_stage, style, shop_name,
-      home_delivery, color, location, trip_number, acceptance_status, fulfillment_type
+      home_delivery, color, location, trip_number, acceptance_status, feedback_status, fulfillment_type
     ) VALUES (
       p_order_id,
       v_garment->>'garment_id',
@@ -388,6 +388,7 @@ BEGIN
       COALESCE((v_garment->>'location')::location, 'shop'),
       COALESCE((v_garment->>'trip_number')::INT, 1),
       (v_garment->>'acceptance_status')::BOOLEAN,
+      v_garment->>'feedback_status',
       (v_garment->>'fulfillment_type')::fulfillment_type
     );
   END LOOP;
@@ -428,7 +429,7 @@ BEGIN
     SELECT CASE
         WHEN bool_and(g.piece_stage = 'completed')
             THEN 'completed'::order_phase
-        WHEN bool_and(g.piece_stage IN ('waiting_for_acceptance', 'waiting_cut'))
+        WHEN bool_and(g.piece_stage IN ('waiting_for_acceptance', 'waiting_cut', 'brova_trialed'))
             THEN v_current_phase -- preserve 'new' vs 'in_progress' distinction
         ELSE 'in_progress'::order_phase
     END INTO v_new_phase
@@ -575,7 +576,7 @@ BEGIN
       AND order_id = p_order_id
       AND acceptance_status = true
       AND location = 'shop'
-      AND piece_stage IN ('accepted', 'at_shop', 'awaiting_trial', 'ready_for_pickup');
+      AND piece_stage IN ('brova_trialed', 'awaiting_trial', 'ready_for_pickup');
 
     IF FOUND THEN
       v_updated_count := v_updated_count + 1;

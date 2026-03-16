@@ -89,12 +89,12 @@ function garmentSummary(garments: WorkshopGarment[]): string {
 const isAllWaitingAcceptance = (garments: WorkshopGarment[]) =>
   garments.every((g) => g.piece_stage === "waiting_for_acceptance");
 
-/** Finals needing release: either still at waiting_for_acceptance, or POS released to waiting_cut but no plan yet */
+/** Finals needing release: either still at waiting_for_acceptance, or at waiting_cut but not yet in production */
 const hasReleasableFinals = (garments: WorkshopGarment[]) =>
   garments.some((g) =>
     g.garment_type === "final" && (
       g.piece_stage === "waiting_for_acceptance" ||
-      (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+      (g.piece_stage === "waiting_cut" && !g.in_production)
     ),
   );
 
@@ -296,7 +296,7 @@ function WaitingFinalsCard({
   const releasableGarments = group.garments.filter(
     (g) => g.garment_type === "final" && (
       g.piece_stage === "waiting_for_acceptance" ||
-      (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+      (g.piece_stage === "waiting_cut" && !g.in_production)
     ),
   );
   const deliveryDate = group.garments[0]?.delivery_date_order;
@@ -309,7 +309,7 @@ function WaitingFinalsCard({
 
   // Determine readiness from brova status
   const noBrovas = !brovaStatus || brovaStatus.total === 0;
-  const isReady = noBrovas || (brovaStatus.trialed === brovaStatus.total && brovaStatus.accepted > 0);
+  const isReady = noBrovas || brovaStatus.accepted > 0;
   const allRejected = !!(brovaStatus && brovaStatus.total > 0 && brovaStatus.trialed === brovaStatus.total && brovaStatus.accepted === 0);
 
   return (
@@ -362,6 +362,14 @@ function WaitingFinalsCard({
                   className="border-0 bg-amber-100 text-amber-800 text-[10px] font-semibold uppercase"
                 >
                   Awaiting trial ({brovaStatus!.trialed}/{brovaStatus!.total} trialed)
+                </Badge>
+              )}
+              {isReady && !noBrovas && brovaStatus!.trialed < brovaStatus!.total && (
+                <Badge
+                  variant="outline"
+                  className="border-0 bg-amber-100 text-amber-800 text-[10px] font-semibold uppercase"
+                >
+                  {brovaStatus!.trialed}/{brovaStatus!.total} trialed
                 </Badge>
               )}
               {posReleased && (
@@ -893,15 +901,15 @@ function ParkingPage() {
   const sortedWaitingGroups = [...waitingFinalsGroups].sort((a, b) => {
     const aStatus = brovaStatusMap[a.order_id];
     const bStatus = brovaStatusMap[b.order_id];
-    const aReady = !aStatus || aStatus.total === 0 || (aStatus.trialed === aStatus.total && aStatus.accepted > 0);
-    const bReady = !bStatus || bStatus.total === 0 || (bStatus.trialed === bStatus.total && bStatus.accepted > 0);
+    const aReady = !aStatus || aStatus.total === 0 || aStatus.accepted > 0;
+    const bReady = !bStatus || bStatus.total === 0 || bStatus.accepted > 0;
     if (aReady && !bReady) return -1;
     if (!aReady && bReady) return 1;
     return 0;
   });
   const readyCount = sortedWaitingGroups.filter((og) => {
     const s = brovaStatusMap[og.order_id];
-    return !s || s.total === 0 || (s.trialed === s.total && s.accepted > 0);
+    return !s || s.total === 0 || s.accepted > 0;
   }).length;
   // Orders tab: only show orders that have schedulable garments (not fully waiting_for_acceptance)
   // Fully-blocked orders belong exclusively in the Release Finals tab
@@ -968,11 +976,11 @@ function ParkingPage() {
     switch (finalsFilter) {
       case "ready": return sortedWaitingGroups.filter((og) => {
         const s = brovaStatusMap[og.order_id];
-        return !s || s.total === 0 || (s.trialed === s.total && s.accepted > 0);
+        return !s || s.total === 0 || s.accepted > 0;
       });
       case "awaiting": return sortedWaitingGroups.filter((og) => {
         const s = brovaStatusMap[og.order_id];
-        return s && s.total > 0 && !(s.trialed === s.total && s.accepted > 0);
+        return s && s.total > 0 && s.accepted === 0;
       });
       default: return sortedWaitingGroups;
     }
@@ -1070,7 +1078,7 @@ function ParkingPage() {
   const isOrderReady = (orderId: number) => {
     const s = brovaStatusMap[orderId];
     if (!s || s.total === 0) return true; // no brovas = ready
-    return s.trialed === s.total && s.accepted > 0;
+    return s.accepted > 0;
   };
 
   // Build a warning message for non-ready orders
@@ -1094,7 +1102,7 @@ function ParkingPage() {
       .filter((g) =>
         g.garment_type === "final" && (
           g.piece_stage === "waiting_for_acceptance" ||
-          (g.piece_stage === "waiting_cut" && !g.production_plan && !g.in_production)
+          (g.piece_stage === "waiting_cut" && !g.in_production)
         ),
       )
       .map((g) => g.id);
@@ -1148,14 +1156,14 @@ function ParkingPage() {
   };
 
   const handleSendReturnSingle = async (id: string) => {
-    await sendReturnMut.mutateAsync({ id, stage: "needs_repair" as PieceStage });
+    await sendReturnMut.mutateAsync({ id, stage: "waiting_cut" as PieceStage });
     toast.success("Return sent to Scheduler");
   };
 
   const handleSendReturnBatch = async () => {
     await Promise.all(
       [...selectedReturnIds].map((id) =>
-        sendReturnMut.mutateAsync({ id, stage: "needs_repair" as PieceStage }),
+        sendReturnMut.mutateAsync({ id, stage: "waiting_cut" as PieceStage }),
       ),
     );
     toast.success(`${selectedReturnIds.size} return(s) sent to Scheduler`);

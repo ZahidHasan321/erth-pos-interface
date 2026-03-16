@@ -34,7 +34,7 @@ async function getAlterationGarments(): Promise<AlterationGarment[]> {
         workOrder:work_orders!order_id(invoice_number)
       )
     `)
-    .in("piece_stage", ["needs_repair", "needs_redo"])
+    .in("feedback_status", ["needs_repair", "needs_redo"])
     .eq("location", "shop")
     .eq("order.brand", brand)
     .eq("order.checkout_status", "confirmed");
@@ -164,19 +164,27 @@ function AlterationsPage() {
                           <Badge
                             variant="outline"
                             className={
-                              g.piece_stage === "needs_repair"
+                              (g as any).feedback_status === "needs_repair"
                                 ? "border-amber-300 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase"
                                 : "border-red-300 bg-red-50 text-red-700 text-[10px] font-bold uppercase"
                             }
                           >
-                            {g.piece_stage === "needs_repair" ? "Needs Repair" : "Needs Redo"}
+                            {(g as any).feedback_status === "needs_repair" ? "Needs Repair" : "Needs Redo"}
                           </Badge>
-                          {(g.trip_number ?? 1) > 1 && (
-                            <Badge variant="outline" className="text-[10px] font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
-                              <RotateCcw className="w-2.5 h-2.5 mr-1" />
-                              Trip #{g.trip_number}
-                            </Badge>
-                          )}
+                          {(() => {
+                            const trip = g.trip_number ?? 1;
+                            const altNum = g.garment_type === "final" && trip >= 2
+                              ? trip - 1
+                              : g.garment_type === "brova" && trip >= 4
+                                ? trip - 3
+                                : null;
+                            return altNum !== null ? (
+                              <Badge variant="outline" className="text-[10px] font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
+                                <RotateCcw className="w-2.5 h-2.5 mr-1" />
+                                Alt {altNum}
+                              </Badge>
+                            ) : null;
+                          })()}
                         </div>
                         {g.notes && (
                           <p className="text-xs text-muted-foreground max-w-xs truncate">{g.notes}</p>

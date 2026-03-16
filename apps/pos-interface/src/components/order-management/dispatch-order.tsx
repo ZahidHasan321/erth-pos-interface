@@ -146,6 +146,11 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                     {finalCount} Final
                   </span>
                 )}
+                {garments.some(g => g.express) && (
+                  <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                    Express
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -199,14 +204,21 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                   <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors">
                     <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
                     <td className="py-2.5 px-5">
-                      <span className={cn(
-                        "inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded",
-                        g.garment_type === "brova"
-                          ? "bg-blue-50 text-blue-700"
-                          : "bg-emerald-50 text-emerald-700"
-                      )}>
-                        {g.garment_type}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn(
+                          "inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded",
+                          g.garment_type === "brova"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-emerald-50 text-emerald-700"
+                        )}>
+                          {g.garment_type}
+                        </span>
+                        {g.express && (
+                          <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                            Express
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
                     <td className="py-2.5 px-5">
@@ -425,17 +437,25 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
                         </Badge>
                       </div>
 
-                      {/* Stage */}
+                      {/* Feedback status */}
                       <Badge className={cn(
                         "text-[9px] font-black uppercase border-none",
-                        g.piece_stage === "needs_redo" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        (g as any).feedback_status === "needs_redo" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                       )}>
-                        {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
+                        {(g as any).feedback_status === "needs_redo" ? "Needs Redo" : (g as any).feedback_status === "needs_repair" ? "Needs Repair" : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
                       </Badge>
 
-                      {/* Trip number */}
+                      {/* Trip label */}
                       <span className="text-[10px] font-bold text-muted-foreground">
-                        {(g.trip_number || 1) > 1 ? `Alt ${(g.trip_number || 1) - 1}` : "1st trip"}
+                        {(() => {
+                          const trip = g.trip_number || 1;
+                          const altNum = g.garment_type === "final" && trip >= 2
+                            ? trip - 1
+                            : g.garment_type === "brova" && trip >= 4
+                              ? trip - 3
+                              : null;
+                          return altNum !== null ? `Alt ${altNum}` : "1st trip";
+                        })()}
                       </span>
 
                       {/* Feedback context */}

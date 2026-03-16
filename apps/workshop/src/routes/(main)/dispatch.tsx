@@ -23,7 +23,7 @@ function DispatchPage() {
   const dispatchMut = useDispatchGarments();
 
   // Ready garments at workshop — includes accepted/completed garments that ended up back here
-  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "accepted", "completed", "ready_for_pickup"]);
+  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed", "completed", "ready_for_pickup"]);
   const readyGarments = useMemo(
     () => allGarments.filter(
       (g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""),
@@ -117,14 +117,13 @@ function DispatchPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {readyGarments.map((g, i) => (
+              {readyGarments.map((g) => (
                 <GarmentCard
                   key={g.id}
                   garment={g}
                   selected={selectedReady.has(g.id)}
                   onSelect={toggleGarment(setSelectedReady)}
                   showPipeline={false}
-                  index={i}
                   actions={
                     <Button
                       size="sm"
@@ -165,12 +164,11 @@ function DispatchPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {inTransitGarments.map((g, i) => (
+              {inTransitGarments.map((g) => (
                 <GarmentCard
                   key={g.id}
                   garment={g}
                   showPipeline={false}
-                  index={i}
                 />
               ))}
             </div>

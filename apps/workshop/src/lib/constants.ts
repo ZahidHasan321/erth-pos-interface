@@ -17,13 +17,22 @@ export const PIECE_STAGE_LABELS = {
   ironing: "Ironing",
   quality_check: "Quality Check",
   ready_for_dispatch: "Ready for Dispatch",
-  at_shop: "At Shop",
   awaiting_trial: "Awaiting Trial",
   ready_for_pickup: "Ready for Pickup",
+  brova_trialed: "Brova Trialed",
+  completed: "Completed",
+} as const;
+
+export const FEEDBACK_STATUS_LABELS = {
   accepted: "Accepted",
   needs_repair: "Needs Repair",
   needs_redo: "Needs Redo",
-  completed: "Completed",
+} as const;
+
+export const FEEDBACK_STATUS_COLORS = {
+  accepted: "bg-emerald-200 text-emerald-900",
+  needs_repair: "bg-amber-200 text-amber-900",
+  needs_redo: "bg-red-200 text-red-900",
 } as const;
 
 export const RESPONSIBILITY_LABELS = {

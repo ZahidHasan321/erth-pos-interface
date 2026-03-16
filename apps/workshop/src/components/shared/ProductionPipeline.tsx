@@ -12,8 +12,8 @@ const PIPELINE_STAGES = [
 
 /** Stages that come AFTER the production pipeline — all steps should show as done */
 const POST_PRODUCTION_STAGES = new Set([
-  "ready_for_dispatch", "at_shop", "awaiting_trial",
-  "ready_for_pickup", "accepted", "completed",
+  "ready_for_dispatch", "awaiting_trial",
+  "ready_for_pickup", "brova_trialed", "completed",
 ]);
 
 

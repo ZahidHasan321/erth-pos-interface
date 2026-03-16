@@ -26,12 +26,9 @@ export const PIECE_STAGE_LABELS = {
     ironing: "Ironing",
     quality_check: "Quality Check",
     ready_for_dispatch: "Ready for Dispatch",
-    at_shop: "At Shop",
     awaiting_trial: "Awaiting Trial",
     ready_for_pickup: "Ready for Pickup",
-    accepted: "Accepted",
-    needs_repair: "Needs Repair",
-    needs_redo: "Needs Redo",
+    brova_trialed: "Brova Trialed",
     completed: "Completed",
 } as const;
 
@@ -46,13 +43,22 @@ export const PIECE_STAGE_COLORS = {
     ironing: "amber",
     quality_check: "amber",
     ready_for_dispatch: "green",
-    at_shop: "green",
     awaiting_trial: "blue",
     ready_for_pickup: "emerald",
-    accepted: "emerald",
-    needs_repair: "red",
-    needs_redo: "red",
+    brova_trialed: "purple",
     completed: "slate",
+} as const;
+
+export const FEEDBACK_STATUS_LABELS = {
+    accepted: "Accepted",
+    needs_repair: "Needs Repair",
+    needs_redo: "Needs Redo",
+} as const;
+
+export const FEEDBACK_STATUS_COLORS = {
+    accepted: "emerald",
+    needs_repair: "amber",
+    needs_redo: "red",
 } as const;
 
 export const LOCATION_LABELS = {

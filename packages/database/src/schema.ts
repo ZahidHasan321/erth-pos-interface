@@ -57,14 +57,9 @@ export const pieceStageEnum = pgEnum("piece_stage", [
     "ready_for_dispatch",        // Passed QC, dispatch queue
 
     // --- Shop ---
-    "at_shop",                   // DEPRECATED — use awaiting_trial or ready_for_pickup
-    "awaiting_trial",            // Brova at shop, waiting for customer trial
+    "awaiting_trial",            // Brova/Final at shop, waiting for customer trial/recheck
     "ready_for_pickup",          // Final at shop, ready for customer collection
-    "accepted",                  // Tried & approved, parked
-
-    // --- Needs Work ---
-    "needs_repair",              // Needs fix (acceptance_status says accepted or rejected)
-    "needs_redo",                // Full redo from scratch
+    "brova_trialed",             // Brova after customer trial (feedback_status has outcome)
 
     // --- Terminal ---
     "completed",                 // Done (fulfillment_type says collected vs delivered)
@@ -192,7 +187,8 @@ export const styles = pgTable("styles", {
 export const fabrics = pgTable("fabrics", {
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
-    color: text("color"),
+    color: text("color"),             // Shop's internal color code (e.g. "C04", "CREAM")
+    color_hex: text("color_hex"),     // Hex value for UI display (e.g. "#FFFFF0")
     real_stock: numeric("real_stock", { precision: 10, scale: 2 }),
     price_per_meter: numeric("price_per_meter", { precision: 10, scale: 3 }),
 });
@@ -415,6 +411,7 @@ export const garments = pgTable("garments", {
     piece_stage: pieceStageEnum("piece_stage"),
     location: locationEnum("location").default("shop"),
     acceptance_status: boolean("acceptance_status"),
+    feedback_status: text("feedback_status"), // "accepted" | "needs_repair" | "needs_redo" | null
     fulfillment_type: fulfillmentTypeEnum("fulfillment_type"),
     trip_number: integer("trip_number").default(1),
 

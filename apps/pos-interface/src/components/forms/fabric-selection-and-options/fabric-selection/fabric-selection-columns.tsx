@@ -20,88 +20,88 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   // IDs
   {
     accessorKey: "garment_id",
-    header: "Garment ID",
-    size: 120,
+    header: "ID",
+    size: 70,
     cell: FabricCells.GarmentIdCell,
   },
   {
     accessorKey: "measurement_id",
-    header: "Measurement ID",
-    size: 180,
+    header: "Measurement",
+    size: 120,
     cell: FabricCells.MeasurementIdCell,
   },
   // Fabric Selection
   {
     accessorKey: "fabric_source",
     header: "Source",
-    size: 200,
+    size: 80,
     cell: FabricCells.FabricSourceCell,
   },
   {
     accessorKey: "fabric_id",
     header: "Fabric",
-    size: 250,
+    size: 200,
     cell: FabricCells.IfInsideCell,
   },
   {
     accessorKey: "shop_name",
     header: "Shop Name",
-    size: 200,
+    size: 160,
     cell: FabricCells.ShopNameCell,
   },
   {
     accessorKey: "color",
     header: "Color",
-    size: 150,
+    size: 100,
     cell: FabricCells.ColorCell,
   },
   {
     accessorKey: "fabric_length",
     header: "Length (m)",
-    size: 140,
+    size: 90,
     cell: FabricCells.FabricLengthCell,
   },
   {
     accessorKey: "fabric_amount",
     header: "Amount",
-    size: 180,
+    size: 70,
     cell: FabricCells.FabricAmountCell,
   },
   // Order Details
   {
     accessorKey: "garment_type",
-    header: "Garment Type",
-    size: 150,
+    header: "Type",
+    size: 100,
     cell: FabricCells.GarmentTypeCell,
   },
   {
     accessorKey: "soaking",
-    header: "Soaking",
-    size: 120,
+    header: "Soak",
+    size: 60,
     cell: FabricCells.SoakingCell,
   },
   {
     accessorKey: "express",
     header: "Express",
-    size: 180,
+    size: 80,
     cell: FabricCells.ExpressCell,
   },
   {
     accessorKey: "delivery_date",
-    header: "Delivery Date",
-    size: 220,
+    header: "Delivery",
+    size: 160,
     cell: FabricCells.DeliveryDateCell,
   },
   {
     accessorKey: "notes",
     header: "Note",
-    size: 250,
+    size: 180,
     cell: FabricCells.NoteCell,
   },
   {
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
-    size: 80,
+    size: 50,
     cell: ActionCell,
   },
 ];
@@ -131,15 +131,11 @@ function ActionCell({ row, table }: { row: any; table: any }) {
   const customerMobile = meta?.customerMobile || "N/A";
   const measurementOptions = meta?.measurementOptions || [];
 
-  const currentRowData = (getValues(
-    `garments.${row.index}`,
-  ) || row.original) as GarmentSchema;
+  const getCurrentRowData = () =>
+    (getValues(`garments.${row.index}`) || row.original) as GarmentSchema;
 
+  const currentRowData = getCurrentRowData();
   if (!currentRowData) return null;
-
-  const measurementDisplay =
-    measurementOptions.find((m) => m.id === currentRowData.measurement_id)
-      ?.MeasurementID || currentRowData.measurement_id;
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -151,20 +147,29 @@ function ActionCell({ row, table }: { row: any; table: any }) {
       }`,
   });
 
-  const fabricData = {
-    orderId: orderID,
-    customerId,
-    customerName,
-    customerMobile,
-    garmentId: currentRowData.garment_id || "N/A",
-    fabricSource: currentRowData.fabric_source || "",
-    fabricId: currentRowData.fabric_id?.toString() || "",
-    fabricLength: currentRowData.fabric_length?.toString() ?? "0",
-    measurementId: measurementDisplay || "N/A",
-    garment_type: currentRowData.garment_type || 'final',
-    express: currentRowData.express || false,
-    deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
+  // Read fresh form data for print label (not stale render-time snapshot)
+  const getFabricData = () => {
+    const data = getCurrentRowData();
+    const measurementDisplay =
+      measurementOptions.find((m) => m.id === data.measurement_id)
+        ?.MeasurementID || data.measurement_id;
+    return {
+      orderId: orderID,
+      customerId,
+      customerName,
+      customerMobile,
+      garmentId: data.garment_id || "N/A",
+      fabricSource: data.fabric_source || "",
+      fabricId: data.fabric_id?.toString() || "",
+      fabricLength: data.fabric_length?.toString() ?? "0",
+      measurementId: measurementDisplay || "N/A",
+      garment_type: data.garment_type || 'final',
+      express: data.express || false,
+      deliveryDate: data.delivery_date ? new Date(data.delivery_date) : null,
+    };
   };
+
+  const fabricData = getFabricData();
 
   /* ---------- RENDER ---------- */
   return (

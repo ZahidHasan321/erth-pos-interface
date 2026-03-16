@@ -53,8 +53,6 @@ const STAGE_ORDER: Record<string, number> = {
   ironing: 6,
   quality_check: 7,
   ready_for_dispatch: 8,
-  needs_repair: 2,
-  needs_redo: 1,
 };
 
 function getDeliveryUrgency(date?: string) {
@@ -218,7 +216,7 @@ function OrderHeader({
   const inProd = garments.filter((g) => g.in_production && g.production_plan);
   const readyDispatch = garments.filter((g) => g.piece_stage === "ready_for_dispatch");
   const brovasNeedRepair = brovas.filter(
-    (g) => g.location === "shop" && (g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo"),
+    (g) => g.location === "shop" && (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo"),
   );
   const brovasAtShop = brovas.filter((g) => g.location === "shop");
   const maxTrip = Math.max(...garments.map((g) => g.trip_number ?? 1));
@@ -458,7 +456,7 @@ function GarmentPlanCard({
   const tripNum = garment.trip_number ?? 1;
   const needsRepairAtShop =
     garment.location === "shop" &&
-    (garment.piece_stage === "needs_repair" || garment.piece_stage === "needs_redo");
+    (garment.feedback_status === "needs_repair" || garment.feedback_status === "needs_redo");
   // Alteration (In) only for trip 3+ (went back twice already)
   const isAlterationIn = needsRepairAtShop && tripNum >= 3;
   const isBrovaReturn = needsRepairAtShop && tripNum === 2;
@@ -509,6 +507,7 @@ function GarmentPlanCard({
     <div className={cn(
       "bg-white border rounded-xl p-3 shadow-sm",
       garment.express && "border-orange-200",
+      garment.piece_stage === "waiting_for_acceptance" && "opacity-50 bg-zinc-50",
     )}>
       {/* Garment header */}
       <div className="flex items-start justify-between gap-2">

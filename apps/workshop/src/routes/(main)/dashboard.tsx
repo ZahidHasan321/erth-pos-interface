@@ -65,10 +65,10 @@ function DashboardPage() {
         g.location === "workshop" &&
         g.in_production &&
         !g.production_plan &&
-        (g.piece_stage === "waiting_cut" || g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo")
+        g.piece_stage === "waiting_cut"
     );
     const qcReturns = allGarments.filter(
-      (g) => g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo"
+      (g) => g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo"
     );
     const readyToDispatch = allGarments.filter(
       (g) => g.piece_stage === "ready_for_dispatch"

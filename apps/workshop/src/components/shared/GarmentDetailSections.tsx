@@ -96,7 +96,7 @@ export function GarmentHeader({
         </span>
         <StageBadge stage={garment.piece_stage} />
         {garment.express && <ExpressBadge />}
-        <AlterationBadge tripNumber={garment.trip_number} />
+        <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
       </div>
 
       {/* Info + dates row */}

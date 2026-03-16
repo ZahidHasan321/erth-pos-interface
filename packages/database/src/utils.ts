@@ -4,6 +4,28 @@ const TERMINAL: PieceStage[] = ["completed"];
 const PRE_DISPATCH: PieceStage[] = ["waiting_for_acceptance", "waiting_cut"];
 
 /**
+ * Determines if a garment is in "alteration" territory based on trip number and type.
+ * - Brova: trip >= 4 (trip 1=initial, 2=after first trial, 3=brova changes, 4+=alteration)
+ * - Final: trip >= 2 (no trial step, any return is alteration)
+ */
+export function isAlteration(tripNumber: number | null | undefined, garmentType: string | null | undefined): boolean {
+    const trip = tripNumber ?? 1;
+    if (garmentType === "final") return trip >= 2;
+    return trip >= 4; // brova
+}
+
+/**
+ * Returns the alteration number (1-based) or null if not an alteration.
+ * - Brova: alt# = trip - 3 (trip 4 = Alt 1, trip 5 = Alt 2, ...)
+ * - Final: alt# = trip - 1 (trip 2 = Alt 1, trip 3 = Alt 2, ...)
+ */
+export function getAlterationNumber(tripNumber: number | null | undefined, garmentType: string | null | undefined): number | null {
+    const trip = tripNumber ?? 1;
+    if (garmentType === "final") return trip >= 2 ? trip - 1 : null;
+    return trip >= 4 ? trip - 3 : null;
+}
+
+/**
  * Re-computes the order phase based on the current stages of its garments.
  * Logic matches the DB trigger recompute_order_phase().
  */
@@ -30,6 +52,7 @@ interface GarmentInfo {
     garment_type: GarmentType | null | string;
     location: Location | null | string;
     acceptance_status: boolean | null;
+    feedback_status?: string | null;
     trip_number?: number | null;
 }
 
@@ -64,14 +87,15 @@ const PRODUCTION: PieceStage[] = [
     "waiting_cut", "soaking", "cutting", "post_cutting",
     "sewing", "finishing", "ironing", "quality_check", "ready_for_dispatch"
 ];
-const NEEDS_WORK: PieceStage[] = ["needs_repair", "needs_redo"];
-const SHOP: PieceStage[] = ["at_shop", "awaiting_trial", "ready_for_pickup", "accepted"];
+const SHOP: PieceStage[] = ["awaiting_trial", "ready_for_pickup", "brova_trialed"];
 
 function isBrovaAccepted(g: GarmentInfo): boolean {
-    const stage = g.piece_stage as PieceStage;
-    return stage === "accepted" ||
-           stage === "completed" ||
-           (stage === "needs_repair" && g.acceptance_status === true);
+    return g.piece_stage === "completed" ||
+           g.acceptance_status === true;
+}
+
+function garmentNeedsWork(g: GarmentInfo): boolean {
+    return g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo";
 }
 
 /**
@@ -95,21 +119,21 @@ export function getOrderSummary(garments: GarmentInfo[]): OrderSummary {
         totalGarments: garments.length,
 
         brovaTotal: brovas.length,
-        brovaAtShop: count(brovas, ["at_shop", "awaiting_trial"]),
+        brovaAtShop: count(brovas, ["awaiting_trial"]),
         brovaAccepted: brovas.filter(isBrovaAccepted).length,
-        brovaNeedsWork: count(brovas, NEEDS_WORK),
+        brovaNeedsWork: brovas.filter(garmentNeedsWork).length,
         brovaInPipeline: count(brovas, PRODUCTION),
         brovaCompleted: count(brovas, ["completed"]),
 
         finalTotal: finals.length,
         finalWaiting: count(finals, ["waiting_for_acceptance"]),
         finalInProduction: count(finals, PRODUCTION),
-        finalAtShop: count(finals, ["at_shop", "ready_for_pickup"]),
-        finalNeedsWork: count(finals, NEEDS_WORK),
+        finalAtShop: count(finals, ["ready_for_pickup", "awaiting_trial"]),
+        finalNeedsWork: finals.filter(garmentNeedsWork).length,
         finalCompleted: count(finals, ["completed"]),
 
         hasBrovaReadyForTrial:
-            brovas.some(g => g.piece_stage === "at_shop" || g.piece_stage === "awaiting_trial") &&
+            brovas.some(g => g.piece_stage === "awaiting_trial") &&
             finals.some(g => g.piece_stage === "waiting_for_acceptance"),
 
         hasBlockedFinals:
@@ -119,13 +143,13 @@ export function getOrderSummary(garments: GarmentInfo[]): OrderSummary {
         allBrovasTrialed:
             brovas.length > 0 &&
             brovas.every(g =>
-                g.piece_stage === "accepted" ||
+                g.piece_stage === "brova_trialed" ||
                 g.piece_stage === "completed" ||
-                NEEDS_WORK.includes(g.piece_stage as PieceStage)
+                garmentNeedsWork(g)
             ),
 
         hasGarmentsNeedingAction:
-            garments.some(g => NEEDS_WORK.includes(g.piece_stage as PieceStage)),
+            garments.some(garmentNeedsWork),
 
         allAtShop,
         allCompleted,
@@ -137,6 +161,7 @@ export type BrovaFeedback = "accepted" | "needs_repair_accepted" | "needs_repair
 
 interface BrovaFeedbackResult {
     newStage: PieceStage;
+    feedbackStatus: string;
     acceptanceStatus: boolean;
     releaseFinals: boolean;
     brovaGoesBack: boolean;
@@ -149,68 +174,58 @@ interface BrovaFeedbackResult {
  */
 export function evaluateBrovaFeedback(
     feedback: BrovaFeedback,
-    allBrovas: { id: string; piece_stage: PieceStage | null | string; acceptance_status: boolean | null }[],
+    allBrovas: { id: string; piece_stage: PieceStage | null | string; acceptance_status: boolean | null; feedback_status?: string | null }[],
     currentBrovaId: string
 ): BrovaFeedbackResult {
-    // Map feedback to stage + acceptance_status
-    const mapping: Record<BrovaFeedback, { stage: PieceStage; accepted: boolean }> = {
-        "accepted": { stage: "accepted", accepted: true },
-        "needs_repair_accepted": { stage: "needs_repair", accepted: true },
-        "needs_repair_rejected": { stage: "needs_repair", accepted: false },
-        "needs_redo": { stage: "needs_redo", accepted: false },
+    // Map feedback to feedback_status + acceptance_status
+    const mapping: Record<BrovaFeedback, { feedbackStatus: string; accepted: boolean }> = {
+        "accepted": { feedbackStatus: "accepted", accepted: true },
+        "needs_repair_accepted": { feedbackStatus: "needs_repair", accepted: true },
+        "needs_repair_rejected": { feedbackStatus: "needs_repair", accepted: false },
+        "needs_redo": { feedbackStatus: "needs_redo", accepted: false },
     };
 
-    const { stage: newStage, accepted: acceptanceStatus } = mapping[feedback];
+    const { feedbackStatus, accepted: acceptanceStatus } = mapping[feedback];
+
+    // All brovas now go to brova_trialed
+    const newStage: PieceStage = "brova_trialed";
 
     // Simulate: what would brova states look like AFTER this feedback?
     const simulatedBrovas = allBrovas.map(b =>
         b.id === currentBrovaId
-            ? { ...b, piece_stage: newStage, acceptance_status: acceptanceStatus }
+            ? { ...b, piece_stage: newStage, acceptance_status: acceptanceStatus, feedback_status: feedbackStatus }
             : b
     );
 
-    const anyAccepted = simulatedBrovas.some(b =>
+    // Release finals as soon as ANY brova is accepted — no need to wait for all
+    const releaseFinals = simulatedBrovas.some(b =>
         b.acceptance_status === true ||
-        b.piece_stage === "accepted" ||
         b.piece_stage === "completed"
     );
 
-    const allTrialed = simulatedBrovas.every(b =>
-        b.piece_stage === "accepted" ||
-        b.piece_stage === "needs_repair" ||
-        b.piece_stage === "needs_redo" ||
-        b.piece_stage === "completed"
-    );
-
-    // Release ONLY when ALL brovas trialed AND at least one accepted
-    const releaseFinals = anyAccepted && allTrialed;
     const brovaGoesBack = feedback === "needs_repair_rejected" || feedback === "needs_redo";
     // needs_repair_accepted: brova stays at shop, staff sends back later
 
     let message = "";
     if (feedback === "accepted") {
         message = releaseFinals
-            ? "Brova accepted. Final production will begin."
-            : "Brova accepted. Waiting for other brova(s) to be trialed.";
+            ? "Brova accepted. Finals can be released to production."
+            : "Brova accepted.";
     } else if (feedback === "needs_repair_accepted") {
         message = releaseFinals
-            ? "Brova accepted with minor fix needed. Finals will start. Send brova back when ready."
-            : "Brova accepted with fix needed. Waiting for other brova(s).";
+            ? "Brova accepted with minor fix needed. Finals can be released. Send brova back when ready."
+            : "Brova accepted with fix needed.";
     } else if (feedback === "needs_repair_rejected") {
         message = releaseFinals
-            ? "Brova rejected. But another brova was accepted, so finals will start."
-            : allTrialed
-                ? "All brovas rejected. Finals will NOT start."
-                : "Brova rejected. Waiting for other brova(s).";
+            ? "Brova rejected. But another brova was accepted, so finals can start."
+            : "Brova rejected — needs repair.";
     } else if (feedback === "needs_redo") {
         message = releaseFinals
-            ? "Brova rejected (full redo). But another brova was accepted, so finals will start."
-            : allTrialed
-                ? "All brovas rejected. Finals will NOT start."
-                : "Brova rejected (redo). Waiting for other brova(s).";
+            ? "Brova rejected (full redo). But another brova was accepted, so finals can start."
+            : "Brova rejected — full redo needed.";
     }
 
-    return { newStage, acceptanceStatus, releaseFinals, brovaGoesBack, message };
+    return { newStage, feedbackStatus, acceptanceStatus, releaseFinals, brovaGoesBack, message };
 }
 
 /**
@@ -226,7 +241,7 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
 
     // 2. Derive base flags from shop items
     const isBrovaTrial = shopItems.some(g => g.garment_type === 'brova' && g.acceptance_status !== true);
-    const isAlterationIn = shopItems.some(g => (Number(g.trip_number) || 1) >= 3 && g.acceptance_status !== true);
+    const isAlterationIn = shopItems.some(g => isAlteration(g.trip_number, g.garment_type) && g.acceptance_status !== true);
 
     // 3. Check if finals are still outstanding (not at shop and not completed)
     const allGarments = garments.filter(g => g.piece_stage !== 'completed');
@@ -234,10 +249,11 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
     const finalsNotAtShop = finals.filter(g => g.location !== 'shop');
     const isWaitingFinals = finalsNotAtShop.length > 0;
 
-    // 4. Check if a shop item is "done" — accepted brovas OR finals at ready_for_pickup
+    // 4. Check if a shop item is "done" — accepted brovas OR first-trip finals at ready_for_pickup
     const isShopItemDone = (g: GarmentInfo) =>
         g.acceptance_status === true ||
-        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup');
+        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup' &&
+         g.feedback_status !== 'needs_repair' && g.feedback_status !== 'needs_redo');
 
     // Ready for pickup: everything at shop is done AND no finals outstanding
     const isReadyForPickup = shopItems.length > 0
@@ -249,17 +265,23 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
         && shopItems.every(isShopItemDone)
         && isWaitingFinals;
 
-    // 6. Determine priority label
-    let label: "brova_trial" | "alteration_in" | "ready_for_pickup" | "pickup_waiting_finals" | null = null;
+    // 6. Check if any shop item needs work (rejected finals/brovas waiting to be sent back)
+    const hasNeedsAction = shopItems.some(g =>
+        g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo');
+
+    // 7. Determine priority label
+    let label: "brova_trial" | "alteration_in" | "needs_action" | "ready_for_pickup" | "pickup_waiting_finals" | null = null;
 
     if (isAlterationIn) label = "alteration_in";
     else if (isBrovaTrial) label = "brova_trial";
+    else if (hasNeedsAction) label = "needs_action";
     else if (isPickupWaitingFinals) label = "pickup_waiting_finals";
     else if (isReadyForPickup) label = "ready_for_pickup";
 
     return {
         isBrovaTrial,
         isAlterationIn,
+        hasNeedsAction,
         isReadyForPickup,
         isPickupWaitingFinals,
         isWaitingFinals,

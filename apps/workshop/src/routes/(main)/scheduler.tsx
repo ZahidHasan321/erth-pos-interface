@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useSchedulerGarments, useBrovaPlans, useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
+import { useResources } from "@/hooks/useResources";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
@@ -11,11 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Clock, Package, CheckSquare, Home,
+  Clock, Package, CheckSquare, Home, User, Zap,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -344,18 +346,20 @@ function SchedulerPage() {
   );
   const orders = groupByOrder([...firstTrip, ...waitingFinals]);
 
-  // Brova tab: 2nd-trip returns (garment-level)
+  // Brova tab: trip 2-3 brova returns (garment-level, before alteration threshold)
   const brovaReturns = schedulable.filter(
     (g) =>
-      g.trip_number === 2 &&
-      (g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo"),
+      g.garment_type === "brova" &&
+      (g.trip_number === 2 || g.trip_number === 3) &&
+      (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo"),
   );
 
-  // Alteration (In) tab: 3rd+ trip returns (garment-level)
+  // Alteration (In) tab: brova trip >= 4 OR final trip >= 2 (garment-level)
   const alterationIn = schedulable.filter(
     (g) =>
-      (g.trip_number ?? 0) >= 3 &&
-      (g.piece_stage === "needs_repair" || g.piece_stage === "needs_redo"),
+      (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo") &&
+      (((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
+       ((g.trip_number ?? 0) >= 2 && g.garment_type === "final")),
   );
 
   // Fetch brova production plans for orders that have finals (to pre-populate same personnel)
@@ -377,16 +381,74 @@ function SchedulerPage() {
     return map;
   }, [allGarments]);
 
-  // Selection state
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
-  const [selectedBrovaReturnIds, setSelectedBrovaReturnIds] = useState<Set<string>>(new Set());
-  const [selectedAltInIds, setSelectedAltInIds] = useState<Set<string>>(new Set());
-
-  // Shared date
+  // Shared date (declared early — used by workload memo)
   const todayStr = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [planOpen, setPlanOpen] = useState(false);
   const [returnPlanOpen, setReturnPlanOpen] = useState(false);
+
+  // Resources for workload view
+  const { data: resources = [] } = useResources();
+
+  // Compute per-worker workload for selected date, grouped by stage → unit
+  const workload = useMemo(() => {
+    const roleToStage: Record<string, string> = {
+      cutter: "cutting",
+      post_cutter: "post_cutting",
+      sewer: "sewing",
+      finisher: "finishing",
+      ironer: "ironing",
+      quality_checker: "quality_check",
+    };
+
+    // Count garments assigned to each worker on the selected date
+    const workerCounts: Record<string, { assigned: number; target: number | null; stage: string; unit: string }> = {};
+
+    for (const g of allGarments) {
+      if (!g.assigned_date || !g.in_production || !g.production_plan) continue;
+      const dateStr = typeof g.assigned_date === "string"
+        ? g.assigned_date.slice(0, 10)
+        : new Date(g.assigned_date).toISOString().slice(0, 10);
+      if (dateStr !== selectedDate) continue;
+
+      const plan = g.production_plan as Record<string, string>;
+      for (const [role, workerName] of Object.entries(plan)) {
+        if (!workerName) continue;
+        const stage = roleToStage[role] || role;
+        const key = `${stage}::${workerName}`;
+        if (!workerCounts[key]) {
+          const res = resources.find(r => r.resource_name === workerName && r.responsibility === stage);
+          workerCounts[key] = { assigned: 0, target: res?.daily_target ?? null, stage, unit: res?.unit ?? "Unassigned" };
+        }
+        workerCounts[key].assigned++;
+      }
+    }
+
+    // Group by stage → unit → workers
+    const byStage: Record<string, Record<string, { name: string; assigned: number; target: number | null }[]>> = {};
+    for (const [key, data] of Object.entries(workerCounts)) {
+      const [stage, name] = key.split("::");
+      if (!byStage[stage]) byStage[stage] = {};
+      if (!byStage[stage][data.unit]) byStage[stage][data.unit] = [];
+      byStage[stage][data.unit].push({ name, assigned: data.assigned, target: data.target });
+    }
+
+    // Sort workers by assigned (desc) within each unit
+    for (const stage of Object.keys(byStage)) {
+      for (const unit of Object.keys(byStage[stage])) {
+        byStage[stage][unit].sort((a, b) => b.assigned - a.assigned);
+      }
+    }
+
+    return byStage;
+  }, [allGarments, selectedDate, resources]);
+
+  const totalForDate = scheduledDates[selectedDate] ?? 0;
+
+  // Selection state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
+  const [selectedBrovaReturnIds, setSelectedBrovaReturnIds] = useState<Set<string>>(new Set());
+  const [selectedAltInIds, setSelectedAltInIds] = useState<Set<string>>(new Set());
 
   const toggleOrderInSet = (
     setFn: React.Dispatch<React.SetStateAction<Set<number>>>,
@@ -507,7 +569,7 @@ function SchedulerPage() {
   const [activeTab, setActiveTab] = useState("orders");
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
@@ -541,8 +603,8 @@ function SchedulerPage() {
         </div>
       </div>
 
-      {/* Split layout: list on left, calendar on right */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+      {/* Split layout: list | calendar+action | workload */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px_280px] gap-5 items-start">
         {/* ── Left: Tabs + list ── */}
         <div>
           <Tabs defaultValue="orders" value={activeTab} onValueChange={setActiveTab}>
@@ -720,6 +782,95 @@ function SchedulerPage() {
             >
               Create Plan
             </Button>
+          </div>
+        </div>
+
+        {/* ── Right: Workshop Workload ── */}
+        <div className="space-y-3 lg:sticky lg:top-6">
+          <div className="bg-white border rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-1.5">
+                <Zap className="w-4 h-4" /> Workload
+              </h3>
+              <Badge variant="secondary" className="font-black text-[10px]">
+                {totalForDate} garment{totalForDate !== 1 ? "s" : ""}
+              </Badge>
+            </div>
+
+            {totalForDate === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                No garments scheduled for this date
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {PRODUCTION_STAGES.map((stage) => {
+                  const units = workload[stage];
+                  if (!units || Object.keys(units).length === 0) return null;
+
+                  const stageLabel = stage.replace(/_/g, " ");
+                  const unitNames = Object.keys(units).sort();
+                  const hasMultipleUnits = unitNames.length > 1;
+
+                  return (
+                    <div key={stage}>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">
+                        {stageLabel}
+                      </p>
+                      <div className="space-y-2">
+                        {unitNames.map((unitName) => (
+                          <div key={unitName}>
+                            {hasMultipleUnits && (
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-primary/60 mb-1 pl-1">
+                                {unitName}
+                              </p>
+                            )}
+                            <div className="space-y-1">
+                              {units[unitName].map((w) => {
+                                const pct = w.target ? Math.min(100, Math.round((w.assigned / w.target) * 100)) : null;
+                                const isOverloaded = w.target ? w.assigned > w.target : false;
+                                return (
+                                  <div key={w.name} className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                                      <span className="text-xs font-semibold truncate">{w.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className={cn(
+                                        "text-xs font-black tabular-nums",
+                                        isOverloaded ? "text-red-600" : "text-foreground"
+                                      )}>
+                                        {w.assigned}
+                                      </span>
+                                      {w.target && (
+                                        <>
+                                          <span className="text-[10px] text-muted-foreground">/</span>
+                                          <span className="text-[10px] text-muted-foreground">{w.target}</span>
+                                        </>
+                                      )}
+                                      {pct !== null && (
+                                        <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                                          <div
+                                            className={cn(
+                                              "h-full rounded-full transition-all",
+                                              pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500"
+                                            )}
+                                            style={{ width: `${Math.min(pct, 100)}%` }}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
