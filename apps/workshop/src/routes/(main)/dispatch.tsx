@@ -4,12 +4,12 @@ import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useDispatchGarments } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
+import { PageHeader, StatsCard, EmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Truck, Package } from "lucide-react";
+import { Truck, Package, ArrowRightLeft } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/dispatch")({
   component: DispatchPage,
@@ -62,26 +62,16 @@ function DispatchPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto pb-28">
-      <div className="mb-6">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          <Truck className="w-6 h-6" /> Dispatch
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {readyGarments.length} garment{readyGarments.length !== 1 ? "s" : ""}{" "}
-          ready for dispatch
-        </p>
-      </div>
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-28">
+      <PageHeader
+        icon={Truck}
+        title="Dispatch"
+        subtitle={`${readyGarments.length} garment${readyGarments.length !== 1 ? "s" : ""} ready for dispatch`}
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
-        <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 text-center">
-          <p className="text-xl font-black text-green-700">{readyGarments.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 opacity-70">Ready</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-center">
-          <p className="text-xl font-black text-blue-700">{inTransitGarments.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 opacity-70">In Transit</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+        <StatsCard icon={Package} value={readyGarments.length} label="Ready" color="green" />
+        <StatsCard icon={ArrowRightLeft} value={inTransitGarments.length} label="In Transit" color="blue" dimOnZero />
       </div>
 
       <Tabs defaultValue="ready">
@@ -94,7 +84,7 @@ function DispatchPage() {
           </TabsTrigger>
           <TabsTrigger value="transit">
             In Transit{" "}
-            <Badge variant="secondary" className="ml-1 text-xs">
+            <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
               {inTransitGarments.length}
             </Badge>
           </TabsTrigger>
@@ -103,18 +93,9 @@ function DispatchPage() {
         {/* ── READY — garment level ── */}
         <TabsContent value="ready">
           {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 rounded-xl" />
-              ))}
-            </div>
+            <LoadingSkeleton />
           ) : readyGarments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-              <Package className="w-10 h-10 text-muted-foreground/30 mb-3" />
-              <p className="font-semibold text-muted-foreground">
-                No garments ready for dispatch
-              </p>
-            </div>
+            <EmptyState icon={Package} message="No garments ready for dispatch" />
           ) : (
             <div className="space-y-3">
               {readyGarments.map((g) => (
@@ -129,7 +110,7 @@ function DispatchPage() {
                       size="sm"
                       onClick={() => handleDispatchSingle(g.id)}
                       disabled={dispatchMut.isPending}
-                      className="h-9 px-4 text-sm font-bold"
+                      className="text-xs h-7"
                     >
                       <Truck className="w-3 h-3 mr-1" />
                       Dispatch
@@ -156,12 +137,7 @@ function DispatchPage() {
         {/* ── IN TRANSIT — garment level, read-only ── */}
         <TabsContent value="transit">
           {inTransitGarments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-              <Truck className="w-10 h-10 text-muted-foreground/30 mb-3" />
-              <p className="font-semibold text-muted-foreground">
-                Nothing in transit
-              </p>
-            </div>
+            <EmptyState icon={Truck} message="Nothing in transit" />
           ) : (
             <div className="space-y-3">
               {inTransitGarments.map((g) => (

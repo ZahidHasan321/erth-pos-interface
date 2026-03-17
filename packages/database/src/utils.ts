@@ -235,57 +235,64 @@ export function evaluateBrovaFeedback(
  * Looks at ALL garments in the order (not just shop items) to determine
  * whether finals are still outstanding (in production / at workshop / in transit).
  */
+export type ShowroomLabel =
+    | "alteration_in"      // Alteration garment at shop needing trial/action
+    | "brova_trial"        // Brovas at shop, customer needs to try them on
+    | "needs_action"       // Garments rejected, need to be sent back to workshop
+    | "awaiting_finals"    // Brovas done, waiting for finals from workshop
+    | "partial_ready"      // Some items ready at shop, others still out (generic)
+    | "ready_for_pickup"   // Everything done, customer can collect
+    | null;
+
 export function getShowroomStatus(garments: GarmentInfo[]) {
-    // 1. Filter only items physically at the shop and not finished
     const shopItems = garments.filter(g => g.location === 'shop' && g.piece_stage !== 'completed');
+    const allNonCompleted = garments.filter(g => g.piece_stage !== 'completed');
 
-    // 2. Derive base flags from shop items
-    const isBrovaTrial = shopItems.some(g => g.garment_type === 'brova' && g.acceptance_status !== true);
-    const isAlterationIn = shopItems.some(g => isAlteration(g.trip_number, g.garment_type) && g.acceptance_status !== true);
+    // Check if finals are in transit to shop (shop needs to know even if no items at shop yet)
+    const finalsInTransit = allNonCompleted.some(g =>
+        g.garment_type === 'final' && g.location === 'transit_to_shop');
 
-    // 3. Check if finals are still outstanding (not at shop and not completed)
-    const allGarments = garments.filter(g => g.piece_stage !== 'completed');
-    const finals = allGarments.filter(g => g.garment_type === 'final');
-    const finalsNotAtShop = finals.filter(g => g.location !== 'shop');
-    const isWaitingFinals = finalsNotAtShop.length > 0;
+    if (shopItems.length === 0) {
+        // No items at shop, but finals heading this way
+        if (finalsInTransit) {
+            return { label: "awaiting_finals" as ShowroomLabel, hasPhysicalItems: false };
+        }
+        return { label: null as ShowroomLabel, hasPhysicalItems: false };
+    }
 
-    // 4. Check if a shop item is "done" — accepted brovas OR first-trip finals at ready_for_pickup
-    const isShopItemDone = (g: GarmentInfo) =>
-        g.acceptance_status === true ||
-        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup' &&
-         g.feedback_status !== 'needs_repair' && g.feedback_status !== 'needs_redo');
+    // What's happening at the shop? Look at each garment's state.
+    const hasAlterationNeedingWork = shopItems.some(g =>
+        isAlteration(g.trip_number, g.garment_type) &&
+        g.acceptance_status !== true &&
+        (g.piece_stage === 'awaiting_trial' || g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo'));
 
-    // Ready for pickup: everything at shop is done AND no finals outstanding
-    const isReadyForPickup = shopItems.length > 0
-        && shopItems.every(isShopItemDone)
-        && !isWaitingFinals;
+    const hasBrovaAwaitingTrial = shopItems.some(g =>
+        g.garment_type === 'brova' && g.piece_stage === 'awaiting_trial');
 
-    // 5. Pickup + Waiting Finals: shop items done but finals still out
-    const isPickupWaitingFinals = shopItems.length > 0
-        && shopItems.every(isShopItemDone)
-        && isWaitingFinals;
-
-    // 6. Check if any shop item needs work (rejected finals/brovas waiting to be sent back)
-    const hasNeedsAction = shopItems.some(g =>
+    const hasGarmentNeedingAction = shopItems.some(g =>
         g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo');
 
-    // 7. Determine priority label
-    let label: "brova_trial" | "alteration_in" | "needs_action" | "ready_for_pickup" | "pickup_waiting_finals" | null = null;
+    const finalsStillOut = allNonCompleted.some(g =>
+        g.garment_type === 'final' && g.location !== 'shop');
 
-    if (isAlterationIn) label = "alteration_in";
-    else if (isBrovaTrial) label = "brova_trial";
-    else if (hasNeedsAction) label = "needs_action";
-    else if (isPickupWaitingFinals) label = "pickup_waiting_finals";
-    else if (isReadyForPickup) label = "ready_for_pickup";
+    const garmentsStillOut = allNonCompleted.some(g => g.location !== 'shop');
 
-    return {
-        isBrovaTrial,
-        isAlterationIn,
-        hasNeedsAction,
-        isReadyForPickup,
-        isPickupWaitingFinals,
-        isWaitingFinals,
-        label,
-        hasPhysicalItems: shopItems.length > 0
-    };
+    // Are all brovas at shop done (trialed/accepted/completed)?
+    const shopBrovas = shopItems.filter(g => g.garment_type === 'brova');
+    const allShopItemsDone = shopItems.every(g =>
+        g.acceptance_status === true ||
+        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup' &&
+         g.feedback_status !== 'needs_repair' && g.feedback_status !== 'needs_redo'));
+
+    // Priority: alteration > brova trial > needs action > awaiting finals > partial ready > ready
+    let label: ShowroomLabel = null;
+
+    if (hasAlterationNeedingWork) label = "alteration_in";
+    else if (hasBrovaAwaitingTrial) label = "brova_trial";
+    else if (hasGarmentNeedingAction) label = "needs_action";
+    else if (shopBrovas.length > 0 && finalsStillOut) label = "awaiting_finals";
+    else if (allShopItemsDone && !garmentsStillOut) label = "ready_for_pickup";
+    else if (garmentsStillOut) label = "partial_ready";
+
+    return { label, hasPhysicalItems: true };
 }

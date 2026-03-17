@@ -61,7 +61,7 @@ export function DirectLookupCard({
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0 }}
-                    className="text-[10px] font-black text-destructive uppercase tracking-widest bg-destructive/5 px-2 py-1 rounded-md border border-destructive/10"
+                    className="text-xs font-black text-destructive uppercase tracking-widest bg-destructive/5 px-2 py-1 rounded-md border border-destructive/10"
                 >
                     {idError || fatouraError}
                 </motion.span>
@@ -72,7 +72,7 @@ export function DirectLookupCard({
       <div className="flex flex-col sm:flex-row items-end gap-3">
         {/* Order ID Input Group */}
         <div className="space-y-1.5 flex-1 w-full">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 text-nowrap">
+          <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1 text-nowrap">
             Order ID
           </Label>
           <Input
@@ -93,11 +93,11 @@ export function DirectLookupCard({
           />
         </div>
 
-        <div className="hidden sm:block mb-3.5 text-muted-foreground/30 font-black text-[10px]">OR</div>
+        <div className="hidden sm:block mb-3.5 text-muted-foreground/30 font-black text-xs">OR</div>
 
         {/* Invoice No Input Group */}
         <div className="space-y-1.5 flex-1 w-full">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 text-nowrap">
+          <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1 text-nowrap">
             Invoice Number
           </Label>
           <Input
@@ -122,7 +122,7 @@ export function DirectLookupCard({
           size="sm"
           onClick={handleSubmit}
           disabled={!hasInput || isSearching || disabled}
-          className="h-11 px-6 font-black uppercase tracking-widest text-[10px] rounded-xl shadow-md shrink-0 w-full sm:w-auto transition-all active:scale-[0.98]"
+          className="h-11 px-6 font-black uppercase tracking-widest text-xs rounded-xl shadow-md shrink-0 w-full sm:w-auto transition-all active:scale-[0.98]"
         >
           {isSearching ? (
             <RefreshCw className="size-4 animate-spin" />

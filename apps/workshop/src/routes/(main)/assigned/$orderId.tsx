@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
-import { useAssignedViewGarments } from "@/hooks/useWorkshopGarments";
+import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import {
   useUpdateGarmentDetails,
   useUpdateOrderDeliveryDate,
@@ -9,6 +9,7 @@ import {
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
+import { MetadataChip } from "@/components/shared/PageShell";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,13 +73,10 @@ function AssignedOrderDetailPage() {
   const { orderId } = Route.useParams();
   const orderIdNum = Number(orderId);
   const router = useRouter();
-  const { data: all = [], isLoading } = useAssignedViewGarments();
+  const { data: garments = [], isLoading } = useOrderGarments(orderIdNum);
   const updateMut = useUpdateGarmentDetails();
   const deliveryDateMut = useUpdateOrderDeliveryDate();
   const assignedDateMut = useUpdateOrderAssignedDate();
-
-  // Show ALL garments for this order — regardless of location or stage
-  const garments = all.filter((g) => g.order_id === orderIdNum);
 
   if (isLoading) {
     return (
@@ -167,7 +165,7 @@ function AssignedOrderDetailPage() {
             {brovas.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-[10px]">Brova</span>
+                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-xs">Brova</span>
                   {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
                 </h3>
                 {brovas.map((g) => (
@@ -178,7 +176,7 @@ function AssignedOrderDetailPage() {
             {finals.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px]">Final</span>
+                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-xs">Final</span>
                   {finals.length} garment{finals.length !== 1 ? "s" : ""}
                 </h3>
                 {finals.map((g) => (
@@ -289,11 +287,9 @@ function OrderHeader({
             {brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {hasExpress && <ExpressBadge />}
             {first.home_delivery_order && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200">
-                <Home className="w-3 h-3" /> Delivery
-              </span>
+              <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
             )}
-            <span className={cn("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md", statusLabel.cls)}>
+            <span className={cn("text-xs font-semibold uppercase px-2 py-0.5 rounded-md", statusLabel.cls)}>
               {statusLabel.text}
             </span>
           </div>
@@ -315,10 +311,10 @@ function OrderHeader({
         {/* Right — dates */}
         <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-lg border shrink-0 sm:w-52">
           <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Clock className="w-3 h-3" /> Delivery
               {daysLabel && (
-                <span className={cn("text-[10px] font-bold ml-0.5", urgency.className)}>
+                <span className={cn("text-xs font-bold ml-0.5", urgency.className)}>
                   ({daysLabel})
                 </span>
               )}
@@ -330,7 +326,7 @@ function OrderHeader({
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Timer className="w-3 h-3" /> Assigned (all)
             </Label>
             <DatePicker
@@ -414,7 +410,7 @@ function SharedPlanSection({
           return (
             <span
               key={step.key}
-              className="inline-flex items-center gap-1 text-[11px] bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md"
+              className="inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md"
             >
               <span className="text-muted-foreground">{step.label}:</span>
               <span className="font-semibold">{worker}</span>
@@ -514,7 +510,7 @@ function GarmentPlanCard({
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <span
             className={cn(
-              "text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
+              "text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
               garment.garment_type === "brova"
                 ? "bg-purple-100 text-purple-800 border-purple-200"
                 : "bg-blue-100 text-blue-800 border-blue-200",
@@ -533,13 +529,13 @@ function GarmentPlanCard({
           {(garment.trip_number ?? 1) > 1 && <TrialBadge tripNumber={garment.trip_number} />}
           {isAlterationIn && <AlterationInBadge />}
           {isBrovaReturn && (
-            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
+            <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
               Brova Return
             </span>
           )}
           <StageBadge stage={garment.piece_stage} />
           <span className={cn(
-            "text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded",
+            "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
             garment.location === "shop" ? "bg-green-100 text-green-800"
               : garment.location === "workshop" ? "bg-blue-100 text-blue-800"
               : garment.location === "transit_to_shop" ? "bg-cyan-100 text-cyan-800"
@@ -568,22 +564,22 @@ function GarmentPlanCard({
         <div className="mt-2">
           <ProductionPipeline currentStage={garment.piece_stage} compact hasSoaking={hasSoaking} />
           {isAtShopPostProduction && (
-            <p className="text-[10px] text-green-700 font-semibold mt-1">
+            <p className="text-xs text-green-700 font-semibold mt-1">
               Production complete — at shop
             </p>
           )}
           {isAlterationIn && (
-            <p className="text-[10px] text-orange-700 font-semibold mt-1">
+            <p className="text-xs text-orange-700 font-semibold mt-1">
               Needs to return for alteration
             </p>
           )}
           {isBrovaReturn && (
-            <p className="text-[10px] text-amber-700 font-semibold mt-1">
+            <p className="text-xs text-amber-700 font-semibold mt-1">
               Brova return — needs changes
             </p>
           )}
           {needsRepairAtShop && tripNum === 1 && (
-            <p className="text-[10px] text-amber-700 font-semibold mt-1">
+            <p className="text-xs text-amber-700 font-semibold mt-1">
               Needs changes after 1st trial
             </p>
           )}
@@ -608,7 +604,7 @@ function GarmentPlanCard({
       {/* Per-garment dates */}
       <div className="grid grid-cols-2 gap-2 mt-2 max-w-xs lg:ml-auto">
         <div className="space-y-0.5">
-          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
             <Clock className="w-3 h-3" /> Delivery
           </Label>
           <DatePicker
@@ -618,7 +614,7 @@ function GarmentPlanCard({
           />
         </div>
         <div className="space-y-0.5">
-          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
             <Timer className="w-3 h-3" /> Assigned
           </Label>
           <DatePicker
@@ -661,7 +657,7 @@ function GarmentPlanCard({
               const isCurrent = currentStageOrder === step.stageOrder;
               return (
                 <span key={step.key} className={cn(
-                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded",
+                  "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded",
                   isDone ? "bg-emerald-50 text-emerald-700"
                     : isCurrent ? "bg-blue-50 text-blue-700 border border-blue-200"
                     : "bg-zinc-50 text-muted-foreground",
@@ -674,9 +670,9 @@ function GarmentPlanCard({
             })}
             {sharedPlan && diffs.length > 0 && (
               <>
-                <span className="text-[10px] text-amber-600 font-semibold">Overrides:</span>
+                <span className="text-xs text-amber-600 font-semibold">Overrides:</span>
                 {diffs.map((step) => (
-                  <span key={step.key} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  <span key={step.key} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                     <span className="font-medium">{step.label}:</span>
                     <span className="font-semibold">{plan[step.key]}</span>
                   </span>
@@ -684,7 +680,7 @@ function GarmentPlanCard({
               </>
             )}
             {sharedPlan && completed.length > 0 && diffs.length === 0 && completed.map((step) => (
-              <span key={step.key} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+              <span key={step.key} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
                 <Check className="w-2.5 h-2.5" />
                 <span className="font-medium">{step.label}:</span>
                 <span className="font-semibold">{history[step.key]}</span>

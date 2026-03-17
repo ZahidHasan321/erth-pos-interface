@@ -201,7 +201,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
             </div>
             Shelf <span className="text-primary">Products</span>
           </h2>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
             Select inventory items for direct sales
           </p>
         </div>
@@ -212,7 +212,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
               onClick={addRow}
               variant="outline"
               size="sm"
-              className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+              className="h-9 px-4 font-black uppercase tracking-widest text-xs gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
             >
               <Plus className="size-3.5" />
               Add Item
@@ -235,12 +235,12 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
       {/* Summary Footer */}
       <div className="flex justify-between items-center pt-2">
-        <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-background border-border text-muted-foreground">
+        <Badge variant="outline" className="text-xs font-black uppercase tracking-widest px-3 py-1.5 bg-background border-border text-muted-foreground">
           {watchedProducts.length} {watchedProducts.length === 1 ? 'Item' : 'Items'}
         </Badge>
 
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Total</span>
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Total</span>
           <div className="text-2xl font-black text-primary tracking-tighter">
             {totalAmount.toFixed(2)} <span className="text-xs font-bold uppercase ml-0.5">KWD</span>
           </div>

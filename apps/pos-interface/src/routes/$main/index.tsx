@@ -74,13 +74,11 @@ function DashboardPage() {
         }),
         readyForPickup: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            const status = getShowroomStatus(o.garments || []);
-            return status.isReadyForPickup;
+            return getShowroomStatus(o.garments || []).label === "ready_for_pickup";
         }),
         brovaTrials: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
-            const status = getShowroomStatus(o.garments || []);
-            return status.isBrovaTrial;
+            return getShowroomStatus(o.garments || []).label === "brova_trial";
         }),
         needsAction: orders.filter(o => {
             if (o.checkout_status !== 'confirmed') return false;
@@ -172,7 +170,7 @@ function DashboardPage() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-xl font-black uppercase tracking-tight">Priority Deliveries</CardTitle>
-                                <CardDescription className="font-bold uppercase text-[10px] tracking-widest mt-1">Orders due in the next 7 days</CardDescription>
+                                <CardDescription className="font-bold uppercase text-xs tracking-widest mt-1">Orders due in the next 7 days</CardDescription>
                             </div>
                             <Badge variant="outline" className="font-black px-3 py-1 bg-background">
                                 {stats.upcomingDeliveries.length} SCHEDULED
@@ -184,7 +182,7 @@ function DashboardPage() {
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b bg-muted/10">
+                                        <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b bg-muted/10">
                                             <th className="px-6 py-4 text-left">Order / Customer</th>
                                             <th className="px-6 py-4 text-left">Production Stage</th>
                                             <th className="px-6 py-4 text-left">Delivery Date</th>
@@ -207,7 +205,7 @@ function DashboardPage() {
                                                         <Badge 
                                                             variant="outline" 
                                                             className={cn(
-                                                                "text-[10px] font-black uppercase tracking-tight border-none",
+                                                                "text-xs font-black uppercase tracking-tight border-none",
                                                                 `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
                                                                 `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
                                                             )}
@@ -215,7 +213,7 @@ function DashboardPage() {
                                                             {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
                                                         </Badge>
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Pending</span>
+                                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pending</span>
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -238,7 +236,7 @@ function DashboardPage() {
                                                             to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
                                                             search={{ orderId: order.id }}
                                                         >
-                                                            <Badge className="cursor-pointer font-black text-[9px] uppercase tracking-widest bg-primary hover:bg-primary/90 flex items-center gap-1.5">
+                                                            <Badge className="cursor-pointer font-black text-xs uppercase tracking-widest bg-primary hover:bg-primary/90 flex items-center gap-1.5">
                                                                 <Eye className="w-3 h-3" />
                                                                 View Order
                                                             </Badge>
@@ -265,7 +263,7 @@ function DashboardPage() {
                 <Card className={cn("lg:col-span-4 border-2 shadow-sm rounded-3xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(5)}>
                     <CardHeader className="bg-muted/30 border-b pb-6">
                         <CardTitle className="text-xl font-black uppercase tracking-tight">Workflow Health</CardTitle>
-                        <CardDescription className="font-bold uppercase text-[10px] tracking-widest mt-1">Status of ongoing production</CardDescription>
+                        <CardDescription className="font-bold uppercase text-xs tracking-widest mt-1">Status of ongoing production</CardDescription>
                     </CardHeader>
                     <CardContent className="p-6 space-y-6">
                         <WorkflowItem 
@@ -323,7 +321,7 @@ function DashboardPage() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-sm truncate">{customer.name}</p>
-                                    <p className="text-[10px] font-medium text-muted-foreground">{customer.phone}</p>
+                                    <p className="text-xs font-medium text-muted-foreground">{customer.phone}</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -340,14 +338,14 @@ function StatCard({ title, value, icon: Icon, color, bg, trend, index, to, searc
                 <div className={cn("p-3 rounded-2xl", bg)}>
                     <Icon className={cn("w-6 h-6", color)} />
                 </div>
-                <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-[0.1em] opacity-60">Live</Badge>
+                <Badge variant="secondary" className="text-xs font-black uppercase tracking-[0.1em] opacity-60">Live</Badge>
             </div>
             <div className="space-y-1">
                 <h3 className="text-3xl font-black tracking-tighter">{value}</h3>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
             </div>
             <div className="mt-4 pt-4 border-t border-dashed flex items-center justify-between">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">{trend}</span>
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-tight">{trend}</span>
                 <TrendingUp className="w-3 h-3 text-muted-foreground opacity-30" />
             </div>
         </CardContent>

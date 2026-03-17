@@ -572,7 +572,7 @@ export function FabricSelectionForm({
                         <div className="flex flex-wrap items-end gap-6">
                             {/* 1. PIECE MANAGEMENT */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Pieces Count</label>
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Pieces Count</label>
                                 <div className="flex items-center gap-2 bg-background border border-border/60 rounded-xl p-1.5 shadow-xs">
                                     <Input
                                         type="number"
@@ -586,7 +586,7 @@ export function FabricSelectionForm({
                                         onClick={() => numRowsToAdd > 0 && syncRows(numRowsToAdd, garmentFields, { addRow: addGarmentRow, removeRow: removeGarmentRow })}
                                         disabled={isFormDisabled}
                                         size="sm"
-                                        className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 rounded-lg"
+                                        className="h-9 px-4 font-black uppercase tracking-widest text-xs gap-2 rounded-lg"
                                     >
                                         <Plus className="size-3.5" /> Sync
                                     </Button>
@@ -595,7 +595,7 @@ export function FabricSelectionForm({
 
                             {/* 2. STITCHING PRICE */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Stitching Price</label>
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Stitching Price</label>
                                 <Tabs
                                     value={stitchingPrice.toString()}
                                     onValueChange={(val) => setStitchingPrice(parseFloat(val))}
@@ -610,7 +610,7 @@ export function FabricSelectionForm({
 
                             {/* 3. DELIVERY DATE */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Delivery Date</label>
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Delivery Date</label>
                                 <div className="h-12 w-48 bg-background border border-border/60 rounded-xl shadow-xs overflow-hidden flex flex-col justify-center">
                                     <DatePicker
                                         placeholder={new Date().toISOString()}
@@ -627,7 +627,7 @@ export function FabricSelectionForm({
 
                             {/* 4. MEASUREMENT HELPER (Far Right) */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Measurement Assistant</label>
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Measurement Assistant</label>
                                 <div className="flex gap-4 h-12 items-center bg-background border border-border/60 rounded-xl px-4 shadow-xs">
                                     <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
                                         <SelectTrigger className="w-40 border-none shadow-none font-bold h-9 bg-muted/40 hover:bg-muted/60 transition-colors">
@@ -645,16 +645,16 @@ export function FabricSelectionForm({
                                     {selectedMeasurementId && fabricMeter !== null ? (
                                         <div className="flex items-center gap-5 animate-in fade-in slide-in-from-right-2 duration-300">
                                             <div className="flex flex-col">
-                                                <span className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Meter</span>
+                                                <span className="text-xs font-black text-muted-foreground uppercase leading-none mb-1">Meter</span>
                                                 <span className="text-sm font-black text-primary leading-none">{fabricMeter}m</span>
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Qallabi</span>
+                                                <span className="text-xs font-black text-muted-foreground uppercase leading-none mb-1">Qallabi</span>
                                                 <span className="text-sm font-black text-primary leading-none">{qallabi}m</span>
                                             </div>
                                         </div>
                                     ) : (
-                                        <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tight italic">No calculation</span>
+                                        <span className="text-xs font-bold text-muted-foreground/40 uppercase tracking-tight italic">No calculation</span>
                                     )}
                                 </div>
                             </div>
@@ -664,7 +664,7 @@ export function FabricSelectionForm({
                         <div className="flex items-center gap-4 bg-primary/5 rounded-xl p-3 border border-primary/10">
                             <div className="flex items-center gap-2 px-2 border-r border-primary/20 shrink-0">
                                 <Sparkles className="size-3.5 text-primary" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Offers</span>
+                                <span className="text-xs font-black uppercase tracking-widest text-primary">Offers</span>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {activeCampaigns.length > 0 ? (
@@ -675,7 +675,7 @@ export function FabricSelectionForm({
                                                 key={campaign.id}
                                                 variant={isSelected ? "default" : "outline"}
                                                 className={cn(
-                                                    "cursor-pointer px-3 py-1 text-[10px] font-black uppercase tracking-tighter transition-all",
+                                                    "cursor-pointer px-3 py-1 text-xs font-black uppercase tracking-tighter transition-all",
                                                     isSelected ? "bg-primary shadow-md shadow-primary/20" : "bg-white hover:bg-primary/5 hover:border-primary/30"
                                                 )}
                                                 onClick={() => {
@@ -693,7 +693,7 @@ export function FabricSelectionForm({
                                         );
                                     })
                                 ) : (
-                                    <span className="text-[10px] font-bold text-muted-foreground italic">No active campaigns available</span>
+                                    <span className="text-xs font-bold text-muted-foreground italic">No active campaigns available</span>
                                 )}
                             </div>
                         </div>
@@ -709,7 +709,7 @@ export function FabricSelectionForm({
                                         </div>
                                         Garment <span className="text-primary">Selections</span>
                                     </h2>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
                                         Select fabric source, type, and measurements
                                     </p>
                                 </div>
@@ -801,7 +801,7 @@ export function FabricSelectionForm({
                                     </div>
                                     Style <span className="text-primary">Options</span>
                                 </h2>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
                                     Customize collar, pockets, buttons, and other style details
                                 </p>
                             </div>
@@ -811,7 +811,7 @@ export function FabricSelectionForm({
                                 size="sm"
                                 onClick={copyGarmentToAll}
                                 disabled={isFormDisabled || garmentFields.length < 2}
-                                className="h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+                                className="h-9 px-4 font-black uppercase tracking-widest text-xs gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
                             >
                                 <Copy className="size-3.5" />
                                 Copy First Row

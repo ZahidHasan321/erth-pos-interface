@@ -29,6 +29,8 @@ import mudawarKabbak from "@/assets/sleeves-assets/sleeves-types/Mudawar Kabbak.
 
 import walletIcon from "@/assets/Wallet.png";
 import penIcon from "@/assets/Pen.png";
+import phoneIcon from "@/assets/Phone.png";
+import smallTabaggiIcon from "@/assets/collar-assets/Small Tabbagi.png";
 
 export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> = {
   // Collar types
@@ -65,7 +67,7 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
   CUF_NO_CUFF: { image: "", label: "No Cuff" },
 };
 
-export const ACCESSORY_ICONS = { wallet: walletIcon, pen: penIcon };
+export const ACCESSORY_ICONS = { wallet: walletIcon, pen: penIcon, phone: phoneIcon, smallTabaggi: smallTabaggiIcon };
 
 export const THICKNESS_LABELS: Record<string, string> = {
   SINGLE: "S",

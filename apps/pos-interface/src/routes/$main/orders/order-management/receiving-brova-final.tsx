@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -113,9 +114,25 @@ function ReceivingInterface() {
             {/* List */}
             <div className="space-y-4">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-4">
-                        <RefreshCw className="size-8 text-primary/40 animate-spin" />
-                        <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Syncing with server...</p>
+                    <div className="space-y-4">
+                        {[1, 2, 3].map((i) => (
+                            <Card key={i} className="border-2 border-border/60 rounded-2xl py-0 gap-0">
+                                <CardContent className="p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Skeleton className="h-5 w-16 rounded-md" />
+                                            <Skeleton className="h-5 w-32 rounded-md" />
+                                        </div>
+                                        <Skeleton className="h-7 w-24 rounded-full" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Skeleton className="h-4 w-20 rounded-md" />
+                                        <Skeleton className="h-4 w-28 rounded-md" />
+                                    </div>
+                                    <Skeleton className="h-10 w-full rounded-xl" />
+                                </CardContent>
+                            </Card>
+                        ))}
                     </div>
                 ) : filteredOrders.length === 0 ? (
                     <div className="py-20 text-center">
@@ -181,7 +198,7 @@ function OrderCard({
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold">Order #{order.id}</h3>
-                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium mt-0.5">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-0.5">
                                     <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
                                     <span className="size-1 rounded-full bg-muted-foreground/30" />
                                     <Clock className="size-2.5" />
@@ -193,7 +210,7 @@ function OrderCard({
                             <Badge
                                 variant="outline"
                                 className={cn(
-                                    "text-[9px] uppercase font-black px-2 py-0.5 border-none shadow-xs",
+                                    "text-xs uppercase font-black px-2 py-0.5 border-none shadow-xs",
                                     PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground"
                                 )}
                             >
@@ -216,7 +233,7 @@ function OrderCard({
                             {order.customer?.phone && (
                                 <div className="flex items-center gap-2.5 ml-1">
                                     <Phone className="size-2.5 text-muted-foreground" />
-                                    <span className="text-[11px] font-medium text-muted-foreground">{order.customer.phone}</span>
+                                    <span className="text-xs font-medium text-muted-foreground">{order.customer.phone}</span>
                                 </div>
                             )}
                         </div>
@@ -226,25 +243,25 @@ function OrderCard({
                     <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
                         <div className="flex flex-col gap-1.5">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Incoming</span>
-                                <Badge variant="secondary" className="font-black text-[10px] px-2 py-0.5">
+                                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Incoming</span>
+                                <Badge variant="secondary" className="font-black text-xs px-2 py-0.5">
                                     {dispatchedGarments.length} Pieces
                                 </Badge>
                             </div>
                             <div className="flex items-center gap-2">
                                 {brovaCount > 0 && (
-                                    <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                    <span className="text-xs font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                                         {brovaCount} Brova
                                     </span>
                                 )}
                                 {finalCount > 0 && (
-                                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                                    <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
                                         {finalCount} Final
                                     </span>
                                 )}
                             </div>
                             {order.delivery_date && (
-                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                                     <Clock className="size-2.5" />
                                     <span>Due {format(new Date(order.delivery_date), "d MMM yyyy")}</span>
                                 </div>
@@ -291,7 +308,7 @@ function OrderCard({
                     <div className="border-t-2 border-border/40 bg-muted/5">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
                                     <th className="text-left py-2.5 px-5">Garment</th>
                                     <th className="text-left py-2.5 px-5">Type</th>
                                     <th className="text-left py-2.5 px-5">Style</th>
@@ -306,7 +323,7 @@ function OrderCard({
                                         <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
                                         <td className="py-2.5 px-5">
                                             <span className={cn(
-                                                "inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded",
+                                                "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
                                                 g.garment_type === "brova"
                                                     ? "bg-blue-50 text-blue-700"
                                                     : "bg-emerald-50 text-emerald-700"
@@ -342,7 +359,7 @@ function OrderCard({
                                             })()}
                                         </td>
                                         <td className="py-2.5 px-5">
-                                            <span className="text-[10px] font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
+                                            <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
                                                 In Transit to Shop
                                             </span>
                                         </td>
@@ -352,7 +369,7 @@ function OrderCard({
                         </table>
 
                         <div className="px-5 py-3 flex justify-between items-center border-t border-border/40">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                                 Verify items before marking received
                             </span>
                             <Link

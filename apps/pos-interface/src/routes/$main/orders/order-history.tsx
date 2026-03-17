@@ -106,7 +106,7 @@ function OrderHistoryPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {/* Date Filter */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Date</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Date</label>
                             <DatePicker
                                 value={dateFilter}
                                 onChange={setDateFilter}
@@ -118,7 +118,7 @@ function OrderHistoryPage() {
 
                         {/* Sort Order */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Sort By</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Sort By</label>
                             <Select value={sortOrder} onValueChange={(v: any) => setSortOrder(v)}>
                                 <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
                                     <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ function OrderHistoryPage() {
 
                         {/* Status Filter */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Checkout</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Checkout</label>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
                                 <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
                                     <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ function OrderHistoryPage() {
 
                         {/* Phase Filter */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Phase</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Phase</label>
                             <Select value={phaseFilter} onValueChange={setPhaseFilter}>
                                 <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
                                     <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ function OrderHistoryPage() {
 
                         {/* Type Filter */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Order Type</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Order Type</label>
                             <Select value={typeFilter} onValueChange={setTypeFilter}>
                                 <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
                                     <div className="flex items-center gap-2">
@@ -325,9 +325,9 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                     #{order.id}
                                 </span>
                                 {order.order_type === "SALES" ? (
-                                    <span className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">SALES</span>
+                                    <span className="bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded font-black uppercase tracking-wider">SALES</span>
                                 ) : (
-                                    <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">WORK</span>
+                                    <span className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded font-black uppercase tracking-wider">WORK</span>
                                 )}
                             </div>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
@@ -361,7 +361,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                 {order.order_type === "WORK" && (
                                     <div className="flex flex-col items-center gap-1 shrink-0">
                                         <div className={cn(
-                                            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border",
+                                            "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border",
                                             order.home_delivery
                                                 ? "bg-blue-50 text-blue-600 border-blue-200"
                                                 : "bg-slate-50 text-slate-600 border-slate-200"
@@ -373,7 +373,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                             )}
                                         </div>
                                         {order.delivery_date && (
-                                            <span className="text-[11px] tabular-nums font-medium text-muted-foreground">
+                                            <span className="text-xs tabular-nums font-medium text-muted-foreground">
                                                 {format(new Date(order.delivery_date), "dd/MM/yy")}
                                             </span>
                                         )}
@@ -402,18 +402,18 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                 <div className="flex flex-col items-end min-w-25">
                                     {isWorkOrder ? (
                                         <div className="flex flex-col items-end space-y-0.5">
-                                            <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
+                                            <span className="text-xs text-muted-foreground font-bold tabular-nums">
                                                 Total: {order.total_amount.toFixed(2)}
                                             </span>
-                                            <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
+                                            <span className="text-xs text-muted-foreground font-bold tabular-nums">
                                                 Paid: {order.paid_amount.toFixed(2)}
                                             </span>
                                             {order.balance > 0 ? (
-                                                <span className="text-[10px] text-destructive font-black tabular-nums bg-destructive/5 px-1 rounded border border-destructive/10">
+                                                <span className="text-xs text-destructive font-black tabular-nums bg-destructive/5 px-1 rounded border border-destructive/10">
                                                     Due: {order.balance.toFixed(2)}
                                                 </span>
                                             ) : (
-                                                <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">Paid Full</span>
+                                                <span className="text-xs text-emerald-600 font-bold uppercase tracking-tighter">Paid Full</span>
                                             )}
                                         </div>
                                     ) : (
@@ -421,7 +421,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                             <span className="font-black text-base tabular-nums leading-none">
                                                 {order.total_amount.toFixed(2)}
                                             </span>
-                                            <span className="text-[10px] font-bold text-muted-foreground">KWD</span>
+                                            <span className="text-xs font-bold text-muted-foreground">KWD</span>
                                         </div>
                                     )}
                                 </div>
@@ -435,7 +435,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                     <Badge 
                                         variant="outline" 
                                         className={cn(
-                                            "hidden sm:flex h-6 px-2 text-[10px] font-black uppercase border-none shadow-xs",
+                                            "hidden sm:flex h-6 px-2 text-xs font-black uppercase border-none shadow-xs",
                                             `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
                                             `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
                                         )}

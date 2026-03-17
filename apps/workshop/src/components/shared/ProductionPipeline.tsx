@@ -30,7 +30,7 @@ export function ProductionPipeline({ currentStage, compact = false, hasSoaking }
   const current = isPostProduction ? stages.length : (currentStage ? order.indexOf(currentStage) : -1);
 
   return (
-    <div className={cn("flex items-center gap-0.5", compact ? "text-[9px]" : "text-[10px]")}>
+    <div className={cn("flex items-center gap-0.5", compact ? "text-[10px]" : "text-xs")}>
       {stages.map((stage, i) => {
         const isDone = i < current;
         const isActive = i === current;
@@ -40,17 +40,17 @@ export function ProductionPipeline({ currentStage, compact = false, hasSoaking }
           <div key={stage.key} className="flex items-center">
             <div
               className={cn(
-                "rounded px-1.5 py-0.5 font-semibold uppercase tracking-wider transition-all",
+                "rounded-md px-1.5 py-0.5 font-semibold uppercase tracking-wider transition-all",
                 compact ? "px-1" : "px-1.5",
-                isDone && "bg-emerald-200 text-emerald-900",
-                isActive && "bg-blue-600 text-white shadow",
-                isPending && "bg-zinc-200 text-zinc-500",
+                isDone && "bg-emerald-100 text-emerald-800 border border-emerald-200/60",
+                isActive && "bg-primary text-primary-foreground shadow-sm",
+                isPending && "bg-muted text-muted-foreground/50",
               )}
             >
               {stage.label}
             </div>
             {i < stages.length - 1 && (
-              <div className={cn("w-2 h-0.5 mx-0.5", isDone ? "bg-emerald-400" : "bg-gray-200")} />
+              <div className={cn("w-2 h-0.5 mx-0.5 rounded-full", isDone ? "bg-emerald-300" : "bg-border")} />
             )}
           </div>
         );

@@ -29,7 +29,7 @@ const WORKSHOP_QUERY = `
     workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery)
   ),
   customer:orders!order_id(
-    customer:customers!customer_id(name, phone)
+    customer:customers!customer_id(name, phone, country_code)
   ),
   measurement:measurements!measurement_id(*),
   style_ref:styles!style_id(name, image_url),
@@ -48,7 +48,7 @@ function flattenGarment(raw: any): WorkshopGarment {
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
     customer_name: cust?.name ?? undefined,
-    customer_mobile: cust?.phone ?? undefined,
+    customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
     measurement: measurement ?? null,
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
@@ -115,6 +115,24 @@ export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
 
   if (error) {
     console.error('getAssignedViewGarments error:', error);
+    return [];
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+};
+
+/**
+ * Fetch ALL garments for a specific order — no location or plan filter.
+ * Used by the order detail page to show full order regardless of production status.
+ */
+export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment[]> => {
+  const { data, error } = await supabase
+    .from('garments')
+    .select(WORKSHOP_QUERY)
+    .eq('order_id', orderId)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    console.error('getOrderGarments error:', error);
     return [];
   }
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
@@ -191,12 +209,22 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .in('id', ids);
   if (error) throw new Error(error.message);
 
-  // For return garments with feedback_status, set piece_stage to waiting_cut
+  // Accepted brovas go straight to ready_for_dispatch — no production needed,
+  // they're just waiting to be dispatched back with the rest of the order
+  const { error: eAccepted } = await supabase
+    .from('garments')
+    .update({ piece_stage: 'ready_for_dispatch' as PieceStage })
+    .in('id', ids)
+    .eq('feedback_status', 'accepted');
+  if (eAccepted) throw new Error(eAccepted.message);
+
+  // For return garments with non-accepted feedback, set piece_stage to waiting_cut
   const { error: e2 } = await supabase
     .from('garments')
     .update({ piece_stage: 'waiting_cut' as PieceStage })
     .in('id', ids)
     .not('feedback_status', 'is', null)
+    .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
   if (e2) throw new Error(e2.message);
 };
@@ -209,22 +237,32 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .in('id', ids);
   if (e1) throw new Error(e1.message);
 
-  // Only set in_production=true for garments NOT waiting_for_acceptance
+  // Accepted brovas go straight to ready_for_dispatch — no production needed
+  const { error: eAccepted } = await supabase
+    .from('garments')
+    .update({ piece_stage: 'ready_for_dispatch' as PieceStage, in_production: false })
+    .in('id', ids)
+    .eq('feedback_status', 'accepted');
+  if (eAccepted) throw new Error(eAccepted.message);
+
+  // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
   // (finals parked for brova trial must stay out of production)
   const { error: e2 } = await supabase
     .from('garments')
     .update({ in_production: true })
     .in('id', ids)
-    .neq('piece_stage', 'waiting_for_acceptance');
+    .neq('piece_stage', 'waiting_for_acceptance')
+    .neq('feedback_status', 'accepted');
   if (e2) throw new Error(e2.message);
 
-  // For return brovas with feedback_status, reset piece_stage to waiting_cut
-  // so they appear in the scheduler (mirrors receiveGarments logic)
+  // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
+  // so they appear in the scheduler
   const { error: e3 } = await supabase
     .from('garments')
     .update({ piece_stage: 'waiting_cut' as PieceStage })
     .in('id', ids)
     .not('feedback_status', 'is', null)
+    .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
   if (e3) throw new Error(e3.message);
 };

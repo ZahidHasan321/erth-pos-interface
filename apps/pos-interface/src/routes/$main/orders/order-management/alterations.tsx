@@ -118,7 +118,7 @@ function AlterationsPage() {
             <Package className="w-8 h-8 text-muted-foreground/30" />
           </div>
           <h3 className="text-xl font-black text-foreground uppercase tracking-tight">All Clear</h3>
-          <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-1 max-w-xs">
+          <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-1 max-w-xs">
             No garments currently need alteration
           </p>
         </div>
@@ -165,8 +165,8 @@ function AlterationsPage() {
                             variant="outline"
                             className={
                               (g as any).feedback_status === "needs_repair"
-                                ? "border-amber-300 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase"
-                                : "border-red-300 bg-red-50 text-red-700 text-[10px] font-bold uppercase"
+                                ? "border-amber-300 bg-amber-50 text-amber-700 text-xs font-bold uppercase"
+                                : "border-red-300 bg-red-50 text-red-700 text-xs font-bold uppercase"
                             }
                           >
                             {(g as any).feedback_status === "needs_repair" ? "Needs Repair" : "Needs Redo"}
@@ -179,7 +179,7 @@ function AlterationsPage() {
                                 ? trip - 3
                                 : null;
                             return altNum !== null ? (
-                              <Badge variant="outline" className="text-[10px] font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
+                              <Badge variant="outline" className="text-xs font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
                                 <RotateCcw className="w-2.5 h-2.5 mr-1" />
                                 Alt {altNum}
                               </Badge>

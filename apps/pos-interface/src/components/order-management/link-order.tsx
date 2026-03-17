@@ -396,12 +396,12 @@ export default function LinkOrder() {
             <div className="bg-muted/30 px-5 py-3 border-b border-border flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Selected Orders</h3>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mt-0.5">
+                <p className="text-xs font-bold text-muted-foreground uppercase mt-0.5">
                     {selectedOrders.length} Orders Ready to Link
                 </p>
               </div>
               {hasOrders && (
-                <Button variant="ghost" size="sm" onClick={handleClear} className="h-8 text-[10px] font-black uppercase tracking-tighter text-muted-foreground hover:text-destructive transition-colors">
+                <Button variant="ghost" size="sm" onClick={handleClear} className="h-8 text-xs font-black uppercase tracking-tighter text-muted-foreground hover:text-destructive transition-colors">
                     Clear Selection
                 </Button>
               )}
@@ -460,17 +460,17 @@ export default function LinkOrder() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-sm tracking-tight">#{order.id}</span>
                             {order.invoiceNumber && (
-                              <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">INV {order.invoiceNumber}</span>
+                              <span className="text-xs font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">INV {order.invoiceNumber}</span>
                             )}
-                            {isPrimary && <Badge variant="default" className="text-[8px] font-black h-4 px-1.5 rounded-sm">PRIMARY</Badge>}
+                            {isPrimary && <Badge variant="default" className="text-xs font-black h-4 px-1.5 rounded-sm">PRIMARY</Badge>}
                             {order.isExistingPrimary && !isPrimary && (
-                              <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
+                              <Badge variant="outline" className="text-xs font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
                             )}
                             {order.isExistingChild && (
-                              <Badge variant="outline" className="text-[8px] font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600">CHILD</Badge>
+                              <Badge variant="outline" className="text-xs font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600">CHILD</Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1 font-bold truncate">
                               <User className="size-2.5 shrink-0" />
                               {order.customerName || "—"}
@@ -538,7 +538,7 @@ export default function LinkOrder() {
             <div className="overflow-auto max-h-[50vh] border rounded-xl bg-muted/5">
               <table className="w-full text-sm min-w-[600px]">
                 <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
-                  <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                     <th className="p-4 text-left w-12">
                       <div className="flex items-center justify-center">
                          <Checkbox
@@ -596,22 +596,22 @@ export default function LinkOrder() {
                             <h4 className="font-black text-xs uppercase">
                                 #{order.id}
                             </h4>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase">
+                            <p className="text-xs font-bold text-muted-foreground uppercase">
                               Inv: {order.invoice_number ?? "—"}
                             </p>
                           </div>
                         </td>
                         <td className="p-4">
                            {isChild ? (
-                             <Badge variant="secondary" className="text-[8px] font-black h-4 px-1 rounded-sm whitespace-nowrap">
+                             <Badge variant="secondary" className="text-xs font-black h-4 px-1 rounded-sm whitespace-nowrap">
                                 LINKED TO #{order.linked_order_id}
                              </Badge>
                            ) : isPrimary ? (
-                             <Badge variant="secondary" className="text-[8px] font-black h-4 px-1 rounded-sm whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200">
+                             <Badge variant="secondary" className="text-xs font-black h-4 px-1 rounded-sm whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200">
                                 PRIMARY OF GROUP
                              </Badge>
                            ) : (
-                             <span className="text-[10px] font-bold text-muted-foreground uppercase">Independent</span>
+                             <span className="text-xs font-bold text-muted-foreground uppercase">Independent</span>
                            )}
                         </td>
                         <td className="p-4">
@@ -621,7 +621,7 @@ export default function LinkOrder() {
                                 <span className="text-xs font-bold">{format(new Date(order.delivery_date), "PP")}</span>
                              </div>
                            ) : (
-                             <span className="text-[10px] font-bold text-muted-foreground uppercase">Not set</span>
+                             <span className="text-xs font-bold text-muted-foreground uppercase">Not set</span>
                            )}
                         </td>
                         <td className="p-4">
@@ -629,7 +629,7 @@ export default function LinkOrder() {
                             <Badge 
                               variant="outline" 
                               className={cn(
-                                "text-[9px] font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
+                                "text-xs font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
                                 `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
                                 `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
                               )}
@@ -637,7 +637,7 @@ export default function LinkOrder() {
                               {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
                             </Badge>
                           ) : (
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
                           )}
                         </td>
                       </tr>
@@ -651,14 +651,14 @@ export default function LinkOrder() {
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
                 <div className="flex items-center gap-2">
                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                     {selectedDialogIds.length} Orders Selected
                   </p>
                 </div>
                 <div className="flex gap-3">
                   <Button
                     variant="ghost"
-                    className="font-black uppercase tracking-widest text-[10px]"
+                    className="font-black uppercase tracking-widest text-xs"
                     onClick={() => setIsDialogOpen(false)}
                   >
                     Cancel

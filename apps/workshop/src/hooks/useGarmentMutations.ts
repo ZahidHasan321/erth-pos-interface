@@ -17,80 +17,257 @@ import {
   updateOrderAssignedDate,
 } from '@/api/garments';
 import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
+import type { WorkshopGarment } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
+/** Invalidate all garment-related queries (background refetch, no flash) */
+function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
+  qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
+  qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
+  qc.invalidateQueries({ queryKey: ['sidebar-counts'] });
+  qc.invalidateQueries({ queryKey: ['completed-today-garments'] });
+}
+
+/**
+ * Optimistically patch garments in the workshop cache.
+ * Returns a rollback function to restore the previous state on error.
+ */
+function optimisticPatch(
+  qc: ReturnType<typeof useQueryClient>,
+  ids: string[],
+  patch: Partial<WorkshopGarment>,
+): () => void {
+  const prev = qc.getQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY);
+  if (prev) {
+    const idSet = new Set(ids);
+    qc.setQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY, (old) =>
+      (old ?? []).map((g) => (idSet.has(g.id) ? { ...g, ...patch } : g)),
+    );
+  }
+  return () => {
+    if (prev) qc.setQueryData(WORKSHOP_GARMENTS_KEY, prev);
+  };
+}
+
+
+/** Simple mutation — no optimistic update, just invalidate on settle */
 function useMut<TArgs>(fn: (args: TArgs) => Promise<void>) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
-      qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
-      // Also invalidate individual garment detail queries
-      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
-    },
+    onSettled: () => invalidateAll(qc),
   });
 }
 
+// ── Receiving ──────────────────────────────────────────────────────────────
+
 export function useReceiveGarments() {
-  return useMut((ids: string[]) => receiveGarments(ids));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => receiveGarments(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      location: 'workshop' as any,
+      in_production: false,
+    }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useReceiveAndStart() {
-  return useMut((ids: string[]) => receiveAndStartGarments(ids));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => receiveAndStartGarments(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      location: 'workshop' as any,
+      in_production: true,
+    }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
+// ── Parking → Scheduler ────────────────────────────────────────────────────
+
 export function useSendToScheduler() {
-  return useMut((ids: string[]) => sendToScheduler(ids));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => sendToScheduler(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, { in_production: true }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useSendReturnToProduction() {
-  return useMut(({ id, stage }: { id: string; stage: PieceStage }) =>
-    sendReturnToProduction(id, stage),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: PieceStage }) =>
+      sendReturnToProduction(id, stage),
+    onMutate: ({ id }) => optimisticPatch(qc, [id], {
+      in_production: true,
+      piece_stage: 'waiting_cut' as PieceStage,
+      production_plan: null,
+    }),
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
+
+// ── Scheduling ─────────────────────────────────────────────────────────────
 
 export function useScheduleGarments() {
-  return useMut((args: { ids: string[]; soakingIds?: string[]; nonSoakingIds?: string[]; plan: Record<string, string>; date: string; reentryStage?: PieceStage }) =>
-    scheduleGarments(args.ids, args.plan, args.date, undefined, args.reentryStage, args.soakingIds, args.nonSoakingIds),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      ids: string[];
+      soakingIds?: string[];
+      nonSoakingIds?: string[];
+      plan: Record<string, string>;
+      date: string;
+      reentryStage?: PieceStage;
+    }) =>
+      scheduleGarments(
+        args.ids, args.plan, args.date, undefined,
+        args.reentryStage, args.soakingIds, args.nonSoakingIds,
+      ),
+    onMutate: (args) => {
+      // Scheduled garments get a production_plan and move out of waiting_cut,
+      // so they'll no longer match the scheduler filter — optimistically patch them
+      const soakSet = new Set(args.soakingIds ?? []);
+      const prev = qc.getQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY);
+      if (prev) {
+        const idSet = new Set(args.ids);
+        qc.setQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY, (old) =>
+          (old ?? []).map((g) => {
+            if (!idSet.has(g.id)) return g;
+            const stage = args.reentryStage
+              ?? (soakSet.has(g.id) ? 'soaking' : 'cutting');
+            return {
+              ...g,
+              production_plan: args.plan,
+              assigned_date: args.date,
+              in_production: true,
+              piece_stage: stage as PieceStage,
+            };
+          }),
+        );
+      }
+      return () => { if (prev) qc.setQueryData(WORKSHOP_GARMENTS_KEY, prev); };
+    },
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
+// ── Terminal operations ────────────────────────────────────────────────────
+
 export function useStartGarment() {
-  return useMut((id: string) => startGarment(id));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => startGarment(id),
+    onMutate: (id) => optimisticPatch(qc, [id], {
+      start_time: new Date() as any,
+    }),
+    onError: (_err, _id, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useCompleteAndAdvance() {
-  return useMut((args: { id: string; worker: string; stage: string; nextStage: string }) =>
-    completeAndAdvance(args.id, args.worker, args.stage, args.nextStage),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; worker: string; stage: string; nextStage: string }) =>
+      completeAndAdvance(args.id, args.worker, args.stage, args.nextStage),
+    onMutate: (args) => optimisticPatch(qc, [args.id], {
+      piece_stage: args.nextStage as PieceStage,
+      start_time: null,
+    }),
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useQcPass() {
-  return useMut((args: { id: string; worker: string; ratings: Record<string, number> }) =>
-    qcPass(args.id, args.worker, args.ratings),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; worker: string; ratings: Record<string, number> }) =>
+      qcPass(args.id, args.worker, args.ratings),
+    onMutate: (args) => optimisticPatch(qc, [args.id], {
+      piece_stage: 'ready_for_dispatch' as PieceStage,
+      start_time: null,
+      quality_check_ratings: args.ratings,
+    }),
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useQcFail() {
-  return useMut((args: { id: string; returnStage: PieceStage; reason: string }) =>
-    qcFail(args.id, args.returnStage, args.reason),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; returnStage: PieceStage; reason: string }) =>
+      qcFail(args.id, args.returnStage, args.reason),
+    onMutate: (args) => optimisticPatch(qc, [args.id], {
+      piece_stage: args.returnStage,
+      start_time: null,
+    }),
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
+
+// ── Dispatch ───────────────────────────────────────────────────────────────
 
 export function useDispatchGarments() {
-  return useMut((ids: string[]) => dispatchGarments(ids));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => dispatchGarments(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      location: 'transit_to_shop' as any,
+      in_production: false,
+    }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
+// ── Release finals ─────────────────────────────────────────────────────────
+
 export function useReleaseFinals() {
-  return useMut((ids: string[]) => releaseFinals(ids));
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => releaseFinals(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      piece_stage: 'waiting_cut' as PieceStage,
+      in_production: false,
+    }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useReleaseFinalsWithPlan() {
-  return useMut((args: { ids: string[]; plan: Record<string, string>; date: string }) =>
-    releaseFinalsWithPlan(args.ids, args.plan, args.date),
-  );
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { ids: string[]; plan: Record<string, string>; date: string }) =>
+      releaseFinalsWithPlan(args.ids, args.plan, args.date),
+    onMutate: (args) => {
+      const stage = (args.plan as any).soaker ? 'soaking' : 'cutting';
+      return optimisticPatch(qc, args.ids, {
+        piece_stage: stage as PieceStage,
+        in_production: true,
+        production_plan: args.plan,
+        assigned_date: args.date,
+      });
+    },
+    onError: (_err, _args, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
 }
+
+// ── Detail updates ─────────────────────────────────────────────────────────
 
 export function useUpdateGarmentDetails() {
   return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null } }) =>

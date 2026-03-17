@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWorkshopGarments, getCompletedTodayGarments, getGarmentById, getAssignedViewGarments, getCompletedOrderGarments, getBrovaStatusForOrders, getBrovaPlansForOrders } from '@/api/garments';
+import { getWorkshopGarments, getCompletedTodayGarments, getGarmentById, getOrderGarments, getAssignedViewGarments, getCompletedOrderGarments, getBrovaStatusForOrders, getBrovaPlansForOrders } from '@/api/garments';
 import type { WorkshopGarment } from '@repo/database';
 
 export const WORKSHOP_GARMENTS_KEY = ['workshop-garments'] as const;
@@ -71,6 +71,15 @@ export function useCompletedOrders() {
     queryFn: getCompletedOrderGarments,
     staleTime: 60_000,
     refetchInterval: 120_000,
+  });
+}
+
+export function useOrderGarments(orderId: number) {
+  return useQuery({
+    queryKey: ['order-garments', orderId],
+    queryFn: () => getOrderGarments(orderId),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 

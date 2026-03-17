@@ -12,7 +12,8 @@ import {
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pencil, Phone, MapPin, Users, User, Mail, MessageSquare, ArrowLeft, Loader2, Ruler } from 'lucide-react';
+import { Pencil, Phone, MapPin, Users, User, Mail, MessageSquare, ArrowLeft, Ruler } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useCustomer } from '@/hooks/use-customers';
 import { 
@@ -79,14 +80,14 @@ function CustomerSummaryCard({
                             <Phone className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Mobile</p>
+                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Mobile</p>
                             <p className="font-mono font-bold text-foreground">
                                 {customer.country_code} {customer.phone}
                             </p>
                             {customer.whatsapp && (
                                 <div className="flex items-center gap-1 mt-1">
                                     <div className="size-2 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[10px] font-bold text-green-600 uppercase">WhatsApp Active</span>
+                                    <span className="text-xs font-bold text-green-600 uppercase">WhatsApp Active</span>
                                 </div>
                             )}
                         </div>
@@ -97,7 +98,7 @@ function CustomerSummaryCard({
                             <MapPin className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Location</p>
+                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Location</p>
                             <p className="font-bold text-foreground">
                                 {customer.area || "N/A"}
                             </p>
@@ -105,7 +106,7 @@ function CustomerSummaryCard({
                                 {customer.city || "No city specified"}
                             </p>
                             {customer.nationality && (
-                                <p className="text-[10px] font-bold text-primary uppercase mt-1">
+                                <p className="text-xs font-bold text-primary uppercase mt-1">
                                     {customer.nationality}
                                 </p>
                             )}
@@ -117,7 +118,7 @@ function CustomerSummaryCard({
                             <Users className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Account Type</p>
+                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Account Type</p>
                             <div className="flex items-center gap-2">
                                 <span className={cn(
                                     "text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-sm",
@@ -141,7 +142,7 @@ function CustomerSummaryCard({
                             <Mail className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Email</p>
+                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Email</p>
                             <p className="text-sm font-medium text-foreground truncate max-w-[150px]">
                                 {customer.email || "No email provided"}
                             </p>
@@ -153,7 +154,7 @@ function CustomerSummaryCard({
                     <div className="mt-6 p-3 rounded-lg bg-muted/30 border border-border/50 flex gap-3">
                         <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="space-y-1">
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Notes</p>
+                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Notes</p>
                             <p className="text-sm text-muted-foreground italic leading-relaxed">
                                 "{customer.notes}"
                             </p>
@@ -203,9 +204,29 @@ function CustomerDetailComponent() {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                <p className="text-muted-foreground font-medium">Loading customer profile...</p>
+            <div className="space-y-6 py-6 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+                <Skeleton className="h-9 w-48 rounded-lg" />
+                <Card className="border-2 py-0 gap-0">
+                    <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center gap-4">
+                            <Skeleton className="size-16 rounded-full" />
+                            <div className="space-y-2 flex-1">
+                                <Skeleton className="h-6 w-48 rounded-md" />
+                                <Skeleton className="h-4 w-32 rounded-md" />
+                            </div>
+                            <Skeleton className="h-9 w-24 rounded-lg" />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="space-y-1.5">
+                                    <Skeleton className="h-3 w-16 rounded-md" />
+                                    <Skeleton className="h-5 w-28 rounded-md" />
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+                <Skeleton className="h-64 rounded-2xl" />
             </div>
         );
     }
@@ -277,7 +298,7 @@ function CustomerDetailComponent() {
                             <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
                             {watchedCustomer.name}
                         </SheetTitle>
-                        <SheetDescription className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
+                        <SheetDescription className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
                             manage and update body measurements for this profile
                         </SheetDescription>
                     </SheetHeader>

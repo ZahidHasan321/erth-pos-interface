@@ -309,12 +309,12 @@ export function OrderDataTable({
                         <div className="p-3 sm:pl-10">
                           <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
                             Garments
-                            <span className="bg-muted px-1.5 py-0.5 rounded-full text-[10px] font-black">{row.original.garmentsCount}</span>
+                            <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{row.original.garmentsCount}</span>
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                             {row.original.garments
                               .filter((g: any) => {
-                                if (row.original.showroomStatus.isReadyForPickup) return true;
+                                if (row.original.showroomStatus.label === "ready_for_pickup") return true;
                                 return g.locationKey === 'shop';
                               })
                               .map((garment) => {
@@ -327,14 +327,14 @@ export function OrderDataTable({
                                     className="p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm"
                                   >
                                     <div className="flex justify-between items-center mb-1.5">
-                                      <span className="font-mono font-medium text-[10px] text-muted-foreground">{garment.garmentId}</span>
+                                      <span className="font-mono font-medium text-xs text-muted-foreground">{garment.garmentId}</span>
                                       <div className="flex items-center gap-1">
                                         {isAlteration && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
                                             asChild
-                                            className="h-5 w-5 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                            className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                                           >
                                             <Link
                                               to="/$main/orders/order-management/feedback/$orderId"
@@ -348,7 +348,7 @@ export function OrderDataTable({
                                         )}
                                         <span
                                           className={cn(
-                                            "inline-flex items-center rounded border px-1 py-0 text-[9px] font-bold",
+                                            "inline-flex items-center rounded border px-1 py-0 text-xs font-bold",
                                             isAlteration
                                               ? "bg-blue-50 text-blue-700 border-blue-200"
                                               : garment.isBrova
@@ -362,20 +362,20 @@ export function OrderDataTable({
                                     </div>
                                     <div className="space-y-1">
                                       <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground text-[9px] uppercase font-bold">Stage</span>
-                                        <span className="font-bold text-[10px] bg-muted px-1.5 py-0.5 rounded">{garment.pieceStage}</span>
+                                        <span className="text-muted-foreground text-xs uppercase font-bold">Stage</span>
+                                        <span className="font-bold text-xs bg-muted px-1.5 py-0.5 rounded">{garment.pieceStage}</span>
                                       </div>
                                       <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground text-[9px] uppercase font-bold">Location</span>
+                                        <span className="text-muted-foreground text-xs uppercase font-bold">Location</span>
                                         <span className={cn(
-                                          "font-bold text-[10px] px-1.5 py-0.5 rounded",
+                                          "font-bold text-xs px-1.5 py-0.5 rounded",
                                           garment.locationKey === 'shop' ? "bg-emerald-50 text-emerald-700" : "bg-primary/5 text-primary"
                                         )}>
                                           {garment.locationLabel}
                                         </span>
                                       </div>
                                       <div className="pt-1 mt-1 border-t border-border/40">
-                                        <span className="font-bold text-[10px] text-primary leading-tight">{garment.style || "Standard Kuwaiti Style"}</span>
+                                        <span className="font-bold text-xs text-primary leading-tight">{garment.style || "Standard Kuwaiti Style"}</span>
                                       </div>
                                     </div>
                                   </div>

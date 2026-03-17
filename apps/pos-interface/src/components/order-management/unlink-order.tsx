@@ -26,6 +26,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
+import { Skeleton } from "../ui/skeleton";
 import {
     Dialog,
     DialogContent,
@@ -171,9 +172,26 @@ export default function UnlinkOrder() {
             {/* --- Groups List --- */}
             <div className="space-y-2">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-10 gap-4">
-                        <RefreshCw className="w-10 h-10 text-primary/40 animate-spin" />
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading link groups...</p>
+                    <div className="space-y-3">
+                        {[1, 2, 3].map((i) => (
+                            <Card key={i} className="border-2 border-border/60 py-0 gap-0">
+                                <div className="px-5 py-3 flex items-center gap-5">
+                                    <Skeleton className="size-11 rounded-2xl shrink-0" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex items-center gap-3">
+                                            <Skeleton className="h-5 w-16 rounded-md" />
+                                            <Skeleton className="h-4 w-20 rounded-md" />
+                                            <Skeleton className="h-5 w-32 rounded-md" />
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                            <Skeleton className="h-4 w-24 rounded-md" />
+                                        </div>
+                                    </div>
+                                    <Skeleton className="h-9 w-9 rounded-xl" />
+                                </div>
+                            </Card>
+                        ))}
                     </div>
                 ) : linkGroups.length === 0 ? (
                     <div className="bg-muted/30 rounded-3xl border-2 border-dashed border-border p-20 text-center">
@@ -215,14 +233,14 @@ export default function UnlinkOrder() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">New Delivery Date</Label>
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Delivery Date</Label>
                             <DatePicker
                                 value={reviseDate || undefined}
                                 onChange={(date) => setReviseDate(date || null)}
                                 className="w-full h-12 border-2 text-base font-bold"
                                 placeholder="Select Independent Delivery Date"
                             />
-                            <p className="text-[10px] font-bold text-muted-foreground italic px-1">
+                            <p className="text-xs font-bold text-muted-foreground italic px-1">
                                 * Required to schedule the workshop separately
                             </p>
                         </div>
@@ -292,7 +310,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                         <div className="flex items-center gap-3 mb-1">
                             <h3 className="text-lg font-black uppercase tracking-tight leading-none">#{group.primaryId}</h3>
                             {invoice && (
-                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md uppercase tracking-widest leading-none">INV {invoice}</span>
+                                <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md uppercase tracking-widest leading-none">INV {invoice}</span>
                             )}
                             <div className="h-4 w-px bg-border/60 mx-1" />
                             <span className="text-base font-black text-foreground truncate uppercase tracking-tight">{customerName}</span>
@@ -303,7 +321,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                                 <Badge 
                                     variant="outline" 
                                     className={cn(
-                                        "h-5 px-2 text-[10px] font-black uppercase border-none shadow-xs",
+                                        "h-5 px-2 text-xs font-black uppercase border-none shadow-xs",
                                         `bg-${ORDER_PHASE_COLORS[orderPhase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
                                         `text-${ORDER_PHASE_COLORS[orderPhase as keyof typeof ORDER_PHASE_COLORS]}-600`
                                     )}
@@ -311,7 +329,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                                     {ORDER_PHASE_LABELS[orderPhase as keyof typeof ORDER_PHASE_LABELS]}
                                 </Badge>
                             )}
-                            <div className="flex items-center gap-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                            <div className="flex items-center gap-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">
                                 <div className="flex items-center gap-1.5">
                                     <Phone className="size-3 text-primary/60" />
                                     <span className="font-mono">{customerPhone || "N/A"}</span>
@@ -329,15 +347,15 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
 
                 <div className="flex items-center gap-6">
                     <div className="hidden lg:flex flex-col items-end">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Linked Group</span>
+                        <span className="text-xs font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Linked Group</span>
                         <div className="flex -space-x-2">
                             {group.children.slice(0, 5).map((c) => (
-                                <div key={c.id} className="size-6 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shadow-sm">
+                                <div key={c.id} className="size-6 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shadow-sm">
                                     {c.id.toString().slice(-2)}
                                 </div>
                             ))}
                             {group.children.length > 5 && (
-                                <div className="size-6 rounded-full border-2 border-background bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold shadow-sm">
+                                <div className="size-6 rounded-full border-2 border-background bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shadow-sm">
                                     +{group.children.length - 5}
                                 </div>
                             )}
@@ -392,7 +410,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                                                         <Badge 
                                                             variant="outline" 
                                                             className={cn(
-                                                                "text-[9px] font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
+                                                                "text-xs font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
                                                                 `bg-${ORDER_PHASE_COLORS[child.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
                                                                 `text-${ORDER_PHASE_COLORS[child.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
                                                             )}
@@ -400,7 +418,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                                                             {ORDER_PHASE_LABELS[child.order_phase as keyof typeof ORDER_PHASE_LABELS]}
                                                         </Badge>
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
+                                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
                                                     )}
                                                 </td>
                                                 <td className="py-2 px-4 text-right">

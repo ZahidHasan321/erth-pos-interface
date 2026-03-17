@@ -109,7 +109,7 @@ export function MeasurementGrid({ measurement }: MeasurementGridProps) {
                     <span className="text-sm font-bold tabular-nums">
                       {whole}
                       {frac && <span className="text-xs font-semibold text-muted-foreground">({frac})</span>}
-                      <span className="text-[10px] text-muted-foreground font-normal">°</span>
+                      <span className="text-xs text-muted-foreground font-normal">°</span>
                     </span>
                   </div>
                 );

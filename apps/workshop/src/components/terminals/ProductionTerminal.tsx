@@ -3,12 +3,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments, useCompletedTodayGarments } from "@/hooks/useWorkshopGarments";
 import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { Skeleton } from "@/components/ui/skeleton";
+import { StatsCard, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle2, CalendarDays, Gauge } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 interface ProductionTerminalProps {
@@ -77,53 +77,43 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
     navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
   };
 
+  // Use Gauge as the header icon since we receive ReactNode but PageHeader needs LucideIcon
+  // We'll render the icon inline instead
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-5 flex items-end justify-between">
+      <div className="mb-6 flex items-end justify-between animate-fade-in">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-            {icon} {stageLabel}
+          <h1 className="text-2xl tracking-tight flex items-center gap-2.5">
+            {icon} <span className="font-normal">Production</span> <span className="font-bold text-primary">{stageLabel}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {stageGarments.length} garment{stageGarments.length !== 1 ? "s" : ""} at this station
           </p>
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-lg">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-card border px-3 py-1.5 rounded-lg shadow-sm">
           <CalendarDays className="w-4 h-4" />
           {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
         </div>
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-4 gap-2 mb-5">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-center">
-          <p className="text-xl font-black text-blue-700">{queue.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 opacity-70">Queue</p>
-        </div>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
-          <p className="text-xl font-black text-emerald-700">{started}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 opacity-70">Started</p>
-        </div>
-        <div className={`rounded-xl p-2.5 text-center border ${pending.length > 0 ? "bg-red-50 border-red-200" : "bg-zinc-50 border-zinc-200"}`}>
-          <p className={`text-xl font-black ${pending.length > 0 ? "text-red-700" : "text-zinc-400"}`}>{pending.length}</p>
-          <p className={`text-[10px] font-bold uppercase tracking-wider ${pending.length > 0 ? "text-red-600 opacity-70" : "text-zinc-400"}`}>Overdue</p>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 text-center">
-          <p className="text-xl font-black text-green-700">{completedToday.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 opacity-70">Done Today</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6 stagger-children">
+        <StatsCard icon={Clock} value={queue.length} label="Queue" color="blue" />
+        <StatsCard icon={Gauge} value={started} label="Started" color="emerald" />
+        <StatsCard icon={AlertCircle} value={pending.length} label="Overdue" color="red" dimOnZero />
+        <StatsCard icon={CheckCircle2} value={completedToday.length} label="Done Today" color="green" />
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+        <LoadingSkeleton />
       ) : (
         <Tabs defaultValue="queue">
           <TabsList className="mb-4">
             <TabsTrigger value="queue" className="gap-1.5">
               <Clock className="w-3.5 h-3.5" />
               Queue
-              <Badge variant="secondary" className="ml-0.5 text-xs">{queue.length}</Badge>
+              <Badge variant="secondary" className="ml-0.5 text-xs bg-blue-100 text-blue-700">{queue.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="pending" className="gap-1.5">
               <AlertCircle className="w-3.5 h-3.5" />

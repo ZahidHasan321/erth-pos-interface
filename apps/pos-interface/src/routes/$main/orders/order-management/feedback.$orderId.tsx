@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
@@ -786,9 +787,28 @@ function UnifiedFeedbackInterface() {
 
   if (isLoadingOrder) {
     return (
-      <div className="container mx-auto p-4 md:p-6 max-w-7xl flex flex-col items-center justify-center py-32 gap-4">
-        <Loader2 className="size-8 text-primary/40 animate-spin" />
-        <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Loading order...</p>
+      <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between border-b border-border pb-6">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64 rounded-lg" />
+            <Skeleton className="h-4 w-40 rounded-md" />
+          </div>
+          <Skeleton className="h-10 w-28 rounded-xl" />
+        </div>
+        {/* Tabs skeleton */}
+        <Skeleton className="h-10 w-80 rounded-xl" />
+        {/* Content skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -800,7 +820,7 @@ function UnifiedFeedbackInterface() {
           <Package className="w-10 h-10 text-muted-foreground/40" />
         </div>
         <h3 className="text-2xl font-black text-foreground uppercase tracking-tight">Order Not Found</h3>
-        <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-2">This order could not be loaded</p>
+        <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-2">This order could not be loaded</p>
         <Button variant="outline" className="mt-6 font-bold" onClick={() => router.history.back()}>
           <ArrowLeft className="size-3.5 mr-2" />
           Go Back
@@ -825,13 +845,13 @@ function UnifiedFeedbackInterface() {
             #{activeOrder.id} &bull; {activeOrder.customer?.name || "Guest"}
           </span>
           {activeGarment?.garment_type === "brova" && (
-            <Badge variant="outline" className="text-[9px] font-black uppercase bg-amber-50 text-amber-700 border-amber-200">Brova Trial</Badge>
+            <Badge variant="outline" className="text-xs font-black uppercase bg-amber-50 text-amber-700 border-amber-200">Brova Trial</Badge>
           )}
           {activeGarment?.garment_type === "final" && (
-            <Badge variant="outline" className="text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border-emerald-200">Final / Pickup</Badge>
+            <Badge variant="outline" className="text-xs font-black uppercase bg-emerald-50 text-emerald-700 border-emerald-200">Final / Pickup</Badge>
           )}
           {currentState.isEditing && (
-            <Badge variant="outline" className="text-[9px] font-black uppercase bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
+            <Badge variant="outline" className="text-xs font-black uppercase bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
           )}
         </div>
       </div>
@@ -847,11 +867,11 @@ function UnifiedFeedbackInterface() {
                     <User className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
                     <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
                   </div>
                   <div className="ml-2 pl-3 border-l border-border py-1">
-                    <p className="text-[10px] font-bold text-muted-foreground font-mono leading-none">{activeOrder.customer?.phone}</p>
+                    <p className="text-xs font-bold text-muted-foreground font-mono leading-none">{activeOrder.customer?.phone}</p>
                   </div>
                 </div>
 
@@ -864,7 +884,7 @@ function UnifiedFeedbackInterface() {
                             <Banknote className="w-3.5 h-3.5" />
                         </div>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Total Paid</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Total Paid</p>
                             <p className="font-black text-sm leading-none text-emerald-700">{activeOrder.paid || 0} KWD</p>
                         </div>
                     </div>
@@ -876,7 +896,7 @@ function UnifiedFeedbackInterface() {
                             <CreditCard className="w-3.5 h-3.5" />
                         </div>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Balance</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Balance</p>
                             <p className={cn(
                                 "font-black text-sm leading-none",
                                 (activeOrder.order_total || 0) - (activeOrder.paid || 0) > 0 ? "text-red-700" : "text-emerald-700"
@@ -896,10 +916,10 @@ function UnifiedFeedbackInterface() {
                       <Hash className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
+                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
                       <div className="flex items-center gap-2 leading-none">
                         <span className="font-black text-sm">#{activeOrder.id}</span>
-                        <span className="text-[10px] font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "\u2014"}</span>
+                        <span className="text-xs font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "\u2014"}</span>
                       </div>
                     </div>
                   </div>
@@ -916,7 +936,7 @@ function UnifiedFeedbackInterface() {
                     {(activeOrder as any).home_delivery ? <Home className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery</p>
                     <p className={cn(
                       "font-black text-sm leading-none",
                       (activeOrder as any).home_delivery ? "text-indigo-700" : "text-foreground"
@@ -949,7 +969,7 @@ function UnifiedFeedbackInterface() {
                     >
                         <div className="text-left w-full space-y-0.5">
                             <div className="flex items-center justify-between gap-2">
-                                <span className="font-black text-[11px] truncate uppercase tracking-tighter">{garment.garment_id}</span>
+                                <span className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</span>
                                 <div className="flex items-center gap-1">
                                     {isNotAtShop && (
                                         <Badge className="h-3 px-1 text-[6px] font-black uppercase border-none bg-purple-100 text-purple-700 data-[state=active]:bg-purple-500 data-[state=active]:text-white">
@@ -999,7 +1019,7 @@ function UnifiedFeedbackInterface() {
                                 </div>
                                 <CardTitle className="text-base font-bold uppercase tracking-tight">Adjustment Log</CardTitle>
                             </div>
-                            <Badge variant="outline" className="bg-background font-black text-[9px] h-6 px-2">
+                            <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">
                                 {isMeasurementLoading ? "SYNCING..." : "SYNCED"}
                             </Badge>
                         </div>
@@ -1008,7 +1028,7 @@ function UnifiedFeedbackInterface() {
                     <div className="relative overflow-x-auto">
                         <Table>
                             <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
-                                <TableRow className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                <TableRow className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                     <TableHead className="w-[12%] p-3">Dimension</TableHead>
                                     <TableHead className="text-center bg-muted/30 w-[10%] p-3">Order (in)</TableHead>
                                     <TableHead className="text-center w-[10%] bg-muted/30 p-3">QC (in)</TableHead>
@@ -1038,7 +1058,7 @@ function UnifiedFeedbackInterface() {
                                         <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
                                             <TableCell className="p-3">
                                                 <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
-                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
+                                                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
                                             </TableCell>
                                             <TableCell className="text-center font-black text-sm bg-muted/30">
                                                 {orderValue || "-"}
@@ -1070,7 +1090,7 @@ function UnifiedFeedbackInterface() {
                                             <TableCell className="text-center">
                                                     {diffOrder !== null ? (
                                                             <Badge variant="secondary" className={cn(
-                                                                "font-black text-[10px] h-6 px-1.5 shadow-sm",
+                                                                "font-black text-xs h-6 px-1.5 shadow-sm",
                                                                 statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
                                                                 statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
                                                                 statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
@@ -1078,20 +1098,20 @@ function UnifiedFeedbackInterface() {
                                                                 {diffOrder > 0 ? `+${diffOrder}` : diffOrder}
                                                             </Badge>
                                                     ) : (
-                                                        <span className="text-muted-foreground font-black text-[10px] opacity-20">{"\u2014"}</span>
+                                                        <span className="text-muted-foreground font-black text-xs opacity-20">{"\u2014"}</span>
                                                     )}
                                             </TableCell>
                                             <TableCell className="p-1.5">
                                                 <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
                                                     <SelectTrigger className={cn(
-                                                        "h-8 text-[10px] font-bold border-none shadow-none rounded-lg px-2 transition-colors",
+                                                        "h-8 text-xs font-bold border-none shadow-none rounded-lg px-2 transition-colors",
                                                         selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
                                                     )}>
                                                         <SelectValue placeholder="Select" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {DIFFERENCE_REASONS.map(r => (
-                                                            <SelectItem key={r.label} value={r.label} className={cn("text-[10px] font-bold uppercase py-2", r.color)}>
+                                                            <SelectItem key={r.label} value={r.label} className={cn("text-xs font-bold uppercase py-2", r.color)}>
                                                                 {r.label}
                                                             </SelectItem>
                                                         ))}
@@ -1102,7 +1122,7 @@ function UnifiedFeedbackInterface() {
                                                 <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-2 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
                                                     <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
                                                     <Input
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[10px] font-bold h-8"
+                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-xs font-bold h-8"
                                                         placeholder="Adjustment note..."
                                                         value={noteValue}
                                                         onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
@@ -1235,7 +1255,7 @@ function UnifiedFeedbackInterface() {
                                                         <button
                                                             onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
                                                             className={cn(
-                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
+                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
                                                                 hashwaConfirmed
                                                                     ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
                                                                     : "bg-background border-amber-200 text-amber-600 hover:border-emerald-400"
@@ -1247,7 +1267,7 @@ function UnifiedFeedbackInterface() {
                                                         <button
                                                             onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
                                                             className={cn(
-                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-[11px] uppercase tracking-wide transition-all",
+                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
                                                                 hashwaRejected
                                                                     ? "bg-red-500 border-red-500 text-white shadow-sm"
                                                                     : "bg-background border-amber-200 text-amber-600 hover:border-red-400"
@@ -1385,7 +1405,7 @@ function UnifiedFeedbackInterface() {
                                     </div>
                                     <div>
                                         <CardTitle className="text-base font-bold uppercase tracking-tight">Previous Feedback</CardTitle>
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
                                             {feedbackHistory.length} previous trip{feedbackHistory.length > 1 ? "s" : ""}
                                         </p>
                                     </div>
@@ -1399,12 +1419,12 @@ function UnifiedFeedbackInterface() {
                                     <div key={fb.id} className="p-3 rounded-xl border border-border/60 bg-muted/10 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="font-black text-[8px] uppercase">
+                                                <Badge variant="outline" className="font-black text-xs uppercase">
                                                     Trip {fb.trip_number || i + 1}
                                                 </Badge>
                                                 <Badge
                                                     className={cn(
-                                                        "font-black text-[8px] uppercase border-none",
+                                                        "font-black text-xs uppercase border-none",
                                                         fb.action === "accepted" && "bg-emerald-100 text-emerald-700",
                                                         fb.action === "needs_repair_accepted" && "bg-yellow-100 text-yellow-700",
                                                         fb.action === "needs_repair_rejected" && "bg-amber-100 text-amber-700",
@@ -1416,13 +1436,13 @@ function UnifiedFeedbackInterface() {
                                                     {fb.action?.replace(/_/g, " ")}
                                                 </Badge>
                                             </div>
-                                            <span className="text-[10px] font-bold text-muted-foreground">
+                                            <span className="text-xs font-bold text-muted-foreground">
                                                 {fb.created_at ? new Date(fb.created_at).toLocaleDateString() : ""}
                                             </span>
                                         </div>
                                         {fb.satisfaction_level && (
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Satisfaction:</span>
+                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Satisfaction:</span>
                                                 <span className="text-sm">
                                                     {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.emoji || ""}{" "}
                                                     {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.label || `${fb.satisfaction_level}/5`}
@@ -1455,7 +1475,7 @@ function UnifiedFeedbackInterface() {
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Overall Satisfaction</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Overall Satisfaction</Label>
                       <RadioGroup
                           value={currentState.satisfaction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { satisfaction: val })}
@@ -1472,7 +1492,7 @@ function UnifiedFeedbackInterface() {
                                       )}
                                   >
                                       <span className="text-2xl">{level.emoji}</span>
-                                      <span className="font-bold uppercase tracking-wider text-[9px]">{level.label}</span>
+                                      <span className="font-bold uppercase tracking-wider text-xs">{level.label}</span>
                                   </Label>
                               </div>
                           ))}
@@ -1483,9 +1503,9 @@ function UnifiedFeedbackInterface() {
                   {activeTab === "brova" && (
                       <div className="pt-3 border-t border-border/60 space-y-3">
                           <div className="flex items-center justify-between">
-                              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
+                              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
                               {currentState.customerSignature && (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px]">SIGNED</Badge>
+                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-xs">SIGNED</Badge>
                               )}
                           </div>
 
@@ -1510,7 +1530,7 @@ function UnifiedFeedbackInterface() {
                                           <div className="p-2.5 rounded-full bg-muted/30">
                                               <PenTool className="size-5 text-muted-foreground/50" />
                                           </div>
-                                          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
+                                          <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
                                       </button>
                                   </DialogTrigger>
                                   <DialogContent className="max-w-[95vw] sm:max-w-[550px] p-0 overflow-hidden">
@@ -1546,7 +1566,7 @@ function UnifiedFeedbackInterface() {
               <CardContent className="p-4 space-y-4">
                   {/* Status */}
                   <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Status</Label>
                       <RadioGroup
                           value={currentState.feedbackAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { feedbackAction: val })}
@@ -1558,7 +1578,7 @@ function UnifiedFeedbackInterface() {
                                   <Label
                                       htmlFor={`action-${opt.value}`}
                                       className={cn(
-                                          "flex items-center justify-center h-10 rounded-lg border-2 border-border bg-card px-2 cursor-pointer transition-all font-black uppercase tracking-tight text-[10px] text-center",
+                                          "flex items-center justify-center h-10 rounded-lg border-2 border-border bg-card px-2 cursor-pointer transition-all font-black uppercase tracking-tight text-xs text-center",
                                           opt.color
                                       )}
                                   >
@@ -1587,7 +1607,7 @@ function UnifiedFeedbackInterface() {
 
                   {/* Distribution */}
                   <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Distribution</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Distribution</Label>
                       <RadioGroup
                           value={currentState.distributionAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { distributionAction: val })}
@@ -1615,7 +1635,7 @@ function UnifiedFeedbackInterface() {
                                           )}
                                       >
                                           <opt.icon className="w-3.5 h-3.5 text-muted-foreground" />
-                                          <span className="font-bold uppercase tracking-wide text-[10px]">{opt.label}</span>
+                                          <span className="font-bold uppercase tracking-wide text-xs">{opt.label}</span>
                                       </Label>
                                   </div>
                               );
@@ -1657,7 +1677,7 @@ function UnifiedFeedbackInterface() {
                   <div className="grid grid-cols-2 gap-3">
                       {/* Delivery Type */}
                       <div className="space-y-1.5">
-                          <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Delivery</Label>
+                          <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Delivery</Label>
                           <button
                               onClick={async () => {
                                   const newVal = !(activeOrder as any).home_delivery;
@@ -1666,7 +1686,7 @@ function UnifiedFeedbackInterface() {
                                   toast.success(newVal ? "Switched to Home Delivery" : "Switched to Pickup");
                               }}
                               className={cn(
-                                  "w-full flex items-center justify-center gap-2 h-10 rounded-lg border-2 font-bold uppercase tracking-tight text-[10px] transition-all cursor-pointer active:scale-[0.97] shadow-sm hover:shadow-md",
+                                  "w-full flex items-center justify-center gap-2 h-10 rounded-lg border-2 font-bold uppercase tracking-tight text-xs transition-all cursor-pointer active:scale-[0.97] shadow-sm hover:shadow-md",
                                   (activeOrder as any).home_delivery
                                       ? "border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                                       : "border-primary/30 bg-card text-foreground hover:bg-primary/5 hover:border-primary/50"
@@ -1691,7 +1711,7 @@ function UnifiedFeedbackInterface() {
                           if (blockedFinals.length === 0) return null;
                           return (
                               <div className="space-y-1.5">
-                                  <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                       Finals ({blockedFinals.length})
                                   </Label>
                                   <Button
@@ -1699,7 +1719,7 @@ function UnifiedFeedbackInterface() {
                                       onClick={() => setIsProductionConfirmOpen(true)}
                                       variant={anyBrovaAccepted ? "default" : "outline"}
                                       className={cn(
-                                          "w-full h-10 font-bold uppercase tracking-tight text-[10px] rounded-lg shadow-sm",
+                                          "w-full h-10 font-bold uppercase tracking-tight text-xs rounded-lg shadow-sm",
                                           anyBrovaAccepted && "hover:shadow-md active:scale-[0.97]",
                                           !anyBrovaAccepted && "border-2 border-amber-300 text-amber-600 bg-amber-50/50 cursor-not-allowed opacity-70"
                                       )}
@@ -1714,7 +1734,7 @@ function UnifiedFeedbackInterface() {
                                       {anyBrovaAccepted ? "Start Production" : "Accept Brova First"}
                                   </Button>
                                   {anyBrovaAccepted && (
-                                      <p className="text-[9px] font-bold text-emerald-600 text-center">Ready to release</p>
+                                      <p className="text-xs font-bold text-emerald-600 text-center">Ready to release</p>
                                   )}
                               </div>
                           );

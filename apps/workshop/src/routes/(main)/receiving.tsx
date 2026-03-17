@@ -4,65 +4,25 @@ import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useReceiveGarments, useReceiveAndStart } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
+import {
+  PageHeader, StatsCard, EmptyState, LoadingSkeleton,
+  GarmentTypeBadge,
+} from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { StageBadge, BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
-import { cn, formatDate } from "@/lib/utils";
+import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
-import { Inbox, ChevronDown, ChevronUp, Clock, Package, Home } from "lucide-react";
-import type { WorkshopGarment } from "@repo/database";
+import { Inbox, ChevronDown, ChevronUp, Clock, Package, Home, Eye } from "lucide-react";
+import { OrderPeekSheet } from "@/components/shared/PeekSheets";
 
 export const Route = createFileRoute("/(main)/receiving")({
   component: ReceivingPage,
   head: () => ({ meta: [{ title: "Receiving" }] }),
 });
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-interface OrderGroup {
-  order_id: number;
-  invoice_number?: number;
-  customer_name?: string;
-  customer_mobile?: string;
-  brands: string[];
-  express: boolean;
-  home_delivery?: boolean;
-  garments: WorkshopGarment[];
-}
-
-function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
-  const map = new Map<number, OrderGroup>();
-  for (const g of garments) {
-    if (!map.has(g.order_id)) {
-      map.set(g.order_id, {
-        order_id: g.order_id,
-        invoice_number: g.invoice_number,
-        customer_name: g.customer_name,
-        customer_mobile: g.customer_mobile,
-        brands: [],
-        express: false,
-        home_delivery: g.home_delivery_order,
-        garments: [],
-      });
-    }
-    const entry = map.get(g.order_id)!;
-    entry.garments.push(g);
-    if (g.express) entry.express = true;
-    if (g.order_brand && !entry.brands.includes(g.order_brand)) entry.brands.push(g.order_brand);
-  }
-  return Array.from(map.values());
-}
-
-function garmentSummary(garments: WorkshopGarment[]): string {
-  const b = garments.filter((g) => g.garment_type === "brova").length;
-  const f = garments.filter((g) => g.garment_type === "final").length;
-  const parts: string[] = [];
-  if (b) parts.push(`${b} Brova`);
-  if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
-  return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
-}
+// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
 
 // ── OrderCard (order-level, for Incoming tab) ────────────────────────────────
 
@@ -82,150 +42,104 @@ function OrderCard({
   isReceiving: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [peekOpen, setPeekOpen] = useState(false);
   const deliveryDate = group.garments[0]?.delivery_date_order;
+  const daysLeft = deliveryDate
+    ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+    : null;
+  const isOverdue = daysLeft !== null && daysLeft < 0;
+  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
 
   return (
+    <>
     <div
       className={cn(
         "bg-white border rounded-xl transition-all shadow-sm border-l-4",
         group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
-        selected && "border-primary ring-1 ring-primary/30",
+        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
     >
-      {/* Header - clickable to expand */}
       <div
         className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => onToggle(!selected)}
       >
-        <div className="flex items-start gap-3">
-          {/* Checkbox */}
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-4 h-4 accent-primary cursor-pointer shrink-0 mt-1"
-          />
-
-          {/* Left: order info */}
-          <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Top row: ID + customer + badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono font-bold text-base">#{group.order_id}</span>
-              <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
-              {group.brands.map((b) => (
-                <BrandBadge key={b} brand={b} />
-              ))}
-              {group.express && <ExpressBadge />}
-              {group.home_delivery && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200">
-                  <Home className="w-3 h-3" />
-                  Delivery
-                </span>
-              )}
-            </div>
-
-            {/* Bottom row: metadata chips */}
-            <div className="flex items-center flex-wrap gap-1.5">
-              {group.invoice_number && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                  INV-{group.invoice_number}
-                </span>
-              )}
-              {group.customer_mobile && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                  {group.customer_mobile}
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                <Package className="w-3 h-3" />
-                {garmentSummary(group.garments)}
-              </span>
-              {deliveryDate && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-100 font-semibold px-2 py-0.5 rounded-md">
-                  <Clock className="w-3 h-3" />
-                  {formatDate(deliveryDate)}
-                </span>
-              )}
-            </div>
+        {/* Row 1: Identity + actions */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+            />
+            <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
+            {group.invoice_number && (
+              <span className="text-sm text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
+            )}
+            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+            <span className="text-base text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
           </div>
 
-          {/* Right: action buttons + chevron indicator */}
-          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => { e.stopPropagation(); onReceivePark(); }}
-              disabled={isReceiving}
-              className="text-xs h-7"
-            >
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onReceivePark(); }} disabled={isReceiving} className="text-xs h-7">
               Receive
             </Button>
-            <Button
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }}
-              disabled={isReceiving}
-              className="text-xs h-7"
-            >
+            <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }} disabled={isReceiving} className="text-xs h-7">
               Receive & Start
             </Button>
-            <div className={cn(
-              "p-1.5 rounded-md transition-colors",
-              expanded ? "bg-muted" : "text-muted-foreground",
-            )}>
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            <button
+              className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+            >
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Status (left) + Logistics (right) */}
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-sm text-muted-foreground/60">{garmentSummary(group.garments)}</span>
+            {group.express && <ExpressBadge />}
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {group.home_delivery && (
+              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
+                <Home className="w-3 h-3" /> Delivery
+              </span>
+            )}
+            {deliveryDate && (
+              <span className={cn(
+                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
+                isOverdue && "bg-red-100 text-red-800",
+                isUrgent && "bg-amber-100 text-amber-800",
+                !isUrgent && !isOverdue && "text-muted-foreground",
+              )}>
+                <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Expanded garment list */}
       {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-3 space-y-2">
+        <div className="border-t bg-muted/20 px-4 py-2.5 space-y-1.5">
           {group.garments.map((g) => (
             <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2">
-              <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
-                {g.garment_id ?? g.id.slice(0, 8)}
-              </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "border-0 font-semibold text-[10px] uppercase",
-                  g.garment_type === "brova"
-                    ? "bg-purple-200 text-purple-900"
-                    : "bg-blue-200 text-blue-900",
-                )}
-              >
-                {g.garment_type}
-              </Badge>
-              <StageBadge stage={g.piece_stage} />
+              <GarmentTypeBadge type={g.garment_type ?? "final"} />
+              <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
               {g.express && <ExpressBadge />}
             </div>
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-// ── EmptyState ───────────────────────────────────────────────────────────────
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-2xl">
-      <Inbox className="w-10 h-10 text-muted-foreground/30 mb-3" />
-      <p className="font-semibold text-muted-foreground">{message}</p>
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-3">
-      {[1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-24 rounded-xl" />
-      ))}
-    </div>
+    <OrderPeekSheet orderId={peekOpen ? group.order_id : null} open={peekOpen} onOpenChange={setPeekOpen} />
+    </>
   );
 }
 
@@ -320,52 +234,37 @@ function ReceivingPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto pb-28">
-      <div className="mb-6">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          <Inbox className="w-6 h-6" /> Receiving
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {inTransit.length} garment{inTransit.length !== 1 ? "s" : ""} in transit from shop
-        </p>
-      </div>
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-28">
+      <PageHeader
+        icon={Inbox}
+        title="Receiving"
+        subtitle={`${inTransit.length} garment${inTransit.length !== 1 ? "s" : ""} in transit from shop`}
+      />
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-2 mb-6">
-        <div className="border rounded-xl p-2.5 text-center bg-blue-50 text-blue-700 border-blue-200 shadow-sm">
-          <Inbox className="w-4 h-4 mx-auto mb-1 opacity-60" />
-          <p className="text-xl font-black leading-none">{incomingOrders.length}</p>
-          <p className="text-[10px] mt-1 uppercase tracking-wider font-bold opacity-70">Incoming</p>
-        </div>
-        <div className="border rounded-xl p-2.5 text-center bg-purple-50 text-purple-700 border-purple-200 shadow-sm">
-          <Package className="w-4 h-4 mx-auto mb-1 opacity-60" />
-          <p className="text-xl font-black leading-none">{brovaReturns.length}</p>
-          <p className="text-[10px] mt-1 uppercase tracking-wider font-bold opacity-70">Brova Returns</p>
-        </div>
-        <div className="border rounded-xl p-2.5 text-center bg-orange-50 text-orange-700 border-orange-200 shadow-sm">
-          <Clock className="w-4 h-4 mx-auto mb-1 opacity-60" />
-          <p className="text-xl font-black leading-none">{alterationIn.length}</p>
-          <p className="text-[10px] mt-1 uppercase tracking-wider font-bold opacity-70">Alteration In</p>
-        </div>
+      <div className="grid grid-cols-3 gap-2.5 mb-6">
+        <StatsCard icon={Inbox} value={incomingOrders.length} label="Incoming" color="blue" />
+        <StatsCard icon={Package} value={brovaReturns.length} label="Brova Returns" color="purple" />
+        <StatsCard icon={Clock} value={alterationIn.length} label="Alteration In" color="orange" dimOnZero />
       </div>
 
       <Tabs defaultValue="incoming">
         <TabsList className="mb-4 h-auto flex-wrap gap-1">
           <TabsTrigger value="incoming">
             Incoming{" "}
-            <Badge variant="secondary" className="ml-1 text-xs">
+            <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
               {incomingOrders.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="brova-returns">
             Brova Returns{" "}
-            <Badge variant="secondary" className="ml-1 text-xs">
+            <Badge variant="secondary" className="ml-1 text-xs bg-purple-100 text-purple-700">
               {brovaReturns.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="alteration-in">
             Alteration In{" "}
-            <Badge variant="secondary" className="ml-1 text-xs">
+            <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-700">
               {alterationIn.length}
             </Badge>
           </TabsTrigger>
@@ -382,7 +281,7 @@ function ReceivingPage() {
           {isLoading ? (
             <LoadingSkeleton />
           ) : incomingOrders.length === 0 ? (
-            <EmptyState message="No incoming orders" />
+            <EmptyState icon={Inbox} message="No incoming orders" />
           ) : (
             <div className="space-y-3">
               {incomingOrders.map((group) => (
@@ -425,7 +324,7 @@ function ReceivingPage() {
           {isLoading ? (
             <LoadingSkeleton />
           ) : brovaReturns.length === 0 ? (
-            <EmptyState message="No brova returns in transit" />
+            <EmptyState icon={Package} message="No brova returns in transit" />
           ) : (
             <div className="space-y-3">
               {brovaReturns.map((g, i) => (
@@ -435,8 +334,6 @@ function ReceivingPage() {
                   selected={selectedBrova.has(g.id)}
                   onSelect={toggleGarment(setSelectedBrova)}
                   showPipeline={false}
-
-
                   index={i}
                   actions={
                     <div className="flex gap-1">
@@ -499,7 +396,7 @@ function ReceivingPage() {
           {isLoading ? (
             <LoadingSkeleton />
           ) : alterationIn.length === 0 ? (
-            <EmptyState message="No alteration returns in transit" />
+            <EmptyState icon={Clock} message="No alteration returns in transit" />
           ) : (
             <div className="space-y-3">
               {alterationIn.map((g, i) => (
@@ -509,8 +406,6 @@ function ReceivingPage() {
                   selected={selectedAltIn.has(g.id)}
                   onSelect={toggleGarment(setSelectedAltIn)}
                   showPipeline={false}
-
-
                   index={i}
                   actions={
                     <div className="flex gap-1">

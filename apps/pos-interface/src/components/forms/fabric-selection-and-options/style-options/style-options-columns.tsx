@@ -8,8 +8,8 @@ import * as StyleCells from "./style-options-cells";
 export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "garment_id",
-    header: "Garment ID",
-    size: 80,
+    header: "ID",
+    size: 50,
     cell: StyleCells.GarmentIdCell,
   },
   {

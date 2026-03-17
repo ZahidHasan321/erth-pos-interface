@@ -125,19 +125,14 @@ export function GarmentHeader({
             Delivery
           </span>
         )}
-        {garment.delivery_date_order && (
+        {/* When showExtras is true, dates are editable via children — skip read-only display */}
+        {!showExtras && garment.delivery_date_order && (
           <span className="flex items-center gap-1 text-amber-700 font-medium">
             <Clock className="w-3.5 h-3.5" />
             {formatDate(garment.delivery_date_order)}
           </span>
         )}
-        {showExtras && garment.delivery_date && (
-          <span className="flex items-center gap-1 text-orange-600 font-medium">
-            <Clock className="w-3.5 h-3.5" />
-            {garment.delivery_date instanceof Date ? formatDate(garment.delivery_date.toISOString()) : formatDate(garment.delivery_date)}
-          </span>
-        )}
-        {garment.assigned_date && (
+        {!showExtras && garment.assigned_date && (
           <span className="flex items-center gap-1 text-violet-700 font-medium">
             <Timer className="w-3.5 h-3.5" />
             {formatDate(garment.assigned_date)}
@@ -211,8 +206,17 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
         )}
 
         {specs.map((field) => {
-          const rawVal = String(g[field.key]);
-          const mapped = field.type === "text" ? STYLE_IMAGE_MAP[rawVal] : null;
+          let lookupKey = String(g[field.key]);
+          // jabzour_1 stores BUTTON/ZIPPER enum; actual style key is in jabzour_2
+          // ZIPPER = Shaab (show JAB_SHAAB), BUTTON = jabzour_2 is the style
+          if (field.key === "jabzour_1") {
+            lookupKey = g.jabzour_1 === "ZIPPER" ? "JAB_SHAAB" : String(g.jabzour_2 ?? "");
+          }
+          // jabzour_2: when ZIPPER, show the sub-style; when BUTTON, jabzour_2 was already shown as jabzour_1
+          if (field.key === "jabzour_2" && g.jabzour_1 !== "ZIPPER") {
+            return null; // skip, already shown in jabzour_1 row
+          }
+          const mapped = field.type === "text" ? STYLE_IMAGE_MAP[lookupKey] : null;
           const thickness = field.thicknessKey ? g[field.thicknessKey] : null;
           const thicknessLabel = thickness ? THICKNESS_LABELS[thickness] ?? thickness : null;
           const isBool = field.type === "boolean";
@@ -233,7 +237,7 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
                   <img src={boolIcon} alt={field.label} className="h-7 w-7 object-contain" />
                 ) : null}
                 <span className="text-sm font-semibold">
-                  {isBool ? "Yes" : (mapped?.label ?? rawVal)}
+                  {isBool ? "Yes" : (mapped?.label ?? lookupKey)}
                 </span>
                 {thicknessLabel && (
                   <span className="text-xs font-bold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded">

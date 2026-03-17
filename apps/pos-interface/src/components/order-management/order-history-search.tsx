@@ -41,7 +41,7 @@ export function OrderHistorySearch({
           </button>
         )}
       </div>
-      <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground font-semibold">
+      <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground font-semibold">
         <Hash className="size-3 text-primary/60" />
         <span>Use <span className="text-primary">#</span> for direct ID/Invoice lookup</span>
       </div>

@@ -43,7 +43,7 @@ export function LinkConfigurationPanel({
           </div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest">Global Revise Date</h3>
-            <p className="text-[9px] font-bold text-muted-foreground uppercase">Sync all delivery dates</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase">Sync all delivery dates</p>
           </div>
         </div>
 
@@ -57,13 +57,13 @@ export function LinkConfigurationPanel({
           />
 
           <div className="space-y-2.5 pt-1">
-            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+            <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
               <span className="text-muted-foreground">Primary Order</span>
               <span className={cn(primaryOrderId ? "text-primary" : "text-destructive")}>
                 {primaryOrderId ? `Order #${primaryOrderId}` : "Required"}
               </span>
             </div>
-            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+            <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
               <span className="text-muted-foreground">Revise Date</span>
               <span className={cn(reviseDate ? "text-primary" : "text-destructive")}>
                 {reviseDate ? format(reviseDate, "PP") : "Required"}

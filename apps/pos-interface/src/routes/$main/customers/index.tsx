@@ -8,7 +8,6 @@ import {
   Eye,
   Phone,
   MapPin,
-  Loader2,
   Ruler
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,7 @@ import {
 import { useCustomers } from "@/hooks/use-customers";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { 
   Select,
@@ -86,7 +86,7 @@ function CustomersListComponent() {
           <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
             Customer <span className="text-primary">Directory</span>
           </h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
             Manage and view your customer database
           </p>
         </div>
@@ -128,20 +128,14 @@ function CustomersListComponent() {
       <Card className="border-border/60 shadow-sm overflow-hidden py-0 gap-0">
         <CardContent className="p-0">
           <div className="relative">
-            {isLoading && (
-              <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10">
-                <Loader2 className="h-8 w-8 text-primary animate-spin" />
-              </div>
-            )}
-            
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="font-bold uppercase text-[10px] tracking-widest py-4">Customer</TableHead>
-                  <TableHead className="font-bold uppercase text-[10px] tracking-widest py-4">Contact</TableHead>
-                  <TableHead className="font-bold uppercase text-[10px] tracking-widest py-4">Location</TableHead>
-                  <TableHead className="font-bold uppercase text-[10px] tracking-widest py-4">Account Type</TableHead>
-                  <TableHead className="text-right font-bold uppercase text-[10px] tracking-widest py-4">Actions</TableHead>
+                  <TableHead className="font-bold uppercase text-xs tracking-widest py-4">Customer</TableHead>
+                  <TableHead className="font-bold uppercase text-xs tracking-widest py-4">Contact</TableHead>
+                  <TableHead className="font-bold uppercase text-xs tracking-widest py-4">Location</TableHead>
+                  <TableHead className="font-bold uppercase text-xs tracking-widest py-4">Account Type</TableHead>
+                  <TableHead className="text-right font-bold uppercase text-xs tracking-widest py-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -178,7 +172,7 @@ function CustomersListComponent() {
                       </TableCell>
                       <TableCell className="py-4">
                         <span className={cn(
-                          "text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-sm uppercase tracking-wider",
+                          "text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-sm uppercase tracking-wider",
                           customer.account_type === 'Primary' 
                             ? "bg-blue-50 text-blue-700 border-blue-200" 
                             : "bg-amber-50 text-amber-700 border-amber-200"
@@ -207,13 +201,31 @@ function CustomersListComponent() {
                       </TableCell>
                     </TableRow>
                   ))
-                ) : !isLoading ? (
+                ) : isLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="size-10 rounded-full" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-28 rounded-md" />
+                            <Skeleton className="h-3 w-20 rounded-md" />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4"><Skeleton className="h-4 w-32 rounded-md" /></TableCell>
+                      <TableCell className="py-4"><Skeleton className="h-4 w-28 rounded-md" /></TableCell>
+                      <TableCell className="py-4"><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                      <TableCell className="py-4 text-right"><Skeleton className="h-8 w-20 rounded-md ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       No customers found.
                     </TableCell>
                   </TableRow>
-                ) : null}
+                )}
               </TableBody>
             </Table>
           </div>
@@ -227,7 +239,7 @@ function CustomersListComponent() {
               <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
               {selectedCustomer?.name}
             </SheetTitle>
-            <SheetDescription className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
+            <SheetDescription className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
               manage and update body measurements for this profile
             </SheetDescription>
           </SheetHeader>

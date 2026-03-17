@@ -8,6 +8,9 @@ import {
 } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
+import {
+  MetadataChip, GarmentTypeBadge,
+} from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,16 +26,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BrandBadge, ExpressBadge, StageBadge } from "@/components/shared/StageBadge";
-import { cn, formatDate } from "@/lib/utils";
-import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { useResources } from "@/hooks/useResources";
 import { toast } from "sonner";
 import {
   ParkingSquare, Clock, RotateCcw, Zap, Unlock, ChevronDown, ChevronUp,
-  Package, Home, AlertTriangle, ClipboardList, Check,
+  Package, Home, AlertTriangle, ClipboardList, Check, Eye,
   CalendarDays, Pencil, Scissors, Shirt, Sparkles, Flame, ShieldCheck, Droplets,
   type LucideIcon,
 } from "lucide-react";
+import { OrderPeekSheet } from "@/components/shared/PeekSheets";
 import type { WorkshopGarment } from "@repo/database";
 import type { PieceStage } from "@repo/database";
 
@@ -41,50 +44,7 @@ export const Route = createFileRoute("/(main)/parking")({
   head: () => ({ meta: [{ title: "Parking" }] }),
 });
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-interface OrderGroup {
-  order_id: number;
-  invoice_number?: number;
-  customer_name?: string;
-  customer_mobile?: string;
-  brands: string[];
-  express: boolean;
-  home_delivery?: boolean;
-  garments: WorkshopGarment[];
-}
-
-function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
-  const map = new Map<number, OrderGroup>();
-  for (const g of garments) {
-    if (!map.has(g.order_id)) {
-      map.set(g.order_id, {
-        order_id: g.order_id,
-        invoice_number: g.invoice_number,
-        customer_name: g.customer_name,
-        customer_mobile: g.customer_mobile,
-        brands: [],
-        express: false,
-        home_delivery: g.home_delivery_order,
-        garments: [],
-      });
-    }
-    const entry = map.get(g.order_id)!;
-    entry.garments.push(g);
-    if (g.express) entry.express = true;
-    if (g.order_brand && !entry.brands.includes(g.order_brand)) entry.brands.push(g.order_brand);
-  }
-  return Array.from(map.values());
-}
-
-function garmentSummary(garments: WorkshopGarment[]): string {
-  const b = garments.filter((g) => g.garment_type === "brova").length;
-  const f = garments.filter((g) => g.garment_type === "final").length;
-  const parts: string[] = [];
-  if (b) parts.push(`${b} Brova`);
-  if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
-  return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
-}
+// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
 
 const isAllWaitingAcceptance = (garments: WorkshopGarment[]) =>
   garments.every((g) => g.piece_stage === "waiting_for_acceptance");
@@ -138,11 +98,18 @@ function ParkingOrderCard({
   isSending: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [peekOpen, setPeekOpen] = useState(false);
   const allParked = isAllWaitingAcceptance(group.garments);
   const brovaBlock = getBrovaBlockReason(allOrderGarments);
   const deliveryDate = group.garments[0]?.delivery_date_order;
+  const daysLeft = deliveryDate
+    ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+    : null;
+  const isOverdue = daysLeft !== null && daysLeft < 0;
+  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
 
   return (
+    <>
     <div
       className={cn(
         "bg-white border rounded-xl transition-all shadow-sm border-l-4",
@@ -151,127 +118,99 @@ function ParkingOrderCard({
           : allParked
             ? "border-l-amber-400"
             : "border-l-border",
-        selected && "border-primary ring-1 ring-primary/30",
+        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
     >
       <div
         className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => !allParked && onToggle(!selected)}
       >
-        <div className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={(e) => onToggle(e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-            disabled={allParked}
-            className="w-4 h-4 accent-primary cursor-pointer shrink-0 disabled:cursor-not-allowed mt-0.5"
-          />
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
-              <span className="font-mono font-bold text-base shrink-0">#{group.order_id}</span>
-              <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
-              {group.brands.map((b) => (
-                <BrandBadge key={b} brand={b} />
-              ))}
-              {group.express && <ExpressBadge />}
-              {group.home_delivery && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200">
-                  <Home className="w-3 h-3" />
-                  Delivery
-                </span>
-              )}
-              {allParked && brovaBlock === "in_production" && (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-purple-500 text-white text-[10px] font-semibold uppercase"
-                >
-                  Brova in production
-                </Badge>
-              )}
-              {allParked && brovaBlock === "awaiting_trial" && (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-amber-500 text-white text-[10px] font-semibold uppercase"
-                >
-                  Waiting for brova trial
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center flex-wrap gap-1.5">
-              {group.invoice_number && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md font-mono">
-                  INV-{group.invoice_number}
-                </span>
-              )}
-              {group.customer_mobile && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                  {group.customer_mobile}
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                <Package className="w-3 h-3" />
-                {garmentSummary(group.garments)}
-              </span>
-              {deliveryDate && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                  <Clock className="w-3 h-3" />
-                  {formatDate(deliveryDate)}
-                </span>
-              )}
-            </div>
+        {/* Row 1: Identity + actions */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
+              onClick={(e) => e.stopPropagation()}
+              disabled={allParked}
+              className="w-4 h-4 accent-primary cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            />
+            <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
+            {group.invoice_number && (
+              <span className="text-sm text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
+            )}
+            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+            <span className="text-base text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+
+          <div className="flex items-center gap-1.5 shrink-0">
             {!allParked && (
-              <Button
-                size="sm"
-                onClick={(e) => { e.stopPropagation(); onSendToScheduler(); }}
-                disabled={isSending}
-                className="text-xs h-7"
-              >
+              <Button size="sm" onClick={(e) => { e.stopPropagation(); onSendToScheduler(); }} disabled={isSending} className="text-xs h-7">
                 → Scheduler
               </Button>
             )}
-            <div className={cn(
-              "p-1.5 rounded-md transition-colors",
-              expanded ? "bg-muted" : "text-muted-foreground",
-            )}>
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            <button
+              className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+            >
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Status (left) + Logistics (right) */}
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            {allParked && brovaBlock === "in_production" && (
+              <Badge variant="outline" className="border-0 bg-purple-500 text-white text-xs font-semibold uppercase">
+                Brova in production
+              </Badge>
+            )}
+            {allParked && brovaBlock === "awaiting_trial" && (
+              <Badge variant="outline" className="border-0 bg-amber-500 text-white text-xs font-semibold uppercase">
+                Waiting for brova trial
+              </Badge>
+            )}
+            <span className="text-sm text-muted-foreground/60">{garmentSummary(group.garments)}</span>
+            {group.express && <ExpressBadge />}
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {group.home_delivery && (
+              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
+                <Home className="w-3 h-3" /> Delivery
+              </span>
+            )}
+            {deliveryDate && (
+              <span className={cn(
+                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
+                isOverdue && "bg-red-100 text-red-800",
+                isUrgent && "bg-amber-100 text-amber-800",
+                !isUrgent && !isOverdue && "text-muted-foreground",
+              )}>
+                <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-3 space-y-2">
+        <div className="border-t bg-muted/20 px-4 py-2.5 space-y-1.5">
           {group.garments.map((g) => (
-            <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
-                {g.garment_id ?? g.id.slice(0, 8)}
-              </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "border-0 font-semibold text-[10px] uppercase",
-                  g.garment_type === "brova"
-                    ? "bg-purple-200 text-purple-900"
-                    : "bg-blue-200 text-blue-900",
-                )}
-              >
-                {g.garment_type}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="border-0 text-[10px] font-semibold uppercase bg-zinc-200 text-zinc-800"
-              >
-                {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ??
-                  g.piece_stage}
-              </Badge>
+            <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2">
+              <GarmentTypeBadge type={g.garment_type ?? "final"} />
+              <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
             </div>
           ))}
         </div>
       )}
     </div>
+    <OrderPeekSheet orderId={peekOpen ? group.order_id : null} open={peekOpen} onOpenChange={setPeekOpen} />
+    </>
   );
 }
 
@@ -320,7 +259,7 @@ function WaitingFinalsCard({
           ? "border-l-orange-400 ring-1 ring-orange-200"
           : "border-l-amber-400",
         isReady ? "border-green-300 bg-green-50/40" : "border-amber-200 bg-amber-50/30",
-        selected && "border-primary ring-1 ring-primary/30",
+        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
     >
       <div
@@ -335,98 +274,64 @@ function WaitingFinalsCard({
             onClick={(e) => e.stopPropagation()}
             className="w-4 h-4 accent-primary cursor-pointer shrink-0 mt-0.5"
           />
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
-              <span className="font-mono font-bold text-base shrink-0">#{group.order_id}</span>
-              <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
-              {group.brands.map((b) => (
-                <BrandBadge key={b} brand={b} />
-              ))}
-              {allRejected ? (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-red-100 text-red-800 text-[10px] font-semibold uppercase"
-                >
-                  All brovas rejected
-                </Badge>
-              ) : isReady ? (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-green-600 text-white text-[10px] font-semibold uppercase"
-                >
-                  {noBrovas ? "No brovas — ready" : "Ready for finals"}
-                </Badge>
-              ) : (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-amber-100 text-amber-800 text-[10px] font-semibold uppercase"
-                >
-                  Awaiting trial ({brovaStatus!.trialed}/{brovaStatus!.total} trialed)
-                </Badge>
-              )}
-              {isReady && !noBrovas && brovaStatus!.trialed < brovaStatus!.total && (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-amber-100 text-amber-800 text-[10px] font-semibold uppercase"
-                >
-                  {brovaStatus!.trialed}/{brovaStatus!.total} trialed
-                </Badge>
-              )}
-              {posReleased && (
-                <Badge
-                  variant="outline"
-                  className="border-0 bg-blue-100 text-blue-800 text-[10px] font-semibold uppercase"
-                >
-                  Shop approved
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center flex-wrap gap-1.5">
-              {group.invoice_number && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md font-mono">
-                  INV-{group.invoice_number}
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                <Package className="w-3 h-3" />
-                {garmentSummary(group.garments)}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                {releasableGarments.length} final{releasableGarments.length !== 1 ? "s" : ""}
-              </span>
-              {deliveryDate && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                  <Clock className="w-3 h-3" />
-                  {formatDate(deliveryDate)}
-                </span>
-              )}
-            </div>
-            {brovaAssignedDate && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md line-through">
-                  <CalendarDays className="w-3 h-3" />
-                  Brova: {formatDate(brovaAssignedDate)}
-                </span>
-                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200">
-                  Set new date on release
-                </span>
+          <div className="flex-1 min-w-0">
+            {/* Row 1: Identity + status (left) + Delivery & actions (right) */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+                  <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
+                  <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
+                  {group.brands.map((b) => (
+                    <BrandBadge key={b} brand={b} />
+                  ))}
+                </div>
+                {/* Status badges row */}
+                <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                  {allRejected ? (
+                    <Badge variant="outline" className="border-0 bg-red-100 text-red-800 text-xs font-semibold uppercase">
+                      All brovas rejected
+                    </Badge>
+                  ) : isReady ? (
+                    <Badge variant="outline" className="border-0 bg-green-600 text-white text-xs font-semibold uppercase">
+                      {noBrovas ? "No brovas — ready" : "Ready for finals"}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                      Awaiting trial ({brovaStatus!.trialed}/{brovaStatus!.total} trialed)
+                    </Badge>
+                  )}
+                  {isReady && !noBrovas && brovaStatus!.trialed < brovaStatus!.total && (
+                    <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                      {brovaStatus!.trialed}/{brovaStatus!.total} trialed
+                    </Badge>
+                  )}
+                  {posReleased && (
+                    <Badge variant="outline" className="border-0 bg-blue-100 text-blue-800 text-xs font-semibold uppercase">
+                      Shop approved
+                    </Badge>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-            <Button
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onRelease(); }}
-              disabled={isReleasing}
-              className={cn(
-                "text-xs h-7",
-                isReady
-                  ? "bg-green-600 hover:bg-green-700"
-                  : allRejected
-                    ? "bg-red-600 hover:bg-red-700"
-                    : "bg-amber-600 hover:bg-amber-700",
-              )}
-            >
+              <div className="flex items-start gap-2 shrink-0">
+                {deliveryDate && (
+                  <div className="text-right hidden sm:block">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Due</p>
+                    <p className="text-sm font-bold text-amber-700">{formatDate(deliveryDate)}</p>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); onRelease(); }}
+                  disabled={isReleasing}
+                  className={cn(
+                    "text-xs h-7",
+                    isReady
+                      ? "bg-green-600 hover:bg-green-700"
+                      : allRejected
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-amber-600 hover:bg-amber-700",
+                  )}
+                >
               {isReady ? (
                 <Unlock className="w-3 h-3 mr-1" />
               ) : (
@@ -442,6 +347,31 @@ function WaitingFinalsCard({
             </div>
           </div>
         </div>
+            {/* Row 2: Metadata */}
+            <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
+              {group.invoice_number && (
+                <MetadataChip>INV-{group.invoice_number}</MetadataChip>
+              )}
+              <MetadataChip icon={Package}>{garmentSummary(group.garments)}</MetadataChip>
+              {deliveryDate && (
+                <span className="sm:hidden">
+                  <MetadataChip icon={Clock} variant="amber">Due {formatDate(deliveryDate)}</MetadataChip>
+                </span>
+              )}
+            </div>
+            {brovaAssignedDate && (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md line-through">
+                  <CalendarDays className="w-3 h-3" />
+                  Brova: {formatDate(brovaAssignedDate)}
+                </span>
+                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200">
+                  Set new date on release
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {expanded && (
@@ -451,17 +381,7 @@ function WaitingFinalsCard({
               <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
                 {g.garment_id ?? g.id.slice(0, 8)}
               </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "border-0 font-semibold text-[10px] uppercase",
-                  g.garment_type === "brova"
-                    ? "bg-purple-200 text-purple-900"
-                    : "bg-blue-200 text-blue-900",
-                )}
-              >
-                {g.garment_type}
-              </Badge>
+              <GarmentTypeBadge type={g.garment_type ?? "final"} />
               <StageBadge stage={g.piece_stage} />
             </div>
           ))}
@@ -494,6 +414,7 @@ function ReturnGarmentCard({
       selected={selected}
       onSelect={onSelect}
       showPipeline={false}
+      hideStage
       index={index}
       actions={
         <Button size="sm" variant="outline" onClick={onSendSingle} disabled={isPending}>
@@ -503,8 +424,6 @@ function ReturnGarmentCard({
     />
   );
 }
-
-// ── EmptyState / LoadingSkeleton ─────────────────────────────────────────────
 
 // ── Release Finals Dialog ────────────────────────────────────────────────────
 
@@ -657,7 +576,7 @@ function ReleaseFinalsDialog({
                 Production Plan
               </Label>
               {defaultPlan && (
-                <span className="text-[10px] text-muted-foreground">from brova</span>
+                <span className="text-xs text-muted-foreground">from brova</span>
               )}
             </div>
 
@@ -702,11 +621,11 @@ function ReleaseFinalsDialog({
                         return (
                           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
                             {hasMultipleUnits && workerUnit && (
-                              <span className="text-[10px] text-muted-foreground font-normal">{workerUnit} ·</span>
+                              <span className="text-xs text-muted-foreground font-normal">{workerUnit} ·</span>
                             )}
                             {worker}
                             <span className={cn(
-                              "text-[10px] font-bold tabular-nums",
+                              "text-xs font-bold tabular-nums",
                               wOver ? "text-red-500" : wLoad > 0 ? "text-orange-500" : "text-emerald-500",
                             )}>
                               {wCap > 0 ? `${wLoad}/${wCap}` : wLoad > 0 ? String(wLoad) : "0"}
@@ -730,7 +649,7 @@ function ReleaseFinalsDialog({
                         {/* Unit picker — only when multiple units */}
                         {hasMultipleUnits && (
                           <div>
-                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1.5 block">
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1.5 block">
                               Unit
                             </Label>
                             <div className="flex gap-2">
@@ -789,12 +708,12 @@ function ReleaseFinalsDialog({
                                   {r.resource_name}
                                   {r.resource_type === "Senior" && (
                                     <span className={cn(
-                                      "text-[10px] font-bold uppercase",
+                                      "text-xs font-bold uppercase",
                                       isSelected ? "text-white/80" : "text-amber-500",
                                     )}>Sr</span>
                                   )}
                                   <span className={cn(
-                                    "text-[10px] font-bold tabular-nums",
+                                    "text-xs font-bold tabular-nums",
                                     isSelected
                                       ? "text-white/70"
                                       : isOver
@@ -878,7 +797,7 @@ function ParkingPage() {
   // Split data
   const parked = allGarments.filter((g) => g.location === "workshop" && !g.in_production);
   const ordersGarments = parked.filter((g) => (g.trip_number ?? 1) === 1);
-  const returnsGarments = parked.filter((g) => (g.trip_number ?? 1) > 1);
+  const returnsGarments = parked.filter((g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted");
   const orderGroups = groupByOrder(ordersGarments);
 
   // Build lookup of ALL garments per order (including in_production ones) for brova status
@@ -1433,7 +1352,7 @@ function StatsBar({
           >
             <Icon className="w-3.5 h-3.5 mx-auto mb-0.5 opacity-60" />
             <p className="text-lg font-black leading-none">{s.value}</p>
-            <p className="text-[9px] mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
+            <p className="text-xs mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
           </button>
         );
       })}

@@ -409,7 +409,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
           <h4 className="text-xs font-semibold text-gray-800 mb-2 text-center">
             الملاحظات والشروط
           </h4>
-          <ul className="text-right text-gray-700 text-[10px] leading-relaxed space-y-1">
+          <ul className="text-right text-gray-700 text-xs leading-relaxed space-y-1">
             <li>• سيتم التواصل معك لتحديد موعد البروفة.</li>
             <li>• التأخير عن البروفة يؤخر موعد التسليم.</li>
             <li>• أي تعديل بعد اعتماد البروفة يُحسب برسوم.</li>

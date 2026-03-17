@@ -128,7 +128,7 @@ export function SimplifiedCustomerForm({
                         </div>
                         Customer <span className="text-primary">Details</span>
                     </h2>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
                         Search existing or create new customer
                     </p>
                 </div>
@@ -140,7 +140,7 @@ export function SimplifiedCustomerForm({
                             onClear();
                             setSearchValue("");
                         }}
-                        className="h-9 px-4 text-[9px] font-black uppercase tracking-widest border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
+                        className="h-9 px-4 text-xs font-black uppercase tracking-widest border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
                     >
                         <X className="size-3.5 mr-1.5" />
                         Change Customer
@@ -157,7 +157,7 @@ export function SimplifiedCustomerForm({
 
                     {/* 1. PHONE / SEARCH */}
                     <div className="md:col-span-4 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <Phone className="size-3" /> Mobile Number
                         </label>
                         <div className="flex gap-2 relative">
@@ -217,7 +217,7 @@ export function SimplifiedCustomerForm({
                                         >
                                             {customers.length > 0 ? (
                                                 <div className="p-2 space-y-1">
-                                                    <div className="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 border-b border-muted mb-1">
+                                                    <div className="px-3 py-2 text-xs font-black uppercase tracking-widest text-muted-foreground/60 border-b border-muted mb-1">
                                                         Found {searchResults?.count} accounts
                                                     </div>
                                                     {customers.map((c) => (
@@ -232,10 +232,10 @@ export function SimplifiedCustomerForm({
                                                                 </div>
                                                                 <div>
                                                                     <div className="font-bold text-foreground group-hover:text-primary transition-colors">{c.name}</div>
-                                                                    <div className="text-[11px] font-mono font-bold text-muted-foreground/70">{c.phone}</div>
+                                                                    <div className="text-xs font-mono font-bold text-muted-foreground/70">{c.phone}</div>
                                                                 </div>
                                                             </div>
-                                                            <Badge className="text-[9px] font-black uppercase bg-muted/50 text-muted-foreground border-none group-hover:bg-primary/20 group-hover:text-primary">
+                                                            <Badge className="text-xs font-black uppercase bg-muted/50 text-muted-foreground border-none group-hover:bg-primary/20 group-hover:text-primary">
                                                                 {c.account_type}
                                                             </Badge>
                                                         </button>
@@ -247,7 +247,7 @@ export function SimplifiedCustomerForm({
                                                         <AlertCircle className="size-6 text-muted-foreground/30" />
                                                     </div>
                                                     <p className="text-sm font-black text-muted-foreground/60 uppercase tracking-tight">No records found</p>
-                                                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase mt-1">Fill in details and click Create</p>
+                                                    <p className="text-xs font-bold text-muted-foreground/40 uppercase mt-1">Fill in details and click Create</p>
                                                 </div>
                                             )}
                                         </motion.div>
@@ -259,7 +259,7 @@ export function SimplifiedCustomerForm({
 
                     {/* 2. NAME */}
                     <div className="md:col-span-3 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <User className="size-3" /> Customer Name
                         </label>
                         <Controller
@@ -278,7 +278,7 @@ export function SimplifiedCustomerForm({
 
                     {/* 3. ARABIC NAME */}
                     <div className="md:col-span-3 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <Languages className="size-3" /> Arabic Name
                         </label>
                         <Controller
@@ -301,7 +301,7 @@ export function SimplifiedCustomerForm({
                     <div className="md:col-span-2 flex justify-end">
                         {!hasCustomer && !isOrderClosed && (
                             <Button
-                                className="h-11 w-full font-black uppercase tracking-widest text-[10px] gap-2 shadow-lg shadow-primary/20"
+                                className="h-11 w-full font-black uppercase tracking-widest text-xs gap-2 shadow-lg shadow-primary/20"
                                 onClick={handleCreateQuickly}
                                 disabled={isCreating}
                             >
@@ -321,7 +321,7 @@ export function SimplifiedCustomerForm({
 
                 {hasCustomer && (
                     <div className="mt-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-500">
-                         <Badge variant="outline" className="text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 bg-white border-primary/20 text-primary shadow-xs">
+                         <Badge variant="outline" className="text-xs font-black uppercase tracking-[0.2em] px-2.5 py-1 bg-white border-primary/20 text-primary shadow-xs">
                             Account Verified
                          </Badge>
                          <div className="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent" />

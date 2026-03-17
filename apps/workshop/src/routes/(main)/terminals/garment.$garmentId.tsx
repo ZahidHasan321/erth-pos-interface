@@ -10,11 +10,11 @@ import {
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import {
   GarmentHeader,
-  StyleSection,
   WorkerHistorySection,
   NotesSection,
   HISTORY_KEY_MAP,
 } from "@/components/shared/GarmentDetailSections";
+import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,7 +100,7 @@ function TerminalGarmentPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-4xl mx-auto space-y-4">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 rounded-xl" />
         <Skeleton className="h-48 rounded-xl" />
@@ -110,7 +110,7 @@ function TerminalGarmentPage() {
 
   if (!garment) {
     return (
-      <div className="p-6 max-w-4xl mx-auto text-center py-24">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto text-center py-24">
         <p className="text-lg font-semibold text-muted-foreground">Garment not found</p>
         <Button variant="outline" className="mt-4" onClick={() => router.history.back()}>
           Go Back
@@ -141,20 +141,22 @@ function TerminalGarmentPage() {
 
       <GarmentHeader garment={garment} />
 
-      <div className={cn(
-        "mt-3",
-        isQC && "flex flex-col lg:flex-row gap-3",
-      )}>
-        <div className={cn("flex-1 min-w-0 space-y-3", isQC && "lg:max-w-[60%]")}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <StyleSection garment={garment} />
-            <WorkerHistorySection garment={garment} />
-          </div>
+      {/* Main content: overlay + production team + QC */}
+      <div className="mt-3 flex flex-col lg:flex-row gap-3 items-start">
+        {/* Dishdasha spec sheet */}
+        <div className="lg:w-[55%] shrink-0">
+          <DishdashaOverlay garment={garment} measurement={garment.measurement} />
+        </div>
+
+        {/* Production team + notes */}
+        <div className="flex-1 min-w-0 space-y-3">
+          <WorkerHistorySection garment={garment} />
           {garment.notes && <NotesSection notes={garment.notes} />}
         </div>
 
+        {/* QC panel (only on quality_check stage) */}
         {isQC && (
-          <div className="lg:w-[340px] shrink-0 lg:sticky lg:top-4 lg:self-start">
+          <div className="lg:w-[320px] shrink-0 lg:sticky lg:top-4 lg:self-start">
             <QCActions garment={garment} />
           </div>
         )}
@@ -354,7 +356,7 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             {worker && !workerOverride ? (
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-bold">QC Inspector</p>
+                  <p className="text-xs uppercase tracking-wider text-emerald-600 font-bold">QC Inspector</p>
                   <p className="text-sm font-semibold text-emerald-900">{worker}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setWorkerOverride(true)}>

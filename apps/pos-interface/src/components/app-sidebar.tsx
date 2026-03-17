@@ -4,18 +4,19 @@ import {
   ChevronDown,
   LayoutDashboard,
   ShoppingBag,
+  ShoppingCart,
   Package,
   Users,
   Store,
-  Settings,
+  ClipboardList,
   Truck,
   PackageOpen,
-  Send,
+  ArrowUpFromLine,
   Link2,
   Unlink,
   PackageCheck,
-  Wrench,
-  Edit,
+  Palette,
+  Ruler,
   XCircle,
   BarChart,
   PackagePlus,
@@ -70,7 +71,7 @@ const data = {
         {
           title: "New Sales Order",
           url: "orders/new-sales-order",
-          icon: ShoppingBag,
+          icon: ShoppingCart,
         },
         {
           title: "Orders at Showroom",
@@ -95,12 +96,12 @@ const data = {
         {
           title: "Order Management",
           isCollapsible: true,
-          icon: Settings,
+          icon: ClipboardList,
           items: [
             {
               title: "Dispatch Orders",
               url: "orders/order-management/dispatch",
-              icon: Send,
+              icon: ArrowUpFromLine,
             },
             {
               title: "Link Orders",
@@ -120,12 +121,12 @@ const data = {
             {
               title: "Change Options",
               url: "orders/order-management/change-options",
-              icon: Wrench,
+              icon: Palette,
             },
             {
               title: "Alterations",
               url: "orders/order-management/alterations",
-              icon: Edit,
+              icon: Ruler,
             },
             {
               title: "Cancel Order",

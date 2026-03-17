@@ -188,7 +188,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                         onClick={() => setEditingStep(step.planKey)}
                       >
                         Change
@@ -235,10 +235,10 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                                   {isSelected && <Check className="w-3 h-3 shrink-0" />}
                                   <span className="truncate max-w-[100px]">{r.resource_name}</span>
                                   {r.resource_type === "Senior" && (
-                                    <span className={cn("text-[9px] font-bold uppercase", isSelected ? "text-white/80" : "text-amber-500")}>Sr</span>
+                                    <span className={cn("text-xs font-bold uppercase", isSelected ? "text-white/80" : "text-amber-500")}>Sr</span>
                                   )}
                                   <span className={cn(
-                                    "text-[10px] font-bold tabular-nums",
+                                    "text-xs font-bold tabular-nums",
                                     isSelected ? "text-white/70" : isOver ? "text-red-500" : load > 0 ? "text-orange-500" : "text-emerald-500",
                                   )}>
                                     {cap > 0 ? `${load}/${cap}` : load > 0 ? load : "0"}

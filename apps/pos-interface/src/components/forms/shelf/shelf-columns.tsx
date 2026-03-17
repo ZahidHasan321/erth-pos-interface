@@ -50,7 +50,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                         ))}
                     </SelectContent>
                 </Select>
-                {error && <span className="text-[10px] text-red-500 text-left">{error.message}</span>}
+                {error && <span className="text-xs text-red-500 text-left">{error.message}</span>}
             </div>
         )
     }
@@ -108,7 +108,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                         }).filter(Boolean)}
                     </SelectContent>
                 </Select>
-                {error && <span className="text-[10px] text-red-500 text-left">{error.message}</span>}
+                {error && <span className="text-xs text-red-500 text-left">{error.message}</span>}
             </div>
         )
     }
@@ -289,12 +289,12 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
         </Button>
       </div>
       {isProductSelected && maxStock === 0 && (
-        <span className="text-[10px] text-red-600 font-bold text-center">No stock</span>
+        <span className="text-xs text-red-600 font-bold text-center">No stock</span>
       )}
       {isProductSelected && quantity > maxStock && maxStock > 0 && (
-        <span className="text-[10px] text-red-600 font-bold text-center">Exceeds stock ({maxStock})</span>
+        <span className="text-xs text-red-600 font-bold text-center">Exceeds stock ({maxStock})</span>
       )}
-      {error && <span className="text-[10px] text-red-500 text-center">{error.message}</span>}
+      {error && <span className="text-xs text-red-500 text-center">{error.message}</span>}
     </div>
   )
 }

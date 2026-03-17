@@ -79,7 +79,7 @@ const Step: React.FC<StepProps> = ({
       <div className="mt-0.5 text-center">
         <motion.p
           className={cn(
-            "text-[11px] sm:text-xs font-medium transition-all max-w-[60px] sm:max-w-[80px] md:max-w-none line-clamp-2 md:line-clamp-1",
+            "text-xs sm:text-xs font-medium transition-all max-w-[60px] sm:max-w-[80px] md:max-w-none line-clamp-2 md:line-clamp-1",
             isActive
               ? "text-secondary font-semibold"
               : isCompleted

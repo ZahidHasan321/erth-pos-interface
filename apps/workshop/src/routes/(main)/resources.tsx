@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useResources, useCreateResource, useUpdateResource, useDeleteResource } from "@/hooks/useResources";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Users, Plus, Trash2, Droplets, Scissors, Package,
-  Shirt, Sparkles, Flame, ShieldCheck, Star, Pencil,
+  Shirt, Sparkles, Flame, ShieldCheck, Star, Pencil, Target, AlertTriangle,
+  ChevronDown,
 } from "lucide-react";
 import type { NewResource, Resource } from "@repo/database";
 
@@ -21,155 +22,18 @@ export const Route = createFileRoute("/(main)/resources")({
 });
 
 const STAGES = [
-  { key: "soaking",       label: "Soaking",       icon: Droplets,    bg: "bg-blue-50",    border: "border-blue-200",    iconColor: "text-blue-600",    headerBg: "bg-blue-100" },
-  { key: "cutting",       label: "Cutting",       icon: Scissors,    bg: "bg-amber-50",   border: "border-amber-200",   iconColor: "text-amber-600",   headerBg: "bg-amber-100" },
-  { key: "post_cutting",  label: "Post-Cutting",  icon: Package,     bg: "bg-orange-50",  border: "border-orange-200",  iconColor: "text-orange-600",  headerBg: "bg-orange-100" },
-  { key: "sewing",        label: "Sewing",        icon: Shirt,       bg: "bg-purple-50",  border: "border-purple-200",  iconColor: "text-purple-600",  headerBg: "bg-purple-100" },
-  { key: "finishing",     label: "Finishing",      icon: Sparkles,    bg: "bg-emerald-50", border: "border-emerald-200", iconColor: "text-emerald-600", headerBg: "bg-emerald-100" },
-  { key: "ironing",       label: "Ironing",        icon: Flame,       bg: "bg-red-50",     border: "border-red-200",     iconColor: "text-red-600",     headerBg: "bg-red-100" },
-  { key: "quality_check", label: "Quality Check",  icon: ShieldCheck, bg: "bg-indigo-50",  border: "border-indigo-200",  iconColor: "text-indigo-600",  headerBg: "bg-indigo-100" },
+  { key: "soaking",       label: "Soaking",       icon: Droplets,    iconColor: "text-sky-600",     bg: "bg-sky-50",     border: "border-sky-200",     stripe: "bg-sky-500" },
+  { key: "cutting",       label: "Cutting",       icon: Scissors,    iconColor: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-200",   stripe: "bg-amber-500" },
+  { key: "post_cutting",  label: "Post-Cutting",  icon: Package,     iconColor: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  stripe: "bg-orange-500" },
+  { key: "sewing",        label: "Sewing",        icon: Shirt,       iconColor: "text-purple-600",  bg: "bg-purple-50",  border: "border-purple-200",  stripe: "bg-purple-500" },
+  { key: "finishing",     label: "Finishing",      icon: Sparkles,    iconColor: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", stripe: "bg-emerald-500" },
+  { key: "ironing",       label: "Ironing",       icon: Flame,       iconColor: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-200",    stripe: "bg-rose-500" },
+  { key: "quality_check", label: "Quality Check",  icon: ShieldCheck, iconColor: "text-indigo-600",  bg: "bg-indigo-50",  border: "border-indigo-200",  stripe: "bg-indigo-500" },
 ] as const;
 
 type FormData = Partial<Omit<NewResource, 'id' | 'created_at'>>;
 
-// ── Worker Row ──────────────────────────────────────────────────────────────
-
-function WorkerRow({
-  worker,
-  onEdit,
-  onDelete,
-  deleting,
-}: {
-  worker: Resource;
-  onEdit: () => void;
-  onDelete: () => void;
-  deleting: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-white/80 hover:shadow-sm transition-colors group cursor-pointer"
-      onClick={onEdit}
-    >
-      <div className="w-8 h-8 rounded-full bg-white border flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
-        {worker.resource_name.charAt(0)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm">{worker.resource_name}</p>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-          {worker.resource_type && (
-            <span className={cn(
-              "px-1.5 py-0.5 rounded-full font-semibold uppercase",
-              worker.resource_type === "Senior" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600",
-            )}>
-              {worker.resource_type}
-            </span>
-          )}
-          {worker.unit && <span className="font-mono">{worker.unit}</span>}
-          {worker.daily_target && (
-            <span>{worker.daily_target}/day</span>
-          )}
-          {worker.rating && (
-            <span className="flex items-center gap-0.5">
-              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-              {worker.rating}
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          disabled={deleting}
-          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-500 hover:bg-red-50 transition-colors"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Stage Card ──────────────────────────────────────────────────────────────
-
-function StageCard({
-  stage,
-  workers,
-  onEdit,
-  onDelete,
-  deleting,
-}: {
-  stage: typeof STAGES[number];
-  workers: Resource[];
-  onEdit: (worker: Resource) => void;
-  onDelete: (id: string) => void;
-  deleting: boolean;
-}) {
-  const Icon = stage.icon;
-
-  // Group workers by unit within this stage
-  const units = new Map<string, Resource[]>();
-  for (const w of workers) {
-    const u = w.unit ?? "Unassigned";
-    if (!units.has(u)) units.set(u, []);
-    units.get(u)!.push(w);
-  }
-  const hasMultipleUnits = units.size > 1;
-
-  return (
-    <div className={cn("border rounded-xl overflow-hidden shadow-sm", stage.border)}>
-      {/* Header */}
-      <div className={cn("px-4 py-2.5 flex items-center gap-2.5", stage.headerBg)}>
-        <Icon className={cn("w-5 h-5", stage.iconColor)} />
-        <span className="font-bold text-sm">{stage.label}</span>
-        <span className={cn("ml-auto text-xs font-bold px-2 py-0.5 rounded-full", stage.bg, stage.iconColor)}>
-          {workers.length}
-        </span>
-      </div>
-
-      {/* Workers */}
-      <div className={cn("px-2 py-1.5", stage.bg)}>
-        {workers.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">No workers assigned</p>
-        ) : hasMultipleUnits ? (
-          Array.from(units.entries()).map(([unitName, unitWorkers]) => (
-            <div key={unitName} className="mb-1 last:mb-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 pt-2 pb-1">
-                {unitName}
-              </p>
-              {unitWorkers.map((w) => (
-                <WorkerRow
-                  key={w.id}
-                  worker={w}
-                  onEdit={() => onEdit(w)}
-                  onDelete={() => onDelete(w.id)}
-                  deleting={deleting}
-                />
-              ))}
-            </div>
-          ))
-        ) : (
-          workers.map((w) => (
-            <WorkerRow
-              key={w.id}
-              worker={w}
-              onEdit={() => onEdit(w)}
-              onDelete={() => onDelete(w.id)}
-              deleting={deleting}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Worker Form Dialog (Add / Edit) ─────────────────────────────────────────
+// ── Worker Form Dialog ──────────────────────────────────────────────────────
 
 function WorkerFormDialog({
   open,
@@ -197,7 +61,6 @@ function WorkerFormDialog({
     onOpenChange(v);
   };
 
-  // When switching responsibility, check if unit should reset
   const handleResponsibilityChange = (v: string) => {
     setForm((p) => ({ ...p, responsibility: v, unit: "" }));
     setNewUnit(false);
@@ -227,11 +90,11 @@ function WorkerFormDialog({
               <SelectTrigger><SelectValue placeholder="Select production stage" /></SelectTrigger>
               <SelectContent>
                 {STAGES.map((s) => {
-                  const Icon = s.icon;
+                  const SIcon = s.icon;
                   return (
                     <SelectItem key={s.key} value={s.key}>
                       <span className="flex items-center gap-2">
-                        <Icon className={cn("w-3.5 h-3.5", s.iconColor)} />
+                        <SIcon className={cn("w-3.5 h-3.5", s.iconColor)} />
                         {s.label}
                       </span>
                     </SelectItem>
@@ -248,7 +111,7 @@ function WorkerFormDialog({
                   <button
                     type="button"
                     onClick={() => { setNewUnit(!newUnit); setForm((p) => ({ ...p, unit: "" })); }}
-                    className="text-[10px] text-primary font-semibold hover:underline"
+                    className="text-xs text-primary font-semibold hover:underline"
                   >
                     {newUnit ? "Pick existing" : "+ New unit"}
                   </button>
@@ -319,6 +182,175 @@ function WorkerFormDialog({
   );
 }
 
+// ── Stage Groups (collapsible table sections) ───────────────────────────────
+
+function StageGroups({
+  resources,
+  onEdit,
+  onAdd,
+  onDelete,
+  deleting,
+}: {
+  resources: Resource[];
+  onEdit: (w: Resource) => void;
+  onAdd: (stageKey?: string) => void;
+  onDelete: (id: string, name: string) => void;
+  deleting: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+
+  return (
+    <div className="space-y-3">
+      {STAGES.map((stage) => {
+        const workers = resources.filter((r) => r.responsibility === stage.key);
+        const Icon = stage.icon;
+        const isCollapsed = collapsed.has(stage.key);
+
+        return (
+          <div key={stage.key} className={cn("border overflow-hidden shadow-sm", stage.border)}>
+            {/* Group header — always visible, clickable to toggle */}
+            <button
+              onClick={() => toggle(stage.key)}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                stage.bg,
+              )}
+            >
+              <div className={cn("w-2 self-stretch rounded-full shrink-0 -my-3 -ml-4", stage.stripe)} />
+              <Icon className={cn("w-5 h-5 shrink-0", stage.iconColor)} />
+              <span className="font-bold text-sm">{stage.label}</span>
+              <span className={cn(
+                "text-xs font-black tabular-nums px-2 py-0.5 rounded-full",
+                stage.iconColor,
+                workers.length === 0 ? "bg-white/50" : "bg-white/80",
+              )}>
+                {workers.length}
+              </span>
+              <div className="ml-auto flex items-center gap-2 shrink-0">
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); onAdd(stage.key); }}
+                  className={cn(
+                    "inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg transition-colors",
+                    stage.iconColor, "hover:bg-white/60",
+                  )}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add
+                </span>
+                <ChevronDown className={cn(
+                  "w-4 h-4 text-foreground/30 transition-transform",
+                  isCollapsed && "-rotate-90",
+                )} />
+              </div>
+            </button>
+
+            {/* Table rows — collapsible */}
+            {!isCollapsed && (
+              <div className="bg-white">
+                {workers.length === 0 ? (
+                  <div className="px-4 py-5 text-xs text-muted-foreground/40 text-center italic">
+                    No workers assigned to {stage.label.toLowerCase()}
+                  </div>
+                ) : (
+                  <>
+                    {/* Column headers */}
+                    <div className="grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2 border-b bg-muted/30 text-[11px] font-black uppercase tracking-widest text-muted-foreground/60">
+                      <span>Worker</span>
+                      <span>Unit</span>
+                      <span>Type</span>
+                      <span className="text-right">Target</span>
+                      <span className="text-right">Rating</span>
+                      <span />
+                    </div>
+                    {workers.map((w) => (
+                      <div
+                        key={w.id}
+                        className="grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
+                        onClick={() => onEdit(w)}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={cn(
+                            "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 border",
+                            w.resource_type === "Senior"
+                              ? "bg-amber-50 text-amber-700 border-amber-300"
+                              : "bg-muted/50 text-muted-foreground border-transparent",
+                          )}>
+                            {w.resource_name.charAt(0)}
+                          </div>
+                          <span className="text-sm font-semibold truncate">{w.resource_name}</span>
+                        </div>
+
+                        <span className="text-xs text-muted-foreground font-medium truncate">
+                          {w.unit ?? "—"}
+                        </span>
+
+                        <div>
+                          {w.resource_type ? (
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
+                              w.resource_type === "Senior" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600",
+                            )}>
+                              {w.resource_type}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/30">—</span>
+                          )}
+                        </div>
+
+                        <span className="text-sm font-bold tabular-nums text-right">
+                          {w.daily_target ? (
+                            <>{w.daily_target}<span className="text-muted-foreground/40 font-normal">/d</span></>
+                          ) : (
+                            <span className="text-muted-foreground/30">—</span>
+                          )}
+                        </span>
+
+                        <div className="flex items-center justify-end gap-0.5">
+                          {w.rating ? (
+                            <>
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              <span className="text-sm font-bold tabular-nums">{w.rating}</span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/30">—</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-0.5">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(w); }}
+                            className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.resource_name); }}
+                            disabled={deleting}
+                            className="p-1.5 rounded-md text-muted-foreground/30 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function ResourcesPage() {
@@ -327,16 +359,15 @@ function ResourcesPage() {
   const updateMut = useUpdateResource();
   const deleteMut = useDeleteResource();
 
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"add" | "edit">("add");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>({});
 
-  const openAdd = () => {
+  const openAdd = (stageKey?: string) => {
     setDialogMode("add");
     setEditingId(null);
-    setForm({});
+    setForm(stageKey ? { responsibility: stageKey } : {});
     setDialogOpen(true);
   };
 
@@ -356,7 +387,6 @@ function ResourcesPage() {
 
   const handleSubmit = async () => {
     if (!form.resource_name || !form.responsibility) return;
-
     if (dialogMode === "add") {
       await createMut.mutateAsync(form as Omit<NewResource, 'id' | 'created_at'>);
       toast.success(`${form.resource_name} added`);
@@ -374,7 +404,6 @@ function ResourcesPage() {
     toast.success(`${name} removed`);
   };
 
-  // Get existing units for the selected responsibility
   const existingUnits = form.responsibility
     ? [...new Set(
         resources
@@ -384,45 +413,71 @@ function ResourcesPage() {
       )]
     : [];
 
+  const stats = useMemo(() => {
+    const totalCapacity = resources.reduce((s, r) => s + (r.daily_target ?? 0), 0);
+    const seniorCount = resources.filter((r) => r.resource_type === "Senior").length;
+    const emptyStages = STAGES.filter(
+      (s) => !resources.some((r) => r.responsibility === s.key),
+    );
+    return { totalCapacity, seniorCount, emptyStages };
+  }, [resources]);
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2.5">
             <Users className="w-6 h-6" /> Workshop Team
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {resources.length} worker{resources.length !== 1 ? "s" : ""} across {STAGES.length} production stages
+            {resources.length} worker{resources.length !== 1 ? "s" : ""} across {STAGES.length} stages
           </p>
         </div>
-        <Button className="shadow-sm" onClick={openAdd}>
+        <Button className="shadow-sm" onClick={() => openAdd()}>
           <Plus className="w-4 h-4 mr-2" /> Add Worker
         </Button>
       </div>
 
+      {/* Summary strip */}
+      <div className="flex items-center gap-4 flex-wrap mb-6 px-4 py-3 bg-white border rounded-xl shadow-sm">
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-emerald-600" />
+          <span className="text-sm font-bold tabular-nums">{stats.totalCapacity}</span>
+          <span className="text-xs text-muted-foreground">daily capacity</span>
+        </div>
+        <div className="w-px h-5 bg-border" />
+        <div className="flex items-center gap-2">
+          <Star className="w-4 h-4 text-amber-500" />
+          <span className="text-sm font-bold">{stats.seniorCount}</span>
+          <span className="text-xs text-muted-foreground">seniors</span>
+        </div>
+        {stats.emptyStages.length > 0 && (
+          <>
+            <div className="w-px h-5 bg-border" />
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <span className="text-xs text-red-600 font-semibold">
+                {stats.emptyStages.map((s) => s.label).join(", ")} unstaffed
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Stage groups */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {STAGES.map((stage) => {
-            const workers = resources.filter((r) => r.responsibility === stage.key);
-            return (
-              <StageCard
-                key={stage.key}
-                stage={stage}
-                workers={workers}
-                onEdit={openEdit}
-                onDelete={(id) => {
-                  const w = workers.find((r) => r.id === id);
-                  if (w) handleDelete(id, w.resource_name);
-                }}
-                deleting={deleteMut.isPending}
-              />
-            );
-          })}
-        </div>
+        <StageGroups
+          resources={resources}
+          onEdit={openEdit}
+          onAdd={openAdd}
+          onDelete={(id, name) => handleDelete(id, name)}
+          deleting={deleteMut.isPending}
+        />
       )}
 
       <WorkerFormDialog

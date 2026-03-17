@@ -26,19 +26,19 @@ export function GroupedGarmentList({
 
   if (garments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl bg-muted/10">
-        {emptyIcon && <div className="opacity-30 mb-3">{emptyIcon}</div>}
-        <p className="font-semibold text-muted-foreground">{emptyText}</p>
+      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl bg-muted/20 animate-fade-in">
+        {emptyIcon && <div className="opacity-20 mb-3 scale-150">{emptyIcon}</div>}
+        <p className="font-semibold text-muted-foreground/70">{emptyText}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 stagger-children">
       {groups.map(([orderId, orderGarments]) => (
         <div key={orderId}>
           <div className="flex items-center gap-2 px-1 mb-2">
-            <span className="text-sm font-bold text-muted-foreground">
+            <span className="text-sm font-bold text-foreground/70">
               #{orderGarments[0].invoice_number ?? orderId}
             </span>
             {orderGarments[0].customer_name && (
@@ -46,6 +46,7 @@ export function GroupedGarmentList({
                 {orderGarments[0].customer_name}
               </span>
             )}
+            <div className="flex-1 h-px bg-border/60" />
             <span className="text-xs text-muted-foreground/60">
               {orderGarments.length} piece{orderGarments.length !== 1 ? "s" : ""}
             </span>

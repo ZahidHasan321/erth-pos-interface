@@ -33,7 +33,7 @@ export function StageBadge({ stage, className }: StageBadgeProps) {
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-[10px] uppercase tracking-wide",
+        "border-0 font-semibold text-xs uppercase tracking-wide",
         color,
         className,
       )}
@@ -51,7 +51,7 @@ export function FeedbackStatusBadge({ status, className }: { status: string | nu
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-[10px] uppercase tracking-wide",
+        "border-0 font-semibold text-xs uppercase tracking-wide",
         color,
         className,
       )}
@@ -73,7 +73,7 @@ export function AlterationBadge({ tripNumber, garmentType }: { tripNumber: numbe
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-orange-500 text-white font-semibold text-[10px] uppercase tracking-wide"
+      className="border-0 bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide"
     >
       Alt {altNum}
     </Badge>
@@ -87,7 +87,7 @@ export function TrialBadge({ tripNumber }: { tripNumber: number | null | undefin
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-[10px] uppercase tracking-wide",
+        "border-0 font-semibold text-xs uppercase tracking-wide",
         trip === 1
           ? "bg-purple-100 text-purple-800"
           : trip === 2
@@ -105,7 +105,7 @@ export function AlterationInBadge() {
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-orange-600 text-white font-bold text-[10px] uppercase tracking-wide animate-pulse"
+      className="border-0 bg-orange-600 text-white font-bold text-xs uppercase tracking-wide ring-2 ring-orange-300 ring-offset-1"
     >
       Alteration (In)
     </Badge>
@@ -116,7 +116,7 @@ export function ExpressBadge() {
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-red-600 text-white font-bold text-[10px] uppercase tracking-wide"
+      className="border-0 bg-red-600 text-white font-bold text-xs uppercase tracking-wide"
     >
       ⚡ Express
     </Badge>
@@ -134,7 +134,7 @@ export function BrandBadge({ brand }: { brand: string | null | undefined }) {
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-bold text-[10px] uppercase tracking-wide",
+        "border-0 font-bold text-xs uppercase tracking-wide",
         colorMap[brand] ?? "bg-zinc-600 text-white",
       )}
     >

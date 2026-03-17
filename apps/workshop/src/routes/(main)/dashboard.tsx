@@ -451,7 +451,7 @@ function DashboardPage() {
                         style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: color }}
                       >
                         {pct > 20 && (
-                          <span className="text-[10px] font-bold text-white">
+                          <span className="text-xs font-bold text-white">
                             {d.count} order{d.count !== 1 ? "s" : ""}
                           </span>
                         )}
@@ -490,7 +490,7 @@ function DashboardPage() {
                           style={{ width: `${Math.max(pct, 5)}%` }}
                         />
                       </div>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{w.stages}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{w.stages}</span>
                     </div>
                   </div>
                 </div>
@@ -550,7 +550,7 @@ function KpiCard({
     <div className={cn("border rounded-xl p-3 shadow-sm text-center", highlight ?? "bg-white")}>
       <div className={cn("mx-auto mb-1 opacity-60 w-fit", color ?? "text-foreground/50")}>{icon}</div>
       <p className="text-2xl font-black">{value}</p>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
     </div>
   );
 }

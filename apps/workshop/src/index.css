@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -39,48 +39,90 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  --background: oklch(0.965 0.003 240);
-  --foreground: oklch(0.145 0 0);
+  /* Surface — warm off-white with subtle green tint */
+  --background: oklch(0.965 0.005 150);
+  --foreground: oklch(0.15 0.02 150);
+
+  /* Cards — pure white to pop against tinted bg */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.02 150);
+
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.30 0.08 240);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.42 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.15 0.02 150);
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Primary — forest green (brand color) */
+  --primary: oklch(0.35 0.12 160);
+  --primary-foreground: oklch(0.98 0.01 160);
+
+  /* Secondary — earthy warm tone for contrast */
+  --secondary: oklch(0.55 0.14 40);
+  --secondary-foreground: oklch(0.99 0.01 40);
+
+  /* Muted — light green-tinted neutral */
+  --muted: oklch(0.95 0.01 150);
+  --muted-foreground: oklch(0.45 0.03 150);
+
+  /* Accent — soft sage for highlights */
+  --accent: oklch(0.90 0.06 150);
+  --accent-foreground: oklch(0.25 0.06 155);
+
+  /* Utility */
+  --destructive: oklch(0.58 0.22 25);
+  --border: oklch(0.90 0.02 150);
+  --input: oklch(0.95 0.01 150);
+  --ring: oklch(0.45 0.10 160);
+
+  /* Sidebar — white with green accents */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.18 0.02 150);
+  --sidebar-primary: oklch(0.30 0.12 160);
+  --sidebar-primary-foreground: oklch(0.98 0.01 160);
+  --sidebar-accent: oklch(0.92 0.05 150);
+  --sidebar-accent-foreground: oklch(0.22 0.06 155);
+  --sidebar-border: oklch(0.90 0.02 150);
+  --sidebar-ring: oklch(0.40 0.10 160);
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Montserrat', 'Cairo', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Marcellus', 'Cairo', serif;
+  }
+
+  button {
+    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-weight: 600;
+  }
+
+  label {
+    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-weight: 500;
+  }
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: 'Montserrat', sans-serif;
+/* Hide spin buttons for number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-/* CSS animations replacing framer-motion */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── CSS Animations ────────────────────────────────── */
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -91,10 +133,92 @@ body {
   to   { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes shimmer {
+  to { transform: translateX(100%); }
+}
+
 .animate-fade-in {
   animation: fade-in 0.2s ease-out both;
 }
 
 .animate-slide-in-left {
   animation: slide-in-left 0.2s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Staggered children — add to parent, children auto-stagger */
+.stagger-children > * {
+  animation: fade-in 0.2s ease-out both;
+}
+.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2)  { animation-delay: 30ms; }
+.stagger-children > *:nth-child(3)  { animation-delay: 60ms; }
+.stagger-children > *:nth-child(4)  { animation-delay: 90ms; }
+.stagger-children > *:nth-child(5)  { animation-delay: 120ms; }
+.stagger-children > *:nth-child(6)  { animation-delay: 150ms; }
+.stagger-children > *:nth-child(7)  { animation-delay: 180ms; }
+.stagger-children > *:nth-child(8)  { animation-delay: 210ms; }
+.stagger-children > *:nth-child(9)  { animation-delay: 240ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 270ms; }
+.stagger-children > *:nth-child(n+11) { animation-delay: 300ms; }
+
+/* Shimmer skeleton effect */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 40%), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-in-left,
+  .animate-scale-in,
+  .animate-slide-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .stagger-children > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .skeleton-shimmer::after {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

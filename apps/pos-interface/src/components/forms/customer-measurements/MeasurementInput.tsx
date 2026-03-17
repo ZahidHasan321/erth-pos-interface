@@ -124,7 +124,7 @@ export const MeasurementInput = forwardRef<
                     {field.value &&
                       typeof field.value === "number" &&
                       field.value !== 0 && (
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           ({decimalToMixedFraction(field.value)})
                         </span>
                       )}

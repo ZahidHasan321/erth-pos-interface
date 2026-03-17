@@ -78,7 +78,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               </TooltipProvider>
             )}
           </div>
-          <span className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest leading-none">
+          <span className="font-bold text-xs text-muted-foreground uppercase tracking-widest leading-none">
             {row.original.fatoura ? `INV ${row.original.fatoura}` : "—"}
           </span>
         </div>
@@ -98,9 +98,9 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
             {nickName || name}
           </span>
           {nickName && name !== nickName && (
-            <span className="text-[10px] text-muted-foreground/60 truncate max-w-[130px]">{name}</span>
+            <span className="text-xs text-muted-foreground/60 truncate max-w-[130px]">{name}</span>
           )}
-          <span className="text-[11px] font-mono text-muted-foreground">{row.original.mobileNumber}</span>
+          <span className="text-xs font-mono text-muted-foreground">{row.original.mobileNumber}</span>
         </div>
       );
     },
@@ -110,30 +110,41 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     header: "Status",
     size: 130,
     cell: ({ row }) => {
-      const { showroomStatus, fatouraStage, maxTripNumber } = row.original;
+      const { showroomStatus, fatouraStage } = row.original;
       let label = fatouraStage || "—";
       let colorClass = "bg-muted text-muted-foreground";
 
-      if (showroomStatus.isAlterationIn) {
-        const count = (maxTripNumber || 1) - 2;
-        const ordinal = count === 1 ? "1st" : count === 2 ? "2nd" : count === 3 ? "3rd" : `${count}th`;
-        label = `${ordinal} Alteration (In)`;
-        colorClass = "bg-blue-100 text-blue-700 border-blue-200";
-      } else if (showroomStatus.isBrovaTrial) {
-        label = "Brova Trial";
-        colorClass = "bg-amber-100 text-amber-700 border-amber-200";
-      } else if (showroomStatus.isPickupWaitingFinals) {
-        label = "Awaiting Finals";
-        colorClass = "bg-violet-100 text-violet-700 border-violet-200";
-      } else if (showroomStatus.isReadyForPickup) {
-        label = "Ready for Pickup";
-        colorClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
+      switch (showroomStatus.label) {
+        case "alteration_in":
+          label = "Alteration (In)";
+          colorClass = "bg-blue-100 text-blue-700 border-blue-200";
+          break;
+        case "brova_trial":
+          label = "Brova Trial";
+          colorClass = "bg-amber-100 text-amber-700 border-amber-200";
+          break;
+        case "needs_action":
+          label = "Needs Action";
+          colorClass = "bg-red-100 text-red-700 border-red-200";
+          break;
+        case "awaiting_finals":
+          label = "Awaiting Finals";
+          colorClass = "bg-violet-100 text-violet-700 border-violet-200";
+          break;
+        case "partial_ready":
+          label = "Partial Ready";
+          colorClass = "bg-orange-100 text-orange-700 border-orange-200";
+          break;
+        case "ready_for_pickup":
+          label = "Ready for Pickup";
+          colorClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
+          break;
       }
 
       return (
         <span
           className={cn(
-            "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-black uppercase tracking-tight whitespace-nowrap shadow-sm",
+            "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-black uppercase tracking-tight whitespace-nowrap shadow-sm",
             colorClass
           )}
         >
@@ -151,11 +162,11 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
       return (
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold text-muted-foreground/60 uppercase">Order</span>
+            <span className="text-xs font-bold text-muted-foreground/60 uppercase">Order</span>
             <span className="text-xs font-bold tracking-tight">{formatDate(row.original.orderDate)}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold text-muted-foreground/60 uppercase">Delivery</span>
+            <span className="text-xs font-bold text-muted-foreground/60 uppercase">Delivery</span>
             <span className={cn(
               "text-xs font-black tracking-tight",
               overdueDays > 0 ? "text-rose-600" : "text-primary"
@@ -163,13 +174,13 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               {formatDate(row.original.deliveryDate)}
             </span>
             {overdueDays > 0 && (
-              <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-1 rounded">
+              <span className="text-xs font-black text-rose-500 bg-rose-50 px-1 rounded">
                 +{overdueDays}d
               </span>
             )}
           </div>
           {row.original.homeDelivery && (
-            <div className="flex items-center gap-0.5 text-[10px] text-blue-600 font-bold">
+            <div className="flex items-center gap-0.5 text-xs text-blue-600 font-bold">
               <Truck className="size-2.5" />
               <span>Home</span>
             </div>
@@ -198,7 +209,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           <div className="flex items-center gap-1.5">
             <span
               className={cn(
-                "inline-flex items-center justify-center size-5 rounded text-[11px] font-black border",
+                "inline-flex items-center justify-center size-5 rounded text-xs font-black border",
                 atShop === total
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                   : "bg-primary/5 text-primary border-primary/10"
@@ -206,13 +217,13 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
             >
               {atShop}/{total}
             </span>
-            <span className="text-[10px] font-bold uppercase text-muted-foreground/60">at shop</span>
+            <span className="text-xs font-bold uppercase text-muted-foreground/60">at shop</span>
           </div>
           <div className="flex gap-2 pl-0.5">
             {brovas.length > 0 && (
               <span
                 className={cn(
-                  "text-[10px] font-bold uppercase",
+                  "text-xs font-bold uppercase",
                   brovasAtShop > 0 ? "text-amber-600" : "text-muted-foreground/30"
                 )}
               >
@@ -222,7 +233,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
             {finals.length > 0 && (
               <span
                 className={cn(
-                  "text-[10px] font-bold uppercase",
+                  "text-xs font-bold uppercase",
                   finalsAtShop > 0 ? "text-emerald-600" : "text-muted-foreground/30"
                 )}
               >
@@ -262,7 +273,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                     <TooltipTrigger asChild>
                       <span
                         className={cn(
-                          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-black uppercase cursor-default",
+                          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-black uppercase cursor-default",
                           done
                             ? "bg-emerald-500/15 text-emerald-700"
                             : "bg-muted/60 text-muted-foreground/40"
@@ -288,7 +299,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               {hasCall && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-700 cursor-default">
+                    <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-bold bg-blue-500/10 text-blue-700 cursor-default">
                       <Phone className="size-2.5" />
                       <span className="truncate max-w-[55px]">{(order.call_status as string) || "Called"}</span>
                     </span>
@@ -303,7 +314,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               {hasEsc && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-700 cursor-default">
+                    <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-bold bg-rose-500/10 text-rose-700 cursor-default">
                       <AlertTriangle className="size-2.5" />
                       Esc
                     </span>
@@ -315,7 +326,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                 </Tooltip>
               )}
               {!hasCall && !hasEsc && (
-                <span className="text-[10px] text-muted-foreground/30 font-bold">No follow-ups</span>
+                <span className="text-xs text-muted-foreground/30 font-bold">No follow-ups</span>
               )}
             </div>
           </div>
@@ -338,14 +349,14 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           </span>
           <div className="flex items-center gap-1">
             {advance > 0 && (
-              <span className="text-[10px] font-bold text-muted-foreground">
+              <span className="text-xs font-bold text-muted-foreground">
                 Adv: {advance.toFixed(1)}
               </span>
             )}
           </div>
           <span
             className={cn(
-              "text-[11px] font-black tracking-tight",
+              "text-xs font-black tracking-tight",
               balance > 0 ? "text-rose-600" : "text-emerald-600"
             )}
           >
@@ -356,46 +367,77 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     },
   },
   {
-    id: "feedback_action",
-    header: "",
-    size: 50,
+    id: "actions",
+    header: "Actions",
+    size: 80,
     cell: ({ row }) => {
+      const status = row.original.showroomStatus.label;
       const hasShopItems = row.original.showroomStatus.hasPhysicalItems;
-      if (!hasShopItems) return null;
+      const showFeedback = hasShopItems;
+      const showDispatch = status === "needs_action";
+
+      if (!showFeedback && !showDispatch) return null;
+
       return (
         <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                asChild
-                className={cn(
-                  "h-7 w-7 p-0 transition-colors",
-                  row.original.showroomStatus.isBrovaTrial
-                    ? "hover:bg-amber-100 hover:text-amber-700 text-amber-600"
-                    : row.original.showroomStatus.isReadyForPickup
-                      ? "hover:bg-emerald-100 hover:text-emerald-700 text-emerald-600"
-                      : "hover:bg-primary/10 hover:text-primary text-primary/60"
-                )}
-              >
-                <Link
-                  to="/$main/orders/order-management/feedback/$orderId"
-                  params={{ orderId: String(row.original.order.id) }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ClipboardCheck className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs font-bold">
-              {row.original.showroomStatus.isBrovaTrial
-                ? "Brova Feedback"
-                : row.original.showroomStatus.isAlterationIn
-                  ? "Alteration Feedback"
-                  : "Final Feedback"}
-            </TooltipContent>
-          </Tooltip>
+          <div className="flex items-center gap-1">
+            {showFeedback && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className={cn(
+                      "h-7 w-7 p-0 transition-colors",
+                      status === "brova_trial"
+                        ? "hover:bg-amber-100 hover:text-amber-700 text-amber-600"
+                        : status === "ready_for_pickup"
+                          ? "hover:bg-emerald-100 hover:text-emerald-700 text-emerald-600"
+                          : "hover:bg-primary/10 hover:text-primary text-primary/60"
+                    )}
+                  >
+                    <Link
+                      to="/$main/orders/order-management/feedback/$orderId"
+                      params={{ orderId: String(row.original.order.id) }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs font-bold">
+                  {status === "brova_trial"
+                    ? "Brova Feedback"
+                    : status === "alteration_in"
+                      ? "Alteration Feedback"
+                      : "Final Feedback"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {showDispatch && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="h-7 w-7 p-0 transition-colors hover:bg-red-100 hover:text-red-700 text-red-600"
+                  >
+                    <Link
+                      to="/$main/orders/order-management/alterations"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Truck className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs font-bold">
+                  Send Back to Workshop
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </TooltipProvider>
       );
     },

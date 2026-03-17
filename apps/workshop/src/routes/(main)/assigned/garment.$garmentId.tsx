@@ -35,7 +35,7 @@ function AssignedGarmentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-5xl mx-auto space-y-4">
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 rounded-xl" />
         <Skeleton className="h-48 rounded-xl" />
@@ -45,7 +45,7 @@ function AssignedGarmentDetailPage() {
 
   if (!garment) {
     return (
-      <div className="p-6 max-w-5xl mx-auto text-center py-24">
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto text-center py-24">
         <p className="text-lg font-semibold text-muted-foreground">Garment not found</p>
         <Button variant="outline" className="mt-4" onClick={() => router.history.back()}>
           Go Back
@@ -145,7 +145,7 @@ function EditableDates({
   return (
     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-dashed">
       <div className="space-y-1">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
           <Clock className="w-3 h-3" /> Garment Delivery
         </Label>
         <DatePicker
@@ -155,7 +155,7 @@ function EditableDates({
         />
       </div>
       <div className="space-y-1">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
           <Timer className="w-3 h-3" /> Assigned
         </Label>
         <DatePicker

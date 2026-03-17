@@ -27,7 +27,7 @@ export const GarmentIdCell = ({
 }: CellContext<GarmentSchema, unknown>) => {
     const { control } = useFormContext();
     return (
-        <div className="min-w-25">
+        <div>
             <Controller
                 name={`garments.${row.index}.garment_id`}
                 control={control}
@@ -64,7 +64,7 @@ export const MeasurementIdCell = ({
                         >
                             <SelectTrigger
                                 className={cn(
-                                    "w-full bg-background border-border/60",
+                                    "w-full bg-background border-border/60 gap-1",
                                     error && "border-destructive",
                                 )}
                             >
@@ -80,9 +80,6 @@ export const MeasurementIdCell = ({
                                 )}
                             </SelectContent>
                         </Select>
-                        {error && (
-                            <span className="text-xs text-destructive">{error.message}</span>
-                        )}
                     </div>
                 )}
             />
@@ -124,11 +121,6 @@ export const GarmentTypeCell = ({
                                 <SelectItem value="brova">Brova</SelectItem>
                             </SelectContent>
                         </Select>
-                        {error && (
-                            <span className="text-xs text-destructive text-center">
-                                {error.message}
-                            </span>
-                        )}
                     </div>
                 )}
             />
@@ -192,9 +184,6 @@ export const FabricSourceCell = ({
                                 <SelectItem value="OUT">OUT</SelectItem>
                             </SelectContent>
                         </Select>
-                        {error && (
-                            <span className="text-xs text-destructive">{error.message}</span>
-                        )}
                     </div>
                 )}
             />
@@ -238,9 +227,6 @@ export const ShopNameCell = ({
                             value={field.value || ""}
                             disabled={isDisabled || isFormDisabled}
                         />
-                        {error && (
-                            <span className="text-xs text-destructive">{error.message}</span>
-                        )}
                     </div>
                 )}
             />
@@ -336,7 +322,7 @@ export const IfInsideCell = ({
                             />
                         )}
                         <span className="truncate text-sm">{fabric.name}</span>
-                        <span className={cn("flex items-center gap-0.5 ml-auto shrink-0 text-[10px]", getStockColorClass(availableStock))}>
+                        <span className={cn("flex items-center gap-0.5 ml-auto shrink-0 text-xs", getStockColorClass(availableStock))}>
                             <Package className="w-3 h-3" />{availableStock.toFixed(1)}
                         </span>
                     </div>
@@ -353,7 +339,7 @@ export const IfInsideCell = ({
                             <div className="min-w-0">
                                 <p className="text-sm font-medium truncate">{fabric.name}</p>
                                 {fabric.color && (
-                                    <p className="text-[10px] text-muted-foreground">{fabric.color}</p>
+                                    <p className="text-xs text-muted-foreground">{fabric.color}</p>
                                 )}
                             </div>
                         </div>
@@ -403,11 +389,6 @@ export const IfInsideCell = ({
                                     isFormDisabled && "opacity-100 cursor-default"
                                 )}
                             />
-                            {error && (
-                                <span className="text-xs text-destructive">
-                                    {error.message}
-                                </span>
-                            )}
                         </div>
                     )}
                 />
@@ -455,9 +436,6 @@ export const ColorCell = ({
                             value={field.value || ""}
                             readOnly={isReadOnly || isFormDisabled}
                         />
-                        {error && (
-                            <span className="text-xs text-destructive">{error.message}</span>
-                        )}
                     </div>
                 )}
             />
@@ -532,12 +510,9 @@ export const FabricLengthCell = ({
                                 }}
                             />
                             {exceedsStock && !error && (
-                                <span className="text-[10px] text-destructive">
+                                <span className="text-xs text-destructive">
                                     Exceeds stock ({available.toFixed(1)}m)
                                 </span>
-                            )}
-                            {error && (
-                                <span className="text-xs text-destructive">{error.message}</span>
                             )}
                         </div>
                     );
@@ -635,11 +610,6 @@ export const DeliveryDateCell = ({
                                 error && "border-destructive",
                             )}
                         />
-                        {error && (
-                            <span className="text-xs text-destructive whitespace-nowrap">
-                                {error.message}
-                            </span>
-                        )}
                     </div>
                 )}
             />
@@ -761,11 +731,6 @@ export const HomeDeliveryCell = ({
                             disabled={isFormDisabled}
                             className={cn(error && "border-destructive")}
                         />
-                        {error && (
-                            <span className="text-xs text-destructive text-center">
-                                {error.message}
-                            </span>
-                        )}
                     </div>
                 )}
             />

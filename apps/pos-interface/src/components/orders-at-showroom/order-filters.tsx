@@ -86,13 +86,13 @@ export function OrderFilters({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Settings2 className="size-3.5 text-primary/60" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Search & Filter</span>
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Search & Filter</span>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={onClearFilters}
-          className="h-6 px-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
+          className="h-6 px-2 text-xs font-black uppercase tracking-tighter text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
         >
           <X className="size-3 mr-1" />
           Reset
@@ -102,27 +102,27 @@ export function OrderFilters({
       {/* Row 1: Search */}
       <div className="flex flex-wrap gap-3">
         <div className="space-y-1 min-w-[120px] flex-1">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Order ID / Invoice</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Order ID / Invoice</Label>
           <div className="relative group">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Search..."
               value={filters.searchId}
               onChange={(e) => onFilterChange("searchId", e.target.value)}
-              className="pl-8 h-8 text-[11px] border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
+              className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
             />
           </div>
         </div>
 
         <div className="space-y-1 min-w-[160px] flex-[2]">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Customer Name / Mobile</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Customer Name / Mobile</Label>
           <div className="relative group">
             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Search..."
               value={filters.customer}
               onChange={(e) => onFilterChange("customer", e.target.value)}
-              className="pl-8 h-8 text-[11px] border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
+              className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
             />
           </div>
         </div>
@@ -131,16 +131,17 @@ export function OrderFilters({
       {/* Row 2: Filters + Sort */}
       <div className="flex flex-wrap gap-3 pt-3 border-t border-border/40">
         <div className="space-y-1 min-w-[140px] flex-1">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Workflow Status</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Workflow Status</Label>
           <Select value={filters.stage} onValueChange={(value) => onFilterChange("stage", value)}>
-            <SelectTrigger className="h-8 text-[11px] border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
+            <SelectTrigger className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <SelectValue placeholder="All Stages" />
             </SelectTrigger>
             <SelectContent className="rounded-xl shadow-xl">
               <SelectItem value="all">All Showroom Orders</SelectItem>
               <SelectItem value="brova_trial">Brova Trial</SelectItem>
               <SelectItem value="needs_action">Needs Action</SelectItem>
-              <SelectItem value="pickup_waiting_finals">Awaiting Finals</SelectItem>
+              <SelectItem value="awaiting_finals">Awaiting Finals</SelectItem>
+              <SelectItem value="partial_ready">Partial Ready</SelectItem>
               <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
               <SelectItem value="alteration_in">Alteration (In)</SelectItem>
             </SelectContent>
@@ -148,18 +149,18 @@ export function OrderFilters({
         </div>
 
         <div className="space-y-1 min-w-[140px] flex-1">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Follow-up Status</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Follow-up Status</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-8 w-full justify-between text-[11px] font-bold border-2 border-border/60 rounded-lg bg-background px-2.5 transition-all hover:border-primary/30"
+                className="h-8 w-full justify-between text-xs font-bold border-2 border-border/60 rounded-lg bg-background px-2.5 transition-all hover:border-primary/30"
               >
                 {filters.reminderStatuses.length === 0 ? (
                   <span className="text-muted-foreground opacity-60">None Selected</span>
                 ) : (
                   <span className="flex items-center gap-1.5">
-                    <Badge variant="default" className="h-4 px-1 rounded-sm text-[9px] font-black">{filters.reminderStatuses.length}</Badge>
+                    <Badge variant="default" className="h-4 px-1 rounded-sm text-xs font-black">{filters.reminderStatuses.length}</Badge>
                     <span className="truncate">Active</span>
                   </span>
                 )}
@@ -170,7 +171,7 @@ export function OrderFilters({
               {REMINDER_GROUPS.map((group) => (
                 <div key={group.label}>
                   <div className="px-3 pt-2.5 pb-1">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">{group.label}</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">{group.label}</span>
                   </div>
                   {group.items.map((option) => (
                     <div
@@ -178,8 +179,8 @@ export function OrderFilters({
                       className="flex items-center space-x-2 rounded-lg px-3 py-1.5 hover:bg-primary/5 cursor-pointer transition-colors"
                       onClick={() => toggleReminder(option.value)}
                     >
-                      <Checkbox checked={filters.reminderStatuses.includes(option.value)} className="h-3.5 w-3.5 rounded border-2" />
-                      <Label className={cn("text-[11px] font-bold cursor-pointer flex-1", option.color)}>{option.label}</Label>
+                      <Checkbox checked={filters.reminderStatuses.includes(option.value)} className="h-4 w-4 rounded border-2" />
+                      <Label className={cn("text-xs font-bold cursor-pointer flex-1", option.color)}>{option.label}</Label>
                     </div>
                   ))}
                 </div>
@@ -188,7 +189,7 @@ export function OrderFilters({
                 <div className="border-t border-border/40 px-3 py-2">
                   <button
                     onClick={() => onFilterChange("reminderStatuses", [])}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
+                    className="text-xs font-bold text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
                   >
                     Clear selection
                   </button>
@@ -199,9 +200,9 @@ export function OrderFilters({
         </div>
 
         <div className="space-y-1 min-w-[130px] flex-1">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Sorting</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Sorting</Label>
           <Select value={filters.sortBy} onValueChange={(value) => onFilterChange("sortBy", value)}>
-            <SelectTrigger className="h-8 text-[11px] border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
+            <SelectTrigger className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <div className="flex items-center gap-1.5">
                 <ArrowUpDown className="size-3 text-primary/60" />
                 <SelectValue />
@@ -220,7 +221,7 @@ export function OrderFilters({
       {/* Row 3: Date Range */}
       <div className="flex flex-wrap gap-3 pt-3 border-t border-border/40">
         <div className="space-y-1">
-          <Label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Delivery Date Range</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Delivery Date Range</Label>
           <div className="flex items-center gap-2">
             <div className="w-[130px]">
               <DatePicker
@@ -228,17 +229,17 @@ export function OrderFilters({
                 onChange={(d) => onFilterChange("deliveryDateStart", d ? d.toISOString().split("T")[0] : "")}
                 placeholder="From"
                 clearable
-                className="h-8 text-[10px] border-2 border-border/60 rounded-lg bg-background font-bold"
+                className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
               />
             </div>
-            <span className="text-muted-foreground/30 font-black text-[9px] uppercase tracking-tighter shrink-0">to</span>
+            <span className="text-muted-foreground/30 font-black text-xs uppercase tracking-tighter shrink-0">to</span>
             <div className="w-[130px]">
               <DatePicker
                 value={filters.deliveryDateEnd ? new Date(filters.deliveryDateEnd) : null}
                 onChange={(d) => onFilterChange("deliveryDateEnd", d ? d.toISOString().split("T")[0] : "")}
                 placeholder="To"
                 clearable
-                className="h-8 text-[10px] border-2 border-border/60 rounded-lg bg-background font-bold"
+                className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
               />
             </div>
           </div>

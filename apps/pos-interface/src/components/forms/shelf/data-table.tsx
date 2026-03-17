@@ -80,7 +80,7 @@ export function DataTable<TData, TValue>({
                     minWidth: header.column.columnDef.minSize,
                     width: header.column.columnDef.size,
                   }}
-                  className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground"
+                  className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-muted-foreground"
                 >
                   {header.isPlaceholder
                     ? null

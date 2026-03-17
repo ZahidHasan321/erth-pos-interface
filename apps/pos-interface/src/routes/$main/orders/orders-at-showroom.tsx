@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Package,
   User,
-  ExternalLink,
   CheckCircle2,
   AlertTriangle,
   AlertCircle,
@@ -78,7 +77,7 @@ const CompactStat = ({
         <Icon className="w-3.5 h-3.5" />
      </div>
      <div className="min-w-0 flex-1">
-        <p className="text-[8px] font-black uppercase tracking-tight text-muted-foreground leading-none mb-1 truncate">{label}</p>
+        <p className="text-xs font-black uppercase tracking-tight text-muted-foreground leading-none mb-1 truncate">{label}</p>
         <p className="text-lg font-black leading-none tracking-tighter">{value}</p>
      </div>
   </div>
@@ -139,7 +138,7 @@ function ReminderDialog({
                     )} />
                     <span className="font-black">{type}</span>
                     {isDone && fmtDate(date) && (
-                        <span className="text-[10px] opacity-70">{fmtDate(date)}</span>
+                        <span className="text-xs opacity-70">{fmtDate(date)}</span>
                     )}
                     {isDone && notes && <MessageSquare className="size-3 opacity-50 shrink-0" />}
                 </button>
@@ -303,7 +302,7 @@ function EscalationDialog({
                     <AlertTriangle className="size-3.5 shrink-0" />
                     <span className="font-black">Escalate</span>
                     {hasData && fmtDate(date) && (
-                        <span className="text-[10px] opacity-70">{fmtDate(date)}</span>
+                        <span className="text-xs opacity-70">{fmtDate(date)}</span>
                     )}
                 </button>
             </DialogTrigger>
@@ -349,14 +348,14 @@ function OrderManagementConsole({
                     <div className="size-10 bg-muted rounded-full flex items-center justify-center mx-auto mb-2">
                         <User className="size-5" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">Select an order to manage</p>
+                    <p className="text-xs font-black uppercase tracking-[0.2em]">Select an order to manage</p>
                 </div>
             </Card>
         );
     }
 
     const order = selected.order;
-    const isReady = selected.showroomStatus.isReadyForPickup;
+    const isReady = selected.showroomStatus.label === "ready_for_pickup";
 
     const handleUpdate = async (fields: any) => {
         try {
@@ -376,14 +375,14 @@ function OrderManagementConsole({
             <div className="bg-primary/5 px-4 py-2 border-b border-primary/10 flex justify-between items-center">
                 <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-black uppercase tracking-tighter">Order #{order.id}</span>
-                    <Badge variant="outline" className="text-[8px] font-black uppercase h-4 px-1.5 shrink-0">{selected.customerName}</Badge>
+                    <Badge variant="outline" className="text-xs font-black uppercase h-4 px-1.5 shrink-0">{selected.customerName}</Badge>
                 </div>
                 <button onClick={onClose} className="text-muted-foreground hover:text-foreground shrink-0 ml-1"><XIcon className="size-3" /></button>
             </div>
 
             <div className="p-3 flex flex-col gap-2 flex-1">
                 {/* Row 1: Reminders */}
-                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Reminders</span>
+                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Reminders</span>
                 <div className="flex flex-wrap gap-2 -mt-1">
                     {(['R1', 'R2', 'R3'] as const).map(type => {
                         const prefix = type.toLowerCase();
@@ -410,7 +409,7 @@ function OrderManagementConsole({
                 </div>
 
                 {/* Row 2: Call & Escalation */}
-                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Follow-ups</span>
+                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Follow-ups</span>
                 <div className="flex flex-wrap gap-2 -mt-1">
                     <CallLogDialog
                         date={order.call_reminder_date as string | null}
@@ -443,7 +442,7 @@ function OrderManagementConsole({
                     <Button
                         asChild
                         size="sm"
-                        className="flex-1 h-9 font-black uppercase tracking-wider text-[10px] rounded-lg shadow-sm"
+                        className="flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm"
                     >
                         <Link to="/$main/orders/order-management/feedback/$orderId" params={{ orderId: String(order.id) }}>
                             <ClipboardCheck className="size-3.5 mr-1.5" />
@@ -456,7 +455,7 @@ function OrderManagementConsole({
                         disabled={!isReady}
                         variant={isReady ? "default" : "secondary"}
                         className={cn(
-                            "flex-1 h-9 font-black uppercase tracking-wider text-[10px] rounded-lg shadow-sm",
+                            "flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm",
                             isReady && "bg-emerald-600 hover:bg-emerald-700 text-white"
                         )}
                     >
@@ -542,10 +541,11 @@ function RouteComponent() {
     return {
       stats: {
         total: filtered.length,
-        ready: filtered.filter(o => o.showroomStatus.isReadyForPickup).length,
-        brovaTrial: filtered.filter(o => o.showroomStatus.isBrovaTrial).length,
-        needsAction: filtered.filter(o => o.showroomStatus.hasNeedsAction).length,
-        alterationIn: filtered.filter(o => o.showroomStatus.isAlterationIn).length,
+        ready: filtered.filter(o => o.showroomStatus.label === "ready_for_pickup").length,
+        brovaTrial: filtered.filter(o => o.showroomStatus.label === "brova_trial").length,
+        needsAction: filtered.filter(o => o.showroomStatus.label === "needs_action").length,
+        partialReady: filtered.filter(o => o.showroomStatus.label === "partial_ready").length,
+        alterationIn: filtered.filter(o => o.showroomStatus.label === "alteration_in").length,
       }
     };
   }, [orders, filters]);
@@ -585,11 +585,10 @@ function RouteComponent() {
         {/* Stats - Span 2 */}
         <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-2">
           <CompactStat label="Total" value={stats.total} icon={Store} color="bg-slate-500" />
-          <CompactStat label="Trial" value={stats.brovaTrial} icon={RefreshCw} color="bg-amber-500" />
-          <CompactStat label="Needs Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
+          <CompactStat label="Trial" value={stats.brovaTrial + stats.alterationIn} icon={RefreshCw} color="bg-amber-500" />
+          <CompactStat label="Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
+          <CompactStat label="Partial" value={stats.partialReady} icon={Package} color="bg-violet-500" />
           <CompactStat label="Ready" value={stats.ready} icon={CheckCircle} color="bg-emerald-500" />
-          <CompactStat label="Alt (In)" value={stats.alterationIn} icon={Package} color="bg-blue-500" />
-          <CompactStat label="Alt (Out)" value={0} icon={ExternalLink} color="bg-rose-500" className="opacity-50" />
         </div>
       </div>
 

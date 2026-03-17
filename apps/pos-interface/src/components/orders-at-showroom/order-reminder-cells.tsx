@@ -162,7 +162,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
                <div className="space-y-1">
                  <p className="font-semibold text-xs">{type} Details</p>
                  <p className="text-xs text-muted-foreground break-words">{note || "No notes"}</p>
-                 <p className="text-[10px] text-blue-500 pt-1">Click to edit</p>
+                 <p className="text-xs text-blue-500 pt-1">Click to edit</p>
                </div>
              ) : (
                <p>Add {type} details</p>
@@ -281,7 +281,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
                     </span>
                     {status && (
                       <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded border font-medium flex items-center gap-1 whitespace-nowrap", 
+                        "text-xs px-1.5 py-0.5 rounded border font-medium flex items-center gap-1 whitespace-nowrap", 
                         statusColors[status] || "bg-gray-100"
                       )}>
                         {status}
@@ -304,7 +304,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
                  <p className="font-semibold text-xs">Call Log</p>
                  <p className="text-xs">{status || "No Status"}</p>
                  {note && <p className="text-xs text-muted-foreground border-t pt-1 mt-1 break-words">{note}</p>}
-                 <p className="text-[10px] text-blue-500 pt-1">Click to update</p>
+                 <p className="text-xs text-blue-500 pt-1">Click to update</p>
                </div>
              ) : (
                <p>Log a call</p>

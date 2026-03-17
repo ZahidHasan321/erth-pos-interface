@@ -87,7 +87,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 <h3 className="text-sm font-bold">
                   Order {order.id}
                 </h3>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium mt-0.5">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-0.5">
                   <span className="text-primary/80">Inv {order.invoice_number || "—"}</span>
                   <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
                   <Clock className="w-2.5 h-2.5" />
@@ -99,7 +99,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
               <Badge
                 variant="outline"
                 className={cn(
-                  "text-[9px] uppercase font-black px-2 py-0.5 border-none shadow-xs",
+                  "text-xs uppercase font-black px-2 py-0.5 border-none shadow-xs",
                   PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground"
                 )}
               >
@@ -122,7 +122,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
               {order.customer?.phone && (
                 <div className="flex items-center gap-2.5 ml-1">
                   <Phone className="w-2.5 h-2.5 text-muted-foreground" />
-                  <span className="text-[11px] font-medium text-muted-foreground">{order.customer.phone}</span>
+                  <span className="text-xs font-medium text-muted-foreground">{order.customer.phone}</span>
                 </div>
               )}
             </div>
@@ -132,22 +132,22 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
           <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Workload</span>
-                <Badge variant="secondary" className="font-black text-[10px] px-2 py-0.5">{numGarments} Pieces</Badge>
+                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Workload</span>
+                <Badge variant="secondary" className="font-black text-xs px-2 py-0.5">{numGarments} Pieces</Badge>
               </div>
               <div className="flex items-center gap-2">
                 {brovaCount > 0 && (
-                  <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  <span className="text-xs font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                     {brovaCount} Brova
                   </span>
                 )}
                 {finalCount > 0 && (
-                  <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                  <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
                     {finalCount} Final
                   </span>
                 )}
                 {garments.some(g => g.express) && (
-                  <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                  <span className="text-xs font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
                     Express
                   </span>
                 )}
@@ -191,7 +191,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
           <div className="border-t-2 border-border/40 bg-muted/5">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
                   <th className="text-left py-2.5 px-5">Garment</th>
                   <th className="text-left py-2.5 px-5">Type</th>
                   <th className="text-left py-2.5 px-5">Style</th>
@@ -206,7 +206,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                     <td className="py-2.5 px-5">
                       <div className="flex items-center gap-1.5">
                         <span className={cn(
-                          "inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded",
+                          "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
                           g.garment_type === "brova"
                             ? "bg-blue-50 text-blue-700"
                             : "bg-emerald-50 text-emerald-700"
@@ -214,7 +214,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                           {g.garment_type}
                         </span>
                         {g.express && (
-                          <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                          <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
                             Express
                           </span>
                         )}
@@ -222,13 +222,13 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                     </td>
                     <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
                     <td className="py-2.5 px-5">
-                      <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded capitalize">
+                      <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded capitalize">
                         {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage ?? "—"}
                       </span>
                     </td>
                     <td className="py-2.5 px-5">
                       <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded capitalize",
+                        "text-xs font-bold px-2 py-0.5 rounded capitalize",
                         g.location === "shop" ? "bg-emerald-50 text-emerald-700" : "bg-muted text-muted-foreground"
                       )}>
                         {g.location?.replace(/_/g, " ") || "—"}
@@ -402,7 +402,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm">Order {group.orderId}</span>
                 {group.invoiceNumber && (
-                  <span className="text-[10px] font-bold text-primary/70">Inv {group.invoiceNumber}</span>
+                  <span className="text-xs font-bold text-primary/70">Inv {group.invoiceNumber}</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
                 {group.customerPhone && (
                   <>
                     <Phone className="w-2.5 h-2.5 text-muted-foreground ml-2" />
-                    <span className="text-[11px] text-muted-foreground">{group.customerPhone}</span>
+                    <span className="text-xs text-muted-foreground">{group.customerPhone}</span>
                   </>
                 )}
               </div>
@@ -430,7 +430,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
                       <div className="flex items-center gap-2 min-w-[140px]">
                         <span className="font-black text-sm">{g.garment_id || g.id.slice(0, 8)}</span>
                         <Badge className={cn(
-                          "text-[8px] font-black uppercase border-none h-4 px-1.5",
+                          "text-xs font-black uppercase border-none h-4 px-1.5",
                           g.garment_type === "brova" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
                         )}>
                           {g.garment_type}
@@ -439,14 +439,14 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
 
                       {/* Feedback status */}
                       <Badge className={cn(
-                        "text-[9px] font-black uppercase border-none",
+                        "text-xs font-black uppercase border-none",
                         (g as any).feedback_status === "needs_redo" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                       )}>
                         {(g as any).feedback_status === "needs_redo" ? "Needs Redo" : (g as any).feedback_status === "needs_repair" ? "Needs Repair" : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
                       </Badge>
 
                       {/* Trip label */}
-                      <span className="text-[10px] font-bold text-muted-foreground">
+                      <span className="text-xs font-bold text-muted-foreground">
                         {(() => {
                           const trip = g.trip_number || 1;
                           const altNum = g.garment_type === "final" && trip >= 2
@@ -460,7 +460,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
 
                       {/* Feedback context */}
                       {feedback && (
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <MessageSquare className="w-3 h-3" />
                           <span className="font-bold capitalize">{feedback.action?.replace(/_/g, " ")}</span>
                           {feedback.satisfaction_level && (
@@ -477,7 +477,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
                         <Button
                           size="sm"
                           variant="outline"
-                          className="font-black uppercase tracking-widest text-[10px] h-8 border-2 border-amber-500/50 hover:bg-amber-50 hover:border-amber-500"
+                          className="font-black uppercase tracking-widest text-xs h-8 border-2 border-amber-500/50 hover:bg-amber-50 hover:border-amber-500"
                           onClick={() => handleDispatchGarment(g)}
                           disabled={isDispatching}
                         >
@@ -642,7 +642,7 @@ export default function DispatchOrderPage() {
             >
               New Orders
               {orders.length > 0 && (
-                <Badge className="ml-2 bg-primary text-primary-foreground font-black text-[10px] h-5 px-1.5">
+                <Badge className="ml-2 bg-primary text-primary-foreground font-black text-xs h-5 px-1.5">
                   {orders.length}
                 </Badge>
               )}
@@ -653,7 +653,7 @@ export default function DispatchOrderPage() {
             >
               Return to Workshop
               {returnCount > 0 && (
-                <Badge className="ml-2 bg-amber-500 text-white font-black text-[10px] h-5 px-1.5">
+                <Badge className="ml-2 bg-amber-500 text-white font-black text-xs h-5 px-1.5">
                   {returnCount}
                 </Badge>
               )}

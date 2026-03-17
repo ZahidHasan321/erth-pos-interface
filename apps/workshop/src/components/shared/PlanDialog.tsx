@@ -61,7 +61,7 @@ function WorkloadBar({ current, max }: { current: number; max: number }) {
         />
       </div>
       <span className={cn(
-        "text-[10px] font-bold tabular-nums shrink-0",
+        "text-xs font-bold tabular-nums shrink-0",
         isOver ? "text-red-600" : "text-muted-foreground",
       )}>
         {current}/{max}
@@ -142,7 +142,7 @@ function WorkerSelect({
               <span className="truncate max-w-[100px]">{r.resource_name}</span>
               {r.resource_type === "Senior" && (
                 <span className={cn(
-                  "text-[9px] font-bold uppercase",
+                  "text-xs font-bold uppercase",
                   isSelected ? "text-white/80" : "text-amber-500",
                 )}>
                   Sr
@@ -150,7 +150,7 @@ function WorkerSelect({
               )}
               {/* Compact load indicator */}
               <span className={cn(
-                "text-[10px] font-bold tabular-nums",
+                "text-xs font-bold tabular-nums",
                 isSelected
                   ? "text-white/70"
                   : isOverloaded
@@ -338,7 +338,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 />
               );
             })}
-            <span className="text-[10px] font-bold text-muted-foreground ml-1 shrink-0">
+            <span className="text-xs font-bold text-muted-foreground ml-1 shrink-0">
               {filledCount}/{visibleSteps.length}
             </span>
           </div>
@@ -386,7 +386,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{step.label}</span>
                         {!step.required && (
-                          <span className="text-[10px] text-muted-foreground font-medium">(skip)</span>
+                          <span className="text-xs text-muted-foreground font-medium">(skip)</span>
                         )}
                         {step.required && !isFilled && (
                           <span className="text-red-400 text-xs">*</span>
@@ -403,7 +403,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                         onClick={() => setPlan((prev) => ({ ...prev, [step.key]: "" }))}
                       >
                         Change
@@ -417,7 +417,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                       {/* Unit picker (only if multiple units) */}
                       {units.length > 1 && (
                         <div>
-                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
                             Unit
                           </Label>
                           <div className="flex gap-1.5">
@@ -442,7 +442,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
 
                       {/* Worker grid */}
                       <div>
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
                           Worker
                         </Label>
                         <WorkerSelect

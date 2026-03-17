@@ -198,7 +198,7 @@ export const SalesInvoice = React.forwardRef<HTMLDivElement, SalesInvoiceProps>(
           <h4 className="text-xs font-semibold text-gray-800 mb-2 text-center">
             الملاحظات والشروط
           </h4>
-          <ul className="text-right text-gray-700 text-[10px] leading-relaxed space-y-1">
+          <ul className="text-right text-gray-700 text-xs leading-relaxed space-y-1">
             <li>• البضاعة المباعة لا ترد ولا تستبدل بعد خروجها من المعرض.</li>
             <li>• يرجى التأكد من سلامة القطع قبل الاستلام.</li>
             <li>• يتم سداد المبلغ كاملاً عند الشراء.</li>

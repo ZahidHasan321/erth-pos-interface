@@ -44,13 +44,7 @@ export type OrderRow = {
 
   // Derived status info from @repo/database/utils
   showroomStatus: {
-    isBrovaTrial: boolean;
-    isReadyForPickup: boolean;
-    isPickupWaitingFinals: boolean;
-    isWaitingFinals: boolean;
-    isAlterationIn: boolean;
-    hasNeedsAction: boolean;
-    label: "brova_trial" | "alteration_in" | "needs_action" | "ready_for_pickup" | "pickup_waiting_finals" | null;
+    label: "alteration_in" | "brova_trial" | "needs_action" | "awaiting_finals" | "partial_ready" | "ready_for_pickup" | null;
     hasPhysicalItems: boolean;
   };
 

@@ -3,11 +3,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAssignedViewGarments } from "@/hooks/useWorkshopGarments";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
+import { MetadataChip } from "@/components/shared/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
   ClipboardList,
   ChevronDown,
@@ -31,51 +32,7 @@ export const Route = createFileRoute("/(main)/assigned/")({
   head: () => ({ meta: [{ title: "Production Tracker" }] }),
 });
 
-// ── Helpers ────────────────────────────────────────────────────
-
-interface OrderGroup {
-  order_id: number;
-  invoice_number?: number;
-  customer_name?: string;
-  brands: string[];
-  express: boolean;
-  delivery_date?: string;
-  home_delivery?: boolean;
-  garments: WorkshopGarment[];
-}
-
-function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
-  const map = new Map<number, OrderGroup>();
-  for (const g of garments) {
-    if (!map.has(g.order_id)) {
-      map.set(g.order_id, {
-        order_id: g.order_id,
-        invoice_number: g.invoice_number,
-        customer_name: g.customer_name,
-        brands: [],
-        express: false,
-        delivery_date: g.delivery_date_order,
-        home_delivery: g.home_delivery_order,
-        garments: [],
-      });
-    }
-    const entry = map.get(g.order_id)!;
-    entry.garments.push(g);
-    if (g.express) entry.express = true;
-    if (g.order_brand && !entry.brands.includes(g.order_brand))
-      entry.brands.push(g.order_brand);
-  }
-  return Array.from(map.values());
-}
-
-function garmentSummary(garments: WorkshopGarment[]): string {
-  const b = garments.filter((g) => g.garment_type === "brova").length;
-  const f = garments.filter((g) => g.garment_type === "final").length;
-  const parts: string[] = [];
-  if (b) parts.push(`${b} Brova`);
-  if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
-  return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
-}
+// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
 
 const STAGE_ORDER: Record<string, number> = {
   waiting_cut: 0, soaking: 1, cutting: 2, post_cutting: 3,
@@ -98,8 +55,6 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
   const urgency = getDeliveryUrgency(group.delivery_date);
   const brovas = group.garments.filter((g) => g.garment_type === "brova");
   const finals = group.garments.filter((g) => g.garment_type === "final");
-  const maxTrip = Math.max(...group.garments.map((g) => g.trip_number ?? 1));
-
   const statusLabel = (() => {
     const workshopSide = (g: WorkshopGarment) =>
       g.location === "workshop" || g.location === "transit_to_workshop";
@@ -117,6 +72,10 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
     const brovasAtWorkshop = brovas.filter(workshopSide);
     const brovasAllAtShop = brovas.length > 0 && brovas.every(atShop);
 
+    const inTransitToShopBrovas = brovas.filter((g) => g.location === "transit_to_shop");
+    const onlyParkedAtWorkshop = workshopGarments.length > 0 &&
+      workshopGarments.every((g) => g.piece_stage === "waiting_for_acceptance");
+
     // Everything delivered back to shop — workshop side done
     if (allAtShop)
       return { text: "At shop", cls: "bg-green-100 text-green-800" };
@@ -125,13 +84,23 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
     if (allWorkshopReady)
       return { text: "Ready for dispatch", cls: "bg-emerald-100 text-emerald-800" };
 
-    // Shipped back, nothing left at workshop
-    if (inTransitToShop.length > 0 && workshopGarments.length === 0)
+    // Shipped back, nothing left at workshop (or only parked finals)
+    if (inTransitToShop.length > 0 && (workshopGarments.length === 0 || onlyParkedAtWorkshop))
       return { text: "In transit to shop", cls: "bg-sky-100 text-sky-800" };
 
-    // All brovas at shop awaiting trial — finals parked, no active workshop work
-    if (brovasAllAtShop && finalsActiveAtWorkshop.length === 0)
-      return { text: finalsParked.length > 0 ? "Awaiting brova trial" : `At shop — Trial ${maxTrip}`, cls: "bg-teal-100 text-teal-800" };
+    // Brovas in transit to shop, finals still parked
+    if (inTransitToShopBrovas.length > 0 && finalsActiveAtWorkshop.length === 0)
+      return { text: "Brovas in transit", cls: "bg-sky-100 text-sky-800" };
+
+    // All brovas at shop, no active finals in workshop
+    if (brovasAllAtShop && finalsActiveAtWorkshop.length === 0) {
+      const anyAccepted = brovas.some((g) => g.acceptance_status === true);
+      if (finalsParked.length > 0 && anyAccepted)
+        return { text: "Awaiting finals release", cls: "bg-violet-100 text-violet-800" };
+      if (finalsParked.length > 0)
+        return { text: "Awaiting brova trial", cls: "bg-teal-100 text-teal-800" };
+      return { text: "At shop", cls: "bg-green-100 text-green-800" };
+    }
 
     // Finals actively in production at workshop
     if (finalsActiveAtWorkshop.length > 0)
@@ -171,14 +140,12 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {group.express && <ExpressBadge />}
             {group.home_delivery && (
-              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                <Home className="w-3 h-3" /> Del
-              </span>
+              <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
             )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className={cn("text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded", statusLabel.cls)}>
+            <span className={cn("text-xs font-semibold uppercase px-1.5 py-0.5 rounded", statusLabel.cls)}>
               {statusLabel.text}
             </span>
             <ChevronDown className="w-4 h-4 -rotate-90 text-muted-foreground/40" />
@@ -187,24 +154,24 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
 
         {/* Row 2: details spread */}
         <div className="flex items-center justify-between flex-wrap gap-2 mt-1.5">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {group.invoice_number && <span>INV-{group.invoice_number}</span>}
             <span className="flex items-center gap-0.5">
               <Package className="w-3 h-3" /> {garmentSummary(group.garments)}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-2 text-xs">
             {group.delivery_date && (
               <span className={cn("font-semibold flex items-center gap-0.5", urgency.badge && "px-1.5 py-0.5 rounded", urgency.badge)}>
                 <Clock className="w-3 h-3" />
-                {formatDate(group.delivery_date)}
+                Due {formatDate(group.delivery_date)}
                 {daysLabel && <span className="font-bold ml-0.5">({daysLabel})</span>}
               </span>
             )}
             {group.garments[0]?.assigned_date && (
               <span className="flex items-center gap-0.5 text-muted-foreground">
-                <Timer className="w-3 h-3" /> {formatDate(group.garments[0].assigned_date)}
+                <Timer className="w-3 h-3" /> Assigned {formatDate(group.garments[0].assigned_date)}
               </span>
             )}
           </div>
@@ -257,7 +224,7 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
-              "text-[10px] font-bold uppercase px-2 py-0.5 rounded border shrink-0",
+              "text-xs font-bold uppercase px-2 py-0.5 rounded border shrink-0",
               garment.garment_type === "brova"
                 ? "bg-purple-100 text-purple-800 border-purple-200"
                 : "bg-blue-100 text-blue-800 border-blue-200",
@@ -279,29 +246,29 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
         {isAlterationIn ? (
           <AlterationInBadge />
         ) : isBrovaReturn ? (
-          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
+          <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
             Brova Return
           </span>
         ) : (
           <StageBadge stage={garment.piece_stage} />
         )}
-        <span className={cn("text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded", locationCls)}>
+        <span className={cn("text-xs font-semibold uppercase px-1.5 py-0.5 rounded", locationCls)}>
           {locationLabel}
         </span>
         {garment.express && <ExpressBadge />}
         {isAtShopPostProduction && (
-          <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
+          <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
             Production Complete
           </span>
         )}
       </div>
 
       {/* Row 3: metadata */}
-      <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
         {garment.invoice_number && <span>INV-{garment.invoice_number}</span>}
         {garment.assigned_date && (
           <span className="flex items-center gap-0.5">
-            <Timer className="w-3 h-3" /> {formatDate(garment.assigned_date)}
+            <Timer className="w-3 h-3" /> Assigned {formatDate(garment.assigned_date)}
           </span>
         )}
       </div>
@@ -356,7 +323,7 @@ function StatsBar({
           >
             <Icon className="w-3.5 h-3.5 mx-auto mb-0.5 opacity-60" />
             <p className="text-lg font-black leading-none">{s.value}</p>
-            <p className="text-[9px] mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
+            <p className="text-xs mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
           </button>
         );
       })}

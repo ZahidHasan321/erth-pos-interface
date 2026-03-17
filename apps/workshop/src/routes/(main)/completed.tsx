@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCompletedOrders } from "@/hooks/useWorkshopGarments";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
   CheckCircle2,
   ChevronDown,
@@ -11,58 +12,13 @@ import {
   Clock,
   Home,
 } from "lucide-react";
-import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/completed")({
   component: CompletedOrdersPage,
   head: () => ({ meta: [{ title: "Completed Orders" }] }),
 });
 
-// ── Helpers ────────────────────────────────────────────────────
-
-interface OrderGroup {
-  order_id: number;
-  invoice_number?: number;
-  customer_name?: string;
-  brands: string[];
-  express: boolean;
-  delivery_date?: string;
-  home_delivery?: boolean;
-  garments: WorkshopGarment[];
-}
-
-function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
-  const map = new Map<number, OrderGroup>();
-  for (const g of garments) {
-    if (!map.has(g.order_id)) {
-      map.set(g.order_id, {
-        order_id: g.order_id,
-        invoice_number: g.invoice_number,
-        customer_name: g.customer_name,
-        brands: [],
-        express: false,
-        delivery_date: g.delivery_date_order,
-        home_delivery: g.home_delivery_order,
-        garments: [],
-      });
-    }
-    const entry = map.get(g.order_id)!;
-    entry.garments.push(g);
-    if (g.express) entry.express = true;
-    if (g.order_brand && !entry.brands.includes(g.order_brand))
-      entry.brands.push(g.order_brand);
-  }
-  return Array.from(map.values());
-}
-
-function garmentSummary(garments: WorkshopGarment[]): string {
-  const b = garments.filter((g) => g.garment_type === "brova").length;
-  const f = garments.filter((g) => g.garment_type === "final").length;
-  const parts: string[] = [];
-  if (b) parts.push(`${b} Brova`);
-  if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
-  return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
-}
+// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
 
 // ── Order Card ─────────────────────────────────────────────────
 
@@ -83,14 +39,12 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {group.express && <ExpressBadge />}
             {group.home_delivery && (
-              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                <Home className="w-3 h-3" /> Del
-              </span>
+              <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
             )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
+            <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
               Completed
             </span>
             <ChevronDown className="w-4 h-4 -rotate-90 text-muted-foreground/40" />
@@ -98,7 +52,7 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-2 mt-1.5">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {group.invoice_number && <span>INV-{group.invoice_number}</span>}
             <span className="flex items-center gap-0.5">
               <Package className="w-3 h-3" /> {garmentSummary(group.garments)}
@@ -106,7 +60,7 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
           </div>
 
           {group.delivery_date && (
-            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
               Delivered: {formatDate(group.delivery_date)}
             </span>
