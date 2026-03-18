@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
   ClipboardList,
   ChevronDown,
@@ -124,8 +124,9 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
   return (
     <div
       onClick={onClick}
+      {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl shadow-sm border-l-4 cursor-pointer transition-all",
+        "bg-white border rounded-xl shadow-sm border-l-4 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
         urgency.border || "border-l-border",
         group.express && "ring-1 ring-orange-200",
@@ -211,8 +212,9 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
   return (
     <div
       onClick={onClick}
+      {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl px-4 py-3 shadow-sm cursor-pointer transition-all",
+        "bg-white border rounded-xl px-4 py-3 shadow-sm cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
         garment.express && "border-orange-200",
         isAlterationIn && "border-l-4 border-l-orange-500",
@@ -314,7 +316,7 @@ function StatsBar({
             key={s.key}
             onClick={() => onFilter(s.key)}
             className={cn(
-              "border rounded-xl p-2 text-center transition-all",
+              "border rounded-xl p-2 text-center transition-[color,background-color,border-color,box-shadow]",
               s.color,
               filter === s.key
                 ? "ring-2 ring-primary/40 shadow-md scale-[1.02]"

@@ -230,6 +230,7 @@
   button {
     font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 600;
+    touch-action: manipulation;
   }
 
   label {
@@ -264,6 +265,28 @@ input[type="number"] {
 
 .animate-fade-in {
   animation: fade-in 0.2s ease-out both;
+}
+
+/* Touch-optimized scrollable areas */
+@layer base {
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="sheet-content"],
+  [data-slot="dialog-content"] {
+    overscroll-behavior: contain;
+  }
+
+  /* Ensure all interactive elements have adequate touch targets */
+  a, button, [role="button"], [role="tab"], [role="checkbox"], [role="radio"],
+  [role="switch"], [role="menuitem"], [role="option"], select, summary {
+    touch-action: manipulation;
+  }
+
+  /* Prevent text selection on interactive elements during touch */
+  [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 /* Respect reduced motion preference */

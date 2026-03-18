@@ -113,7 +113,7 @@ export function useCompletedTodayGarments() {
 
 export function useBrovaPlans(orderIds: number[]) {
   return useQuery({
-    queryKey: ['brova-plans', ...orderIds.sort()],
+    queryKey: ['brova-plans', ...[...orderIds].sort()],
     queryFn: () => getBrovaPlansForOrders(orderIds),
     enabled: orderIds.length > 0,
     staleTime: 30_000,
@@ -122,7 +122,7 @@ export function useBrovaPlans(orderIds: number[]) {
 
 export function useBrovaStatus(orderIds: number[]) {
   return useQuery({
-    queryKey: ['brova-status', ...orderIds.sort()],
+    queryKey: ['brova-status', ...[...orderIds].sort()],
     queryFn: () => getBrovaStatusForOrders(orderIds),
     enabled: orderIds.length > 0,
     staleTime: 30_000,

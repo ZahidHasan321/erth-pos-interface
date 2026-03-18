@@ -52,6 +52,8 @@ function LoginPage() {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter username"
@@ -62,6 +64,8 @@ function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
+                autoComplete="current-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

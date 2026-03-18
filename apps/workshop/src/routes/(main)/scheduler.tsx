@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
@@ -60,7 +60,7 @@ function SchedulerOrderCard({
     <>
     <div
       className={cn(
-        "bg-white border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-white border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
         group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
@@ -68,6 +68,7 @@ function SchedulerOrderCard({
       <div
         className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
         onClick={() => onToggle(!selected)}
+        {...clickableProps(() => onToggle(!selected))}
       >
         {/* Row 1: Identity + actions */}
         <div className="flex items-center justify-between gap-3">
@@ -77,6 +78,7 @@ function SchedulerOrderCard({
               checked={selected}
               onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
               onClick={(e) => e.stopPropagation()}
+              aria-label={`Select order #${group.order_id}`}
               className="w-4 h-4 accent-primary cursor-pointer shrink-0"
             />
             <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
@@ -89,14 +91,16 @@ function SchedulerOrderCard({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
-              <Eye className="w-3.5 h-3.5" />
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
               className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse garments" : "Expand garments"}
             >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -218,16 +222,18 @@ function HeatCalendar({
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => setViewDate(new Date(year, month - 1, 1))}
+          aria-label="Previous month"
           className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         </button>
         <span className="font-bold text-sm tracking-tight">{monthLabel}</span>
         <button
           onClick={() => setViewDate(new Date(year, month + 1, 1))}
+          aria-label="Next month"
           className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -258,7 +264,7 @@ function HeatCalendar({
               onClick={() => handleDay(day)}
               disabled={isPast}
               className={cn(
-                "relative aspect-square rounded-lg text-xs font-semibold transition-all",
+                "relative aspect-square rounded-lg text-xs font-semibold transition-[color,background-color,border-color,box-shadow]",
                 "flex flex-col items-center justify-center gap-0.5",
                 isPast && "text-muted-foreground/20 cursor-not-allowed",
                 !isPast && !isSelected && "hover:ring-2 hover:ring-primary/30 cursor-pointer",

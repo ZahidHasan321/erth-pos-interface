@@ -48,7 +48,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           e.stopPropagation();
           onSelect(row.original);
         }}
-        className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary transition-colors"
+        className="h-9 w-9 p-0 hover:bg-primary/10 hover:text-primary transition-colors"
       >
         <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
@@ -68,8 +68,8 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="cursor-default text-blue-400 hover:text-blue-600 transition-colors">
-                      <LinkIcon className="size-3" aria-hidden="true" />
+                    <span className="cursor-default text-blue-400 hover:text-blue-600 transition-colors inline-flex items-center justify-center size-6">
+                      <LinkIcon className="size-3.5" aria-hidden="true" />
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-xs font-bold">
@@ -424,7 +424,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                     variant="ghost"
                     size="sm"
                     asChild
-                    className="h-7 w-7 p-0 transition-colors hover:bg-red-100 hover:text-red-700 text-red-600"
+                    className="h-9 w-9 p-0 transition-colors hover:bg-red-100 hover:text-red-700 text-red-600"
                   >
                     <Link
                       to="/$main/orders/order-management/dispatch"

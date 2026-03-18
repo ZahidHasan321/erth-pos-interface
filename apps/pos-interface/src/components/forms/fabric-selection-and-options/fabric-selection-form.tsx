@@ -601,9 +601,9 @@ export function FabricSelectionForm({
                                     onValueChange={(val) => setStitchingPrice(parseFloat(val))}
                                     className="w-fit"
                                 >
-                                    <TabsList className="h-8 bg-background border border-border/60 p-0.5 rounded-lg shadow-xs">
-                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-7 px-3 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Child</TabsTrigger>
-                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-7 px-3 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Adult</TabsTrigger>
+                                    <TabsList className="h-9 bg-background border border-border/60 p-0.5 rounded-lg shadow-xs">
+                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-8 px-4 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Child</TabsTrigger>
+                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-8 px-4 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Adult</TabsTrigger>
                                     </TabsList>
                                 </Tabs>
                             </div>
@@ -623,9 +623,9 @@ export function FabricSelectionForm({
                             {/* 4. MEASUREMENT HELPER */}
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Measurement</label>
-                                <div className="flex gap-2 h-8 items-center bg-background border border-border/60 rounded-lg px-2 shadow-xs">
+                                <div className="flex gap-2 h-9 items-center bg-background border border-border/60 rounded-lg px-2 shadow-xs">
                                     <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
-                                        <SelectTrigger className="w-24 sm:w-32 border-none shadow-none font-bold h-7 text-xs bg-muted/40 hover:bg-muted/60 transition-colors rounded-md px-2">
+                                        <SelectTrigger className="w-24 sm:w-32 border-none shadow-none font-bold h-8 text-xs bg-muted/40 hover:bg-muted/60 transition-colors rounded-md px-2">
                                             <SelectValue placeholder="Select" />
                                         </SelectTrigger>
                                         <SelectContent>

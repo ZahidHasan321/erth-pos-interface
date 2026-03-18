@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { useResources } from "@/hooks/useResources";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Droplets, Scissors, Package, Shirt, Sparkles, Flame, ShieldCheck, Check } from "lucide-react";
 import type { ProductionPlan } from "@repo/database";
 
@@ -54,7 +54,7 @@ function WorkloadBar({ current, max }: { current: number; max: number }) {
       <div className="flex-1 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
         <div
           className={cn(
-            "h-full rounded-full transition-all",
+            "h-full rounded-full transition-[width]",
             isOver ? "bg-red-500" : pct > 60 ? "bg-orange-400" : "bg-emerald-400",
           )}
           style={{ width: `${pct}%` }}
@@ -129,8 +129,9 @@ function WorkerSelect({
               key={r.id}
               type="button"
               onClick={() => onChange(isSelected ? "" : r.resource_name)}
+              aria-pressed={isSelected}
               className={cn(
-                "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]",
                 isSelected
                   ? "border-primary bg-primary text-white shadow-sm"
                   : isOverloaded
@@ -182,7 +183,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
 
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
-  const [date, setDate] = useState(defaultDate ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(defaultDate ?? getLocalDateStr());
   const [reentryStage, setReentryStage] = useState<string>("sewing");
 
   // Compute workload: per plan-key → worker name → garment count
@@ -230,7 +231,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
   useEffect(() => {
     if (open) {
       setPlan(defaultPlan ? { ...defaultPlan } : {});
-      setDate(defaultDate ?? new Date().toISOString().slice(0, 10));
+      setDate(defaultDate ?? getLocalDateStr());
       setReentryStage("sewing");
 
       const units: Record<string, string> = {};
@@ -303,7 +304,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
               <Label className="text-xs font-medium">Assigned Date <span className="text-red-500">*</span></Label>
               <DatePicker
                 value={date}
-                onChange={(d) => setDate(d ? d.toISOString().slice(0, 10) : "")}
+                onChange={(d) => setDate(d ? toLocalDateStr(d) ?? "" : "")}
                 className="h-8 text-sm"
               />
             </div>
@@ -363,7 +364,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 )}
 
                 <div className={cn(
-                  "border rounded-xl p-3 transition-all",
+                  "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
                   isFilled
                     ? "border-zinc-300 bg-white"
                     : !step.required
@@ -426,8 +427,9 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                                 key={u}
                                 type="button"
                                 onClick={() => handleUnitChange(step.key, u)}
+                                aria-pressed={unitSelections[step.key] === u}
                                 className={cn(
-                                  "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                                  "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                                   unitSelections[step.key] === u
                                     ? "border-primary bg-primary/5 text-primary"
                                     : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300",

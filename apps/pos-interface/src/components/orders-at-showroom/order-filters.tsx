@@ -92,9 +92,9 @@ export function OrderFilters({
           variant="ghost"
           size="sm"
           onClick={onClearFilters}
-          className="h-6 px-2 text-xs font-black uppercase tracking-tighter text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
+          className="h-9 px-3 text-xs font-black uppercase tracking-tighter text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
         >
-          <X className="size-3 mr-1" />
+          <X className="size-3.5 mr-1" />
           Reset
         </Button>
       </div>
@@ -111,7 +111,7 @@ export function OrderFilters({
               placeholder="Search…"
               value={filters.searchId}
               onChange={(e) => onFilterChange("searchId", e.target.value)}
-              className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
+              className="pl-8 h-9 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
             />
           </div>
         </div>
@@ -126,7 +126,7 @@ export function OrderFilters({
               placeholder="Search…"
               value={filters.customer}
               onChange={(e) => onFilterChange("customer", e.target.value)}
-              className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
+              className="pl-8 h-9 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
             />
           </div>
         </div>
@@ -137,7 +137,7 @@ export function OrderFilters({
         <div className="space-y-1 min-w-[140px] flex-1">
           <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Workflow Status</Label>
           <Select value={filters.stage} onValueChange={(value) => onFilterChange("stage", value)}>
-            <SelectTrigger className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
+            <SelectTrigger className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <SelectValue placeholder="All Stages" />
             </SelectTrigger>
             <SelectContent className="rounded-xl shadow-xl">
@@ -158,7 +158,7 @@ export function OrderFilters({
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-8 w-full justify-between text-xs font-bold border-2 border-border/60 rounded-lg bg-background px-2.5 transition-all hover:border-primary/30"
+                className="h-9 w-full justify-between text-xs font-bold border-2 border-border/60 rounded-lg bg-background px-3 transition-all hover:border-primary/30"
               >
                 {filters.reminderStatuses.length === 0 ? (
                   <span className="text-muted-foreground opacity-60">None Selected</span>
@@ -180,7 +180,7 @@ export function OrderFilters({
                   {group.items.map((option) => (
                     <label
                       key={option.value}
-                      className="flex items-center space-x-2 rounded-lg px-3 py-1.5 hover:bg-primary/5 cursor-pointer transition-colors"
+                      className="flex items-center space-x-2.5 rounded-lg px-3 py-2.5 hover:bg-primary/5 cursor-pointer transition-colors touch-manipulation active:bg-primary/10"
                       onClick={() => toggleReminder(option.value)}
                     >
                       <Checkbox checked={filters.reminderStatuses.includes(option.value)} className="h-4 w-4 rounded border-2" aria-label={option.label} />
@@ -193,7 +193,7 @@ export function OrderFilters({
                 <div className="border-t border-border/40 px-3 py-2">
                   <button
                     onClick={() => onFilterChange("reminderStatuses", [])}
-                    className="text-xs font-bold text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
+                    className="text-xs font-bold text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer py-1 touch-manipulation"
                   >
                     Clear selection
                   </button>
@@ -206,7 +206,7 @@ export function OrderFilters({
         <div className="space-y-1 min-w-[130px] flex-1">
           <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Sorting</Label>
           <Select value={filters.sortBy} onValueChange={(value) => onFilterChange("sortBy", value)}>
-            <SelectTrigger className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
+            <SelectTrigger className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <div className="flex items-center gap-1.5">
                 <ArrowUpDown className="size-3 text-primary/60" aria-hidden="true" />
                 <SelectValue />
@@ -233,7 +233,7 @@ export function OrderFilters({
                 onChange={(d) => onFilterChange("deliveryDateStart", d ? getLocalDateStr(d) : "")}
                 placeholder="From"
                 clearable
-                className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
+                className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
               />
             </div>
             <span className="text-muted-foreground/30 font-black text-xs uppercase tracking-tighter shrink-0">to</span>
@@ -243,7 +243,7 @@ export function OrderFilters({
                 onChange={(d) => onFilterChange("deliveryDateEnd", d ? getLocalDateStr(d) : "")}
                 placeholder="To"
                 clearable
-                className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
+                className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
               />
             </div>
           </div>

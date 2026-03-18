@@ -33,8 +33,9 @@ export function Pagination({ page, totalPages, onPageChange, totalItems, pageSiz
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
           className="h-8 w-8 p-0"
+          aria-label="Previous page"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         </Button>
         {Array.from({ length: totalPages }, (_, i) => i + 1)
           .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -45,7 +46,7 @@ export function Pagination({ page, totalPages, onPageChange, totalItems, pageSiz
           }, [])
           .map((item, i) =>
             item === "..." ? (
-              <span key={`dots-${i}`} className="px-1 text-xs text-muted-foreground">...</span>
+              <span key={`dots-${i}`} className="px-1 text-xs text-muted-foreground">&hellip;</span>
             ) : (
               <Button
                 key={item}
@@ -64,8 +65,9 @@ export function Pagination({ page, totalPages, onPageChange, totalItems, pageSiz
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
           className="h-8 w-8 p-0"
+          aria-label="Next page"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

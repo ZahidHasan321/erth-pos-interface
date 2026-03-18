@@ -296,7 +296,7 @@ export function OrderDataTable({
                     {...clickableProps(() => row.toggleExpanded())}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-1.5 px-2">
+                      <TableCell key={cell.id} className="py-2.5 px-2.5">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -334,7 +334,7 @@ export function OrderDataTable({
                                             variant="ghost"
                                             size="sm"
                                             asChild
-                                            className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                            className="h-9 w-9 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                                           >
                                             <Link
                                               to="/$main/orders/order-management/feedback/$orderId"
@@ -411,7 +411,7 @@ export function OrderDataTable({
                 setPageSize(Number(v));
                 setPageIndex(0);
             }}>
-                <SelectTrigger className="h-8 w-20 bg-card border-border/60">
+                <SelectTrigger className="h-9 w-20 bg-card border-border/60">
                     <SelectValue placeholder={pageSize.toString()} />
                 </SelectTrigger>
                 <SelectContent>
@@ -447,7 +447,7 @@ export function OrderDataTable({
               aria-label="Previous page"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="h-8 w-8 p-0"
+              className="h-10 w-10 p-0"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -457,7 +457,7 @@ export function OrderDataTable({
               aria-label="Next page"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="h-8 w-8 p-0"
+              className="h-10 w-10 p-0"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>

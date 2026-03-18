@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useResources } from "@/hooks/useResources";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   Cell,
@@ -47,7 +47,7 @@ function DashboardPage() {
 
   // ── Action items (PM attention needed) ────────────────────────────
   const actionItems = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateStr();
 
     const finalsToRelease = allGarments.filter(
       (g) =>
@@ -273,7 +273,7 @@ function DashboardPage() {
     // Count unique orders
     const orderIds = new Set(allGarments.map((g) => g.order_id));
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateStr();
     const overdueOrderIds = new Set<number>();
     for (const g of allGarments) {
       if (g.location === "workshop" && g.delivery_date_order && g.delivery_date_order < todayStr) {
@@ -324,7 +324,7 @@ function DashboardPage() {
       {!isLoading && actionCards.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-4 h-4 text-muted-foreground" />
+            <Clock className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Action Required
             </h2>
@@ -346,7 +346,7 @@ function DashboardPage() {
                   )}
                 >
                   <div className={cn("mt-0.5 shrink-0", style.icon)}>
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -363,7 +363,7 @@ function DashboardPage() {
                     </div>
                     <p className="text-xs text-muted-foreground leading-snug">{card.desc}</p>
                   </div>
-                  <ArrowRight className="w-4 h-4 opacity-30 group-hover:opacity-60 transition-opacity shrink-0 mt-1" />
+                  <ArrowRight className="w-4 h-4 opacity-30 group-hover:opacity-60 transition-opacity shrink-0 mt-1" aria-hidden="true" />
                 </Link>
               );
             })}
@@ -469,7 +469,7 @@ function DashboardPage() {
       {!isLoading && topWorkersData.length > 0 && (
         <div className="bg-white border rounded-xl p-4 shadow-sm mb-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4" /> Busiest Workers
+            <Users className="w-4 h-4" aria-hidden="true" /> Busiest Workers
           </h2>
           <div className="space-y-2">
             {topWorkersData.map((w, i) => {
@@ -518,12 +518,12 @@ function DashboardPage() {
                 to={action.href}
                 className="bg-white border rounded-xl p-4 flex items-center gap-3 transition-all hover:shadow-md hover:bg-muted/40"
               >
-                <Icon className="w-6 h-6 opacity-60 shrink-0" />
+                <Icon className="w-6 h-6 opacity-60 shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm">{action.label}</p>
                   <p className="text-xs text-muted-foreground">{action.desc}</p>
                 </div>
-                <ArrowRight className="w-4 h-4 opacity-40" />
+                <ArrowRight className="w-4 h-4 opacity-40" aria-hidden="true" />
               </Link>
             );
           })}

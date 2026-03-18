@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, Clock, Timer } from "lucide-react";
+import { toLocalDateStr } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/garment/$garmentId")({
@@ -128,7 +129,7 @@ function EditableDates({
     if (!d) return;
     await updateMut.mutateAsync({
       id: garment.id,
-      updates: { delivery_date: d.toISOString().slice(0, 10) },
+      updates: { delivery_date: toLocalDateStr(d) },
     });
     toast.success("Delivery date updated");
   };
@@ -137,7 +138,7 @@ function EditableDates({
     if (!d) return;
     await updateMut.mutateAsync({
       id: garment.id,
-      updates: { assigned_date: d.toISOString().slice(0, 10) },
+      updates: { assigned_date: toLocalDateStr(d) },
     });
     toast.success("Assigned date updated");
   };

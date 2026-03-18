@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
-import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import { Inbox, ChevronDown, ChevronUp, Clock, Package, Home, Eye } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
@@ -54,7 +54,7 @@ function OrderCard({
     <>
     <div
       className={cn(
-        "bg-white border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-white border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
         group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
@@ -62,6 +62,7 @@ function OrderCard({
       <div
         className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
         onClick={() => onToggle(!selected)}
+        {...clickableProps(() => onToggle(!selected))}
       >
         {/* Row 1: Identity + actions */}
         <div className="flex items-center justify-between gap-3">
@@ -71,6 +72,7 @@ function OrderCard({
               checked={selected}
               onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
               onClick={(e) => e.stopPropagation()}
+              aria-label={`Select order #${group.order_id}`}
               className="w-4 h-4 accent-primary cursor-pointer shrink-0"
             />
             <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
@@ -88,14 +90,16 @@ function OrderCard({
             <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }} disabled={isReceiving} className="text-xs h-7">
               Receive & Start
             </Button>
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
-              <Eye className="w-3.5 h-3.5" />
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
               className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse garments" : "Expand garments"}
             >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
             </button>
           </div>
         </div>

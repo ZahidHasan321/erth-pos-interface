@@ -1,3 +1,4 @@
+import type React from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { WorkshopGarment } from "@repo/database";
@@ -85,4 +86,18 @@ export function garmentSummary(garments: WorkshopGarment[]): string {
   if (b) parts.push(`${b} Brova`);
   if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
   return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
+}
+
+/** Props to make a non-button element keyboard-accessible as a button */
+export function clickableProps(onClick: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onClick();
+      }
+    },
+  };
 }

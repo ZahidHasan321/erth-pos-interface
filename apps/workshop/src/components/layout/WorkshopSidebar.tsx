@@ -95,7 +95,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link to="/dashboard">
-                    <LayoutDashboard className="w-4 h-4" />
+                    <LayoutDashboard className="w-4 h-4" aria-hidden="true" />
                     <span>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
@@ -112,7 +112,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild>
                     <Link to={item.href}>
-                      <item.icon className="w-4 h-4" />
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -135,7 +135,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild>
                     <Link to={item.href}>
-                      <item.icon className={cn("w-4 h-4", item.color)} />
+                      <item.icon className={cn("w-4 h-4", item.color)} aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -158,7 +158,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild>
                     <Link to={item.href}>
-                      <item.icon className="w-4 h-4" />
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -172,7 +172,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link to="/resources">
-                    <Users className="w-4 h-4" />
+                    <Users className="w-4 h-4" aria-hidden="true" />
                     <span>Resources</span>
                   </Link>
                 </SidebarMenuButton>
@@ -184,7 +184,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
 
       <SidebarFooter className="p-2 border-t flex flex-col gap-1">
         <Button variant="ghost" size="sm" onClick={onLogout} className="w-full justify-start gap-2">
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-4 h-4" aria-hidden="true" />
           <span className="group-data-[collapsible=icon]:hidden">Logout</span>
         </Button>
         <SidebarTrigger className="w-full" />

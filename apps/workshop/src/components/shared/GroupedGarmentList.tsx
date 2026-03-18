@@ -26,7 +26,7 @@ export function GroupedGarmentList({
 
   if (garments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl bg-muted/20 animate-fade-in">
+      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl bg-muted/20 animate-fade-in motion-reduce:animate-none">
         {emptyIcon && <div className="opacity-20 mb-3 scale-150">{emptyIcon}</div>}
         <p className="font-semibold text-muted-foreground/70">{emptyText}</p>
       </div>

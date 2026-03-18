@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments, useBrovaStatus, useBrovaPlans } from "@/hooks/useWorkshopGarments";
+import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import {
   useSendToScheduler,
   useSendReturnToProduction,
@@ -150,14 +151,16 @@ function ParkingOrderCard({
                 → Scheduler
               </Button>
             )}
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
-              <Eye className="w-3.5 h-3.5" />
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
               className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse garments" : "Expand garments"}
             >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -456,7 +459,7 @@ function ReleaseFinalsDialog({
   const { data: allGarmentsForWorkload = [] } = useWorkshopGarments();
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(getLocalDateStr());
   const [editingStep, setEditingStep] = useState<string | null>(null);
 
   // Compute workload: per plan-key → worker name → garment count
@@ -489,7 +492,7 @@ function ReleaseFinalsDialog({
   useEffect(() => {
     if (open) {
       setPlan(defaultPlan ? { ...defaultPlan } : {});
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(getLocalDateStr());
       setEditingStep(null);
       // Auto-detect units from default plan workers
       const units: Record<string, string> = {};
@@ -564,7 +567,7 @@ function ReleaseFinalsDialog({
             </Label>
             <DatePicker
               value={date}
-              onChange={(d) => setDate(d ? d.toISOString().slice(0, 10) : "")}
+              onChange={(d) => setDate(d ? toLocalDateStr(d) ?? "" : "")}
               className="h-9 text-sm font-semibold bg-white"
             />
           </div>

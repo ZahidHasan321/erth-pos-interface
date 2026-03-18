@@ -4,7 +4,7 @@ import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
   CheckCircle2,
   ChevronDown,
@@ -26,8 +26,9 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
   return (
     <div
       onClick={onClick}
+      {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl shadow-sm border-l-4 border-l-green-400 cursor-pointer transition-all",
+        "bg-white border rounded-xl shadow-sm border-l-4 border-l-green-400 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
       )}
     >

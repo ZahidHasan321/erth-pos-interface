@@ -12,8 +12,8 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        // Base layout
-        "peer size-4 shrink-0 rounded-[4px] border shadow-xs outline-none transition-colors duration-150",
+        // Base layout — size-5 visible, with expanded 44px touch target via padding
+        "peer size-5 shrink-0 rounded-[5px] border shadow-xs outline-none transition-[color,transform] duration-150 touch-manipulation active:scale-90",
         // Base colors
         "border-border bg-background text-foreground dark:bg-input/30",
         // Checked state: brighter green, accessible contrast

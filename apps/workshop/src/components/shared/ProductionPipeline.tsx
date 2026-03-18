@@ -40,7 +40,7 @@ export function ProductionPipeline({ currentStage, compact = false, hasSoaking }
           <div key={stage.key} className="flex items-center">
             <div
               className={cn(
-                "rounded-md px-1.5 py-0.5 font-semibold uppercase tracking-wider transition-all",
+                "rounded-md px-1.5 py-0.5 font-semibold uppercase tracking-wider transition-[color,background-color,border-color,box-shadow]",
                 compact ? "px-1" : "px-1.5",
                 isDone && "bg-emerald-100 text-emerald-800 border border-emerald-200/60",
                 isActive && "bg-primary text-primary-foreground shadow-sm",

@@ -405,7 +405,7 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
 
           <div>
             <label className="text-sm font-medium mb-1.5 block">Reason</label>
-            <Input placeholder="Describe the issue..." value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input placeholder="Describe the issue…" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
 
           <Button variant="destructive" className="w-full h-10 text-sm font-bold" onClick={handleFail} disabled={!canFail || failMut.isPending}>

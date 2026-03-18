@@ -54,7 +54,7 @@ function InfoRow({ icon: Icon, label, value, className }: {
   return (
     <div className={cn("flex items-center justify-between py-1.5", className)}>
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {Icon && <Icon className="w-3 h-3" />}
+        {Icon && <Icon className="w-3 h-3" aria-hidden="true" />}
         {label}
       </span>
       <span className="text-sm font-medium text-right">{value}</span>
@@ -116,13 +116,13 @@ export function OrderPeekSheet({ orderId, open, onOpenChange }: OrderPeekSheetPr
               <SheetDescription className="flex items-center gap-3 flex-wrap mt-1">
                 {first?.customer_name && (
                   <span className="flex items-center gap-1">
-                    <User className="w-3 h-3" />
+                    <User className="w-3 h-3" aria-hidden="true" />
                     {first.customer_name}
                   </span>
                 )}
                 {first?.customer_mobile && (
                   <span className="flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
+                    <Phone className="w-3 h-3" aria-hidden="true" />
                     {first.customer_mobile}
                   </span>
                 )}
@@ -139,7 +139,7 @@ export function OrderPeekSheet({ orderId, open, onOpenChange }: OrderPeekSheetPr
                 )}
                 <div className="flex items-center justify-between py-1.5">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Shirt className="w-3 h-3" />
+                    <Shirt className="w-3 h-3" aria-hidden="true" />
                     Garments
                   </span>
                   <span className="text-sm font-medium">
@@ -176,6 +176,7 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
     <div className="border rounded-lg overflow-hidden bg-card">
       <button
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
         className="w-full px-3 py-2.5 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors"
       >
         <GarmentTypeBadge type={garment.garment_type ?? "final"} />
@@ -186,11 +187,11 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
         {garment.express && <ExpressBadge />}
         {garment.soaking && (
           <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
-            <Droplets className="w-2.5 h-2.5" /> Soak
+            <Droplets className="w-2.5 h-2.5" aria-hidden="true" /> Soak
           </span>
         )}
         <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
-        <ChevronDown className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground/50 transition-transform", expanded && "rotate-180")} />
+        <ChevronDown className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground/50 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
       </button>
 
       {expanded && (
@@ -207,7 +208,7 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
               )}
               <div className="flex-1 min-w-0 space-y-0.5 text-xs">
                 <div className="flex items-center gap-1.5">
-                  <Palette className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <Palette className="w-3 h-3 text-muted-foreground shrink-0" aria-hidden="true" />
                   <span className="font-medium">
                     {garment.fabric_name ?? "Outside fabric"}
                     {garment.fabric_color && (
@@ -217,7 +218,7 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
                 </div>
                 {garment.style_name && (
                   <div className="flex items-center gap-1.5">
-                    <Scissors className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <Scissors className="w-3 h-3 text-muted-foreground shrink-0" aria-hidden="true" />
                     <span className="font-medium">{formatStyleName(garment.style_name)}</span>
                   </div>
                 )}
@@ -228,7 +229,7 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
           {/* Notes */}
           {garment.notes && (
             <div className="flex items-start gap-1.5 text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
-              <StickyNote className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />
+              <StickyNote className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" aria-hidden="true" />
               <span className="text-amber-800 whitespace-pre-wrap">{garment.notes}</span>
             </div>
           )}
@@ -290,7 +291,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
           {garment.express && <ExpressBadge />}
           {garment.soaking && (
             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
-              <Droplets className="w-2.5 h-2.5" /> Soak
+              <Droplets className="w-2.5 h-2.5" aria-hidden="true" /> Soak
             </span>
           )}
           <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
@@ -298,13 +299,13 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
         <SheetDescription className="flex items-center gap-3 flex-wrap mt-1">
           {garment.customer_name && (
             <span className="flex items-center gap-1">
-              <User className="w-3 h-3" />
+              <User className="w-3 h-3" aria-hidden="true" />
               {garment.customer_name}
             </span>
           )}
           {garment.customer_mobile && (
             <span className="flex items-center gap-1">
-              <Phone className="w-3 h-3" />
+              <Phone className="w-3 h-3" aria-hidden="true" />
               {garment.customer_mobile}
             </span>
           )}
@@ -336,7 +337,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
                 )}
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-1.5 text-sm">
-                    <Palette className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <Palette className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
                     <span className="font-medium">
                       {garment.fabric_name ?? <span className="text-muted-foreground italic">Outside fabric</span>}
                     </span>
@@ -346,7 +347,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
                   </div>
                   {garment.style_name && (
                     <div className="flex items-center gap-1.5 text-sm">
-                      <Scissors className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <Scissors className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
                       <span className="font-medium">{formatStyleName(garment.style_name)}</span>
                     </div>
                   )}
@@ -362,7 +363,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
             <SectionLabel>Notes</SectionLabel>
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5">
               <div className="flex items-start gap-2">
-                <StickyNote className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                <StickyNote className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" aria-hidden="true" />
                 <p className="text-sm text-amber-900 whitespace-pre-wrap">{garment.notes}</p>
               </div>
             </div>

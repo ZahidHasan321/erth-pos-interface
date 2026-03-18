@@ -16,7 +16,7 @@ export function PageHeader({ icon: Icon, title, subtitle, children }: PageHeader
     <div className="mb-6 flex items-end justify-between gap-4">
       <div>
         <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2.5">
-          <Icon className="w-6 h-6" /> {title}
+          <Icon className="w-6 h-6" aria-hidden="true" /> {title}
         </h1>
         {subtitle && (
           <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
@@ -55,7 +55,7 @@ export function StatsCard({ icon: Icon, value, label, color, dimOnZero }: StatsC
 
   return (
     <div className={cn("rounded-xl p-3 text-center border shadow-sm", c.bg, c.border)}>
-      <Icon className={cn("w-4 h-4 mx-auto mb-1 opacity-60", c.icon)} />
+      <Icon className={cn("w-4 h-4 mx-auto mb-1 opacity-60", c.icon)} aria-hidden="true" />
       <p className={cn("text-2xl font-black tabular-nums leading-none", c.text)}>{value}</p>
       <p className={cn("text-xs font-bold uppercase tracking-wider mt-1", c.label)}>{label}</p>
     </div>
@@ -123,7 +123,7 @@ export function MetadataChip({ icon: Icon, children, variant = "muted", classNam
       CHIP_VARIANTS[variant],
       className,
     )}>
-      {Icon && <Icon className="w-3 h-3" />}
+      {Icon && <Icon className="w-3 h-3" aria-hidden="true" />}
       {children}
     </span>
   );

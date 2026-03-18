@@ -92,7 +92,7 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-card border px-3 py-1.5 rounded-lg shadow-sm">
-          <CalendarDays className="w-4 h-4" />
+          <CalendarDays className="w-4 h-4" aria-hidden="true" />
           {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
         </div>
       </div>
@@ -111,19 +111,19 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
         <Tabs defaultValue="queue">
           <TabsList className="mb-4">
             <TabsTrigger value="queue" className="gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
+              <Clock className="w-3.5 h-3.5" aria-hidden="true" />
               Queue
               <Badge variant="secondary" className="ml-0.5 text-xs bg-blue-100 text-blue-700">{queue.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="pending" className="gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5" />
+              <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
               Overdue
               <Badge variant="secondary" className={`ml-0.5 text-xs ${pending.length > 0 ? "bg-red-100 text-red-700" : ""}`}>
                 {pending.length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="completed" className="gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
               Done
               <Badge variant="secondary" className="ml-0.5 text-xs bg-green-100 text-green-700">{completedToday.length}</Badge>
             </TabsTrigger>

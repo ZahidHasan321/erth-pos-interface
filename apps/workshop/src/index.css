@@ -88,11 +88,17 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    touch-action: manipulation;
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: 'Montserrat', 'Cairo', sans-serif;
+    overscroll-behavior: none;
   }
 
   h1, h2, h3, h4, h5, h6 {

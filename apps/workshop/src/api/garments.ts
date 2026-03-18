@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { getLocalMidnightUtc } from '@/lib/utils';
+import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
@@ -428,14 +428,14 @@ export const qcPass = async (
   const tripEntry = tripHistory.find((t) => t.trip === currentTrip);
   if (tripEntry) {
     tripEntry.worker_history = history;
-    tripEntry.completed_date = now.slice(0, 10);
+    tripEntry.completed_date = getLocalDateStr();
     tripEntry.qc_attempts.push({
       inspector: worker,
       ratings,
       result: "pass",
       fail_reason: null,
       return_stage: null,
-      date: now.slice(0, 10),
+      date: getLocalDateStr(),
     });
   }
 
@@ -475,7 +475,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
       result: "fail",
       fail_reason: reason,
       return_stage: returnStage,
-      date: new Date().toISOString().slice(0, 10),
+      date: getLocalDateStr(),
     });
   }
 

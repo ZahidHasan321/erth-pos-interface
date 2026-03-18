@@ -13,7 +13,7 @@ import { MetadataChip } from "@/components/shared/PageShell";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -263,14 +263,14 @@ function OrderHeader({
 
   const handleDeliveryChange = async (d: Date | null) => {
     if (!d) return;
-    const date = d.toISOString().slice(0, 10);
+    const date = toLocalDateStr(d) ?? "";
     await deliveryDateMut.mutateAsync({ orderId, date });
     toast.success("Delivery date updated");
   };
 
   const handleAssignedChange = async (d: Date | null) => {
     if (!d) return;
-    const date = d.toISOString().slice(0, 10);
+    const date = toLocalDateStr(d) ?? "";
     await assignedDateMut.mutateAsync({ orderId, date });
     toast.success("Assigned date updated");
   };
@@ -481,7 +481,7 @@ function GarmentPlanCard({
 
   const handleGarmentDeliveryChange = async (d: Date | null) => {
     if (!d) return;
-    const date = d.toISOString().slice(0, 10);
+    const date = toLocalDateStr(d);
     await updateMut.mutateAsync({
       id: garment.id,
       updates: { delivery_date: date },
@@ -491,7 +491,7 @@ function GarmentPlanCard({
 
   const handleGarmentAssignedChange = async (d: Date | null) => {
     if (!d) return;
-    const date = d.toISOString().slice(0, 10);
+    const date = toLocalDateStr(d);
     await updateMut.mutateAsync({
       id: garment.id,
       updates: { assigned_date: date },

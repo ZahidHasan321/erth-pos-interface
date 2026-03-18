@@ -76,6 +76,7 @@ function WorkerFormDialog({
           <div className="space-y-1.5">
             <Label>Name <span className="text-red-500">*</span></Label>
             <Input
+              name="resource_name"
               placeholder="Worker name"
               value={form.resource_name ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, resource_name: e.target.value }))}
@@ -128,6 +129,7 @@ function WorkerFormDialog({
                 </Select>
               ) : (
                 <Input
+                  name="unit"
                   placeholder="e.g. Sewing 1"
                   value={form.unit ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}
@@ -149,7 +151,9 @@ function WorkerFormDialog({
             <div className="space-y-1.5">
               <Label>Daily Target</Label>
               <Input
+                name="daily_target"
                 type="number"
+                inputMode="numeric"
                 placeholder="e.g. 10"
                 value={form.daily_target ?? ""}
                 onChange={(e) => setForm((p) => ({ ...p, daily_target: Number(e.target.value) || undefined }))}
@@ -158,7 +162,9 @@ function WorkerFormDialog({
             <div className="space-y-1.5">
               <Label>Rating (1-5)</Label>
               <Input
+                name="rating"
                 type="number"
+                inputMode="numeric"
                 min={1}
                 max={5}
                 placeholder="1-5"
@@ -326,16 +332,18 @@ function StageGroups({
                         <div className="flex items-center justify-end gap-0.5">
                           <button
                             onClick={(e) => { e.stopPropagation(); onEdit(w); }}
+                            aria-label={`Edit ${w.resource_name}`}
                             className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.resource_name); }}
                             disabled={deleting}
+                            aria-label={`Delete ${w.resource_name}`}
                             className="p-1.5 rounded-md text-muted-foreground/30 hover:text-red-500 hover:bg-red-50 transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       </div>

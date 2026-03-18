@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Droplets, Scissors, Package, Shirt, Sparkles, Flame, ShieldCheck, Check } from "lucide-react";
 import type { ProductionPlan } from "@repo/database";
 
@@ -51,7 +51,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
   const [reentryIndex, setReentryIndex] = useState(3); // default: sewing
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [editingStep, setEditingStep] = useState<string | null>(null);
-  const [date, setDate] = useState(defaultDate ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(defaultDate ?? getLocalDateStr());
 
   // Compute workload per step
   const workload = useMemo(() => {
@@ -72,7 +72,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
   useEffect(() => {
     if (open) {
       setPlan({ ...historyAsPlan });
-      setDate(defaultDate ?? new Date().toISOString().slice(0, 10));
+      setDate(defaultDate ?? getLocalDateStr());
       setReentryIndex(3); // sewing
       setEditingStep(null);
     }
@@ -111,7 +111,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
             <Label className="text-xs font-medium">Assigned Date</Label>
             <DatePicker
               value={date}
-              onChange={(d) => setDate(d ? d.toISOString().slice(0, 10) : "")}
+              onChange={(d) => setDate(d ? toLocalDateStr(d) ?? "" : "")}
               className="h-8 text-sm"
             />
           </div>
@@ -128,8 +128,9 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                     key={step.planKey}
                     type="button"
                     onClick={() => setReentryIndex(i)}
+                    aria-pressed={isSelected}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-all",
+                      "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-[color,background-color,border-color,box-shadow]",
                       isSelected
                         ? "border-primary bg-primary text-white shadow-md scale-[1.02]"
                         : "border-zinc-200 bg-white text-zinc-600 hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm cursor-pointer",
@@ -159,7 +160,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                 {i > 0 && <div className="absolute left-[13px] -top-1 w-0.5 h-2 bg-zinc-200" />}
 
                 <div className={cn(
-                  "border rounded-xl p-3 transition-all",
+                  "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
                   currentWorker ? "border-zinc-300 bg-white" : "border-zinc-200 bg-zinc-50",
                 )}>
                   {/* Step header */}
@@ -223,8 +224,9 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                                     setPlan((prev) => ({ ...prev, [step.planKey]: r.resource_name }));
                                     setEditingStep(null);
                                   }}
+                                  aria-pressed={isSelected}
                                   className={cn(
-                                    "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                                    "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]",
                                     isSelected
                                       ? "border-primary bg-primary text-white shadow-sm"
                                       : isOver

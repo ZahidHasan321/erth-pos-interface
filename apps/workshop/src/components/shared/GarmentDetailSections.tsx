@@ -103,38 +103,38 @@ export function GarmentHeader({
       <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
         {garment.customer_name && (
           <span className="flex items-center gap-1 text-muted-foreground">
-            <User className="w-3.5 h-3.5" />
+            <User className="w-3.5 h-3.5" aria-hidden="true" />
             {garment.customer_name}
           </span>
         )}
         {garment.invoice_number && (
           <span className="flex items-center gap-1 text-muted-foreground">
-            <Package className="w-3.5 h-3.5" />
+            <Package className="w-3.5 h-3.5" aria-hidden="true" />
             #{garment.invoice_number}
           </span>
         )}
         {showExtras && garment.customer_mobile && (
           <span className="flex items-center gap-1 text-muted-foreground">
-            <Phone className="w-3.5 h-3.5" />
+            <Phone className="w-3.5 h-3.5" aria-hidden="true" />
             {garment.customer_mobile}
           </span>
         )}
         {garment.home_delivery_order && (
           <span className="flex items-center gap-1 text-indigo-700 font-medium">
-            <Home className="w-3.5 h-3.5" />
+            <Home className="w-3.5 h-3.5" aria-hidden="true" />
             Delivery
           </span>
         )}
         {/* When showExtras is true, dates are editable via children — skip read-only display */}
         {!showExtras && garment.delivery_date_order && (
           <span className="flex items-center gap-1 text-amber-700 font-medium">
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5" aria-hidden="true" />
             {formatDate(garment.delivery_date_order)}
           </span>
         )}
         {!showExtras && garment.assigned_date && (
           <span className="flex items-center gap-1 text-violet-700 font-medium">
-            <Timer className="w-3.5 h-3.5" />
+            <Timer className="w-3.5 h-3.5" aria-hidden="true" />
             {formatDate(garment.assigned_date)}
           </span>
         )}
@@ -314,7 +314,7 @@ export function WorkerHistorySection({
               }`}
             >
               <div className="flex items-center gap-2">
-                {isDone && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                {isDone && <Check className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />}
                 {isCurrent && <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />}
                 {isPending && <div className="w-2 h-2 rounded-full bg-zinc-300" />}
                 <span className={`font-medium ${isPending ? "text-muted-foreground" : ""}`}>
@@ -386,9 +386,10 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
     <div className="border rounded-xl overflow-hidden mb-8">
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/30 transition-colors"
       >
-        <History className="w-5 h-5 text-muted-foreground" />
+        <History className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
         <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">
           Production History
         </span>
@@ -398,7 +399,7 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
         <ChevronDown className={cn(
           "w-5 h-5 text-muted-foreground ml-auto transition-transform",
           open && "rotate-180",
-        )} />
+        )} aria-hidden="true" />
       </button>
 
       {open && (
@@ -454,7 +455,7 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                         "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
                         qc.result === "pass" ? "bg-emerald-500 text-white" : "bg-red-500 text-white",
                       )}>
-                        {qc.result === "pass" ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                        {qc.result === "pass" ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <X className="w-3.5 h-3.5" aria-hidden="true" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -473,7 +474,7 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                         )}
                         {qc.result === "fail" && qc.return_stage && (
                           <div className="flex items-center gap-1.5 mt-1 text-sm text-red-600">
-                            <RotateCcw className="w-3.5 h-3.5" />
+                            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
                             <span>Sent back to {PIECE_STAGE_LABELS[qc.return_stage as keyof typeof PIECE_STAGE_LABELS] ?? qc.return_stage}</span>
                           </div>
                         )}
@@ -482,7 +483,7 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                             {Object.entries(qc.ratings).map(([cat, score]) => (
                               <span key={cat} className="inline-flex items-center gap-1 text-sm text-emerald-700">
                                 <span className="capitalize">{cat}</span>
-                                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                                <Star className="w-4 h-4 fill-amber-400 text-amber-400" aria-hidden="true" />
                                 <span className="font-bold">{score}</span>
                               </span>
                             ))}

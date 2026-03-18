@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, clickableProps, formatDate } from "@/lib/utils";
 import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
 import { GarmentTypeBadge, GarmentTypeBadgeCompact } from "./PageShell";
@@ -46,8 +46,9 @@ export function GarmentCard({
   if (onClick && compact) {
     return (
       <Card
+        {...clickableProps(onClick)}
         className={cn(
-          "border-2 transition-all duration-150 ease-out shadow-sm py-0 gap-0",
+          "border-2 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out shadow-sm py-0 gap-0",
           "cursor-pointer hover:border-primary/40 hover:shadow-md active:scale-[0.97]",
           garment.express && "border-orange-300",
           garment.start_time ? "bg-emerald-50/50 border-emerald-200" : "bg-card",
@@ -112,8 +113,9 @@ export function GarmentCard({
   return (
     <>
       <Card
+        {...(onClick ? clickableProps(onClick) : {})}
         className={cn(
-          "border transition-all duration-150 ease-out shadow-sm py-0 gap-0 rounded-xl overflow-hidden",
+          "border transition-[color,background-color,border-color,box-shadow] duration-150 ease-out shadow-sm py-0 gap-0 rounded-xl overflow-hidden",
           "hover:shadow-md hover:-translate-y-px",
           selected
             ? "border-primary/40 bg-primary/5 ring-2 ring-primary/20 shadow-md"
@@ -157,8 +159,9 @@ export function GarmentCard({
               <button
                 onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }}
                 className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground"
+                aria-label="View garment details"
               >
-                <Eye className="w-4 h-4" />
+                <Eye className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -182,7 +185,7 @@ export function GarmentCard({
               <div className="flex items-center gap-2.5 shrink-0">
                 {garment.home_delivery_order && (
                   <span className="inline-flex items-center gap-1 text-sm text-indigo-600 font-semibold">
-                    <Home className="w-3.5 h-3.5" /> Delivery
+                    <Home className="w-3.5 h-3.5" aria-hidden="true" /> Delivery
                   </span>
                 )}
                 {garment.delivery_date_order && (
@@ -192,7 +195,7 @@ export function GarmentCard({
                     isUrgent && "bg-amber-100 text-amber-800",
                     !isUrgent && !isOverdue && "text-muted-foreground",
                   )}>
-                    <CalendarClock className="w-3.5 h-3.5" />
+                    <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
                     {formatDate(garment.delivery_date_order)}
                   </span>
                 )}
