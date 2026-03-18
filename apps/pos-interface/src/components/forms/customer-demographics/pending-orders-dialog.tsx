@@ -296,7 +296,7 @@ export function PendingOrdersDialog({
                         }
                     >
                         <DialogHeader>
-                            <DialogTitle className="text-2xl font-bold">
+                            <DialogTitle className="text-lg font-bold">
                                 Pending Orders Found
                             </DialogTitle>
                             <DialogDescription id="pending-orders-description">

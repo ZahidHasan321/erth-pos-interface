@@ -551,10 +551,10 @@ function RouteComponent() {
   }, [orders, filters]);
           
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+    <div className="p-3 sm:p-4 max-w-[1600px] mx-auto space-y-3 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight uppercase">
+          <h1 className="text-lg sm:text-xl font-black text-foreground tracking-tight uppercase">
             Orders at <span className="text-primary">Showroom</span>
           </h1>
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
@@ -563,9 +563,9 @@ function RouteComponent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        {/* Filters - Span 6 */}
-        <div className="lg:col-span-6 flex">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 items-stretch">
+        {/* Filters */}
+        <div className="md:col-span-1 lg:col-span-6 flex">
           <OrderFilters
             className="w-full"
             filters={filters}
@@ -574,16 +574,16 @@ function RouteComponent() {
           />
         </div>
 
-        {/* Management Card - Span 4 */}
-        <div className="lg:col-span-4 flex">
+        {/* Management Card */}
+        <div className="md:col-span-1 lg:col-span-4 flex">
           <OrderManagementConsole
             selected={selectedOrder}
             onClose={() => setSelectedOrder(null)}
           />
         </div>
 
-        {/* Stats - Span 2 */}
-        <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-1 gap-2">
+        {/* Stats */}
+        <div className="md:col-span-2 lg:col-span-2 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-1 gap-2">
           <CompactStat label="Total" value={stats.total} icon={Store} color="bg-slate-500" />
           <CompactStat label="Trial" value={stats.brovaTrial + stats.alterationIn} icon={RefreshCw} color="bg-amber-500" />
           <CompactStat label="Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
@@ -592,9 +592,9 @@ function RouteComponent() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-3">
         {isLoading ? <TableSkeleton /> : isError ? (
-          <Card className="border-destructive/20 bg-destructive/10 p-10 text-center rounded-[2rem]">
+          <Card className="border-destructive/20 bg-destructive/10 p-6 text-center rounded-[2rem]">
             <AlertTriangle className="size-10 text-destructive mx-auto mb-4 opacity-50" />
             <p className="text-destructive font-black uppercase tracking-widest">Connection Error</p>
             <p className="text-xs text-muted-foreground mt-2">{error instanceof Error ? error.message : "Failed to load data"}</p>

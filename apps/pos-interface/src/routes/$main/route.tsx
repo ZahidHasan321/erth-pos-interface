@@ -115,15 +115,15 @@ function RouteComponent() {
 
   // Show error page if user tried to access wrong brand
   const errorPage = (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-destructive/5 to-background p-8">
-      <div className="max-w-2xl w-full bg-card border-2 border-destructive/20 rounded-2xl shadow-2xl p-12 text-center space-y-6">
-        <div className="flex justify-center mb-6">
-          <div className="bg-destructive/10 p-6 rounded-full">
-            <ShieldAlert className="w-24 h-24 text-destructive" />
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-destructive/5 to-background p-4">
+      <div className="max-w-2xl w-full bg-card border-2 border-destructive/20 rounded-2xl shadow-2xl p-6 text-center space-y-3">
+        <div className="flex justify-center mb-3">
+          <div className="bg-destructive/10 p-3 rounded-full">
+            <ShieldAlert className="w-14 h-14 text-destructive" />
           </div>
         </div>
 
-        <h1 className="text-4xl font-bold text-foreground">Access Denied</h1>
+        <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
 
         <p className="text-lg text-muted-foreground">
           You don't have permission to access{" "}
@@ -139,7 +139,7 @@ function RouteComponent() {
           user.
         </p>
 
-        <div className="pt-6 flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="pt-3 flex flex-col sm:flex-row gap-4 justify-center">
           <Link to={`/${loaderData.userBrand}`}>
             <Button size="lg" className="w-full sm:w-auto">
               Go to {userBrandName}

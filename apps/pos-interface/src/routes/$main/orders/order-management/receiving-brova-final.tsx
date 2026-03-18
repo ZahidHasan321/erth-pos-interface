@@ -12,8 +12,6 @@ import {
     ChevronDown,
     ExternalLink,
     CheckCircle2,
-    Clock,
-    Phone,
     Hash,
     User,
 } from "lucide-react";
@@ -88,11 +86,11 @@ function ReceivingInterface() {
     }, [orders, searchQuery]);
 
     return (
-        <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-6xl">
+        <div className="container mx-auto p-4 md:p-5 space-y-4 max-w-6xl">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-bold text-foreground">
+                    <h1 className="text-xl font-bold text-foreground">
                         Receiving Inventory
                     </h1>
                     <p className="text-sm text-muted-foreground">
@@ -135,11 +133,11 @@ function ReceivingInterface() {
                         ))}
                     </div>
                 ) : filteredOrders.length === 0 ? (
-                    <div className="py-20 text-center">
+                    <div className="py-10 text-center">
                         <div className="inline-flex p-6 bg-muted/30 rounded-full mb-6 border-2 border-dashed border-border">
-                            <Package className="size-12 text-muted-foreground/40" />
+                            <Package className="size-10 text-muted-foreground/40" />
                         </div>
-                        <h2 className="text-xl font-bold text-muted-foreground">Queue is Empty</h2>
+                        <h2 className="text-base font-bold text-muted-foreground">Queue is Empty</h2>
                         <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
                             No garments are currently in transit from the workshop
                         </p>
@@ -186,120 +184,88 @@ function OrderCard({
         )}>
             <CardContent className="p-0">
                 {/* Main row */}
-                <div
-                    className="flex flex-col md:flex-row items-stretch md:items-center min-h-[80px] cursor-pointer"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                >
-                    {/* 1. Identification */}
-                    <div className="flex-1 px-5 py-3 border-r border-border/40 min-w-[200px]">
-                        <div className="flex items-center gap-3 mb-1">
-                            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                <Hash className="size-3.5" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold">Order #{order.id}</h3>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-0.5">
-                                    <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
-                                    <span className="size-1 rounded-full bg-muted-foreground/30" />
-                                    <Clock className="size-2.5" />
-                                    <span>{orderDate}</span>
+                <div className="cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                    {/* Desktop (lg+): single row */}
+                    <div className="hidden lg:flex items-center min-h-[60px]">
+                        <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[180px]">
+                            <div className="flex items-center gap-2.5 mb-0.5">
+                                <div className="p-1 rounded-md bg-primary/10 text-primary">
+                                    <Hash className="size-3" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold">Order #{order.id}</h3>
+                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+                                        <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
+                                        <span className="size-1 rounded-full bg-muted-foreground/30" />
+                                        <span>{orderDate}</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        {order.order_phase && (
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    "text-xs uppercase font-black px-2 py-0.5 border-none shadow-xs",
-                                    PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground"
-                                )}
-                            >
-                                {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                            </Badge>
-                        )}
-                    </div>
-
-                    {/* 2. Customer */}
-                    <div className="flex-[1.5] px-5 py-3 border-r border-border/40 bg-muted/10">
-                        <div className="space-y-1.5">
-                            <div className="flex items-center gap-2.5">
-                                <div className="p-1 bg-background rounded-full border border-border">
-                                    <User className="size-3 text-muted-foreground" />
-                                </div>
-                                <span className="text-sm font-bold text-foreground truncate">
-                                    {order.customer?.name || "Unknown Customer"}
-                                </span>
-                            </div>
-                            {order.customer?.phone && (
-                                <div className="flex items-center gap-2.5 ml-1">
-                                    <Phone className="size-2.5 text-muted-foreground" />
-                                    <span className="text-xs font-medium text-muted-foreground">{order.customer.phone}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* 3. Garment summary */}
-                    <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
-                        <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Incoming</span>
-                                <Badge variant="secondary" className="font-black text-xs px-2 py-0.5">
-                                    {dispatchedGarments.length} Pieces
+                            {order.order_phase && (
+                                <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
+                                    {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
                                 </Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {brovaCount > 0 && (
-                                    <span className="text-xs font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                                        {brovaCount} Brova
-                                    </span>
-                                )}
-                                {finalCount > 0 && (
-                                    <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
-                                        {finalCount} Final
-                                    </span>
-                                )}
-                            </div>
-                            {order.delivery_date && (
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                                    <Clock className="size-2.5" />
-                                    <span>Due {format(new Date(order.delivery_date), "d MMM yyyy")}</span>
-                                </div>
                             )}
+                        </div>
+                        <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
+                            <div className="flex items-center gap-2">
+                                <User className="size-3 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown Customer"}</span>
+                                {order.customer?.phone && <span className="text-xs text-muted-foreground font-medium shrink-0">{order.customer.phone}</span>}
+                            </div>
+                        </div>
+                        <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{dispatchedGarments.length} Pcs</Badge>
+                                {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
+                                {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+                                {order.delivery_date && (
+                                    <span className="text-[11px] text-muted-foreground font-medium">Due {format(new Date(order.delivery_date), "d MMM")}</span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="w-[170px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+                            <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={(e) => { e.stopPropagation(); onReceive(dispatchedGarments); }} disabled={isSubmitting || dispatchedGarments.length === 0}>
+                                {isSubmitting ? <RefreshCw className="size-3.5 animate-spin" /> : <><CheckCircle2 className="size-3.5 mr-1.5" />Receive</>}
+                            </Button>
+                            <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
+                                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+                            </button>
                         </div>
                     </div>
 
-                    {/* 4. Action */}
-                    <div className="w-full md:w-[180px] md:ml-auto px-5 py-3 flex items-center justify-center gap-3 bg-muted/5">
-                        <Button
-                            className="w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md hover:scale-[1.02] transition-transform"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onReceive(dispatchedGarments);
-                            }}
-                            disabled={isSubmitting || dispatchedGarments.length === 0}
-                        >
-                            {isSubmitting ? (
-                                <RefreshCw className="size-3.5 animate-spin" />
-                            ) : (
-                                <>
-                                    <CheckCircle2 className="size-4 mr-2" />
-                                    Receive
-                                </>
-                            )}
-                        </Button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsExpanded(!isExpanded);
-                            }}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors shrink-0"
-                        >
-                            <ChevronDown className={cn(
-                                "size-4 text-muted-foreground transition-transform duration-300",
-                                isExpanded && "rotate-180"
-                            )} />
-                        </button>
+                    {/* Tablet + Mobile (<lg): compact 2-row */}
+                    <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-bold shrink-0">#{order.id}</span>
+                                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {order.invoice_number || "—"}</span>
+                                {order.order_phase && (
+                                    <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
+                                        {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                                    </Badge>
+                                )}
+                                <div className="w-px h-3.5 bg-border/40 shrink-0" />
+                                <User className="size-3 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown"}</span>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
+                                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+                            </button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] text-muted-foreground">{orderDate}</span>
+                                {order.customer?.phone && <span className="text-[11px] text-muted-foreground font-medium">{order.customer.phone}</span>}
+                                <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{dispatchedGarments.length} Pcs</Badge>
+                                {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
+                                {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+                                {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(new Date(order.delivery_date), "d MMM")}</span>}
+                            </div>
+                            <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={(e) => { e.stopPropagation(); onReceive(dispatchedGarments); }} disabled={isSubmitting || dispatchedGarments.length === 0}>
+                                {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : "Receive"}
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

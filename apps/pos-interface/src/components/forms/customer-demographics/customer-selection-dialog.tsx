@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { clickableProps } from "@/lib/utils";
 import type { Customer } from "@repo/database";
 
 interface CustomerSelectionDialogProps {
@@ -64,7 +65,7 @@ export function CustomerSelectionDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl" aria-describedby="customer-selection-description">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Select a Customer</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Select a Customer</DialogTitle>
           <DialogDescription id="customer-selection-description" className="text-muted-foreground">
             Multiple customers found. Please select one to continue.
           </DialogDescription>
@@ -74,6 +75,7 @@ export function CustomerSelectionDialog({
             <div
               key={customer.id}
               onClick={() => handleSelect(customer)}
+              {...clickableProps(() => handleSelect(customer))}
               className={`p-4 border rounded-xl cursor-pointer transition-all flex flex-col gap-2 ${
                 selectedIndex === index
                   ? "border-primary bg-primary/5 shadow-md"

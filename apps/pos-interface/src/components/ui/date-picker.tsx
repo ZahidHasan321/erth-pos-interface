@@ -20,6 +20,7 @@ export interface DatePickerProps {
   calendarProps?: React.ComponentProps<typeof Calendar>;
   clearable?: boolean;
   disabled?: boolean;
+  displayFormat?: string;
 }
 
 export function DatePicker({
@@ -30,6 +31,7 @@ export function DatePicker({
   calendarProps,
   clearable = false,
   disabled = false,
+  displayFormat = "PPP",
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -40,19 +42,17 @@ export function DatePicker({
           <Button
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal overflow-hidden",
               !value && "text-muted-foreground border-foreground/20",
               value ? "bg-white" : "bg-transparent",
               clearable && value && "pr-10",
               className
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {value ? (
-              format(value, "PPP")
-            ) : (
-              <span>{placeholder ?? "Pick a date"}</span>
-            )}
+            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">
+              {value ? format(value, displayFormat) : (placeholder ?? "Pick a date")}
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-white" align="start">

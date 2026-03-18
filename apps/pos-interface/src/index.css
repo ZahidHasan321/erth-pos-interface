@@ -209,11 +209,18 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-size: 14px;
+    touch-action: manipulation;
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: 'Montserrat', 'Cairo', sans-serif;
+    overscroll-behavior: none;
   }
 
   h1, h2, h3, h4, h5, h6 {

@@ -174,7 +174,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-12 text-muted-foreground gap-3">
+      <div className="flex items-center justify-center p-6 text-muted-foreground gap-3">
         <Loader2 className="size-5 animate-spin" />
         <span className="text-sm font-bold uppercase tracking-widest">Loading products...</span>
       </div>
@@ -183,7 +183,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
   if (error) {
     return (
-      <div className="flex items-center justify-center p-12 text-destructive gap-3">
+      <div className="flex items-center justify-center p-6 text-destructive gap-3">
         <AlertCircle className="size-5" />
         <span className="text-sm font-bold">Error loading products: {error.message}</span>
       </div>
@@ -195,7 +195,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
       {/* Section Header */}
       <div className="flex justify-between items-end">
         <div className="space-y-1">
-          <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+          <h2 className="text-lg font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
             <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
               <Package className="size-4" />
             </div>
@@ -241,7 +241,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Total</span>
-          <div className="text-2xl font-black text-primary tracking-tighter">
+          <div className="text-lg font-black text-primary tracking-tighter">
             {totalAmount.toFixed(2)} <span className="text-xs font-bold uppercase ml-0.5">KWD</span>
           </div>
         </div>

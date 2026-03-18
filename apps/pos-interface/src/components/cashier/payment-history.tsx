@@ -109,7 +109,7 @@ export function PaymentHistory({
                                     </Badge>
                                 </TableCell>
                                 <TableCell
-                                    className={`font-semibold ${tx.amount < 0 ? "text-red-600" : "text-green-600"}`}
+                                    className={`font-semibold tabular-nums ${tx.amount < 0 ? "text-red-600" : "text-green-600"}`}
                                 >
                                     {tx.amount < 0 ? "-" : "+"}{fmt(Math.abs(tx.amount))} KD
                                 </TableCell>
@@ -128,6 +128,7 @@ export function PaymentHistory({
                                         size="icon"
                                         className="h-7 w-7"
                                         onClick={() => printTransaction(tx)}
+                                        aria-label="Print receipt"
                                     >
                                         <Printer className="h-3.5 w-3.5" />
                                     </Button>

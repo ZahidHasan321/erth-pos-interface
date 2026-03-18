@@ -110,7 +110,7 @@ export function SimplifiedCustomerForm({
     const showResults = isFocused && searchValue.length >= 3 && !hasCustomer;
 
     const inputClasses = cn(
-        "h-11 font-bold transition-all",
+        "h-9 font-bold transition-all",
         hasCustomer ? "bg-muted/50 border-transparent shadow-none" : "bg-background border-border/60"
     );
 
@@ -119,7 +119,7 @@ export function SimplifiedCustomerForm({
             {/* Section Header */}
             <div className="flex justify-between items-end">
                 <div className="space-y-1">
-                    <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                    <h2 className="text-lg font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
                         <div className={cn(
                             "p-1.5 rounded-lg",
                             hasCustomer ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
@@ -150,13 +150,13 @@ export function SimplifiedCustomerForm({
 
             {/* Form Content */}
             <div className={cn(
-                "rounded-2xl border-2 p-6 transition-all duration-300",
+                "rounded-2xl border-2 p-4 transition-all duration-300",
                 hasCustomer ? "border-primary/30 bg-primary/[0.02]" : "border-border bg-card"
             )}>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
 
                     {/* 1. PHONE / SEARCH */}
-                    <div className="md:col-span-4 space-y-2">
+                    <div className="sm:col-span-1 lg:col-span-4 space-y-2">
                         <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <Phone className="size-3" /> Mobile Number
                         </label>
@@ -176,7 +176,7 @@ export function SimplifiedCustomerForm({
                                             value={field.value || "+965"}
                                             onChange={field.onChange}
                                             placeholder="Code"
-                                            className="h-11 border-border/60 bg-background font-bold"
+                                            className="h-9 border-border/60 bg-background font-bold"
                                         />
                                     )}
                                 />
@@ -189,7 +189,7 @@ export function SimplifiedCustomerForm({
                                         <Input
                                             {...field}
                                             value={hasCustomer ? customerPhone : field.value}
-                                            placeholder="Enter mobile..."
+                                            placeholder="Enter mobile…"
                                             readOnly={hasCustomer || isOrderClosed}
                                             className={cn(inputClasses, "pr-10")}
                                             onChange={(e) => {
@@ -258,7 +258,7 @@ export function SimplifiedCustomerForm({
                     </div>
 
                     {/* 2. NAME */}
-                    <div className="md:col-span-3 space-y-2">
+                    <div className="sm:col-span-1 lg:col-span-3 space-y-2">
                         <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <User className="size-3" /> Customer Name
                         </label>
@@ -277,7 +277,7 @@ export function SimplifiedCustomerForm({
                     </div>
 
                     {/* 3. ARABIC NAME */}
-                    <div className="md:col-span-3 space-y-2">
+                    <div className="sm:col-span-1 lg:col-span-3 space-y-2">
                         <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
                             <Languages className="size-3" /> Arabic Name
                         </label>
@@ -298,10 +298,10 @@ export function SimplifiedCustomerForm({
                     </div>
 
                     {/* 4. ACTION */}
-                    <div className="md:col-span-2 flex justify-end">
+                    <div className="sm:col-span-1 lg:col-span-2 flex justify-end">
                         {!hasCustomer && !isOrderClosed && (
                             <Button
-                                className="h-11 w-full font-black uppercase tracking-widest text-xs gap-2 shadow-lg shadow-primary/20"
+                                className="h-9 w-full font-black uppercase tracking-widest text-xs gap-2 shadow-lg shadow-primary/20"
                                 onClick={handleCreateQuickly}
                                 disabled={isCreating}
                             >
@@ -310,7 +310,7 @@ export function SimplifiedCustomerForm({
                             </Button>
                         )}
                         {hasCustomer && (
-                            <div className="h-11 flex items-center justify-center w-full">
+                            <div className="h-9 flex items-center justify-center w-full">
                                 <div className="size-9 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                                     <Check className="size-5" />
                                 </div>

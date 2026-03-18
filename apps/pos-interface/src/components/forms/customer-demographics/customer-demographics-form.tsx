@@ -300,7 +300,7 @@ export function CustomerDemographicsForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleFormSubmit)}
-        className="space-y-6 w-full"
+        className="space-y-4 w-full"
       >
         <ConfirmationDialog
           isOpen={confirmationDialog.isOpen}
@@ -312,10 +312,10 @@ export function CustomerDemographicsForm({
           description={confirmationDialog.description}
         />
 
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex justify-between items-start mb-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-transparent bg-linear-to-r from-primary to-secondary bg-clip-text">
+              <h1 className="text-lg font-bold text-transparent bg-linear-to-r from-primary to-secondary bg-clip-text">
                 {header}
               </h1>
               {id && isOrderClosed && (
@@ -330,11 +330,11 @@ export function CustomerDemographicsForm({
         </div>
 
         {/* Two-column layout: Basic Info (left) | Personal Details + Account (right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
           {/* LEFT COLUMN: Basic Information */}
-          <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
+          <div className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-foreground">
+              <h3 className="text-base font-semibold text-foreground">
                 Basic Information
               </h3>
               {form.watch("id") && (
@@ -607,9 +607,9 @@ export function CustomerDemographicsForm({
           </div>
 
           {/* RIGHT COLUMN: Personal Details + Account/Customer */}
-          <div className="space-y-6">
-            <div className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
-              <h3 className="text-lg font-semibold text-foreground">
+          <div className="space-y-4">
+            <div className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+              <h3 className="text-base font-semibold text-foreground">
                 Personal Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -732,7 +732,7 @@ export function CustomerDemographicsForm({
 
             <ErrorBoundary fallback={<div>Account Info crashed</div>}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <section className="flex flex-col rounded-xl bg-card p-6 gap-4 border border-border shadow-sm">
+                <section className="flex flex-col rounded-xl bg-card p-4 gap-3 border border-border shadow-sm">
                   <h3 className="text-base font-semibold text-foreground">
                     Account Information
                   </h3>
@@ -786,8 +786,8 @@ export function CustomerDemographicsForm({
                         >
                           <FormControl>
                             <SelectTrigger className={cn(
-                              "bg-background border-border/60 transition-all duration-300",
-                              AccountType === "Secondary" && !field.value && "ring-2 ring-primary/40 shadow-[0_0_10px_rgba(var(--primary),0.3)] border-primary/50 animate-pulse"
+                              "bg-background border-border/60 transition-colors duration-300",
+                              AccountType === "Secondary" && !field.value && "ring-2 ring-primary/40 border-primary/50"
                             )}>
                               <SelectValue
                                 placeholder={
@@ -816,7 +816,7 @@ export function CustomerDemographicsForm({
                   />
                 </section>
 
-                <section className="space-y-4 bg-card p-6 rounded-xl border border-border shadow-sm">
+                <section className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
                   <h3 className="text-base font-semibold text-foreground">
                     Customer Details
                   </h3>
@@ -854,10 +854,10 @@ export function CustomerDemographicsForm({
         </div>
 
         {/* Address - full width below */}
-        <div className="bg-card p-6 rounded-xl space-y-4 border border-border shadow-sm">
+        <div className="bg-card p-4 rounded-xl space-y-3 border border-border shadow-sm">
           <ErrorBoundary fallback={<div>Address fields crashed</div>}>
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                 <MapPin className="size-5 text-primary" />
                 Address
               </h3>
@@ -874,7 +874,7 @@ export function CustomerDemographicsForm({
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                 <FormField
                   control={form.control}
                   name="city"
@@ -1057,13 +1057,13 @@ export function CustomerDemographicsForm({
                                     
                                         <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
                                           <DialogContent className="max-w-3xl p-0 overflow-visible border-none shadow-2xl">
-                                            <DialogHeader className="p-6 pb-0">
-                                              <DialogTitle className="text-2xl font-bold">Change Customer</DialogTitle>
+                                            <DialogHeader className="p-4 pb-0">
+                                              <DialogTitle className="text-lg font-bold">Change Customer</DialogTitle>
                                               <DialogDescription>
                                                 Search and select a new customer for this order. This will replace the current customer.
                                               </DialogDescription>
                                             </DialogHeader>
-                                            <div className="p-6 pt-4">
+                                            <div className="p-4 pt-3">
                                                   <SearchCustomer 
                 onCustomerFound={(customer) => {
                   onCustomerChange?.(customer);
@@ -1088,7 +1088,7 @@ export function CustomerDemographicsForm({
               </DialogDescription>
             </DialogHeader>
             {primaryAccount && (
-              <div className="space-y-4 py-4">
+              <div className="space-y-3 py-3">
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <span className="text-muted-foreground font-medium">Name:</span>
                   <span className="col-span-2 font-semibold">{primaryAccount.name}</span>

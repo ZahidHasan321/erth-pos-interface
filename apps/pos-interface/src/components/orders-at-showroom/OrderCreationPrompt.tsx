@@ -33,13 +33,13 @@ export function OrderCreationPrompt({
 
       <div className="flex flex-col sm:flex-row gap-4">
         <Button size="lg" onClick={onCreateOrder} disabled={isPending}>
-          <Plus className="w-4 h-4 mr-2" />
-          {isPending ? "Creating..." : `Create New ${orderType}`}
+          <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+          {isPending ? "Creating\u2026" : `Create New ${orderType}`}
         </Button>
 
         {onLoadExisting && (
           <Button size="lg" variant="secondary" onClick={onLoadExisting} disabled={isPending}>
-            <Search className="w-4 h-4 mr-2" />
+            <Search className="w-4 h-4 mr-2" aria-hidden="true" />
             Load Existing Order
           </Button>
         )}

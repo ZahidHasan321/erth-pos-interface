@@ -38,37 +38,38 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "select_action",
     header: "",
-    size: 40,
+    size: 32,
     cell: ({ row }) => (
       <Button
         variant="ghost"
         size="sm"
+        aria-label="Order options"
         onClick={(e) => {
           e.stopPropagation();
           onSelect(row.original);
         }}
         className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary transition-colors"
       >
-        <Settings2 className="h-3.5 w-3.5" />
+        <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
     ),
   },
   {
     accessorKey: "orderId",
     header: "Order",
-    size: 80,
+    size: 65,
     cell: ({ row }) => {
       const linkedOrderId = (row.original.order as any).linked_order_id;
       return (
         <div className="flex flex-col">
           <div className="flex items-center gap-1">
-            <span className="font-black text-sm tracking-tighter">#{row.original.orderId}</span>
+            <span className="font-bold text-sm tracking-tighter">#{row.original.orderId}</span>
             {linkedOrderId && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="cursor-default text-blue-400 hover:text-blue-600 transition-colors">
-                      <LinkIcon className="size-3" />
+                      <LinkIcon className="size-3" aria-hidden="true" />
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-xs font-bold">
@@ -88,13 +89,13 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     accessorKey: "customerName",
     header: "Customer",
-    size: 140,
+    size: 115,
     cell: ({ row }) => {
       const nickName = row.original.customerNickName;
       const name = row.original.customerName;
       return (
         <div className="flex flex-col">
-          <span className="font-black text-xs uppercase tracking-tight truncate max-w-[130px]">
+          <span className="font-bold text-xs uppercase tracking-tight truncate max-w-[130px]">
             {nickName || name}
           </span>
           {nickName && name !== nickName && (
@@ -108,7 +109,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     accessorKey: "fatouraStage",
     header: "Status",
-    size: 130,
+    size: 105,
     cell: ({ row }) => {
       const { showroomStatus, fatouraStage } = row.original;
       let label = fatouraStage || "—";
@@ -144,7 +145,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
       return (
         <span
           className={cn(
-            "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-black uppercase tracking-tight whitespace-nowrap shadow-sm",
+            "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-bold uppercase tracking-tight whitespace-nowrap shadow-sm",
             colorClass
           )}
         >
@@ -156,7 +157,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "dates",
     header: "Dates",
-    size: 100,
+    size: 85,
     cell: ({ row }) => {
       const overdueDays = getDaysOverdue(row.original.deliveryDate);
       return (
@@ -168,20 +169,20 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           <div className="flex items-center gap-1">
             <span className="text-xs font-bold text-muted-foreground/60 uppercase">Delivery</span>
             <span className={cn(
-              "text-xs font-black tracking-tight",
+              "text-xs font-bold tracking-tight",
               overdueDays > 0 ? "text-rose-600" : "text-primary"
             )}>
               {formatDate(row.original.deliveryDate)}
             </span>
             {overdueDays > 0 && (
-              <span className="text-xs font-black text-rose-500 bg-rose-50 px-1 rounded">
+              <span className="text-xs font-bold text-rose-500 bg-rose-50 px-1 rounded">
                 +{overdueDays}d
               </span>
             )}
           </div>
           {row.original.homeDelivery && (
             <div className="flex items-center gap-0.5 text-xs text-blue-600 font-bold">
-              <Truck className="size-2.5" />
+              <Truck className="size-2.5" aria-hidden="true" />
               <span>Home</span>
             </div>
           )}
@@ -192,7 +193,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "garments_summary",
     header: "Garments",
-    size: 110,
+    size: 90,
     cell: ({ row }) => {
       const garments = (row.original.order as any).garments || [];
       const total = garments.length;
@@ -209,7 +210,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           <div className="flex items-center gap-1.5">
             <span
               className={cn(
-                "inline-flex items-center justify-center size-5 rounded text-xs font-black border",
+                "inline-flex items-center justify-center size-5 rounded text-xs font-bold border",
                 atShop === total
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                   : "bg-primary/5 text-primary border-primary/10"
@@ -248,7 +249,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "reminders",
     header: "Follow-up",
-    size: 120,
+    size: 100,
     cell: ({ row }) => {
       const order = row.original.order;
       const r1 = !!order.r1_date;
@@ -273,7 +274,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                     <TooltipTrigger asChild>
                       <span
                         className={cn(
-                          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-black uppercase cursor-default",
+                          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-bold uppercase cursor-default",
                           done
                             ? "bg-emerald-500/15 text-emerald-700"
                             : "bg-muted/60 text-muted-foreground/40"
@@ -281,7 +282,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                       >
                         <span className={cn("size-1 rounded-full", done ? "bg-emerald-500" : "bg-muted-foreground/30")} />
                         {label}
-                        {done && notesVal && <MessageSquare className="size-2 opacity-60" />}
+                        {done && notesVal && <MessageSquare className="size-2 opacity-60" aria-hidden="true" />}
                       </span>
                     </TooltipTrigger>
                     {done && (
@@ -300,7 +301,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-bold bg-blue-500/10 text-blue-700 cursor-default">
-                      <Phone className="size-2.5" />
+                      <Phone className="size-2.5" aria-hidden="true" />
                       <span className="truncate max-w-[55px]">{(order.call_status as string) || "Called"}</span>
                     </span>
                   </TooltipTrigger>
@@ -315,7 +316,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-bold bg-rose-500/10 text-rose-700 cursor-default">
-                      <AlertTriangle className="size-2.5" />
+                      <AlertTriangle className="size-2.5" aria-hidden="true" />
                       Esc
                     </span>
                   </TooltipTrigger>
@@ -337,14 +338,14 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "financials",
     header: "Payment",
-    size: 100,
+    size: 85,
     cell: ({ row }) => {
       const total = row.original.totalAmount;
       const advance = row.original.advance || 0;
       const balance = row.original.balance || 0;
       return (
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-black tracking-tighter">
+        <div className="flex flex-col gap-0.5 tabular-nums">
+          <span className="text-xs font-bold tracking-tighter">
             KD {total.toFixed(2)}
           </span>
           <div className="flex items-center gap-1">
@@ -356,7 +357,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           </div>
           <span
             className={cn(
-              "text-xs font-black tracking-tight",
+              "text-xs font-bold tracking-tight",
               balance > 0 ? "text-rose-600" : "text-emerald-600"
             )}
           >
@@ -369,7 +370,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "actions",
     header: "Actions",
-    size: 80,
+    size: 65,
     cell: ({ row }) => {
       const status = row.original.showroomStatus.label;
       const hasShopItems = row.original.showroomStatus.hasPhysicalItems;
@@ -401,8 +402,9 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                       to="/$main/orders/order-management/feedback/$orderId"
                       params={{ orderId: String(row.original.order.id) }}
                       onClick={(e) => e.stopPropagation()}
+                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" ? "Alteration feedback" : "Final feedback"}
                     >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -425,10 +427,11 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                     className="h-7 w-7 p-0 transition-colors hover:bg-red-100 hover:text-red-700 text-red-600"
                   >
                     <Link
-                      to="/$main/orders/order-management/alterations"
+                      to="/$main/orders/order-management/dispatch"
                       onClick={(e) => e.stopPropagation()}
+                      aria-label="Send back to workshop"
                     >
-                      <Truck className="h-3.5 w-3.5" />
+                      <Truck className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -445,10 +448,11 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
   {
     id: "expander_arrow",
     header: "",
-    size: 30,
+    size: 24,
     cell: ({ row }) => (
       <div className="flex items-center justify-center">
         <ChevronRight
+          aria-hidden="true"
           className={cn(
             "h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-300",
             row.getIsExpanded() && "rotate-90 text-primary"

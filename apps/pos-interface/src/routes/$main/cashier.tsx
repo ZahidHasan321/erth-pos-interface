@@ -354,14 +354,14 @@ function CashierPage() {
 
             {/* Empty States */}
             {!order && !isFetching && searchQuery && searchResult?.status !== "error" && (
-                <div className="text-center py-16 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground">
                     <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
                     <p>No order found. Try searching by Order ID, Invoice #, or Phone.</p>
                 </div>
             )}
 
             {!searchQuery && (
-                <div className="text-center py-16 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground">
                     <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
                     <p className="text-lg">Search for an order to get started</p>
                     <p className="text-sm mt-1">Enter an Order ID, Invoice Number, or Customer Phone</p>

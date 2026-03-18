@@ -381,7 +381,7 @@ export const IfInsideCell = ({
                                     setSearchQuery("");
                                 }}
                                 onSearch={setSearchQuery}
-                                placeholder="Search fabric..."
+                                placeholder="Search fabric…"
                                 disabled={isFormDisabled}
                                 className={cn(
                                     "bg-background border-border/60",

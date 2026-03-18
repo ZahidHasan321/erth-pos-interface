@@ -344,11 +344,11 @@ export default function LinkOrder() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto"
+      className="space-y-3 p-4 md:p-5 max-w-7xl mx-auto"
     >
       {/* --- Page Header --- */}
       <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-4">
-        <h1 className="text-3xl font-bold text-foreground">
+        <h1 className="text-xl font-bold text-foreground">
           Link <span className="text-primary">Orders</span>
         </h1>
         <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
@@ -386,7 +386,7 @@ export default function LinkOrder() {
         </div>
       </ErrorBoundary>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         {/* --- LEFT: Orders List --- */}
         <div className="lg:col-span-8 space-y-4">
           <motion.div
@@ -415,11 +415,11 @@ export default function LinkOrder() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="p-12 text-center text-muted-foreground h-full flex flex-col items-center justify-center absolute inset-0"
+                    className="p-6 text-center text-muted-foreground h-full flex flex-col items-center justify-center absolute inset-0"
                   >
                     <div className="flex flex-col items-center gap-4">
                       <div className="p-4 bg-muted/50 rounded-full border-2 border-dashed border-border">
-                          <LinkIcon className="w-8 h-8 opacity-20" />
+                          <LinkIcon className="w-6 h-6 opacity-20" />
                       </div>
                       <div>
                           <p className="text-sm font-black uppercase tracking-tight">No orders selected</p>
@@ -525,7 +525,7 @@ export default function LinkOrder() {
                   <LinkIcon className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black uppercase tracking-tight">
+                  <DialogTitle className="text-lg font-black uppercase tracking-tight">
                     Select Orders to Link
                   </DialogTitle>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">

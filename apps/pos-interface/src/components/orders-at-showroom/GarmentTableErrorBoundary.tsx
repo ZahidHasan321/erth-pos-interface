@@ -32,9 +32,9 @@ export class GarmentTableErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-8">
+        <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 p-8">
           <div className="flex items-start gap-4">
-            <AlertCircle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+            <AlertCircle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1 space-y-3">
               <div>
                 <h3 className="text-lg font-semibold text-destructive">
@@ -60,7 +60,7 @@ export class GarmentTableErrorBoundary extends React.Component<Props, State> {
                   onClick={this.handleReset}
                   className="gap-2"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   Try Again
                 </Button>
                 <Button

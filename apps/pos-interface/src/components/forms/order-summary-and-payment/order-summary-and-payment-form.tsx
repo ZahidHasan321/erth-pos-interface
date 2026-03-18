@@ -67,7 +67,7 @@ const paymentOptions = [
   {
     value: "others",
     label: "Others",
-    icon: <Receipt className="w-10 h-10" />,
+    icon: <Receipt className="w-8 h-8" />,
   },
 ];
 
@@ -307,11 +307,11 @@ export function OrderSummaryAndPaymentForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit, onInvalid)}
-        className="space-y-8 w-full"
+        className="space-y-4 w-full"
       >
         <div className="flex justify-between items-start mb-2">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-lg font-bold text-foreground">
               Review & Payment
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -324,16 +324,16 @@ export function OrderSummaryAndPaymentForm({
           variants={PAGE_VARIANTS}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
         >
           {/* LEFT COLUMN: Delivery & Discounts */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Delivery Section - Hidden for Sales Orders */}
             {effectiveOrderType !== "SALES" && (
               <motion.section
-                className="bg-card rounded-xl border border-border shadow-sm p-6"
+                className="bg-card rounded-xl border border-border shadow-sm p-4"
               >
-                <h3 className="text-lg font-semibold mb-4">Delivery Option</h3>
+                <h3 className="text-base font-semibold mb-2">Delivery Option</h3>
                 <FormField
                   control={form.control}
                   name="home_delivery"
@@ -341,7 +341,7 @@ export function OrderSummaryAndPaymentForm({
                     <RadioGroup
                       onValueChange={(value) => field.onChange(value === "true")}
                       value={field.value ? "true" : "false"}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                      className="grid grid-cols-2 gap-4"
                       disabled={isOrderClosed}
                     >
                       {deliveryOptions.map((option) => {
@@ -352,7 +352,7 @@ export function OrderSummaryAndPaymentForm({
                             key={option.value.toString()}
                             htmlFor={option.value.toString()}
                             className={cn(
-                              "flex flex-col items-center justify-center rounded-lg p-6 border-2 transition-all relative",
+                              "flex flex-col items-center justify-center rounded-lg p-3 border-2 transition-all relative",
                               !isDisabled && "cursor-pointer hover:border-primary hover:shadow-md",
                               isDisabled && "opacity-50 cursor-not-allowed",
                               isSelected
@@ -369,12 +369,12 @@ export function OrderSummaryAndPaymentForm({
                               src={option.img}
                               alt={option.label}
                               className={cn(
-                                "h-16 object-contain transition-all",
+                                "h-10 object-contain transition-all",
                                 isSelected && "scale-110"
                               )}
                             />
                             <FormLabel className={cn(
-                              "mt-3 text-base cursor-pointer transition-all",
+                              "mt-2 text-base cursor-pointer transition-all",
                               isSelected ? "font-bold text-primary" : "font-medium text-foreground"
                             )}>
                               {option.label}
@@ -414,15 +414,15 @@ export function OrderSummaryAndPaymentForm({
             <motion.section
               className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
             >
-              <header className="bg-primary text-primary-foreground px-6 py-4">
-                <h3 className="text-lg font-semibold">Discounts</h3>
+              <header className="bg-primary text-primary-foreground px-4 py-2">
+                <h3 className="text-base font-semibold">Discounts</h3>
               </header>
-              <div className="p-6 space-y-4">
+              <div className="p-4 space-y-3">
                 <FormField
                   control={form.control}
                   name="discount_type"
                   render={({ field }) => (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-2">
                       {discountOptions.map((opt) => {
                         const active = field.value === opt.value;
                         return (
@@ -431,7 +431,7 @@ export function OrderSummaryAndPaymentForm({
                               type="button"
                               onClick={() => toggleDiscountType(opt.value)}
                               className={cn(
-                                "flex items-center justify-between rounded-lg border p-4 transition-all w-full",
+                                "flex items-center justify-between rounded-lg border p-3 transition-all w-full",
                                 active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background",
                                 isOrderClosed && "opacity-50 cursor-not-allowed"
                               )}
@@ -454,9 +454,9 @@ export function OrderSummaryAndPaymentForm({
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden px-1 -mx-1 pb-1"
                     >
-                      <div className="pt-4 space-y-4 border-t border-border mt-2">
+                      <div className="pt-3 space-y-3 border-t border-border mt-2">
                         {discount_type === "flat" || discount_type === "referral" || discount_type === "loyalty" ? (
-                          <div className="flex gap-4">
+                          <div className="flex gap-3">
                             <FormField
                               control={form.control}
                               name="discount_percentage"
@@ -464,12 +464,12 @@ export function OrderSummaryAndPaymentForm({
                                 <FormItem className="flex-1">
                                   <FormLabel>Percentage (%)</FormLabel>
                                   <FormControl>
-                                    <Input 
-                                      type="number" 
+                                    <Input
+                                      type="number"
                                       placeholder="0"
-                                      {...field} 
+                                      {...field}
                                       value={field.value ?? ""}
-                                      onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)} 
+                                      onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
                                       onFocus={(e) => e.target.select()}
                                       disabled={isOrderClosed}
                                     />
@@ -498,12 +498,12 @@ export function OrderSummaryAndPaymentForm({
                               <FormItem>
                                 <FormLabel>Discount Value (KWD)</FormLabel>
                                 <FormControl>
-                                  <Input 
-                                    type="number" 
+                                  <Input
+                                    type="number"
                                     placeholder="0.000"
-                                    {...field} 
+                                    {...field}
                                     value={field.value ?? ""}
-                                    onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)} 
+                                    onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
                                     onFocus={(e) => e.target.select()}
                                     disabled={isOrderClosed}
                                   />
@@ -535,9 +535,9 @@ export function OrderSummaryAndPaymentForm({
 
             {/* Notes Section */}
             <motion.section
-              className="bg-card rounded-xl border border-border shadow-sm p-6"
+              className="bg-card rounded-xl border border-border shadow-sm p-4"
             >
-              <h3 className="text-lg font-semibold mb-4">Order Notes</h3>
+              <h3 className="text-base font-semibold mb-2">Order Notes</h3>
               <FormField
                 control={form.control}
                 name="notes"
@@ -546,7 +546,7 @@ export function OrderSummaryAndPaymentForm({
                     <FormControl>
                       <Textarea 
                         placeholder="Add any special instructions or internal notes for this order..."
-                        className="min-h-[120px] resize-none"
+                        className="min-h-[80px] resize-none"
                         disabled={isOrderClosed}
                         {...field}
                         value={field.value ?? ""}
@@ -560,12 +560,12 @@ export function OrderSummaryAndPaymentForm({
           </div>
 
           {/* RIGHT COLUMN: Payment Method & Summary */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Payment Method */}
             <motion.section
-              className="bg-card rounded-xl border border-border shadow-sm p-6"
+              className="bg-card rounded-xl border border-border shadow-sm p-4"
             >
-              <h3 className="text-lg font-semibold mb-4">Payment Method</h3>
+              <h3 className="text-base font-semibold mb-2">Payment Method</h3>
               <FormField
                 control={form.control}
                 name="payment_type"
@@ -576,17 +576,17 @@ export function OrderSummaryAndPaymentForm({
                         onValueChange={field.onChange}
                         value={field.value}
                         disabled={isOrderClosed}
-                        className="grid grid-cols-3 gap-4"
+                        className="grid grid-cols-3 gap-2"
                       >
                         {paymentOptions.map((option) => (
                           <label
                             key={option.value}
                             className={cn(
-                              "flex flex-col items-center justify-center rounded-lg p-3 border-2 transition-all cursor-pointer relative text-center",
+                              "flex flex-col items-center justify-center rounded-lg p-2 border-2 transition-all cursor-pointer relative text-center",
                               field.value === option.value ? "border-primary bg-primary/5" : "border-border bg-background"
                             )}
                           >
-                            <div className="h-10 w-10 flex items-center justify-center mb-2">
+                            <div className="h-8 w-8 flex items-center justify-center mb-1">
                               {option.img ? (
                                 <img src={option.img} alt={option.label} className="max-h-full object-contain" />
                               ) : option.icon}
@@ -602,15 +602,15 @@ export function OrderSummaryAndPaymentForm({
                 )}
               />
 
-              <div className="space-y-4 mt-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-3 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
                     name="payment_ref_no"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Ref. No {payment_type !== "cash" && "*"}</FormLabel>
-                        <FormControl><Input {...field} disabled={isOrderClosed} /></FormControl>
+                        <FormControl><Input placeholder="Enter reference no." {...field} disabled={isOrderClosed} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -670,7 +670,7 @@ export function OrderSummaryAndPaymentForm({
 
               {/* Sales Order specific totals and buttons */}
               {effectiveOrderType === "SALES" && (
-                <div className="mt-8 pt-6 border-t border-border space-y-6">
+                <div className="mt-4 pt-3 border-t border-border space-y-3">
                   <div className="space-y-2">
                     <div className="flex justify-between font-semibold text-sm">
                       <span>Total</span>
@@ -680,7 +680,7 @@ export function OrderSummaryAndPaymentForm({
                       <span>Discount</span>
                       <span>-{safeDiscountValue.toFixed(3)} KWD</span>
                     </div>
-                    <div className="flex justify-between font-bold text-xl pt-2 border-t border-border">
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                       <span>Net Total</span>
                       <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
                     </div>
@@ -710,7 +710,7 @@ export function OrderSummaryAndPaymentForm({
                                 <Input
                                   type="number"
                                   className={cn(
-                                    "w-32 text-right font-bold text-lg h-12",
+                                    "w-32 text-right font-bold text-lg h-10",
                                     balance < 0 && "border-destructive focus-visible:ring-destructive/20"
                                   )}
                                   placeholder="0.000"
@@ -753,10 +753,10 @@ export function OrderSummaryAndPaymentForm({
 
                   <div className="flex flex-col gap-3">
                     {!isOrderClosed && (
-                      <Button 
-                        type="submit" 
-                        size="lg" 
-                        className="w-full h-14 text-lg"
+                      <Button
+                        type="submit"
+                        size="lg"
+                        className="w-full h-11 text-lg"
                         disabled={form.formState.isSubmitting}
                       >
                         {form.formState.isSubmitting ? (
@@ -774,14 +774,14 @@ export function OrderSummaryAndPaymentForm({
                         variant="outline"
                         onClick={handlePrint}
                         disabled={!isOrderClosed || isLoadingFatoura}
-                        className="h-12"
+                        className="h-10"
                       >
                         {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
                         Invoice
                       </Button>
 
                       {!isOrderClosed && (
-                        <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
+                        <Button type="button" variant="destructive" onClick={onCancel} className="h-10">
                           <X className="w-4 h-4 mr-2" />
                           Cancel
                         </Button>
@@ -795,9 +795,9 @@ export function OrderSummaryAndPaymentForm({
             {/* Charges Summary - Hidden for Sales Orders */}
             {effectiveOrderType !== "SALES" && (
               <motion.section
-                className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4"
+                className="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3"
               >
-                <h3 className="text-lg font-semibold mb-2">Summary</h3>
+                <h3 className="text-base font-semibold mb-2">Summary</h3>
                 {deliveryDate && (
                   <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-muted/50 border border-border">
                     <CalendarDays className="w-4 h-4 text-primary" />
@@ -843,7 +843,7 @@ export function OrderSummaryAndPaymentForm({
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-border">
+                <div className="pt-3 border-t border-border">
                   <FormField
                     control={form.control}
                     name="paid"
@@ -867,7 +867,7 @@ export function OrderSummaryAndPaymentForm({
                               <Input
                                 type="number"
                                 className={cn(
-                                  "w-32 text-right font-bold text-lg h-12",
+                                  "w-32 text-right font-bold text-lg h-10",
                                   balance < 0 && "border-destructive focus-visible:ring-destructive/20"
                                 )}
                                 placeholder="0.000"
@@ -906,12 +906,12 @@ export function OrderSummaryAndPaymentForm({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col gap-3 pt-6">
+                <div className="flex flex-col gap-3 pt-3">
                   {!isOrderClosed && (
-                    <Button 
-                      type="submit" 
-                      size="lg" 
-                      className="w-full h-14 text-lg"
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="w-full h-11 text-lg"
                       disabled={form.formState.isSubmitting || showAddressWarning}
                     >
                       {form.formState.isSubmitting ? (
@@ -929,14 +929,14 @@ export function OrderSummaryAndPaymentForm({
                       variant="outline"
                       onClick={handlePrint}
                       disabled={!isOrderClosed || (isLoadingFatoura)}
-                      className="h-12"
+                      className="h-10"
                     >
                       {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
                       Print Invoice
                     </Button>
 
                     {!isOrderClosed && (
-                      <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
+                      <Button type="button" variant="destructive" onClick={onCancel} className="h-10">
                         <X className="w-4 h-4 mr-2" />
                         Cancel Order
                       </Button>

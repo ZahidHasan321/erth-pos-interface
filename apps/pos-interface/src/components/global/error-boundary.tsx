@@ -48,7 +48,7 @@ export class ErrorBoundary extends React.Component<
 
       // Default error UI
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-background">
+        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
           <Card className="max-w-2xl w-full border-destructive/30 shadow-lg">
             <CardHeader className="bg-destructive/10 border-b border-destructive/30">
               <div className="flex items-center gap-3">
@@ -56,7 +56,7 @@ export class ErrorBoundary extends React.Component<
                   <XCircle className="w-6 h-6 text-destructive" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl text-destructive">
+                  <CardTitle className="text-base text-destructive">
                     Something went wrong
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -65,7 +65,7 @@ export class ErrorBoundary extends React.Component<
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
+            <CardContent className="space-y-3 pt-4">
               <div className="bg-muted/30 border border-border rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />

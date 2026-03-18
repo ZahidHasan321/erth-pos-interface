@@ -37,7 +37,7 @@ import {
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { DatePicker } from "../ui/date-picker";
-import { cn } from "@/lib/utils";
+import { cn, clickableProps } from "@/lib/utils";
 import { Input } from "../ui/input";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 
@@ -143,12 +143,12 @@ export default function UnlinkOrder() {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="space-y-4 p-4 md:p-6 max-w-6xl mx-auto"
+            className="space-y-4 p-4 md:p-5 max-w-6xl mx-auto"
         >
             {/* --- Page Header --- */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
                 <motion.div variants={itemVariants} className="space-y-1">
-                    <h1 className="text-3xl font-black text-foreground tracking-tight uppercase">
+                    <h1 className="text-xl font-black text-foreground tracking-tight uppercase">
                         Unlink <span className="text-primary">Order</span>
                     </h1>
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
@@ -160,7 +160,7 @@ export default function UnlinkOrder() {
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                         <Input
-                            placeholder="Search ID, Invoice or Customer..."
+                            placeholder="Search ID, Invoice or Customer…"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-10 h-10 bg-card border-2 border-border focus-visible:ring-primary/20"
@@ -194,9 +194,9 @@ export default function UnlinkOrder() {
                         ))}
                     </div>
                 ) : linkGroups.length === 0 ? (
-                    <div className="bg-muted/30 rounded-3xl border-2 border-dashed border-border p-20 text-center">
-                        <div className="size-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Layers className="w-8 h-8 text-muted-foreground" />
+                    <div className="bg-muted/30 rounded-xl border-2 border-dashed border-border p-8 text-center">
+                        <div className="size-10 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Layers className="w-6 h-6 text-muted-foreground" />
                         </div>
                         <h3 className="text-lg font-bold text-foreground uppercase tracking-tight">No Active Link Groups</h3>
                         <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">
@@ -218,13 +218,13 @@ export default function UnlinkOrder() {
             <Dialog open={!!orderToUnlink} onOpenChange={(open) => !open && setOrderToUnlink(null)}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+                        <DialogTitle className="flex items-center gap-3 text-base font-black uppercase tracking-tight">
                             <Unlink className="w-6 h-6 text-destructive" />
                             Unlink Order
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="py-6 space-y-6">
+                    <div className="py-4 space-y-3">
                         <div className="bg-destructive/5 border border-destructive/10 rounded-2xl p-4">
                             <p className="text-sm font-medium text-destructive leading-relaxed">
                                 You are about to disconnect <span className="font-bold">Order #{orderToUnlink?.id}</span> from its primary group.
@@ -299,7 +299,9 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                     "px-5 py-3 cursor-pointer flex items-center justify-between transition-colors",
                     isExpanded ? "bg-primary/5" : "bg-card hover:bg-muted/30"
                 )}
+                aria-expanded={isExpanded}
                 onClick={() => setIsExpanded(!isExpanded)}
+                {...clickableProps(() => setIsExpanded(!isExpanded))}
             >
                 <div className="flex items-center gap-5 flex-1 min-w-0">
                     <div className="size-11 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-sm border border-primary/5">
@@ -345,7 +347,7 @@ function LinkGroupCard({ group, onUnlink }: { group: { primaryId: number; childr
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
                     <div className="hidden lg:flex flex-col items-end">
                         <span className="text-xs font-black text-muted-foreground uppercase tracking-widest leading-none mb-1.5 opacity-60">Linked Group</span>
                         <div className="flex -space-x-2">

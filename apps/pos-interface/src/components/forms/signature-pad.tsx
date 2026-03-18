@@ -1,7 +1,15 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useRef, useEffect, useCallback } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useRef, useEffect, useCallback, useState } from "react";
+import { Pen } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 
 interface SignaturePadProps {
@@ -9,6 +17,7 @@ interface SignaturePadProps {
 }
 
 export function SignaturePad({ onSave }: SignaturePadProps) {
+  const [open, setOpen] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -30,54 +39,72 @@ export function SignaturePad({ onSave }: SignaturePadProps) {
     const ctx = canvas.getContext("2d");
     if (ctx) ctx.scale(ratio, ratio);
 
-    // Restore previous drawing if any
     if (data && sigCanvas.current) {
       sigCanvas.current.fromDataURL(data, { width, height });
     }
   }, []);
 
   useEffect(() => {
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-    return () => window.removeEventListener("resize", resizeCanvas);
-  }, [resizeCanvas]);
+    if (!open) return;
+    // Small delay to let the dialog render before measuring
+    const timer = setTimeout(resizeCanvas, 50);
+    return () => clearTimeout(timer);
+  }, [open, resizeCanvas]);
 
   const clear = () => {
     sigCanvas.current?.clear();
   };
 
-  const save = () => {
+  const handleConfirm = () => {
     if (sigCanvas.current?.isEmpty()) return;
     if (sigCanvas.current && onSave) {
       onSave(sigCanvas.current.getCanvas().toDataURL("image/png"));
     }
+    setOpen(false);
   };
 
   return (
-    <div className="space-y-3">
-      <div
-        ref={containerRef}
-        className="w-full h-[180px] sm:h-[200px] rounded-xl border-2 border-border bg-white touch-none"
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="gap-2"
       >
-        <SignatureCanvas
-          ref={sigCanvas}
-          penColor="black"
-          minWidth={1.5}
-          maxWidth={3}
-          canvasProps={{
-            className: "sigCanvas",
-            style: { display: "block", width: "100%", height: "100%", borderRadius: "0.75rem" },
-          }}
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button type="button" onClick={clear} variant="outline" className="flex-1 h-10 font-bold uppercase tracking-wide text-xs">
-          Clear
-        </Button>
-        <Button type="button" onClick={save} className="flex-1 h-10 font-bold uppercase tracking-wide text-xs">
-          Save Signature
-        </Button>
-      </div>
-    </div>
+        <Pen className="w-4 h-4" />
+        Sign
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Customer Signature</DialogTitle>
+          </DialogHeader>
+          <div
+            ref={containerRef}
+            className="w-full h-[250px] rounded-xl border-2 border-border bg-white touch-none"
+          >
+            <SignatureCanvas
+              ref={sigCanvas}
+              penColor="black"
+              minWidth={1.5}
+              maxWidth={3}
+              canvasProps={{
+                className: "sigCanvas",
+                style: { display: "block", width: "100%", height: "100%", borderRadius: "0.75rem" },
+              }}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={clear}>
+              Clear
+            </Button>
+            <Button type="button" onClick={handleConfirm}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

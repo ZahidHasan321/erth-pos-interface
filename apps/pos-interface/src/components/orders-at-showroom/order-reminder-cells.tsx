@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { updateOrder } from "@/api/orders";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr } from "@/lib/utils";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { 
   day: "numeric", 
@@ -102,7 +102,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
 
   const handleSave = async () => {
     if (!editDate) return;
-    const dateStr = editDate.toISOString().split("T")[0];
+    const dateStr = getLocalDateStr(editDate);
     let updates: Record<string, any> = {};
 
     if (type === "Escalation") {
@@ -146,11 +146,11 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
                 {hasData ? (
                   <div className="flex items-center gap-1.5">
                     <span>{formattedDate}</span>
-                    {note && <MessageSquare className="h-3 w-3 opacity-70" />}
+                    {note && <MessageSquare className="h-3 w-3 opacity-70" aria-hidden="true" />}
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3 w-3" aria-hidden="true" />
                     <span>Add</span>
                   </div>
                 )}
@@ -184,7 +184,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              placeholder={`Enter ${type} notes...`}
+              placeholder={`Enter ${type} notes\u2026`}
               value={editNote}
               onChange={(e) => setEditNote(e.target.value)}
               rows={4}
@@ -195,9 +195,9 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
           <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
             {updateMutation.isPending ? (
-               <Loader2 className="h-4 w-4 animate-spin mr-2" />
+               <Loader2 className="h-4 w-4 animate-spin mr-2 motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-               <Save className="h-4 w-4 mr-2" />
+               <Save className="h-4 w-4 mr-2" aria-hidden="true" />
             )}
             Save
           </Button>
@@ -237,7 +237,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
   const handleSave = async () => {
     if (!editDate) return;
     const updates = {
-      call_reminder_date: editDate.toISOString().split("T")[0],
+      call_reminder_date: getLocalDateStr(editDate),
       call_status: editStatus,
       call_notes: editNote
     };
@@ -276,7 +276,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
                 {hasData ? (
                   <>
                     <span className="text-xs font-medium flex items-center gap-1">
-                      <Phone className="h-3 w-3 text-muted-foreground" />
+                      <Phone className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                       {formattedDate || <span className="text-muted-foreground">No Date</span>}
                     </span>
                     {status && (
@@ -285,13 +285,13 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
                         statusColors[status] || "bg-gray-100"
                       )}>
                         {status}
-                        {note && <MessageSquare className="h-2.5 w-2.5 opacity-60 ml-0.5" />}
+                        {note && <MessageSquare className="h-2.5 w-2.5 opacity-60 ml-0.5" aria-hidden="true" />}
                       </span>
                     )}
                   </>
                 ) : (
                   <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3 w-3" aria-hidden="true" />
                     <span>Log Call</span>
                   </div>
                 )}
@@ -326,7 +326,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
             <Label htmlFor="call-status">Status</Label>
             <Select value={editStatus} onValueChange={setEditStatus}>
               <SelectTrigger id="call-status">
-                <SelectValue placeholder="Select status" />
+                <SelectValue placeholder="Select status…" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Connected">Connected</SelectItem>
@@ -340,7 +340,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
             <Label htmlFor="call-notes">Notes</Label>
             <Textarea
               id="call-notes"
-              placeholder="Enter call notes..."
+              placeholder="Enter call notes\u2026"
               value={editNote}
               onChange={(e) => setEditNote(e.target.value)}
               rows={4}
@@ -351,9 +351,9 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
           <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
             {updateMutation.isPending ? (
-               <Loader2 className="h-4 w-4 animate-spin mr-2" />
+               <Loader2 className="h-4 w-4 animate-spin mr-2 motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-               <Save className="h-4 w-4 mr-2" />
+               <Save className="h-4 w-4 mr-2" aria-hidden="true" />
             )}
             Save
           </Button>

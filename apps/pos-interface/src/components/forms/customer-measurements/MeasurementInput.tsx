@@ -7,6 +7,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
 
 // Convert decimal to mixed fraction
@@ -49,6 +50,7 @@ interface MeasurementInputProps {
   label: string;
   unit: string;
   isDisabled: boolean;
+  isComputed?: boolean; // Auto-calculated field — render as plain text, not input
   className?: string; // For custom styling of the outer div
   labelClassName?: string; // For custom styling of the FormLabel
   onEnterPress?: () => void; // Callback for Enter key press
@@ -64,6 +66,7 @@ export const MeasurementInput = forwardRef<
     label,
     unit,
     isDisabled,
+    isComputed,
     className,
     labelClassName,
     onEnterPress,
@@ -79,60 +82,63 @@ export const MeasurementInput = forwardRef<
         const hasError = !!fieldState.error;
         return (
           <FormItem className={className}>
-            <div className="flex items-center gap-4 flex-nowrap">
-              <FormLabel className={labelClassName}>{label}</FormLabel>
+            <FormLabel className={cn("text-xs text-muted-foreground", labelClassName)}>{label}</FormLabel>
+            {isComputed ? (
+              <div className="text-sm font-semibold text-foreground/70 tabular-nums h-10 flex items-center">
+                {typeof field.value === "number" && field.value !== 0
+                  ? `${field.value} ${unit}`
+                  : <span className="text-muted-foreground/40">—</span>
+                }
+              </div>
+            ) : (
               <FormControl>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex items-center">
-                      <Input
-                        ref={(element) => {
-                          // Call both refs
-                          fieldRef(element);
-                          if (typeof ref === "function") {
-                            ref(element);
-                          } else if (ref) {
-                            ref.current = element;
-                          }
-                        }}
-                        type="number"
-                        step="0.01"
-                        {...fieldProps}
-                        value={
-                          typeof field.value === "number"
-                            ? field.value
-                            : ""
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex items-center">
+                    <Input
+                      ref={(element) => {
+                        fieldRef(element);
+                        if (typeof ref === "function") {
+                          ref(element);
+                        } else if (ref) {
+                          ref.current = element;
                         }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          field.onChange(value === "" ? undefined : parseFloat(value));
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            onEnterPress?.();
-                          }
-                        }}
-                        className={`w-26 bg-white pr-7 focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${hasError ? "border-red-500 ring-1 ring-red-500" : "border-black"}`}
-                        disabled={isDisabled}
-                        placeholder="xx"
-                      />
-                      <span className="absolute right-2 text-gray-500 pointer-events-none">
-                        {unit}
-                      </span>
-                    </div>
-                    {field.value &&
-                      typeof field.value === "number" &&
-                      field.value !== 0 && (
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          ({decimalToMixedFraction(field.value)})
-                        </span>
-                      )}
+                      }}
+                      type="number"
+                      step="0.01"
+                      {...fieldProps}
+                      value={
+                        typeof field.value === "number"
+                          ? field.value
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value === "" ? undefined : parseFloat(value));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          onEnterPress?.();
+                        }
+                      }}
+                      className={`w-24 bg-white pr-7 focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${hasError ? "border-red-500 ring-1 ring-red-500" : "border-black"}`}
+                      disabled={isDisabled}
+                      placeholder="xx"
+                    />
+                    <span className="absolute right-2 text-gray-500 pointer-events-none text-xs">
+                      {unit}
+                    </span>
                   </div>
-                  {/* Error indicated by red border only — no text to avoid layout shift */}
+                  {field.value &&
+                    typeof field.value === "number" &&
+                    field.value !== 0 && (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {decimalToMixedFraction(field.value)}
+                      </span>
+                    )}
                 </div>
               </FormControl>
-            </div>
+            )}
           </FormItem>
         );
       }}

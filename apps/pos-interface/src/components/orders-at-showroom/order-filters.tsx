@@ -24,7 +24,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr } from "@/lib/utils";
 
 export type FilterState = {
   searchId: string;
@@ -85,7 +85,7 @@ export function OrderFilters({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Settings2 className="size-3.5 text-primary/60" />
+          <Settings2 className="size-3.5 text-primary/60" aria-hidden="true" />
           <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Search & Filter</span>
         </div>
         <Button
@@ -104,9 +104,11 @@ export function OrderFilters({
         <div className="space-y-1 min-w-[120px] flex-1">
           <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Order ID / Invoice</Label>
           <div className="relative group">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" aria-hidden="true" />
             <Input
-              placeholder="Search..."
+              name="order-search"
+              autoComplete="off"
+              placeholder="Search…"
               value={filters.searchId}
               onChange={(e) => onFilterChange("searchId", e.target.value)}
               className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
@@ -117,9 +119,11 @@ export function OrderFilters({
         <div className="space-y-1 min-w-[160px] flex-[2]">
           <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-0.5">Customer Name / Mobile</Label>
           <div className="relative group">
-            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
+            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40 group-focus-within:text-primary transition-colors" aria-hidden="true" />
             <Input
-              placeholder="Search..."
+              name="customer-search"
+              autoComplete="off"
+              placeholder="Search…"
               value={filters.customer}
               onChange={(e) => onFilterChange("customer", e.target.value)}
               className="pl-8 h-8 text-xs border-2 border-border/60 rounded-lg bg-muted/5 font-bold transition-all focus-visible:ring-primary/20"
@@ -164,7 +168,7 @@ export function OrderFilters({
                     <span className="truncate">Active</span>
                   </span>
                 )}
-                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-40" />
+                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-40" aria-hidden="true" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[200px] p-0 rounded-xl shadow-2xl border-2 border-border/40" align="start">
@@ -174,14 +178,14 @@ export function OrderFilters({
                     <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">{group.label}</span>
                   </div>
                   {group.items.map((option) => (
-                    <div
+                    <label
                       key={option.value}
                       className="flex items-center space-x-2 rounded-lg px-3 py-1.5 hover:bg-primary/5 cursor-pointer transition-colors"
                       onClick={() => toggleReminder(option.value)}
                     >
-                      <Checkbox checked={filters.reminderStatuses.includes(option.value)} className="h-4 w-4 rounded border-2" />
-                      <Label className={cn("text-xs font-bold cursor-pointer flex-1", option.color)}>{option.label}</Label>
-                    </div>
+                      <Checkbox checked={filters.reminderStatuses.includes(option.value)} className="h-4 w-4 rounded border-2" aria-label={option.label} />
+                      <span className={cn("text-xs font-bold cursor-pointer flex-1", option.color)}>{option.label}</span>
+                    </label>
                   ))}
                 </div>
               ))}
@@ -204,7 +208,7 @@ export function OrderFilters({
           <Select value={filters.sortBy} onValueChange={(value) => onFilterChange("sortBy", value)}>
             <SelectTrigger className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <div className="flex items-center gap-1.5">
-                <ArrowUpDown className="size-3 text-primary/60" />
+                <ArrowUpDown className="size-3 text-primary/60" aria-hidden="true" />
                 <SelectValue />
               </div>
             </SelectTrigger>
@@ -226,7 +230,7 @@ export function OrderFilters({
             <div className="w-[130px]">
               <DatePicker
                 value={filters.deliveryDateStart ? new Date(filters.deliveryDateStart) : null}
-                onChange={(d) => onFilterChange("deliveryDateStart", d ? d.toISOString().split("T")[0] : "")}
+                onChange={(d) => onFilterChange("deliveryDateStart", d ? getLocalDateStr(d) : "")}
                 placeholder="From"
                 clearable
                 className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
@@ -236,7 +240,7 @@ export function OrderFilters({
             <div className="w-[130px]">
               <DatePicker
                 value={filters.deliveryDateEnd ? new Date(filters.deliveryDateEnd) : null}
-                onChange={(d) => onFilterChange("deliveryDateEnd", d ? d.toISOString().split("T")[0] : "")}
+                onChange={(d) => onFilterChange("deliveryDateEnd", d ? getLocalDateStr(d) : "")}
                 placeholder="To"
                 clearable
                 className="h-8 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"

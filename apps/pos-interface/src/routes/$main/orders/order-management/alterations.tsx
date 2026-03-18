@@ -91,11 +91,11 @@ function AlterationsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-8 pb-24 animate-fade-in">
+    <div className="container mx-auto p-4 md:p-5 max-w-5xl space-y-4 pb-8 animate-in fade-in zoom-in-95 duration-300">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <h1 className="text-4xl font-black text-foreground uppercase tracking-tight">
+          <h1 className="text-xl font-black text-foreground uppercase tracking-tight">
             Alterations <span className="text-primary">Center</span>
           </h1>
           <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest mt-1">
@@ -113,17 +113,17 @@ function AlterationsPage() {
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
         </div>
       ) : garments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-border rounded-3xl bg-muted/5">
-          <div className="size-20 bg-muted/30 rounded-full flex items-center justify-center mb-6 shadow-inner">
+        <div className="flex flex-col items-center justify-center py-10 text-center border-2 border-dashed border-border rounded-xl bg-muted/5">
+          <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 shadow-inner">
             <Package className="w-8 h-8 text-muted-foreground/30" />
           </div>
-          <h3 className="text-xl font-black text-foreground uppercase tracking-tight">All Clear</h3>
+          <h3 className="text-base font-black text-foreground uppercase tracking-tight">All Clear</h3>
           <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-1 max-w-xs">
             No garments currently need alteration
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3">
           {[...grouped.entries()].map(([orderId, items], oi) => {
             const first = items[0];
             const customer = first?.order?.customer;
@@ -134,7 +134,7 @@ function AlterationsPage() {
                 className="border-2 rounded-2xl overflow-hidden animate-fade-in"
                 style={{ animationDelay: `${oi * 40}ms` }}
               >
-                <CardHeader className="bg-muted/20 border-b px-6 py-4">
+                <CardHeader className="bg-muted/20 border-b px-4 py-3">
                   <CardTitle className="flex items-center justify-between">
                     <div>
                       <span className="text-base font-black uppercase">
@@ -155,7 +155,7 @@ function AlterationsPage() {
                   {items.map((g, gi) => (
                     <div
                       key={g.id}
-                      className="flex items-center justify-between px-6 py-4 hover:bg-muted/10 transition-colors animate-fade-in"
+                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/10 transition-colors animate-fade-in"
                       style={{ animationDelay: `${(oi * 3 + gi) * 25}ms` }}
                     >
                       <div className="space-y-1">

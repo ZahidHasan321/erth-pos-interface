@@ -123,7 +123,7 @@ function LoginComponent() {
           {/* Logo Section */}
           <motion.div
             variants={itemVariants}
-            className={`px-8 pt-6 pb-6 ${
+            className={`px-5 pt-4 pb-4 ${
               userType === BRAND_NAMES.showroom
                 ? "bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent"
                 : "bg-gradient-to-br from-slate-600/8 via-slate-500/4 to-transparent"
@@ -134,7 +134,7 @@ function LoginComponent() {
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="bg-background rounded-2xl p-4 shadow-lg w-32 h-24 flex items-center justify-center"
+                className="bg-background rounded-2xl p-4 shadow-lg w-24 h-18 flex items-center justify-center"
               >
                 <img
                   src={
@@ -151,7 +151,7 @@ function LoginComponent() {
                 />
               </motion.div>
             </div>
-            <h1 className="text-3xl font-bold text-center text-foreground mb-2 brand-font">
+            <h1 className="text-xl font-bold text-center text-foreground mb-2 brand-font">
               {userType === BRAND_NAMES.showroom ? "Erth" : "Sakkba"}
             </h1>
             <p className="text-sm text-center text-muted-foreground">
@@ -160,11 +160,11 @@ function LoginComponent() {
           </motion.div>
 
           {/* Form Section */}
-          <div className="p-8 pt-6">
+          <div className="p-5 pt-4">
             {search.redirect && (
               <motion.div variants={itemVariants}>
                 <Alert
-                  className={`mb-6 ${
+                  className={`mb-3 ${
                     userType === BRAND_NAMES.showroom
                       ? "border-green-500/50 bg-green-500/5"
                       : "border-slate-500/40 bg-slate-500/5"
@@ -301,7 +301,7 @@ function LoginComponent() {
         {/* Footer */}
         <motion.p
           variants={itemVariants}
-          className="text-center text-sm text-muted-foreground mt-6"
+          className="text-center text-sm text-muted-foreground mt-4"
         >
           Secure tailoring management system
         </motion.p>

@@ -787,9 +787,9 @@ function UnifiedFeedbackInterface() {
 
   if (isLoadingOrder) {
     return (
-      <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6">
+      <div className="container mx-auto p-4 md:p-5 max-w-7xl space-y-4">
         {/* Header skeleton */}
-        <div className="flex items-center justify-between border-b border-border pb-6">
+        <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="space-y-2">
             <Skeleton className="h-8 w-64 rounded-lg" />
             <Skeleton className="h-4 w-40 rounded-md" />
@@ -799,7 +799,7 @@ function UnifiedFeedbackInterface() {
         {/* Tabs skeleton */}
         <Skeleton className="h-10 w-80 rounded-xl" />
         {/* Content skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="lg:col-span-2 space-y-4">
             <Skeleton className="h-48 rounded-2xl" />
             <Skeleton className="h-32 rounded-2xl" />
@@ -815,13 +815,13 @@ function UnifiedFeedbackInterface() {
 
   if (!activeOrder) {
     return (
-      <div className="container mx-auto p-4 md:p-6 max-w-7xl flex flex-col items-center justify-center py-32 text-center">
-        <div className="size-24 bg-muted/30 rounded-full flex items-center justify-center mb-8 border-2 border-dashed border-border shadow-inner">
+      <div className="container mx-auto p-4 md:p-5 max-w-7xl flex flex-col items-center justify-center py-10 text-center">
+        <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 border-2 border-dashed border-border shadow-inner">
           <Package className="w-10 h-10 text-muted-foreground/40" />
         </div>
-        <h3 className="text-2xl font-black text-foreground uppercase tracking-tight">Order Not Found</h3>
+        <h3 className="text-lg font-black text-foreground uppercase tracking-tight">Order Not Found</h3>
         <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-2">This order could not be loaded</p>
-        <Button variant="outline" className="mt-6 font-bold" onClick={() => router.history.back()}>
+        <Button variant="outline" className="mt-4 font-bold" onClick={() => router.history.back()}>
           <ArrowLeft className="size-3.5 mr-2" />
           Go Back
         </Button>
@@ -878,7 +878,7 @@ function UnifiedFeedbackInterface() {
                 <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Financial Status */}
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3">
                         <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
                             <Banknote className="w-3.5 h-3.5" />
@@ -910,7 +910,7 @@ function UnifiedFeedbackInterface() {
                 <div className="hidden lg:block h-6 w-px bg-border/60" />
 
                 {/* Order Details */}
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
                       <Hash className="w-3.5 h-3.5" />

@@ -542,11 +542,11 @@ export function FabricSelectionForm({
         <FormProvider {...form}>
             <form
                 onSubmit={form.handleSubmit(handleSaveSelections)}
-                className="w-full space-y-6"
+                className="w-full space-y-4"
             >
                 <div className="flex justify-between items-start mb-2">
                     <div className="space-y-1">
-                        <h1 className="text-3xl font-bold text-foreground">
+                        <h1 className="text-lg font-bold text-foreground">
                             Fabric Selection & Style Options
                         </h1>
                         <p className="text-sm text-muted-foreground">
@@ -556,7 +556,7 @@ export function FabricSelectionForm({
                 </div>
 
                 {!orderId && !isOrderClosed && (
-                    <Alert variant="destructive" className="mb-4">
+                    <Alert variant="destructive" className="mb-2">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle>Order Required</AlertTitle>
                         <AlertDescription>
@@ -567,18 +567,18 @@ export function FabricSelectionForm({
                 )}
 
                 <div className="p-0 border border-border rounded-2xl bg-card w-full overflow-hidden shadow-sm space-y-0">
-                    {/* NEW COMMAND BAR HEADER */}
-                    <div className="bg-muted/30 border-b p-5 space-y-6">
-                        <div className="flex flex-wrap items-end gap-6">
+                    {/* COMMAND BAR HEADER */}
+                    <div className="bg-muted/30 border-b px-3 sm:px-4 py-3 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
                             {/* 1. PIECE MANAGEMENT */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Pieces Count</label>
-                                <div className="flex items-center gap-2 bg-background border border-border/60 rounded-xl p-1.5 shadow-xs">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Pieces</label>
+                                <div className="flex items-center gap-1.5 bg-background border border-border/60 rounded-lg p-1 shadow-xs">
                                     <Input
                                         type="number"
                                         placeholder="Qty"
                                         onChange={(e) => setNumRowsToAdd(parseInt(e.target.value, 10))}
-                                        className="w-20 h-9 font-black text-center bg-transparent border-none shadow-none focus-visible:ring-0"
+                                        className="w-14 h-8 font-bold text-center text-sm bg-transparent border-none shadow-none focus-visible:ring-0"
                                         disabled={isFormDisabled}
                                     />
                                     <Button
@@ -586,87 +586,74 @@ export function FabricSelectionForm({
                                         onClick={() => numRowsToAdd > 0 && syncRows(numRowsToAdd, garmentFields, { addRow: addGarmentRow, removeRow: removeGarmentRow })}
                                         disabled={isFormDisabled}
                                         size="sm"
-                                        className="h-9 px-4 font-black uppercase tracking-widest text-xs gap-2 rounded-lg"
+                                        className="h-8 px-3 font-bold uppercase tracking-wide text-xs gap-1.5 rounded-md"
                                     >
-                                        <Plus className="size-3.5" /> Sync
+                                        <Plus className="size-3" /> Sync
                                     </Button>
                                 </div>
                             </div>
 
                             {/* 2. STITCHING PRICE */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Stitching Price</label>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Stitching</label>
                                 <Tabs
                                     value={stitchingPrice.toString()}
                                     onValueChange={(val) => setStitchingPrice(parseFloat(val))}
                                     className="w-fit"
                                 >
-                                    <TabsList className="h-12 bg-background border border-border/60 p-1 rounded-xl shadow-xs">
-                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Child</TabsTrigger>
-                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-9 px-5 font-black text-xs rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Adult</TabsTrigger>
+                                    <TabsList className="h-8 bg-background border border-border/60 p-0.5 rounded-lg shadow-xs">
+                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-7 px-3 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Child</TabsTrigger>
+                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-7 px-3 font-bold text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Adult</TabsTrigger>
                                     </TabsList>
                                 </Tabs>
                             </div>
 
                             {/* 3. DELIVERY DATE */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Delivery Date</label>
-                                <div className="h-12 w-48 bg-background border border-border/60 rounded-xl shadow-xs overflow-hidden flex flex-col justify-center">
-                                    <DatePicker
-                                        placeholder={new Date().toISOString()}
-                                        value={deliveryDate ? new Date(deliveryDate) : new Date()}
-                                        onChange={(value) => value && setDeliveryDate(value.toISOString())}
-                                        disabled={isFormDisabled}
-                                        className="border-none shadow-none w-full h-full font-bold focus:ring-0 px-4 flex items-center bg-transparent"
-                                    />
-                                </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Delivery</label>
+                                <DatePicker
+                                    placeholder={new Date().toISOString()}
+                                    value={deliveryDate ? new Date(deliveryDate) : new Date()}
+                                    onChange={(value) => value && setDeliveryDate(value.toISOString())}
+                                    disabled={isFormDisabled}
+                                    className="h-8 bg-background border-border/60 rounded-lg shadow-xs font-bold text-xs"
+                                />
                             </div>
 
-                            {/* SPACER to push measurement to right */}
-                            <div className="flex-1" />
-
-                            {/* 4. MEASUREMENT HELPER (Far Right) */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Measurement Assistant</label>
-                                <div className="flex gap-4 h-12 items-center bg-background border border-border/60 rounded-xl px-4 shadow-xs">
+                            {/* 4. MEASUREMENT HELPER */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Measurement</label>
+                                <div className="flex gap-2 h-8 items-center bg-background border border-border/60 rounded-lg px-2 shadow-xs">
                                     <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
-                                        <SelectTrigger className="w-40 border-none shadow-none font-bold h-9 bg-muted/40 hover:bg-muted/60 transition-colors">
-                                            <SelectValue placeholder="Select ID" />
+                                        <SelectTrigger className="w-24 sm:w-32 border-none shadow-none font-bold h-7 text-xs bg-muted/40 hover:bg-muted/60 transition-colors rounded-md px-2">
+                                            <SelectValue placeholder="Select" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {measurements.map((m) => (
-                                                <SelectItem key={m.id} value={m.id ?? ""}>{m.measurement_id}</SelectItem>
+                                                <SelectItem key={m.id} value={m.id ?? ""} className="text-xs">{m.measurement_id}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-
-                                    <div className="h-6 w-px bg-border/60" />
-
                                     {selectedMeasurementId && fabricMeter !== null ? (
-                                        <div className="flex items-center gap-5 animate-in fade-in slide-in-from-right-2 duration-300">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-black text-muted-foreground uppercase leading-none mb-1">Meter</span>
-                                                <span className="text-sm font-black text-primary leading-none">{fabricMeter}m</span>
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-black text-muted-foreground uppercase leading-none mb-1">Qallabi</span>
-                                                <span className="text-sm font-black text-primary leading-none">{qallabi}m</span>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-xs animate-in fade-in duration-200">
+                                            <span className="font-bold text-primary tabular-nums">{fabricMeter}m</span>
+                                            <span className="text-muted-foreground/40">/</span>
+                                            <span className="font-bold text-primary tabular-nums">{qallabi}m</span>
                                         </div>
                                     ) : (
-                                        <span className="text-xs font-bold text-muted-foreground/40 uppercase tracking-tight italic">No calculation</span>
+                                        <span className="text-[10px] font-bold text-muted-foreground/40 italic hidden sm:inline">No calc</span>
                                     )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* CAMPAIGN OFFERS (CHIPS STYLE) */}
-                        <div className="flex items-center gap-4 bg-primary/5 rounded-xl p-3 border border-primary/10">
-                            <div className="flex items-center gap-2 px-2 border-r border-primary/20 shrink-0">
-                                <Sparkles className="size-3.5 text-primary" />
-                                <span className="text-xs font-black uppercase tracking-widest text-primary">Offers</span>
+                        {/* CAMPAIGN OFFERS */}
+                        <div className="flex items-center gap-3 bg-primary/5 rounded-lg p-2 border border-primary/10">
+                            <div className="flex items-center gap-1.5 px-1.5 border-r border-primary/20 shrink-0">
+                                <Sparkles className="size-3 text-primary" />
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Offers</span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5">
                                 {activeCampaigns.length > 0 ? (
                                     activeCampaigns.map((campaign) => {
                                         const isSelected = selectedCampaigns.includes(campaign.id.toString());
@@ -675,8 +662,8 @@ export function FabricSelectionForm({
                                                 key={campaign.id}
                                                 variant={isSelected ? "default" : "outline"}
                                                 className={cn(
-                                                    "cursor-pointer px-3 py-1 text-xs font-black uppercase tracking-tighter transition-all",
-                                                    isSelected ? "bg-primary shadow-md shadow-primary/20" : "bg-white hover:bg-primary/5 hover:border-primary/30"
+                                                    "cursor-pointer px-2 py-0.5 text-[11px] font-bold transition-all",
+                                                    isSelected ? "bg-primary shadow-sm shadow-primary/20" : "bg-white hover:bg-primary/5 hover:border-primary/30"
                                                 )}
                                                 onClick={() => {
                                                     if (isFormDisabled) return;
@@ -688,28 +675,28 @@ export function FabricSelectionForm({
                                                 }}
                                             >
                                                 {campaign.name}
-                                                {isSelected && <Check className="size-2.5 ml-1.5" />}
+                                                {isSelected && <Check className="size-2.5 ml-1" />}
                                             </Badge>
                                         );
                                     })
                                 ) : (
-                                    <span className="text-xs font-bold text-muted-foreground italic">No active campaigns available</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground italic">No active campaigns</span>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-6">
+                    <div className="p-4 space-y-3">
                         <div className="space-y-3">
                             <div className="flex justify-between items-end">
                                 <div className="space-y-1">
-                                    <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                                    <h2 className="text-base font-semibold text-foreground flex items-center gap-2.5">
                                         <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
                                             <Package className="size-4" />
                                         </div>
                                         Garment <span className="text-primary">Selections</span>
                                     </h2>
-                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                    <p className="text-xs font-medium text-muted-foreground ml-9">
                                         Select fabric source, type, and measurements
                                     </p>
                                 </div>
@@ -738,7 +725,7 @@ export function FabricSelectionForm({
                             tempStockUsage={tempStockUsage}
                         />
 
-                        <div className="flex justify-end pt-4">
+                        <div className="flex justify-end pt-3">
                             <Button
                                 type="button"
                                 variant="secondary"
@@ -793,15 +780,15 @@ export function FabricSelectionForm({
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-end pt-4">
+                        <div className="flex justify-between items-end pt-3">
                             <div className="space-y-1">
-                                <h2 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-2.5">
+                                <h2 className="text-base font-semibold text-foreground flex items-center gap-2.5">
                                     <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
                                         <Pencil className="size-4" />
                                     </div>
                                     Style <span className="text-primary">Options</span>
                                 </h2>
-                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 ml-9">
+                                <p className="text-xs font-medium text-muted-foreground ml-9">
                                     Customize collar, pockets, buttons, and other style details
                                 </p>
                             </div>
@@ -811,7 +798,7 @@ export function FabricSelectionForm({
                                 size="sm"
                                 onClick={copyGarmentToAll}
                                 disabled={isFormDisabled || garmentFields.length < 2}
-                                className="h-9 px-4 font-black uppercase tracking-widest text-xs gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
+                                className="h-9 px-4 font-semibold uppercase tracking-wide text-xs gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
                             >
                                 <Copy className="size-3.5" />
                                 Copy First Row
@@ -833,9 +820,9 @@ export function FabricSelectionForm({
                             stitchingPrice={stitchingPrice}
                         />
 
-                        <div className="flex items-end justify-between gap-6 pt-4">
+                        <div className="flex items-end justify-between gap-4 pt-3">
                             <div className="space-y-2">
-                                <h3 className="text-lg font-semibold text-foreground">
+                                <h3 className="text-base font-semibold text-foreground">
                                     Customer Signature
                                     <span className="text-destructive"> *</span>
                                 </h3>
@@ -844,32 +831,27 @@ export function FabricSelectionForm({
                                     control={form.control}
                                     render={({ field, fieldState }) => (
                                         <div className="space-y-2">
-                                            <div className="w-fit">
+                                            <div className="flex items-center gap-3">
                                                 {field.value ? (
-                                                    <div className="space-y-2">
-                                                        <div className="border rounded-lg bg-white/70">
+                                                    <>
+                                                        <div className="border rounded-lg bg-white/70 p-1">
                                                             <img
                                                                 src={field.value}
                                                                 alt="Customer signature"
-                                                                style={{
-                                                                    width: "500px",
-                                                                    height: "200px",
-                                                                    display: "block",
-                                                                }}
+                                                                className="h-10 w-auto object-contain"
                                                             />
                                                         </div>
                                                         {!isFormDisabled && (
                                                             <Button
                                                                 type="button"
-                                                                variant="outline"
+                                                                variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => field.onChange("")}
                                                             >
-                                                                <X className="w-4 h-4 mr-2" />
-                                                                Clear Signature
+                                                                <X className="w-4 h-4" />
                                                             </Button>
                                                         )}
-                                                    </div>
+                                                    </>
                                                 ) : !isFormDisabled ? (
                                                     <SignaturePad
                                                         onSave={(signature) => {
@@ -878,18 +860,7 @@ export function FabricSelectionForm({
                                                         }}
                                                     />
                                                 ) : (
-                                                    <div
-                                                        className="border rounded-lg bg-muted text-center text-muted-foreground"
-                                                        style={{
-                                                            width: "500px",
-                                                            height: "200px",
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                        }}
-                                                    >
-                                                        No signature provided
-                                                    </div>
+                                                    <span className="text-sm text-muted-foreground">No signature</span>
                                                 )}
                                             </div>
                                             {fieldState.error && (

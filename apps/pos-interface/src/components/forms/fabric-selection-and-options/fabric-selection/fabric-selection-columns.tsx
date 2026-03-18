@@ -21,87 +21,87 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "garment_id",
     header: "ID",
-    size: 50,
+    size: 40,
     cell: FabricCells.GarmentIdCell,
   },
   {
     accessorKey: "measurement_id",
     header: "Measurement",
-    size: 120,
+    size: 100,
     cell: FabricCells.MeasurementIdCell,
   },
   // Fabric Selection
   {
     accessorKey: "fabric_source",
     header: "Source",
-    size: 80,
+    size: 65,
     cell: FabricCells.FabricSourceCell,
   },
   {
     accessorKey: "fabric_id",
     header: "Fabric",
-    size: 200,
+    size: 160,
     cell: FabricCells.IfInsideCell,
   },
   {
     accessorKey: "shop_name",
     header: "Shop Name",
-    size: 160,
+    size: 130,
     cell: FabricCells.ShopNameCell,
   },
   {
     accessorKey: "color",
     header: "Color",
-    size: 100,
+    size: 80,
     cell: FabricCells.ColorCell,
   },
   {
     accessorKey: "fabric_length",
     header: "Length (m)",
-    size: 90,
+    size: 75,
     cell: FabricCells.FabricLengthCell,
   },
   {
     accessorKey: "fabric_amount",
     header: "Amount",
-    size: 70,
+    size: 60,
     cell: FabricCells.FabricAmountCell,
   },
   // Order Details
   {
     accessorKey: "garment_type",
     header: "Type",
-    size: 100,
+    size: 80,
     cell: FabricCells.GarmentTypeCell,
   },
   {
     accessorKey: "soaking",
     header: "Soak",
-    size: 60,
+    size: 50,
     cell: FabricCells.SoakingCell,
   },
   {
     accessorKey: "express",
     header: "Express",
-    size: 80,
+    size: 60,
     cell: FabricCells.ExpressCell,
   },
   {
     accessorKey: "delivery_date",
     header: "Delivery",
-    size: 160,
+    size: 130,
     cell: FabricCells.DeliveryDateCell,
   },
   {
     accessorKey: "notes",
     header: "Note",
-    size: 180,
+    size: 140,
     cell: FabricCells.NoteCell,
   },
   {
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
-    size: 50,
+    size: 40,
     cell: ActionCell,
   },
 ];
@@ -181,7 +181,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" disabled={isFormDisabled}>
+          <Button variant="ghost" size="icon" disabled={isFormDisabled} aria-label="More options">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>

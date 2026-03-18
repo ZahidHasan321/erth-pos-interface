@@ -220,7 +220,7 @@ export function AppSidebar({
               ? { target: "_blank", rel: "noopener noreferrer" }
               : {})}
           >
-            {Icon && <Icon className="h-4 w-4" />}
+            {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
             <span>{title}</span>
           </Link>
         </SidebarMenuButton>
@@ -267,7 +267,7 @@ export function AppSidebar({
           isActive={hasActiveChild}
           tooltip={title}
         >
-          {Icon && <Icon className="h-4 w-4" />}
+          {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           <span>{title}</span>
           <ChevronDown
             className={`ml-auto h-4 w-4 transition-transform ${
@@ -295,7 +295,7 @@ export function AppSidebar({
                         ? { target: "_blank", rel: "noopener noreferrer" }
                         : {})}
                     >
-                      {subItem.icon && <subItem.icon className="h-4 w-4" />}
+                      {subItem.icon && <subItem.icon className="h-4 w-4" aria-hidden="true" />}
                       <span>{subItem.title}</span>
                     </Link>
                   </SidebarMenuSubButton>
@@ -398,21 +398,21 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Switch Brand">
               <Link to="/home">
-                <Home className="h-4 w-4" />
+                <Home className="h-4 w-4" aria-hidden="true" />
                 <span>Switch Brand</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={onLogout} tooltip="Logout">
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
               <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem className="hidden md:block">
             <SidebarMenuButton asChild tooltip="Toggle Sidebar">
               <SidebarTrigger>
-                <Menu className="h-4 w-4" />
+                <Menu className="h-4 w-4" aria-hidden="true" />
                 <span>Toggle Sidebar</span>
               </SidebarTrigger>
             </SidebarMenuButton>

@@ -90,13 +90,13 @@ function DashboardPage() {
 
     if (isLoading) {
         return (
-            <div className="p-8 space-y-8">
+            <div className="p-4 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {[...Array(4)].map((_, i) => (
                         <Skeleton key={i} className="h-32 w-full rounded-2xl" />
                     ))}
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <Skeleton className="h-[400px] lg:col-span-2 rounded-2xl" />
                     <Skeleton className="h-[400px] rounded-2xl" />
                 </div>
@@ -105,10 +105,10 @@ function DashboardPage() {
     }
 
     return (
-        <div className={cn("p-6 md:p-10 max-w-[1600px] mx-auto space-y-10", ANIMATION_CLASSES.fadeInUp)}>
+        <div className={cn("p-4 md:p-5 max-w-[1600px] mx-auto space-y-4", ANIMATION_CLASSES.fadeInUp)}>
             {/* Header */}
             <div className="flex flex-col gap-1">
-                <h1 className="text-4xl font-black tracking-tight text-foreground uppercase">
+                <h1 className="text-2xl font-black tracking-tight text-foreground uppercase">
                     Control <span className="text-primary">Center</span>
                 </h1>
                 <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs opacity-70">
@@ -117,7 +117,7 @@ function DashboardPage() {
             </div>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatCard 
                     title="Total Customers" 
                     value={stats.totalCustomers} 
@@ -163,142 +163,114 @@ function DashboardPage() {
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Upcoming Deliveries Table */}
-                <Card className={cn("lg:col-span-8 border-2 shadow-sm rounded-3xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(4)}>
-                    <CardHeader className="bg-muted/30 border-b pb-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {/* Upcoming Deliveries */}
+                <Card className={cn("md:col-span-8 border-2 shadow-sm rounded-xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(4)}>
+                    <CardHeader className="bg-muted/30 border-b py-2.5 px-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="text-xl font-black uppercase tracking-tight">Priority Deliveries</CardTitle>
-                                <CardDescription className="font-bold uppercase text-xs tracking-widest mt-1">Orders due in the next 7 days</CardDescription>
+                                <CardTitle className="text-base font-black uppercase tracking-tight">Priority Deliveries</CardTitle>
+                                <CardDescription className="font-bold uppercase text-[10px] tracking-widest mt-0.5">Next 7 days</CardDescription>
                             </div>
-                            <Badge variant="outline" className="font-black px-3 py-1 bg-background">
-                                {stats.upcomingDeliveries.length} SCHEDULED
+                            <Badge variant="outline" className="font-black px-2 py-0.5 text-xs bg-background">
+                                {stats.upcomingDeliveries.length}
                             </Badge>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
                         {stats.upcomingDeliveries.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b bg-muted/10">
-                                            <th className="px-6 py-4 text-left">Order / Customer</th>
-                                            <th className="px-6 py-4 text-left">Production Stage</th>
-                                            <th className="px-6 py-4 text-left">Delivery Date</th>
-                                            <th className="px-6 py-4 text-right">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {stats.upcomingDeliveries.slice(0, 6).sort((a, b) => new Date(a.delivery_date!).getTime() - new Date(b.delivery_date!).getTime()).map((order) => (
-                                            <tr key={order.id} className="hover:bg-muted/5 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-black text-sm text-foreground">#{order.id}</span>
-                                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">
-                                                            {order.customer?.name}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {order.order_phase ? (
-                                                        <Badge 
-                                                            variant="outline" 
-                                                            className={cn(
-                                                                "text-xs font-black uppercase tracking-tight border-none",
-                                                                `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
-                                                                `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
-                                                            )}
-                                                        >
-                                                            {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                                                        </Badge>
-                                                    ) : (
-                                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pending</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock className={cn(
-                                                            "w-3.5 h-3.5",
-                                                            new Date(order.delivery_date!) <= endOfDay(today) ? "text-rose-500" : "text-muted-foreground"
-                                                        )} />
-                                                        <span className={cn(
-                                                            "text-xs font-bold",
-                                                            new Date(order.delivery_date!) <= endOfDay(today) ? "text-rose-600 font-black" : "text-foreground"
-                                                        )}>
-                                                            {format(new Date(order.delivery_date!), "MMM d, yyyy")}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Link 
-                                                            to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
-                                                            search={{ orderId: order.id }}
-                                                        >
-                                                            <Badge className="cursor-pointer font-black text-xs uppercase tracking-widest bg-primary hover:bg-primary/90 flex items-center gap-1.5">
-                                                                <Eye className="w-3 h-3" />
-                                                                View Order
-                                                            </Badge>
-                                                        </Link>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className="divide-y">
+                                {stats.upcomingDeliveries.slice(0, 6).sort((a, b) => new Date(a.delivery_date!).getTime() - new Date(b.delivery_date!).getTime()).map((order) => (
+                                    <Link
+                                        key={order.id}
+                                        to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                                        search={{ orderId: order.id }}
+                                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/5 transition-colors group"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-black text-sm">#{order.id}</span>
+                                                <span className="text-xs font-bold text-muted-foreground truncate">{order.customer?.name}</span>
+                                            </div>
+                                        </div>
+                                        {order.order_phase && (
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    "text-[10px] font-black uppercase tracking-tight border-none shrink-0 h-5 px-1.5",
+                                                    ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS] === "gray" && "bg-gray-500/15 text-gray-600",
+                                                    ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS] === "amber" && "bg-amber-500/15 text-amber-600",
+                                                    ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS] === "emerald" && "bg-emerald-500/15 text-emerald-600"
+                                                )}
+                                            >
+                                                {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                                            </Badge>
+                                        )}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <Clock className={cn(
+                                                "w-3 h-3",
+                                                new Date(order.delivery_date!) <= endOfDay(today) ? "text-rose-500" : "text-muted-foreground"
+                                            )} />
+                                            <span className={cn(
+                                                "text-xs font-bold tabular-nums",
+                                                new Date(order.delivery_date!) <= endOfDay(today) ? "text-rose-600 font-black" : "text-foreground"
+                                            )}>
+                                                {format(new Date(order.delivery_date!), "d MMM")}
+                                            </span>
+                                        </div>
+                                        <Eye className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
+                                    </Link>
+                                ))}
                             </div>
                         ) : (
-                            <div className="p-20 text-center space-y-4">
-                                <div className="size-16 bg-muted rounded-full flex items-center justify-center mx-auto opacity-40">
-                                    <Package className="w-8 h-8" />
-                                </div>
-                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No deliveries scheduled this week</p>
+                            <div className="p-6 text-center">
+                                <Package className="w-6 h-6 mx-auto text-muted-foreground/30 mb-2" />
+                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">No deliveries this week</p>
                             </div>
                         )}
                     </CardContent>
                 </Card>
 
                 {/* Workflow Summary */}
-                <Card className={cn("lg:col-span-4 border-2 shadow-sm rounded-3xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(5)}>
-                    <CardHeader className="bg-muted/30 border-b pb-6">
-                        <CardTitle className="text-xl font-black uppercase tracking-tight">Workflow Health</CardTitle>
-                        <CardDescription className="font-bold uppercase text-xs tracking-widest mt-1">Status of ongoing production</CardDescription>
+                <Card className={cn("md:col-span-4 border-2 shadow-sm rounded-xl overflow-hidden", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(5)}>
+                    <CardHeader className="bg-muted/30 border-b py-2.5 px-4">
+                        <CardTitle className="text-base font-black uppercase tracking-tight">Workflow Health</CardTitle>
+                        <CardDescription className="font-bold uppercase text-[10px] tracking-widest mt-0.5">Ongoing production</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-6 space-y-6">
-                        <WorkflowItem 
-                            label="Ready for Pickup" 
-                            count={stats.readyForPickup.length} 
-                            icon={Package} 
-                            color="text-emerald-600" 
+                    <CardContent className="p-2.5 space-y-2">
+                        <WorkflowItem
+                            label="Ready for Pickup"
+                            count={stats.readyForPickup.length}
+                            icon={Package}
+                            color="text-emerald-600"
                             bg="bg-emerald-50"
                             to="/$main/orders/orders-at-showroom"
                             search={{ stage: "ready_for_pickup" }}
                         />
-                        <WorkflowItem 
-                            label="Brova Trials" 
-                            count={stats.brovaTrials.length} 
-                            icon={Scissors} 
-                            color="text-amber-600" 
+                        <WorkflowItem
+                            label="Brova Trials"
+                            count={stats.brovaTrials.length}
+                            icon={Scissors}
+                            color="text-amber-600"
                             bg="bg-amber-50"
                             to="/$main/orders/orders-at-showroom"
                             search={{ stage: "brova_trial" }}
                         />
-                        <WorkflowItem 
-                            label="Needs Action" 
-                            count={stats.needsAction.length} 
-                            icon={AlertCircle} 
-                            color="text-rose-600" 
+                        <WorkflowItem
+                            label="Needs Action"
+                            count={stats.needsAction.length}
+                            icon={AlertCircle}
+                            color="text-rose-600"
                             bg="bg-rose-50"
                             to="/$main/orders/orders-at-showroom"
                             search={{ stage: "needs_action" }}
                         />
-                        <WorkflowItem 
-                            label="Completed & Closed" 
-                            count={orders.filter(o => o.order_phase === 'completed').length} 
-                            icon={CheckCircle2} 
-                            color="text-emerald-600" 
-                            bg="bg-emerald-50" 
+                        <WorkflowItem
+                            label="Completed"
+                            count={orders.filter(o => o.order_phase === 'completed').length}
+                            icon={CheckCircle2}
+                            color="text-emerald-600"
+                            bg="bg-emerald-50"
                             to="/$main/orders/order-history"
                             search={{ phaseFilter: "completed" }}
                         />
@@ -307,7 +279,7 @@ function DashboardPage() {
             </div>
 
             {/* Recent Customers Section */}
-            <div className={cn("space-y-6", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(6)}>
+            <div className={cn("space-y-3", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(6)}>
                 <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-primary" />
                     <h2 className="text-xl font-black uppercase tracking-tight">Recently Joined Customers</h2>
@@ -333,18 +305,18 @@ function DashboardPage() {
 }
 function StatCard({ title, value, icon: Icon, color, bg, trend, index, to, search }: any) {
     const content = (
-        <CardContent className="p-6">
+        <CardContent className="p-3">
             <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-3 rounded-2xl", bg)}>
+                <div className={cn("p-2 rounded-2xl", bg)}>
                     <Icon className={cn("w-6 h-6", color)} />
                 </div>
                 <Badge variant="secondary" className="text-xs font-black uppercase tracking-[0.1em] opacity-60">Live</Badge>
             </div>
             <div className="space-y-1">
-                <h3 className="text-3xl font-black tracking-tighter">{value}</h3>
+                <h3 className="text-xl font-black tracking-tighter">{value}</h3>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
             </div>
-            <div className="mt-4 pt-4 border-t border-dashed flex items-center justify-between">
+            <div className="mt-2 pt-2 border-t border-dashed flex items-center justify-between">
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-tight">{trend}</span>
                 <TrendingUp className="w-3 h-3 text-muted-foreground opacity-30" />
             </div>
@@ -352,7 +324,7 @@ function StatCard({ title, value, icon: Icon, color, bg, trend, index, to, searc
     );
 
     return (
-        <Card className={cn("border-2 shadow-none rounded-3xl overflow-hidden group hover:border-primary/30 transition-all", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(index)}>
+        <Card className={cn("border-2 shadow-none rounded-xl overflow-hidden group hover:border-primary/30 transition-all", ANIMATION_CLASSES.fadeInUp)} style={ANIMATION_CLASSES.staggerDelay(index)}>
             {to ? (
                 <Link to={to} search={search}>
                     {content}
@@ -364,17 +336,14 @@ function StatCard({ title, value, icon: Icon, color, bg, trend, index, to, searc
 
 function WorkflowItem({ label, count, icon: Icon, color, bg, to, search }: any) {
     const content = (
-        <div className="flex items-center justify-between p-4 rounded-2xl border-2 border-transparent hover:border-border hover:bg-muted/5 transition-all">
-            <div className="flex items-center gap-4">
-                <div className={cn("p-2.5 rounded-xl", bg)}>
-                    <Icon className={cn("w-5 h-5", color)} />
+        <div className="flex items-center justify-between p-2.5 rounded-xl border-2 border-transparent hover:border-border hover:bg-muted/5 transition-all">
+            <div className="flex items-center gap-2.5">
+                <div className={cn("p-1.5 rounded-lg", bg)}>
+                    <Icon className={cn("w-4 h-4", color)} />
                 </div>
                 <span className="text-xs font-bold uppercase tracking-wide text-foreground">{label}</span>
             </div>
-            <div className="flex items-center gap-3">
-                <span className="text-lg font-black tracking-tighter">{count}</span>
-                <div className="size-1.5 rounded-full bg-border" />
-            </div>
+            <span className="text-base font-black tracking-tighter tabular-nums">{count}</span>
         </div>
     );
 

@@ -42,13 +42,13 @@ export function GroupedMeasurementFields({
   getEnterHandler,
 }: GroupedMeasurementFieldsProps) {
   return (
-    <div key={title} className={cn("bg-card border border-border rounded-xl p-6 shadow-sm", wrapperClassName)}>
-      <h4 className="text-lg font-semibold mb-4 text-foreground">{title}</h4>
-      <div className="flex flex-col gap-y-4">
+    <div key={title} className={cn("bg-card border border-border rounded-xl p-3 shadow-sm", wrapperClassName)}>
+      {title && <h4 className="text-sm font-semibold mb-2 text-foreground">{title}</h4>}
+      <div className="flex flex-wrap gap-x-4 gap-y-2 items-end">
         {fields.map((fieldOrFieldGroup, index) => {
           if (Array.isArray(fieldOrFieldGroup)) {
             return (
-              <div key={index} className="flex flex-wrap gap-y-6 w-fit gap-x-12 border border-border p-3 rounded-lg bg-card">
+              <div key={index} className="flex flex-wrap gap-x-4 gap-y-2 items-end border-l-2 border-primary/20 pl-3">
                 {fieldOrFieldGroup.map((fieldConfig) => {
                   const fieldPath = fieldConfig.name as Path<CustomerMeasurementsSchema>;
                   return (
@@ -60,7 +60,8 @@ export function GroupedMeasurementFields({
                       label={fieldConfig.label}
                       unit={unit}
                       isDisabled={isDisabled || (fieldConfig.isDisabled ?? false)}
-                      className={cn( fieldConfig.className )}
+                      isComputed={fieldConfig.isDisabled ?? false}
+                      className={cn(fieldConfig.className)}
                       labelClassName={fieldConfig.labelClassName}
                       onEnterPress={getEnterHandler?.(fieldPath)}
                     />
@@ -82,7 +83,7 @@ export function GroupedMeasurementFields({
               label={fieldConfig.label}
               unit={unit}
               isDisabled={isDisabled || (fieldConfig.isDisabled ?? false)}
-              className={cn( fieldConfig.className, "border border-border p-3 rounded-lg w-fit bg-card" )}
+              className={cn(fieldConfig.className)}
               labelClassName={fieldConfig.labelClassName}
               onEnterPress={getEnterHandler?.(fieldPath)}
             />

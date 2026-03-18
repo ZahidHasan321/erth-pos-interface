@@ -52,7 +52,7 @@ function CustomerSummaryCard({
                         <User className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                        <CardTitle className="text-2xl font-bold text-foreground">
+                        <CardTitle className="text-lg font-bold text-foreground">
                             {customer.name}
                         </CardTitle>
                         {customer.arabic_name && (
@@ -74,7 +74,7 @@ function CustomerSummaryCard({
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
                     <div className="flex items-start gap-3">
                         <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
                             <Phone className="h-4 w-4" />
@@ -151,7 +151,7 @@ function CustomerSummaryCard({
                 </div>
                 
                 {customer.notes && (
-                    <div className="mt-6 p-3 rounded-lg bg-muted/30 border border-border/50 flex gap-3">
+                    <div className="mt-3 p-3 rounded-lg bg-muted/30 border border-border/50 flex gap-3">
                         <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="space-y-1">
                             <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Notes</p>
@@ -204,12 +204,12 @@ function CustomerDetailComponent() {
 
     if (isLoading) {
         return (
-            <div className="space-y-6 py-6 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+            <div className="space-y-3 py-4 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
                 <Skeleton className="h-9 w-48 rounded-lg" />
                 <Card className="border-2 py-0 gap-0">
-                    <CardContent className="p-6 space-y-4">
+                    <CardContent className="p-3 space-y-4">
                         <div className="flex items-center gap-4">
-                            <Skeleton className="size-16 rounded-full" />
+                            <Skeleton className="size-10 rounded-full" />
                             <div className="space-y-2 flex-1">
                                 <Skeleton className="h-6 w-48 rounded-md" />
                                 <Skeleton className="h-4 w-32 rounded-md" />
@@ -237,8 +237,8 @@ function CustomerDetailComponent() {
                 <div className="bg-destructive/10 p-4 rounded-full mb-4">
                     <User className="h-10 w-10 text-destructive" />
                 </div>
-                <h2 className="text-xl font-bold mb-2">Customer Not Found</h2>
-                <p className="text-muted-foreground mb-6 max-w-md">
+                <h2 className="text-base font-bold mb-2">Customer Not Found</h2>
+                <p className="text-muted-foreground mb-3 max-w-md">
                     We couldn't find the customer you're looking for. It may have been deleted or the ID is incorrect.
                 </p>
                 <Button asChild>
@@ -252,7 +252,7 @@ function CustomerDetailComponent() {
     }
 
     return (
-        <div className="space-y-6 py-6 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+        <div className="space-y-3 py-4 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
             <div className="flex items-center justify-between">
                 <Button asChild variant="ghost" className="hover:bg-primary/10 text-primary gap-2 h-9 px-3">
                     <Link to="/$main/customers">
@@ -292,9 +292,9 @@ function CustomerDetailComponent() {
             )}
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-10">
-                    <SheetHeader className="mb-8 p-0">
-                        <SheetTitle className="text-4xl font-black uppercase tracking-tighter">
+                <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-5">
+                    <SheetHeader className="mb-4 p-0">
+                        <SheetTitle className="text-xl font-black uppercase tracking-tighter">
                             <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
                             {watchedCustomer.name}
                         </SheetTitle>

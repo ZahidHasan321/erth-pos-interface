@@ -12,17 +12,17 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'serial_number',
     header: '#',
-    size: 50,
-    minSize: 50,
+    size: 40,
+    minSize: 40,
     cell: ({ row }) => (
-      <span className="text-xs font-black text-muted-foreground">{row.index + 1}</span>
+      <span className="text-xs font-bold text-muted-foreground">{row.index + 1}</span>
     ),
   },
   {
     accessorKey: 'product_type',
     header: 'Product Type',
-    size: 200,
-    minSize: 180,
+    size: 160,
+    minSize: 140,
     cell: ({ row, table }) => {
         const { updateData, serverProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.product_type
@@ -58,8 +58,8 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'brand',
     header: 'Brand',
-    size: 200,
-    minSize: 180,
+    size: 160,
+    minSize: 140,
     cell: ({ row, table }) => {
         const { updateData, serverProducts, selectedProducts, errors, isOrderDisabled } = table.options.meta as any
         const error = errors?.[row.index]?.brand
@@ -116,16 +116,16 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'stock',
     header: 'Stock',
-    size: 80,
-    minSize: 80,
+    size: 60,
+    minSize: 60,
     cell: ({ row }) => {
       const isProductSelected = !!row.original.product_type && !!row.original.brand
       if (!isProductSelected) return <span className="text-muted-foreground">-</span>
 
       const stock = row.original.stock || 0;
       const colorClass =
-        stock <= 0 ? "text-red-600 font-black" :
-        stock < 5 ? "text-orange-600 font-black" :
+        stock <= 0 ? "text-red-600 font-bold" :
+        stock < 5 ? "text-orange-600 font-bold" :
         stock <= 11 ? "text-green-600 font-bold" :
         "text-foreground font-bold";
 
@@ -135,14 +135,14 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'quantity',
     header: 'Quantity',
-    size: 150,
-    minSize: 140,
+    size: 120,
+    minSize: 110,
     cell: QuantityCell,
   },
   {
     accessorKey: 'unit_price',
     header: 'Unit Price',
-    size: 100,
+    size: 80,
     minSize: 90,
     cell: ({ row }) => {
         const isProductSelected = !!row.original.product_type && !!row.original.brand
@@ -165,7 +165,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
       if (!isProductSelected) return <span className="text-muted-foreground">-</span>
 
       const total = row.original.quantity * row.original.unit_price
-      return <span className="font-black text-primary">{total.toFixed(2)}</span>
+      return <span className="font-bold text-primary">{total.toFixed(2)}</span>
     },
   },
   {
@@ -182,6 +182,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
           size="icon"
           onClick={() => removeRow(row.index)}
           className="size-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+          aria-label="Remove item"
         >
           <Trash2 className="size-3.5" />
         </Button>
@@ -263,6 +264,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           disabled={quantity <= 1 || isOrderDisabled}
           variant="outline"
           className="size-8"
+          aria-label="Decrease quantity"
         >
           -
         </Button>
@@ -284,6 +286,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
           variant="outline"
           className="size-8"
+          aria-label="Increase quantity"
         >
           +
         </Button>

@@ -12,10 +12,7 @@ import {
     ChevronLeft,
     User,
     Calendar,
-    Filter,
     History,
-    Phone,
-    CalendarArrowDown,
     Truck
 } from "lucide-react";
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/useOrderHistory";
@@ -33,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { OrderHistorySearch } from "@/components/order-management/order-history-search";
 import { DatePicker } from "@/components/ui/date-picker";
-import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
+import { ORDER_PHASE_LABELS } from "@/lib/constants";
 
 export const Route = createFileRoute("/$main/orders/order-history")({
     component: OrderHistoryPage,
@@ -77,114 +74,93 @@ function OrderHistoryPage() {
     return (
         <div className="container mx-auto py-4 px-4 lg:px-8 space-y-3 max-w-7xl">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-foreground">
-                        <History className="w-8 h-8 text-primary" />
-                        Order History
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Manage your previous work and sales orders
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 text-primary font-bold text-sm">
-                    <Package className="w-4 h-4" />
-                    <span>{totalCount} {totalCount === 1 ? 'Order' : 'Orders'} Total</span>
-                </div>
+            <div className="space-y-1">
+                <h1 className="text-xl font-bold tracking-tight flex items-center gap-2 text-foreground">
+                    <History className="w-5 h-5 text-primary" />
+                    Order History
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                    Manage your previous work and sales orders
+                </p>
             </div>
 
             {/* Filters Section */}
-            <Card className="border border-border/80 shadow-md bg-white rounded-2xl overflow-hidden mb-4 py-0 gap-0">
-                <CardContent className="p-4 sm:p-6 space-y-4">
-                    {/* Search - Full Width */}
-                    <OrderHistorySearch
-                        value={searchTerm}
-                        onChange={setSearchTerm}
-                    />
+            <Card className="border border-border/80 shadow-sm bg-white rounded-xl overflow-hidden mb-3 py-0 gap-0">
+                <CardContent className="p-2.5 sm:p-3 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                            <OrderHistorySearch
+                                value={searchTerm}
+                                onChange={setSearchTerm}
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 text-primary font-bold text-xs tabular-nums shrink-0 self-start">
+                            <Package className="w-3.5 h-3.5" />
+                            <span>{totalCount}</span>
+                        </div>
+                    </div>
 
-                    {/* Filter Row */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                        {/* Date Filter */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Date</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2">
+                        <div className="space-y-1 col-span-2 sm:col-span-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Date</label>
                             <DatePicker
                                 value={dateFilter}
                                 onChange={setDateFilter}
                                 clearable
-                                placeholder="Filter by date"
-                                className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20 w-full text-sm"
+                                placeholder="Any date"
+                                className="h-8 bg-white border-border/80 rounded-lg shadow-sm focus:ring-primary/20 w-full text-xs [&>button]:truncate"
                             />
                         </div>
-
-                        {/* Sort Order */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Sort By</label>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Sort</label>
                             <Select value={sortOrder} onValueChange={(v: any) => setSortOrder(v)}>
-                                <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
-                                    <div className="flex items-center gap-2">
-                                        <CalendarArrowDown className="size-4 text-primary shrink-0" />
-                                        <SelectValue placeholder="Sort" />
-                                    </div>
+                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
+                                    <SelectValue placeholder="Sort" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl shadow-xl">
-                                    <SelectItem value="newest" className="rounded-lg">Newest First</SelectItem>
-                                    <SelectItem value="oldest" className="rounded-lg">Oldest First</SelectItem>
+                                <SelectContent className="rounded-lg">
+                                    <SelectItem value="newest" className="text-xs">Newest</SelectItem>
+                                    <SelectItem value="oldest" className="text-xs">Oldest</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        {/* Status Filter */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Checkout</label>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Status</label>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
-                                    <div className="flex items-center gap-2">
-                                        <Filter className="size-4 text-primary shrink-0" />
-                                        <SelectValue placeholder="Checkout" />
-                                    </div>
+                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
+                                    <SelectValue placeholder="All" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl shadow-xl">
-                                    <SelectItem value="all" className="rounded-lg">All Status</SelectItem>
-                                    <SelectItem value="confirmed" className="rounded-lg">Confirmed</SelectItem>
-                                    <SelectItem value="draft" className="rounded-lg">Drafts</SelectItem>
-                                    <SelectItem value="cancelled" className="rounded-lg">Cancelled</SelectItem>
+                                <SelectContent className="rounded-lg">
+                                    <SelectItem value="all" className="text-xs">All</SelectItem>
+                                    <SelectItem value="confirmed" className="text-xs">Confirmed</SelectItem>
+                                    <SelectItem value="draft" className="text-xs">Drafts</SelectItem>
+                                    <SelectItem value="cancelled" className="text-xs">Cancelled</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        {/* Phase Filter */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Phase</label>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Phase</label>
                             <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                                <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
-                                    <div className="flex items-center gap-2">
-                                        <Clock className="size-4 text-primary shrink-0" />
-                                        <SelectValue placeholder="Phase" />
-                                    </div>
+                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
+                                    <SelectValue placeholder="All" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl shadow-xl">
-                                    <SelectItem value="all" className="rounded-lg">All Phases</SelectItem>
-                                    <SelectItem value="new" className="rounded-lg">New</SelectItem>
-                                    <SelectItem value="in_progress" className="rounded-lg">In Progress</SelectItem>
-                                    <SelectItem value="completed" className="rounded-lg">Completed</SelectItem>
+                                <SelectContent className="rounded-lg">
+                                    <SelectItem value="all" className="text-xs">All</SelectItem>
+                                    <SelectItem value="new" className="text-xs">New</SelectItem>
+                                    <SelectItem value="in_progress" className="text-xs">In Progress</SelectItem>
+                                    <SelectItem value="completed" className="text-xs">Completed</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        {/* Type Filter */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Order Type</label>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Type</label>
                             <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                <SelectTrigger className="h-10 bg-white border-border/80 rounded-xl shadow-sm focus:ring-primary/20">
-                                    <div className="flex items-center gap-2">
-                                        <ShoppingBag className="size-4 text-primary shrink-0" />
-                                        <SelectValue placeholder="Type" />
-                                    </div>
+                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
+                                    <SelectValue placeholder="All" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl shadow-xl">
-                                    <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
-                                    <SelectItem value="WORK" className="rounded-lg">Work Orders</SelectItem>
-                                    <SelectItem value="SALES" className="rounded-lg">Sales Orders</SelectItem>
+                                <SelectContent className="rounded-lg">
+                                    <SelectItem value="all" className="text-xs">All</SelectItem>
+                                    <SelectItem value="WORK" className="text-xs">Work</SelectItem>
+                                    <SelectItem value="SALES" className="text-xs">Sales</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -227,7 +203,7 @@ function OrderHistoryPage() {
                         </div>
 
                         {/* Pagination Controls */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-6">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows</span>
@@ -288,165 +264,181 @@ function OrderHistoryPage() {
     );
 }
 
-const getStatusBadge = (status: string) => {
+const PHASE_BADGE_STYLES: Record<string, string> = {
+    new: "bg-gray-500/15 text-gray-600",
+    in_progress: "bg-amber-500/15 text-amber-600",
+    completed: "bg-emerald-500/15 text-emerald-600",
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
     switch (status) {
         case "confirmed":
-            return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/20 text-xs px-2 py-0.5 h-6 shadow-none"><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Confirmed</Badge>;
+            return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[11px] px-1.5 py-0 h-5 shadow-none"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
         case "cancelled":
-            return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-xs px-2 py-0.5 h-6 shadow-none"><XCircle className="w-3.5 h-3.5 mr-1.5" /> Cancelled</Badge>;
-        case "draft":
+            return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[11px] px-1.5 py-0 h-5 shadow-none"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>;
         default:
-            return <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-200 hover:bg-amber-500/20 text-xs px-2 py-0.5 h-6 shadow-none"><Clock className="w-3.5 h-3.5 mr-1.5" /> Draft</Badge>;
+            return <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-200 text-[11px] px-1.5 py-0 h-5 shadow-none"><Clock className="w-3 h-3 mr-1" />Draft</Badge>;
     }
+};
+
+const PhaseBadge = ({ phase }: { phase: string }) => (
+    <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-black uppercase border-none shadow-xs", PHASE_BADGE_STYLES[phase])}>
+        {ORDER_PHASE_LABELS[phase as keyof typeof ORDER_PHASE_LABELS]}
+    </Badge>
+);
+
+const TypeBadge = ({ type }: { type: string }) => type === "SALES"
+    ? <span className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider leading-none">SALES</span>
+    : <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider leading-none">WORK</span>;
+
+const DeliveryBadge = ({ homeDelivery }: { homeDelivery: boolean }) => (
+    <span className={cn(
+        "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border leading-none",
+        homeDelivery ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-slate-50 text-slate-600 border-slate-200"
+    )}>
+        {homeDelivery ? <><Truck className="w-2.5 h-2.5" />Delivery</> : <><ShoppingBag className="w-2.5 h-2.5" />Pickup</>}
+    </span>
+);
+
+const ItemCount = ({ isWork, count }: { isWork: boolean; count: number }) => (
+    <div className="bg-muted/50 px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 border border-border/10">
+        {isWork ? <Package className="w-3 h-3 text-primary/70" /> : <ShoppingBag className="w-3 h-3 text-amber-500/70" />}
+        <span className="text-xs font-bold tabular-nums">{count}</span>
+    </div>
+);
+
+const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrder: boolean }) => {
+    if (!isWorkOrder) {
+        return (
+            <div className="flex items-center gap-1 text-foreground">
+                <span className="font-black text-sm tabular-nums leading-none">{order.total_amount.toFixed(2)}</span>
+                <span className="text-[10px] font-bold text-muted-foreground">KWD</span>
+            </div>
+        );
+    }
+    return (
+        <div className="flex items-center gap-2 tabular-nums text-[11px]">
+            <span className="text-muted-foreground font-bold">{order.total_amount.toFixed(2)}</span>
+            <span className="text-muted-foreground/50">/</span>
+            <span className="text-muted-foreground font-bold">{order.paid_amount.toFixed(2)}</span>
+            {order.balance > 0 ? (
+                <span className="text-destructive font-black bg-destructive/5 px-1 py-0.5 rounded border border-destructive/10 leading-none">
+                    Due {order.balance.toFixed(2)}
+                </span>
+            ) : (
+                <span className="text-emerald-600 font-bold uppercase text-[10px] tracking-tight">Paid</span>
+            )}
+        </div>
+    );
 };
 
 function OrderCard({ order }: { order: OrderHistoryItem }) {
     const isWorkOrder = order.order_type === "WORK";
     const route = isWorkOrder ? "/$main/orders/new-work-order" : "/$main/orders/new-sales-order";
+    const itemCount = isWorkOrder ? order.fabric_count : order.shelf_item_count;
+    const orderDate = order.order_date ? format(new Date(order.order_date), "dd/MM/yy") : "N/A";
 
     return (
-        <Link
-            to={route}
-            search={{ orderId: order.id }}
-            className="group block transition-all"
-        >
-            <Card className="overflow-hidden border border-border/50 group-hover:border-primary/40 group-hover:shadow-md transition-all bg-card/50 backdrop-blur-sm relative py-0 gap-0 shadow-sm rounded-xl">
-                <div className={cn(
-                    "absolute left-0 top-0 bottom-0 w-1.5",
-                    isWorkOrder ? "bg-primary" : "bg-amber-500"
-                )} />
-                <CardContent className="p-2 sm:px-4 sm:py-3">
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+        <Link to={route} search={{ orderId: order.id }} className="group block">
+            <Card className="overflow-hidden border border-border/50 group-hover:border-primary/40 group-hover:shadow-md transition-all bg-card/50 relative py-0 gap-0 shadow-sm rounded-xl">
+                <div className={cn("absolute left-0 top-0 bottom-0 w-1", isWorkOrder ? "bg-primary" : "bg-amber-500")} />
 
-                        {/* ID & Date */}
-                        <div className="flex flex-row md:flex-col items-center md:items-start justify-between md:justify-center gap-1 md:w-36 shrink-0">
+                <CardContent className="pl-4 pr-3 py-2 sm:pl-5 sm:pr-4">
+                    {/* ===== DESKTOP (lg+): single row ===== */}
+                    <div className="hidden lg:flex items-center gap-4">
+                        <div className="flex items-center gap-2 w-40 shrink-0">
+                            <span className="text-sm font-bold tabular-nums">#{order.id}</span>
+                            <TypeBadge type={order.order_type} />
+                            <span className="text-xs text-muted-foreground tabular-nums">{orderDate}</span>
+                        </div>
+
+                        <div className="w-px h-8 bg-border/30 shrink-0" />
+
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
+                            <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                            {isWorkOrder && order.delivery_date && (
+                                <span className="text-[11px] tabular-nums text-muted-foreground">Due {format(new Date(order.delivery_date), "dd/MM/yy")}</span>
+                            )}
+                        </div>
+
+                        <ItemCount isWork={isWorkOrder} count={itemCount} />
+                        <Financials order={order} isWorkOrder={isWorkOrder} />
+
+                        <div className="w-px h-8 bg-border/30 shrink-0" />
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <StatusBadge status={order.checkout_status} />
+                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all ml-1" />
+                        </div>
+                    </div>
+
+                    {/* ===== TABLET (sm to lg): compact 2-row grid ===== */}
+                    <div className="hidden sm:grid lg:hidden grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+                        {/* Row 1 left: ID + customer */}
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-bold tabular-nums shrink-0">#{order.id}</span>
+                            <TypeBadge type={order.order_type} />
+                            <div className="w-px h-4 bg-border/30 shrink-0" />
+                            <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
+                            <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                        </div>
+                        {/* Row 1 right: financials + chevron */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <Financials order={order} isWorkOrder={isWorkOrder} />
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                        </div>
+
+                        {/* Row 2 left: date, delivery, items, badges */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />{orderDate}
+                            </span>
+                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                            {isWorkOrder && order.delivery_date && (
+                                <span className="text-[11px] tabular-nums text-muted-foreground">Due {format(new Date(order.delivery_date), "dd/MM/yy")}</span>
+                            )}
+                            <ItemCount isWork={isWorkOrder} count={itemCount} />
+                        </div>
+                        {/* Row 2 right: status badges */}
+                        <div className="flex items-center gap-1.5 justify-end">
+                            <StatusBadge status={order.checkout_status} />
+                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                        </div>
+                    </div>
+
+                    {/* ===== MOBILE (<sm): compact stack ===== */}
+                    <div className="sm:hidden space-y-1.5">
+                        {/* Row 1: ID + type + date + chevron */}
+                        <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <span className="text-base font-bold text-foreground tabular-nums">
-                                    #{order.id}
-                                </span>
-                                {order.order_type === "SALES" ? (
-                                    <span className="bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded font-black uppercase tracking-wider">SALES</span>
-                                ) : (
-                                    <span className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded font-black uppercase tracking-wider">WORK</span>
-                                )}
+                                <span className="text-sm font-bold tabular-nums">#{order.id}</span>
+                                <TypeBadge type={order.order_type} />
+                                <span className="text-[11px] text-muted-foreground tabular-nums">{orderDate}</span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1.5">
-                                    <Calendar className="w-4 h-4 opacity-70" />
-                                    <span className="tabular-nums font-medium">{order.order_date ? format(new Date(order.order_date), "dd/MM/yy") : "N/A"}</span>
-                                </div>
-
-                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                         </div>
-
-                        {/* Customer Info */}
-                        <div className="flex-1 min-w-0 md:border-l md:border-border/20 md:pl-6">
-                            <div className="flex items-center gap-6">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="bg-primary/10 p-1.5 rounded-full shrink-0">
-                                            <User className="w-4 h-4 text-primary" />
-                                        </div>
-                                        <h3 className="font-bold text-base leading-tight group-hover:text-primary transition-colors truncate">
-                                            {order.customer_name}
-                                        </h3>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-muted-foreground mt-1 ml-0.5">
-                                        <Phone className="w-3.5 h-3.5 opacity-70 shrink-0" />
-                                        <span className="text-sm font-mono tabular-nums font-medium">
-                                            {order.customer_phone}
-                                        </span>
-                                    </div>
-                                </div>
-                                {order.order_type === "WORK" && (
-                                    <div className="flex flex-col items-center gap-1 shrink-0">
-                                        <div className={cn(
-                                            "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border",
-                                            order.home_delivery
-                                                ? "bg-blue-50 text-blue-600 border-blue-200"
-                                                : "bg-slate-50 text-slate-600 border-slate-200"
-                                        )}>
-                                            {order.home_delivery ? (
-                                                <><Truck className="w-3 h-3" /> Delivery</>
-                                            ) : (
-                                                <><ShoppingBag className="w-3 h-3" /> Pick Up</>
-                                            )}
-                                        </div>
-                                        {order.delivery_date && (
-                                            <span className="text-xs tabular-nums font-medium text-muted-foreground">
-                                                {format(new Date(order.delivery_date), "dd/MM/yy")}
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
+                        {/* Row 2: customer + phone */}
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <span className="font-semibold text-sm truncate">{order.customer_name}</span>
                             </div>
+                            <span className="text-[11px] text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
                         </div>
-
-                        {/* Right: Items, Financials & Status */}
-                        <div className="flex items-center justify-between md:justify-end gap-3 md:border-l md:border-border/20 md:pl-6 md:min-w-65">
-
-                            <div className="flex items-center gap-4">
-                                {/* Item Badge */}
-                                <div className="bg-muted/50 px-2.5 py-1 rounded-lg flex items-center gap-2 border border-border/10">
-                                    {isWorkOrder ? (
-                                        <Package className="w-4 h-4 text-primary/70" />
-                                    ) : (
-                                        <ShoppingBag className="w-4 h-4 text-amber-500/70" />
-                                    )}
-                                    <span className="text-sm font-bold tabular-nums">
-                                        {isWorkOrder ? order.fabric_count : order.shelf_item_count}
-                                    </span>
-                                </div>
-
-                                {/* Financials */}
-                                <div className="flex flex-col items-end min-w-25">
-                                    {isWorkOrder ? (
-                                        <div className="flex flex-col items-end space-y-0.5">
-                                            <span className="text-xs text-muted-foreground font-bold tabular-nums">
-                                                Total: {order.total_amount.toFixed(2)}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground font-bold tabular-nums">
-                                                Paid: {order.paid_amount.toFixed(2)}
-                                            </span>
-                                            {order.balance > 0 ? (
-                                                <span className="text-xs text-destructive font-black tabular-nums bg-destructive/5 px-1 rounded border border-destructive/10">
-                                                    Due: {order.balance.toFixed(2)}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-emerald-600 font-bold uppercase tracking-tighter">Paid Full</span>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1.5 text-foreground">
-                                            <span className="font-black text-base tabular-nums leading-none">
-                                                {order.total_amount.toFixed(2)}
-                                            </span>
-                                            <span className="text-xs font-bold text-muted-foreground">KWD</span>
-                                        </div>
-                                    )}
-                                </div>
+                        {/* Row 3: badges + financials */}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/30">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <StatusBadge status={order.checkout_status} />
+                                {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                                <ItemCount isWork={isWorkOrder} count={itemCount} />
                             </div>
-
-                            <div className="flex items-center gap-3">
-                                <div className="hidden sm:block">
-                                    {getStatusBadge(order.checkout_status)}
-                                </div>
-                                {order.order_phase && (
-                                    <Badge 
-                                        variant="outline" 
-                                        className={cn(
-                                            "hidden sm:flex h-6 px-2 text-xs font-black uppercase border-none shadow-xs",
-                                            `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
-                                            `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
-                                        )}
-                                    >
-                                        {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                                    </Badge>
-                                )}
-                                <ChevronRight className="w-5 h-5 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                            </div>
+                            <Financials order={order} isWorkOrder={isWorkOrder} />
                         </div>
-
                     </div>
                 </CardContent>
             </Card>

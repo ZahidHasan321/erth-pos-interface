@@ -1,5 +1,3 @@
-"use client";
-
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -29,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { cn } from "@/lib/utils";
+import { cn, clickableProps } from "@/lib/utils";
 
 import type { OrderRow } from "./types";
 import type { FilterState } from "./order-filters";
@@ -288,12 +286,14 @@ export function OrderDataTable({
                   {/* Main Order Row */}
                   <TableRow
                     data-state={row.getIsSelected() && "selected"}
+                    aria-expanded={row.getIsExpanded()}
                     className={cn(
                         "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
                         (row.original.order as any).linked_order_id && "border-l-4 border-l-blue-300/70 bg-blue-50/30",
                         selectedOrderId && row.original.order.id === selectedOrderId && "bg-primary/10 border-l-4 border-l-primary"
                     )}
                     onClick={() => row.toggleExpanded()}
+                    {...clickableProps(() => row.toggleExpanded())}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="py-1.5 px-2">
@@ -341,8 +341,9 @@ export function OrderDataTable({
                                               params={{ orderId: String(row.original.order.id) }}
                                               search={{ garmentId: garment.garmentRecordId }}
                                               onClick={(e) => e.stopPropagation()}
+                                              aria-label="Alteration feedback"
                                             >
-                                              <ClipboardCheck className="h-3 w-3" />
+                                              <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
                                             </Link>
                                           </Button>
                                         )}
@@ -436,27 +437,29 @@ export function OrderDataTable({
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground tabular-nums">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
           </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
+              aria-label="Previous page"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
               className="h-8 w-8 p-0"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="outline"
               size="sm"
+              aria-label="Next page"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
               className="h-8 w-8 p-0"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </div>

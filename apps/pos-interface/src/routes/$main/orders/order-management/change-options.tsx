@@ -13,8 +13,8 @@ export const Route = createFileRoute("/$main/orders/order-management/change-opti
 
 function RouteComponent() {
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Change Options</h1>
+    <div className="p-4">
+      <h1 className="text-lg font-bold mb-3">Change Options</h1>
       <p className="text-muted-foreground">
         This page is for changing order options.
       </p>

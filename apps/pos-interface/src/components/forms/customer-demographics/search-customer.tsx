@@ -270,7 +270,7 @@ export function SearchCustomer({
               selectedCustomerId ? "text-green-600" : "text-muted-foreground group-focus-within:text-primary"
             )} />
             <Input
-              placeholder="Search name, mobile, or nickname..."
+              placeholder="Search name, mobile, or nickname…"
               value={searchValue}
               onChange={(e) => {
                 const newValue = e.target.value;
@@ -282,7 +282,7 @@ export function SearchCustomer({
               }}
               onFocus={() => setIsFocused(true)}
               className={cn(
-                "h-12 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20 transition-all font-bold",
+                "h-9 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20 transition-[color,background-color,border-color,box-shadow] font-bold",
                 selectedCustomerId && "border-green-600 ring-2 ring-green-600/10 font-semibold text-green-700"
               )}
             />
@@ -295,6 +295,7 @@ export function SearchCustomer({
                   type="button"
                   onClick={handleClear}
                   className="p-1 hover:bg-muted rounded-full transition-colors"
+                  aria-label="Clear search"
                 >
                   <X className="size-4 text-muted-foreground" />
                 </button>
@@ -325,7 +326,7 @@ export function SearchCustomer({
                   ) : (
                     <>
                       {!isFetching && customers.length === 0 && hasMinChars && (
-                        <div className="p-12 py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground min-h-[228px]">
+                        <div className="p-6 py-6 flex flex-col items-center justify-center gap-3 text-muted-foreground min-h-[228px]">
                           <div className="bg-muted p-4 rounded-full">
                             <AlertCircle className="size-10 opacity-20" />
                           </div>

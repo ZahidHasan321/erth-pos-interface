@@ -110,6 +110,7 @@ export function GarmentCollection({ garments, orderId, remainingBalance }: Garme
                         onCheckedChange={() => toggleGarment(g.id)}
                         disabled={!eligible}
                         className="mt-1"
+                        aria-label="Select garment"
                     />
                     <div className="flex-1 min-w-0 space-y-1.5">
                         {/* Row 1: ID + Type + Stage */}
@@ -126,9 +127,9 @@ export function GarmentCollection({ garments, orderId, remainingBalance }: Garme
                                 }`}
                             >
                                 {isBrova ? (
-                                    <><Scissors className="h-3 w-3 mr-1" />Brova (Trial)</>
+                                    <><Scissors className="h-3 w-3 mr-1" aria-hidden="true" />Brova (Trial)</>
                                 ) : (
-                                    <><Shirt className="h-3 w-3 mr-1" />Final</>
+                                    <><Shirt className="h-3 w-3 mr-1" aria-hidden="true" />Final</>
                                 )}
                             </Badge>
                             <Badge
@@ -138,7 +139,7 @@ export function GarmentCollection({ garments, orderId, remainingBalance }: Garme
                                 {stageLabel}
                             </Badge>
                             {g.piece_stage === "completed" && (
-                                <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                                <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" aria-hidden="true" />
                             )}
                         </div>
 
@@ -180,6 +181,7 @@ export function GarmentCollection({ garments, orderId, remainingBalance }: Garme
                         <Checkbox
                             checked={selectedIds.size === eligibleGarments.length && eligibleGarments.length > 0}
                             onCheckedChange={toggleAll}
+                            aria-label="Select all garments"
                         />
                         <span className="text-sm font-medium">
                             Select All Eligible ({eligibleGarments.length})
@@ -187,10 +189,10 @@ export function GarmentCollection({ garments, orderId, remainingBalance }: Garme
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                            <Scissors className="h-3 w-3" /> Brova: {brovaCount}
+                            <Scissors className="h-3 w-3" aria-hidden="true" /> Brova: {brovaCount}
                         </span>
                         <span className="flex items-center gap-1">
-                            <Shirt className="h-3 w-3" /> Final: {finalCount}
+                            <Shirt className="h-3 w-3" aria-hidden="true" /> Final: {finalCount}
                         </span>
                     </div>
                 </div>

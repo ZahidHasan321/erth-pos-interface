@@ -12,7 +12,6 @@ import {
   Hash,
   ChevronRight,
   ChevronDown,
-  Clock,
   RotateCcw,
   MessageSquare,
   Loader2,
@@ -31,7 +30,7 @@ import { getOrdersList, dispatchOrder } from "@/api/orders";
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
-import { cn } from "@/lib/utils";
+import { cn, clickableProps } from "@/lib/utils";
 
 interface OrderWithDetails extends Order {
     customer?: Customer;
@@ -73,116 +72,89 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
     )}>
       <CardContent className="p-0">
         <div
-          className="flex flex-col md:flex-row items-stretch md:items-center min-h-[80px] cursor-pointer"
+          className="cursor-pointer"
           onClick={() => setIsExpanded(!isExpanded)}
+          {...clickableProps(() => setIsExpanded(!isExpanded))}
         >
-
-          {/* 1. Identification Segment */}
-          <div className="flex-1 px-5 py-3 border-r border-border/40 min-w-[200px]">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="p-1.5 rounded-lg transition-colors bg-primary/10 text-primary">
-                <Hash className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">
-                  Order {order.id}
-                </h3>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-0.5">
-                  <span className="text-primary/80">Inv {order.invoice_number || "—"}</span>
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                  <Clock className="w-2.5 h-2.5" />
-                  <span>{orderDate}</span>
+          {/* Desktop (lg+): single row */}
+          <div className="hidden lg:flex items-center min-h-[64px]">
+            <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[180px]">
+              <div className="flex items-center gap-2.5 mb-0.5">
+                <div className="p-1 rounded-md bg-primary/10 text-primary">
+                  <Hash className="w-3 h-3" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Order {order.id}</h3>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+                    <span className="text-primary/80">Inv {order.invoice_number || "—"}</span>
+                    <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                    <span>{orderDate}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            {order.order_phase && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-xs uppercase font-black px-2 py-0.5 border-none shadow-xs",
-                  PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground"
-                )}
-              >
-                {order.order_phase === "new" ? "New" : order.order_phase === "in_progress" ? "In Progress" : order.order_phase === "completed" ? "Completed" : order.order_phase}
-              </Badge>
-            )}
-          </div>
-
-          {/* 2. Customer Info Segment */}
-          <div className="flex-[1.5] px-5 py-3 border-r border-border/40 bg-muted/10">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1 bg-background rounded-full border border-border">
-                  <User className="w-3 h-3 text-muted-foreground" />
-                </div>
-                <span className="text-sm font-bold text-foreground truncate">
-                  {order.customer?.name || "Unknown Customer"}
-                </span>
-              </div>
-              {order.customer?.phone && (
-                <div className="flex items-center gap-2.5 ml-1">
-                  <Phone className="w-2.5 h-2.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">{order.customer.phone}</span>
-                </div>
+              {order.order_phase && (
+                <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
+                  {order.order_phase === "new" ? "New" : order.order_phase === "in_progress" ? "In Progress" : order.order_phase === "completed" ? "Completed" : order.order_phase}
+                </Badge>
               )}
             </div>
-          </div>
-
-          {/* 3. Pieces Info Segment */}
-          <div className="flex-[1.2] px-5 py-3 border-r border-border/40">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Workload</span>
-                <Badge variant="secondary" className="font-black text-xs px-2 py-0.5">{numGarments} Pieces</Badge>
-              </div>
+            <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
               <div className="flex items-center gap-2">
-                {brovaCount > 0 && (
-                  <span className="text-xs font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                    {brovaCount} Brova
-                  </span>
-                )}
-                {finalCount > 0 && (
-                  <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
-                    {finalCount} Final
-                  </span>
-                )}
-                {garments.some(g => g.express) && (
-                  <span className="text-xs font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
-                    Express
-                  </span>
-                )}
+                <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown Customer"}</span>
+                {order.customer?.phone && <span className="text-xs text-muted-foreground font-medium shrink-0">{order.customer.phone}</span>}
               </div>
+            </div>
+            <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{numGarments} Pcs</Badge>
+                {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
+                {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+                {garments.some(g => g.express) && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
+              </div>
+            </div>
+            <div className="w-[180px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+              <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={handleDispatch} disabled={isUpdating}>
+                {isUpdating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><span>Dispatch</span><ChevronRight className="w-3 h-3 ml-1" /></>}
+              </Button>
+              <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0" aria-label={isExpanded ? "Collapse" : "Expand"} aria-expanded={isExpanded}>
+                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+              </button>
             </div>
           </div>
 
-          {/* 4. Action Segment */}
-          <div className="w-full md:w-[200px] md:ml-auto px-5 py-3 flex items-center justify-center gap-3 bg-muted/5">
-            <Button
-              className="w-full h-10 md:h-11 font-bold uppercase tracking-wider shadow-md hover:scale-[1.02] transition-transform"
-              onClick={handleDispatch}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <>
-                  <span>Dispatch</span>
-                  <ChevronRight className="w-3.5 h-3.5 ml-2 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </Button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsExpanded(!isExpanded);
-              }}
-              className="p-2 hover:bg-muted rounded-lg transition-colors shrink-0"
-            >
-              <ChevronDown className={cn(
-                "size-4 text-muted-foreground transition-transform duration-300",
-                isExpanded && "rotate-180"
-              )} />
-            </button>
+          {/* Tablet + Mobile (<lg): compact 2-row grid */}
+          <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-bold shrink-0">#{order.id}</span>
+                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {order.invoice_number || "—"}</span>
+                {order.order_phase && (
+                  <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
+                    {order.order_phase === "new" ? "New" : order.order_phase === "in_progress" ? "In Progress" : "Completed"}
+                  </Badge>
+                )}
+                <div className="w-px h-3.5 bg-border/40 shrink-0" />
+                <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown"}</span>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0" aria-expanded={isExpanded}>
+                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-muted-foreground">{orderDate}</span>
+                {order.customer?.phone && <span className="text-[11px] text-muted-foreground font-medium">{order.customer.phone}</span>}
+                <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{numGarments} Pcs</Badge>
+                {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
+                {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+                {garments.some(g => g.express) && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
+              </div>
+              <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={handleDispatch} disabled={isUpdating}>
+                {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : "Dispatch"}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -363,8 +335,8 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
   if (isError) {
     return (
       <Card className="border-destructive/30 bg-destructive/5">
-        <CardContent className="p-8 text-center">
-          <p className="font-bold text-destructive uppercase tracking-widest mb-4">
+        <CardContent className="p-4 text-center">
+          <p className="font-bold text-destructive uppercase tracking-widest mb-3">
             Error: {error instanceof Error ? error.message : "Fetch Failed"}
           </p>
           <Button variant="outline" className="font-bold" onClick={() => queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] })}>
@@ -377,11 +349,11 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
 
   if (orderGroups.length === 0) {
     return (
-      <div className="py-20 text-center">
-        <div className="inline-flex p-6 bg-muted/30 rounded-full mb-6 border-2 border-dashed border-border">
-          <RotateCcw className="w-12 h-12 text-muted-foreground/40" />
+      <div className="py-10 text-center">
+        <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
+          <RotateCcw className="w-8 h-8 text-muted-foreground/40" />
         </div>
-        <h2 className="text-xl font-bold text-muted-foreground">No Returns Pending</h2>
+        <h2 className="text-base font-bold text-muted-foreground">No Returns Pending</h2>
         <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
           No garments need to be sent back to workshop
         </p>
@@ -586,10 +558,10 @@ export default function DispatchOrderPage() {
 
   return (
     <ErrorBoundary showDetails={true}>
-      <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-6xl">
+      <div className="container mx-auto p-4 md:p-5 space-y-4 max-w-6xl">
         <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-xl font-bold text-foreground">
               Dispatch Center
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -669,8 +641,8 @@ export default function DispatchOrderPage() {
               </div>
             ) : isError ? (
               <Card className="border-destructive/30 bg-destructive/5">
-                <CardContent className="p-8 text-center">
-                   <p className="font-bold text-destructive uppercase tracking-widest mb-4">Error: {error instanceof Error ? error.message : "Fetch Failed"}</p>
+                <CardContent className="p-4 text-center">
+                   <p className="font-bold text-destructive uppercase tracking-widest mb-3">Error: {error instanceof Error ? error.message : "Fetch Failed"}</p>
                    <Button variant="outline" className="font-bold" onClick={() => queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })}>
                       Retry Connection
                    </Button>
@@ -679,11 +651,11 @@ export default function DispatchOrderPage() {
             ) : (
               <div className="space-y-4">
                 {orders.length === 0 ? (
-                  <div className="py-20 text-center">
-                    <div className="inline-flex p-6 bg-muted/30 rounded-full mb-6 border-2 border-dashed border-border">
-                      <PackageCheck className="w-12 h-12 text-muted-foreground/40" />
+                  <div className="py-10 text-center">
+                    <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
+                      <PackageCheck className="w-8 h-8 text-muted-foreground/40" />
                     </div>
-                    <h2 className="text-xl font-bold text-muted-foreground">Queue is Empty</h2>
+                    <h2 className="text-base font-bold text-muted-foreground">Queue is Empty</h2>
                     <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">No pending dispatches at this time</p>
                   </div>
                 ) : (
