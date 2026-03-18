@@ -203,7 +203,7 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
                 <img
                   src={garment.style_image_url}
                   alt={garment.style_name ? formatStyleName(garment.style_name) : "Style"}
-                  className="w-10 h-10 object-contain rounded-md bg-white border shrink-0"
+                  className="w-10 h-10 object-contain rounded-md bg-card border shrink-0"
                 />
               )}
               <div className="flex-1 min-w-0 space-y-0.5 text-xs">
@@ -332,7 +332,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
                   <img
                     src={garment.style_image_url}
                     alt={garment.style_name ? formatStyleName(garment.style_name) : "Style"}
-                    className="w-14 h-14 object-contain rounded-lg bg-white border shrink-0"
+                    className="w-14 h-14 object-contain rounded-lg bg-card border shrink-0"
                   />
                 )}
                 <div className="flex-1 min-w-0 space-y-1">

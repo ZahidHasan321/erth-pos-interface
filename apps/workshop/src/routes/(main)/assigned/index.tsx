@@ -18,7 +18,6 @@ import {
   Clock,
   Zap,
   Package,
-  Timer,
   Home,
   AlertTriangle,
   Truck,
@@ -126,7 +125,7 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
       onClick={onClick}
       {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl shadow-sm border-l-4 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
+        "bg-card border rounded-xl shadow-sm border-l-4 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
         urgency.border || "border-l-border",
         group.express && "ring-1 ring-orange-200",
@@ -170,11 +169,6 @@ function AssignedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () 
                 {daysLabel && <span className="font-bold ml-0.5">({daysLabel})</span>}
               </span>
             )}
-            {group.garments[0]?.assigned_date && (
-              <span className="flex items-center gap-0.5 text-muted-foreground">
-                <Timer className="w-3 h-3" /> Assigned {formatDate(group.garments[0].assigned_date)}
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -214,7 +208,7 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
       onClick={onClick}
       {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl px-4 py-3 shadow-sm cursor-pointer transition-[color,background-color,border-color,box-shadow]",
+        "bg-card border rounded-xl px-4 py-3 shadow-sm cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
         garment.express && "border-orange-200",
         isAlterationIn && "border-l-4 border-l-orange-500",
@@ -268,11 +262,6 @@ function StandaloneGarmentRow({ garment, onClick }: { garment: WorkshopGarment; 
       {/* Row 3: metadata */}
       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
         {garment.invoice_number && <span>INV-{garment.invoice_number}</span>}
-        {garment.assigned_date && (
-          <span className="flex items-center gap-0.5">
-            <Timer className="w-3 h-3" /> Assigned {formatDate(garment.assigned_date)}
-          </span>
-        )}
       </div>
 
       {/* Pipeline */}
@@ -306,8 +295,8 @@ function StatsBar({
 }) {
   return (
     <div className={cn(
-      "grid gap-2 mb-5",
-      stats.length <= 5 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3 sm:grid-cols-7",
+      "grid gap-1.5 mb-3",
+      stats.length <= 5 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-4 sm:grid-cols-7",
     )}>
       {stats.map((s) => {
         const Icon = s.icon;
@@ -316,16 +305,16 @@ function StatsBar({
             key={s.key}
             onClick={() => onFilter(s.key)}
             className={cn(
-              "border rounded-xl p-2 text-center transition-[color,background-color,border-color,box-shadow]",
+              "border rounded-lg px-2 py-1.5 text-center transition-[color,background-color,border-color,box-shadow]",
               s.color,
               filter === s.key
-                ? "ring-2 ring-primary/40 shadow-md scale-[1.02]"
-                : "shadow-sm hover:shadow-md",
+                ? "ring-2 ring-primary/40 shadow-md"
+                : "hover:shadow-sm",
             )}
           >
-            <Icon className="w-3.5 h-3.5 mx-auto mb-0.5 opacity-60" />
-            <p className="text-lg font-black leading-none">{s.value}</p>
-            <p className="text-xs mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
+            <Icon className="w-3 h-3 mx-auto mb-0.5 opacity-60" />
+            <p className="text-base font-black leading-none">{s.value}</p>
+            <p className="text-[10px] mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
           </button>
         );
       })}
@@ -357,7 +346,20 @@ function AssignedPage() {
     (((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
      ((g.trip_number ?? 0) >= 2 && g.garment_type === "final")),
   );
-  const orderGroups = groupByOrder(regular);
+  const orderGroupsUnsorted = groupByOrder(regular);
+
+  // Sort: overdue first, then due soon, then express, then delivery date asc
+  const orderGroups = [...orderGroupsUnsorted].sort((a, b) => {
+    const now = Date.now();
+    const daysA = a.delivery_date ? Math.ceil((new Date(a.delivery_date).getTime() - now) / 86400000) : 999;
+    const daysB = b.delivery_date ? Math.ceil((new Date(b.delivery_date).getTime() - now) / 86400000) : 999;
+    const overdueA = daysA < 0 ? 1 : 0;
+    const overdueB = daysB < 0 ? 1 : 0;
+    if (overdueA !== overdueB) return overdueB - overdueA;
+    if (a.express && !b.express) return -1;
+    if (!a.express && b.express) return 1;
+    return daysA - daysB;
+  });
 
   // Order-level classifications
   const scheduled = orderGroups.filter((og) =>
@@ -482,11 +484,11 @@ function AssignedPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-10">
-      <div className="mb-5">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          <ClipboardList className="w-6 h-6" /> Production Tracker
+      <div className="mb-4">
+        <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+          <ClipboardList className="w-5 h-5" /> Production Tracker
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-0.5">
           {all.length} garment{all.length !== 1 ? "s" : ""} across {orderGroups.length} order{orderGroups.length !== 1 ? "s" : ""}
           {brovaReturns.length > 0 && <> &middot; {brovaReturns.length} brova return{brovaReturns.length !== 1 ? "s" : ""}</>}
           {alterations.length > 0 && <> &middot; {alterations.length} alteration{alterations.length !== 1 ? "s" : ""}</>}
@@ -494,7 +496,7 @@ function AssignedPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="mb-4">
+        <TabsList className="mb-3 flex-nowrap overflow-x-auto">
           <TabsTrigger value="orders">
             Orders <Badge variant="secondary" className="ml-1 text-xs">{orderGroups.length}</Badge>
           </TabsTrigger>
@@ -522,8 +524,8 @@ function AssignedPage() {
           {isLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
           ) : filteredOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-              <ClipboardList className="w-10 h-10 text-muted-foreground/30 mb-3" />
+            <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
+              <ClipboardList className="w-8 h-8 text-muted-foreground/20 mb-3" />
               <p className="font-semibold text-muted-foreground">No orders match this filter</p>
             </div>
           ) : (
@@ -550,8 +552,8 @@ function AssignedPage() {
 
         <TabsContent value="brova-returns" className="mt-0">
           {filteredReturns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-              <RotateCcw className="w-10 h-10 text-muted-foreground/30 mb-3" />
+            <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
+              <RotateCcw className="w-8 h-8 text-muted-foreground/20 mb-3" />
               <p className="font-semibold text-muted-foreground">
                 {returnFilter === "all" ? "No brova returns in production" : "No returns match this filter"}
               </p>
@@ -576,8 +578,8 @@ function AssignedPage() {
 
         <TabsContent value="alterations" className="mt-0">
           {filteredAlterations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-              <RotateCcw className="w-10 h-10 text-muted-foreground/30 mb-3" />
+            <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
+              <RotateCcw className="w-8 h-8 text-muted-foreground/20 mb-3" />
               <p className="font-semibold text-muted-foreground">
                 {alterationFilter === "all" ? "No alterations in production" : "No alterations match this filter"}
               </p>

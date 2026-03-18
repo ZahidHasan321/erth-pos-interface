@@ -28,7 +28,7 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
       onClick={onClick}
       {...clickableProps(onClick)}
       className={cn(
-        "bg-white border rounded-xl shadow-sm border-l-4 border-l-green-400 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
+        "bg-card border rounded-xl shadow-sm border-l-4 border-l-green-400 cursor-pointer transition-[color,background-color,border-color,box-shadow]",
         "hover:border-primary/50 hover:shadow-md active:bg-muted/30",
       )}
     >
@@ -78,7 +78,12 @@ function CompletedOrdersPage() {
   const { data: all = [], isLoading } = useCompletedOrders();
   const navigate = useNavigate();
 
-  const orderGroups = groupByOrder(all);
+  const orderGroups = groupByOrder(all).sort((a, b) => {
+    // Most recent delivery date first
+    const dateA = a.delivery_date ?? "";
+    const dateB = b.delivery_date ?? "";
+    return dateB.localeCompare(dateA);
+  });
   const pagination = usePagination(orderGroups, 20);
 
   const handleOrderClick = (orderId: number) => {
@@ -87,11 +92,11 @@ function CompletedOrdersPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-10">
-      <div className="mb-5">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          <CheckCircle2 className="w-6 h-6 text-green-600" /> Completed Orders
+      <div className="mb-4">
+        <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-green-600" /> Completed Orders
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-0.5">
           {orderGroups.length} order{orderGroups.length !== 1 ? "s" : ""} fully completed
         </p>
       </div>
@@ -101,8 +106,8 @@ function CompletedOrdersPage() {
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
         </div>
       ) : orderGroups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl">
-          <CheckCircle2 className="w-10 h-10 text-muted-foreground/30 mb-3" />
+        <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
+          <CheckCircle2 className="w-8 h-8 text-muted-foreground/20 mb-3" />
           <p className="font-semibold text-muted-foreground">No completed orders yet</p>
         </div>
       ) : (

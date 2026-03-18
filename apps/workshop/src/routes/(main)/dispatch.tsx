@@ -25,9 +25,18 @@ function DispatchPage() {
   // Ready garments at workshop — includes accepted/completed garments that ended up back here
   const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed", "completed", "ready_for_pickup"]);
   const readyGarments = useMemo(
-    () => allGarments.filter(
-      (g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""),
-    ),
+    () => allGarments
+      .filter((g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""))
+      .sort((a, b) => {
+        if (a.express && !b.express) return -1;
+        if (!a.express && b.express) return 1;
+        const dateA = a.delivery_date_order ?? "";
+        const dateB = b.delivery_date_order ?? "";
+        if (dateA && dateB) return dateA.localeCompare(dateB);
+        if (dateA && !dateB) return -1;
+        if (!dateA && dateB) return 1;
+        return 0;
+      }),
     [allGarments],
   );
 
@@ -69,13 +78,13 @@ function DispatchPage() {
         subtitle={`${readyGarments.length} garment${readyGarments.length !== 1 ? "s" : ""} ready for dispatch`}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         <StatsCard icon={Package} value={readyGarments.length} label="Ready" color="green" />
         <StatsCard icon={ArrowRightLeft} value={inTransitGarments.length} label="In Transit" color="blue" dimOnZero />
       </div>
 
       <Tabs defaultValue="ready">
-        <TabsList className="mb-4">
+        <TabsList className="mb-3 flex-nowrap overflow-x-auto">
           <TabsTrigger value="ready">
             Ready{" "}
             <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-700">
@@ -97,7 +106,7 @@ function DispatchPage() {
           ) : readyGarments.length === 0 ? (
             <EmptyState icon={Package} message="No garments ready for dispatch" />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {readyGarments.map((g) => (
                 <GarmentCard
                   key={g.id}
@@ -139,7 +148,7 @@ function DispatchPage() {
           {inTransitGarments.length === 0 ? (
             <EmptyState icon={Truck} message="Nothing in transit" />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {inTransitGarments.map((g) => (
                 <GarmentCard
                   key={g.id}

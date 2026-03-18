@@ -12,8 +12,8 @@ export function WorkshopLayout({ onLogout }: WorkshopLayoutProps) {
       <div className="flex h-screen w-screen">
         <WorkshopSidebar onLogout={onLogout} />
         <SidebarInset className="flex-1 flex flex-col min-w-0">
-          {/* Mobile header — visible only below md */}
-          <header className="flex md:hidden items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
+          {/* Header with sidebar trigger — visible below xl (sheet sidebar on tablets/small laptops) */}
+          <header className="flex xl:hidden items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
             <SidebarTrigger className="size-8" />
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs">

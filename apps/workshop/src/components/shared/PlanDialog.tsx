@@ -32,7 +32,7 @@ const STAGE_TO_STEP_INDEX: Record<string, number> = {
 interface PlanDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (plan: Record<string, string>, date: string, unit?: string, reentryStage?: string) => void;
+  onConfirm: (plan: Record<string, string>, date: string, unit?: string, reentryStage?: string, deliveryDate?: string) => void;
   garmentCount?: number;
   defaultDate?: string;
   isAlteration?: boolean;
@@ -41,6 +41,9 @@ interface PlanDialogProps {
   confirmLabel?: string;
   /** True if any garment in the batch needs soaking */
   hasSoaking?: boolean;
+  /** Show delivery date field — for per-garment editing */
+  showDeliveryDate?: boolean;
+  defaultDeliveryDate?: string;
 }
 
 // ── Workload bar ─────────────────────────────────────────────────────────────
@@ -136,7 +139,7 @@ function WorkerSelect({
                   ? "border-primary bg-primary text-white shadow-sm"
                   : isOverloaded
                     ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
+                    : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
               )}
             >
               {isSelected && <Check className="w-3 h-3 shrink-0" />}
@@ -177,12 +180,13 @@ function WorkerSelect({
 
 // ── Main dialog ──────────────────────────────────────────────────────────────
 
-export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking }: PlanDialogProps) {
+export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate }: PlanDialogProps) {
   const { data: resources = [] } = useResources();
   const { data: allGarments = [] } = useWorkshopGarments();
 
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
+  const [deliveryDate, setDeliveryDate] = useState(defaultDeliveryDate ?? "");
   const [date, setDate] = useState(defaultDate ?? getLocalDateStr());
   const [reentryStage, setReentryStage] = useState<string>("sewing");
 
@@ -232,6 +236,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
     if (open) {
       setPlan(defaultPlan ? { ...defaultPlan } : {});
       setDate(defaultDate ?? getLocalDateStr());
+      setDeliveryDate(defaultDeliveryDate ?? "");
       setReentryStage("sewing");
 
       const units: Record<string, string> = {};
@@ -280,7 +285,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
     for (const step of visibleSteps) {
       if (plan[step.key]) finalPlan[step.key] = plan[step.key];
     }
-    onConfirm(finalPlan, date, undefined, isAlteration ? reentryStage : undefined);
+    onConfirm(finalPlan, date, undefined, isAlteration ? reentryStage : undefined, showDeliveryDate ? deliveryDate : undefined);
     onOpenChange(false);
   };
 
@@ -288,7 +293,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white border-b px-5 pt-5 pb-3">
+        <div className="sticky top-0 z-10 bg-card border-b px-5 pt-5 pb-3">
           <DialogHeader>
             <DialogTitle className="text-lg">{title ?? (isAlteration ? "Alteration Plan" : "Production Plan")}</DialogTitle>
           </DialogHeader>
@@ -298,8 +303,8 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
             </p>
           )}
 
-          {/* Date + re-entry */}
-          <div className={cn("mt-3 grid gap-3", isAlteration ? "grid-cols-2" : "grid-cols-1")}>
+          {/* Date + re-entry + delivery */}
+          <div className={cn("mt-3 grid gap-3", isAlteration ? "grid-cols-2" : showDeliveryDate ? "grid-cols-2" : "grid-cols-1")}>
             <div className="space-y-1">
               <Label className="text-xs font-medium">Assigned Date <span className="text-red-500">*</span></Label>
               <DatePicker
@@ -308,6 +313,16 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 className="h-8 text-sm"
               />
             </div>
+            {showDeliveryDate && (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Delivery Date</Label>
+                <DatePicker
+                  value={deliveryDate}
+                  onChange={(d) => setDeliveryDate(d ? toLocalDateStr(d) ?? "" : "")}
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
             {isAlteration && (
               <div className="space-y-1">
                 <Label className="text-xs font-medium">Re-entry Stage <span className="text-red-500">*</span></Label>
@@ -366,10 +381,10 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 <div className={cn(
                   "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
                   isFilled
-                    ? "border-zinc-300 bg-white"
+                    ? "border-zinc-300 bg-card"
                     : !step.required
                       ? "border-dashed border-zinc-200 bg-zinc-50/50"
-                      : "border-zinc-200 bg-white",
+                      : "border-zinc-200 bg-card",
                 )}>
                   {/* Step header */}
                   <div className="flex items-center gap-2.5 mb-2.5">
@@ -432,7 +447,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                                   "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                                   unitSelections[step.key] === u
                                     ? "border-primary bg-primary/5 text-primary"
-                                    : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300",
+                                    : "border-zinc-200 bg-card text-zinc-600 hover:border-zinc-300",
                                 )}
                               >
                                 {u}
@@ -465,7 +480,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t px-5 py-3 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-card border-t px-5 py-3 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleConfirm} disabled={!canSubmit}>
             {confirmLabel ?? "Schedule"}

@@ -113,7 +113,7 @@ function ParkingOrderCard({
     <>
     <div
       className={cn(
-        "bg-white border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-all shadow-sm border-l-4",
         group.express
           ? "border-l-orange-400 ring-1 ring-orange-200"
           : allParked
@@ -204,7 +204,7 @@ function ParkingOrderCard({
       {expanded && (
         <div className="border-t bg-muted/20 px-4 py-2.5 space-y-1.5">
           {group.garments.map((g) => (
-            <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2">
+            <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2">
               <GarmentTypeBadge type={g.garment_type ?? "final"} />
               <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
             </div>
@@ -257,7 +257,7 @@ function WaitingFinalsCard({
   return (
     <div
       className={cn(
-        "bg-white border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-all shadow-sm border-l-4",
         group.express
           ? "border-l-orange-400 ring-1 ring-orange-200"
           : "border-l-amber-400",
@@ -380,7 +380,7 @@ function WaitingFinalsCard({
       {expanded && (
         <div className="border-t bg-muted/20 px-4 py-3 space-y-2">
           {group.garments.map((g) => (
-            <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2 flex-wrap">
+            <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
                 {g.garment_id ?? g.id.slice(0, 8)}
               </span>
@@ -546,7 +546,7 @@ function ReleaseFinalsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-0 overflow-hidden">
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b bg-white">
+        <div className="px-5 pt-5 pb-3 border-b bg-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Unlock className="w-5 h-5 text-green-600" />
@@ -568,7 +568,7 @@ function ReleaseFinalsDialog({
             <DatePicker
               value={date}
               onChange={(d) => setDate(d ? toLocalDateStr(d) ?? "" : "")}
-              className="h-9 text-sm font-semibold bg-white"
+              className="h-9 text-sm font-semibold bg-card"
             />
           </div>
 
@@ -600,7 +600,7 @@ function ReleaseFinalsDialog({
                 return (
                   <div key={step.key} className={cn(
                     "border rounded-lg transition-all",
-                    isEditing ? "border-primary bg-primary/5" : "border-zinc-200 bg-white",
+                    isEditing ? "border-primary bg-primary/5" : "border-zinc-200 bg-card",
                   )}>
                     {/* Row: icon + label + unit + worker + edit button */}
                     <div
@@ -666,7 +666,7 @@ function ReleaseFinalsDialog({
                                     "active:scale-95",
                                     selectedUnit === u
                                       ? "border-primary bg-primary text-white shadow-md"
-                                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:shadow-md",
+                                      : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-400 hover:shadow-md",
                                   )}
                                 >
                                   {u}
@@ -705,7 +705,7 @@ function ReleaseFinalsDialog({
                                       ? "border-primary bg-primary text-white shadow-md"
                                       : isOver
                                         ? "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:shadow-md"
-                                        : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:shadow-md",
+                                        : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-400 hover:shadow-md",
                                   )}
                                 >
                                   {r.resource_name}
@@ -745,7 +745,7 @@ function ReleaseFinalsDialog({
         </div>
 
         {/* Footer */}
-        <div className="border-t bg-white px-5 py-3 flex items-center justify-between gap-3">
+        <div className="border-t bg-card px-5 py-3 flex items-center justify-between gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             className="bg-green-600 hover:bg-green-700 flex-1 max-w-[200px]"
@@ -801,7 +801,12 @@ function ParkingPage() {
   const parked = allGarments.filter((g) => g.location === "workshop" && !g.in_production);
   const ordersGarments = parked.filter((g) => (g.trip_number ?? 1) === 1);
   const returnsGarments = parked.filter((g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted");
-  const orderGroups = groupByOrder(ordersGarments);
+  const orderGroups = groupByOrder(ordersGarments).sort((a, b) => {
+    if (a.delivery_date && b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
+    if (a.delivery_date && !b.delivery_date) return -1;
+    if (!a.delivery_date && b.delivery_date) return 1;
+    return 0;
+  });
 
   // Build lookup of ALL garments per order (including in_production ones) for brova status
   const allGarmentsByOrder = new Map<number, WorkshopGarment[]>();
@@ -1104,7 +1109,7 @@ function ParkingPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="mb-4 h-auto flex-wrap gap-1">
+        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto">
           <TabsTrigger value="orders">
             Orders{" "}
             <Badge variant="secondary" className="ml-1 text-xs">

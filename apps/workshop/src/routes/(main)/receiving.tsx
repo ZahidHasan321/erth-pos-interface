@@ -54,7 +54,7 @@ function OrderCard({
     <>
     <div
       className={cn(
-        "bg-white border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
         group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
@@ -133,7 +133,7 @@ function OrderCard({
       {expanded && (
         <div className="border-t bg-muted/20 px-4 py-2.5 space-y-1.5">
           {group.garments.map((g) => (
-            <div key={g.id} className="bg-white rounded-lg border p-2 flex items-center gap-2">
+            <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2">
               <GarmentTypeBadge type={g.garment_type ?? "final"} />
               <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
               {g.express && <ExpressBadge />}
@@ -167,7 +167,14 @@ function ReceivingPage() {
       ((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
       ((g.trip_number ?? 0) >= 2 && g.garment_type === "final"),
   );
-  const incomingOrders = groupByOrder(incoming);
+  const incomingOrders = groupByOrder(incoming).sort((a, b) => {
+    if (a.express && !b.express) return -1;
+    if (!a.express && b.express) return 1;
+    if (a.delivery_date && b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
+    if (a.delivery_date && !b.delivery_date) return -1;
+    if (!a.delivery_date && b.delivery_date) return 1;
+    return 0;
+  });
 
   // Selection state per tab (Incoming selects at order level)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
@@ -246,14 +253,14 @@ function ReceivingPage() {
       />
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-2.5 mb-6">
+      <div className="grid grid-cols-3 gap-2 mb-3">
         <StatsCard icon={Inbox} value={incomingOrders.length} label="Incoming" color="blue" />
         <StatsCard icon={Package} value={brovaReturns.length} label="Brova Returns" color="purple" />
         <StatsCard icon={Clock} value={alterationIn.length} label="Alteration In" color="orange" dimOnZero />
       </div>
 
       <Tabs defaultValue="incoming">
-        <TabsList className="mb-4 h-auto flex-wrap gap-1">
+        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto">
           <TabsTrigger value="incoming">
             Incoming{" "}
             <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
@@ -287,7 +294,7 @@ function ReceivingPage() {
           ) : incomingOrders.length === 0 ? (
             <EmptyState icon={Inbox} message="No incoming orders" />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {incomingOrders.map((group) => (
                 <OrderCard
                   key={group.order_id}
@@ -330,7 +337,7 @@ function ReceivingPage() {
           ) : brovaReturns.length === 0 ? (
             <EmptyState icon={Package} message="No brova returns in transit" />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {brovaReturns.map((g, i) => (
                 <GarmentCard
                   key={g.id}
@@ -402,7 +409,7 @@ function ReceivingPage() {
           ) : alterationIn.length === 0 ? (
             <EmptyState icon={Clock} message="No alteration returns in transit" />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {alterationIn.map((g, i) => (
                 <GarmentCard
                   key={g.id}

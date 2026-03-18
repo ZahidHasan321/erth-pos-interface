@@ -4,20 +4,20 @@ import { cn } from "@/lib/utils";
 import type { PieceStage } from "@repo/database";
 
 const STAGE_COLOR: Record<string, string> = {
-  waiting_for_acceptance: "bg-zinc-200 text-zinc-800",
-  waiting_cut:            "bg-zinc-200 text-zinc-800",
-  soaking:                "bg-sky-200 text-sky-900",
-  cutting:                "bg-amber-200 text-amber-900",
-  post_cutting:           "bg-amber-300 text-amber-950",
-  sewing:                 "bg-orange-200 text-orange-900",
-  finishing:              "bg-violet-200 text-violet-900",
-  ironing:                "bg-rose-200 text-rose-900",
-  quality_check:          "bg-yellow-200 text-yellow-900",
-  ready_for_dispatch:     "bg-emerald-200 text-emerald-900",
-  awaiting_trial:         "bg-blue-200 text-blue-900",
-  ready_for_pickup:       "bg-emerald-200 text-emerald-900",
-  brova_trialed:          "bg-purple-200 text-purple-900",
-  completed:              "bg-slate-200 text-slate-800",
+  waiting_for_acceptance: "bg-zinc-100 text-zinc-700",
+  waiting_cut:            "bg-zinc-100 text-zinc-700",
+  soaking:                "bg-sky-100 text-sky-800",
+  cutting:                "bg-amber-100 text-amber-800",
+  post_cutting:           "bg-orange-100 text-orange-800",
+  sewing:                 "bg-purple-100 text-purple-800",
+  finishing:              "bg-emerald-100 text-emerald-800",
+  ironing:                "bg-rose-100 text-rose-800",
+  quality_check:          "bg-indigo-100 text-indigo-800",
+  ready_for_dispatch:     "bg-green-100 text-green-800",
+  awaiting_trial:         "bg-blue-100 text-blue-800",
+  ready_for_pickup:       "bg-green-100 text-green-800",
+  brova_trialed:          "bg-violet-100 text-violet-800",
+  completed:              "bg-slate-100 text-slate-700",
 };
 
 interface StageBadgeProps {

@@ -62,7 +62,7 @@ export function DishdashaOverlay({ garment, measurement }: DishdashaOverlayProps
   const jabzourSecondary = isShaab && g.jabzour_2 ? STYLE_IMAGE_MAP[g.jabzour_2] : null;
 
   return (
-      <div className="bg-white border rounded-xl overflow-hidden print:border-none print:rounded-none">
+      <div className="bg-card border rounded-xl overflow-hidden print:border-none print:rounded-none">
         <div className="flex">
 
           {/* Dishdasha diagram */}

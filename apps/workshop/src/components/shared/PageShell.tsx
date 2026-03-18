@@ -13,13 +13,13 @@ interface PageHeaderProps {
 
 export function PageHeader({ icon: Icon, title, subtitle, children }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex items-end justify-between gap-4">
+    <div className="mb-4 flex items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2.5">
-          <Icon className="w-6 h-6" aria-hidden="true" /> {title}
+        <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+          <Icon className="w-5 h-5" aria-hidden="true" /> {title}
         </h1>
         {subtitle && (
-          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         )}
       </div>
       {children}
@@ -39,14 +39,14 @@ interface StatsCardProps {
 }
 
 const STAT_COLORS = {
-  blue:    { bg: "bg-blue-50/80",    border: "border-blue-200/60",    text: "text-blue-700",    label: "text-blue-600/70",    icon: "text-blue-600" },
-  purple:  { bg: "bg-purple-50/80",  border: "border-purple-200/60",  text: "text-purple-700",  label: "text-purple-600/70",  icon: "text-purple-600" },
-  orange:  { bg: "bg-orange-50/80",  border: "border-orange-200/60",  text: "text-orange-700",  label: "text-orange-600/70",  icon: "text-orange-600" },
-  green:   { bg: "bg-green-50/80",   border: "border-green-200/60",   text: "text-green-700",   label: "text-green-600/70",   icon: "text-green-600" },
-  red:     { bg: "bg-red-50/80",     border: "border-red-200/60",     text: "text-red-700",     label: "text-red-600/70",     icon: "text-red-600" },
-  emerald: { bg: "bg-emerald-50/80", border: "border-emerald-200/60", text: "text-emerald-700", label: "text-emerald-600/70", icon: "text-emerald-600" },
-  amber:   { bg: "bg-amber-50/80",   border: "border-amber-200/60",   text: "text-amber-700",   label: "text-amber-600/70",   icon: "text-amber-600" },
-  zinc:    { bg: "bg-zinc-50/80",    border: "border-zinc-200/60",    text: "text-zinc-500",    label: "text-zinc-400",       icon: "text-zinc-400" },
+  blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    label: "text-blue-600/80",    icon: "text-blue-600" },
+  purple:  { bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-700",  label: "text-purple-600/80",  icon: "text-purple-600" },
+  orange:  { bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-700",  label: "text-orange-600/80",  icon: "text-orange-600" },
+  green:   { bg: "bg-green-50",   border: "border-green-200",   text: "text-green-700",   label: "text-green-600/80",   icon: "text-green-600" },
+  red:     { bg: "bg-red-50",     border: "border-red-200",     text: "text-red-700",     label: "text-red-600/80",     icon: "text-red-600" },
+  emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", label: "text-emerald-600/80", icon: "text-emerald-600" },
+  amber:   { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700",   label: "text-amber-600/80",   icon: "text-amber-600" },
+  zinc:    { bg: "bg-zinc-50",    border: "border-zinc-200",    text: "text-zinc-500",    label: "text-zinc-400",       icon: "text-zinc-400" },
 } as const;
 
 export function StatsCard({ icon: Icon, value, label, color, dimOnZero }: StatsCardProps) {
@@ -54,10 +54,10 @@ export function StatsCard({ icon: Icon, value, label, color, dimOnZero }: StatsC
   const c = isDimmed ? STAT_COLORS.zinc : STAT_COLORS[color];
 
   return (
-    <div className={cn("rounded-xl p-3 text-center border shadow-sm", c.bg, c.border)}>
-      <Icon className={cn("w-4 h-4 mx-auto mb-1 opacity-60", c.icon)} aria-hidden="true" />
-      <p className={cn("text-2xl font-black tabular-nums leading-none", c.text)}>{value}</p>
-      <p className={cn("text-xs font-bold uppercase tracking-wider mt-1", c.label)}>{label}</p>
+    <div className={cn("rounded-lg px-3 py-2 text-center border", c.bg, c.border)}>
+      <Icon className={cn("w-3.5 h-3.5 mx-auto mb-0.5 opacity-60", c.icon)} aria-hidden="true" />
+      <p className={cn("text-xl font-black tabular-nums leading-none", c.text)}>{value}</p>
+      <p className={cn("text-[10px] font-bold uppercase tracking-wider mt-0.5", c.label)}>{label}</p>
     </div>
   );
 }
@@ -75,16 +75,16 @@ export function EmptyState({ icon: IconOrNode, message }: EmptyStateProps) {
     || typeof IconOrNode === "function";
 
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-2xl bg-muted/10 animate-fade-in">
+    <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5 animate-fade-in">
       {isComponent ? (
         (() => {
           const Icon = IconOrNode as LucideIcon;
-          return <Icon className="w-10 h-10 text-muted-foreground/20 mb-3" />;
+          return <Icon className="w-8 h-8 text-muted-foreground/20 mb-2" />;
         })()
       ) : IconOrNode ? (
-        <div className="opacity-20 mb-3 scale-150">{IconOrNode}</div>
+        <div className="opacity-20 mb-2 scale-125">{IconOrNode}</div>
       ) : null}
-      <p className="font-semibold text-muted-foreground/70">{message}</p>
+      <p className="text-sm font-medium text-muted-foreground/50">{message}</p>
     </div>
   );
 }

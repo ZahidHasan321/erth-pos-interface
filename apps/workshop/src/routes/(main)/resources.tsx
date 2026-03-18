@@ -259,15 +259,15 @@ function StageGroups({
 
             {/* Table rows — collapsible */}
             {!isCollapsed && (
-              <div className="bg-white">
+              <div className="bg-card">
                 {workers.length === 0 ? (
                   <div className="px-4 py-5 text-xs text-muted-foreground/40 text-center italic">
                     No workers assigned to {stage.label.toLowerCase()}
                   </div>
                 ) : (
                   <>
-                    {/* Column headers */}
-                    <div className="grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2 border-b bg-muted/30 text-[11px] font-black uppercase tracking-widest text-muted-foreground/60">
+                    {/* Column headers — hidden on small tablets, visible on wider screens */}
+                    <div className="hidden md:grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2 border-b bg-muted/30 text-[11px] font-black uppercase tracking-widest text-muted-foreground/60">
                       <span>Worker</span>
                       <span>Unit</span>
                       <span>Type</span>
@@ -278,73 +278,134 @@ function StageGroups({
                     {workers.map((w) => (
                       <div
                         key={w.id}
-                        className="grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
                         onClick={() => onEdit(w)}
+                        className="border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={cn(
-                            "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 border",
-                            w.resource_type === "Senior"
-                              ? "bg-amber-50 text-amber-700 border-amber-300"
-                              : "bg-muted/50 text-muted-foreground border-transparent",
-                          )}>
-                            {w.resource_name.charAt(0)}
-                          </div>
-                          <span className="text-sm font-semibold truncate">{w.resource_name}</span>
-                        </div>
-
-                        <span className="text-xs text-muted-foreground font-medium truncate">
-                          {w.unit ?? "—"}
-                        </span>
-
-                        <div>
-                          {w.resource_type ? (
-                            <span className={cn(
-                              "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
-                              w.resource_type === "Senior" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600",
+                        {/* Wide layout (md+) — table row */}
+                        <div className="hidden md:grid grid-cols-[1fr_100px_80px_80px_80px_72px] gap-2 px-4 py-2.5 items-center">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={cn(
+                              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 border",
+                              w.resource_type === "Senior"
+                                ? "bg-amber-50 text-amber-700 border-amber-300"
+                                : "bg-muted/50 text-muted-foreground border-transparent",
                             )}>
-                              {w.resource_type}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground/30">—</span>
-                          )}
+                              {w.resource_name.charAt(0)}
+                            </div>
+                            <span className="text-sm font-semibold truncate">{w.resource_name}</span>
+                          </div>
+
+                          <span className="text-xs text-muted-foreground font-medium truncate">
+                            {w.unit ?? "—"}
+                          </span>
+
+                          <div>
+                            {w.resource_type ? (
+                              <span className={cn(
+                                "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
+                                w.resource_type === "Senior" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600",
+                              )}>
+                                {w.resource_type}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/30">—</span>
+                            )}
+                          </div>
+
+                          <span className="text-sm font-bold tabular-nums text-right">
+                            {w.daily_target ? (
+                              <>{w.daily_target}<span className="text-muted-foreground/40 font-normal">/d</span></>
+                            ) : (
+                              <span className="text-muted-foreground/30">—</span>
+                            )}
+                          </span>
+
+                          <div className="flex items-center justify-end gap-0.5">
+                            {w.rating ? (
+                              <>
+                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                <span className="text-sm font-bold tabular-nums">{w.rating}</span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/30">—</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-end gap-0.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEdit(w); }}
+                              aria-label={`Edit ${w.resource_name}`}
+                              className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.resource_name); }}
+                              disabled={deleting}
+                              aria-label={`Delete ${w.resource_name}`}
+                              className="p-1.5 rounded-md text-muted-foreground/30 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                          </div>
                         </div>
 
-                        <span className="text-sm font-bold tabular-nums text-right">
-                          {w.daily_target ? (
-                            <>{w.daily_target}<span className="text-muted-foreground/40 font-normal">/d</span></>
-                          ) : (
-                            <span className="text-muted-foreground/30">—</span>
-                          )}
-                        </span>
-
-                        <div className="flex items-center justify-end gap-0.5">
-                          {w.rating ? (
-                            <>
-                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              <span className="text-sm font-bold tabular-nums">{w.rating}</span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground/30">—</span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-end gap-0.5">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onEdit(w); }}
-                            aria-label={`Edit ${w.resource_name}`}
-                            className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.resource_name); }}
-                            disabled={deleting}
-                            aria-label={`Delete ${w.resource_name}`}
-                            className="p-1.5 rounded-md text-muted-foreground/30 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
+                        {/* Compact card layout (below md) — stacked for tablets */}
+                        <div className="md:hidden px-4 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={cn(
+                                "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 border",
+                                w.resource_type === "Senior"
+                                  ? "bg-amber-50 text-amber-700 border-amber-300"
+                                  : "bg-muted/50 text-muted-foreground border-transparent",
+                              )}>
+                                {w.resource_name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-sm font-semibold truncate block">{w.resource_name}</span>
+                                <span className="text-xs text-muted-foreground">{w.unit ?? "No unit"}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onEdit(w); }}
+                                aria-label={`Edit ${w.resource_name}`}
+                                className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.resource_name); }}
+                                disabled={deleting}
+                                aria-label={`Delete ${w.resource_name}`}
+                                className="p-1.5 rounded-md text-muted-foreground/30 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            {w.resource_type && (
+                              <span className={cn(
+                                "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
+                                w.resource_type === "Senior" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600",
+                              )}>
+                                {w.resource_type}
+                              </span>
+                            )}
+                            {w.daily_target && (
+                              <span className="text-xs font-bold tabular-nums text-muted-foreground">
+                                <Target className="w-3 h-3 inline mr-0.5" />{w.daily_target}/d
+                              </span>
+                            )}
+                            {w.rating && (
+                              <span className="flex items-center gap-0.5 text-xs">
+                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                <span className="font-bold tabular-nums">{w.rating}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -433,12 +494,12 @@ function ResourcesPage() {
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2.5">
-            <Users className="w-6 h-6" /> Workshop Team
+          <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+            <Users className="w-5 h-5" /> Workshop Team
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {resources.length} worker{resources.length !== 1 ? "s" : ""} across {STAGES.length} stages
           </p>
         </div>
@@ -448,7 +509,7 @@ function ResourcesPage() {
       </div>
 
       {/* Summary strip */}
-      <div className="flex items-center gap-4 flex-wrap mb-6 px-4 py-3 bg-white border rounded-xl shadow-sm">
+      <div className="flex items-center gap-4 flex-wrap mb-4 px-4 py-2.5 bg-card border rounded-lg">
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-emerald-600" />
           <span className="text-sm font-bold tabular-nums">{stats.totalCapacity}</span>

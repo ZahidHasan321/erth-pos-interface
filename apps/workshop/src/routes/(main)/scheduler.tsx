@@ -3,14 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useSchedulerGarments, useBrovaPlans, useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
-import { GarmentCard } from "@/components/shared/GarmentCard";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
-import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { BrandBadge } from "@/components/shared/StageBadge";
 import {
-  PageHeader, StatsCard, EmptyState, LoadingSkeleton,
-  GarmentTypeBadge,
+  PageHeader, EmptyState, LoadingSkeleton,
 } from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +17,8 @@ import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, clickableProps, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Clock, Package, CheckSquare, Home, User, Zap, AlertTriangle, Eye,
+  CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
+  Clock, Package, CheckSquare, Home, User, AlertTriangle, Eye,
   Calendar, BarChart3,
 } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
@@ -33,6 +31,73 @@ export const Route = createFileRoute("/(main)/scheduler")({
 
 function toIsoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// ── Lightweight garment row for brova returns / alterations ──────────────────
+
+function SchedulerGarmentRow({
+  garment: g,
+  selected,
+  onSelect,
+}: {
+  garment: WorkshopGarment;
+  selected: boolean;
+  onSelect: (id: string, checked: boolean) => void;
+}) {
+  const daysLeft = g.delivery_date_order
+    ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
+    : null;
+  const isOverdue = daysLeft !== null && daysLeft < 0;
+  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+  const daysLabel = daysLeft !== null
+    ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`
+    : null;
+
+  return (
+    <div
+      className={cn(
+        "bg-card border rounded-lg px-3 py-2 flex items-center gap-2 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
+        "hover:bg-muted/20 active:scale-[0.99]",
+        g.express && "border-l-[3px] border-l-orange-400",
+        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
+      )}
+      onClick={() => onSelect(g.id, !selected)}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={(e) => { e.stopPropagation(); onSelect(g.id, e.target.checked); }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+      />
+      <span className={cn(
+        "font-bold uppercase text-[10px] px-1 py-0.5 rounded shrink-0",
+        g.garment_type === "brova" ? "text-purple-700 bg-purple-50" : "text-blue-700 bg-blue-50",
+      )}>
+        {g.garment_type === "brova" ? "B" : "F"}
+      </span>
+      <span className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
+      <span className="text-xs text-muted-foreground truncate">
+        {g.customer_name ?? "—"}
+      </span>
+      <div className="flex items-center gap-1 ml-auto shrink-0">
+        {g.fabric_name && (
+          <span className="text-[10px] text-muted-foreground hidden sm:inline truncate max-w-[100px]">{g.fabric_name}</span>
+        )}
+        {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded text-[10px]">Soak</span>}
+        {daysLabel && (
+          <span className={cn(
+            "text-[10px] font-bold tabular-nums px-1 py-0.5 rounded",
+            isOverdue && "bg-red-100 text-red-700",
+            isUrgent && "bg-amber-100 text-amber-700",
+            !isUrgent && !isOverdue && "text-muted-foreground",
+          )}>
+            {daysLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── OrderCard (order-level selection) ────────────────────────────────────────
@@ -49,103 +114,113 @@ function SchedulerOrderCard({
   const [expanded, setExpanded] = useState(false);
   const [peekOpen, setPeekOpen] = useState(false);
   const deliveryDate = group.garments[0]?.delivery_date_order;
-  const hasBrova = group.garments.some((g) => g.garment_type === "brova");
   const daysLeft = deliveryDate
     ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+  const daysLabel = daysLeft !== null
+    ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Due today" : `${daysLeft}d`
+    : null;
 
   return (
     <>
     <div
       className={cn(
-        "bg-white border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
-        group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
+        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-[3px]",
+        group.express
+          ? "border-l-orange-400"
+          : isOverdue
+            ? "border-l-red-500"
+            : isUrgent
+              ? "border-l-amber-400"
+              : "border-l-transparent",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
     >
       <div
-        className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => onToggle(!selected)}
-        {...clickableProps(() => onToggle(!selected))}
+        className="px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
+        onClick={() => setExpanded((v) => !v)}
+        {...clickableProps(() => setExpanded((v) => !v))}
       >
-        {/* Row 1: Identity + actions */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: checkbox + identity */}
+          <div className="flex items-center gap-2 min-w-0">
             <input
               type="checkbox"
               checked={selected}
-              onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
+              onChange={(e) => onToggle(e.target.checked)}
               onClick={(e) => e.stopPropagation()}
               aria-label={`Select order #${group.order_id}`}
               className="w-4 h-4 accent-primary cursor-pointer shrink-0"
             />
-            <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
-            {group.invoice_number && (
-              <span className="text-sm text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
-            )}
-            <GarmentTypeBadge type={hasBrova ? "brova" : "final"} />
+            <span className="font-mono font-bold shrink-0">#{group.order_id}</span>
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-            <span className="text-base text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
+            <span className="text-sm text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
           </div>
 
+          {/* Right: delivery + actions */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+            {daysLabel && (
+              <span className={cn(
+                "text-xs font-bold tabular-nums px-1.5 py-0.5 rounded",
+                isOverdue && "bg-red-100 text-red-700",
+                isUrgent && "bg-amber-100 text-amber-700",
+                !isUrgent && !isOverdue && "text-muted-foreground",
+              )}>
+                {daysLabel}
+              </span>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground/40 hover:text-foreground">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
-            <button
-              className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
-              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse garments" : "Expand garments"}
-            >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
-            </button>
+            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
           </div>
         </div>
 
-        {/* Row 2: Status (left) + Logistics (right) */}
-        <div className="flex items-center justify-between gap-3 mt-2">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="text-sm text-muted-foreground/60">{garmentSummary(group.garments)}</span>
-            {group.express && <ExpressBadge />}
-          </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            {group.home_delivery && (
-              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
-                <Home className="w-3 h-3" /> Delivery
-              </span>
-            )}
-            {deliveryDate && (
-              <span className={cn(
-                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                isOverdue && "bg-red-100 text-red-800",
-                isUrgent && "bg-amber-100 text-amber-800",
-                !isUrgent && !isOverdue && "text-muted-foreground",
-              )}>
-                <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
-              </span>
-            )}
-          </div>
+        {/* Summary line */}
+        <div className="flex items-center gap-1.5 mt-1 ml-6 flex-wrap">
+          <span className="text-xs text-muted-foreground">{garmentSummary(group.garments)}</span>
+          {group.home_delivery && (
+            <span className="text-[10px] font-semibold text-indigo-600">
+              <Home className="w-2.5 h-2.5 inline mr-0.5" />Delivery
+            </span>
+          )}
+          {deliveryDate && !daysLabel && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              <Clock className="w-2.5 h-2.5 inline mr-0.5" />{formatDate(deliveryDate)}
+            </span>
+          )}
         </div>
       </div>
 
+      {/* Expanded: garment details — fabric, soaking, style info */}
       {expanded && (
-        <div className="border-t px-4 py-2.5 space-y-1.5 bg-muted/20">
+        <div className="border-t px-3 py-2 space-y-1 bg-muted/10">
           {group.garments.map((g) => {
             const isParked = g.piece_stage === "waiting_for_acceptance";
             return (
               <div key={g.id} className={cn(
-                "flex items-center gap-2 rounded-lg border p-2",
-                isParked ? "bg-zinc-50 opacity-60" : "bg-white",
+                "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
+                isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
               )}>
-                <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                {g.express && <ExpressBadge />}
-                {isParked && (
-                  <span className="text-xs text-muted-foreground italic">parked — will get same plan</span>
+                <span className={cn(
+                  "font-bold uppercase text-[10px] px-1 py-0.5 rounded shrink-0",
+                  g.garment_type === "brova" ? "text-purple-700 bg-purple-50" : "text-blue-700 bg-blue-50",
+                )}>
+                  {g.garment_type === "brova" ? "B" : "F"}
+                </span>
+                <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                {g.fabric_name ? (
+                  <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
+                ) : (
+                  <span className="text-muted-foreground/50 truncate">Outside fabric</span>
                 )}
+                <div className="flex items-center gap-1 ml-auto shrink-0">
+                  {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded text-[10px]">Soak</span>}
+                  {g.express && <span className="font-bold text-red-700 bg-red-100 px-1 py-0.5 rounded text-[10px]">Express</span>}
+                  {isParked && <span className="text-muted-foreground/60 italic text-[10px]">parked</span>}
+                </div>
               </div>
             );
           })}
@@ -219,11 +294,11 @@ function HeatCalendar({
   return (
     <div className="select-none">
       {/* Month nav */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <button
           onClick={() => setViewDate(new Date(year, month - 1, 1))}
           aria-label="Previous month"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
+          className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation"
         >
           <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         </button>
@@ -231,23 +306,23 @@ function HeatCalendar({
         <button
           onClick={() => setViewDate(new Date(year, month + 1, 1))}
           aria-label="Next month"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
+          className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation"
         >
           <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
       {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 gap-1.5 text-center mb-2">
+      <div className="grid grid-cols-7 gap-0.5 text-center mb-0.5">
         {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest py-1">
+          <div key={d} className="text-[10px] font-bold text-muted-foreground/40 uppercase py-0.5">
             {d}
           </div>
         ))}
       </div>
 
-      {/* Day cells */}
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* Day cells — tall rectangles for better touch targets in narrow columns */}
+      <div className="grid grid-cols-7 gap-0.5">
         {cells.map((day, i) => {
           if (!day) return <div key={`e-${i}`} />;
           const d = new Date(year, month, day);
@@ -264,13 +339,13 @@ function HeatCalendar({
               onClick={() => handleDay(day)}
               disabled={isPast}
               className={cn(
-                "relative aspect-square rounded-lg text-xs font-semibold transition-[color,background-color,border-color,box-shadow]",
-                "flex flex-col items-center justify-center gap-0.5",
+                "relative h-10 rounded-md text-xs font-semibold transition-[color,background-color,border-color,box-shadow] touch-manipulation",
+                "flex flex-col items-center justify-center",
                 isPast && "text-muted-foreground/20 cursor-not-allowed",
-                !isPast && !isSelected && "hover:ring-2 hover:ring-primary/30 cursor-pointer",
+                !isPast && !isSelected && "hover:bg-primary/10 active:scale-95 cursor-pointer",
                 !isPast && !isSelected && HEAT_BG[heat],
                 isToday && !isSelected && "ring-2 ring-primary/50 font-black text-primary",
-                isSelected && "bg-primary text-primary-foreground shadow-lg ring-2 ring-primary/40 scale-105",
+                isSelected && "bg-primary text-primary-foreground shadow-md",
               )}
             >
               <span>{day}</span>
@@ -291,7 +366,7 @@ function HeatCalendar({
       </div>
 
       {/* Heat legend */}
-      <div className="flex items-center justify-center gap-2 mt-4 text-[10px] text-muted-foreground/50">
+      <div className="flex items-center justify-center gap-2 mt-3 text-[10px] text-muted-foreground/50">
         <span>Light</span>
         <div className="flex gap-0.5">
           {[1, 2, 3, 4].map((h) => (
@@ -426,7 +501,21 @@ function SchedulerPage() {
       g.piece_stage === "waiting_for_acceptance" &&
       g.garment_type === "final",
   );
-  const orders = groupByOrder([...firstTrip, ...waitingFinals]);
+  const ordersUnsorted = groupByOrder([...firstTrip, ...waitingFinals]);
+
+  // Sort: express first, then by delivery date (soonest first), then no-date last
+  const orders = useMemo(() => {
+    return [...ordersUnsorted].sort((a, b) => {
+      // Express always first
+      if (a.express && !b.express) return -1;
+      if (!a.express && b.express) return 1;
+      // Then by delivery date (earliest first, no date last)
+      if (a.delivery_date && b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
+      if (a.delivery_date && !b.delivery_date) return -1;
+      if (!a.delivery_date && b.delivery_date) return 1;
+      return 0;
+    });
+  }, [ordersUnsorted]);
 
   const brovaReturns = schedulable.filter(
     (g) =>
@@ -641,7 +730,6 @@ function SchedulerPage() {
     setSelectedAltInIds(new Set());
   };
 
-  const expressCount = orders.filter((o) => o.express).length;
   const [activeTab, setActiveTab] = useState("orders");
 
   // Mobile: toggle control panel visibility
@@ -663,101 +751,102 @@ function SchedulerPage() {
         subtitle={`${schedulable.length} garment${schedulable.length !== 1 ? "s" : ""} awaiting production plans`}
       />
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
-        <StatsCard icon={Package} value={orders.length} label="Orders" color="blue" />
-        <StatsCard icon={Package} value={brovaReturns.length} label="Brova Returns" color="purple" dimOnZero />
-        <StatsCard icon={AlertTriangle} value={alterationIn.length} label="Alteration (In)" color="orange" dimOnZero />
-        <StatsCard icon={Zap} value={expressCount} label="Express" color="red" dimOnZero />
-      </div>
-
-      {/* ── Mobile: date & panel toggle ── */}
-      <div className="lg:hidden mb-4">
-        <button
-          onClick={() => setShowMobilePanel(!showMobilePanel)}
-          className={cn(
-            "w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-white shadow-sm transition-colors",
-            showMobilePanel && "ring-2 ring-primary/20",
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-primary" />
-            <span className="font-bold text-sm">{selectedDateLabel}</span>
-            {totalForDate > 0 && (
-              <Badge variant="secondary" className="text-xs font-bold">{totalForDate} scheduled</Badge>
-            )}
-          </div>
-          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", showMobilePanel && "rotate-180")} />
-        </button>
-
-        {showMobilePanel && (
-          <div className="mt-3 bg-white border rounded-xl shadow-sm p-4 animate-fade-in space-y-4">
-            <HeatCalendar
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              scheduledDates={scheduledDates}
-              maxPerDay={maxPerDay}
-            />
-            <div className="border-t pt-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-bold">{selectedDateLabel}</span>
-                </div>
+      {/* ── Tablet/phone: calendar + workload on top, full width ── */}
+      <div className="lg:hidden mb-3">
+        <div className="bg-card border rounded-xl shadow-sm p-3">
+          <div className="flex gap-3">
+            {/* Calendar — capped width so it doesn't overstretch */}
+            <div className="w-[280px] shrink-0">
+              <HeatCalendar
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                scheduledDates={scheduledDates}
+                maxPerDay={maxPerDay}
+              />
+            </div>
+            {/* Workload — takes remaining space, only on wider tablets */}
+            <div className="hidden sm:block flex-1 min-w-0 border-l pl-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-bold">{selectedDateLabel}</span>
                 {totalForDate > 0 && (
-                  <Badge variant="secondary" className="text-xs font-bold">{totalForDate} garments</Badge>
+                  <span className="text-xs text-muted-foreground tabular-nums ml-auto">{totalForDate}</span>
                 )}
               </div>
-              <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
+              <div className="max-h-[220px] overflow-y-auto">
+                <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
+              </div>
             </div>
           </div>
-        )}
+          {/* Workload on narrow screens — collapsible below calendar */}
+          <div className="sm:hidden border-t mt-2 pt-2">
+            <button
+              onClick={() => setShowMobilePanel(!showMobilePanel)}
+              className="w-full flex items-center justify-between text-left touch-manipulation"
+            >
+              <div className="flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-bold">{selectedDateLabel}</span>
+                {totalForDate > 0 && <span className="text-xs text-muted-foreground tabular-nums">· {totalForDate} scheduled</span>}
+              </div>
+              <ChevronDown className={cn("w-3 h-3 text-muted-foreground/50 transition-transform", showMobilePanel && "rotate-180")} />
+            </button>
+            {showMobilePanel && (
+              <div className="mt-2 animate-fade-in">
+                <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── 3-column layout: orders | calendar | workload ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px_280px] gap-5 items-start">
+      {/* ── Layout: single col (tablet/phone) | 2col desktop ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_560px] gap-4 items-start">
 
         {/* ── Col 1: Tabs + order list ── */}
         <div className="min-w-0">
           <Tabs defaultValue="orders" value={activeTab} onValueChange={setActiveTab}>
-            <div className="flex items-center justify-between mb-4">
-              <TabsList className="h-auto flex-wrap gap-1">
-                <TabsTrigger value="orders">
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto max-w-full">
+                <TabsTrigger value="orders" className="text-xs px-2.5">
                   Orders{" "}
-                  <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
+                  <Badge variant="secondary" className="ml-1 text-[10px] bg-blue-100 text-blue-700">
                     {orders.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="brova">
+                <TabsTrigger value="brova" className="text-xs px-2.5">
                   Brova{" "}
-                  <Badge variant="secondary" className="ml-1 text-xs bg-purple-100 text-purple-700">
+                  <Badge variant="secondary" className="ml-1 text-[10px] bg-purple-100 text-purple-700">
                     {brovaReturns.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="alteration-in">
-                  Alteration (In){" "}
-                  <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-700">
+                <TabsTrigger value="alteration-in" className="text-xs px-2.5">
+                  <span className="hidden min-[480px]:inline">Alteration</span>
+                  <span className="min-[480px]:hidden">Alt</span>
+                  {" (In) "}
+                  <Badge variant="secondary" className="ml-1 text-[10px] bg-orange-100 text-orange-700">
                     {alterationIn.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="alteration-out" disabled>
-                  Alteration (Out)
+                <TabsTrigger value="alteration-out" className="text-xs px-2.5" disabled>
+                  <span className="hidden min-[480px]:inline">Alteration</span>
+                  <span className="min-[480px]:hidden">Alt</span>
+                  {" (Out)"}
                 </TabsTrigger>
               </TabsList>
 
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs h-7 shrink-0"
+              <button
+                className="text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1 shrink-0"
                 onClick={() => {
                   if (activeTab === "orders") selectAllOrders();
                   else if (activeTab === "brova") selectAllBrovaReturns();
                   else if (activeTab === "alteration-in") selectAllAltIn();
                 }}
               >
-                <CheckSquare className="w-3 h-3 mr-1" />
-                Select All
-              </Button>
+                <CheckSquare className="w-3 h-3" />
+                <span className="hidden sm:inline">Select all</span>
+                <span className="sm:hidden">All</span>
+              </button>
             </div>
 
             <TabsContent value="orders">
@@ -787,16 +876,13 @@ function SchedulerPage() {
               ) : brovaReturns.length === 0 ? (
                 <EmptyState icon={Package} message="No brova returns to schedule" />
               ) : (
-                <div className="space-y-2">
-                  {brovaReturns.map((g, i) => (
-                    <GarmentCard
+                <div className="space-y-1.5">
+                  {brovaReturns.map((g) => (
+                    <SchedulerGarmentRow
                       key={g.id}
                       garment={g}
                       selected={selectedBrovaReturnIds.has(g.id)}
                       onSelect={(id, checked) => toggleGarmentInSet(setSelectedBrovaReturnIds, id, checked)}
-                      showPipeline={false}
-                      hideStage
-                      index={i}
                     />
                   ))}
                 </div>
@@ -809,16 +895,13 @@ function SchedulerPage() {
               ) : alterationIn.length === 0 ? (
                 <EmptyState icon={AlertTriangle} message="No alterations to schedule" />
               ) : (
-                <div className="space-y-2">
-                  {alterationIn.map((g, i) => (
-                    <GarmentCard
+                <div className="space-y-1.5">
+                  {alterationIn.map((g) => (
+                    <SchedulerGarmentRow
                       key={g.id}
                       garment={g}
                       selected={selectedAltInIds.has(g.id)}
                       onSelect={(id, checked) => toggleGarmentInSet(setSelectedAltInIds, id, checked)}
-                      showPipeline={false}
-                      hideStage
-                      index={i}
                     />
                   ))}
                 </div>
@@ -828,27 +911,49 @@ function SchedulerPage() {
             <TabsContent value="alteration-out">
               <EmptyState message="Coming soon — externally-made dishdashas" />
             </TabsContent>
+
           </Tabs>
         </div>
 
-        {/* ── Col 2: Calendar (sticky, compact) ── */}
-        <div className="hidden lg:block lg:sticky lg:top-6">
-          <div className="bg-white border rounded-xl shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="w-4 h-4 text-primary" />
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
+        {/* ── Col 2: Calendar + workload combined (desktop only) ── */}
+        <div className="hidden lg:block lg:sticky lg:top-4">
+          <div className="bg-card border rounded-xl shadow-sm p-3 xl:p-4">
+            {/* xl+: side by side | lg: stacked */}
+            <div className="flex flex-col xl:flex-row xl:gap-4">
+              {/* Calendar */}
+              <div className="xl:w-[300px] xl:shrink-0 max-w-[320px]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
+                </div>
+                <HeatCalendar
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  scheduledDates={scheduledDates}
+                  maxPerDay={maxPerDay}
+                />
+              </div>
+              {/* Workload — beside calendar on xl, below on lg */}
+              <div className="border-t xl:border-t-0 xl:border-l mt-3 pt-3 xl:mt-0 xl:pt-0 xl:pl-4 xl:flex-1 xl:min-w-[180px]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-bold">{selectedDateLabel}</span>
+                  </div>
+                  {totalForDate > 0 && (
+                    <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>
+                  )}
+                </div>
+                <div className="max-h-[260px] overflow-y-auto">
+                  <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
+                </div>
+              </div>
             </div>
-            <HeatCalendar
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              scheduledDates={scheduledDates}
-              maxPerDay={maxPerDay}
-            />
 
-            {/* Action — sits below calendar */}
-            <div className="border-t mt-4 pt-4">
+            {/* Action — below calendar + workload */}
+            <div className="border-t mt-3 pt-3">
               {totalSelected > 0 ? (
-                <div className="mb-2.5">
+                <div className="mb-2">
                   <p className="text-sm font-semibold">
                     {getSelectedGarmentIds().length} garment{getSelectedGarmentIds().length !== 1 ? "s" : ""}
                     <span className="text-muted-foreground font-normal text-xs">
@@ -862,7 +967,7 @@ function SchedulerPage() {
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground mb-2.5">Select orders to schedule</p>
+                <p className="text-xs text-muted-foreground mb-2">Select orders to schedule</p>
               )}
               <Button
                 className="w-full h-9 font-bold text-sm"
@@ -871,26 +976,6 @@ function SchedulerPage() {
               >
                 Create Plan
               </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Col 3: Workload for selected date ── */}
-        <div className="hidden lg:block lg:sticky lg:top-6 min-w-0">
-          <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-primary" />
-                <span className="text-sm font-bold">{selectedDateLabel}</span>
-              </div>
-              {totalForDate > 0 && (
-                <Badge variant="secondary" className="font-bold text-xs">
-                  {totalForDate}
-                </Badge>
-              )}
-            </div>
-            <div className="px-3 py-3 max-h-[calc(100vh-200px)] overflow-y-auto">
-              <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
             </div>
           </div>
         </div>
@@ -906,12 +991,13 @@ function SchedulerPage() {
           setSelectedAltInIds(new Set());
         }}
       >
+        <span className="text-xs opacity-70 hidden sm:inline">{selectedDateLabel}</span>
         <Button
           size="sm"
           disabled={!selectedDate || scheduleMut.isPending}
           onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
         >
-          Create Plan ({getSelectedGarmentIds().length} garments)
+          Create Plan ({getSelectedGarmentIds().length})
         </Button>
       </BatchActionBar>
 

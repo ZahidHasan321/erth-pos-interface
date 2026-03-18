@@ -3,17 +3,13 @@ import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import {
   useUpdateGarmentDetails,
-  useUpdateOrderDeliveryDate,
-  useUpdateOrderAssignedDate,
 } from "@/hooks/useGarmentMutations";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
 import { MetadataChip } from "@/components/shared/PageShell";
-import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -75,8 +71,6 @@ function AssignedOrderDetailPage() {
   const router = useRouter();
   const { data: garments = [], isLoading } = useOrderGarments(orderIdNum);
   const updateMut = useUpdateGarmentDetails();
-  const deliveryDateMut = useUpdateOrderDeliveryDate();
-  const assignedDateMut = useUpdateOrderAssignedDate();
 
   if (isLoading) {
     return (
@@ -98,7 +92,7 @@ function AssignedOrderDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to Production Tracker
         </button>
-        <div className="text-center py-24 border-2 border-dashed rounded-2xl">
+        <div className="text-center py-12 border border-dashed rounded-xl bg-muted/5">
           <p className="text-lg font-semibold text-muted-foreground">
             No garments found for this order
           </p>
@@ -139,12 +133,7 @@ function AssignedOrderDetailPage() {
       </button>
 
       {/* Order header */}
-      <OrderHeader
-        garments={garments}
-        orderId={orderIdNum}
-        deliveryDateMut={deliveryDateMut}
-        assignedDateMut={assignedDateMut}
-      />
+      <OrderHeader garments={garments} orderId={orderIdNum} />
 
       {/* Shared production plan at order level */}
       {sharedPlan && (
@@ -196,13 +185,9 @@ function AssignedOrderDetailPage() {
 function OrderHeader({
   garments,
   orderId,
-  deliveryDateMut,
-  assignedDateMut,
 }: {
   garments: WorkshopGarment[];
   orderId: number;
-  deliveryDateMut: ReturnType<typeof useUpdateOrderDeliveryDate>;
-  assignedDateMut: ReturnType<typeof useUpdateOrderAssignedDate>;
 }) {
   const first = garments[0];
   const brands = [...new Set(garments.map((g) => g.order_brand).filter(Boolean))] as string[];
@@ -261,26 +246,10 @@ function OrderHeader({
         : `${urgency.days}d left`
     : null;
 
-  const handleDeliveryChange = async (d: Date | null) => {
-    if (!d) return;
-    const date = toLocalDateStr(d) ?? "";
-    await deliveryDateMut.mutateAsync({ orderId, date });
-    toast.success("Delivery date updated");
-  };
-
-  const handleAssignedChange = async (d: Date | null) => {
-    if (!d) return;
-    const date = toLocalDateStr(d) ?? "";
-    await assignedDateMut.mutateAsync({ orderId, date });
-    toast.success("Assigned date updated");
-  };
-
   return (
-    <div className="bg-white border rounded-xl p-4 shadow-sm">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        {/* Left — order info */}
+    <div className="bg-card border rounded-xl p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {/* Top row */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-black text-lg">#{orderId}</span>
             <span className="font-semibold text-sm">{first.customer_name ?? "—"}</span>
@@ -294,7 +263,6 @@ function OrderHeader({
             </span>
           </div>
 
-          {/* Info row */}
           <div className="flex items-center flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
             {first.invoice_number && <span>INV-{first.invoice_number}</span>}
             <span className="flex items-center gap-1">
@@ -308,34 +276,23 @@ function OrderHeader({
           </div>
         </div>
 
-        {/* Right — dates */}
-        <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-lg border shrink-0 sm:w-52">
-          <div className="space-y-1">
-            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Delivery
-              {daysLabel && (
-                <span className={cn("text-xs font-bold ml-0.5", urgency.className)}>
-                  ({daysLabel})
-                </span>
-              )}
-            </Label>
-            <DatePicker
-              value={first.delivery_date_order ?? ""}
-              onChange={handleDeliveryChange}
-              className={cn("h-8 text-sm font-semibold", urgency.className)}
-            />
+        {/* Delivery date — read-only */}
+        {first.delivery_date_order && (
+          <div className="shrink-0 text-right">
+            <span className={cn(
+              "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-1 rounded-md",
+              urgency.days !== null && urgency.days < 0 && "bg-red-100 text-red-800",
+              urgency.days !== null && urgency.days >= 0 && urgency.days <= 2 && "bg-amber-100 text-amber-800",
+              (urgency.days === null || urgency.days > 2) && "bg-muted text-foreground",
+            )}>
+              <Clock className="w-3.5 h-3.5" />
+              {formatDate(first.delivery_date_order)}
+            </span>
+            {daysLabel && (
+              <p className={cn("text-xs font-bold mt-0.5", urgency.className)}>{daysLabel}</p>
+            )}
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-              <Timer className="w-3 h-3" /> Assigned (all)
-            </Label>
-            <DatePicker
-              value={first.assigned_date ?? ""}
-              onChange={handleAssignedChange}
-              className="h-8 text-sm font-semibold"
-            />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -381,7 +338,7 @@ function SharedPlanSection({
   };
 
   return (
-    <div className="mt-3 bg-white border rounded-xl p-3 shadow-sm">
+    <div className="mt-3 bg-card border rounded-xl p-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Production Plan
@@ -468,40 +425,24 @@ function GarmentPlanCard({
   const handlePlanConfirm = async (
     newPlan: Record<string, string>,
     date: string,
+    _unit?: string,
+    _reentryStage?: string,
+    newDeliveryDate?: string,
   ) => {
-    await updateMut.mutateAsync({
-      id: garment.id,
-      updates: {
-        assigned_date: date || null,
-        production_plan: newPlan,
-      },
-    });
+    const updates: Record<string, unknown> = {
+      assigned_date: date || null,
+      production_plan: newPlan,
+    };
+    if (newDeliveryDate !== undefined) {
+      updates.delivery_date = newDeliveryDate || null;
+    }
+    await updateMut.mutateAsync({ id: garment.id, updates });
     toast.success(`${garment.garment_id ?? "Garment"} updated`);
-  };
-
-  const handleGarmentDeliveryChange = async (d: Date | null) => {
-    if (!d) return;
-    const date = toLocalDateStr(d);
-    await updateMut.mutateAsync({
-      id: garment.id,
-      updates: { delivery_date: date },
-    });
-    toast.success(`${garment.garment_id ?? "Garment"} delivery date updated`);
-  };
-
-  const handleGarmentAssignedChange = async (d: Date | null) => {
-    if (!d) return;
-    const date = toLocalDateStr(d);
-    await updateMut.mutateAsync({
-      id: garment.id,
-      updates: { assigned_date: date },
-    });
-    toast.success(`${garment.garment_id ?? "Garment"} assigned date updated`);
   };
 
   return (
     <div className={cn(
-      "bg-white border rounded-xl p-3 shadow-sm",
+      "bg-card border rounded-xl p-3 shadow-sm",
       garment.express && "border-orange-200",
       garment.piece_stage === "waiting_for_acceptance" && "opacity-50 bg-zinc-50",
     )}>
@@ -550,13 +491,44 @@ function GarmentPlanCard({
           </span>
         </div>
 
-        <button
-          onClick={() => setPlanOpen(true)}
-          className="p-1 rounded hover:bg-muted cursor-pointer transition-colors shrink-0"
-          title="Edit production plan"
-        >
-          <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right text-[11px] tabular-nums leading-tight">
+            {garment.delivery_date && (() => {
+              const days = Math.ceil((new Date(garment.delivery_date).getTime() - Date.now()) / 86400000);
+              const isDone = garment.piece_stage === "completed" || garment.piece_stage === "ready_for_pickup";
+              const daysText = days < 0 ? `${Math.abs(days)}d late` : days === 0 ? "today" : `${days}d`;
+              return (
+                <div className={cn(
+                  isDone ? "text-muted-foreground" : days < 0 ? "text-red-700" : days <= 2 ? "text-amber-700" : "text-muted-foreground",
+                )}>
+                  Due <span className="font-semibold">{formatDate(String(garment.delivery_date))}</span>
+                  <span className="ml-0.5">({daysText})</span>
+                </div>
+              );
+            })()}
+            {garment.assigned_date && (() => {
+              const days = Math.ceil((new Date(garment.assigned_date + "T23:59:59").getTime() - Date.now()) / 86400000);
+              const isPast = days < 0;
+              const isDone = garment.piece_stage === "ready_for_dispatch" || garment.piece_stage === "completed" || garment.piece_stage === "ready_for_pickup";
+              const daysText = days < 0 ? `${Math.abs(days)}d over` : days === 0 ? "today" : `${days}d`;
+              return (
+                <div className={cn(
+                  isPast && !isDone ? "text-red-600" : "text-muted-foreground",
+                )}>
+                  Assigned <span className="font-semibold">{formatDate(garment.assigned_date)}</span>
+                  <span className="ml-0.5">({daysText})</span>
+                </div>
+              );
+            })()}
+          </div>
+          <button
+            onClick={() => setPlanOpen(true)}
+            className="p-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors"
+            title="Edit production plan"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
       </div>
 
       {/* Pipeline */}
@@ -601,29 +573,6 @@ function GarmentPlanCard({
         </p>
       )}
 
-      {/* Per-garment dates */}
-      <div className="grid grid-cols-2 gap-2 mt-2 max-w-xs lg:ml-auto">
-        <div className="space-y-0.5">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
-            <Clock className="w-3 h-3" /> Delivery
-          </Label>
-          <DatePicker
-            value={garment.delivery_date ?? ""}
-            onChange={handleGarmentDeliveryChange}
-            className="h-7 text-xs font-semibold"
-          />
-        </div>
-        <div className="space-y-0.5">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-0.5">
-            <Timer className="w-3 h-3" /> Assigned
-          </Label>
-          <DatePicker
-            value={garment.assigned_date ?? ""}
-            onChange={handleGarmentAssignedChange}
-            className="h-7 text-xs font-semibold"
-          />
-        </div>
-      </div>
 
       {/* Worker summary — only show if different from shared plan, or no shared plan */}
       {garment.production_plan && (() => {
@@ -690,7 +639,7 @@ function GarmentPlanCard({
         );
       })()}
 
-      {/* PlanDialog for editing */}
+      {/* PlanDialog for editing — includes delivery date */}
       <PlanDialog
         open={planOpen}
         onOpenChange={setPlanOpen}
@@ -701,6 +650,8 @@ function GarmentPlanCard({
         title={`Edit Plan — ${garment.garment_id}`}
         confirmLabel="Save Changes"
         hasSoaking={hasSoaking}
+        showDeliveryDate
+        defaultDeliveryDate={garment.delivery_date ? String(garment.delivery_date) : undefined}
       />
     </div>
   );

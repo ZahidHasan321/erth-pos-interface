@@ -20,16 +20,16 @@ export const Route = createFileRoute("/(main)/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard" }] }),
 });
 
-// Stage colors for pipeline chart
+// Stage colors for pipeline chart — vibrant, distinct per stage
 const PIPELINE_COLORS: Record<string, string> = {
   Soaking:   "#0ea5e9",
-  Cutting:   "#3b82f6",
-  "Post-Cut": "#6366f1",
+  Cutting:   "#f59e0b",
+  "Post-Cut": "#f97316",
   Sewing:    "#8b5cf6",
-  Finishing:  "#a855f7",
-  Ironing:   "#f59e0b",
-  QC:        "#f97316",
-  Dispatch:  "#10b981",
+  Finishing:  "#10b981",
+  Ironing:   "#ef4444",
+  QC:        "#6366f1",
+  Dispatch:  "#22c55e",
 };
 
 const URGENCY_COLORS: Record<string, string> = {
@@ -315,14 +315,14 @@ function DashboardPage() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-10">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-black uppercase tracking-tight">Workshop Overview</h1>
-        <p className="text-sm text-muted-foreground mt-1">Live production status</p>
+      <div className="mb-4">
+        <h1 className="text-xl font-black uppercase tracking-tight">Workshop Overview</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">Live production status</p>
       </div>
 
       {/* ── ACTION REQUIRED ────────────────────────────────────────── */}
       {!isLoading && actionCards.length > 0 && (
-        <div className="mb-6">
+        <div className="mb-4">
           <div className="flex items-center gap-2 mb-3">
             <Clock className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -373,11 +373,11 @@ function DashboardPage() {
 
       {/* Top KPIs */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-4">
           {[1,2,3,4,5,6].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
           <KpiCard label="Orders" value={stats.totalOrders} icon={<ClipboardList className="w-5 h-5" />} />
           <KpiCard label="Garments" value={stats.totalGarments} icon={<Inbox className="w-5 h-5" />} />
           <KpiCard label="In Production" value={stats.inProduction} icon={<Zap className="w-5 h-5" />} />
@@ -391,9 +391,9 @@ function DashboardPage() {
       )}
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Production pipeline — from actual garment stages */}
-        <div className="lg:col-span-2 bg-white border rounded-xl p-4 shadow-sm">
+        <div className="lg:col-span-2 bg-card border rounded-xl p-4 shadow-sm">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
             Production Pipeline
           </h2>
@@ -425,7 +425,7 @@ function DashboardPage() {
         </div>
 
         {/* Delivery urgency — orders by due date */}
-        <div className="bg-white border rounded-xl p-4 shadow-sm">
+        <div className="bg-card border rounded-xl p-4 shadow-sm">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
             Delivery Urgency
           </h2>
@@ -467,7 +467,7 @@ function DashboardPage() {
 
       {/* Top 5 Busiest Workers */}
       {!isLoading && topWorkersData.length > 0 && (
-        <div className="bg-white border rounded-xl p-4 shadow-sm mb-6">
+        <div className="bg-card border rounded-xl p-4 shadow-sm mb-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
             <Users className="w-4 h-4" aria-hidden="true" /> Busiest Workers
           </h2>
@@ -516,7 +516,7 @@ function DashboardPage() {
               <Link
                 key={action.href}
                 to={action.href}
-                className="bg-white border rounded-xl p-4 flex items-center gap-3 transition-all hover:shadow-md hover:bg-muted/40"
+                className="bg-card border rounded-xl p-4 flex items-center gap-3 transition-all hover:shadow-md hover:bg-muted/40"
               >
                 <Icon className="w-6 h-6 opacity-60 shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
@@ -547,7 +547,7 @@ function KpiCard({
   highlight?: string;
 }) {
   return (
-    <div className={cn("border rounded-xl p-3 shadow-sm text-center", highlight ?? "bg-white")}>
+    <div className={cn("border rounded-xl p-3 shadow-sm text-center", highlight ?? "bg-card")}>
       <div className={cn("mx-auto mb-1 opacity-60 w-fit", color ?? "text-foreground/50")}>{icon}</div>
       <p className="text-2xl font-black">{value}</p>
       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>

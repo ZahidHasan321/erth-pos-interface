@@ -203,7 +203,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             {worker && !workerOverride ? (
@@ -326,7 +326,7 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
   };
 
   return (
-    <div className="bg-white border rounded-xl p-4 shadow-sm">
+    <div className="bg-card border rounded-xl p-4 shadow-sm">
       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
         Quality Check
       </h3>

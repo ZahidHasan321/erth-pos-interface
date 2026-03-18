@@ -97,7 +97,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white border-b px-5 pt-5 pb-3">
+        <div className="sticky top-0 z-10 bg-card border-b px-5 pt-5 pb-3">
           <DialogHeader>
             <DialogTitle className="text-lg">{title ?? "Return Plan"}</DialogTitle>
           </DialogHeader>
@@ -133,7 +133,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                       "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-[color,background-color,border-color,box-shadow]",
                       isSelected
                         ? "border-primary bg-primary text-white shadow-md scale-[1.02]"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm cursor-pointer",
+                        : "border-zinc-200 bg-card text-zinc-600 hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm cursor-pointer",
                     )}
                   >
                     <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : step.color)} />
@@ -161,7 +161,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
 
                 <div className={cn(
                   "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
-                  currentWorker ? "border-zinc-300 bg-white" : "border-zinc-200 bg-zinc-50",
+                  currentWorker ? "border-zinc-300 bg-card" : "border-zinc-200 bg-zinc-50",
                 )}>
                   {/* Step header */}
                   <div className="flex items-center gap-2.5">
@@ -231,7 +231,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                                       ? "border-primary bg-primary text-white shadow-sm"
                                       : isOver
                                         ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                                        : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
+                                        : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
                                   )}
                                 >
                                   {isSelected && <Check className="w-3 h-3 shrink-0" />}
@@ -259,7 +259,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t px-5 py-3 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-card border-t px-5 py-3 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleConfirm} disabled={!date || !allFilled}>
             Schedule

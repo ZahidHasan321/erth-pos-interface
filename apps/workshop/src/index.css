@@ -41,53 +41,53 @@
 :root {
   --radius: 0.75rem;
 
-  /* Surface — warm off-white with subtle green tint */
-  --background: oklch(0.965 0.005 150);
-  --foreground: oklch(0.15 0.02 150);
+  /* Surface — warm stone tint, dark enough for cards to pop */
+  --background: oklch(0.94 0.01 75);
+  --foreground: oklch(0.14 0.02 55);
 
-  /* Cards — pure white to pop against tinted bg */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 150);
+  /* Cards — crisp white, clear separation from background */
+  --card: oklch(0.995 0.002 75);
+  --card-foreground: oklch(0.16 0.02 55);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 150);
+  --popover: oklch(0.995 0.002 75);
+  --popover-foreground: oklch(0.14 0.02 55);
 
-  /* Primary — forest green (brand color) */
-  --primary: oklch(0.35 0.12 160);
-  --primary-foreground: oklch(0.98 0.01 160);
+  /* Primary — deep workshop green, confident and grounded */
+  --primary: oklch(0.36 0.10 155);
+  --primary-foreground: oklch(0.97 0.01 155);
 
-  /* Secondary — earthy warm tone for contrast */
-  --secondary: oklch(0.55 0.14 40);
-  --secondary-foreground: oklch(0.99 0.01 40);
+  /* Secondary — warm earthy brown for contrast moments */
+  --secondary: oklch(0.52 0.12 55);
+  --secondary-foreground: oklch(0.98 0.01 55);
 
-  /* Muted — light green-tinted neutral */
-  --muted: oklch(0.95 0.01 150);
-  --muted-foreground: oklch(0.45 0.03 150);
+  /* Muted — warm stone gray, visible but recessive */
+  --muted: oklch(0.92 0.008 75);
+  --muted-foreground: oklch(0.46 0.02 55);
 
-  /* Accent — soft sage for highlights */
-  --accent: oklch(0.90 0.06 150);
-  --accent-foreground: oklch(0.25 0.06 155);
+  /* Accent — warm sand for active highlights */
+  --accent: oklch(0.90 0.04 75);
+  --accent-foreground: oklch(0.22 0.03 55);
 
   /* Utility */
-  --destructive: oklch(0.58 0.22 25);
-  --border: oklch(0.90 0.02 150);
-  --input: oklch(0.95 0.01 150);
-  --ring: oklch(0.45 0.10 160);
+  --destructive: oklch(0.55 0.22 27);
+  --border: oklch(0.88 0.012 75);
+  --input: oklch(0.94 0.008 75);
+  --ring: oklch(0.45 0.08 155);
 
-  /* Sidebar — white with green accents */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.18 0.02 150);
-  --sidebar-primary: oklch(0.30 0.12 160);
-  --sidebar-primary-foreground: oklch(0.98 0.01 160);
-  --sidebar-accent: oklch(0.92 0.05 150);
-  --sidebar-accent-foreground: oklch(0.22 0.06 155);
-  --sidebar-border: oklch(0.90 0.02 150);
-  --sidebar-ring: oklch(0.40 0.10 160);
+  /* Sidebar — slightly off-white, warm and grounded */
+  --sidebar: oklch(0.98 0.005 75);
+  --sidebar-foreground: oklch(0.16 0.02 55);
+  --sidebar-primary: oklch(0.32 0.10 155);
+  --sidebar-primary-foreground: oklch(0.97 0.01 155);
+  --sidebar-accent: oklch(0.92 0.02 75);
+  --sidebar-accent-foreground: oklch(0.20 0.03 55);
+  --sidebar-border: oklch(0.88 0.012 75);
+  --sidebar-ring: oklch(0.40 0.08 155);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -108,11 +108,31 @@
   button {
     font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 600;
+    touch-action: manipulation;
   }
 
   label {
     font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 500;
+  }
+
+  /* Touch-optimized scrollable areas */
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="sheet-content"],
+  [data-slot="dialog-content"] {
+    overscroll-behavior: contain;
+  }
+
+  /* Prevent text selection on interactive elements during touch */
+  [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  a, button, [role="button"], [role="tab"], [role="checkbox"], [role="radio"],
+  [role="switch"], [role="menuitem"], [role="option"], select, summary {
+    touch-action: manipulation;
   }
 }
 

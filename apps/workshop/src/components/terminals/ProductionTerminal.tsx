@@ -55,6 +55,18 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
         q.push(g);
       }
     }
+    // Sort: started first, then express, then by assigned date
+    const sortFn = (a: WorkshopGarment, b: WorkshopGarment) => {
+      if (a.start_time && !b.start_time) return -1;
+      if (!a.start_time && b.start_time) return 1;
+      if (a.express && !b.express) return -1;
+      if (!a.express && b.express) return 1;
+      const dateA = a.assigned_date ?? "";
+      const dateB = b.assigned_date ?? "";
+      return dateA.localeCompare(dateB);
+    };
+    q.sort(sortFn);
+    p.sort(sortFn);
     return { queue: q, pending: p };
   }, [stageGarments, todayStr]);
 
@@ -82,23 +94,23 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-6 flex items-end justify-between animate-fade-in">
+      <div className="mb-4 flex items-end justify-between animate-fade-in">
         <div>
-          <h1 className="text-2xl tracking-tight flex items-center gap-2.5">
+          <h1 className="text-xl tracking-tight flex items-center gap-2">
             {icon} <span className="font-normal">Production</span> <span className="font-bold text-primary">{stageLabel}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {stageGarments.length} garment{stageGarments.length !== 1 ? "s" : ""} at this station
           </p>
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-card border px-3 py-1.5 rounded-lg shadow-sm">
-          <CalendarDays className="w-4 h-4" aria-hidden="true" />
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground bg-card border px-2.5 py-1 rounded-md">
+          <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
           {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
         </div>
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6 stagger-children">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 stagger-children">
         <StatsCard icon={Clock} value={queue.length} label="Queue" color="blue" />
         <StatsCard icon={Gauge} value={started} label="Started" color="emerald" />
         <StatsCard icon={AlertCircle} value={pending.length} label="Overdue" color="red" dimOnZero />
@@ -109,7 +121,7 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
         <LoadingSkeleton />
       ) : (
         <Tabs defaultValue="queue">
-          <TabsList className="mb-4">
+          <TabsList className="mb-3 flex-nowrap overflow-x-auto">
             <TabsTrigger value="queue" className="gap-1.5">
               <Clock className="w-3.5 h-3.5" aria-hidden="true" />
               Queue
