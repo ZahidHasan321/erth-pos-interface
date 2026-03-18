@@ -17,7 +17,6 @@ import {
   Clock,
   Package,
   Home,
-  Timer,
   Edit3,
   Phone,
 } from "lucide-react";
@@ -350,14 +349,6 @@ function SharedPlanSection({
           Edit plan for all
         </button>
       </div>
-
-      {/* Date row */}
-      {date && (
-        <div className="flex items-center gap-1 mb-2 text-sm text-muted-foreground">
-          <Timer className="w-3.5 h-3.5" />
-          Assigned: <span className="font-semibold text-foreground">{formatDate(date)}</span>
-        </div>
-      )}
 
       {/* Worker pills */}
       <div className="flex flex-wrap gap-1.5">
