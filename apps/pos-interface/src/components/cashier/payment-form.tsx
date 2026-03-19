@@ -44,7 +44,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
     const [isRefund, setIsRefund] = useState(false);
     const paymentMutation = usePaymentMutation();
 
-    const { data: employees = [] } = useQuery({
+    const { data: employeesRaw } = useQuery({
         queryKey: ["employees"],
         queryFn: async () => {
             const { data, error } = await supabase.from("users").select("id, name");
@@ -52,6 +52,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
             return data;
         },
     });
+    const employees = Array.isArray(employeesRaw) ? employeesRaw : [];
 
     const form = useForm<PaymentFormValues>({
         resolver: zodResolver(paymentSchema) as any,

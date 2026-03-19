@@ -259,12 +259,10 @@ const UNPAID_PAGE_SIZE = 8;
 
 export type DashboardFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sales";
 
-function ReportsPanel({ summary, unpaidOrders, onSelectOrder, activeFilter, onFilterChange }: {
+function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
     summary: CashierSummary;
     unpaidOrders: CashierOrderListItem[];
     onSelectOrder: (id: string) => void;
-    activeFilter: DashboardFilter;
-    onFilterChange: (f: DashboardFilter) => void;
 }) {
     const [unpaidVisible, setUnpaidVisible] = useState(UNPAID_PAGE_SIZE);
     const now = new Date();
@@ -273,13 +271,10 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder, activeFilter, onFi
     const allBilled = Number(summary.all_billed);
     const allCollected = Number(summary.all_collected);
     const totalUnpaidAmount = Number(summary.all_outstanding);
-    const todayCount = Number(summary.today_count);
     const monthTotal = Number(summary.month_billed);
     const monthPaid = Number(summary.month_paid);
     const monthOutstanding = Number(summary.month_outstanding);
     const collectionRate = monthTotal > 0 ? Math.round((monthPaid / monthTotal) * 100) : 0;
-    const workCount = Number(summary.work_count);
-    const salesCount = Number(summary.sales_count);
     const workBilled = Number(summary.work_billed);
     const salesBilled = Number(summary.sales_billed);
     const monthWorkBilled = Number(summary.month_work_billed);
@@ -292,75 +287,34 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder, activeFilter, onFi
                 <h3 className="font-bold text-sm mb-2 flex items-center gap-1.5">
                     <CreditCard className="h-4 w-4 text-muted-foreground" /> Payment Summary
                 </h3>
-                {/* All Time — donuts left, addition-style legend right */}
-                {allBilled > 0 ? (
-                    <div className="flex items-center gap-3">
-                        <div className="flex gap-3 shrink-0 items-center">
-                            <DonutChart
-                                size={80}
-                                strokeWidth={10}
-                                hideLegend
-                                center={{ value: `${(workBilled + salesBilled) > 0 ? Math.round((workBilled / (workBilled + salesBilled)) * 100) : 0}%`, label: "work" }}
-                                segments={[
-                                    { value: workBilled, color: "#0d9488", label: "Work", amount: fmtK(workBilled) },
-                                    { value: salesBilled, color: "#7c3aed", label: "Sales", amount: fmtK(salesBilled) },
-                                ]}
-                            />
-                            <DonutChart
-                                size={100}
-                                strokeWidth={13}
-                                hideLegend
-                                center={{ value: `${Math.round((allCollected / allBilled) * 100)}%`, label: "paid" }}
-                                segments={[
-                                    { value: allCollected, color: "#047857", label: "Collected", amount: fmtK(allCollected) },
-                                    { value: totalUnpaidAmount, color: "#ea580c", label: "Remaining", amount: fmtK(totalUnpaidAmount) },
-                                ]}
-                            />
-                        </div>
-                        <div className="flex-1 text-xs tabular-nums space-y-1">
+                {/* Today — simple addition-style, operational info */}
+                <div className="mb-1">
+                    <p className="text-xs font-bold mb-1.5">Today</p>
+                    {Number(summary.today_count) > 0 ? (
+                        <div className="text-xs tabular-nums space-y-1">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Orders</span>
+                                <span className="font-semibold">{Number(summary.today_count)}</span>
+                            </div>
                             <div className="flex justify-between">
                                 <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Collected</span>
-                                <span className="font-semibold">{fmtK(allCollected)}</span>
+                                <span className="font-semibold">{fmtK(Number(summary.today_paid))}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Remaining</span>
-                                <span className="font-semibold text-red-600">{fmtK(totalUnpaidAmount)}</span>
+                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Due</span>
+                                <span className="font-semibold text-orange-600">{fmtK(Math.max(0, Number(summary.today_billed) - Number(summary.today_paid)))}</span>
                             </div>
                             <div className="border-t border-border pt-1 flex justify-between font-bold">
-                                <span>Total</span>
-                                <span>{fmtK(allBilled)}</span>
+                                <span>Billed</span>
+                                <span>{fmtK(Number(summary.today_billed))}</span>
                             </div>
                         </div>
-                    </div>
-                ) : (
-                    <p className="text-xs text-muted-foreground text-center py-3">No orders yet</p>
-                )}
-
-                {/* Filter bar */}
-                <div className="mt-2 pt-1.5 border-t border-border">
-                    <div className="flex flex-wrap gap-1.5">
-                        {([
-                            { key: "all" as const, label: "All" },
-                            { key: "today" as const, label: `Today (${todayCount})` },
-                            { key: "unpaid" as const, label: `Unpaid (${Number(summary.unpaid_count)})` },
-                            { key: "paid" as const, label: "Paid" },
-                            { key: "work" as const, label: `Work (${workCount})` },
-                            { key: "sales" as const, label: `Sales (${salesCount})` },
-                        ] as const).map((f) => (
-                            <button key={f.key} type="button"
-                                onClick={() => onFilterChange(activeFilter === f.key ? "all" : f.key)}
-                                className={`text-xs font-medium px-2.5 py-1.5 rounded-md border transition-all cursor-pointer ${
-                                    activeFilter === f.key
-                                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                        : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
-                                }`}>
-                                {f.label}
-                            </button>
-                        ))}
-                    </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">No orders today</p>
+                    )}
                 </div>
 
-                {/* Monthly — donuts left, addition-style legend right */}
+                {/* Monthly — donuts + addition-style legend */}
                 <div className="mt-2 pt-1.5 border-t border-border">
                     <p className="text-xs font-bold mb-1.5">{monthName}</p>
                     {monthTotal > 0 ? (
@@ -406,6 +360,53 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder, activeFilter, onFi
                         </div>
                     ) : (
                         <p className="text-xs text-muted-foreground text-center py-2">No orders this month</p>
+                    )}
+                </div>
+
+                {/* All Time — donuts + addition-style legend */}
+                <div className="mt-2 pt-1.5 border-t border-border">
+                    <p className="text-xs font-bold mb-1.5">All Time</p>
+                    {allBilled > 0 ? (
+                        <div className="flex items-center gap-3">
+                            <div className="flex gap-3 shrink-0 items-center">
+                                <DonutChart
+                                    size={80}
+                                    strokeWidth={10}
+                                    hideLegend
+                                    center={{ value: `${(workBilled + salesBilled) > 0 ? Math.round((workBilled / (workBilled + salesBilled)) * 100) : 0}%`, label: "work" }}
+                                    segments={[
+                                        { value: workBilled, color: "#0d9488", label: "Work", amount: fmtK(workBilled) },
+                                        { value: salesBilled, color: "#7c3aed", label: "Sales", amount: fmtK(salesBilled) },
+                                    ]}
+                                />
+                                <DonutChart
+                                    size={100}
+                                    strokeWidth={13}
+                                    hideLegend
+                                    center={{ value: `${Math.round((allCollected / allBilled) * 100)}%`, label: "paid" }}
+                                    segments={[
+                                        { value: allCollected, color: "#047857", label: "Collected", amount: fmtK(allCollected) },
+                                        { value: totalUnpaidAmount, color: "#ea580c", label: "Remaining", amount: fmtK(totalUnpaidAmount) },
+                                    ]}
+                                />
+                            </div>
+                            <div className="flex-1 text-xs tabular-nums space-y-1">
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Collected</span>
+                                    <span className="font-semibold">{fmtK(allCollected)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Remaining</span>
+                                    <span className="font-semibold text-orange-600">{fmtK(totalUnpaidAmount)}</span>
+                                </div>
+                                <div className="border-t border-border pt-1 flex justify-between font-bold">
+                                    <span>Total</span>
+                                    <span>{fmtK(allBilled)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">No orders yet</p>
                     )}
                 </div>
             </Card>
@@ -489,6 +490,10 @@ export function CashierBody() {
 
     const { data: listSearchResult, isFetching: isListSearching } = useCashierOrderListSearch(listSearchQuery);
     const searchedOrders = listSearchResult?.data || [];
+
+    // Always-fetched unpaid orders for the Remaining section (independent of filter)
+    const { data: unpaidResult } = useRecentCashierOrders("unpaid");
+    const allUnpaidOrders = (unpaidResult?.data || []).filter(o => (o.order_total - o.paid) > 0.001);
 
     const { data: searchResult, isFetching: isOrderLoading } = useCashierOrderSearch(selectedOrderId || "");
     const order = searchResult?.status === "success" ? searchResult.data : null;
@@ -775,9 +780,6 @@ export function CashierBody() {
     if (isInitialLoad && !selectedOrderId) {
         return (
             <div className="h-full flex flex-col">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 shrink-0">
-                    <h2 className="font-bold text-base shrink-0">Cashier</h2>
-                </div>
                 <div className="flex-1 p-3">
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 md:h-full">
                         <div className="md:col-span-3 space-y-2">
@@ -798,27 +800,44 @@ export function CashierBody() {
     // ── Dashboard / Order List ──────────────────────────────────────────────
     return (
         <div className="h-full flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 shrink-0">
-                <h2 className="font-bold text-base shrink-0">Cashier</h2>
-            </div>
-
             <div className="flex-1 overflow-y-auto p-3">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 md:h-full">
                     <div className="md:col-span-3 flex flex-col min-h-0">
                         <div className="relative mb-2 shrink-0">
                             {isListSearching ? (
-                                <Loader2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary animate-spin" />
+                                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
                             ) : (
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             )}
                             <Input placeholder="Search by name, phone, or order ID..." value={listSearchInput}
-                                onChange={(e) => setListSearchInput(e.target.value)} className="pl-8 h-9 text-sm border-2 border-border focus-visible:border-primary" />
+                                onChange={(e) => setListSearchInput(e.target.value)} className="pl-10 h-11 text-sm font-medium border-2 border-border rounded-xl shadow-sm focus-visible:border-primary focus-visible:shadow-md transition-shadow" />
                             {listSearchInput && (
                                 <button type="button" onClick={() => setListSearchInput("")}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                                    <XCircle className="h-3.5 w-3.5" />
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                    <XCircle className="h-4 w-4" />
                                 </button>
                             )}
+                        </div>
+                        {/* Filter bar */}
+                        <div className="flex flex-wrap gap-1.5 mb-2 shrink-0">
+                            {([
+                                { key: "all" as const, label: "All" },
+                                { key: "today" as const, label: `Today (${Number(summary.today_count)})` },
+                                { key: "unpaid" as const, label: `Unpaid (${Number(summary.unpaid_count)})` },
+                                { key: "paid" as const, label: "Paid" },
+                                { key: "work" as const, label: `Work (${Number(summary.work_count)})` },
+                                { key: "sales" as const, label: `Sales (${Number(summary.sales_count)})` },
+                            ] as const).map((f) => (
+                                <button key={f.key} type="button"
+                                    onClick={() => setDashboardFilter(dashboardFilter === f.key ? "all" : f.key)}
+                                    className={`text-xs font-medium px-2.5 py-1.5 rounded-md border transition-all cursor-pointer ${
+                                        dashboardFilter === f.key
+                                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                            : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
+                                    }`}>
+                                    {f.label}
+                                </button>
+                            ))}
                         </div>
                         <div className="flex items-center justify-between px-1 mb-1 shrink-0">
                             <p className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -878,7 +897,7 @@ export function CashierBody() {
                         </div>
                     </div>
                     <div className="md:col-span-2 pr-1 overflow-visible">
-                        <ReportsPanel summary={summary} unpaidOrders={recentOrders.filter(o => (o.order_total - o.paid) > 0.001)} onSelectOrder={handleSelectOrder} activeFilter={dashboardFilter} onFilterChange={setDashboardFilter} />
+                        <ReportsPanel summary={summary} unpaidOrders={allUnpaidOrders} onSelectOrder={handleSelectOrder} />
                     </div>
                 </div>
             </div>
