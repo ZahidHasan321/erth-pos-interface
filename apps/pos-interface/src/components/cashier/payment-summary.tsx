@@ -31,7 +31,8 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const shelfCharge = Number(order?.shelf_charge) || 0;
 
     // Express: count express garments and compute charge from DB price
-    const expressGarmentCount = (order?.garments || []).filter((g: any) => g.express).length;
+    const orderGarments = Array.isArray(order?.garments) ? order.garments : [];
+    const expressGarmentCount = orderGarments.filter((g: any) => g.express).length;
     const expressSurcharge = getPrice("EXPRESS_SURCHARGE") || 2;
     const expressCharge = expressGarmentCount * expressSurcharge;
 

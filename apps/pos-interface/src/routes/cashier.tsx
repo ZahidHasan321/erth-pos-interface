@@ -61,7 +61,8 @@ function CashierTerminal() {
     const order = searchResult?.status === "success" ? searchResult.data : null;
 
     const { data: txResult } = usePaymentTransactions(order?.id);
-    const transactions = txResult?.status === "success" ? txResult.data : [];
+    const txData = txResult?.status === "success" ? txResult.data : [];
+    const transactions = Array.isArray(txData) ? txData : [];
 
     const handleSearch = useCallback(() => {
         if (searchInput.trim()) {
@@ -102,13 +103,16 @@ function CashierTerminal() {
     const isCancelled = order?.checkout_status === "cancelled";
     const isOrderCompleted = order?.order_phase === "completed";
     const isFullyPaid = remainingBalance <= 0;
-    const allGarmentsCompleted = useMemo(() => {
-        if (!order?.garments || order.garments.length === 0) return true;
-        return order.garments.every((g: any) => g.piece_stage === "completed");
-    }, [order?.garments]);
 
-    const hasGarments = order?.garments && order.garments.length > 0;
-    const hasShelfItems = order?.shelf_items && order.shelf_items.length > 0;
+    const garments = Array.isArray(order?.garments) ? order.garments : [];
+    const shelfItems = Array.isArray(order?.shelf_items) ? order.shelf_items : [];
+    const hasGarments = garments.length > 0;
+    const hasShelfItems = shelfItems.length > 0;
+
+    const allGarmentsCompleted = useMemo(() => {
+        if (garments.length === 0) return true;
+        return garments.every((g: any) => g.piece_stage === "completed");
+    }, [garments]);
 
     // Advance = 50% stitching + 100% (fabric + style + delivery + shelf)
     const advance = useMemo(() => {
@@ -250,7 +254,7 @@ function CashierTerminal() {
                                         <Card className="p-4">
                                             <h3 className="font-semibold flex items-center gap-2 mb-3">
                                                 <Shirt className="h-4 w-4" />
-                                                Garments ({order.garments!.length})
+                                                Garments ({garments.length})
                                                 {allGarmentsCompleted && (
                                                     <Badge className="bg-green-600 ml-auto text-xs">All Completed</Badge>
                                                 )}
@@ -261,7 +265,7 @@ function CashierTerminal() {
                                                 </p>
                                             ) : (
                                                 <GarmentCollection
-                                                    garments={order.garments!}
+                                                    garments={garments}
                                                     orderId={order.id}
                                                     remainingBalance={remainingBalance}
                                                 />
@@ -272,10 +276,10 @@ function CashierTerminal() {
                                         <Card className="p-4">
                                             <h3 className="font-semibold flex items-center gap-2 mb-3">
                                                 <Package className="h-4 w-4" />
-                                                Shelf Items ({order.shelf_items!.length})
+                                                Shelf Items ({shelfItems.length})
                                             </h3>
                                             <div className="space-y-2">
-                                                {order.shelf_items!.map((item: any) => (
+                                                {shelfItems.map((item: any) => (
                                                     <div key={item.id} className="flex justify-between items-center text-sm p-2.5 bg-muted/50 rounded-lg">
                                                         <div>
                                                             <span className="font-medium">{item.shelf?.type || `Item #${item.shelf_id}`}</span>
