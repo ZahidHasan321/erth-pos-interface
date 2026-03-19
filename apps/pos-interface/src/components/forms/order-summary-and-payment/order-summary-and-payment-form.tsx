@@ -172,9 +172,11 @@ export function OrderSummaryAndPaymentForm({
   });
 
   // Delivery logic
-  const hasAnyExpressDelivery = React.useMemo(() => {
-    return fabricSelections.some((fabric) => fabric.express);
+  const expressGarmentCount = React.useMemo(() => {
+    return fabricSelections.filter((fabric) => fabric.express).length;
   }, [fabricSelections]);
+
+  const hasAnyExpressDelivery = expressGarmentCount > 0;
 
   React.useEffect(() => {
     let newDeliveryCharge = 0;
@@ -182,12 +184,12 @@ export function OrderSummaryAndPaymentForm({
       newDeliveryCharge += getPrice("HOME_DELIVERY") || 5;
     }
 
-    if (hasAnyExpressDelivery) {
-      newDeliveryCharge += (getPrice("EXPRESS_SURCHARGE") || 2);
+    if (expressGarmentCount > 0) {
+      newDeliveryCharge += expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2);
     }
 
     form.setValue("delivery_charge", newDeliveryCharge, { shouldDirty: false });
-  }, [home_delivery, hasAnyExpressDelivery, form, getPrice]);
+  }, [home_delivery, expressGarmentCount, form, getPrice]);
 
   // Pricing logic
   const totalDue = (Number(fabric_charge) || 0) + 
@@ -823,8 +825,8 @@ export function OrderSummaryAndPaymentForm({
                   </div>
                   {(order_type === "WORK" || hasAnyExpressDelivery) && (
                     <div className="flex justify-between">
-                      <span>Express Surcharge</span>
-                      <span>{(hasAnyExpressDelivery ? (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
+                      <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount} x ${(getPrice("EXPRESS_SURCHARGE") || 2).toFixed(3)})` : ""}</span>
+                      <span>{(expressGarmentCount > 0 ? expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
                     </div>
                   )}
                   <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>

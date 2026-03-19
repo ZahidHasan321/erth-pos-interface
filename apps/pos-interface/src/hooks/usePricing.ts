@@ -41,7 +41,7 @@ export function usePricing() {
     garments: any[],
     shelfItems: any[],
     homeDelivery: boolean,
-    express: boolean,
+    expressCount: number,
     stitchingBaseOverride?: number
   ) => {
     // 1. Calculate Fabric (sum of individual garment fabric prices)
@@ -62,7 +62,7 @@ export function usePricing() {
 
     // 4. Delivery
     const deliveryCharge = homeDelivery ? getPrice('HOME_DELIVERY') : 0;
-    const expressCharge = express ? getPrice('EXPRESS_SURCHARGE') : 0;
+    const expressCharge = expressCount > 0 ? expressCount * getPrice('EXPRESS_SURCHARGE') : 0;
 
     // 5. Shelf
     const shelfTotal = shelfItems.reduce((acc, p) => acc + ((Number(p.unitPrice) || 0) * (Number(p.quantity) || 0)), 0);

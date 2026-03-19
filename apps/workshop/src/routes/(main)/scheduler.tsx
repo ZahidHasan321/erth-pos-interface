@@ -22,6 +22,7 @@ import {
   Calendar, BarChart3,
 } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
+import { getAlterationNumber, isAlteration } from "@repo/database";
 import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/scheduler")({
@@ -33,7 +34,19 @@ function toIsoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-// ── Lightweight garment row for brova returns / alterations ──────────────────
+// ── Garment card for brova returns / alterations ─────────────────────────────
+
+function feedbackInfo(g: WorkshopGarment) {
+  if (g.acceptance_status && g.feedback_status === "needs_repair")
+    return { label: "Fix Needed", cls: "text-amber-700 bg-amber-50 ring-amber-300/40" };
+  if (g.feedback_status === "needs_repair")
+    return { label: "Repair", cls: "text-orange-700 bg-orange-50 ring-orange-300/40" };
+  if (g.feedback_status === "needs_redo")
+    return { label: "Redo", cls: "text-red-700 bg-red-50 ring-red-300/40" };
+  if (g.feedback_status === "accepted" || g.acceptance_status)
+    return { label: "Accepted", cls: "text-emerald-700 bg-emerald-50 ring-emerald-300/40" };
+  return null;
+}
 
 function SchedulerGarmentRow({
   garment: g,
@@ -53,48 +66,84 @@ function SchedulerGarmentRow({
     ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`
     : null;
 
+  const altNum = getAlterationNumber(g.trip_number, g.garment_type);
+  const isAlt = isAlteration(g.trip_number, g.garment_type);
+  const fb = feedbackInfo(g);
+
   return (
     <div
       className={cn(
-        "bg-card border rounded-lg px-3 py-2 flex items-center gap-2 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
-        "hover:bg-muted/20 active:scale-[0.99]",
+        "bg-card border rounded-xl px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
+        "hover:bg-muted/20 active:scale-[0.995]",
         g.express && "border-l-[3px] border-l-orange-400",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
       onClick={() => onSelect(g.id, !selected)}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={(e) => { e.stopPropagation(); onSelect(g.id, e.target.checked); }}
-        onClick={(e) => e.stopPropagation()}
-        className="w-4 h-4 accent-primary cursor-pointer shrink-0"
-      />
-      <span className={cn(
-        "font-bold uppercase text-[10px] px-1 py-0.5 rounded shrink-0",
-        g.garment_type === "brova" ? "text-purple-700 bg-purple-50" : "text-blue-700 bg-blue-50",
-      )}>
-        {g.garment_type === "brova" ? "B" : "F"}
-      </span>
-      <span className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
-      <span className="text-xs text-muted-foreground truncate">
-        {g.customer_name ?? "—"}
-      </span>
-      <div className="flex items-center gap-1 ml-auto shrink-0">
-        {g.fabric_name && (
-          <span className="text-[10px] text-muted-foreground hidden sm:inline truncate max-w-[100px]">{g.fabric_name}</span>
+      {/* Row 1 — Identity: type · ID · customer · brand */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => { e.stopPropagation(); onSelect(g.id, e.target.checked); }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+        />
+        <span className={cn(
+          "font-bold uppercase text-[10px] px-1.5 py-0.5 rounded shrink-0",
+          g.garment_type === "brova" ? "text-purple-700 bg-purple-100" : "text-blue-700 bg-blue-100",
+        )}>
+          {g.garment_type === "brova" ? "B" : "F"}
+        </span>
+        <span className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
+        <span className="text-sm text-muted-foreground truncate min-w-0">{g.customer_name ?? "—"}</span>
+        <div className="ml-auto shrink-0">
+          <BrandBadge brand={g.order_brand} />
+        </div>
+      </div>
+
+      {/* Row 2 — Context: alteration # · feedback · fabric · delivery */}
+      <div className="flex items-center gap-1.5 mt-1.5 ml-6 flex-wrap">
+        {isAlt && altNum !== null && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 ring-1 ring-orange-300/40">
+            Alt #{altNum}
+          </span>
         )}
-        {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded text-[10px]">Soak</span>}
-        {daysLabel && (
+        {!isAlt && (g.trip_number ?? 1) > 1 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 ring-1 ring-purple-300/40">
+            Return #{(g.trip_number ?? 1) - 1}
+          </span>
+        )}
+        {fb && (
+          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded ring-1", fb.cls)}>
+            {fb.label}
+          </span>
+        )}
+        {g.soaking && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 ring-1 ring-sky-300/40">
+            Soak
+          </span>
+        )}
+        <span className="flex-1" />
+        {g.fabric_name && (
+          <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+            {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
+          </span>
+        )}
+        {daysLabel ? (
           <span className={cn(
-            "text-[10px] font-bold tabular-nums px-1 py-0.5 rounded",
+            "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded",
             isOverdue && "bg-red-100 text-red-700",
             isUrgent && "bg-amber-100 text-amber-700",
             !isUrgent && !isOverdue && "text-muted-foreground",
           )}>
             {daysLabel}
           </span>
-        )}
+        ) : g.delivery_date_order ? (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {formatDate(g.delivery_date_order)}
+          </span>
+        ) : null}
       </div>
     </div>
   );

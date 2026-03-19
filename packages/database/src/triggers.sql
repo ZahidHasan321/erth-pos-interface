@@ -574,7 +574,6 @@ BEGIN
       piece_stage = 'completed'
     WHERE id = v_garment_id
       AND order_id = p_order_id
-      AND acceptance_status = true
       AND location = 'shop'
       AND piece_stage IN ('brova_trialed', 'awaiting_trial', 'ready_for_pickup');
 
@@ -602,6 +601,61 @@ BEGIN
     'status', 'success',
     'updated_count', v_updated_count,
     'total_requested', array_length(p_garment_ids, 1)
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11. RPC: Update order discount (cashier terminal)
+CREATE OR REPLACE FUNCTION update_order_discount(
+  p_order_id INT,
+  p_discount_type TEXT,
+  p_discount_value DECIMAL,
+  p_discount_percentage DECIMAL DEFAULT NULL,
+  p_referral_code TEXT DEFAULT NULL,
+  p_new_order_total DECIMAL DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_order RECORD;
+  v_subtotal DECIMAL;
+  v_final_total DECIMAL;
+BEGIN
+  -- Validate order exists
+  SELECT * INTO v_order FROM orders WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  -- Compute subtotal (order_total + existing discount)
+  v_subtotal := COALESCE(v_order.order_total, 0) + COALESCE(v_order.discount_value, 0);
+
+  -- Determine new total
+  IF p_new_order_total IS NOT NULL THEN
+    v_final_total := p_new_order_total;
+  ELSE
+    v_final_total := v_subtotal - COALESCE(p_discount_value, 0);
+  END IF;
+
+  IF v_final_total < 0 THEN
+    v_final_total := 0;
+  END IF;
+
+  -- Update order
+  UPDATE orders
+  SET
+    discount_type = p_discount_type::discount_type,
+    discount_value = COALESCE(p_discount_value, 0),
+    discount_percentage = p_discount_percentage,
+    referral_code = p_referral_code,
+    order_total = v_final_total
+  WHERE id = p_order_id;
+
+  RETURN jsonb_build_object(
+    'status', 'success',
+    'order_id', p_order_id,
+    'subtotal', v_subtotal,
+    'discount_value', COALESCE(p_discount_value, 0),
+    'order_total', v_final_total
   );
 END;
 $$ LANGUAGE plpgsql;

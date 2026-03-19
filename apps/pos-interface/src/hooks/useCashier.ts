@@ -5,6 +5,7 @@ import {
     getPaymentTransactions,
     recordPaymentTransaction,
     collectGarments,
+    updateOrderDiscount,
 } from "@/api/cashier";
 
 export function useCashierOrderSearch(query: string) {
@@ -47,6 +48,28 @@ export function usePaymentMutation() {
         },
         onError: (error) => {
             toast.error(`Payment error: ${error.message}`);
+        },
+    });
+}
+
+export function useUpdateDiscountMutation() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: updateOrderDiscount,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Discount update failed: ${response.message}`);
+                return;
+            }
+            toast.success("Discount updated successfully");
+            queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
+            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+        },
+        onError: (error) => {
+            toast.error(`Discount error: ${error.message}`);
         },
     });
 }

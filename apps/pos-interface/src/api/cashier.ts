@@ -170,6 +170,29 @@ export const recordPaymentTransaction = async (params: {
     return { status: 'success' as const, data };
 };
 
+export const updateOrderDiscount = async (params: {
+    orderId: number;
+    discountType: string;
+    discountValue: number;
+    discountPercentage?: number;
+    referralCode?: string;
+    newOrderTotal?: number;
+}) => {
+    const { data, error } = await supabase.rpc('update_order_discount', {
+        p_order_id: params.orderId,
+        p_discount_type: params.discountType,
+        p_discount_value: params.discountValue,
+        p_discount_percentage: params.discountPercentage || null,
+        p_referral_code: params.referralCode || null,
+        p_new_order_total: params.newOrderTotal || null,
+    });
+
+    if (error) {
+        return { status: 'error' as const, message: error.message };
+    }
+    return { status: 'success' as const, data };
+};
+
 export const collectGarments = async (params: {
     orderId: number;
     garmentIds: string[];

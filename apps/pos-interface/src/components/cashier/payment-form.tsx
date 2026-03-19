@@ -36,9 +36,10 @@ interface PaymentFormProps {
     remainingBalance: number;
     orderTotal: number;
     totalPaid: number;
+    advance?: number;
 }
 
-export function PaymentForm({ orderId, remainingBalance }: PaymentFormProps) {
+export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: PaymentFormProps) {
     const [isRefund, setIsRefund] = useState(false);
     const paymentMutation = usePaymentMutation();
 
@@ -124,6 +125,11 @@ export function PaymentForm({ orderId, remainingBalance }: PaymentFormProps) {
                         placeholder="Enter amount"
                         className="flex-1"
                     />
+                    {!isRefund && totalPaid === 0 && advance != null && advance > 0 && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => form.setValue("amount", Number(advance.toFixed(3)))}>
+                            Advance ({advance.toFixed(3)})
+                        </Button>
+                    )}
                     {!isRefund && remainingBalance > 0 && (
                         <Button type="button" variant="outline" size="sm" onClick={fillRemaining}>
                             Pay Full ({remainingBalance.toFixed(3)})
