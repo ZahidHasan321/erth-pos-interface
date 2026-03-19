@@ -160,12 +160,12 @@ function CashierTerminal() {
             {/* Loading */}
             {isFetching && !order && (
                 <div className="flex-1 p-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                        <div className="lg:col-span-3 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div className="md:col-span-3 space-y-4">
                             <Skeleton className="h-24" />
                             <Skeleton className="h-64" />
                         </div>
-                        <div className="lg:col-span-2 space-y-4">
+                        <div className="md:col-span-2 space-y-4">
                             <Skeleton className="h-48" />
                             <Skeleton className="h-48" />
                         </div>
@@ -194,9 +194,9 @@ function CashierTerminal() {
                         </Alert>
                     )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         {/* LEFT PANEL (60%) */}
-                        <div className="lg:col-span-3 space-y-4">
+                        <div className="md:col-span-3 space-y-4">
                             {/* Customer & Order Info */}
                             <Card className="p-4">
                                 <div className="flex items-start gap-4">
@@ -309,7 +309,7 @@ function CashierTerminal() {
                         </div>
 
                         {/* RIGHT PANEL (40%) */}
-                        <div className="lg:col-span-2 space-y-4">
+                        <div className="md:col-span-2 space-y-4">
                             {/* Payment Summary */}
                             <Card className="p-4">
                                 <h3 className="font-semibold flex items-center gap-2 mb-3">
