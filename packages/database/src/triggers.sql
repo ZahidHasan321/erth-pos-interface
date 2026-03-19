@@ -491,7 +491,8 @@ AFTER INSERT OR UPDATE OR DELETE ON payment_transactions
 FOR EACH ROW
 EXECUTE FUNCTION sync_order_paid_from_transactions();
 
--- 9. RPC: Record a payment transaction
+-- 9. RPC: Record a payment transaction + optionally collect garments
+-- Collection only happens at payment time. Garments are marked collected AND completed together.
 CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_order_id INT,
   p_amount DECIMAL,
@@ -500,13 +501,16 @@ CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_payment_note TEXT DEFAULT NULL,
   p_cashier_id UUID DEFAULT NULL,
   p_transaction_type TEXT DEFAULT 'payment',
-  p_refund_reason TEXT DEFAULT NULL
+  p_refund_reason TEXT DEFAULT NULL,
+  p_collect_garment_ids UUID[] DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
   v_order RECORD;
   v_current_paid DECIMAL;
   v_transaction RECORD;
+  v_garment_id UUID;
+  v_collected_count INT := 0;
 BEGIN
   -- Validate order exists
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
@@ -542,70 +546,93 @@ BEGIN
   )
   RETURNING * INTO v_transaction;
 
+  -- Collect garments if any were selected (mark as collected + completed)
+  IF p_collect_garment_ids IS NOT NULL AND array_length(p_collect_garment_ids, 1) > 0 THEN
+    FOREACH v_garment_id IN ARRAY p_collect_garment_ids
+    LOOP
+      UPDATE garments
+      SET
+        fulfillment_type = 'collected',
+        piece_stage = 'completed'
+      WHERE id = v_garment_id
+        AND order_id = p_order_id
+        AND location = 'shop'
+        AND piece_stage IN ('brova_trialed', 'awaiting_trial', 'ready_for_pickup');
+
+      IF FOUND THEN
+        v_collected_count := v_collected_count + 1;
+      END IF;
+    END LOOP;
+  END IF;
+
   -- Return transaction + updated order info
   RETURN jsonb_build_object(
     'transaction', to_jsonb(v_transaction),
     'order_paid', (SELECT paid FROM orders WHERE id = p_order_id),
-    'order_total', v_order.order_total
+    'order_total', v_order.order_total,
+    'collected_count', v_collected_count
   );
 END;
 $$ LANGUAGE plpgsql;
 
--- 10. RPC: Collect garments (mark as completed with fulfillment type)
-CREATE OR REPLACE FUNCTION collect_garments(
+-- 11. RPC: Toggle home delivery on an order (updates charges + all garments)
+CREATE OR REPLACE FUNCTION toggle_home_delivery(
   p_order_id INT,
-  p_garment_ids UUID[],
-  p_fulfillment_type TEXT DEFAULT 'collected',
-  p_update_home_delivery BOOLEAN DEFAULT FALSE,
-  p_home_delivery BOOLEAN DEFAULT FALSE
+  p_home_delivery BOOLEAN
 )
 RETURNS JSONB AS $$
 DECLARE
-  v_garment_id UUID;
-  v_updated_count INT := 0;
-  v_delivery_charge DECIMAL;
+  v_order RECORD;
+  v_old_delivery DECIMAL;
+  v_new_delivery DECIMAL;
+  v_new_total DECIMAL;
 BEGIN
-  -- Validate and update each garment
-  FOREACH v_garment_id IN ARRAY p_garment_ids
-  LOOP
-    UPDATE garments
-    SET
-      fulfillment_type = p_fulfillment_type::fulfillment_type,
-      piece_stage = 'completed'
-    WHERE id = v_garment_id
-      AND order_id = p_order_id
-      AND location = 'shop'
-      AND piece_stage IN ('brova_trialed', 'awaiting_trial', 'ready_for_pickup');
-
-    IF FOUND THEN
-      v_updated_count := v_updated_count + 1;
-    END IF;
-  END LOOP;
-
-  -- Optionally update home_delivery on work_orders and recalc delivery_charge
-  IF p_update_home_delivery THEN
-    UPDATE work_orders
-    SET home_delivery = p_home_delivery
-    WHERE order_id = p_order_id;
-
-    IF p_home_delivery THEN
-      -- Look up delivery charge from prices table
-      SELECT value INTO v_delivery_charge FROM prices WHERE key = 'delivery_charge';
-      UPDATE orders SET delivery_charge = COALESCE(v_delivery_charge, 0) WHERE id = p_order_id;
-    ELSE
-      UPDATE orders SET delivery_charge = 0 WHERE id = p_order_id;
-    END IF;
+  -- Validate order exists
+  SELECT order_total, delivery_charge, discount_value INTO v_order
+  FROM orders WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
+
+  v_old_delivery := COALESCE(v_order.delivery_charge, 0);
+
+  IF p_home_delivery THEN
+    SELECT COALESCE(value::decimal, 0) INTO v_new_delivery FROM prices WHERE key = 'HOME_DELIVERY';
+    v_new_delivery := COALESCE(v_new_delivery, 0);
+  ELSE
+    v_new_delivery := 0;
+  END IF;
+
+  -- Recalculate order total by swapping delivery charge
+  v_new_total := COALESCE(v_order.order_total, 0) - v_old_delivery + v_new_delivery;
+
+  -- Update order charges
+  UPDATE orders
+  SET delivery_charge = v_new_delivery,
+      order_total = v_new_total
+  WHERE id = p_order_id;
+
+  -- Update work_orders flag
+  UPDATE work_orders
+  SET home_delivery = p_home_delivery
+  WHERE order_id = p_order_id;
+
+  -- Update all garments on this order
+  UPDATE garments
+  SET home_delivery = p_home_delivery
+  WHERE order_id = p_order_id;
 
   RETURN jsonb_build_object(
     'status', 'success',
-    'updated_count', v_updated_count,
-    'total_requested', array_length(p_garment_ids, 1)
+    'order_id', p_order_id,
+    'home_delivery', p_home_delivery,
+    'delivery_charge', v_new_delivery,
+    'order_total', v_new_total
   );
 END;
 $$ LANGUAGE plpgsql;
 
--- 11. RPC: Update order discount (cashier terminal)
+-- 12. RPC: Update order discount (cashier terminal)
 CREATE OR REPLACE FUNCTION update_order_discount(
   p_order_id INT,
   p_discount_type TEXT,
@@ -657,5 +684,38 @@ BEGIN
     'discount_value', COALESCE(p_discount_value, 0),
     'order_total', v_final_total
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 13. RPC: Cashier dashboard summary (lightweight aggregates, no row transfer)
+CREATE OR REPLACE FUNCTION get_cashier_summary(p_brand TEXT, p_today DATE DEFAULT CURRENT_DATE)
+RETURNS JSONB AS $$
+DECLARE
+  v_today DATE := p_today;
+  v_month_start DATE := date_trunc('month', p_today)::date;
+  v_result JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'all_billed',       COALESCE(SUM(order_total::decimal), 0),
+    'all_collected',    COALESCE(SUM(paid::decimal), 0),
+    'all_outstanding',  COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0),
+    'today_count',      COUNT(*) FILTER (WHERE order_date::date = v_today),
+    'today_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_date::date = v_today), 0),
+    'today_paid',       COALESCE(SUM(paid::decimal) FILTER (WHERE order_date::date = v_today), 0),
+    'month_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_date::date >= v_month_start), 0),
+    'month_paid',       COALESCE(SUM(paid::decimal) FILTER (WHERE order_date::date >= v_month_start), 0),
+    'month_outstanding',COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)) FILTER (WHERE order_date::date >= v_month_start), 0),
+    'work_count',       COUNT(*) FILTER (WHERE order_type = 'WORK'),
+    'sales_count',      COUNT(*) FILTER (WHERE order_type = 'SALES'),
+    'unpaid_count',     COUNT(*) FILTER (WHERE order_total::decimal - paid::decimal > 0.001),
+    'work_billed',      COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK'), 0),
+    'sales_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES'), 0),
+    'month_work_billed', COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK' AND order_date::date >= v_month_start), 0),
+    'month_sales_billed',COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES' AND order_date::date >= v_month_start), 0)
+  ) INTO v_result
+  FROM orders
+  WHERE brand = p_brand::brand AND checkout_status != 'draft';
+
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;

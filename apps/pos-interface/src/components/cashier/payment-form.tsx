@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import {
     Select,
     SelectContent,
@@ -37,9 +36,11 @@ interface PaymentFormProps {
     orderTotal: number;
     totalPaid: number;
     advance?: number;
+    collectGarmentIds?: Set<string>;
+    onCollected?: () => void;
 }
 
-export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: PaymentFormProps) {
+export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected }: PaymentFormProps) {
     const [isRefund, setIsRefund] = useState(false);
     const paymentMutation = usePaymentMutation();
 
@@ -70,10 +71,14 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
             return;
         }
 
-        if (!isRefund && values.payment_type !== "cash" && !values.payment_ref_no?.trim()) {
-            form.setError("payment_ref_no", { message: "Reference number is required for non-cash payments" });
+        if (!values.payment_ref_no?.trim()) {
+            form.setError("payment_ref_no", { message: "Reference number is required" });
             return;
         }
+
+        const garmentIds = !isRefund && collectGarmentIds && collectGarmentIds.size > 0
+            ? Array.from(collectGarmentIds)
+            : undefined;
 
         paymentMutation.mutate(
             {
@@ -85,12 +90,14 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
                 cashierId: values.cashier_id || undefined,
                 transactionType: isRefund ? "refund" : "payment",
                 refundReason: isRefund ? values.refund_reason : undefined,
+                collectGarmentIds: garmentIds,
             },
             {
                 onSuccess: (response) => {
                     if (response.status === "success") {
                         form.reset();
                         setIsRefund(false);
+                        if (garmentIds && onCollected) onCollected();
                     }
                 },
             }
@@ -104,18 +111,29 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
     };
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Refund Toggle */}
-            <div className="flex items-center gap-3 pb-3 border-b">
-                <Switch checked={isRefund} onCheckedChange={setIsRefund} id="refund-toggle" />
-                <Label htmlFor="refund-toggle" className={isRefund ? "text-red-600 font-semibold" : ""}>
-                    {isRefund ? "Refund Mode" : "Payment Mode"}
-                </Label>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2.5">
+            {/* Payment / Refund Tabs */}
+            <div className="relative flex rounded-xl bg-muted/80 p-1 shadow-inner border border-border/50">
+                {/* Sliding indicator */}
+                <div
+                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ease-in-out ${isRefund ? "translate-x-[calc(100%+4px)] bg-red-100 shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-red-200" : "translate-x-0 bg-background shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-border/50"}`}
+                    style={{ left: 4 }}
+                />
+                <button type="button"
+                    onClick={() => setIsRefund(false)}
+                    className={`relative z-10 flex-1 text-sm font-semibold py-2 rounded-lg cursor-pointer transition-colors duration-300 ${!isRefund ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    Payment
+                </button>
+                <button type="button"
+                    onClick={() => setIsRefund(true)}
+                    className={`relative z-10 flex-1 text-sm font-semibold py-2 rounded-lg cursor-pointer transition-colors duration-300 ${isRefund ? "text-red-700" : "text-muted-foreground hover:text-foreground"}`}>
+                    Refund
+                </button>
             </div>
 
             {/* Amount */}
-            <div className="space-y-2">
-                <Label>Amount (KD)</Label>
+            <div className="space-y-1">
+                <Label className="text-xs">Amount (KWD)</Label>
                 <div className="flex gap-2">
                     <Input
                         type="number"
@@ -123,7 +141,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
                         min="0.001"
                         {...form.register("amount")}
                         placeholder="Enter amount"
-                        className="flex-1"
+                        className="flex-1 border-2 border-border"
                     />
                     {!isRefund && totalPaid === 0 && advance != null && advance > 0 && (
                         <Button type="button" variant="outline" size="sm" onClick={() => form.setValue("amount", Number(advance.toFixed(3)))}>
@@ -142,71 +160,84 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
             </div>
 
             {/* Payment Type */}
-            <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <RadioGroup
-                    value={form.watch("payment_type")}
-                    onValueChange={(val) => form.setValue("payment_type", val as any)}
-                    className="flex flex-wrap gap-3"
-                >
-                    {Object.entries(PAYMENT_TYPE_LABELS).map(([key, label]) => (
-                        <div key={key} className="flex items-center gap-1.5">
-                            <RadioGroupItem value={key} id={`pt-${key}`} />
-                            <Label htmlFor={`pt-${key}`} className="text-sm cursor-pointer">
+            <div className="space-y-1">
+                <Label className="text-xs">Payment Method</Label>
+                <div className="grid grid-cols-3 gap-1.5">
+                    {Object.entries(PAYMENT_TYPE_LABELS).map(([key, label]) => {
+                        const active = form.watch("payment_type") === key;
+                        return (
+                            <button key={key} type="button"
+                                onClick={() => form.setValue("payment_type", key as any)}
+                                className={`text-xs font-medium py-2 px-2 rounded-md border transition-all cursor-pointer ${
+                                    active
+                                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                        : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
+                                }`}>
                                 {label}
-                            </Label>
-                        </div>
-                    ))}
-                </RadioGroup>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
-            {/* Payment Ref */}
-            <div className="space-y-2">
-                <Label>Reference Number</Label>
-                <Input {...form.register("payment_ref_no")} placeholder="Transaction reference" />
-                {form.formState.errors.payment_ref_no && (
-                    <p className="text-xs text-red-500">{form.formState.errors.payment_ref_no.message}</p>
-                )}
+            {/* Ref + Cashier — same row */}
+            <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                    <Label className="text-xs">Reference No.</Label>
+                    <Input {...form.register("payment_ref_no")} placeholder="Transaction ref" className="border-2 border-border" />
+                    {form.formState.errors.payment_ref_no && (
+                        <p className="text-xs text-red-500">{form.formState.errors.payment_ref_no.message}</p>
+                    )}
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-xs">Cashier</Label>
+                    <Select
+                        value={form.watch("cashier_id") || ""}
+                        onValueChange={(val) => form.setValue("cashier_id", val)}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select cashier" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {employees?.map((emp: any) => (
+                                <SelectItem key={emp.id} value={emp.id}>
+                                    {emp.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
-            {/* Cashier */}
-            <div className="space-y-2">
-                <Label>Cashier</Label>
-                <Select
-                    value={form.watch("cashier_id") || ""}
-                    onValueChange={(val) => form.setValue("cashier_id", val)}
-                >
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select cashier" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {employees?.map((emp: any) => (
-                            <SelectItem key={emp.id} value={emp.id}>
-                                {emp.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Note */}
-            <div className="space-y-2">
-                <Label>Note</Label>
-                <Textarea {...form.register("payment_note")} placeholder="Optional note" rows={2} />
-            </div>
+            {/* Note (hidden during refund — refund reason covers it) */}
+            {!isRefund && (
+                <div className="space-y-1">
+                    <Label className="text-xs">Note</Label>
+                    <Textarea {...form.register("payment_note")} placeholder="Optional note" rows={2} className="border-2 border-border" />
+                </div>
+            )}
 
             {/* Refund Reason */}
             {isRefund && (
-                <div className="space-y-2">
-                    <Label className="text-red-600">Refund Reason *</Label>
+                <div className="space-y-1">
+                    <Label className="text-xs text-red-600">Refund Reason *</Label>
                     <Textarea
                         {...form.register("refund_reason")}
                         placeholder="Reason for refund (required)"
                         rows={2}
+                        className="border-2 border-border"
                     />
                     {form.formState.errors.refund_reason && (
                         <p className="text-xs text-red-500">{form.formState.errors.refund_reason.message}</p>
                     )}
+                </div>
+            )}
+
+            {/* Collection indicator */}
+            {!isRefund && collectGarmentIds && collectGarmentIds.size > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                    <Package className="h-3.5 w-3.5" />
+                    {collectGarmentIds.size} garment{collectGarmentIds.size !== 1 ? "s" : ""} will be collected with this payment
                 </div>
             )}
 
@@ -219,7 +250,9 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance }: P
                     ? "Processing..."
                     : isRefund
                       ? "Record Refund"
-                      : "Record Payment"}
+                      : collectGarmentIds && collectGarmentIds.size > 0
+                        ? `Record Payment & Collect ${collectGarmentIds.size}`
+                        : "Record Payment"}
             </Button>
         </form>
     );

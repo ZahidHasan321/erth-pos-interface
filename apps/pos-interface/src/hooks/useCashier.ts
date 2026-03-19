@@ -4,14 +4,42 @@ import {
     searchOrderForCashier,
     getPaymentTransactions,
     recordPaymentTransaction,
-    collectGarments,
     updateOrderDiscount,
+    toggleHomeDelivery,
+    getRecentCashierOrders,
+    searchCashierOrderList,
+    getCashierSummary,
 } from "@/api/cashier";
 
 export function useCashierOrderSearch(query: string) {
     return useQuery({
         queryKey: ["cashier-order", query],
         queryFn: () => searchOrderForCashier(query),
+        enabled: query.trim().length >= 1,
+        staleTime: 1000 * 30,
+    });
+}
+
+export function useRecentCashierOrders(filter: import("@/api/cashier").CashierFilter = "all") {
+    return useQuery({
+        queryKey: ["cashier-recent-orders", filter],
+        queryFn: () => getRecentCashierOrders(filter),
+        staleTime: 1000 * 60,
+    });
+}
+
+export function useCashierSummary() {
+    return useQuery({
+        queryKey: ["cashier-summary"],
+        queryFn: () => getCashierSummary(),
+        staleTime: 1000 * 60,
+    });
+}
+
+export function useCashierOrderListSearch(query: string) {
+    return useQuery({
+        queryKey: ["cashier-order-list-search", query],
+        queryFn: () => searchCashierOrderList(query),
         enabled: query.trim().length >= 1,
         staleTime: 1000 * 30,
     });
@@ -42,6 +70,8 @@ export function usePaymentMutation() {
             );
             queryClient.invalidateQueries({ queryKey: ["payment-transactions", variables.orderId] });
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
             queryClient.invalidateQueries({ queryKey: ["order-history"] });
@@ -64,6 +94,8 @@ export function useUpdateDiscountMutation() {
             }
             toast.success("Discount updated successfully");
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
             queryClient.invalidateQueries({ queryKey: ["order-history"] });
@@ -74,25 +106,27 @@ export function useUpdateDiscountMutation() {
     });
 }
 
-export function useCollectGarmentsMutation() {
+export function useToggleHomeDeliveryMutation() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: collectGarments,
+        mutationFn: toggleHomeDelivery,
         onSuccess: (response, variables) => {
             if (response.status === "error") {
-                toast.error(`Collection failed: ${response.message}`);
+                toast.error(`Failed to update delivery type: ${response.message}`);
                 return;
             }
-            const result = response.data as any;
-            toast.success(`${result.updated_count} garment(s) collected successfully`);
+            toast.success(variables.homeDelivery ? "Switched to home delivery" : "Switched to pickup");
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
             queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["payment-transactions", variables.orderId] });
+            queryClient.invalidateQueries({ queryKey: ["order-history"] });
         },
         onError: (error) => {
-            toast.error(`Collection error: ${error.message}`);
+            toast.error(`Delivery toggle error: ${error.message}`);
         },
     });
 }
+

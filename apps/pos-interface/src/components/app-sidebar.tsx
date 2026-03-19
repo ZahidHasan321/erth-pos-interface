@@ -90,9 +90,8 @@ const data = {
         },
         {
           title: "Cashier",
-          url: "/cashier",
+          url: "cashier",
           icon: Banknote,
-          isAbsolute: true,
         },
         {
           title: "Order Management",
@@ -374,19 +373,6 @@ export function AppSidebar({
                         icon={subItem.icon}
                         items={subItem.items}
                         mainSegment={mainSegment}
-                      />
-                    );
-                  }
-
-                  // Absolute URL items (e.g. /cashier)
-                  if (subItem.isAbsolute) {
-                    return (
-                      <SidebarLink
-                        key={subItem.title}
-                        to={subItem.url}
-                        title={subItem.title}
-                        icon={subItem.icon}
-                        disabled={false}
                       />
                     );
                   }

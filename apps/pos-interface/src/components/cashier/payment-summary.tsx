@@ -36,10 +36,6 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const expressSurcharge = getPrice("EXPRESS_SURCHARGE") || 2;
     const expressCharge = expressGarmentCount * expressSurcharge;
 
-    // Home delivery portion of delivery charge
-    const homeDeliveryPrice = getPrice("HOME_DELIVERY") || 5;
-    const hasHomeDelivery = order?.home_delivery === true;
-    const homeDeliveryCharge = hasHomeDelivery ? homeDeliveryPrice : 0;
 
     const subtotal = orderTotal + discountValue;
 
@@ -49,7 +45,7 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
     return (
-        <div className="space-y-1.5 text-sm">
+        <div className="space-y-1 text-sm">
             {/* Charge breakdown */}
             <div className="space-y-1">
                 {stitchingCharge > 0 && (
@@ -70,10 +66,10 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                         <span>{fmt(styleCharge)} KD</span>
                     </div>
                 )}
-                {homeDeliveryCharge > 0 && (
+                {deliveryCharge > 0 && (
                     <div className="flex justify-between text-muted-foreground">
-                        <span>Home Delivery</span>
-                        <span>{fmt(homeDeliveryCharge)} KD</span>
+                        <span>Delivery</span>
+                        <span>{fmt(deliveryCharge)} KD</span>
                     </div>
                 )}
                 {expressCharge > 0 && (
@@ -134,10 +130,10 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
             </div>
 
             {/* Advance reference — shown when no payments yet */}
-            {totalPayments === 0 && advance > 0 && (
-                <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                    <span>Advance (minimum)</span>
-                    <span>{fmt(advance)} KD</span>
+            {advance > 0 && (
+                <div className="flex items-center justify-between text-xs font-medium px-2.5 py-2 mt-1 rounded-md bg-amber-50 border border-amber-200 text-amber-800">
+                    <span>Minimum advance</span>
+                    <span className="font-bold tabular-nums">{fmt(advance)} KD</span>
                 </div>
             )}
         </div>

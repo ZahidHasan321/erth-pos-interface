@@ -1,5 +1,6 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { getBrand } from "@/api/orders";
 
 export type OrderHistoryItem = {
   id: number;
@@ -67,6 +68,9 @@ export function useOrderHistory({
           garments:garments(id),
           shelf_items:order_shelf_items(id)
         `, { count: 'exact' });
+
+      // Brand filter
+      query = query.eq('brand', getBrand());
 
       // Apply Filters
       if (statusFilter !== "all") {

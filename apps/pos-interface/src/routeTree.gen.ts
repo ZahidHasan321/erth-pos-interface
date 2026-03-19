@@ -16,6 +16,7 @@ import { Route as MainRouteRouteImport } from './routes/$main/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MainIndexRouteImport } from './routes/$main/index'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
+import { Route as MainCashierRouteImport } from './routes/$main/cashier'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainStoreStockReportRouteImport } from './routes/$main/store/stock-report'
 import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/store/request-delivery'
@@ -73,6 +74,11 @@ const authLoginRoute = authLoginRouteImport.update({
   id: '/(auth)/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MainCashierRoute = MainCashierRouteImport.update({
+  id: '/cashier',
+  path: '/cashier',
+  getParentRoute: () => MainRouteRoute,
 } as any)
 const MainCustomersIndexRoute = MainCustomersIndexRouteImport.update({
   id: '/customers/',
@@ -206,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/cashier': typeof MainCashierRoute
   '/login': typeof authLoginRoute
   '/$main/': typeof MainIndexRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/cashier': typeof MainCashierRoute
   '/login': typeof authLoginRoute
   '/$main': typeof MainIndexRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/cashier': typeof MainCashierRoute
   '/(auth)/login': typeof authLoginRoute
   '/$main/': typeof MainIndexRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
@@ -301,6 +310,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/cashier'
     | '/login'
     | '/$main/'
     | '/$main/customers/$customerId'
@@ -331,6 +341,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/cashier'
     | '/login'
     | '/$main'
     | '/$main/customers/$customerId'
@@ -362,6 +373,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/cashier'
     | '/(auth)/login'
     | '/$main/'
     | '/$main/customers/$customerId'
@@ -447,6 +459,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof authLoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/$main/cashier': {
+      id: '/$main/cashier'
+      path: '/cashier'
+      fullPath: '/$main/cashier'
+      preLoaderRoute: typeof MainCashierRouteImport
+      parentRoute: typeof MainRouteRoute
     }
     '/$main/customers/': {
       id: '/$main/customers/'
@@ -606,6 +625,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface MainRouteRouteChildren {
+  MainCashierRoute: typeof MainCashierRoute
   MainIndexRoute: typeof MainIndexRoute
   MainCustomersCustomerIdRoute: typeof MainCustomersCustomerIdRoute
   MainOrdersCustomerProfilesOrdersRoute: typeof MainOrdersCustomerProfilesOrdersRoute
@@ -632,6 +652,7 @@ interface MainRouteRouteChildren {
 }
 
 const MainRouteRouteChildren: MainRouteRouteChildren = {
+  MainCashierRoute: MainCashierRoute,
   MainIndexRoute: MainIndexRoute,
   MainCustomersCustomerIdRoute: MainCustomersCustomerIdRoute,
   MainOrdersCustomerProfilesOrdersRoute: MainOrdersCustomerProfilesOrdersRoute,
