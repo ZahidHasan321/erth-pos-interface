@@ -106,7 +106,7 @@ function DashboardPage() {
     );
   }
 
-  function formatDeliveryDate(dateStr: string) {
+  function formatDeliveryDate(dateStr: string | Date) {
     const date = new Date(dateStr);
     if (isToday(date)) return "Today";
     if (isTomorrow(date)) return "Tomorrow";
