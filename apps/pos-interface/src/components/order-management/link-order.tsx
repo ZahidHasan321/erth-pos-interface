@@ -263,7 +263,7 @@ export default function LinkOrder() {
       <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
         {/* Header */}
         <div className="space-y-1">
-          <h1 className="text-xl font-bold text-foreground">Link Orders</h1>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">Link Orders</h1>
           <p className="text-sm text-muted-foreground">
             Connect orders for synchronized production and delivery
           </p>

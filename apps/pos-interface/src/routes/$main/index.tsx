@@ -114,11 +114,11 @@ function DashboardPage() {
   }
 
   return (
-    <div className={cn("p-4 md:p-6 max-w-[1600px] mx-auto space-y-5", ANIMATION_CLASSES.fadeInUp)}>
+    <div className={cn("p-4 md:p-5 max-w-[1600px] mx-auto space-y-5", ANIMATION_CLASSES.fadeInUp)}>
       {/* Header */}
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
             Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">

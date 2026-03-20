@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -50,20 +49,15 @@ function LandingPage() {
       />
 
       {/* Top decorative line */}
-      <motion.div
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={{ duration: 1.2, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute top-[15%] left-1/2 -translate-x-1/2 h-px w-32 origin-center"
-        style={{ background: "linear-gradient(90deg, transparent, #d4cdaa40, transparent)" }}
+      <div
+        className="absolute top-[15%] left-1/2 -translate-x-1/2 h-px w-32 origin-center css-scale-in"
+        style={{ background: "linear-gradient(90deg, transparent, #d4cdaa40, transparent)", animationDelay: "0.3s" }}
       />
 
       {/* Brand name */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 mb-4"
+      <div
+        className="relative z-10 mb-4 css-fade-in-scale"
+        style={{ animationDelay: "0.1s" }}
       >
         <h1
           className="brand-font text-5xl md:text-7xl"
@@ -71,34 +65,26 @@ function LandingPage() {
         >
           Autolinium
         </h1>
-      </motion.div>
+      </div>
 
       {/* Tagline */}
-      <motion.p
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-        className="relative z-10 text-sm md:text-base tracking-[0.35em] uppercase mb-16"
-        style={{ color: "#d4cdaa90", fontFamily: "'Montserrat', sans-serif", fontWeight: 400 }}
+      <p
+        className="relative z-10 text-sm md:text-base tracking-[0.35em] uppercase mb-16 css-fade-in-up"
+        style={{ color: "#d4cdaa90", fontFamily: "'Montserrat', sans-serif", fontWeight: 400, animationDelay: "0.6s" }}
       >
         Tailoring Atelier
-      </motion.p>
+      </p>
 
       {/* Decorative diamond */}
-      <motion.div
-        initial={{ opacity: 0, rotate: 45, scale: 0 }}
-        animate={{ opacity: 1, rotate: 45, scale: 1 }}
-        transition={{ duration: 0.6, delay: 0.9, ease: "easeOut" }}
-        className="relative z-10 w-2 h-2 mb-6"
-        style={{ background: "#d4cdaa50" }}
+      <div
+        className="relative z-10 w-2 h-2 mb-6 css-fade-in-scale"
+        style={{ background: "#d4cdaa50", transform: "rotate(45deg)", animationDelay: "0.9s" }}
       />
 
       {/* Enter prompt */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 1.2 }}
-        className="relative z-10 flex flex-col items-center gap-3"
+      <div
+        className="relative z-10 flex flex-col items-center gap-3 css-fade-in"
+        style={{ animationDelay: "1.2s" }}
       >
         <p
           className="text-xs tracking-[0.3em] uppercase animate-pulse"
@@ -106,15 +92,12 @@ function LandingPage() {
         >
           Press Enter or Tap
         </p>
-      </motion.div>
+      </div>
 
       {/* Bottom decorative line */}
-      <motion.div
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={{ duration: 1.2, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute bottom-[15%] left-1/2 -translate-x-1/2 h-px w-32 origin-center"
-        style={{ background: "linear-gradient(90deg, transparent, #d4cdaa40, transparent)" }}
+      <div
+        className="absolute bottom-[15%] left-1/2 -translate-x-1/2 h-px w-32 origin-center css-scale-in"
+        style={{ background: "linear-gradient(90deg, transparent, #d4cdaa40, transparent)", animationDelay: "0.5s" }}
       />
 
       {/* Corner accents */}

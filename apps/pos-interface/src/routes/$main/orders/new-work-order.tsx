@@ -851,7 +851,7 @@ function NewWorkOrder() {
             </div>
 
             {/* Step Content */}
-            <div className="flex flex-col items-center gap-4 md:gap-5 pt-5 pb-8 mx-3 xl:mx-[5%]">
+            <div className="flex flex-col items-center gap-4 md:gap-5 pt-5 pb-8 px-4 md:px-5 max-w-6xl mx-auto w-full">
                 {!isOrderClosed && (
                     <div className="w-full mt-0">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>

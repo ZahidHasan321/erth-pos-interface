@@ -72,7 +72,7 @@ function OrderHistoryPage() {
     }, [searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter, pageSize]);
 
     return (
-        <div className="container mx-auto py-4 px-4 lg:px-8 space-y-3 max-w-7xl">
+        <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-3">
             {/* Header */}
             <div className="space-y-1">
                 <h1 className="text-xl font-bold tracking-tight flex items-center gap-2 text-foreground">

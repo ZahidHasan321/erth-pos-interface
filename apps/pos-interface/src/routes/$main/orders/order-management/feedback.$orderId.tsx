@@ -798,7 +798,7 @@ function UnifiedFeedbackInterface() {
 
   if (isLoadingOrder) {
     return (
-      <div className="container mx-auto p-4 md:p-5 max-w-7xl space-y-4">
+      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
         {/* Header skeleton */}
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="space-y-2">
@@ -826,7 +826,7 @@ function UnifiedFeedbackInterface() {
 
   if (!activeOrder) {
     return (
-      <div className="container mx-auto p-4 md:p-5 max-w-7xl flex flex-col items-center justify-center py-10 text-center">
+      <div className="p-4 md:p-5 max-w-6xl mx-auto flex flex-col items-center justify-center py-10 text-center">
         <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 border-2 border-dashed border-border shadow-inner">
           <Package className="w-10 h-10 text-muted-foreground/40" />
         </div>
@@ -841,7 +841,7 @@ function UnifiedFeedbackInterface() {
   }
 
   return (
-    <div className="container mx-auto p-3 md:p-5 max-w-5xl space-y-4 pb-20">
+    <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4 pb-20">
 
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border pb-3">
@@ -849,7 +849,7 @@ function UnifiedFeedbackInterface() {
           <ArrowLeft className="size-4" />
         </Button>
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-foreground">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">
             Order <span className="text-primary">Feedback</span>
           </h1>
           <span className="text-sm text-muted-foreground font-medium">

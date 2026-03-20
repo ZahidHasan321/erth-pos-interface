@@ -88,10 +88,10 @@ function CustomersListComponent() {
   };
 
   return (
-    <div className="space-y-3 mx-4 lg:mx-8 my-4 max-w-[1600px] 2xl:mx-auto">
+    <div className="space-y-3 p-4 md:p-5 max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <h1 className="text-lg font-black text-foreground tracking-tight uppercase">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">
             Customer <span className="text-primary">Directory</span>
           </h1>
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">

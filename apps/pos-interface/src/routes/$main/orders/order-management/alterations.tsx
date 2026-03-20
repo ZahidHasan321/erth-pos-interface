@@ -91,11 +91,11 @@ function AlterationsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-5 max-w-5xl space-y-4 pb-8 animate-in fade-in zoom-in-95 duration-300">
+    <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4 pb-8 animate-in fade-in zoom-in-95 duration-300">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <h1 className="text-xl font-black text-foreground uppercase tracking-tight">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">
             Alterations <span className="text-primary">Center</span>
           </h1>
           <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest mt-1">

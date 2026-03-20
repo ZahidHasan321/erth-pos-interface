@@ -86,11 +86,11 @@ function ReceivingInterface() {
     }, [orders, searchQuery]);
 
     return (
-        <div className="container mx-auto p-4 md:p-5 space-y-4 max-w-6xl">
+        <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
                 <div className="space-y-1">
-                    <h1 className="text-xl font-bold text-foreground">
+                    <h1 className="text-xl font-bold text-foreground tracking-tight">
                         Receiving Inventory
                     </h1>
                     <p className="text-sm text-muted-foreground">

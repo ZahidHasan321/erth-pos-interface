@@ -204,7 +204,7 @@ function CustomerDetailComponent() {
 
     if (isLoading) {
         return (
-            <div className="space-y-3 py-4 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+            <div className="space-y-3 p-4 md:p-5 max-w-6xl mx-auto">
                 <Skeleton className="h-9 w-48 rounded-lg" />
                 <Card className="border-2 py-0 gap-0">
                     <CardContent className="p-3 space-y-4">
@@ -252,7 +252,7 @@ function CustomerDetailComponent() {
     }
 
     return (
-        <div className="space-y-3 py-4 px-[5%] md:px-[10%] max-w-screen-2xl mx-auto">
+        <div className="space-y-3 p-4 md:p-5 max-w-6xl mx-auto">
             <div className="flex items-center justify-between">
                 <Button asChild variant="ghost" className="hover:bg-primary/10 text-primary gap-2 h-9 px-3">
                     <Link to="/$main/customers">

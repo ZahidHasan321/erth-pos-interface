@@ -148,7 +148,7 @@ export default function UnlinkOrder() {
             {/* --- Page Header --- */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
                 <motion.div variants={itemVariants} className="space-y-1">
-                    <h1 className="text-xl font-black text-foreground tracking-tight uppercase">
+                    <h1 className="text-xl font-bold text-foreground tracking-tight">
                         Unlink <span className="text-primary">Order</span>
                     </h1>
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">

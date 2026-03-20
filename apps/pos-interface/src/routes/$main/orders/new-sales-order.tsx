@@ -393,7 +393,7 @@ function NewSalesOrder() {
             />
 
             {/* Main Content Flow */}
-            <div className="flex flex-col gap-6 pt-5 pb-8 mx-[3%] md:mx-[5%]">
+            <div className="flex flex-col gap-6 pt-5 pb-8 px-4 md:px-5 max-w-6xl mx-auto w-full">
 
                 {/* Step 1: Shelf Products */}
                 <section id="items-section" className="w-full">

@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { motion } from "framer-motion";
 
 import ErthLogo from "../assets/erth-dark.svg";
 import SakkbaLogo from "../assets/Sakkba.png";
@@ -38,11 +37,9 @@ function SelectionPage() {
       <div className="absolute bottom-8 right-8 w-8 h-8 border-r border-b opacity-10" style={{ borderColor: "#d4cdaa" }} />
 
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 text-center mb-12"
+      <div
+        className="relative z-10 text-center mb-12 css-fade-in-up"
+        style={{ animationDelay: "0s" }}
       >
         <p
           className="text-xs tracking-[0.4em] uppercase mb-4"
@@ -54,16 +51,12 @@ function SelectionPage() {
           className="mx-auto h-px w-16"
           style={{ background: "linear-gradient(90deg, transparent, #d4cdaa30, transparent)" }}
         />
-      </motion.div>
+      </div>
 
       {/* Brand cards */}
       <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 max-w-3xl w-full">
         {/* Erth Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <div className="css-fade-in-up" style={{ animationDelay: "0.15s" }}>
           <Link
             to="/$main"
             params={{ main: BRAND_NAMES.showroom }}
@@ -145,14 +138,10 @@ function SelectionPage() {
               </div>
             </div>
           </Link>
-        </motion.div>
+        </div>
 
         {/* Sakkba Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <div className="css-fade-in-up" style={{ animationDelay: "0.3s" }}>
           <Link
             to="/$main"
             params={{ main: BRAND_NAMES.fromHome }}
@@ -234,15 +223,13 @@ function SelectionPage() {
               </div>
             </div>
           </Link>
-        </motion.div>
+        </div>
       </div>
 
       {/* Back link */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.6 }}
-        className="relative z-10 mt-12"
+      <div
+        className="relative z-10 mt-12 css-fade-in"
+        style={{ animationDelay: "0.6s" }}
       >
         <Link
           to="/"
@@ -251,7 +238,7 @@ function SelectionPage() {
         >
           Back
         </Link>
-      </motion.div>
+      </div>
     </div>
   );
 }

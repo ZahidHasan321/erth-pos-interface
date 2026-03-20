@@ -551,10 +551,10 @@ function RouteComponent() {
   }, [orders, filters]);
           
   return (
-    <div className="p-3 sm:p-4 max-w-[1600px] mx-auto space-y-3 animate-in fade-in zoom-in-95 duration-300">
+    <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-3 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-lg sm:text-xl font-black text-foreground tracking-tight uppercase">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">
             Orders at <span className="text-primary">Showroom</span>
           </h1>
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">

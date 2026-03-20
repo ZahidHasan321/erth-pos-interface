@@ -10,7 +10,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 2, // 2 min — data stays fresh, no refetch on mount/focus
-      gcTime: 1000 * 60 * 30, // 30 min — keep cache in memory longer
+      gcTime: 1000 * 60 * 5, // 5 min — keep mobile memory usage low
       refetchOnWindowFocus: false, // don't refetch when switching tabs
       retry: 1, // only 1 retry on failure instead of 3
     },
