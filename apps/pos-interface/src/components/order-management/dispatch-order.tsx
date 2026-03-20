@@ -607,25 +607,25 @@ export default function DispatchOrderPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-auto bg-muted/50 p-1 rounded-xl">
+          <TabsList className="h-auto p-1 rounded-xl w-full md:w-auto">
             <TabsTrigger
               value="new-orders"
-              className="data-[state=active]:bg-background data-[state=active]:shadow-sm font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-lg"
+              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
             >
               New Orders
               {orders.length > 0 && (
-                <Badge className="ml-2 bg-primary text-primary-foreground font-black text-xs h-5 px-1.5">
+                <Badge className="ml-2 bg-primary/20 text-primary font-bold text-xs h-5 px-1.5">
                   {orders.length}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger
               value="return-workshop"
-              className="data-[state=active]:bg-background data-[state=active]:shadow-sm font-black uppercase tracking-widest text-xs px-6 py-2.5 rounded-lg"
+              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
             >
               Return to Workshop
               {returnCount > 0 && (
-                <Badge className="ml-2 bg-amber-500 text-white font-black text-xs h-5 px-1.5">
+                <Badge className="ml-2 bg-amber-500 text-white font-bold text-xs h-5 px-1.5">
                   {returnCount}
                 </Badge>
               )}

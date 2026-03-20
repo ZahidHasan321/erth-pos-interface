@@ -1,11 +1,11 @@
 import type { ApiResponse, UpsertApiResponse } from "../types/api";
 import type { Customer } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 
 const TABLE_NAME = "customers";
 
 export const getCustomers = async (): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' });
 
@@ -24,9 +24,11 @@ export const getPaginatedCustomers = async (
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase
+  let query = db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' })
+    .order('phone', { ascending: true })
+    .order('account_type', { ascending: true }) // Primary before Secondary
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -46,7 +48,7 @@ export const getPaginatedCustomers = async (
 export const searchCustomerByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' })
     .ilike('phone', `%${phone}%`);
@@ -60,7 +62,7 @@ export const searchCustomerByPhone = async (
 export const fuzzySearchCustomers = async (
   query: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'estimated' })
     .or(`name.ilike.%${query}%,phone.ilike.%${query}%,arabic_name.ilike.%${query}%,nick_name.ilike.%${query}%`)
@@ -76,7 +78,7 @@ export const fuzzySearchCustomers = async (
 export const searchPrimaryAccountByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' })
     .eq('phone', phone)
@@ -91,7 +93,7 @@ export const searchPrimaryAccountByPhone = async (
 export const getCustomerById = async (
   id: number,
 ): Promise<ApiResponse<Customer>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select('*')
     .eq('id', id)
@@ -106,7 +108,7 @@ export const getCustomerById = async (
 export const createCustomer = async (
   customer: Partial<Customer>,
 ): Promise<ApiResponse<Customer>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .insert(customer)
     .select()
@@ -123,7 +125,7 @@ export const updateCustomer = async (
   id: number,
   customer: Partial<Customer>,
 ): Promise<ApiResponse<Customer>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update(customer)
     .eq('id', id)
@@ -144,7 +146,7 @@ export const updateCustomer = async (
 export const upsertCustomer = async (
   customers: Partial<Customer>[],
 ): Promise<UpsertApiResponse<Customer>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .upsert(customers) // Phone is not unique anymore, default to PK (id)
     .select();

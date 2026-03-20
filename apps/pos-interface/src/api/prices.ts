@@ -1,11 +1,11 @@
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import type { ApiResponse } from "../types/api";
 import type { Price } from "@repo/database";
 
 const TABLE_NAME = "prices";
 
 export const getPrices = async (): Promise<ApiResponse<Price[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' });
 

@@ -1,9 +1,9 @@
 import type { Employee } from '@repo/database';
-import { supabase } from '../lib/supabase';
+import { db } from "@/lib/db";
 import type { ApiResponse } from '../types/api';
 
 export const getEmployees = async (): Promise<ApiResponse<Employee[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from('users')
     .select('*', { count: 'exact' });
 

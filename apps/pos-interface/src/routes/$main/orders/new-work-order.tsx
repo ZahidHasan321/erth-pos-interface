@@ -32,7 +32,7 @@ import {
 } from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
-import { OrderInfoCard } from "@/components/orders-at-showroom/OrderInfoCard";
+
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
@@ -847,30 +847,6 @@ function NewWorkOrder() {
                     currentStep={currentStep}
                     activeSteps={visibleSteps}
                     onStepChange={handleStepChange}
-                />
-                <OrderInfoCard
-                    orderID={order.id}
-                    fatoura={fatoura}
-                    checkoutStatus={order.checkout_status ?? "draft"}
-                    customerName={
-                        customerDemographics.nick_name ||
-                        customerDemographics.name ||
-                        undefined
-                    }
-                    orderType="Work Order"
-                    homeDelivery={order.home_delivery}
-                    deliveryDate={order.delivery_date}
-                    paymentType={order.payment_type ?? undefined}   // <--- Fix: Convert null to undefined
-                    numOfFabrics={order.num_of_fabrics ?? 0}        // <--- Fix: Convert null to 0
-                    totalAmount={
-                        (order.fabric_charge || 0) +
-                        (order.stitching_charge || 0) +
-                        (order.style_charge || 0) +
-                        (order.delivery_charge || 0) +
-                        (order.shelf_charge || 0)
-                    }
-                    advance={order.advance ?? undefined}
-                    balance={(order.order_total ?? 0) - (order.paid ?? 0)}
                 />
             </div>
 

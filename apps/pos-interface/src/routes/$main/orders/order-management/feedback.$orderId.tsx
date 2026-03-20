@@ -73,6 +73,8 @@ import { getOrderById, updateOrder } from "@/api/orders";
 import { getMeasurementById } from "@/api/measurements";
 import { updateGarment } from "@/api/garments";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip, getFeedbackByOrderId } from "@/api/feedback";
+// Storage helpers ready but not active — enable when Supabase Storage bucket is set up
+// import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
 import { evaluateBrovaFeedback } from "@repo/database";
 
@@ -407,6 +409,7 @@ function UnifiedFeedbackInterface() {
     });
   };
 
+  // TODO: When storage is set up, replace blob URLs with real uploads via storage.ts
   const handleCapture = (optionId: string, type: "photo" | "video", file: File | null) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
@@ -428,6 +431,7 @@ function UnifiedFeedbackInterface() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
+      // TODO: When storage is set up, upload blob via uploadFeedbackVoiceNote() from storage.ts
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const url = URL.createObjectURL(blob);
@@ -577,6 +581,8 @@ function UnifiedFeedbackInterface() {
         // Determine feedback type
         const feedbackType = activeGarment.garment_type === "brova" ? "brova_trial" : "final_collection";
 
+        // TODO: When storage is set up, upload signature via uploadFeedbackSignature() from storage.ts
+
         const feedbackPayload = {
           garment_id: activeGarment.id,
           order_id: activeOrder.id,
@@ -592,7 +598,12 @@ function UnifiedFeedbackInterface() {
           photo_urls: Object.values(state.evidence).filter(Boolean).length > 0
             ? JSON.stringify(Object.values(state.evidence).filter(Boolean).map(e => e!.url))
             : null,
-          voice_note_urls: Object.keys(state.voiceNotes).length > 0 ? JSON.stringify(state.voiceNotes) : null,
+          voice_note_urls: (() => {
+            const validNotes = Object.fromEntries(
+              Object.entries(state.voiceNotes).filter(([, v]) => v != null)
+            );
+            return Object.keys(validNotes).length > 0 ? JSON.stringify(validNotes) : null;
+          })(),
           notes: state.notes || null,
           difference_reasons: Object.keys(state.differenceReasons).length > 0
             ? JSON.stringify(state.differenceReasons)

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { db } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
@@ -61,7 +61,7 @@ function flattenGarment(raw: any): WorkshopGarment {
 }
 
 export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .in('location', ['workshop', 'transit_to_workshop', 'transit_to_shop'])
@@ -77,7 +77,7 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
 
 /** Fetch garments completed today (any location) for terminal "Done" counts */
 export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .gte('completion_time', getLocalMidnightUtc())
@@ -97,7 +97,7 @@ export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> =>
  */
 export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
   // Step 1: find order_ids with at least one garment that has a production_plan
-  const { data: planned, error: e1 } = await supabase
+  const { data: planned, error: e1 } = await db
     .from('garments')
     .select('order_id')
     .not('production_plan', 'is', null);
@@ -107,7 +107,7 @@ export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
   const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
 
   // Step 2: fetch ALL garments from those orders (no location filter)
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .in('order_id', orderIds)
@@ -125,7 +125,7 @@ export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
  * Used by the order detail page to show full order regardless of production status.
  */
 export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .eq('order_id', orderId)
@@ -142,7 +142,7 @@ export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment
  * Fetch a single garment by ID — no location filter.
  */
 export const getGarmentById = async (id: string): Promise<WorkshopGarment | null> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .eq('id', id)
@@ -160,7 +160,7 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
  */
 export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> => {
   // Step 1: find order_ids with at least one garment that has a production_plan
-  const { data: planned, error: e1 } = await supabase
+  const { data: planned, error: e1 } = await db
     .from('garments')
     .select('order_id')
     .not('production_plan', 'is', null);
@@ -170,7 +170,7 @@ export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> =>
   const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
 
   // Step 2: fetch ALL garments from those orders
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .in('order_id', orderIds)
@@ -203,7 +203,7 @@ export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> =>
 export const receiveGarments = async (ids: string[]): Promise<void> => {
   // Only update location & in_production — preserve existing piece_stage
   // (finals with brovas arrive as waiting_for_acceptance and must stay that way)
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ location: 'workshop' as any, in_production: false })
     .in('id', ids);
@@ -211,7 +211,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
 
   // Accepted brovas go straight to ready_for_dispatch — no production needed,
   // they're just waiting to be dispatched back with the rest of the order
-  const { error: eAccepted } = await supabase
+  const { error: eAccepted } = await db
     .from('garments')
     .update({ piece_stage: 'ready_for_dispatch' as PieceStage })
     .in('id', ids)
@@ -219,7 +219,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
   if (eAccepted) throw new Error(eAccepted.message);
 
   // For return garments with non-accepted feedback, set piece_stage to waiting_cut
-  const { error: e2 } = await supabase
+  const { error: e2 } = await db
     .from('garments')
     .update({ piece_stage: 'waiting_cut' as PieceStage })
     .in('id', ids)
@@ -231,14 +231,14 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
 
 export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
   // Receive all into workshop first
-  const { error: e1 } = await supabase
+  const { error: e1 } = await db
     .from('garments')
     .update({ location: 'workshop' as any })
     .in('id', ids);
   if (e1) throw new Error(e1.message);
 
   // Accepted brovas go straight to ready_for_dispatch — no production needed
-  const { error: eAccepted } = await supabase
+  const { error: eAccepted } = await db
     .from('garments')
     .update({ piece_stage: 'ready_for_dispatch' as PieceStage, in_production: false })
     .in('id', ids)
@@ -247,7 +247,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 
   // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
   // (finals parked for brova trial must stay out of production)
-  const { error: e2 } = await supabase
+  const { error: e2 } = await db
     .from('garments')
     .update({ in_production: true })
     .in('id', ids)
@@ -257,7 +257,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 
   // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
   // so they appear in the scheduler
-  const { error: e3 } = await supabase
+  const { error: e3 } = await db
     .from('garments')
     .update({ piece_stage: 'waiting_cut' as PieceStage })
     .in('id', ids)
@@ -268,7 +268,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ in_production: true })
     .in('id', ids);
@@ -279,7 +279,7 @@ export const sendReturnToProduction = async (id: string, _reentryStage: PieceSta
   // Set in_production so it appears in Scheduler's alteration tab.
   // Set piece_stage to waiting_cut (feedback_status already has the context).
   // Clear old production_plan so Scheduler knows it needs a new plan.
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({
       in_production: true,
@@ -307,21 +307,21 @@ export const scheduleGarments = async (
   };
 
   if (reentryStage) {
-    const { error } = await supabase
+    const { error } = await db
       .from('garments')
       .update({ ...baseUpdate, piece_stage: reentryStage })
       .in('id', ids);
     if (error) throw new Error(error.message);
   } else if (soakingIds?.length && nonSoakingIds?.length) {
     const [r1, r2] = await Promise.all([
-      supabase.from('garments').update({ ...baseUpdate, piece_stage: 'soaking' as PieceStage }).in('id', soakingIds),
-      supabase.from('garments').update({ ...baseUpdate, piece_stage: 'cutting' as PieceStage }).in('id', nonSoakingIds),
+      db.from('garments').update({ ...baseUpdate, piece_stage: 'soaking' as PieceStage }).in('id', soakingIds),
+      db.from('garments').update({ ...baseUpdate, piece_stage: 'cutting' as PieceStage }).in('id', nonSoakingIds),
     ]);
     if (r1.error) throw new Error(r1.error.message);
     if (r2.error) throw new Error(r2.error.message);
   } else {
     const firstStage: PieceStage = (soakingIds?.length && plan.soaker) ? 'soaking' : 'cutting';
-    const { error } = await supabase
+    const { error } = await db
       .from('garments')
       .update({ ...baseUpdate, piece_stage: firstStage })
       .in('id', ids);
@@ -329,7 +329,7 @@ export const scheduleGarments = async (
   }
 
   // Append trip_history entry for each garment
-  const { data: garments } = await supabase
+  const { data: garments } = await db
     .from('garments')
     .select('id, trip_number, trip_history')
     .in('id', ids);
@@ -346,19 +346,19 @@ export const scheduleGarments = async (
         completed_date: null,
         qc_attempts: [],
       });
-      return supabase.from('garments').update({ trip_history: history }).eq('id', g.id);
+      return db.from('garments').update({ trip_history: history }).eq('id', g.id);
     }));
   }
 
   // Also save production_plan to waiting_for_acceptance finals in the same orders
   if (!reentryStage) {
-    const { data: scheduled } = await supabase
+    const { data: scheduled } = await db
       .from('garments')
       .select('order_id')
       .in('id', ids);
     if (scheduled?.length) {
       const orderIds = [...new Set(scheduled.map((g: any) => g.order_id))];
-      await supabase
+      await db
         .from('garments')
         .update({ production_plan: plan })
         .in('order_id', orderIds)
@@ -368,7 +368,7 @@ export const scheduleGarments = async (
 };
 
 export const startGarment = async (id: string): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ start_time: new Date().toISOString() })
     .eq('id', id);
@@ -382,7 +382,7 @@ export const completeAndAdvance = async (
   nextStage: string,
 ): Promise<void> => {
   // Build worker_history patch via RPC-style update — fetch first then patch
-  const { data: existing, error: fetchErr } = await supabase
+  const { data: existing, error: fetchErr } = await db
     .from('garments')
     .select('worker_history')
     .eq('id', id)
@@ -394,7 +394,7 @@ export const completeAndAdvance = async (
   const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
   history[historyKey] = workerName;
 
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({
       piece_stage: nextStage as PieceStage,
@@ -411,7 +411,7 @@ export const qcPass = async (
   worker: string,
   ratings: Record<string, number>,
 ): Promise<void> => {
-  const { data: existing, error: fetchErr } = await supabase
+  const { data: existing, error: fetchErr } = await db
     .from('garments')
     .select('worker_history, trip_history, trip_number')
     .eq('id', id)
@@ -439,7 +439,7 @@ export const qcPass = async (
     });
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({
       piece_stage: 'ready_for_dispatch' as PieceStage,
@@ -454,7 +454,7 @@ export const qcPass = async (
 };
 
 export const qcFail = async (id: string, returnStage: PieceStage, reason: string): Promise<void> => {
-  const { data: existing, error: fetchErr } = await supabase
+  const { data: existing, error: fetchErr } = await db
     .from('garments')
     .select('notes, trip_history, trip_number, worker_history')
     .eq('id', id)
@@ -479,7 +479,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
     });
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory })
     .eq('id', id);
@@ -487,7 +487,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
 };
 
 export const dispatchGarments = async (ids: string[]): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ location: 'transit_to_shop', in_production: false, feedback_status: null })
     .in('id', ids);
@@ -496,7 +496,7 @@ export const dispatchGarments = async (ids: string[]): Promise<void> => {
 
 /** Release finals from waiting_for_acceptance → waiting_cut so they can enter production */
 export const releaseFinals = async (ids: string[]): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ piece_stage: 'waiting_cut' as PieceStage, in_production: false })
     .in('id', ids)
@@ -513,7 +513,7 @@ export const releaseFinalsWithPlan = async (
   _assignedUnit?: string,
 ): Promise<void> => {
   const firstStage: PieceStage = plan.soaker ? 'soaking' : 'cutting';
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({
       piece_stage: firstStage,
@@ -534,7 +534,7 @@ export const updateGarmentDetails = async (
     production_plan?: Record<string, string> | null;
   },
 ): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update(updates)
     .eq('id', id);
@@ -544,13 +544,13 @@ export const updateGarmentDetails = async (
 /** Bulk update delivery_date for all garments in an order */
 export const updateOrderDeliveryDate = async (orderId: number, date: string): Promise<void> => {
   // Update delivery_date on the work_orders table
-  const { data: wo } = await supabase
+  const { data: wo } = await db
     .from('work_orders')
     .select('id')
     .eq('order_id', orderId)
     .single();
   if (wo) {
-    const { error } = await supabase
+    const { error } = await db
       .from('work_orders')
       .update({ delivery_date: date })
       .eq('id', wo.id);
@@ -566,7 +566,7 @@ export const getBrovaPlansForOrders = async (
 ): Promise<Record<number, Record<string, string>>> => {
   if (!orderIds.length) return {};
   // Fetch all brovas for these orders — filter for plan/history in JS to avoid PostgREST OR issues
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select('order_id, production_plan, worker_history')
     .in('order_id', orderIds)
@@ -604,7 +604,7 @@ export const getBrovaStatusForOrders = async (
   orderIds: number[],
 ): Promise<Record<number, { total: number; trialed: number; accepted: number }>> => {
   if (!orderIds.length) return {};
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select('order_id, piece_stage, acceptance_status')
     .in('order_id', orderIds)
@@ -627,7 +627,7 @@ export const getBrovaStatusForOrders = async (
 
 /** Bulk update assigned_date for all garments in an order */
 export const updateOrderAssignedDate = async (orderId: number, date: string): Promise<void> => {
-  const { error } = await supabase
+  const { error } = await db
     .from('garments')
     .update({ assigned_date: date })
     .eq('order_id', orderId)

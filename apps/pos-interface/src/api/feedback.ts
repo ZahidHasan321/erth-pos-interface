@@ -1,13 +1,13 @@
 import type { ApiResponse } from "../types/api";
 import type { GarmentFeedback } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 
 const TABLE_NAME = "garment_feedback";
 
 export const createFeedback = async (
   feedback: Partial<GarmentFeedback>
 ): Promise<ApiResponse<GarmentFeedback>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .insert(feedback)
     .select()
@@ -23,7 +23,7 @@ export const createFeedback = async (
 export const getFeedbackByGarmentId = async (
   garmentId: string
 ): Promise<ApiResponse<GarmentFeedback[]>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select("*")
     .eq("garment_id", garmentId)
@@ -38,7 +38,7 @@ export const getFeedbackByGarmentId = async (
 export const getFeedbackByOrderId = async (
   orderId: number
 ): Promise<ApiResponse<GarmentFeedback[]>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select("*")
     .eq("order_id", orderId)
@@ -54,7 +54,7 @@ export const updateFeedback = async (
   feedbackId: string,
   data: Partial<GarmentFeedback>
 ): Promise<ApiResponse<GarmentFeedback>> => {
-  const { data: updated, error } = await supabase
+  const { data: updated, error } = await db
     .from(TABLE_NAME)
     .update(data)
     .eq("id", feedbackId)
@@ -72,7 +72,7 @@ export const getFeedbackByGarmentAndTrip = async (
   garmentId: string,
   tripNumber: number
 ): Promise<ApiResponse<GarmentFeedback | null>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select("*")
     .eq("garment_id", garmentId)

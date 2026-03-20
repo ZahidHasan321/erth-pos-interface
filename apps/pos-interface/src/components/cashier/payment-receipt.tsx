@@ -1,5 +1,6 @@
 import * as React from "react";
 import ErthLogo from "@/assets/erth-light.svg";
+import SakkbaLogo from "@/assets/Sakkba.png";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 
 export interface PaymentReceiptData {
@@ -20,6 +21,7 @@ export interface PaymentReceiptData {
 
 export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentReceiptData }>(
     ({ data }, ref) => {
+        const isErth = document.documentElement.classList.contains("erth");
         const fmt = (n: number): string => Number(n.toFixed(3)).toString();
         const formattedDate = new Date(data.timestamp).toLocaleDateString("ar-KW", {
             year: "numeric",
@@ -40,7 +42,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
             >
                 {/* Header */}
                 <div className="text-center mb-4 pb-3 border-b border-gray-700">
-                    <img src={ErthLogo} alt="ERTH" className="h-12 mx-auto mb-2" />
+                    <img src={isErth ? ErthLogo : SakkbaLogo} alt={isErth ? "Erth" : "Sakkba"} className="h-12 mx-auto mb-2" />
                     <h1 className="text-lg font-bold text-gray-800">
                         {data.transactionType === "refund" ? "ايصال استرجاع" : "ايصال دفع"}
                     </h1>
@@ -114,7 +116,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                 <div className="mt-4 pt-3 border-t border-gray-700 text-center text-xs text-gray-600">
                     <p>{formattedDate}</p>
                     {data.cashierName && <p>الكاشير: {data.cashierName}</p>}
-                    <p className="mt-2 font-semibold">شكرا لاختياركم ERTH Clothing</p>
+                    <p className="mt-2 font-semibold">شكرا لاختياركم {isErth ? "ERTH" : "Sakkba"} Clothing</p>
                 </div>
             </div>
         );

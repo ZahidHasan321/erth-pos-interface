@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrderRow, GarmentRowData } from "@/components/orders-at-showroom/types";
 import { ORDER_PHASE_LABELS, PIECE_STAGE_LABELS, LOCATION_LABELS } from "@/lib/constants";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
 import { getShowroomStatus } from "@repo/database";
 
@@ -140,7 +140,7 @@ export function useShowroomOrders() {
   return useQuery({
     queryKey: ["showroom-orders"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('orders')
         .select(`
           *,
@@ -159,7 +159,7 @@ export function useShowroomOrders() {
 
       return transformToOrderRows(data || []);
     },
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60,
+    staleTime: 1000 * 60 * 2, // 2 min fresh
+    gcTime: 1000 * 60 * 30, // 30 min in cache
   });
 }

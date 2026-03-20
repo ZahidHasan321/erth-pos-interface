@@ -3,7 +3,6 @@
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import * as React from "react";
-import { motion } from "framer-motion";
 
 interface StepProps {
   title: string;
@@ -33,51 +32,26 @@ const Step: React.FC<StepProps> = ({
       )}
     >
       <div className="relative flex flex-col items-center">
-        <motion.div
-          layout
+        <div
           className={cn(
-            "w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center transition-all font-semibold shadow-sm relative overflow-hidden",
+            "w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-semibold shadow-sm relative overflow-hidden transition-transform duration-200",
             isCompleted
               ? "border-primary bg-linear-to-br from-primary to-primary/90 text-primary-foreground shadow-primary/25"
               : isActive
-                ? "border-secondary bg-linear-to-br from-secondary/10 to-secondary/20 text-secondary font-bold shadow-secondary/20"
+                ? "border-secondary bg-linear-to-br from-secondary/10 to-secondary/20 text-secondary font-bold shadow-secondary/20 scale-105"
                 : "border-border bg-background text-muted-foreground"
           )}
-          animate={{
-            scale: isActive ? 1.05 : 1,
-            rotate: isCompleted ? [0, -10, 10, -10, 0] : 0
-          }}
-          transition={{
-            scale: {
-              duration: isActive ? 0.3 : 0.5,
-              type: "spring",
-              stiffness: 280,
-              damping: 20,
-            },
-            rotate: {
-              duration: 0.5,
-              type: "tween",
-              ease: "easeInOut",
-            },
-          }}
         >
-          {isCompleted && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute inset-0 bg-primary/10 rounded-full"
-            />
-          )}
           {isCompleted ? (
             <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 relative z-10" />
           ) : (
             <span className="text-xs relative z-10">{index + 1}</span>
           )}
-        </motion.div>
+        </div>
       </div>
 
       <div className="mt-0.5 text-center">
-        <motion.p
+        <p
           className={cn(
             "text-xs sm:text-xs font-medium transition-all max-w-[60px] sm:max-w-[80px] md:max-w-none line-clamp-2 md:line-clamp-1",
             isActive
@@ -86,13 +60,9 @@ const Step: React.FC<StepProps> = ({
                 ? "text-primary font-medium"
                 : "text-muted-foreground"
           )}
-          animate={{
-            scale: isActive ? 1.02 : 1,
-          }}
-          transition={{ duration: 0.2 }}
         >
           {title}
-        </motion.p>
+        </p>
       </div>
     </button>
   );
@@ -100,9 +70,9 @@ const Step: React.FC<StepProps> = ({
 
 interface StepperProps {
   steps: Array<{ title: string; description?: string; id: string }>;
-  completedSteps: number[];  
+  completedSteps: number[];
   currentStep: number;
-  activeSteps?: number[]; // <--- Add this
+  activeSteps?: number[];
   onStepChange: (index: number) => void;
 }
 
@@ -113,7 +83,7 @@ export const HorizontalStepper: React.FC<StepperProps> = ({
   steps,
   completedSteps,
   currentStep,
-  activeSteps, // <--- Destructure this
+  activeSteps,
   onStepChange,
 }) => {
   return (
@@ -126,24 +96,20 @@ export const HorizontalStepper: React.FC<StepperProps> = ({
               title={step.title}
               description={step.description}
               isCompleted={completedSteps.includes(index)}
-              // Check if index is in activeSteps OR if it matches currentStep
               isActive={activeSteps ? activeSteps.includes(index) : index === currentStep}
               onClick={() => onStepChange(index)}
             />
             {index < steps.length - 1 && (
               <div className="hidden md:flex items-center mx-0.5 lg:mx-1">
-                <motion.div
+                <div
                   className={cn(
-                    "h-0.5 w-6 lg:w-8 rounded-full transition-all",
+                    "h-0.5 w-6 lg:w-8 rounded-full transition-colors duration-200",
                     completedSteps.includes(index)
                       ? "bg-linear-to-r from-primary to-primary/80"
                       : index === currentStep
                         ? "bg-linear-to-r from-secondary/60 to-secondary/30"
                         : "bg-border"
                   )}
-                  animate={{
-                    width: completedSteps.includes(index) ? 32 : 32,
-                  }}
                 />
               </div>
             )}

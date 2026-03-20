@@ -13,9 +13,26 @@ import { type OrderSchema } from "@/components/forms/order-summary-and-payment/o
 import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
 import { type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { type FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Order } from "@repo/database";
+
+/**
+ * Invalidate order-related queries. Uses a single batch to avoid
+ * triggering multiple re-renders.
+ */
+function invalidateOrderQueries(queryClient: QueryClient, customerId?: number | null) {
+  // Batch: mark all as stale but only refetch the ones currently mounted
+  queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
+  queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
+  queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
+  queryClient.invalidateQueries({ queryKey: ["dispatchOrders"], refetchType: "active" });
+  queryClient.invalidateQueries({ queryKey: ["dashboard-orders"], refetchType: "active" });
+  queryClient.invalidateQueries({ queryKey: ["dashboard-customers"], refetchType: "active" });
+  if (customerId) {
+    queryClient.invalidateQueries({ queryKey: ["customer-orders", customerId], refetchType: "active" });
+  }
+}
 
 // Re-export for backward compatibility
 export const mapOrderToSchema = mapOrderToFormValues;
@@ -122,16 +139,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 const order = response.data;
                 const formattedOrder = mapOrderToFormValues(order);
                 
-                // Invalidate relevant queries
-                queryClient.invalidateQueries({ queryKey: ["orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-                queryClient.invalidateQueries({ queryKey: ["order-history"] });
-                queryClient.invalidateQueries({ queryKey: ["customers"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
-                if (order.customer_id) {
-                    queryClient.invalidateQueries({ queryKey: ["customer-orders", order.customer_id] });
-                }
+                invalidateOrderQueries(queryClient, order.customer_id);
+                queryClient.invalidateQueries({ queryKey: ["customers"], refetchType: "active" });
 
                 options.onOrderCreated?.(formattedOrder.id, formattedOrder);
                 toast.success("New order created successfully!");
@@ -161,15 +170,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 toast.success("Order cancelled");
             }
 
-            // Invalidate relevant queries
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-            queryClient.invalidateQueries({ queryKey: ["order-history"] });
-            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
-            if (response.data?.customer_id) {
-                queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
-            }
+            invalidateOrderQueries(queryClient, response.data?.customer_id);
 
             options.onOrderUpdated?.(action);
         },
@@ -328,17 +329,9 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 showFatouraNotification(response.data.invoice_number);
             }
 
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["order-history"] });
-            queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
-            queryClient.invalidateQueries({ queryKey: ["fabrics"] });
-            queryClient.invalidateQueries({ queryKey: ["products"] });
-            if (response.data?.customer_id) {
-                queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
-            }
+            invalidateOrderQueries(queryClient, response.data?.customer_id);
+            queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+            queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
             options.onOrderUpdated?.("updated", response.data);
         },
         onError: () => {
@@ -383,15 +376,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     showFatouraNotification(response.data.invoice_number);
                 }
     
-                queryClient.invalidateQueries({ queryKey: ["orders"] });
-                queryClient.invalidateQueries({ queryKey: ["order-history"] });
-                queryClient.invalidateQueries({ queryKey: ["products"] });
-                queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
-                if (response.data?.customer_id) {
-                    queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
-                }
+                invalidateOrderQueries(queryClient, response.data?.customer_id);
+                queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
                 options.onOrderUpdated?.("updated", response.data);
             },
             onError: () => {
@@ -438,15 +424,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     showFatouraNotification(response.data.invoice_number);
                 }
     
-                queryClient.invalidateQueries({ queryKey: ["orders"] });
-                queryClient.invalidateQueries({ queryKey: ["order-history"] });
-                queryClient.invalidateQueries({ queryKey: ["products"] });
-                queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-orders"] });
-                queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
-                if (response.data?.customer_id) {
-                    queryClient.invalidateQueries({ queryKey: ["customer-orders", response.data.customer_id] });
-                }
+                invalidateOrderQueries(queryClient, response.data?.customer_id);
+                queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
                 options.onOrderUpdated?.("updated", response.data);
             },
             onError: () => {

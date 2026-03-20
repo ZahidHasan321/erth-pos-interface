@@ -20,7 +20,7 @@ import {
 } from "@tanstack/react-router";
 import ErthLogo from "../../assets/erth-light.svg";
 import SakhtbaLogo from "../../assets/Sakkba.png";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 type MainParam = (typeof BRAND_NAMES)[keyof typeof BRAND_NAMES];
@@ -95,18 +95,21 @@ function RouteComponent() {
     };
   }, [main]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setShowLogoutDialog(true);
-  };
+  }, []);
 
-  const confirmLogout = () => {
+  const confirmLogout = useCallback(() => {
     auth.logout().then(() => {
       router.invalidate().finally(() => {
         navigate({ to: "/" });
       });
     });
     setShowLogoutDialog(false);
-  };
+  }, [auth, navigate]);
+
+  const brandLogo = main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo;
+  const brandName = main === BRAND_NAMES.showroom ? BRAND_NAMES.showroom : BRAND_NAMES.fromHome;
 
   const attemptedBrandName =
     loaderData.attemptedBrand === BRAND_NAMES.showroom ? "Erth" : "Sakkba";
@@ -159,36 +162,40 @@ function RouteComponent() {
     </div>
   );
 
+  const sidebar = useMemo(() => (
+    <AppSidebar
+      collapsible="icon"
+      brandLogo={brandLogo}
+      brandName={brandName}
+      onLogout={handleLogout}
+    />
+  ), [brandLogo, brandName, handleLogout]);
+
+  const mobileHeader = useMemo(() => (
+    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b bg-background/95 backdrop-blur-sm px-4 xl:hidden">
+      <div className="flex items-center gap-3">
+        <SidebarTrigger />
+        <div className="h-5 w-px bg-border" />
+        <div className="flex items-center gap-2">
+          <img
+            src={brandLogo}
+            alt="Logo"
+            className="h-6 w-6 object-contain"
+          />
+          <span className="text-base brand-font capitalize tracking-wide">
+            {brandName}
+          </span>
+        </div>
+      </div>
+    </header>
+  ), [brandLogo, brandName]);
+
   const mainLayout = (
     <SidebarProvider defaultOpen>
       <div className="flex h-screen w-screen">
-        <AppSidebar
-          collapsible="icon"
-          brandLogo={main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo}
-          brandName={
-            main === BRAND_NAMES.showroom
-              ? BRAND_NAMES.showroom
-              : BRAND_NAMES.fromHome
-          }
-          onLogout={handleLogout}
-        />
+        {sidebar}
         <SidebarInset className="flex-1 flex flex-col min-w-0">
-          {/* Mobile header with hamburger menu */}
-          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4 xl:hidden">
-            <SidebarTrigger />
-            <div className="flex items-center gap-2.5">
-              <img
-                src={main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo}
-                alt="Logo"
-                className="h-8 w-8 object-contain"
-              />
-              <span className="text-lg font-semibold brand-font capitalize">
-                {main === BRAND_NAMES.showroom
-                  ? BRAND_NAMES.showroom
-                  : BRAND_NAMES.fromHome}
-              </span>
-            </div>
-          </header>
+          {mobileHeader}
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
             <Outlet />
           </main>

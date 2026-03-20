@@ -1,8 +1,8 @@
-import { supabase } from '@/lib/supabase';
+import { db } from "@/lib/db";
 import type { Resource, NewResource } from '@repo/database';
 
 export const getResources = async (): Promise<Resource[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('resources')
     .select('*')
     .order('responsibility')
@@ -12,7 +12,7 @@ export const getResources = async (): Promise<Resource[]> => {
 };
 
 export const createResource = async (resource: Omit<NewResource, 'id' | 'created_at'>): Promise<Resource> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('resources')
     .insert(resource)
     .select()
@@ -22,7 +22,7 @@ export const createResource = async (resource: Omit<NewResource, 'id' | 'created
 };
 
 export const updateResource = async (id: string, updates: Partial<NewResource>): Promise<Resource> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('resources')
     .update(updates)
     .eq('id', id)
@@ -33,6 +33,6 @@ export const updateResource = async (id: string, updates: Partial<NewResource>):
 };
 
 export const deleteResource = async (id: string): Promise<void> => {
-  const { error } = await supabase.from('resources').delete().eq('id', id);
+  const { error } = await db.from('resources').delete().eq('id', id);
   if (error) throw new Error(error.message);
 };

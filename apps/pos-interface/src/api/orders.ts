@@ -1,6 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
@@ -47,7 +47,7 @@ const FILTER_MAP: Record<string, string> = {
 };
 
 export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
-    const { data, error, count } = await supabase
+    const { data, error, count } = await db
         .from(TABLE_NAME)
         .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
         .eq('brand', getBrand());
@@ -62,7 +62,7 @@ export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
 export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
-    let builder = supabase.from(TABLE_NAME)
+    let builder = db.from(TABLE_NAME)
         .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
         .eq('brand', getBrand());
 
@@ -90,7 +90,7 @@ const ORDER_DETAILS_QUERY = `
 `;
 
 export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from(TABLE_NAME)
         .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)')
         .eq('id', id)
@@ -102,7 +102,7 @@ export const getOrderById = async (id: number, includeRelations: boolean = false
 };
 
 export const getOrderByInvoice = async (invoiceNumber: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from(TABLE_NAME)
         .select(includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id!inner(*)')
         .eq('workOrder.invoice_number', invoiceNumber)
@@ -121,11 +121,11 @@ export const getOrdersForLinking = async (
     customerId: number,
     checkoutStatus: string = "confirmed"
 ): Promise<ApiResponse<Order[]>> => {
-    const { data, error, count } = await supabase
+    const { data, error, count } = await db
         .from(TABLE_NAME)
         .select(`
             *,
-            workOrder:work_orders!order_id(*),
+            workOrder:work_orders!order_id!inner(*),
             customer:customers(*),
             child_orders:work_orders!linked_order_id(id:order_id)
         `, { count: 'exact' })
@@ -133,6 +133,7 @@ export const getOrdersForLinking = async (
         .eq('checkout_status', checkoutStatus)
         .eq('order_type', 'WORK')
         .eq('brand', getBrand())
+        .neq('workOrder.order_phase', 'completed')
         .order('order_date', { ascending: false });
 
     if (error) {
@@ -151,7 +152,7 @@ export const getOrdersForLinking = async (
  */
 export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiResponse<Order>> => {
     // 1. Try by ID
-    const { data: resId } = await supabase.from(TABLE_NAME)
+    const { data: resId } = await db.from(TABLE_NAME)
         .select(`
             *,
             workOrder:work_orders!order_id(*),
@@ -165,7 +166,7 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
     if (resId) return { status: 'success', data: flattenOrder(resId) };
     
     // 2. Try by Invoice Number
-    const { data: resInv } = await supabase.from(TABLE_NAME)
+    const { data: resInv } = await db.from(TABLE_NAME)
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
@@ -185,7 +186,7 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
  * Fetch orders that have garments dispatched from workshop.
  */
 export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
-    const { data, error, count } = await supabase
+    const { data, error, count } = await db
         .from(TABLE_NAME)
         .select(`
             *,
@@ -210,7 +211,7 @@ export const dispatchOrder = async (orderId: number): Promise<ApiResponse<Order>
     if (res.status === 'error') return res;
 
     // 2. Update all garments of this order
-    const { error } = await supabase
+    const { error } = await db
         .from('garments')
         .update({ location: 'transit_to_workshop' })
         .eq('order_id', orderId);
@@ -244,7 +245,7 @@ export const createOrder = async (
         }
     });
 
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from(TABLE_NAME)
         .insert(coreFields)
         .select()
@@ -256,7 +257,7 @@ export const createOrder = async (
     }
 
     if (Object.keys(workFields).length > 0 || order.order_type === 'WORK') {
-        const { error: workError } = await supabase
+        const { error: workError } = await db
             .from('work_orders')
             .insert({ order_id: data.id, ...workFields });
         
@@ -292,7 +293,7 @@ export const updateOrder = async (
     });
 
     if (Object.keys(coreUpdates).length > 0) {
-        const { error } = await supabase
+        const { error } = await db
             .from(TABLE_NAME)
             .update(coreUpdates)
             .eq('id', orderId)
@@ -305,7 +306,7 @@ export const updateOrder = async (
     }
 
     if (Object.keys(workUpdates).length > 0) {
-        const { error } = await supabase
+        const { error } = await db
             .from('work_orders')
             .upsert({ order_id: orderId, ...workUpdates });
         
@@ -321,7 +322,7 @@ export const updateOrder = async (
 export const deleteOrder = async (
     orderId: number,
 ): Promise<ApiResponse<void>> => {
-    const { error } = await supabase
+    const { error } = await db
         .from(TABLE_NAME)
         .delete()
         .eq('id', orderId)
@@ -345,7 +346,7 @@ export const getPendingOrdersByCustomer = async (
 ): Promise<ApiResponse<Order[]>> => {
     const selectString = includeRelations ? ORDER_DETAILS_QUERY : '*, workOrder:work_orders!order_id(*)';
 
-    const { data, error, count } = await supabase
+    const { data, error, count } = await db
         .from(TABLE_NAME)
         .select(selectString, { count: 'exact' })
         .eq('customer_id', customerId)
@@ -394,7 +395,7 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
 export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<Order[]>> => {
     const hasWorkOrderFilter = Object.keys(filters).some(key => key in FILTER_MAP);
     
-    let builder = supabase.from(TABLE_NAME).select(`
+    let builder = db.from(TABLE_NAME).select(`
         *,
         workOrder:work_orders!order_id${hasWorkOrderFilter ? '!inner' : ''}(*),
         customer:customers(*),
@@ -447,7 +448,7 @@ export const completeWorkOrder = async (
         return { status: 'error', message: "Order not found or access denied" };
     }
 
-    const { data, error } = await supabase.rpc('complete_work_order', {
+    const { data, error } = await db.rpc('complete_work_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
         p_shelf_items: shelfItems,
@@ -484,7 +485,7 @@ export const completeSalesOrder = async (
         return { status: 'error', message: "Order not found or access denied" };
     }
 
-    const { data, error } = await supabase.rpc('complete_sales_order', {
+    const { data, error } = await db.rpc('complete_sales_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
         p_shelf_items: shelfItems
@@ -517,7 +518,7 @@ export const createCompleteSalesOrder = async (
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
-    const { data, error } = await supabase.rpc('create_complete_sales_order', {
+    const { data, error } = await db.rpc('create_complete_sales_order', {
         p_customer_id: customerId,
         p_checkout_details: { ...checkoutDetails, brand: getBrand() },
         p_shelf_items: shelfItems
@@ -548,7 +549,7 @@ export const saveWorkOrderGarments = async (
         return { status: 'error', message: "Order not found or access denied" };
     }
 
-    const { data, error } = await supabase.rpc('save_work_order_garments', {
+    const { data, error } = await db.rpc('save_work_order_garments', {
         p_order_id: orderId,
         p_garments: garments,
         p_order_updates: orderUpdates
@@ -567,7 +568,7 @@ export const saveWorkOrderGarments = async (
  */
 export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
     // First, get all linked orders (children)
-    const { data, error, count } = await supabase
+    const { data, error, count } = await db
         .from(TABLE_NAME)
         .select(`
             *,
@@ -593,7 +594,7 @@ export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
 
     // Fetch primary details separately
     if (primaryIds.length > 0) {
-        const { data: primaries } = await supabase
+        const { data: primaries } = await db
             .from(TABLE_NAME)
             .select(`
                 *,

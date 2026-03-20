@@ -1,6 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import { getBrand } from "./orders";
 
 const CASHIER_ORDER_QUERY = `
@@ -126,7 +126,7 @@ export const getCashierSummary = async (brand?: string): Promise<{ status: 'succ
     // Pass local date to handle timezone correctly (Supabase runs in UTC)
     const now = new Date();
     const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const { data, error } = await supabase.rpc('get_cashier_summary', { p_brand: currentBrand, p_today: localToday });
+    const { data, error } = await db.rpc('get_cashier_summary', { p_brand: currentBrand, p_today: localToday });
     if (error) {
         console.error('Error fetching cashier summary:', error.message);
         return { status: 'success', data: { all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0, month_billed: 0, month_paid: 0, month_outstanding: 0, work_count: 0, sales_count: 0, unpaid_count: 0, work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0 } };
@@ -138,7 +138,7 @@ export type CashierFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sale
 
 export const getRecentCashierOrders = async (filter: CashierFilter = "all", brand?: string): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
     const currentBrand = brand || getBrand();
-    let query = supabase
+    let query = db
         .from('orders')
         .select(CASHIER_ORDER_LIST_QUERY)
         .eq('brand', currentBrand)
@@ -198,7 +198,7 @@ export const searchOrderForCashier = async (
     if (!isNaN(numericVal)) {
         // Try by order ID
         const byId = await queryWithFallback((sel) =>
-            supabase
+            db
                 .from('orders')
                 .select(sel)
                 .eq('id', numericVal)
@@ -216,7 +216,7 @@ export const searchOrderForCashier = async (
                 'workOrder:work_orders!order_id(*)',
                 'workOrder:work_orders!order_id!inner(*)'
             );
-            return supabase
+            return db
                 .from('orders')
                 .select(invoiceSel)
                 .eq('brand', currentBrand)
@@ -230,7 +230,7 @@ export const searchOrderForCashier = async (
     }
 
     // Try by customer phone (exact match)
-    const { data: phoneCustomers } = await supabase
+    const { data: phoneCustomers } = await db
         .from('customers')
         .select('id')
         .eq('phone', trimmed)
@@ -238,7 +238,7 @@ export const searchOrderForCashier = async (
 
     if (phoneCustomers && phoneCustomers.length > 0) {
         const byPhone = await queryWithFallback((sel) =>
-            supabase
+            db
                 .from('orders')
                 .select(sel)
                 .eq('brand', currentBrand)
@@ -254,7 +254,7 @@ export const searchOrderForCashier = async (
     }
 
     // Try by customer name (ilike search) — return the latest order
-    const { data: nameCustomers } = await supabase
+    const { data: nameCustomers } = await db
         .from('customers')
         .select('id')
         .ilike('name', `%${trimmed}%`)
@@ -262,7 +262,7 @@ export const searchOrderForCashier = async (
 
     if (nameCustomers && nameCustomers.length > 0) {
         const byName = await queryWithFallback((sel) =>
-            supabase
+            db
                 .from('orders')
                 .select(sel)
                 .eq('brand', currentBrand)
@@ -289,7 +289,7 @@ export const searchCashierOrderList = async (
     if (!trimmed) return { status: 'success', data: [] };
 
     // Search customers by name or phone
-    const { data: customers } = await supabase
+    const { data: customers } = await db
         .from('customers')
         .select('id')
         .or(`name.ilike.%${trimmed}%,phone.ilike.%${trimmed}%`)
@@ -298,7 +298,7 @@ export const searchCashierOrderList = async (
     const customerIds = (customers || []).map((c: any) => c.id);
 
     // Build combined query: by order id, invoice, or matching customer
-    let query_ = supabase
+    let query_ = db
         .from('orders')
         .select(CASHIER_ORDER_LIST_QUERY)
         .eq('brand', currentBrand)
@@ -327,7 +327,7 @@ export const searchCashierOrderList = async (
 };
 
 export const getPaymentTransactions = async (orderId: number) => {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from('payment_transactions')
         .select('*, cashier:users(name)')
         .eq('order_id', orderId)
@@ -352,7 +352,7 @@ export const recordPaymentTransaction = async (params: {
     refundReason?: string;
     collectGarmentIds?: string[];
 }) => {
-    const { data, error } = await supabase.rpc('record_payment_transaction', {
+    const { data, error } = await db.rpc('record_payment_transaction', {
         p_order_id: params.orderId,
         p_amount: params.amount,
         p_payment_type: params.paymentType,
@@ -378,7 +378,7 @@ export const updateOrderDiscount = async (params: {
     referralCode?: string;
     newOrderTotal?: number;
 }) => {
-    const { data, error } = await supabase.rpc('update_order_discount', {
+    const { data, error } = await db.rpc('update_order_discount', {
         p_order_id: params.orderId,
         p_discount_type: params.discountType,
         p_discount_value: params.discountValue,
@@ -397,7 +397,7 @@ export const toggleHomeDelivery = async (params: {
     orderId: number;
     homeDelivery: boolean;
 }) => {
-    const { data, error } = await supabase.rpc('toggle_home_delivery', {
+    const { data, error } = await db.rpc('toggle_home_delivery', {
         p_order_id: params.orderId,
         p_home_delivery: params.homeDelivery,
     });

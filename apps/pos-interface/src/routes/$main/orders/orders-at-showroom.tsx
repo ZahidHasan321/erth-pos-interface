@@ -129,12 +129,12 @@ function ReminderDialog({
                 <button className={cn(
                     "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer",
                     isDone
-                        ? "bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/30"
+                        ? "bg-primary/10 text-primary ring-1 ring-primary/30"
                         : "bg-muted/50 text-muted-foreground ring-1 ring-border hover:ring-primary/30 hover:text-foreground"
                 )}>
                     <span className={cn(
                         "size-2 rounded-full shrink-0",
-                        isDone ? "bg-emerald-500" : "bg-muted-foreground/40"
+                        isDone ? "bg-primary" : "bg-muted-foreground/40"
                     )} />
                     <span className="font-black">{type}</span>
                     {isDone && fmtDate(date) && (
@@ -456,7 +456,7 @@ function OrderManagementConsole({
                         variant={isReady ? "default" : "secondary"}
                         className={cn(
                             "flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm",
-                            isReady && "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            isReady && "bg-primary hover:bg-primary/90 text-primary-foreground"
                         )}
                     >
                         <CheckCircle2 className="size-3.5 mr-1.5" />
@@ -588,7 +588,7 @@ function RouteComponent() {
           <CompactStat label="Trial" value={stats.brovaTrial + stats.alterationIn} icon={RefreshCw} color="bg-amber-500" />
           <CompactStat label="Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
           <CompactStat label="Partial" value={stats.partialReady} icon={Package} color="bg-violet-500" />
-          <CompactStat label="Ready" value={stats.ready} icon={CheckCircle} color="bg-emerald-500" />
+          <CompactStat label="Ready" value={stats.ready} icon={CheckCircle} color="bg-primary" />
         </div>
       </div>
 

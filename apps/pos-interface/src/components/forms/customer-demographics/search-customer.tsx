@@ -253,7 +253,7 @@ export function SearchCustomer({
           <div className="flex items-center gap-3">
             <div className={cn(
               "p-2 rounded-lg transition-colors shadow-sm",
-              selectedCustomerId ? "bg-green-600 text-white" : "bg-primary/10 text-primary"
+              selectedCustomerId ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
             )}>
               <SearchIcon className="size-4" />
             </div>
@@ -267,7 +267,7 @@ export function SearchCustomer({
           <div className="relative flex items-center group">
             <SearchIcon className={cn(
               "absolute left-4 size-5 transition-colors",
-              selectedCustomerId ? "text-green-600" : "text-muted-foreground group-focus-within:text-primary"
+              selectedCustomerId ? "text-primary" : "text-muted-foreground group-focus-within:text-primary"
             )} />
             <Input
               placeholder="Search name, mobile, or nickname…"
@@ -283,7 +283,7 @@ export function SearchCustomer({
               onFocus={() => setIsFocused(true)}
               className={cn(
                 "h-9 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20 transition-[color,background-color,border-color,box-shadow] font-bold",
-                selectedCustomerId && "border-green-600 ring-2 ring-green-600/10 font-semibold text-green-700"
+                selectedCustomerId && "border-primary ring-2 ring-primary/10 font-semibold text-primary"
               )}
             />
             <div className="absolute right-4 flex items-center gap-2">

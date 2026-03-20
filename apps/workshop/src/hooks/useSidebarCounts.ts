@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { db } from "@/lib/db";
 
 interface SidebarCounts {
   receiving: number;
@@ -16,7 +16,7 @@ interface SidebarCounts {
 }
 
 async function fetchCounts(): Promise<SidebarCounts> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('garments')
     .select('piece_stage, location, in_production, production_plan')
     .in('location', ['workshop', 'transit_to_workshop'])

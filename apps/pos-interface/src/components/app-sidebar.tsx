@@ -3,9 +3,7 @@ import * as React from "react";
 import {
   ChevronDown,
   LayoutDashboard,
-  ShoppingBag,
   ShoppingCart,
-  Package,
   Users,
   Store,
   ClipboardList,
@@ -47,9 +45,7 @@ import {
 import { BRAND_NAMES } from "@/lib/constants";
 import { LogOut, Home } from "lucide-react";
 
-// This is sample data.
 const data = {
-  versions: ["1.0.1", "1.1.0-alpha", "2.0.0-beta1"],
   navTop: [
     {
       title: "Dashboard",
@@ -59,9 +55,8 @@ const data = {
   ],
   navMain: [
     {
-      title: "Order & Customers",
+      title: "Orders & Customers",
       url: "",
-      icon: ShoppingBag,
       items: [
         {
           title: "New Work Order",
@@ -140,7 +135,6 @@ const data = {
     {
       title: "Store Management",
       url: "",
-      icon: Package,
       items: [
         {
           title: "Stock Report",
@@ -182,7 +176,7 @@ export function AppSidebar({
     title: string;
     icon?: React.ComponentType<{ className?: string }>;
     disabled?: boolean;
-    exactMatch?: boolean; // New prop
+    exactMatch?: boolean;
   };
 
   const SidebarLink: React.FC<SidebarLinkProps> = ({
@@ -197,7 +191,6 @@ export function AppSidebar({
       ? matchRoute({ to })
       : matchRoute({ to, fuzzy: true });
 
-    // Check if the current page is a "new-order" type page:
     const isNewOrderPage =
       typeof window !== "undefined" &&
       /^\/orders\/new-/.test(window.location.pathname);
@@ -215,7 +208,6 @@ export function AppSidebar({
             tabIndex={disabled ? -1 : 0}
             aria-disabled={disabled}
             style={disabled ? { pointerEvents: "none", opacity: 0.5 } : {}}
-            // When on new-order page, open in a new tab:
             {...(isNewOrderPage
               ? { target: "_blank", rel: "noopener noreferrer" }
               : {})}
@@ -245,12 +237,10 @@ export function AppSidebar({
     const matchRoute = useMatchRoute();
     const { setOpen } = useSidebar();
 
-    // Check if any sub-item is active
     const hasActiveChild = items.some((item) =>
       matchRoute({ to: `${mainSegment}/${item.url}`, fuzzy: true })
     );
 
-    // Auto-expand if a child is active
     React.useEffect(() => {
       if (hasActiveChild) {
         setIsOpen(true);
@@ -262,7 +252,7 @@ export function AppSidebar({
         <SidebarMenuButton
           onClick={() => {
             setIsOpen(!isOpen);
-            setOpen(true); // Expand sidebar when clicking collapsible item
+            setOpen(true);
           }}
           isActive={hasActiveChild}
           tooltip={title}
@@ -270,13 +260,13 @@ export function AppSidebar({
           {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           <span>{title}</span>
           <ChevronDown
-            className={`ml-auto h-4 w-4 transition-transform ${
+            className={`ml-auto h-4 w-4 transition-transform duration-200 ${
               isOpen ? "rotate-180" : ""
             }`}
           />
         </SidebarMenuButton>
         {isOpen && (
-          <SidebarMenuSub className="ml-3 mt-1 space-y-1 border-l-2 border-border/40 pl-3">
+          <SidebarMenuSub className="ml-3 mt-1 space-y-0.5 border-l-2 border-primary/15 pl-3">
             {items.map((subItem) => {
               const match = matchRoute({
                 to: `${mainSegment}/${subItem.url}`,
@@ -295,7 +285,7 @@ export function AppSidebar({
                         ? { target: "_blank", rel: "noopener noreferrer" }
                         : {})}
                     >
-                      {subItem.icon && <subItem.icon className="h-4 w-4" aria-hidden="true" />}
+                      {subItem.icon && <subItem.icon className="h-3.5 w-3.5" aria-hidden="true" />}
                       <span>{subItem.title}</span>
                     </Link>
                   </SidebarMenuSubButton>
@@ -308,37 +298,39 @@ export function AppSidebar({
     );
   };
 
-  const { main } = useParams({ strict: false }); // Get the dynamic 'main' parameter
-  const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom; // Construct the main segment
+  const { main } = useParams({ strict: false });
+  const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
 
   return (
     <Sidebar {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="border-b border-sidebar-border pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-              <SidebarMenuButton size="lg" asChild tooltip={brandName}>
-                <Link to="/$main" params={{ main: main ?? BRAND_NAMES.showroom }}>
-                  <div className="flex aspect-square size-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 group-data-[collapsible=icon]:size-8">
-                    <img
-                      src={brandLogo}
-                      alt="Logo"
-                      className="size-8 object-contain group-data-[collapsible=icon]:size-6"
-                    />
-                  </div>
-                  <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate !text-xl brand-font capitalize">
-                      {brandName}
-                    </span>
-                  </div>
-                </Link>
-              </SidebarMenuButton>
-            </div>
+            <SidebarMenuButton size="lg" asChild tooltip={brandName}>
+              <Link to="/$main" params={{ main: main ?? BRAND_NAMES.showroom }}>
+                <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10 group-data-[collapsible=icon]:size-8">
+                  <img
+                    src={brandLogo}
+                    alt="Logo"
+                    className="size-7 object-contain group-data-[collapsible=icon]:size-5"
+                  />
+                </div>
+                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-xl brand-font capitalize tracking-wide">
+                    {brandName}
+                  </span>
+                  <span className="truncate text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+                    Tailoring System
+                  </span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent className="mt-6 flex-1 overflow-y-auto">
-        {/* Top-level navigation items. */}
+
+      <SidebarContent className="mt-2 flex-1 overflow-y-auto">
+        {/* Dashboard */}
         <SidebarGroup key="top">
           <SidebarGroupContent>
             <SidebarMenu>
@@ -355,16 +347,15 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* We create a SidebarGroup for each parent. */}
+        {/* Nav groups */}
         {data.navMain.map((item) => (
           <SidebarGroup key={item.title}>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
               {item.title}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {item.items.map((subItem: any) => {
-                  // Check if this is a collapsible item
                   if (subItem.isCollapsible && subItem.items) {
                     return (
                       <CollapsibleMenuItem
@@ -377,7 +368,6 @@ export function AppSidebar({
                     );
                   }
 
-                  // Regular menu item
                   return (
                     <SidebarLink
                       key={subItem.title}
@@ -393,7 +383,8 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="mt-auto">
+
+      <SidebarFooter className="mt-auto border-t border-sidebar-border pt-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Switch Brand">
@@ -423,4 +414,3 @@ export function AppSidebar({
     </Sidebar>
   );
 }
-

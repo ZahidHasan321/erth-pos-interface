@@ -1,6 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { Garment } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import { getBrand } from "./orders";
 
 const TABLE_NAME = "garments";
@@ -9,7 +9,7 @@ export const updateGarment = async (
   id: string,
   garment: Partial<Garment>
 ): Promise<ApiResponse<Garment>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update(garment)
     .eq('id', id)
@@ -26,7 +26,7 @@ export const updateGarment = async (
 export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select(`
       *,
@@ -64,7 +64,7 @@ export const dispatchGarmentToWorkshop = async (
   garmentId: string,
   currentTripNumber: number
 ): Promise<ApiResponse<Garment>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update({
       location: 'transit_to_workshop',

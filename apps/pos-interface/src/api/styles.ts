@@ -1,9 +1,9 @@
 import type { Style } from "@repo/database";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import type { ApiResponse } from "@/types/api";
 
 export const getStyles = async (): Promise<ApiResponse<Style[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from('styles')
     .select('*', { count: 'exact' });
 

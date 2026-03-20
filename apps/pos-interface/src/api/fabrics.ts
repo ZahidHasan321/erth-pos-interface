@@ -1,9 +1,9 @@
 import type { Fabric } from "@repo/database";
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import type { ApiResponse } from "../types/api";
 
 export const getFabrics = async (): Promise<ApiResponse<Fabric[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from('fabrics')
     .select('*', { count: 'exact' });
 
@@ -26,7 +26,7 @@ export const getFabrics = async (): Promise<ApiResponse<Fabric[]>> => {
 
 
 export const updateFabric = async (id: number, fabric: Partial<Fabric>): Promise<ApiResponse<Fabric>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('fabrics')
     .update(fabric)
     .eq('id', id)

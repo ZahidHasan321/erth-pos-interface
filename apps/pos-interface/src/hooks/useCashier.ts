@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
     searchOrderForCashier,
@@ -10,6 +10,23 @@ import {
     searchCashierOrderList,
     getCashierSummary,
 } from "@/api/cashier";
+
+/**
+ * Invalidate cashier-related + order queries.
+ * refetchType: "active" = only refetch queries that are currently rendered.
+ */
+function invalidateCashierQueries(queryClient: QueryClient, orderId?: number) {
+    if (orderId) {
+        queryClient.invalidateQueries({ queryKey: ["payment-transactions", orderId], refetchType: "active" });
+    }
+    queryClient.invalidateQueries({ queryKey: ["cashier-order"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["cashier-summary"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"], refetchType: "active" });
+    // Mark order lists as stale but only refetch if currently visible
+    queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
+}
 
 export function useCashierOrderSearch(query: string) {
     return useQuery({
@@ -68,13 +85,7 @@ export function usePaymentMutation() {
                     ? "Refund recorded successfully"
                     : "Payment recorded successfully"
             );
-            queryClient.invalidateQueries({ queryKey: ["payment-transactions", variables.orderId] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            invalidateCashierQueries(queryClient, variables.orderId);
         },
         onError: (error) => {
             toast.error(`Payment error: ${error.message}`);
@@ -93,12 +104,7 @@ export function useUpdateDiscountMutation() {
                 return;
             }
             toast.success("Discount updated successfully");
-            queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            invalidateCashierQueries(queryClient);
         },
         onError: (error) => {
             toast.error(`Discount error: ${error.message}`);
@@ -117,16 +123,10 @@ export function useToggleHomeDeliveryMutation() {
                 return;
             }
             toast.success(variables.homeDelivery ? "Switched to home delivery" : "Switched to pickup");
-            queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-summary"] });
-            queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["orders"] });
-            queryClient.invalidateQueries({ queryKey: ["showroom-orders"] });
-            queryClient.invalidateQueries({ queryKey: ["order-history"] });
+            invalidateCashierQueries(queryClient);
         },
         onError: (error) => {
             toast.error(`Delivery toggle error: ${error.message}`);
         },
     });
 }
-

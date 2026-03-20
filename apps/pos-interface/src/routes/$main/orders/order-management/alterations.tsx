@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,7 @@ type AlterationGarment = Garment & {
 
 async function getAlterationGarments(): Promise<AlterationGarment[]> {
   const brand = getBrand();
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("garments")
     .select(`
       *,
@@ -51,7 +51,7 @@ async function getAlterationGarments(): Promise<AlterationGarment[]> {
 }
 
 async function sendToWorkshop(garmentId: string, currentTripNumber: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await db
     .from("garments")
     .update({
       location: "transit_to_workshop",

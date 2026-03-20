@@ -4,7 +4,7 @@ import type { Variants } from "framer-motion";
  * Standard transition timings for consistency
  */
 export const TRANSITIONS = {
-  default: { type: "spring", stiffness: 300, damping: 30 } as const,
+  default: { duration: 0.25, ease: "easeOut" } as const,
   smooth: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1.0] } as const,
   quick: { duration: 0.2, ease: "easeOut" } as const,
   stagger: 0.05,

@@ -8,7 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
-import { Check, Link as LinkIcon, Trash2, User, Phone, Clock } from "lucide-react";
+import { Check, Link as LinkIcon, X, User, Phone, Clock, Crown, Hash, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // UI Components
@@ -24,11 +24,12 @@ import { Checkbox } from "../ui/checkbox";
 import { Badge } from "../ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { DirectLookupCard } from "./order-search-form";
 import { ErrorBoundary } from "../global/error-boundary";
 import { SearchCustomer } from "../forms/customer-demographics/search-customer";
 import { LinkConfigurationPanel } from "./link-configuration-panel";
-import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
+import { ORDER_PHASE_LABELS } from "@/lib/constants";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
 import type { Order, Customer } from "@repo/database";
 
@@ -48,15 +49,9 @@ type SelectedOrder = {
 export default function LinkOrder() {
   const queryClient = useQueryClient();
 
-  // --- Search Inputs ---
-  const [orderIdSearch, setOrderIdSearch] = useState<number | undefined>();
-  const [fatouraSearch, setFatouraSearch] = useState<number | undefined>();
-  
-  // --- Loading & Error States ---
-  const [isSearchingId, setIsSearchingId] = useState(false);
-  const [isSearchingFatoura, setIsSearchingFatoura] = useState(false);
-  const [idError, setIdError] = useState<string | undefined>();
-  const [fatouraError, setFatouraError] = useState<string | undefined>();
+  // --- Search State ---
+  const [quickSearch, setQuickSearch] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   // --- Global State ---
   const [selectedOrders, setSelectedOrders] = useState<SelectedOrder[]>([]);
@@ -68,22 +63,40 @@ export default function LinkOrder() {
   const [selectedDialogIds, setSelectedDialogIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- Input Change Handlers (Clear errors on type) ---
-  const handleOrderIdChange = (val: number | undefined) => {
-    setOrderIdSearch(val);
-    if (idError) setIdError(undefined);
-  };
+  // --- Helpers ---
 
-  const handleFatouraChange = (val: number | undefined) => {
-    setFatouraSearch(val);
-    if (fatouraError) setFatouraError(undefined);
-  };
+  function validateOrder(order: any): boolean {
+    if (order.checkout_status !== "confirmed") {
+      toast.warning("Only confirmed orders can be linked.");
+      return false;
+    }
+    if (order.order_type !== "WORK") {
+      toast.warning("Only work orders can be linked.");
+      return false;
+    }
+    return true;
+  }
+
+  function mapOrderToSelected(order: any): SelectedOrder {
+    return {
+      id: order.id,
+      invoiceNumber: order.invoice_number,
+      orderDate: order.order_date,
+      deliveryDate: order.delivery_date,
+      customerId: order.customer_id,
+      customerName: order.customer?.name,
+      customerPhone: order.customer?.phone ?? undefined,
+      orderPhase: order.order_phase,
+      isExistingPrimary: order.child_orders && order.child_orders.length > 0,
+      isExistingChild: !!order.linked_order_id,
+    };
+  }
 
   // --- Search Handlers ---
+
   const handleCustomerFound = async (customer: Customer) => {
     try {
       const ordersResponse = await getOrdersForLinking(customer.id);
-
       if (ordersResponse.data && ordersResponse.data.length > 0) {
         setCustomerOrders(ordersResponse.data);
         setSelectedDialogIds([]);
@@ -91,592 +104,542 @@ export default function LinkOrder() {
       } else {
         toast.info(`No confirmed orders found for ${customer.name}.`);
       }
-    } catch (error) {
-      console.error("Failed to fetch customer orders", error);
+    } catch {
       toast.error("Failed to fetch customer orders.");
     }
   };
 
-  const handleIdSearch = async () => {
-    if (!orderIdSearch) return;
-    
-    setIdError(undefined);
-    setIsSearchingId(true);
-    
+  const handleQuickSearch = async () => {
+    const term = quickSearch.trim();
+    if (!term) return;
+
+    setIsSearching(true);
     try {
-        const res = await getOrderForLinking(orderIdSearch);
-        if (res.status === "error" || !res.data) {
-            setIdError("Order ID not found");
-            toast.error("Order ID not found");
-        } else {
-            const order = res.data;
-            if (validateOrder(order)) {
-                addOrdersToSelection([order]);
-                setOrderIdSearch(undefined);
-            }
+      const numVal = parseInt(term.replace("#", ""));
+      if (isNaN(numVal)) {
+        toast.warning("Enter a valid Order ID or Invoice Number");
+        return;
+      }
+      const res = await getOrderForLinking(numVal);
+      if (res.status === "error" || !res.data) {
+        toast.error("Order not found");
+      } else {
+        const order = res.data;
+        if (validateOrder(order)) {
+          await addOrdersToSelection([order]);
+          setQuickSearch("");
         }
-    } catch (err) {
-        toast.error("Search failed");
+      }
+    } catch {
+      toast.error("Search failed");
     } finally {
-        setIsSearchingId(false);
+      setIsSearching(false);
     }
   };
 
-  const handleFatouraSearch = async () => {
-    if (!fatouraSearch) return;
-    
-    setFatouraError(undefined);
-    setIsSearchingFatoura(true);
-    
-    try {
-        const res = await getOrderForLinking(fatouraSearch);
-        if (res.status === "error" || !res.data) {
-            setFatouraError("Invoice No not found");
-            toast.error("Invoice Number not found");
-        } else {
-            const order = res.data;
-            if (validateOrder(order)) {
-                addOrdersToSelection([order]);
-                setFatouraSearch(undefined);
-            }
-        }
-    } catch (err) {
-        toast.error("Search failed");
-    } finally {
-        setIsSearchingFatoura(false);
-    }
-  };
-
-  const validateOrder = (order: any) => {
-    if (order.checkout_status !== "confirmed") {
-        toast.warning("Only confirmed orders can be linked.");
-        return false;
-    }
-    if (order.order_type !== "WORK") {
-        toast.warning("Only work orders can be linked.");
-        return false;
-    }
-    return true;
-  };
-
-  // --- Helper: Add Orders to Main List ---
+  // --- Add Orders to Main List ---
   async function addOrdersToSelection(ordersToProcess: any[]) {
-    // We use a Map to keep track of orders to be added, avoiding duplicates
     const ordersMap = new Map<number, SelectedOrder>();
     const idsToFetch = new Set<number>();
-    
-    // 1. Initial Mapping & Identification of group members
+
     for (const order of ordersToProcess) {
-        if (selectedOrders.some(o => o.id === order.id)) continue;
+      if (selectedOrders.some((o) => o.id === order.id)) continue;
 
-        const mapped: SelectedOrder = {
-            id: order.id,
-            invoiceNumber: order.invoice_number,
-            orderDate: order.order_date,
-            deliveryDate: order.delivery_date,
-            customerId: order.customer_id,
-            customerName: order.customer?.name,
-            customerPhone: order.customer?.phone ?? undefined,
-            orderPhase: order.order_phase,
-            isExistingPrimary: order.child_orders && order.child_orders.length > 0,
-            isExistingChild: !!order.linked_order_id
-        };
-        
-        ordersMap.set(order.id, mapped);
+      ordersMap.set(order.id, mapOrderToSelected(order));
 
-        // If it's a child, we need its primary
-        if (order.linked_order_id) {
-            idsToFetch.add(order.linked_order_id);
-        }
-
-        // If it's a primary, we need its children
-        if (order.child_orders) {
-            order.child_orders.forEach((c: any) => idsToFetch.add(c.id || c.order_id));
-        }
+      if (order.linked_order_id) idsToFetch.add(order.linked_order_id);
+      if (order.child_orders) {
+        order.child_orders.forEach((c: any) => idsToFetch.add(c.id || c.order_id));
+      }
     }
 
-    // 2. Fetch missing group members
-    const finalFetchIds = Array.from(idsToFetch).filter(id => 
-        !ordersMap.has(id) && !selectedOrders.some(o => o.id === id)
+    // Fetch missing group members
+    const finalFetchIds = Array.from(idsToFetch).filter(
+      (id) => !ordersMap.has(id) && !selectedOrders.some((o) => o.id === id)
     );
 
     if (finalFetchIds.length > 0) {
-        toast.info(`Syncing linked group members...`);
-        try {
-            const results = await Promise.all(finalFetchIds.map(id => getOrderForLinking(id)));
-            const validOrders = results
-                .filter(res => res.status === "success" && res.data)
-                .map(res => res.data);
-            
-            for (const order of validOrders) {
-                if (!order) continue;
-                ordersMap.set(order.id, {
-                    id: order.id,
-                    invoiceNumber: order.invoice_number,
-                    orderDate: order.order_date,
-                    deliveryDate: order.delivery_date,
-                    customerId: order.customer_id,
-                    customerName: order.customer?.name,
-                    customerPhone: order.customer?.phone ?? undefined,
-                    orderPhase: order.order_phase,
-                    isExistingPrimary: order.child_orders && order.child_orders.length > 0,
-                    isExistingChild: !!order.linked_order_id
-                });
-                
-                // If the fetched order has more links, we could recurse, 
-                // but for a single level depth (primary <-> child), this is sufficient.
-            }
-        } catch (error) {
-            console.error("Group sync failed", error);
-            toast.error("Failed to sync some group members");
+      try {
+        const results = await Promise.all(finalFetchIds.map((id) => getOrderForLinking(id)));
+        for (const res of results) {
+          if (res.status === "success" && res.data) {
+            ordersMap.set(res.data.id, mapOrderToSelected(res.data));
+          }
         }
+      } catch {
+        toast.error("Failed to sync some group members");
+      }
     }
 
-    // 3. Update State once
     const newItems = Array.from(ordersMap.values());
     if (newItems.length > 0) {
-        setSelectedOrders(prev => {
-            const existingIds = new Set(prev.map(o => o.id));
-            const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
-            return [...prev, ...uniqueNewItems];
-        });
+      setSelectedOrders((prev) => {
+        const existingIds = new Set(prev.map((o) => o.id));
+        return [...prev, ...newItems.filter((item) => !existingIds.has(item.id))];
+      });
+
+      // Auto-set primary to first order if not set
+      if (!primaryOrderId && newItems.length > 0) {
+        const existingPrimary = newItems.find((o) => o.isExistingPrimary);
+        setPrimaryOrderId(existingPrimary?.id ?? newItems[0].id);
+      }
     }
   }
 
-  // --- Helper: Remove Order ---
   function removeOrder(id: number) {
     setSelectedOrders((prev) => prev.filter((o) => o.id !== id));
-    if (primaryOrderId === id) {
-      setPrimaryOrderId(null);
-    }
+    if (primaryOrderId === id) setPrimaryOrderId(null);
   }
 
-  // --- Dialog Handlers ---
+  // --- Dialog ---
   function toggleDialogSelection(id: number) {
     setSelectedDialogIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   }
 
   function handleDialogConfirm() {
-    const ordersToAdd = customerOrders.filter((o) =>
-      selectedDialogIds.includes(o.id),
-    );
+    const ordersToAdd = customerOrders.filter((o) => selectedDialogIds.includes(o.id));
     addOrdersToSelection(ordersToAdd);
     setIsDialogOpen(false);
   }
 
-  // --- Link Orders Handler ---
+  // --- Link Orders ---
   async function handleLinkOrders(reviseDate: Date) {
     if (!primaryOrderId) {
       toast.error("Please select a primary order.");
       return;
     }
-
     if (selectedOrders.length < 2) {
       toast.error("Please select at least 2 orders to link.");
       return;
     }
 
     setIsSubmitting(true);
-
     try {
       const now = new Date();
-      const updatePromises = selectedOrders.map((order) => {
-        const isPrimary = order.id === primaryOrderId;
-        const updateData: any = {
-          delivery_date: reviseDate.toISOString(),
-        };
-
-        if (!isPrimary) {
-          updateData.linked_order_id = primaryOrderId;
-          updateData.linked_date = now.toISOString();
-          updateData.unlinked_date = null;
-        } else {
+      await Promise.all(
+        selectedOrders.map((order) => {
+          const isPrimary = order.id === primaryOrderId;
+          const updateData: any = {
+            delivery_date: reviseDate.toISOString(),
+          };
+          if (!isPrimary) {
+            updateData.linked_order_id = primaryOrderId;
+            updateData.linked_date = now.toISOString();
+            updateData.unlinked_date = null;
+          } else {
             updateData.linked_order_id = null;
             updateData.unlinked_date = null;
-        }
+          }
+          return updateOrder(updateData, order.id);
+        })
+      );
 
-        return updateOrder(updateData, order.id);
-      });
-
-      await Promise.all(updatePromises);
       toast.success(`Successfully linked ${selectedOrders.length} orders.`);
       handleClear();
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    } catch (error) {
-      console.error("Failed to link orders", error);
+      queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
+    } catch {
       toast.error("Failed to link orders. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  // --- Clear Form ---
   function handleClear() {
     setSelectedOrders([]);
     setPrimaryOrderId(null);
-    setOrderIdSearch(undefined);
-    setFatouraSearch(undefined);
-    setIdError(undefined);
-    setFatouraError(undefined);
+    setQuickSearch("");
     setCustomerOrders([]);
     setSelectedDialogIds([]);
   }
 
   const hasOrders = selectedOrders.length > 0;
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
-  };
-
   return (
-    <motion.section
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-3 p-4 md:p-5 max-w-7xl mx-auto"
-    >
-      {/* --- Page Header --- */}
-      <motion.div variants={itemVariants} className="space-y-1 border-b border-border pb-4">
-        <h1 className="text-xl font-bold text-foreground">
-          Link <span className="text-primary">Orders</span>
-        </h1>
-        <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
-          Connect multiple orders for synchronized production and delivery
-        </p>
-      </motion.div>
-
-      {/* --- Search Section --- */}
-      <ErrorBoundary>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-            {/* 1. Customer Search (Fuzzy) */}
-            <div className="lg:col-span-6 h-full min-h-[120px]">
-                <SearchCustomer 
-                    onCustomerFound={handleCustomerFound}
-                    onHandleClear={() => {}}
-                    clearOnSelect={true}
-                />
-            </div>
-            
-            {/* 2. Direct Lookups (Exact) */}
-            <div className="lg:col-span-6 h-full min-h-[120px]">
-                <DirectLookupCard 
-                    orderId={orderIdSearch}
-                    fatoura={fatouraSearch}
-                    onOrderIdChange={handleOrderIdChange}
-                    onFatouraChange={handleFatouraChange}
-                    onOrderIdSubmit={handleIdSearch}
-                    onFatouraSubmit={handleFatouraSearch}
-                    isSearchingId={isSearchingId}
-                    isSearchingFatoura={isSearchingFatoura}
-                    idError={idError}
-                    fatouraError={fatouraError}
-                />
-            </div>
+    <ErrorBoundary>
+      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
+        {/* Header */}
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold text-foreground">Link Orders</h1>
+          <p className="text-sm text-muted-foreground">
+            Connect orders for synchronized production and delivery
+          </p>
         </div>
-      </ErrorBoundary>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* --- LEFT: Orders List --- */}
-        <div className="lg:col-span-8 space-y-4">
-          <motion.div
-            variants={itemVariants}
-            className="bg-card rounded-xl border border-border shadow-sm overflow-hidden h-full flex flex-col py-0 gap-0"
-          >
-            <div className="bg-muted/30 px-5 py-3 border-b border-border flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Selected Orders</h3>
-                <p className="text-xs font-bold text-muted-foreground uppercase mt-0.5">
-                    {selectedOrders.length} Orders Ready to Link
-                </p>
+        {/* Search section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Customer search */}
+          <SearchCustomer
+            onCustomerFound={handleCustomerFound}
+            onHandleClear={() => {}}
+            clearOnSelect={true}
+          />
+
+          {/* Quick lookup */}
+          <div className="bg-muted/40 px-5 py-4 rounded-2xl border border-border/50 shadow-sm flex flex-col justify-center space-y-3">
+            <div className="flex items-center gap-3 px-1">
+              <div className="p-2 bg-primary/10 rounded-lg text-primary shadow-sm">
+                <Hash className="size-4" />
               </div>
-              {hasOrders && (
-                <Button variant="ghost" size="sm" onClick={handleClear} className="h-8 text-xs font-black uppercase tracking-tighter text-muted-foreground hover:text-destructive transition-colors">
-                    Clear Selection
-                </Button>
-              )}
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-tight">
+                Quick Add
+              </h2>
             </div>
+            <div className="flex items-end gap-3">
+              <div className="space-y-1.5 flex-1">
+                <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground ml-1">
+                  Order ID or Invoice No
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 5021 or #10025"
+                  value={quickSearch}
+                  onChange={(e) => setQuickSearch(e.target.value)}
+                  disabled={isSearching}
+                  className="h-9 font-bold bg-white rounded-xl border-border shadow-sm"
+                  onKeyDown={(e) => e.key === "Enter" && handleQuickSearch()}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleQuickSearch}
+                disabled={!quickSearch.trim() || isSearching}
+                className="h-9 px-5 font-bold uppercase tracking-wide text-xs rounded-xl shadow-sm shrink-0"
+              >
+                <Search className="size-3.5 mr-1.5" />
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
 
-            <div className="divide-y divide-border flex-1 overflow-y-auto min-h-[300px] relative">
-              <AnimatePresence initial={false}>
-                {!hasOrders ? (
-                  <motion.div 
-                    key="empty"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="p-6 text-center text-muted-foreground h-full flex flex-col items-center justify-center absolute inset-0"
+        {/* Main content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Orders list */}
+          <div className="lg:col-span-2">
+            <div className="bg-card rounded-xl border shadow-none overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wide">
+                    Selected Orders
+                  </h3>
+                  {hasOrders && (
+                    <Badge variant="outline" className="font-bold text-xs">
+                      {selectedOrders.length}
+                    </Badge>
+                  )}
+                </div>
+                {hasOrders && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClear}
+                    className="h-7 text-xs font-medium text-muted-foreground hover:text-destructive"
                   >
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="p-4 bg-muted/50 rounded-full border-2 border-dashed border-border">
-                          <LinkIcon className="w-6 h-6 opacity-20" />
-                      </div>
-                      <div>
-                          <p className="text-sm font-black uppercase tracking-tight">No orders selected</p>
-                          <p className="text-xs font-medium mt-1">Search and add orders to build your link group</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  selectedOrders.map((order) => {
-                    const isPrimary = order.id === primaryOrderId;
-
-                    return (
-                      <motion.div
-                        key={order.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className={cn(
-                          "flex items-center gap-3 p-3 transition-all border-l-4",
-                          isPrimary
-                            ? "border-l-primary bg-primary/5"
-                            : "border-l-transparent hover:bg-muted/20"
-                        )}
-                      >
-                        {/* Primary Radio */}
-                        <div
-                          className={cn(
-                            "size-5 rounded-full border-2 flex items-center justify-center cursor-pointer shrink-0 transition-all",
-                            isPrimary ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary/50"
-                          )}
-                          onClick={() => setPrimaryOrderId(order.id)}
-                        >
-                          {isPrimary && <div className="size-2 rounded-full bg-white" />}
-                        </div>
-
-                        {/* Main Info */}
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-sm tracking-tight">#{order.id}</span>
-                            {order.invoiceNumber && (
-                              <span className="text-xs font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">INV {order.invoiceNumber}</span>
-                            )}
-                            {isPrimary && <Badge variant="default" className="text-xs font-black h-4 px-1.5 rounded-sm">PRIMARY</Badge>}
-                            {order.isExistingPrimary && !isPrimary && (
-                              <Badge variant="outline" className="text-xs font-black h-4 px-1 rounded-sm border-amber-500 text-amber-700">EXISTING PRIMARY</Badge>
-                            )}
-                            {order.isExistingChild && (
-                              <Badge variant="outline" className="text-xs font-black h-4 px-1 rounded-sm border-blue-400 text-blue-600">CHILD</Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1 font-bold truncate">
-                              <User className="size-2.5 shrink-0" />
-                              {order.customerName || "—"}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Phone className="size-2.5 shrink-0" />
-                              {order.customerPhone || "N/A"}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="size-2.5 shrink-0" />
-                              {order.deliveryDate ? format(new Date(order.deliveryDate), "PP") : "No date"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Remove */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeOrder(order.id)}
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </motion.div>
-                    );
-                  })
+                    Clear all
+                  </Button>
                 )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* --- RIGHT: Link Configuration Panel --- */}
-        <div className="lg:col-span-4 space-y-4">
-           <LinkConfigurationPanel 
-            hasOrders={hasOrders}
-            primaryOrderId={primaryOrderId}
-            onLinkOrders={handleLinkOrders}
-            isSubmitting={isSubmitting}
-           />
-        </div>
-      </div>
-
-      {/* --- Customer Selection Dialog --- */}
-      <ErrorBoundary>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[80vw] !max-w-5xl max-h-[85vh]">
-            <DialogHeader className="border-b border-border pb-4 px-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-primary/10 rounded-xl">
-                  <LinkIcon className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg font-black uppercase tracking-tight">
-                    Select Orders to Link
-                  </DialogTitle>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">
-                    Choose multiple confirmed orders for this customer
-                  </p>
-                </div>
               </div>
-            </DialogHeader>
 
-            <div className="overflow-auto max-h-[50vh] border rounded-xl bg-muted/5">
-              <table className="w-full text-sm min-w-[600px]">
-                <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b-2 border-border/60">
-                  <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                    <th className="p-4 text-left w-12">
-                      <div className="flex items-center justify-center">
-                         <Checkbox
+              <div className="min-h-[280px] relative">
+                <AnimatePresence initial={false}>
+                  {!hasOrders ? (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground p-6"
+                    >
+                      <div className="p-4 bg-muted/30 rounded-full border-2 border-dashed border-border mb-3">
+                        <LinkIcon className="w-6 h-6 opacity-20" />
+                      </div>
+                      <p className="text-sm font-medium">No orders selected</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">
+                        Search by customer or order ID to add orders
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <div className="divide-y divide-border/50">
+                      {selectedOrders.map((order) => {
+                        const isPrimary = order.id === primaryOrderId;
+
+                        return (
+                          <motion.div
+                            key={order.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className={cn(
+                              "flex items-center gap-3 px-4 py-3 transition-colors",
+                              isPrimary ? "bg-primary/5" : "hover:bg-muted/20"
+                            )}
+                          >
+                            {/* Primary selector */}
+                            <button
+                              className={cn(
+                                "size-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                                isPrimary
+                                  ? "border-primary bg-primary"
+                                  : "border-muted-foreground/25 hover:border-primary/50"
+                              )}
+                              onClick={() => setPrimaryOrderId(order.id)}
+                              title="Set as primary"
+                            >
+                              {isPrimary && <Crown className="size-2.5 text-primary-foreground" />}
+                            </button>
+
+                            {/* Order info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-sm">#{order.id}</span>
+                                {order.invoiceNumber && (
+                                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                    INV {order.invoiceNumber}
+                                  </span>
+                                )}
+                                {isPrimary && (
+                                  <Badge className="text-[10px] font-bold h-4 px-1.5 bg-primary text-primary-foreground">
+                                    PRIMARY
+                                  </Badge>
+                                )}
+                                {order.isExistingChild && (
+                                  <Badge variant="outline" className="text-[10px] font-bold h-4 px-1.5 border-blue-300 text-blue-600">
+                                    LINKED
+                                  </Badge>
+                                )}
+                                {order.orderPhase && (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] font-bold h-4 px-1.5 border-none",
+                                      order.orderPhase === "new" && "bg-gray-500/10 text-gray-500",
+                                      order.orderPhase === "in_progress" && "bg-amber-500/10 text-amber-600",
+                                      order.orderPhase === "completed" && "bg-primary/10 text-primary"
+                                    )}
+                                  >
+                                    {ORDER_PHASE_LABELS[order.orderPhase as keyof typeof ORDER_PHASE_LABELS]}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 md:gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                                <span className="flex items-center gap-1 font-medium truncate max-w-[120px] md:max-w-none">
+                                  <User className="size-2.5 shrink-0" />
+                                  {order.customerName || "Unknown"}
+                                </span>
+                                {order.customerPhone && (
+                                  <span className="hidden md:flex items-center gap-1">
+                                    <Phone className="size-2.5 shrink-0" />
+                                    {order.customerPhone}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1">
+                                  <Clock className="size-2.5 shrink-0" />
+                                  {order.deliveryDate
+                                    ? format(new Date(order.deliveryDate), "d MMM")
+                                    : "No date"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Remove */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeOrder(order.id)}
+                              className="h-7 w-7 shrink-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+
+          {/* Config panel */}
+          <div className="lg:col-span-1">
+            <LinkConfigurationPanel
+              hasOrders={hasOrders}
+              primaryOrderId={primaryOrderId}
+              onLinkOrders={handleLinkOrders}
+              isSubmitting={isSubmitting}
+            />
+          </div>
+        </div>
+
+        {/* Customer orders dialog */}
+        <ErrorBoundary>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogContent className="!w-[95vw] sm:!w-[90vw] md:!w-[80vw] !max-w-4xl max-h-[85vh]">
+              <DialogHeader className="border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <LinkIcon className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-base font-bold">
+                      Select Orders to Link
+                    </DialogTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Choose confirmed orders for this customer
+                    </p>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="overflow-auto max-h-[50vh] border rounded-lg">
+                <table className="w-full text-sm min-w-[500px]">
+                  <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
+                    <tr className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      <th className="p-3 text-center w-12">
+                        <Checkbox
                           checked={
                             customerOrders.length > 0 &&
-                            selectedDialogIds.length === customerOrders.filter(o => !o.linked_order_id).length
+                            selectedDialogIds.length ===
+                              customerOrders.filter((o) => !o.linked_order_id).length
                           }
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              const availableIds = customerOrders
-                                .filter((o) => !o.linked_order_id)
-                                .map((o) => o.id);
-                              setSelectedDialogIds(availableIds);
+                              setSelectedDialogIds(
+                                customerOrders
+                                  .filter((o) => !o.linked_order_id)
+                                  .map((o) => o.id)
+                              );
                             } else {
                               setSelectedDialogIds([]);
                             }
                           }}
                         />
-                      </div>
-                    </th>
-                    <th className="p-4 text-left">Identity</th>
-                    <th className="p-4 text-left">Link Status</th>
-                    <th className="p-4 text-left">Current Delivery</th>
-                    <th className="p-4 text-left">Stage</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {customerOrders.map((order: any) => {
-                    const isChild = !!order.linked_order_id;
-                    const isPrimary = order.child_orders && order.child_orders.length > 0;
-                    const isSelected = selectedDialogIds.includes(order.id);
+                      </th>
+                      <th className="p-3 text-left">Order</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Delivery</th>
+                      <th className="p-3 text-left">Phase</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {customerOrders.map((order: any) => {
+                      const isChild = !!order.linked_order_id;
+                      const isPrimary =
+                        order.child_orders && order.child_orders.length > 0;
+                      const isSelected = selectedDialogIds.includes(order.id);
 
-                    return (
-                      <tr
-                        key={order.id}
-                        className={cn(
-                          "transition-colors group cursor-pointer",
-                          isSelected
+                      return (
+                        <tr
+                          key={order.id}
+                          className={cn(
+                            "transition-colors cursor-pointer",
+                            isSelected
                               ? "bg-primary/5 hover:bg-primary/10"
-                              : "hover:bg-muted/20",
-                        )}
-                        onClick={() => toggleDialogSelection(order.id)}
-                      >
-                        <td className="p-4">
-                          <div className="flex items-center justify-center">
-                            <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleDialogSelection(order.id)}
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="space-y-1">
-                            <h4 className="font-black text-xs uppercase">
-                                #{order.id}
-                            </h4>
-                            <p className="text-xs font-bold text-muted-foreground uppercase">
-                              Inv: {order.invoice_number ?? "—"}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                           {isChild ? (
-                             <Badge variant="secondary" className="text-xs font-black h-4 px-1 rounded-sm whitespace-nowrap">
-                                LINKED TO #{order.linked_order_id}
-                             </Badge>
-                           ) : isPrimary ? (
-                             <Badge variant="secondary" className="text-xs font-black h-4 px-1 rounded-sm whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200">
-                                PRIMARY OF GROUP
-                             </Badge>
-                           ) : (
-                             <span className="text-xs font-bold text-muted-foreground uppercase">Independent</span>
-                           )}
-                        </td>
-                        <td className="p-4">
-                           {order.delivery_date ? (
-                             <div className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-xs font-bold">{format(new Date(order.delivery_date), "PP")}</span>
-                             </div>
-                           ) : (
-                             <span className="text-xs font-bold text-muted-foreground uppercase">Not set</span>
-                           )}
-                        </td>
-                        <td className="p-4">
-                          {order.order_phase ? (
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "text-xs font-black uppercase tracking-wider h-5 px-2 border-none shadow-xs",
-                                `bg-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-500/15`,
-                                `text-${ORDER_PHASE_COLORS[order.order_phase as keyof typeof ORDER_PHASE_COLORS]}-600`
-                              )}
-                            >
-                              {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">N/A</span>
+                              : "hover:bg-muted/20"
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <DialogFooter className="border-t border-border pt-6 px-2">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                <div className="flex items-center gap-2">
-                   <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                    {selectedDialogIds.length} Orders Selected
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    className="font-black uppercase tracking-widest text-xs"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleDialogConfirm}
-                    disabled={selectedDialogIds.length === 0}
-                    className="font-black uppercase tracking-widest h-10 px-6 shadow-lg shadow-primary/20"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Add Selection
-                  </Button>
-                </div>
+                          onClick={() => toggleDialogSelection(order.id)}
+                        >
+                          <td className="p-3 text-center">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleDialogSelection(order.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <span className="font-bold text-sm">#{order.id}</span>
+                            {order.invoice_number && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                INV {order.invoice_number}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {isChild ? (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] font-bold h-4 px-1.5"
+                              >
+                                Linked to #{order.linked_order_id}
+                              </Badge>
+                            ) : isPrimary ? (
+                              <Badge className="text-[10px] font-bold h-4 px-1.5 bg-amber-500/15 text-amber-700 border-none">
+                                Primary
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Independent
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {order.delivery_date ? (
+                              <span className="text-xs font-medium">
+                                {format(new Date(order.delivery_date), "d MMM yyyy")}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Not set
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {order.order_phase ? (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-bold h-4 px-1.5 border-none",
+                                  order.order_phase === "new" && "bg-gray-500/10 text-gray-500",
+                                  order.order_phase === "in_progress" && "bg-amber-500/10 text-amber-600",
+                                  order.order_phase === "completed" && "bg-primary/10 text-primary"
+                                )}
+                              >
+                                {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">N/A</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </ErrorBoundary>
-    </motion.section>
+
+              <DialogFooter className="border-t border-border pt-4">
+                <div className="flex justify-between items-center w-full">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {selectedDialogIds.length} selected
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleDialogConfirm}
+                      disabled={selectedDialogIds.length === 0}
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1.5" />
+                      Add {selectedDialogIds.length > 0 ? `(${selectedDialogIds.length})` : ""}
+                    </Button>
+                  </div>
+                </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </ErrorBoundary>
+      </div>
+    </ErrorBoundary>
   );
 }

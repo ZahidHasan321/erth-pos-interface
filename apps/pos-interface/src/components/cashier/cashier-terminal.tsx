@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ChipToggle } from "@/components/ui/chip-toggle";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,7 +82,7 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
     const phaseColors: Record<string, string> = {
         new: "bg-sky-100 text-sky-700",
         in_progress: "bg-amber-100 text-amber-700",
-        completed: "bg-emerald-100 text-emerald-700",
+        completed: "bg-primary/15 text-primary",
     };
 
     const orderDateStr = item.order_date ? new Date(item.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "-";
@@ -124,7 +125,7 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
                     </span>
                 )}
                 {hasReady && item.garment_total > 0 && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-600 text-white shrink-0">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary text-primary-foreground shrink-0">
                         {item.garment_ready}/{item.garment_total} ready
                     </span>
                 )}
@@ -658,18 +659,21 @@ export function CashierBody() {
                                     <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t">
                                         <span className="text-xs text-muted-foreground">Delivery:</span>
                                         <div className="flex rounded-lg border bg-muted p-0.5">
-                                            <button type="button"
+                                            <ChipToggle
+                                                active={!isHomeDelivery}
                                                 onClick={() => { if (isHomeDelivery) toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: false }); }}
                                                 disabled={toggleDeliveryMutation.isPending}
-                                                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-all cursor-pointer ${!isHomeDelivery ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}>
+                                                className="px-3">
                                                 <Store className="h-3.5 w-3.5" /> Pickup
-                                            </button>
-                                            <button type="button"
+                                            </ChipToggle>
+                                            <ChipToggle
+                                                active={isHomeDelivery}
+                                                activeVariant="blue"
                                                 onClick={() => { if (!isHomeDelivery) toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: true }); }}
                                                 disabled={toggleDeliveryMutation.isPending}
-                                                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-all cursor-pointer ${isHomeDelivery ? "bg-blue-100 text-blue-700 shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}>
+                                                className="px-3">
                                                 <Truck className="h-3.5 w-3.5" /> Home Delivery
-                                            </button>
+                                            </ChipToggle>
                                         </div>
                                         {toggleDeliveryMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                                     </div>
@@ -828,15 +832,12 @@ export function CashierBody() {
                                 { key: "work" as const, label: `Work (${Number(summary.work_count)})` },
                                 { key: "sales" as const, label: `Sales (${Number(summary.sales_count)})` },
                             ] as const).map((f) => (
-                                <button key={f.key} type="button"
-                                    onClick={() => setDashboardFilter(dashboardFilter === f.key ? "all" : f.key)}
-                                    className={`text-xs font-medium px-2.5 py-1.5 rounded-md border transition-all cursor-pointer ${
-                                        dashboardFilter === f.key
-                                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                            : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
-                                    }`}>
+                                <ChipToggle
+                                    key={f.key}
+                                    active={dashboardFilter === f.key}
+                                    onClick={() => setDashboardFilter(dashboardFilter === f.key ? "all" : f.key)}>
                                     {f.label}
-                                </button>
+                                </ChipToggle>
                             ))}
                         </div>
                         <div className="flex items-center justify-between px-1 mb-1 shrink-0">

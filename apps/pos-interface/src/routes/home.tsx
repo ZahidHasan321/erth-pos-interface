@@ -1,141 +1,256 @@
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 
-import ErthLogo from "../assets/erth-light.svg";
-import SakhtbaLogo from "../assets/Sakkba.png";
+import ErthLogo from "../assets/erth-dark.svg";
+import SakkbaLogo from "../assets/Sakkba.png";
 import { BRAND_NAMES } from "@/lib/constants";
 
 export const Route = createFileRoute("/home")({
   component: SelectionPage,
   head: () => ({
-    meta: [{
-      title: "Select Platform",
-    }],
-    links: [{
-      rel: 'icon',
-      type: "image/svg+xml",
-      href: "/erth-dark.svg"
-    }]
+    meta: [{ title: "Select Workspace" }],
   }),
 });
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.2 },
-  },
-};
-
-const itemVariants = {
-  hidden: { y: 30, opacity: 0 },
-  visible: { y: 0, opacity: 1 },
-};
-
 function SelectionPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-linear-to-br from-background via-muted/30 to-background p-4">
+    <div
+      className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden px-6 py-12"
+      style={{ background: "linear-gradient(160deg, #0c0b09 0%, #141210 40%, #100f0c 70%, #0a0908 100%)" }}
+    >
+      {/* Geometric pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `
+            linear-gradient(30deg, #d4cdaa 1px, transparent 1px),
+            linear-gradient(150deg, #d4cdaa 1px, transparent 1px),
+            linear-gradient(90deg, #d4cdaa 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 70px, 40px 70px, 70px 40px",
+        }}
+      />
+
+      {/* Corner accents */}
+      <div className="absolute top-8 left-8 w-8 h-8 border-l border-t opacity-10" style={{ borderColor: "#d4cdaa" }} />
+      <div className="absolute top-8 right-8 w-8 h-8 border-r border-t opacity-10" style={{ borderColor: "#d4cdaa" }} />
+      <div className="absolute bottom-8 left-8 w-8 h-8 border-l border-b opacity-10" style={{ borderColor: "#d4cdaa" }} />
+      <div className="absolute bottom-8 right-8 w-8 h-8 border-r border-b opacity-10" style={{ borderColor: "#d4cdaa" }} />
+
+      {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="max-w-5xl w-full text-center mb-8"
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 text-center mb-12"
       >
-        <h1 className="text-3xl md:text-3xl font-bold text-foreground mb-4 tracking-tight">
-          Select Platform
-        </h1>
-        <p className="text-lg md:text-xl text-muted-foreground">
-          Choose your workspace to continue
+        <p
+          className="text-xs tracking-[0.4em] uppercase mb-4"
+          style={{ color: "#d4cdaa70", fontFamily: "'Montserrat', sans-serif" }}
+        >
+          Select Workspace
         </p>
+        <div
+          className="mx-auto h-px w-16"
+          style={{ background: "linear-gradient(90deg, transparent, #d4cdaa30, transparent)" }}
+        />
       </motion.div>
 
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl w-full"
-      >
-        {/* Erth Section */}
-        <motion.div variants={itemVariants}>
-          <Link to="/$main" params={{ main: BRAND_NAMES.showroom }} className="block group h-full">
-            <Card className="h-full flex flex-col items-center justify-between p-4 bg-card border-2 border-border hover:border-green-900 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 rounded-2xl overflow-hidden relative">
-              {/* Subtle background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-green-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      {/* Brand cards */}
+      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 max-w-3xl w-full">
+        {/* Erth Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Link
+            to="/$main"
+            params={{ main: BRAND_NAMES.showroom }}
+            className="group block"
+          >
+            <div
+              className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"
+              style={{
+                background: "linear-gradient(175deg, #0f1a0f 0%, #162216 50%, #0f170f 100%)",
+                border: "1px solid rgba(34, 60, 34, 0.5)",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(212,205,170,0.05)",
+              }}
+            >
+              {/* Hover glow */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
+                style={{
+                  background: "radial-gradient(ellipse at 50% 30%, rgba(34,80,34,0.15) 0%, transparent 70%)",
+                }}
+              />
 
-              <div className="relative z-10 flex flex-col items-center w-full space-y-3">
-                {/* Logo */}
-                <div className="bg-background rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform duration-300 w-24 h-24 flex items-center justify-center">
-                  <img src={ErthLogo} alt="Erth Logo" className="w-16 h-16 object-contain" />
+              {/* Fabric texture overlay */}
+              <div
+                className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity duration-500"
+                style={{
+                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212,205,170,0.3) 2px, rgba(212,205,170,0.3) 3px)",
+                }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center px-8 py-10">
+                {/* Logo container */}
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(34,60,34,0.6), rgba(20,45,20,0.8))",
+                    border: "1px solid rgba(60,100,60,0.5)",
+                    boxShadow: "0 0 30px rgba(34,60,34,0.3), inset 0 0 20px rgba(212,205,170,0.05)",
+                  }}
+                >
+                  <img src={ErthLogo} alt="Erth" className="w-12 h-12 object-contain drop-shadow-[0_0_8px_rgba(212,205,170,0.3)]" />
                 </div>
 
-                {/* Title */}
-                <h2 className="text-xl font-bold text-foreground brand-font capitalize min-h-[2.5rem] flex items-center">
+                {/* Brand name */}
+                <h2
+                  className="brand-font text-2xl mb-2 capitalize"
+                  style={{ color: "#d4cdaa" }}
+                >
                   {BRAND_NAMES.showroom}
                 </h2>
 
+                {/* Divider */}
+                <div
+                  className="h-px w-12 my-4"
+                  style={{ background: "linear-gradient(90deg, transparent, rgba(34,80,34,0.5), transparent)" }}
+                />
+
                 {/* Description */}
-                <p className="text-base text-muted-foreground text-center px-4 min-h-[4.5rem] flex items-center leading-relaxed">
-                  Showroom management and comprehensive tools
+                <p
+                  className="text-sm text-center leading-relaxed mb-8"
+                  style={{ color: "rgba(212,205,170,0.75)", fontFamily: "'Montserrat', sans-serif" }}
+                >
+                  Showroom management
+                  <br />& comprehensive tools
                 </p>
 
-                {/* Button */}
-                <Button
-                  size="lg"
-                  className="w-full py-3 text-lg bg-green-950 hover:bg-green-900 text-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 font-semibold border border-green-800/50 hover:border-green-700 hover:-translate-y-1 group"
+                {/* CTA */}
+                <div
+                  className="w-full py-3 rounded-xl text-center text-sm tracking-[0.15em] uppercase transition-all duration-400 group-hover:tracking-[0.2em]"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(34,60,34,0.5), rgba(20,40,20,0.7))",
+                    border: "1px solid rgba(34,80,34,0.3)",
+                    color: "rgba(212,205,170,0.9)",
+                    fontFamily: "'Montserrat', sans-serif",
+                    fontWeight: 500,
+                  }}
                 >
-                  <span className="flex items-center justify-center gap-3">
-                    Enter Erth
-                    <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </span>
-                </Button>
+                  Enter
+                </div>
               </div>
-            </Card>
+            </div>
           </Link>
         </motion.div>
 
-        {/* Sakkba Section */}
-        <motion.div variants={itemVariants}>
-          <Link to="/$main" params={{ main: BRAND_NAMES.fromHome }} className="block group h-full">
-            <Card className="h-full flex flex-col items-center justify-between p-4 bg-card border-2 border-border hover:border-blue-900 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 rounded-2xl overflow-hidden relative">
-              {/* Subtle background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        {/* Sakkba Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Link
+            to="/$main"
+            params={{ main: BRAND_NAMES.fromHome }}
+            className="group block"
+          >
+            <div
+              className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"
+              style={{
+                background: "linear-gradient(175deg, #0f1220 0%, #141a2e 50%, #0f1320 100%)",
+                border: "1px solid rgba(40, 50, 80, 0.5)",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(212,205,170,0.05)",
+              }}
+            >
+              {/* Hover glow */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
+                style={{
+                  background: "radial-gradient(ellipse at 50% 30%, rgba(40,50,100,0.15) 0%, transparent 70%)",
+                }}
+              />
 
-              <div className="relative z-10 flex flex-col items-center w-full space-y-3">
-                {/* Logo */}
-                <div className="bg-background rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform duration-300 w-24 h-24 flex items-center justify-center">
-                  <img src={SakhtbaLogo} alt="Sakkba Logo" className="w-14 h-14 object-contain" />
+              {/* Fabric texture overlay */}
+              <div
+                className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity duration-500"
+                style={{
+                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212,205,170,0.3) 2px, rgba(212,205,170,0.3) 3px)",
+                }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center px-8 py-10">
+                {/* Logo container */}
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(40,50,80,0.6), rgba(25,35,65,0.8))",
+                    border: "1px solid rgba(60,75,120,0.5)",
+                    boxShadow: "0 0 30px rgba(40,50,80,0.3), inset 0 0 20px rgba(212,205,170,0.05)",
+                  }}
+                >
+                  <img src={SakkbaLogo} alt="Sakkba" className="w-11 h-11 object-contain drop-shadow-[0_0_8px_rgba(212,205,170,0.3)] invert" />
                 </div>
 
-                {/* Title */}
-                <h2 className="text-xl font-bold text-foreground brand-font capitalize min-h-[2.5rem] flex items-center">
+                {/* Brand name */}
+                <h2
+                  className="brand-font text-2xl mb-2 capitalize"
+                  style={{ color: "#d4cdaa" }}
+                >
                   {BRAND_NAMES.fromHome}
                 </h2>
 
+                {/* Divider */}
+                <div
+                  className="h-px w-12 my-4"
+                  style={{ background: "linear-gradient(90deg, transparent, rgba(40,50,100,0.5), transparent)" }}
+                />
+
                 {/* Description */}
-                <p className="text-base text-muted-foreground text-center px-4 min-h-[4.5rem] flex items-center leading-relaxed">
-                  Home-based order management system
+                <p
+                  className="text-sm text-center leading-relaxed mb-8"
+                  style={{ color: "rgba(212,205,170,0.75)", fontFamily: "'Montserrat', sans-serif" }}
+                >
+                  Home-based order
+                  <br />management system
                 </p>
 
-                {/* Button */}
-                <Button
-                  size="lg"
-                  className="w-full py-3 text-lg bg-blue-950 hover:bg-blue-900 text-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 font-semibold border border-blue-800/50 hover:border-blue-700 hover:-translate-y-1 group"
+                {/* CTA */}
+                <div
+                  className="w-full py-3 rounded-xl text-center text-sm tracking-[0.15em] uppercase transition-all duration-400 group-hover:tracking-[0.2em]"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(40,50,80,0.5), rgba(25,30,55,0.7))",
+                    border: "1px solid rgba(40,60,100,0.3)",
+                    color: "rgba(212,205,170,0.9)",
+                    fontFamily: "'Montserrat', sans-serif",
+                    fontWeight: 500,
+                  }}
                 >
-                  <span className="flex items-center justify-center gap-3">
-                    Enter Sakkba
-                    <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </span>
-                </Button>
+                  Enter
+                </div>
               </div>
-            </Card>
+            </div>
           </Link>
         </motion.div>
+      </div>
+
+      {/* Back link */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.6 }}
+        className="relative z-10 mt-12"
+      >
+        <Link
+          to="/"
+          className="text-xs tracking-[0.2em] uppercase transition-colors duration-300 hover:opacity-80"
+          style={{ color: "#d4cdaa30", fontFamily: "'Montserrat', sans-serif" }}
+        >
+          Back
+        </Link>
       </motion.div>
     </div>
   );

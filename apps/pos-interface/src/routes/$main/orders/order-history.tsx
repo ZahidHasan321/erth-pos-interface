@@ -267,13 +267,13 @@ function OrderHistoryPage() {
 const PHASE_BADGE_STYLES: Record<string, string> = {
     new: "bg-gray-500/15 text-gray-600",
     in_progress: "bg-amber-500/15 text-amber-600",
-    completed: "bg-emerald-500/15 text-emerald-600",
+    completed: "bg-primary/15 text-primary",
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
     switch (status) {
         case "confirmed":
-            return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[11px] px-1.5 py-0 h-5 shadow-none"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
+            return <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] px-1.5 py-0 h-5 shadow-none"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
         case "cancelled":
             return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[11px] px-1.5 py-0 h-5 shadow-none"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>;
         default:
@@ -326,7 +326,7 @@ const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrd
                     Due {order.balance.toFixed(2)}
                 </span>
             ) : (
-                <span className="text-emerald-600 font-bold uppercase text-[10px] tracking-tight">Paid</span>
+                <span className="text-primary font-bold uppercase text-[10px] tracking-tight">Paid</span>
             )}
         </div>
     );
@@ -343,75 +343,82 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
             <Card className="overflow-hidden border border-border/50 group-hover:border-primary/40 group-hover:shadow-md transition-all bg-card/50 relative py-0 gap-0 shadow-sm rounded-xl">
                 <div className={cn("absolute left-0 top-0 bottom-0 w-1", isWorkOrder ? "bg-primary" : "bg-amber-500")} />
 
-                <CardContent className="pl-4 pr-3 py-2 sm:pl-5 sm:pr-4">
-                    {/* ===== DESKTOP (lg+): single row ===== */}
-                    <div className="hidden lg:flex items-center gap-4">
-                        <div className="flex items-center gap-2 w-40 shrink-0">
-                            <span className="text-sm font-bold tabular-nums">#{order.id}</span>
-                            <TypeBadge type={order.order_type} />
-                            <span className="text-xs text-muted-foreground tabular-nums">{orderDate}</span>
+                <CardContent className="pl-4 pr-3 py-2.5 sm:pl-5 sm:pr-4 space-y-1.5">
+                    {/* ===== DESKTOP (lg+): 2-row layout ===== */}
+                    <div className="hidden lg:block space-y-1.5">
+                        {/* Row 1: ID, customer, status badges */}
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-sm font-bold tabular-nums">#{order.id}</span>
+                                <TypeBadge type={order.order_type} />
+                            </div>
+                            <div className="w-px h-4 bg-border/30 shrink-0" />
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
+                                <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <StatusBadge status={order.checkout_status} />
+                                {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all ml-1" />
+                            </div>
                         </div>
-
-                        <div className="w-px h-8 bg-border/30 shrink-0" />
-
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                            <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
-                            <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
-                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                        {/* Row 2: contextual details */}
+                        <div className="flex items-center gap-3 pl-0.5">
+                            <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />{orderDate}
+                            </span>
                             {isWorkOrder && order.delivery_date && (
-                                <span className="text-[11px] tabular-nums text-muted-foreground">Due {format(new Date(order.delivery_date), "dd/MM/yy")}</span>
+                                <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                                </span>
                             )}
-                        </div>
-
-                        <ItemCount isWork={isWorkOrder} count={itemCount} />
-                        <Financials order={order} isWorkOrder={isWorkOrder} />
-
-                        <div className="w-px h-8 bg-border/30 shrink-0" />
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                            <StatusBadge status={order.checkout_status} />
-                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all ml-1" />
+                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                            <ItemCount isWork={isWorkOrder} count={itemCount} />
+                            {isWorkOrder && order.charges.discount > 0 && (
+                                <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded leading-none">
+                                    -{order.charges.discount.toFixed(2)} disc
+                                </span>
+                            )}
+                            <div className="flex-1" />
+                            <Financials order={order} isWorkOrder={isWorkOrder} />
                         </div>
                     </div>
 
-                    {/* ===== TABLET (sm to lg): compact 2-row grid ===== */}
-                    <div className="hidden sm:grid lg:hidden grid-cols-[1fr_auto] gap-x-3 gap-y-1">
-                        {/* Row 1 left: ID + customer */}
-                        <div className="flex items-center gap-2 min-w-0">
+                    {/* ===== TABLET (sm to lg): 2-row grid ===== */}
+                    <div className="hidden sm:block lg:hidden space-y-1.5">
+                        {/* Row 1: ID + customer + badges */}
+                        <div className="flex items-center gap-2">
                             <span className="text-sm font-bold tabular-nums shrink-0">#{order.id}</span>
                             <TypeBadge type={order.order_type} />
                             <div className="w-px h-4 bg-border/30 shrink-0" />
                             <User className="w-3.5 h-3.5 text-primary shrink-0" />
                             <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
                             <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
-                        </div>
-                        {/* Row 1 right: financials + chevron */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            <Financials order={order} isWorkOrder={isWorkOrder} />
+                            <div className="flex-1" />
+                            <StatusBadge status={order.checkout_status} />
+                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
                             <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
-
-                        {/* Row 2 left: date, delivery, items, badges */}
+                        {/* Row 2: date, delivery, items, financials */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />{orderDate}
                             </span>
-                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
                             {isWorkOrder && order.delivery_date && (
-                                <span className="text-[11px] tabular-nums text-muted-foreground">Due {format(new Date(order.delivery_date), "dd/MM/yy")}</span>
+                                <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                                </span>
                             )}
+                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
                             <ItemCount isWork={isWorkOrder} count={itemCount} />
-                        </div>
-                        {/* Row 2 right: status badges */}
-                        <div className="flex items-center gap-1.5 justify-end">
-                            <StatusBadge status={order.checkout_status} />
-                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                            <div className="flex-1" />
+                            <Financials order={order} isWorkOrder={isWorkOrder} />
                         </div>
                     </div>
 
-                    {/* ===== MOBILE (<sm): compact stack ===== */}
+                    {/* ===== MOBILE (<sm): 3-row stack ===== */}
                     <div className="sm:hidden space-y-1.5">
                         {/* Row 1: ID + type + date + chevron */}
                         <div className="flex items-center justify-between">
@@ -422,16 +429,19 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             </div>
                             <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                         </div>
-                        {/* Row 2: customer + phone */}
+                        {/* Row 2: customer + phone + delivery */}
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <User className="w-3.5 h-3.5 text-primary shrink-0" />
                                 <span className="font-semibold text-sm truncate">{order.customer_name}</span>
                             </div>
-                            <span className="text-[11px] text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                                <span className="text-[11px] text-muted-foreground font-mono tabular-nums">{order.customer_phone}</span>
+                            </div>
                         </div>
-                        {/* Row 3: badges + financials */}
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/30">
+                        {/* Row 3: badges + items + financials */}
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/30">
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <StatusBadge status={order.checkout_status} />
                                 {order.order_phase && <PhaseBadge phase={order.order_phase} />}
@@ -439,6 +449,11 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             </div>
                             <Financials order={order} isWorkOrder={isWorkOrder} />
                         </div>
+                        {isWorkOrder && order.delivery_date && (
+                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                                <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>

@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChipToggle } from "@/components/ui/chip-toggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +18,7 @@ import {
 import { usePaymentMutation } from "@/hooks/useCashier";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 
 const paymentSchema = z.object({
     amount: z.coerce.number().positive("Amount must be greater than 0"),
@@ -47,7 +48,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
     const { data: employeesRaw } = useQuery({
         queryKey: ["employees"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("users").select("id, name");
+            const { data, error } = await db.from("users").select("id, name");
             if (error || !Array.isArray(data)) return [];
             return data;
         },
@@ -164,20 +165,15 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
             <div className="space-y-1">
                 <Label className="text-xs">Payment Method</Label>
                 <div className="grid grid-cols-3 gap-1.5">
-                    {Object.entries(PAYMENT_TYPE_LABELS).map(([key, label]) => {
-                        const active = form.watch("payment_type") === key;
-                        return (
-                            <button key={key} type="button"
-                                onClick={() => form.setValue("payment_type", key as any)}
-                                className={`text-xs font-medium py-2 px-2 rounded-md border transition-all cursor-pointer ${
-                                    active
-                                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                        : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
-                                }`}>
-                                {label}
-                            </button>
-                        );
-                    })}
+                    {Object.entries(PAYMENT_TYPE_LABELS).map(([key, label]) => (
+                        <ChipToggle
+                            key={key}
+                            active={form.watch("payment_type") === key}
+                            onClick={() => form.setValue("payment_type", key as any)}
+                            className="py-2">
+                            {label}
+                        </ChipToggle>
+                    ))}
                 </div>
             </div>
 

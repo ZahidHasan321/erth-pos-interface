@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { 
-  Search, 
-  Plus, 
-  ChevronLeft, 
+import {
+  Search,
+  Plus,
+  ChevronLeft,
   ChevronRight,
   Eye,
   Phone,
   MapPin,
-  Ruler
+  Ruler,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,32 +26,38 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetDescription 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription
 } from "@/components/ui/sheet";
 import { CustomerMeasurementsStandalone } from "@/components/forms/customer-measurements";
+import type { Customer } from "@repo/database";
 
 export const Route = createFileRoute("/$main/customers/")({
   component: CustomersListComponent,
   head: () => ({
-    meta: [
-      {
-        title: "Customers | Erth POS",
-      },
-    ],
+    meta: [{ title: "Customers" }],
   }),
 });
+
+/**
+ * Check if two customers share the same phone (linked accounts).
+ * Returns true if prev and current have the same phone number.
+ */
+function isSameGroup(a: Customer | undefined, b: Customer | undefined): boolean {
+  if (!a || !b) return false;
+  return !!a.phone && !!b.phone && a.phone === b.phone;
+}
 
 function CustomersListComponent() {
   const [page, setPage] = useState(1);
@@ -63,6 +70,7 @@ function CustomersListComponent() {
 
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+  const customers = data?.data || [];
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -135,70 +143,109 @@ function CustomersListComponent() {
                 <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Customer</TableHead>
                 <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Contact</TableHead>
                 <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Location</TableHead>
-                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Type</TableHead>
+                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Account</TableHead>
                 <TableHead className="text-right font-bold uppercase text-xs tracking-widest py-3">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data?.data && data.data.length > 0 ? (
-                data.data.map((customer) => (
-                  <TableRow key={customer.id} className="hover:bg-muted/30 transition-colors group">
-                    <TableCell className="py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                          {customer.name.charAt(0).toUpperCase()}
+              {customers.length > 0 ? (
+                customers.map((customer, index) => {
+                  const prevCustomer = index > 0 ? customers[index - 1] : undefined;
+                  const nextCustomer = index < customers.length - 1 ? customers[index + 1] : undefined;
+                  const isGrouped = isSameGroup(prevCustomer, customer);
+                  const isGroupEnd = !isSameGroup(customer, nextCustomer);
+                  const isSecondary = customer.account_type === "Secondary";
+
+                  return (
+                    <TableRow
+                      key={customer.id}
+                      className={cn(
+                        "hover:bg-muted/30 transition-colors group",
+                        isGrouped && "border-t-0",
+                        isGrouped && !isGroupEnd && "border-b-0",
+                        isSecondary && isGrouped && "bg-muted/15",
+                      )}
+                    >
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-3">
+                          {/* Indent secondary accounts */}
+                          {isSecondary && isGrouped && (
+                            <div className="w-4 flex justify-center shrink-0">
+                              <div className="w-px h-4 bg-primary/20" />
+                            </div>
+                          )}
+                          <div className={cn(
+                            "size-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
+                            isSecondary
+                              ? "bg-amber-500/10 text-amber-700"
+                              : "bg-primary/10 text-primary"
+                          )}>
+                            {customer.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
+                              {customer.name}
+                              {isSecondary && customer.relation && (
+                                <span className="text-muted-foreground font-medium ml-1">({customer.relation})</span>
+                              )}
+                            </p>
+                            {customer.arabic_name && (
+                              <p className="text-xs text-muted-foreground" dir="rtl">{customer.arabic_name}</p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">{customer.name}</p>
-                          {customer.arabic_name && (
-                            <p className="text-xs text-muted-foreground" dir="rtl">{customer.arabic_name}</p>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-mono text-xs">{customer.country_code} {customer.phone}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-xs">{customer.area || "N/A"}, {customer.city || "N/A"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                            customer.account_type === 'Primary'
+                              ? "bg-primary/10 text-primary border-primary/20"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          )}>
+                            {customer.account_type}
+                          </span>
+                          {!isSecondary && isGrouped === false && isSameGroup(customer, nextCustomer) && (
+                            <span className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                            </span>
                           )}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-mono text-xs">{customer.country_code} {customer.phone}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3">
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-xs">{customer.area || "N/A"}, {customer.city || "N/A"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3">
-                      <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
-                        customer.account_type === 'Primary'
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      )}>
-                        {customer.account_type}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right py-3">
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-secondary hover:text-secondary hover:bg-secondary/10"
-                          onClick={() => openMeasurements(customer.id, customer.name)}
-                        >
-                          <Ruler className="h-3.5 w-3.5 mr-1.5" />
-                          Measure
-                        </Button>
-                        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10">
-                          <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }}>
-                            <Eye className="h-3.5 w-3.5 mr-1.5" />
-                            Details
-                          </Link>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="text-right py-3">
+                        <div className="flex justify-end gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-secondary hover:text-secondary hover:bg-secondary/10"
+                            onClick={() => openMeasurements(customer.id, customer.name)}
+                          >
+                            <Ruler className="h-3.5 w-3.5 mr-1.5" />
+                            Measure
+                          </Button>
+                          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10">
+                            <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }}>
+                              <Eye className="h-3.5 w-3.5 mr-1.5" />
+                              Details
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
@@ -223,64 +270,94 @@ function CustomersListComponent() {
 
       {/* Mobile/Tablet Cards (<lg) */}
       <div className="lg:hidden flex flex-col gap-2">
-        {data?.data && data.data.length > 0 ? (
-          data.data.map((customer) => (
-            <Card key={customer.id} className="border-border/50 shadow-sm py-0 gap-0 overflow-hidden">
-              <CardContent className="p-0">
-                <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5">
-                  {/* Avatar */}
-                  <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                    {customer.name.charAt(0).toUpperCase()}
-                  </div>
+        {customers.length > 0 ? (
+          customers.map((customer, index) => {
+            const prevCustomer = index > 0 ? customers[index - 1] : undefined;
+            const isGrouped = isSameGroup(prevCustomer, customer);
+            const isSecondary = customer.account_type === "Secondary";
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm truncate">{customer.name}</span>
-                      <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wider shrink-0",
-                        customer.account_type === 'Primary'
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      )}>
-                        {customer.account_type}
-                      </span>
+            return (
+              <Card
+                key={customer.id}
+                className={cn(
+                  "border-border/50 shadow-sm py-0 gap-0 overflow-hidden",
+                  isGrouped && "-mt-1.5 rounded-t-none border-t-0",
+                  isSecondary && isGrouped && "bg-muted/10",
+                )}
+              >
+                <CardContent className="p-0">
+                  <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5">
+                    {/* Indent for secondary */}
+                    {isSecondary && isGrouped && (
+                      <div className="w-2 flex justify-center shrink-0">
+                        <div className="w-px h-6 bg-primary/20" />
+                      </div>
+                    )}
+
+                    {/* Avatar */}
+                    <div className={cn(
+                      "size-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
+                      isSecondary
+                        ? "bg-amber-500/10 text-amber-700"
+                        : "bg-primary/10 text-primary"
+                    )}>
+                      {customer.name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                      <span className="font-mono flex items-center gap-1">
-                        <Phone className="h-3 w-3 shrink-0" />
-                        {customer.country_code} {customer.phone}
-                      </span>
-                      {(customer.area || customer.city) && (
-                        <span className="hidden sm:flex items-center gap-1">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          {customer.area || "N/A"}, {customer.city || "N/A"}
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm truncate">
+                          {customer.name}
+                          {isSecondary && customer.relation && (
+                            <span className="text-muted-foreground font-medium ml-1">({customer.relation})</span>
+                          )}
                         </span>
-                      )}
+                        <span className={cn(
+                          "text-[10px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wider shrink-0",
+                          customer.account_type === 'Primary'
+                            ? "bg-primary/10 text-primary border-primary/20"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        )}>
+                          {customer.account_type}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                        <span className="font-mono flex items-center gap-1">
+                          <Phone className="h-3 w-3 shrink-0" />
+                          {customer.country_code} {customer.phone}
+                        </span>
+                        {(customer.area || customer.city) && (
+                          <span className="hidden sm:flex items-center gap-1">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {customer.area || "N/A"}, {customer.city || "N/A"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-secondary hover:text-secondary hover:bg-secondary/10"
+                        onClick={() => openMeasurements(customer.id, customer.name)}
+                        title="Measurements"
+                      >
+                        <Ruler className="h-4 w-4" />
+                      </Button>
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10">
+                        <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }} title="Details">
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                      </Button>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-secondary hover:text-secondary hover:bg-secondary/10"
-                      onClick={() => openMeasurements(customer.id, customer.name)}
-                      title="Measurements"
-                    >
-                      <Ruler className="h-4 w-4" />
-                    </Button>
-                    <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10">
-                      <Link to="/$main/customers/$customerId" params={{ customerId: customer.id.toString() }} title="Details">
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         ) : isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="border-border/50 shadow-sm py-0 gap-0">
@@ -316,8 +393,8 @@ function CustomersListComponent() {
           </SheetHeader>
           {selectedCustomer && (
             <div className="mt-4">
-              <CustomerMeasurementsStandalone 
-                customerId={selectedCustomer.id} 
+              <CustomerMeasurementsStandalone
+                customerId={selectedCustomer.id}
                 hideHeader={true}
               />
             </div>
@@ -330,14 +407,14 @@ function CustomersListComponent() {
         <div className="text-sm text-muted-foreground order-2 sm:order-1">
           {totalCount > 0 ? (
             <>
-              Showing <span className="font-bold text-foreground">{data?.data?.length}</span> out of{" "}
+              Showing <span className="font-bold text-foreground">{customers.length}</span> out of{" "}
               <span className="font-bold text-foreground">{totalCount}</span> customers
             </>
           ) : (
             "No customers to show"
           )}
         </div>
-        
+
         <div className="flex items-center gap-1.5 order-1 sm:order-2">
           <Button
             variant="outline"
@@ -351,7 +428,7 @@ function CustomersListComponent() {
             <ChevronLeft className="h-4 w-4 -mr-2" />
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -394,17 +471,17 @@ function CustomersListComponent() {
                 >
                   1
                 </Button>
-                
+
                 {page > 3 && <span className="text-muted-foreground px-1">...</span>}
-                
+
                 {Array.from({ length: 3 }, (_, i) => {
                   let pageNum;
                   if (page <= 3) pageNum = i + 2;
                   else if (page >= totalPages - 2) pageNum = totalPages - 3 + i;
                   else pageNum = page - 1 + i;
-                  
+
                   if (pageNum <= 1 || pageNum >= totalPages) return null;
-                  
+
                   return (
                     <Button
                       key={pageNum}
@@ -421,9 +498,9 @@ function CustomersListComponent() {
                     </Button>
                   );
                 })}
-                
+
                 {page < totalPages - 2 && <span className="text-muted-foreground px-1">...</span>}
-                
+
                 <Button
                   variant={page === totalPages ? "default" : "ghost"}
                   size="sm"

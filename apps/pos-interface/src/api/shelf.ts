@@ -1,11 +1,11 @@
 import type { ApiResponse } from '../types/api';
-import { supabase } from '../lib/supabase';
+import { db } from "@/lib/db";
 import type { Shelf } from '@repo/database';
 
 const TABLE_NAME = 'shelf';
 
 export const getShelf = async (): Promise<ApiResponse<Shelf[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' });
 
@@ -19,7 +19,7 @@ export const updateShelf = async (
   id: string,
   shelf: Partial<Shelf>,
 ): Promise<ApiResponse<Shelf>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update(shelf)
     .eq('id', id)

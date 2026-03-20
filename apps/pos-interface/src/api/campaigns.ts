@@ -1,11 +1,11 @@
-import { supabase } from "../lib/supabase";
+import { db } from "@/lib/db";
 import type { ApiResponse } from "../types/api";
 import type { Campaign } from "@repo/database";
 
 const TABLE_NAME = "campaigns";
 
 export const getCampaigns = async (): Promise<ApiResponse<Campaign[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' })
     .eq('active', true);

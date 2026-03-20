@@ -231,6 +231,9 @@
     font-family: 'Montserrat', 'Cairo', sans-serif;
     font-weight: 600;
     touch-action: manipulation;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   label {
@@ -286,6 +289,70 @@ input[type="number"] {
   [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
     -webkit-user-select: none;
     user-select: none;
+  }
+}
+
+/* ── Touch feedback for ALL interactive elements ── */
+@layer base {
+  /*
+   * Base: every <button> gets touch feedback automatically.
+   * Components that define their own active:scale (Button, Checkbox, Switch, etc.)
+   * override this via higher-specificity Tailwind utilities.
+   */
+  button:not(:disabled) {
+    transition: transform 0.12s ease, opacity 0.12s ease, color 0.12s ease,
+                background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    &:active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+  }
+
+  /* Navigation links — subtle scale + dim on press */
+  a[href]:not([data-slot="button"]) {
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    &:active {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+  }
+
+  /* Clickable cards — press-in effect when used as links or buttons */
+  [data-slot="card"]:has(> a),
+  a [data-slot="card"],
+  [data-slot="card"][role="button"],
+  [data-slot="card"].cursor-pointer {
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    &:active {
+      transform: scale(0.985);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+  }
+
+  /* Generic role="button" elements (divs, spans acting as buttons) */
+  [role="button"]:not(button):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+      opacity: 0.9;
+    }
+  }
+
+  /* Clickable table rows */
+  tr.cursor-pointer,
+  tr:has(> td > a) {
+    transition: background-color 0.1s ease;
+    &:active {
+      background-color: var(--accent) !important;
+    }
+  }
+
+  /* Summary/disclosure elements */
+  summary {
+    transition: opacity 0.1s ease;
+    &:active {
+      opacity: 0.8;
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
 
 export type OrderHistoryItem = {
@@ -59,7 +59,7 @@ export function useOrderHistory({
 
       // We use inner join for customer if we want to search by customer fields efficiently
       // But we must handle the query building carefully
-      let query = supabase
+      let query = db
         .from('orders')
         .select(`
           *,

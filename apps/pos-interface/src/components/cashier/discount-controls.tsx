@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { ChipToggle } from "@/components/ui/chip-toggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
@@ -104,17 +105,12 @@ export function DiscountControls({
             {/* Type selector */}
             <div className="grid grid-cols-4 gap-1.5">
                 {discountOptions.map((opt) => (
-                    <button
+                    <ChipToggle
                         key={opt.value}
-                        type="button"
-                        onClick={() => setDiscountType(discountType === opt.value ? "" : opt.value)}
-                        className={`text-xs py-1.5 px-2 rounded-md border transition-all cursor-pointer ${discountType === opt.value
-                                ? "border-primary bg-primary text-primary-foreground font-semibold shadow-sm"
-                                : "border-border bg-background hover:bg-accent/50 hover:border-primary/40"
-                            }`}
-                    >
+                        active={discountType === opt.value}
+                        onClick={() => setDiscountType(discountType === opt.value ? "" : opt.value)}>
                         {opt.label}
-                    </button>
+                    </ChipToggle>
                 ))}
             </div>
 

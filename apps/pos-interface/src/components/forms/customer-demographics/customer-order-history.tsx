@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import { transformToOrderRows } from "@/hooks/useShowroomOrders";
 import { OrderDataTable } from "../../orders-at-showroom/order-data-tables";
 import { orderColumns } from "../../orders-at-showroom/order-columns";
@@ -28,7 +28,7 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["customer-orders", customerId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("orders")
         .select(`
           *,

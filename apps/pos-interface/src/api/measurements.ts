@@ -1,11 +1,11 @@
 import type { ApiResponse } from '../types/api';
 import type { Measurement } from '@repo/database';
-import { supabase } from '../lib/supabase';
+import { db } from "@/lib/db";
 
 const TABLE_NAME = 'measurements';
 
 export const getMeasurements = async (): Promise<ApiResponse<Measurement[]>> => {
-  const { data, error, count } = await supabase
+  const { data, error, count } = await db
     .from(TABLE_NAME)
     .select('*', { count: 'exact' });
 
@@ -16,7 +16,7 @@ export const getMeasurements = async (): Promise<ApiResponse<Measurement[]>> => 
 };
 
 export const getMeasurementsByCustomerId = async (customerId: number): Promise<ApiResponse<Measurement[]>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select('*')
     .eq('customer_id', customerId)
@@ -29,7 +29,7 @@ export const getMeasurementsByCustomerId = async (customerId: number): Promise<A
 };
 
 export const getMeasurementById = async (id: string): Promise<ApiResponse<Measurement>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select('*')
     .eq('id', id)
@@ -44,7 +44,7 @@ export const getMeasurementById = async (id: string): Promise<ApiResponse<Measur
 export const createMeasurement = async (
   measurement: Partial<Measurement>,
 ): Promise<ApiResponse<Measurement>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .insert(measurement)
     .select()
@@ -61,7 +61,7 @@ export const updateMeasurement = async (
   id: string,
   measurement: Partial<Measurement>,
 ): Promise<ApiResponse<Measurement>> => {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update(measurement)
     .eq('id', id)
