@@ -318,26 +318,26 @@ function NewWorkOrder() {
             resetWorkOrder();
 
             const response = await getOrderDetails(order.id, true);
-            console.log("Work order details response:", response);
 
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
                 const isConfirmed = orderData.checkout_status === "confirmed";
 
-                console.log("Work Order Data retrieved:", orderData);
 
-                // 1. Load Customer
+                // 1. Load Customer (fire measurements check in parallel — don't await it)
+                let measurementsPromise: Promise<void> | null = null;
                 if (orderData.customer) {
                     const customerFormValues = mapCustomerToFormValues(orderData.customer);
                     demographicsForm.reset(customerFormValues);
                     setCustomerDemographics(customerFormValues);
                     addSavedStep(0);
 
-                    // Check if customer has measurements to mark step 1 as complete
-                    const measurementsRes = await getMeasurementsByCustomerId(Number(orderData.customer.id));
-                    if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
-                        addSavedStep(1);
-                    }
+                    // Fire measurements check without blocking — runs in parallel with garment/shelf/order loading below
+                    measurementsPromise = getMeasurementsByCustomerId(Number(orderData.customer.id)).then(measurementsRes => {
+                        if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
+                            addSavedStep(1);
+                        }
+                    });
                 } else {
                     demographicsForm.reset(customerDemographicsDefaults);
                 }
@@ -398,6 +398,9 @@ function NewWorkOrder() {
                 } else {
                     OrderForm.reset(orderDefaults);
                 }
+
+                // Wait for measurements check to finish (was running in parallel)
+                if (measurementsPromise) await measurementsPromise;
 
                 // Navigate to review step if confirmed, otherwise to measurements
                 setCurrentStep(isConfirmed ? 4 : 1);

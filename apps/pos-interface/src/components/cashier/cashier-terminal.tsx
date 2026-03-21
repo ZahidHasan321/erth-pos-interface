@@ -32,6 +32,7 @@ import { ORDER_PHASE_LABELS } from "@/lib/constants";
 const PAGE_SIZE = 15;
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
+const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
 
 // ── Custom keyframes (injected once) ────────────────────────────────────────
 const CASHIER_KEYFRAMES_ID = "cashier-keyframes";
@@ -40,8 +41,8 @@ if (typeof document !== "undefined" && !document.getElementById(CASHIER_KEYFRAME
     style.id = CASHIER_KEYFRAMES_ID;
     style.textContent = `
         @keyframes cashier-focus-in {
-            from { opacity: 0; transform: scale(0.96); filter: blur(4px); }
-            to   { opacity: 1; transform: scale(1);    filter: blur(0px); }
+            from { opacity: 0; transform: scale(0.96); }
+            to   { opacity: 1; transform: scale(1); }
         }
         @keyframes cashier-pop {
             0%   { opacity: 0; transform: scale(0.6); }
@@ -85,14 +86,14 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
         completed: "bg-primary/15 text-primary",
     };
 
-    const orderDateStr = item.order_date ? new Date(item.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "-";
-    const deliveryDateStr = item.delivery_date ? new Date(item.delivery_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : null;
+    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "-";
+    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : null;
 
     return (
         <button
             type="button"
             onClick={() => onSelect(String(item.id))}
-            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-all cursor-pointer active:scale-[0.99] ${rowBg}`}
+            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-colors cursor-pointer active:scale-[0.99] ${rowBg}`}
         >
             {/* Top row: ID, customer, amount */}
             <div className="flex items-center gap-3">
@@ -201,8 +202,7 @@ function DonutChart({ segments, size = 120, strokeWidth = 14, center, summaryLin
                             onTouchStart={(e) => { e.stopPropagation(); setHoveredIdx(hoveredIdx === arc.origIdx ? null : arc.origIdx); }}
                             className="cursor-pointer"
                             style={{
-                                transition: `stroke-dasharray 800ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 150}ms, stroke-width 300ms ease, filter 300ms ease`,
-                                filter: hoveredIdx === arc.origIdx ? `drop-shadow(0 0 8px ${arc.color}80)` : "none",
+                                transition: `stroke-dasharray 800ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 150}ms, stroke-width 300ms ease`,
                             }} />
                     ))}
                 </svg>
@@ -435,7 +435,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 const paidPct = o.order_total > 0 ? Math.round((o.paid / o.order_total) * 100) : 0;
                                 return (
                                     <button key={o.id} type="button" onClick={() => onSelectOrder(String(o.id))}
-                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-all cursor-pointer active:scale-[0.99] border border-transparent hover:border-red-200"
+                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-colors cursor-pointer active:scale-[0.99] border border-transparent hover:border-red-200"
                                         style={i < 8 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 40}ms both` } : undefined}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
@@ -598,7 +598,7 @@ export function CashierBody() {
                     <span className="text-sm font-bold tabular-nums text-muted-foreground">#{order.id}</span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 max-w-[1400px] mx-auto w-full">
+                <div className="flex-1 overflow-y-auto p-4 max-w-[1400px] mx-auto w-full will-change-scroll [transform:translateZ(0)]">
                     {isCancelled && (
                         <Alert variant="destructive" className="mb-4"><XCircle className="h-4 w-4" />
                             <AlertDescription>This order has been <strong>cancelled</strong>.</AlertDescription></Alert>
@@ -804,7 +804,7 @@ export function CashierBody() {
     // ── Dashboard / Order List ──────────────────────────────────────────────
     return (
         <div className="h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto p-3 will-change-scroll [transform:translateZ(0)]">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 md:h-full">
                     <div className="md:col-span-3 flex flex-col min-h-0">
                         <div className="relative mb-2 shrink-0">
@@ -860,7 +860,7 @@ export function CashierBody() {
                                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Due</span>
                             </div>
                         </div>
-                        <div className="max-h-[50vh] md:max-h-none flex-1 overflow-y-auto space-y-1 min-h-0 pr-3 md:pr-2 scrollbar-thin">
+                        <div className="max-h-[50vh] md:max-h-none flex-1 overflow-y-auto space-y-1 min-h-0 pr-3 md:pr-2 scrollbar-thin will-change-scroll [transform:translateZ(0)]">
                             {/* Loading: only show skeletons for search, not filter switches */}
                             {isListSearching && (
                                 <div className="space-y-1">

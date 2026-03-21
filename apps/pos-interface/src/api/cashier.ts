@@ -5,19 +5,19 @@ import { getBrand } from "./orders";
 
 const CASHIER_ORDER_QUERY = `
     *,
-    workOrder:work_orders!order_id(*, campaign:campaigns(name)),
-    customer:customers(*),
-    garments:garments(*, fabric:fabrics(*)),
-    shelf_items:order_shelf_items(*, shelf:shelf(*)),
-    payment_transactions:payment_transactions(*, cashier:users(name))
+    workOrder:work_orders!order_id(invoice_number, order_phase, delivery_date, home_delivery, campaign_id, campaign:campaigns(name)),
+    customer:customers(id, name, phone, city, area, block, street, house_no, address_note),
+    garments:garments(id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style),
+    shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, shelf:shelf(type, serial_number)),
+    payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, created_at, cashier_id, cashier:users(name))
 `;
 
 const CASHIER_ORDER_QUERY_FALLBACK = `
     *,
-    workOrder:work_orders!order_id(*, campaign:campaigns(name)),
-    customer:customers(*),
-    garments:garments(*, fabric:fabrics(*)),
-    shelf_items:order_shelf_items(*, shelf:shelf(*))
+    workOrder:work_orders!order_id(invoice_number, order_phase, delivery_date, home_delivery, campaign_id, campaign:campaigns(name)),
+    customer:customers(id, name, phone, city, area, block, street, house_no, address_note),
+    garments:garments(id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style),
+    shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, shelf:shelf(type, serial_number))
 `;
 
 function flattenCashierOrder(data: any): Order | null {

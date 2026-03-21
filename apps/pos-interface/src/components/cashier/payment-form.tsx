@@ -52,6 +52,8 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
             if (error || !Array.isArray(data)) return [];
             return data;
         },
+        staleTime: Infinity,
+        gcTime: Infinity,
     });
     const employees = Array.isArray(employeesRaw) ? employeesRaw : [];
 

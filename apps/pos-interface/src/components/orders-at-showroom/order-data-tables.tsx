@@ -75,25 +75,29 @@ export function OrderDataTable({
       return [];
     }
 
+    // Pre-compute filter values once (avoid re-creating per row)
+    const searchIdLower = filters.searchId ? filters.searchId.toLowerCase() : "";
+    const customerLower = filters.customer ? filters.customer.toLowerCase() : "";
+    const startTime = filters.deliveryDateStart ? new Date(filters.deliveryDateStart).getTime() : 0;
+    const endTime = filters.deliveryDateEnd ? new Date(filters.deliveryDateEnd).getTime() + 86400000 : 0;
+
     // 1. Filter
     const result = data.filter((row) => {
       try {
         const order = row.order;
 
         // ID / Invoice Search (Combined)
-        if (filters.searchId) {
-          const searchLower = filters.searchId.toLowerCase();
-          const orderIdMatch = (row.orderId || "").toLowerCase().includes(searchLower);
-          const fatouraMatch = String(row.fatoura || "").includes(searchLower);
+        if (searchIdLower) {
+          const orderIdMatch = (row.orderId || "").toLowerCase().includes(searchIdLower);
+          const fatouraMatch = String(row.fatoura || "").includes(searchIdLower);
           if (!orderIdMatch && !fatouraMatch) return false;
         }
 
         // Customer / Mobile Search
-        if (filters.customer) {
-          const searchLower = filters.customer.toLowerCase();
-          const nameMatch = (row.customerName || "").toLowerCase().includes(searchLower);
-          const nickMatch = (row.customerNickName || "").toLowerCase().includes(searchLower);
-          const mobileMatch = (row.mobileNumber || "").includes(searchLower);
+        if (customerLower) {
+          const nameMatch = (row.customerName || "").toLowerCase().includes(customerLower);
+          const nickMatch = (row.customerNickName || "").toLowerCase().includes(customerLower);
+          const mobileMatch = (row.mobileNumber || "").includes(customerLower);
           if (!nameMatch && !nickMatch && !mobileMatch) return false;
         }
 
@@ -103,19 +107,12 @@ export function OrderDataTable({
         }
 
         // Date Range (Delivery Date)
-        if (filters.deliveryDateStart || filters.deliveryDateEnd) {
+        if (startTime || endTime) {
           if (!row.deliveryDate) return false;
           const deliveryTime = new Date(row.deliveryDate).getTime();
-          
-          if (filters.deliveryDateStart) {
-            const startTime = new Date(filters.deliveryDateStart).getTime();
-            if (deliveryTime < startTime) return false;
-          }
-          if (filters.deliveryDateEnd) {
-            const endTime = new Date(filters.deliveryDateEnd).getTime();
-            // Add 1 day to end date to make it inclusive
-            if (deliveryTime > endTime + 86400000) return false;
-          }
+
+          if (startTime && deliveryTime < startTime) return false;
+          if (endTime && deliveryTime > endTime) return false;
         }
 
         // Reminder Status Logic (Multi-select AND logic)

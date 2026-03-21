@@ -305,7 +305,7 @@ export function SearchCustomer({
 
           {/* Floating Results List */}
           {showList && (
-            <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-border bg-white shadow-2xl overflow-hidden z-40 transition-all duration-150 transform origin-top">
+            <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-border bg-white shadow-lg overflow-hidden z-40 transition-all duration-150 transform origin-top">
               <Command shouldFilter={false} className="bg-transparent">
                 <CommandList className="max-h-[400px] scrollbar-thin overflow-y-auto">
                   {showSkeleton ? (

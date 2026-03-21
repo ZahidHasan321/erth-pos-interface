@@ -18,7 +18,7 @@ export function TableSkeleton() {
       {Array.from({ length: 8 }).map((_, i) => (
         <div 
           key={i} 
-          className="group relative flex items-center gap-4 p-4 px-6 bg-card/50 backdrop-blur-sm border border-border/60 rounded-2xl transition-all hover:border-primary/20"
+          className="group relative flex items-center gap-4 p-4 px-6 bg-card/50 border border-border/60 rounded-2xl transition-colors hover:border-primary/20"
           style={{
             opacity: 1 - (i * 0.1), // Fading effect for lower rows
           }}

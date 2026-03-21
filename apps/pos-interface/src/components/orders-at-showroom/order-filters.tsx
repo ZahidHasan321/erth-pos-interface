@@ -140,7 +140,7 @@ export function OrderFilters({
             <SelectTrigger className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold focus:ring-primary/20">
               <SelectValue placeholder="All Stages" />
             </SelectTrigger>
-            <SelectContent className="rounded-xl shadow-xl">
+            <SelectContent className="rounded-xl shadow-md">
               <SelectItem value="all">All Showroom Orders</SelectItem>
               <SelectItem value="brova_trial">Brova Trial</SelectItem>
               <SelectItem value="needs_action">Needs Action</SelectItem>
@@ -171,7 +171,7 @@ export function OrderFilters({
                 <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-40" aria-hidden="true" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0 rounded-xl shadow-2xl border-2 border-border/40" align="start">
+            <PopoverContent className="w-[200px] p-0 rounded-xl shadow-md border-2 border-border/40" align="start">
               {REMINDER_GROUPS.map((group) => (
                 <div key={group.label}>
                   <div className="px-3 pt-2.5 pb-1">
@@ -212,7 +212,7 @@ export function OrderFilters({
                 <SelectValue />
               </div>
             </SelectTrigger>
-            <SelectContent className="rounded-xl shadow-xl">
+            <SelectContent className="rounded-xl shadow-md">
               <SelectItem value="created_desc">Newest First</SelectItem>
               <SelectItem value="deliveryDate_asc">Earliest Delivery</SelectItem>
               <SelectItem value="deliveryDate_desc">Latest Delivery</SelectItem>

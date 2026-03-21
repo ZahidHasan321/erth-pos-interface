@@ -70,7 +70,7 @@ const CompactStat = ({
   className?: string;
 }) => (
   <div className={cn(
-    "flex items-center gap-2 bg-card border-2 border-border/60 rounded-xl p-2 pr-3 transition-all hover:border-primary/20 shadow-sm",
+    "flex items-center gap-2 bg-card border-2 border-border/60 rounded-xl p-2 pr-3 transition-colors hover:border-primary/20 shadow-sm",
     className
   )}>
      <div className={cn("p-1.5 rounded-lg bg-muted/50", color.replace('bg-', 'text-'))}>

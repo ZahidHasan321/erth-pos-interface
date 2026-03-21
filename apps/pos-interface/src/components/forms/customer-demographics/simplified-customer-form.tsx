@@ -213,7 +213,7 @@ export function SimplifiedCustomerForm({
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: 10 }}
-                                            className="absolute left-0 right-0 top-full mt-3 bg-white border-2 border-primary/20 shadow-2xl rounded-2xl overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
+                                            className="absolute left-0 right-0 top-full mt-3 bg-white border-2 border-primary/20 shadow-lg rounded-2xl overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
                                         >
                                             {customers.length > 0 ? (
                                                 <div className="p-2 space-y-1">
