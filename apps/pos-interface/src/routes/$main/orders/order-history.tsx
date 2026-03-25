@@ -13,7 +13,10 @@ import {
     User,
     Calendar,
     History,
-    Truck
+    Truck,
+    Search,
+    X,
+    ArrowUpDown
 } from "lucide-react";
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/useOrderHistory";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +29,10 @@ import {
     SelectTrigger,
     SelectValue
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { OrderHistorySearch } from "@/components/order-management/order-history-search";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 
@@ -85,88 +89,96 @@ function OrderHistoryPage() {
             </div>
 
             {/* Filters Section */}
-            <Card className="border border-border/80 shadow-sm bg-white rounded-xl overflow-hidden mb-3 py-0 gap-0">
-                <CardContent className="p-2.5 sm:p-3 space-y-2.5">
-                    <div className="flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                            <OrderHistorySearch
-                                value={searchTerm}
-                                onChange={setSearchTerm}
-                            />
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 text-primary font-bold text-xs tabular-nums shrink-0 self-start">
-                            <Package className="w-3.5 h-3.5" />
-                            <span>{totalCount}</span>
-                        </div>
+            <div className="bg-white border border-border/60 rounded-xl shadow-sm p-2.5 sm:p-3 space-y-2.5">
+                {/* Search + Count */}
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-1 min-w-0 group">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+                        <Input
+                            placeholder="Search customer, phone, or #ID..."
+                            className="pl-8 pr-8 h-8 text-xs bg-muted/30 border-transparent focus-visible:bg-white focus-visible:border-border shadow-none rounded-lg font-medium placeholder:font-normal"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Clear search"
+                            >
+                                <X className="size-3" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1.5 rounded-lg border border-primary/10 text-primary font-black text-xs tabular-nums shrink-0">
+                        <Package className="size-3.5" />
+                        <span>{totalCount}</span>
+                    </div>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Tabs value={typeFilter} onValueChange={setTypeFilter} className="w-auto gap-0">
+                        <TabsList className="h-8">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
+                            <TabsTrigger value="WORK" className="text-[11px] font-bold px-2.5">Work</TabsTrigger>
+                            <TabsTrigger value="SALES" className="text-[11px] font-bold px-2.5">Sales</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+
+                    <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto gap-0">
+                        <TabsList className="h-8">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
+                            <TabsTrigger value="confirmed" className="text-[11px] font-bold px-2.5">Confirmed</TabsTrigger>
+                            <TabsTrigger value="draft" className="text-[11px] font-bold px-2.5">Draft</TabsTrigger>
+                            <TabsTrigger value="cancelled" className="text-[11px] font-bold px-2.5">Cancelled</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+
+                    <Tabs value={phaseFilter} onValueChange={setPhaseFilter} className="w-auto gap-0">
+                        <TabsList className="h-8">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
+                            <TabsTrigger value="new" className="text-[11px] font-bold px-2.5">New</TabsTrigger>
+                            <TabsTrigger value="in_progress" className="text-[11px] font-bold px-2.5">In Prog</TabsTrigger>
+                            <TabsTrigger value="completed" className="text-[11px] font-bold px-2.5">Done</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+
+                    <div className="shrink-0 w-32">
+                        <DatePicker
+                            value={dateFilter}
+                            onChange={setDateFilter}
+                            clearable
+                            placeholder="Any date"
+                            displayFormat="dd MMM yy"
+                            className="h-8 bg-transparent border-border/40 rounded-lg shadow-none text-[11px] font-bold"
+                        />
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2">
-                        <div className="space-y-1 col-span-2 sm:col-span-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Date</label>
-                            <DatePicker
-                                value={dateFilter}
-                                onChange={setDateFilter}
-                                clearable
-                                placeholder="Any date"
-                                className="h-8 bg-white border-border/80 rounded-lg shadow-sm focus:ring-primary/20 w-full text-xs [&>button]:truncate"
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Sort</label>
-                            <Select value={sortOrder} onValueChange={(v: any) => setSortOrder(v)}>
-                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
-                                    <SelectValue placeholder="Sort" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-lg">
-                                    <SelectItem value="newest" className="text-xs">Newest</SelectItem>
-                                    <SelectItem value="oldest" className="text-xs">Oldest</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Status</label>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-lg">
-                                    <SelectItem value="all" className="text-xs">All</SelectItem>
-                                    <SelectItem value="confirmed" className="text-xs">Confirmed</SelectItem>
-                                    <SelectItem value="draft" className="text-xs">Drafts</SelectItem>
-                                    <SelectItem value="cancelled" className="text-xs">Cancelled</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Phase</label>
-                            <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-lg">
-                                    <SelectItem value="all" className="text-xs">All</SelectItem>
-                                    <SelectItem value="new" className="text-xs">New</SelectItem>
-                                    <SelectItem value="in_progress" className="text-xs">In Progress</SelectItem>
-                                    <SelectItem value="completed" className="text-xs">Completed</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground ml-0.5">Type</label>
-                            <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                <SelectTrigger className="h-8 bg-white border-border/80 rounded-lg shadow-sm text-xs">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-lg">
-                                    <SelectItem value="all" className="text-xs">All</SelectItem>
-                                    <SelectItem value="WORK" className="text-xs">Work</SelectItem>
-                                    <SelectItem value="SALES" className="text-xs">Sales</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    <div className="flex-1 min-w-0" />
+
+                    <button
+                        type="button"
+                        onClick={() => setSortOrder(prev => prev === "newest" ? "oldest" : "newest")}
+                        className="flex items-center gap-1 h-8 px-2.5 text-[11px] font-bold text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-colors shrink-0"
+                    >
+                        <ArrowUpDown className="size-3" />
+                        {sortOrder === "newest" ? "Newest" : "Oldest"}
+                    </button>
+
+                    {(searchTerm || statusFilter !== "all" || phaseFilter !== "all" || typeFilter !== "all" || dateFilter) && (
+                        <button
+                            type="button"
+                            onClick={() => { setSearchTerm(""); setStatusFilter("all"); setPhaseFilter("all"); setTypeFilter("all"); setDateFilter(null); }}
+                            className="flex items-center gap-0.5 h-8 px-1.5 text-[11px] font-bold text-destructive/70 hover:text-destructive transition-colors shrink-0"
+                        >
+                            <X className="size-3" />
+                            Clear
+                        </button>
+                    )}
+                </div>
+            </div>
 
             {/* List Section */}
             <div className="flex flex-col gap-2 min-h-100">
@@ -460,3 +472,4 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
         </Link>
     );
 }
+

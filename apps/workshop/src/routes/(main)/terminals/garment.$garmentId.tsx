@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useGarment } from "@/hooks/useWorkshopGarments";
 import {
@@ -167,6 +167,31 @@ function TerminalGarmentPage() {
   );
 }
 
+// ── Elapsed Timer ───────────────────────────────────────────────
+
+function ElapsedTimer({ since }: { since: string | Date }) {
+  const [, tick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ms = Date.now() - new Date(since).getTime();
+  const mins = Math.floor(ms / 60_000);
+  const hrs = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+
+  const display =
+    hrs > 0 ? `${hrs}h ${remainMins}m` : mins > 0 ? `${mins}m` : "just now";
+
+  return (
+    <span className="text-xs font-mono text-emerald-600 tabular-nums">
+      {display}
+    </span>
+  );
+}
+
 // ── Terminal Actions (floating bar) ─────────────────────────────
 
 function TerminalActions({ garment }: { garment: WorkshopGarment }) {
@@ -225,8 +250,8 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
             )}
           </div>
 
-          <div className="flex gap-2 shrink-0">
-            {!garment.start_time && (
+          <div className="flex gap-2 shrink-0 items-center">
+            {!garment.start_time ? (
               <Button
                 variant="outline"
                 className="h-12 px-5 text-base font-bold"
@@ -241,6 +266,12 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 <Play className="w-5 h-5 mr-1.5" />
                 Start
               </Button>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-sm font-bold text-emerald-700">In Progress</span>
+                <ElapsedTimer since={garment.start_time} />
+              </div>
             )}
             <Button
               className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all"
