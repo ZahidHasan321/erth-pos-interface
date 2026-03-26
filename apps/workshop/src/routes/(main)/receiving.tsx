@@ -5,14 +5,14 @@ import { useReceiveGarments, useReceiveAndStart } from "@/hooks/useGarmentMutati
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import {
-  PageHeader, StatsCard, EmptyState, LoadingSkeleton,
+  PageHeader, EmptyState, LoadingSkeleton,
   GarmentTypeBadge,
 } from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
-import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import { Inbox, ChevronDown, ChevronUp, Clock, Package, Home, Eye } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
@@ -60,9 +60,7 @@ function OrderCard({
       )}
     >
       <div
-        className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => onToggle(!selected)}
-        {...clickableProps(() => onToggle(!selected))}
+        className="px-4 py-3 transition-colors rounded-t-xl"
       >
         {/* Row 1: Identity + actions */}
         <div className="flex items-center justify-between gap-3">
@@ -90,11 +88,11 @@ function OrderCard({
             <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }} disabled={isReceiving} className="text-xs h-7">
               Receive & Start
             </Button>
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
-              className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
+              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/50 hover:text-foreground")}
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
               aria-expanded={expanded}
               aria-label={expanded ? "Collapse garments" : "Expand garments"}
@@ -251,13 +249,6 @@ function ReceivingPage() {
         title="Receiving"
         subtitle={`${inTransit.length} garment${inTransit.length !== 1 ? "s" : ""} in transit from shop`}
       />
-
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <StatsCard icon={Inbox} value={incomingOrders.length} label="Incoming" color="blue" />
-        <StatsCard icon={Package} value={brovaReturns.length} label="Brova Returns" color="purple" />
-        <StatsCard icon={Clock} value={alterationIn.length} label="Alteration In" color="orange" dimOnZero />
-      </div>
 
       <Tabs defaultValue="incoming">
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto">

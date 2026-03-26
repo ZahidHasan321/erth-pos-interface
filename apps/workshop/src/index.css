@@ -41,48 +41,48 @@
 :root {
   --radius: 0.75rem;
 
-  /* Surface — warm stone tint, dark enough for cards to pop */
-  --background: oklch(0.94 0.01 75);
-  --foreground: oklch(0.14 0.02 55);
+  /* Surface — clean white */
+  --background: oklch(0.995 0 0);
+  --foreground: oklch(0.13 0.01 260);
 
-  /* Cards — crisp white, clear separation from background */
-  --card: oklch(0.995 0.002 75);
-  --card-foreground: oklch(0.16 0.02 55);
+  /* Cards — pure white, defined by border not fill */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 260);
 
-  --popover: oklch(0.995 0.002 75);
-  --popover-foreground: oklch(0.14 0.02 55);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.13 0.01 260);
 
-  /* Primary — deep workshop green, confident and grounded */
-  --primary: oklch(0.36 0.10 155);
-  --primary-foreground: oklch(0.97 0.01 155);
+  /* Primary — workshop green, clean and modern */
+  --primary: oklch(0.40 0.09 160);
+  --primary-foreground: oklch(0.97 0.005 160);
 
-  /* Secondary — warm earthy brown for contrast moments */
-  --secondary: oklch(0.52 0.12 55);
-  --secondary-foreground: oklch(0.98 0.01 55);
+  /* Secondary — cool slate for contrast moments */
+  --secondary: oklch(0.54 0.06 260);
+  --secondary-foreground: oklch(0.98 0 0);
 
-  /* Muted — warm stone gray, visible but recessive */
-  --muted: oklch(0.92 0.008 75);
-  --muted-foreground: oklch(0.46 0.02 55);
+  /* Muted — neutral gray, recessive */
+  --muted: oklch(0.94 0.003 260);
+  --muted-foreground: oklch(0.44 0.01 260);
 
-  /* Accent — warm sand for active highlights */
-  --accent: oklch(0.90 0.04 75);
-  --accent-foreground: oklch(0.22 0.03 55);
+  /* Accent — subtle gray for active highlights */
+  --accent: oklch(0.92 0.003 260);
+  --accent-foreground: oklch(0.22 0.01 260);
 
   /* Utility */
   --destructive: oklch(0.55 0.22 27);
-  --border: oklch(0.88 0.012 75);
-  --input: oklch(0.94 0.008 75);
-  --ring: oklch(0.45 0.08 155);
+  --border: oklch(0.91 0.01 250);
+  --input: oklch(0.97 0.003 260);
+  --ring: oklch(0.45 0.08 160);
 
-  /* Sidebar — slightly off-white, warm and grounded */
-  --sidebar: oklch(0.98 0.005 75);
-  --sidebar-foreground: oklch(0.16 0.02 55);
-  --sidebar-primary: oklch(0.32 0.10 155);
-  --sidebar-primary-foreground: oklch(0.97 0.01 155);
-  --sidebar-accent: oklch(0.92 0.02 75);
-  --sidebar-accent-foreground: oklch(0.20 0.03 55);
-  --sidebar-border: oklch(0.88 0.012 75);
-  --sidebar-ring: oklch(0.40 0.08 155);
+  /* Sidebar — white, clean and minimal */
+  --sidebar: oklch(0.995 0 0);
+  --sidebar-foreground: oklch(0.15 0.01 260);
+  --sidebar-primary: oklch(0.37 0.09 160);
+  --sidebar-primary-foreground: oklch(0.97 0.005 160);
+  --sidebar-accent: oklch(0.94 0.003 260);
+  --sidebar-accent-foreground: oklch(0.20 0.01 260);
+  --sidebar-border: oklch(0.93 0.005 260);
+  --sidebar-ring: oklch(0.40 0.08 160);
 }
 
 @layer base {
@@ -131,8 +131,10 @@
   }
 
   a, button, [role="button"], [role="tab"], [role="checkbox"], [role="radio"],
-  [role="switch"], [role="menuitem"], [role="option"], select, summary {
+  [role="switch"], [role="menuitem"], [role="option"], select, summary,
+  [role="combobox"] {
     touch-action: manipulation;
+    cursor: pointer;
   }
 }
 
@@ -145,6 +147,55 @@ input[type="number"]::-webkit-outer-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* ── Touch feedback for interactive elements ────────── */
+
+@layer base {
+  button:not(:disabled) {
+    transition: transform 0.12s ease, opacity 0.12s ease, color 0.12s ease,
+                background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    &:active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+  }
+
+  a[href]:not([data-slot="button"]) {
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    &:active {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+  }
+
+  /* Clickable cards — subtle press-in */
+  [data-slot="card"][role="button"],
+  [data-slot="card"].cursor-pointer {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    &:active {
+      transform: scale(0.985);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+  }
+
+  /* Generic role="button" elements (divs, spans acting as buttons) */
+  [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+      opacity: 0.9;
+    }
+  }
+
+  /* Clickable table rows — bg change only, no scale */
+  tr.cursor-pointer,
+  tr:has(> td > a) {
+    transition: background-color 0.1s ease;
+    &:active {
+      background-color: var(--accent) !important;
+    }
+  }
 }
 
 /* ── CSS Animations ────────────────────────────────── */
@@ -215,7 +266,7 @@ input[type="number"] {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 40%), transparent);
+  background: linear-gradient(90deg, transparent, oklch(1 0 260 / 35%), transparent);
   animation: shimmer 1.5s infinite;
 }
 

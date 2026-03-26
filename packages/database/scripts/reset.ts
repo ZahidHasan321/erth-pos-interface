@@ -11,6 +11,7 @@ async function main() {
   // Drop all tables in reverse dependency order
   console.log("Dropping tables...");
   await client.unsafe(`
+    DROP TABLE IF EXISTS payment_transactions CASCADE;
     DROP TABLE IF EXISTS garment_feedback CASCADE;
     DROP TABLE IF EXISTS order_shelf_items CASCADE;
     DROP TABLE IF EXISTS garments CASCADE;
@@ -23,6 +24,7 @@ async function main() {
     DROP TABLE IF EXISTS fabrics CASCADE;
     DROP TABLE IF EXISTS shelf CASCADE;
     DROP TABLE IF EXISTS prices CASCADE;
+    DROP TABLE IF EXISTS resources CASCADE;
     DROP TABLE IF EXISTS users CASCADE;
   `);
 
@@ -42,6 +44,11 @@ async function main() {
     DROP TYPE IF EXISTS measurement_type CASCADE;
     DROP TYPE IF EXISTS jabzour_type CASCADE;
     DROP TYPE IF EXISTS garment_type CASCADE;
+    DROP TYPE IF EXISTS transaction_type CASCADE;
+    DROP TYPE IF EXISTS location CASCADE;
+    DROP TYPE IF EXISTS feedback_status CASCADE;
+    DROP TYPE IF EXISTS acceptance_status CASCADE;
+    DROP TYPE IF EXISTS fulfillment_type CASCADE;
   `);
 
   // Drop sequences

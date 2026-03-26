@@ -1,19 +1,20 @@
 import type { ApiResponse, UpsertApiResponse } from "../types/api";
 import type { Customer } from "@repo/database";
 import { db } from "@/lib/db";
+import { sanitizeFilterValue } from "@/lib/utils";
 
 const TABLE_NAME = "customers";
 
 export const getCustomers = async (): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' });
+    .select('*');
 
   if (error) {
     console.error('Error fetching customers:', error);
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+  return { status: 'success', data: data as any };
 };
 
 export const getPaginatedCustomers = async (
@@ -21,73 +22,83 @@ export const getPaginatedCustomers = async (
   pageSize: number,
   search?: string
 ): Promise<ApiResponse<Customer[]>> => {
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  let query = db
-    .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
-    .order('phone', { ascending: true })
-    .order('account_type', { ascending: true }) // Primary before Secondary
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (search) {
-    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,arabic_name.ilike.%${search}%,nick_name.ilike.%${search}%`);
-  }
-
-  const { data, error, count } = await query;
+  // Use server-side fuzzy search RPC (pg_trgm powered)
+  const { data, error } = await db.rpc('search_customers_paginated', {
+    p_query: search || null,
+    p_page: page,
+    p_page_size: pageSize,
+  });
 
   if (error) {
     console.error('Error fetching paginated customers:', error);
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    // Fallback to simple query if RPC doesn't exist yet
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    let query = db.from(TABLE_NAME).select('*', { count: 'exact' })
+      .order('phone', { ascending: true }).range(from, to);
+    if (search) {
+      const s = sanitizeFilterValue(search);
+      query = query.or(`name.ilike.%${s}%,phone.ilike.%${s}%,arabic_name.ilike.%${s}%,nick_name.ilike.%${s}%`);
+    }
+    const fb = await query;
+    if (fb.error) return { status: 'error', message: fb.error.message, data: [], count: 0 };
+    return { status: 'success', data: fb.data as any, count: fb.count || 0 };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+
+  const result = data as any;
+  return { status: 'success', data: result?.data || [], count: result?.count || 0 };
 };
 
 export const searchCustomerByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
-    .ilike('phone', `%${phone}%`);
+    .select('*')
+    .ilike('phone', `%${sanitizeFilterValue(phone)}%`)
+    .limit(20);
 
   if (error) {
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+  return { status: 'success', data: data as any };
 };
 
 export const fuzzySearchCustomers = async (
   query: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await db
-    .from(TABLE_NAME)
-    .select('*', { count: 'estimated' })
-    .or(`name.ilike.%${query}%,phone.ilike.%${query}%,arabic_name.ilike.%${query}%,nick_name.ilike.%${query}%`)
-    .order('name', { ascending: true })
-    .limit(10);
+  // Use pg_trgm fuzzy search RPC — typo-tolerant, relevance-ranked
+  const { data, error } = await db.rpc('search_customers_fuzzy', {
+    p_query: query,
+    p_limit: 10,
+  });
 
   if (error) {
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    // Fallback to ILIKE if RPC doesn't exist yet
+    const q = sanitizeFilterValue(query);
+    const fb = await db.from(TABLE_NAME).select('*')
+      .or(`name.ilike.%${q}%,phone.ilike.%${q}%,arabic_name.ilike.%${q}%,nick_name.ilike.%${q}%`)
+      .order('name', { ascending: true }).limit(10);
+    if (fb.error) return { status: 'error', message: fb.error.message, data: [] };
+    return { status: 'success', data: fb.data as any };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+
+  return { status: 'success', data: (data || []) as any };
 };
 
 export const searchPrimaryAccountByPhone = async (
   phone: string,
 ): Promise<ApiResponse<Customer[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
+    .select('*')
     .eq('phone', phone)
     .eq('account_type', 'Primary');
 
   if (error) {
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+  return { status: 'success', data: data as any };
 };
 
 export const getCustomerById = async (
@@ -143,6 +154,21 @@ export const updateCustomer = async (
  * Batch Upsert or Single Upsert
  * @param customers Array of customers to upsert
  */
+/**
+ * Lightweight count-only query (no row data transferred).
+ */
+export const getCustomerCount = async (): Promise<number> => {
+  const { count, error } = await db
+    .from(TABLE_NAME)
+    .select('*', { count: 'exact', head: true });
+
+  if (error) {
+    console.error('Error fetching customer count:', error);
+    return 0;
+  }
+  return count || 0;
+};
+
 export const upsertCustomer = async (
   customers: Partial<Customer>[],
 ): Promise<UpsertApiResponse<Customer>> => {

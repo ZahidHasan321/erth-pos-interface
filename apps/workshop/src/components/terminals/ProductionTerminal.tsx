@@ -3,12 +3,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments, useCompletedTodayGarments } from "@/hooks/useWorkshopGarments";
 import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { StatsCard, LoadingSkeleton } from "@/components/shared/PageShell";
+import { LoadingSkeleton } from "@/components/shared/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Clock, AlertCircle, CheckCircle2, CalendarDays, Gauge } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 interface ProductionTerminalProps {
@@ -83,7 +83,6 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
   }, [completedTodayAll, terminalStage, historyKey, thisStageOrder]);
 
   const completedPagination = usePagination(completedToday, 15);
-  const started = queue.filter((g) => g.start_time).length;
 
   const handleCardClick = (g: WorkshopGarment) => {
     navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
@@ -107,14 +106,6 @@ export function ProductionTerminal({ terminalStage, icon }: ProductionTerminalPr
           <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
           {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
         </div>
-      </div>
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 stagger-children">
-        <StatsCard icon={Clock} value={queue.length} label="Queue" color="blue" />
-        <StatsCard icon={Gauge} value={started} label="Started" color="emerald" />
-        <StatsCard icon={AlertCircle} value={pending.length} label="Overdue" color="red" dimOnZero />
-        <StatsCard icon={CheckCircle2} value={completedToday.length} label="Done Today" color="green" />
       </div>
 
       {isLoading ? (

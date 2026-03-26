@@ -3,9 +3,9 @@ import { db } from "@/lib/db";
 import type { ApiResponse } from "@/types/api";
 
 export const getStyles = async (): Promise<ApiResponse<Style[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from('styles')
-    .select('*', { count: 'exact' });
+    .select('*');
 
   if (error) {
     console.error('Error fetching styles:', error);
@@ -13,13 +13,11 @@ export const getStyles = async (): Promise<ApiResponse<Style[]>> => {
       status: 'error',
       message: error.message,
       data: [],
-      count: 0
     };
   }
 
   return {
     status: 'success',
     data: data as Style[],
-    count: count || 0
   };
 };

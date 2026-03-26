@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getResources, createResource, updateResource, deleteResource } from '@/api/resources';
+import { getResources, getResourcesWithUsers, createResource, updateResource, deleteResource, linkResourceToUser, unlinkResourceFromUser } from '@/api/resources';
 import type { NewResource } from '@repo/database';
 
 const KEY = ['resources'] as const;
@@ -34,5 +34,38 @@ export function useDeleteResource() {
   return useMutation({
     mutationFn: (id: string) => deleteResource(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+const WITH_USERS_KEY = ['resources-with-users'] as const;
+
+export function useResourcesWithUsers() {
+  return useQuery({
+    queryKey: WITH_USERS_KEY,
+    queryFn: getResourcesWithUsers,
+    staleTime: 60_000,
+  });
+}
+
+export function useLinkResourceToUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ resourceId, userId }: { resourceId: string; userId: string }) =>
+      linkResourceToUser(resourceId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: WITH_USERS_KEY });
+    },
+  });
+}
+
+export function useUnlinkResourceFromUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (resourceId: string) => unlinkResourceFromUser(resourceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: WITH_USERS_KEY });
+    },
   });
 }

@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { db } from "./src/client";
-import { garments } from "./src/schema";
+import { db } from "../src/client";
+import { garments } from "../src/schema";
 import { eq } from "drizzle-orm";
 async function main() {
   const [g] = await db.select({
@@ -18,7 +18,11 @@ async function main() {
     lines: garments.lines,
     soaking: garments.soaking,
   }).from(garments).where(eq(garments.id, "fdceba06-2dc4-4b82-b686-01ba3f0a9263"));
-  console.log(JSON.stringify(g, null, 2));
+  if (g) {
+    console.log(JSON.stringify(g, null, 2));
+  } else {
+    console.log("Not found");
+  }
   process.exit(0);
 }
 main();

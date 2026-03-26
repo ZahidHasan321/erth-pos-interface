@@ -1,10 +1,11 @@
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import * as React from "react";
 import { z } from "zod";
-import sleep, { useAuth } from "@/context/auth";
+import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { AlertCircle, LogIn } from "lucide-react";
+import { db } from "@/lib/db";
 import ErthLogoDark from "@/assets/erth-dark.svg";
 import SakktbaLogo from "@/assets/Sakkba.png";
 
@@ -25,11 +26,21 @@ export const Route = createFileRoute("/(auth)/login")({
   }),
 });
 
+type ShopUser = {
+  id: string;
+  username: string;
+  name: string;
+  role: string | null;
+  brands: string[] | null;
+};
+
 function LoginComponent() {
   const auth = useAuth();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [shopUsers, setShopUsers] = React.useState<ShopUser[]>([]);
 
   const search = Route.useSearch();
 
@@ -43,6 +54,18 @@ function LoginComponent() {
   const [userType, setUserType] =
     React.useState<(typeof BRAND_NAMES)[keyof typeof BRAND_NAMES]>(initialUserType);
 
+  // Fetch shop users for quick login
+  React.useEffect(() => {
+    db.from("users")
+      .select("id, username, name, role, brands")
+      .eq("department", "shop")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => {
+        if (data) setShopUsers(data);
+      });
+  }, []);
+
   // Apply brand theme class so CSS variables resolve correctly
   React.useEffect(() => {
     const root = document.documentElement;
@@ -51,31 +74,39 @@ function LoginComponent() {
     return () => { root.classList.remove(userType); };
   }, [userType]);
 
-  const onFormSubmit = async (evt: React.FormEvent<HTMLFormElement>) => {
+  const doLogin = async (username: string, password: string) => {
     setIsSubmitting(true);
+    setError(null);
     try {
-      evt.preventDefault();
-      const data = new FormData(evt.currentTarget);
-      const identifier = data.get("username")?.toString();
-      const password = data.get("password")?.toString();
-
-      if (!identifier || !password) return;
-
-      await auth.login({ username: identifier, password, userType });
+      await auth.login({ username, password, userType });
       await router.invalidate();
-      await sleep(1);
 
       if (userType === initialUserType && search.redirect) {
         await navigate({ to: search.redirect });
       } else {
         await navigate({ to: `/${userType}` });
       }
-    } catch (error) {
-      console.error("Error logging in: ", error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const onFormSubmit = async (evt: React.FormEvent<HTMLFormElement>) => {
+    evt.preventDefault();
+    const data = new FormData(evt.currentTarget);
+    const identifier = data.get("username")?.toString();
+    const password = data.get("password")?.toString();
+    if (!identifier || !password) return;
+    await doLogin(identifier, password);
+  };
+
+  // Filter test accounts to those that have access to the selected brand
+  const filteredUsers = shopUsers.filter((u) => {
+    if (!u.brands || u.brands.length === 0) return true;
+    return u.brands.includes(userType);
+  });
 
   const isErth = userType === BRAND_NAMES.showroom;
 
@@ -165,6 +196,22 @@ function LoginComponent() {
           </div>
         )}
 
+        {/* Error message */}
+        {error && (
+          <div
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg mb-5"
+            style={{
+              background: "rgba(239,68,68,0.12)",
+              border: "1px solid rgba(239,68,68,0.25)",
+            }}
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#f87171" }} />
+            <span className="text-xs" style={{ color: "#fca5a5", fontFamily: "'Montserrat', sans-serif" }}>
+              {error}
+            </span>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={onFormSubmit}>
           <fieldset disabled={isSubmitting} className="space-y-4">
@@ -175,12 +222,12 @@ function LoginComponent() {
                 className="text-xs font-medium tracking-[0.1em] uppercase"
                 style={{ color: "#d4cdaa99", fontFamily: "'Montserrat', sans-serif" }}
               >
-                Username or User ID
+                Username
               </label>
               <Input
                 id="username-input"
                 name="username"
-                placeholder="Enter your username or ID"
+                placeholder="Enter your username"
                 type="text"
                 required
                 className="h-11 bg-white/[0.06] border-white/[0.12] text-[#e8e2c4] placeholder:text-white/30 focus:border-[#d4cdaa60] focus:ring-[#d4cdaa30] rounded-lg"
@@ -292,6 +339,79 @@ function LoginComponent() {
             </div>
           </fieldset>
         </form>
+
+        {/* Test Accounts */}
+        {filteredUsers.length > 0 && (
+          <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(212,205,170,0.1)" }}>
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3"
+              style={{ color: "#d4cdaa40", fontFamily: "'Montserrat', sans-serif" }}
+            >
+              Test Accounts (pw: 123)
+            </p>
+            <div className="space-y-1">
+              {filteredUsers.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => doLogin(u.username, "123")}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 group"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(212,205,170,0.08)";
+                    e.currentTarget.style.borderColor = "rgba(212,205,170,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black"
+                      style={{
+                        background: isErth
+                          ? "rgba(34,60,34,0.5)"
+                          : "rgba(40,50,80,0.5)",
+                        color: "#d4cdaa",
+                      }}
+                    >
+                      {u.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold" style={{ color: "#d4cdaa" }}>
+                        {u.name}
+                      </p>
+                      <p className="text-[10px]" style={{ color: "#d4cdaa50" }}>
+                        @{u.username}{u.role ? ` · ${u.role.charAt(0).toUpperCase() + u.role.slice(1)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {u.brands && u.brands.length > 1 && (
+                    <div className="flex gap-1">
+                      {u.brands.map((b) => (
+                        <span
+                          key={b}
+                          className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
+                          style={{
+                            background: b === userType ? "rgba(212,205,170,0.15)" : "rgba(255,255,255,0.05)",
+                            color: b === userType ? "#d4cdaa" : "#d4cdaa40",
+                          }}
+                        >
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <p

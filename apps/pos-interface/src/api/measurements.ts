@@ -5,14 +5,14 @@ import { db } from "@/lib/db";
 const TABLE_NAME = 'measurements';
 
 export const getMeasurements = async (): Promise<ApiResponse<Measurement[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' });
+    .select('*');
 
   if (error) {
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any, count: count || 0 };
+  return { status: 'success', data: data as any };
 };
 
 export const getMeasurementsByCustomerId = async (customerId: number): Promise<ApiResponse<Measurement[]>> => {

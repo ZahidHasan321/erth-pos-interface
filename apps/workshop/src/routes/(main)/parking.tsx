@@ -123,8 +123,7 @@ function ParkingOrderCard({
       )}
     >
       <div
-        className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => !allParked && onToggle(!selected)}
+        className="px-4 py-3 transition-colors rounded-t-xl"
       >
         {/* Row 1: Identity + actions */}
         <div className="flex items-center justify-between gap-3">
@@ -151,11 +150,11 @@ function ParkingOrderCard({
                 → Scheduler
               </Button>
             )}
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground">
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
-              className={cn("p-1.5 rounded-md transition-colors", expanded ? "bg-muted" : "text-muted-foreground/50")}
+              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/50 hover:text-foreground")}
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
               aria-expanded={expanded}
               aria-label={expanded ? "Collapse garments" : "Expand garments"}

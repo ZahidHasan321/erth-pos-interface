@@ -190,12 +190,16 @@ export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> =>
     byOrder.get(g.order_id)!.push(g);
   }
 
+  // A garment is "done" from the workshop's perspective if it's completed,
+  // or it's back at shop in a post-production stage (not awaiting_trial or needing action)
+  const SHOP_DONE_STAGES = new Set(['completed', 'ready_for_pickup', 'brova_trialed']);
+  const isGarmentDone = (g: WorkshopGarment) =>
+    g.piece_stage === 'completed' ||
+    (g.location === 'shop' && SHOP_DONE_STAGES.has(g.piece_stage ?? ''));
+
   const result: WorkshopGarment[] = [];
   for (const garments of byOrder.values()) {
-    const allDone = garments.every(
-      (g) => g.piece_stage === 'completed' || g.location === 'shop',
-    );
-    if (allDone) result.push(...garments);
+    if (garments.every(isGarmentDone)) result.push(...garments);
   }
   return result;
 };

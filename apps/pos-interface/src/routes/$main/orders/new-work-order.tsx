@@ -57,6 +57,7 @@ import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import { useAuth } from "@/context/auth";
 
 type OrderSearch = {
     orderId?: number;
@@ -82,12 +83,16 @@ export const Route = createFileRoute("/$main/orders/new-work-order")({
     }),
 });
 
-const steps = [
+const stepsBase = [
     { title: "Demographics", id: "step-0" },
     { title: "Measurement", id: "step-1" },
     { title: "Fabric Selection", id: "step-2" },
     { title: "Shelf Products", id: "step-3" },
-    { title: "Review & Payment", id: "step-4" },
+];
+
+const getSteps = (cashierHandlesPayment: boolean) => [
+    ...stepsBase,
+    { title: cashierHandlesPayment ? "Review & Confirm" : "Review & Payment", id: "step-4" },
 ];
 
 const useCurrentWorkOrderStore = createWorkOrderStore("main");
@@ -95,9 +100,12 @@ const useCurrentWorkOrderStore = createWorkOrderStore("main");
 function NewWorkOrder() {
     const { orderId: searchOrderId } = Route.useSearch();
     // ============================================================================
-    // NAVIGATION
+    // NAVIGATION & BRAND
     // ============================================================================
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const cashierHandlesPayment = user?.userType === "erth";
+    const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
     const { styles, stitchingAdult, stitchingChild } = usePricing();
 
     // ============================================================================
@@ -617,23 +625,24 @@ function NewWorkOrder() {
         completeWorkOrderMutation.mutate({
             orderId,
             checkoutDetails: {
-                paymentType: data.payment_type!,
-                paid: data.paid ?? 0,
-                paymentRefNo: data.payment_ref_no ?? undefined,
-                paymentNote: data.payment_note ?? undefined,
+                // For ERTH, payment is handled at cashier — default to cash/0
+                paymentType: cashierHandlesPayment ? "cash" : data.payment_type!,
+                paid: cashierHandlesPayment ? 0 : (data.paid ?? 0),
+                paymentRefNo: cashierHandlesPayment ? undefined : (data.payment_ref_no ?? undefined),
+                paymentNote: cashierHandlesPayment ? undefined : (data.payment_note ?? undefined),
                 orderTaker: data.order_taker_id ?? undefined,
-                discountType: data.discount_type ?? undefined,
-                discountValue: data.discount_value ?? undefined,
-                discountPercentage: data.discount_percentage ?? undefined,
-                referralCode: data.referral_code ?? undefined,
+                discountType: cashierHandlesPayment ? undefined : (data.discount_type ?? undefined),
+                discountValue: cashierHandlesPayment ? undefined : (data.discount_value ?? undefined),
+                discountPercentage: cashierHandlesPayment ? undefined : (data.discount_percentage ?? undefined),
+                referralCode: cashierHandlesPayment ? undefined : (data.referral_code ?? undefined),
                 orderTotal: data.order_total ?? 0,
-                advance: data.advance ?? undefined,
+                advance: cashierHandlesPayment ? undefined : (data.advance ?? undefined),
                 fabricCharge: data.fabric_charge ?? 0,
                 stitchingCharge: data.stitching_charge ?? 0,
                 styleCharge: data.style_charge ?? 0,
                 deliveryCharge: data.delivery_charge ?? 0,
                 shelfCharge: data.shelf_charge ?? 0,
-                homeDelivery: data.home_delivery,
+                homeDelivery: cashierHandlesPayment ? false : data.home_delivery,
                 deliveryDate: order.delivery_date ?? undefined,
                 stitchingPrice: data.stitching_price,
             },
@@ -855,6 +864,28 @@ function NewWorkOrder() {
 
             {/* Step Content */}
             <div className="flex flex-col items-center gap-4 md:gap-5 pt-5 pb-8 px-4 md:px-5 max-w-6xl mx-auto w-full">
+                {isOrderClosed && (
+                    <div className="w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-muted/60 border border-border">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className={`font-semibold ${checkoutStatus === "confirmed" ? "text-emerald-700" : "text-red-600"}`}>
+                                {checkoutStatus === "confirmed" ? "Order Confirmed" : "Order Cancelled"}
+                            </span>
+                            {orderId && <span className="text-muted-foreground tabular-nums">#{orderId}</span>}
+                            {fatoura && <span className="text-muted-foreground tabular-nums">· INV {fatoura}</span>}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                resetWorkOrder();
+                                resetLocalState();
+                                navigate({ to: "/$main/orders/new-work-order", params: { main: user?.userType || "erth" }, search: {} });
+                            }}
+                            className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation active:scale-[0.97]"
+                        >
+                            + New Order
+                        </button>
+                    </div>
+                )}
                 {!isOrderClosed && (
                     <div className="w-full mt-0">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
@@ -1019,18 +1050,30 @@ function NewWorkOrder() {
                             fabricSelections={fabricSelections}
                             deliveryDate={order.delivery_date}
                             orderType="WORK"
+                            cashierHandlesPayment={cashierHandlesPayment}
                             onConfirm={(data) => {
-                                const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
-                                openDialog(
-                                    isZeroPayment ? "Confirm with Zero Payment?" : "Confirm new work order",
-                                    isZeroPayment
-                                        ? "You are about to confirm this order without any payment. Are you sure you want to proceed?"
-                                        : "Do you want to confirm a new work order?",
-                                    () => {
-                                        handleOrderConfirmation(data);
-                                        closeDialog();
-                                    },
-                                );
+                                if (cashierHandlesPayment) {
+                                    openDialog(
+                                        "Confirm work order",
+                                        "Confirm this order? Payment and discounts will be handled at the cashier.",
+                                        () => {
+                                            handleOrderConfirmation(data);
+                                            closeDialog();
+                                        },
+                                    );
+                                } else {
+                                    const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
+                                    openDialog(
+                                        isZeroPayment ? "Confirm with Zero Payment?" : "Confirm new work order",
+                                        isZeroPayment
+                                            ? "You are about to confirm this order without any payment. Are you sure you want to proceed?"
+                                            : "Do you want to confirm a new work order?",
+                                        () => {
+                                            handleOrderConfirmation(data);
+                                            closeDialog();
+                                        },
+                                    );
+                                }
                             }}
                             onCancel={() => {
                                 openDialog(

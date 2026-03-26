@@ -19,6 +19,19 @@ export function toLocalDateStr(value: string | Date | null | undefined): string 
   return isNaN(d.getTime()) ? null : getLocalDateStr(d);
 }
 
+/**
+ * Escape special PostgREST filter characters in user-provided search terms.
+ * Prevents filter injection via characters like commas, dots, and parens
+ * that have syntactic meaning in PostgREST .or() / .ilike() filters.
+ */
+export function sanitizeFilterValue(value: string): string {
+  // Remove characters that are syntactically meaningful in PostgREST filters:
+  // , (separates OR conditions), . (separates table.column), ( ) (grouping)
+  // \ (escape char). We strip them rather than escape because PostgREST
+  // doesn't have a reliable escaping mechanism for these in filter strings.
+  return value.replace(/[,.()\\\x00]/g, '');
+}
+
 export function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 

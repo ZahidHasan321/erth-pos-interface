@@ -3,9 +3,9 @@ import { db } from "@/lib/db";
 import type { ApiResponse } from "../types/api";
 
 export const getFabrics = async (): Promise<ApiResponse<Fabric[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from('fabrics')
-    .select('*', { count: 'exact' });
+    .select('*');
 
   if (error) {
     console.error('Error fetching fabrics:', error);
@@ -13,14 +13,12 @@ export const getFabrics = async (): Promise<ApiResponse<Fabric[]>> => {
       status: 'error',
       message: error.message,
       data: [],
-      count: 0
     };
   }
 
   return {
     status: 'success',
     data: (data as any) as Fabric[],
-    count: count || 0
   };
 };
 

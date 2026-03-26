@@ -48,10 +48,10 @@ export function GarmentCard({
       <Card
         {...clickableProps(onClick)}
         className={cn(
-          "border-2 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out shadow-sm py-0 gap-0",
-          "cursor-pointer hover:border-primary/40 hover:shadow-md active:scale-[0.97]",
-          garment.express && "border-orange-300",
-          garment.start_time ? "bg-emerald-50/50 border-emerald-200" : "bg-card",
+          "border border-border/60 transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out py-0 gap-0",
+          "cursor-pointer hover:border-primary/30 hover:shadow-md active:scale-[0.97]",
+          garment.express && "!border-orange-300",
+          garment.start_time ? "bg-emerald-50/50 !border-emerald-200" : "bg-card",
         )}
         onClick={onClick}
       >
@@ -88,7 +88,7 @@ export function GarmentCard({
             <p className="text-xs text-muted-foreground capitalize mt-0.5 truncate">{garment.style_name}</p>
           )}
           <div className="flex items-center gap-1.5 mt-auto pt-2 flex-wrap">
-            {hasSoaking && <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
+            {hasSoaking && (garment.piece_stage === "waiting_cut" || garment.piece_stage === "soaking") && <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
             <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             {garment.assigned_date && (
               <span className="text-[10px] font-semibold text-red-600">{formatDate(garment.assigned_date)}</span>
@@ -115,7 +115,7 @@ export function GarmentCard({
       <Card
         {...(onClick ? clickableProps(onClick) : {})}
         className={cn(
-          "border transition-[color,background-color,border-color,box-shadow] duration-150 ease-out shadow-sm py-0 gap-0 rounded-xl overflow-hidden",
+          "border transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out shadow-sm py-0 gap-0 rounded-xl overflow-hidden",
           "hover:shadow-md hover:-translate-y-px",
           selected
             ? "border-primary/40 bg-primary/5 ring-2 ring-primary/20 shadow-md"
@@ -158,7 +158,7 @@ export function GarmentCard({
               {actions}
               <button
                 onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }}
-                className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground"
+                className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer"
                 aria-label="View garment details"
               >
                 <Eye className="w-4 h-4" aria-hidden="true" />

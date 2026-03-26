@@ -39,11 +39,12 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
         const isSelected = selectedIds.has(g.id);
 
         return (
-            <button
+            <div
                 key={g.id}
-                type="button"
+                role="button"
+                tabIndex={eligible ? 0 : -1}
                 onClick={() => { if (eligible) onToggle(g.id); }}
-                disabled={!eligible}
+                onKeyDown={(e) => { if (eligible && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggle(g.id); } }}
                 className={`w-full text-left relative rounded-lg border p-2.5 transition-all ${
                     isCompleted
                         ? "bg-muted/30 border-muted opacity-40"
@@ -92,7 +93,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         </span>
                     )}
                 </div>
-            </button>
+            </div>
         );
     };
 
@@ -102,7 +103,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
             {/* Select All */}
             {hasEligible && (
                 <div className="flex items-center justify-between pb-2 border-b">
-                    <button type="button" onClick={onToggleAll} className="flex items-center gap-2 cursor-pointer">
+                    <label role="button" onClick={onToggleAll} className="flex items-center gap-2 cursor-pointer">
                         <Checkbox
                             checked={selectedIds.size === eligibleGarments.length && eligibleGarments.length > 0}
                             onCheckedChange={onToggleAll}
@@ -112,7 +113,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         <span className="text-sm font-medium">
                             Select All Ready ({eligibleGarments.length})
                         </span>
-                    </button>
+                    </label>
                     {selectedIds.size > 0 && (
                         <span className="text-xs text-primary font-medium tabular-nums">
                             {selectedIds.size} selected

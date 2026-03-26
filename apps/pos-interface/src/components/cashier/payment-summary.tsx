@@ -30,12 +30,13 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const styleCharge = Number(order?.style_charge) || 0;
     const shelfCharge = Number(order?.shelf_charge) || 0;
 
+    const isWorkOrder = order?.order_type === "WORK";
+
     // Express: count express garments and compute charge from DB price
     const orderGarments = Array.isArray(order?.garments) ? order.garments : [];
     const expressGarmentCount = orderGarments.filter((g: any) => g.express).length;
     const expressSurcharge = getPrice("EXPRESS_SURCHARGE") || 2;
     const expressCharge = expressGarmentCount * expressSurcharge;
-
 
     const subtotal = orderTotal + discountValue;
 
@@ -45,43 +46,43 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
     return (
-        <div className="space-y-1 text-sm">
-            {/* Charge breakdown */}
+        <div className="space-y-1.5 text-sm">
+            {/* Charge breakdown — always show for work orders, only non-zero for sales */}
             <div className="space-y-1">
-                {stitchingCharge > 0 && (
+                {(isWorkOrder || stitchingCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Stitching</span>
-                        <span>{fmt(stitchingCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(stitchingCharge)} KD</span>
                     </div>
                 )}
-                {fabricCharge > 0 && (
+                {(isWorkOrder || fabricCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Fabric</span>
-                        <span>{fmt(fabricCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(fabricCharge)} KD</span>
                     </div>
                 )}
-                {styleCharge > 0 && (
+                {(isWorkOrder || styleCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Style</span>
-                        <span>{fmt(styleCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(styleCharge)} KD</span>
                     </div>
                 )}
-                {deliveryCharge > 0 && (
+                {(isWorkOrder || deliveryCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Delivery</span>
-                        <span>{fmt(deliveryCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(deliveryCharge)} KD</span>
                     </div>
                 )}
-                {expressCharge > 0 && (
+                {(expressCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount} x ${fmt(expressSurcharge)})` : ""}</span>
-                        <span>{fmt(expressCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(expressCharge)} KD</span>
                     </div>
                 )}
-                {shelfCharge > 0 && (
+                {(shelfCharge > 0) && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Shelf Items</span>
-                        <span>{fmt(shelfCharge)} KD</span>
+                        <span className="tabular-nums">{fmt(shelfCharge)} KD</span>
                     </div>
                 )}
             </div>
@@ -90,7 +91,7 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                 <>
                     <div className="flex justify-between pt-1">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span>{fmt(subtotal)} KD</span>
+                        <span className="tabular-nums">{fmt(subtotal)} KD</span>
                     </div>
                     <div className="flex justify-between text-amber-600">
                         <span className="flex items-center gap-1">
@@ -99,26 +100,26 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                             {discountType && <span className="text-xs">({DISCOUNT_TYPE_LABELS[discountType] || discountType})</span>}
                             {discountPercentage > 0 && <span className="text-xs">{discountPercentage}%</span>}
                         </span>
-                        <span>-{fmt(discountValue)} KD</span>
+                        <span className="tabular-nums">-{fmt(discountValue)} KD</span>
                     </div>
                 </>
             )}
 
-            <div className="flex justify-between font-medium">
+            <div className="flex justify-between font-medium pt-0.5">
                 <span>Order Total</span>
-                <span>{fmt(orderTotal)} KD</span>
+                <span className="tabular-nums">{fmt(orderTotal)} KD</span>
             </div>
 
             <Separator />
 
             <div className="flex justify-between text-green-600">
                 <span>Payments</span>
-                <span>{fmt(totalPayments)} KD</span>
+                <span className="tabular-nums">{fmt(totalPayments)} KD</span>
             </div>
             {totalRefunds > 0 && (
                 <div className="flex justify-between text-red-600">
                     <span>Refunds</span>
-                    <span>-{fmt(totalRefunds)} KD</span>
+                    <span className="tabular-nums">-{fmt(totalRefunds)} KD</span>
                 </div>
             )}
 
@@ -126,11 +127,11 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
 
             <div className={`flex justify-between font-bold text-base ${remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
                 <span>{remainingBalance <= 0 ? "Fully Paid" : "Remaining"}</span>
-                <span>{fmt(Math.max(0, remainingBalance))} KD</span>
+                <span className="tabular-nums">{fmt(Math.max(0, remainingBalance))} KD</span>
             </div>
 
-            {/* Advance reference — shown when no payments yet */}
-            {advance > 0 && (
+            {/* Advance reference — only when not yet covered */}
+            {isWorkOrder && advance > 0 && totalPaid < advance && (
                 <div className="flex items-center justify-between text-xs font-medium px-2.5 py-2 mt-1 rounded-md bg-amber-50 border border-amber-200 text-amber-800">
                     <span>Minimum advance</span>
                     <span className="font-bold tabular-nums">{fmt(advance)} KD</span>

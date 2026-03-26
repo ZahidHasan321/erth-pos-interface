@@ -130,7 +130,7 @@ export function useBrovaStatus(orderIds: number[]) {
   });
 }
 
-const DISPATCH_STAGES = new Set(['ready_for_dispatch', 'brova_trialed', 'completed', 'ready_for_pickup']);
+const DISPATCH_STAGES = new Set(['ready_for_dispatch', 'brova_trialed']);
 
 export function useDispatchGarments() {
   return useQuery({

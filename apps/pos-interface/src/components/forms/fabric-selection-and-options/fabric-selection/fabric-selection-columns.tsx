@@ -165,6 +165,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
       measurementId: measurementDisplay || "N/A",
       garment_type: data.garment_type || 'final',
       express: data.express || false,
+      soaking: data.soaking || false,
       deliveryDate: data.delivery_date ? new Date(data.delivery_date) : null,
     };
   };

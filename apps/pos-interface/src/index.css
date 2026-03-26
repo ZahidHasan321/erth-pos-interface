@@ -87,16 +87,16 @@
   /* Supporting colors - more defined */
   --muted: oklch(0.96 0 0);
   /* pure neutral gray, no tint */
-  --muted-foreground: oklch(0.45 0 0);
-  /* pure neutral gray text */
+  --muted-foreground: oklch(0.40 0 0);
+  /* darker neutral gray text for legibility */
 
   /* Utility colors */
   --destructive: oklch(0.58 0.22 25);
   /* muted red with better saturation */
-  --border: oklch(0.90 0 0);
-  /* pure neutral border */
-  --input: oklch(0.96 0 0);
-  /* pure neutral input background */
+  --border: oklch(0.88 0 0);
+  /* neutral border */
+  --input: oklch(0.82 0 0);
+  /* visible input border */
   --ring: oklch(0.60 0.08 165);
   /* primary-based ring color */
 
@@ -138,9 +138,11 @@
   --accent-foreground: oklch(0.25 0.06 155);
   --muted: oklch(0.95 0.02 150);
   /* very light green-tinted gray */
-  --muted-foreground: oklch(0.45 0.05 155);
-  --border: oklch(0.88 0.03 150);
-  /* light green-tinted border */
+  --muted-foreground: oklch(0.37 0.04 155);
+  --border: oklch(0.86 0.03 150);
+  /* green-tinted border */
+  --input: oklch(0.80 0.03 155);
+  /* visible input border */
   --ring: oklch(0.35 0.10 155);
   --sidebar-primary: oklch(0.30 0.12 155);
   --sidebar-accent: oklch(0.88 0.08 140);
@@ -214,6 +216,7 @@
   html {
     font-size: 14px;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -226,13 +229,17 @@
     font-family: 'Marcellus', 'Cairo', serif;
   }
 
-  button {
+  button, [role="button"], a, label[for], select, summary {
     font-family: 'Montserrat', 'Cairo', sans-serif;
-    font-weight: 600;
     touch-action: manipulation;
-    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  button {
+    font-weight: 600;
+    cursor: pointer;
   }
 
   label {
@@ -320,8 +327,10 @@ input[type="number"] {
 
   /* Ensure all interactive elements have adequate touch targets */
   a, button, [role="button"], [role="tab"], [role="checkbox"], [role="radio"],
-  [role="switch"], [role="menuitem"], [role="option"], select, summary {
+  [role="switch"], [role="menuitem"], [role="option"], select, summary,
+  [role="combobox"] {
     touch-action: manipulation;
+    cursor: pointer;
   }
 
   /* Prevent text selection on interactive elements during touch */
@@ -369,7 +378,7 @@ input[type="number"] {
   }
 
   /* Generic role="button" elements (divs, spans acting as buttons) */
-  [role="button"]:not(button):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
+  [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
     transition: transform 0.12s ease, opacity 0.12s ease;
     &:active:not(:disabled) {
       transform: scale(0.97);

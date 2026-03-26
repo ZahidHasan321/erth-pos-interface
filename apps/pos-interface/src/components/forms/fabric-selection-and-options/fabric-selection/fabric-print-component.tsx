@@ -20,6 +20,7 @@ interface FabricLabelProps {
     measurementId: string;
     garment_type: 'brova' | 'final';
     express: boolean;
+    soaking: boolean;
     deliveryDate: Date | null;
   };
 }
@@ -84,28 +85,42 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
             />
           </div>
 
-          {/* Header - Order ID and Customer Mobile */}
+          {/* Header - Express / Order info / Soaking */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            borderBottom: '2px solid black'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '2px solid black',
+            padding: '4px 8px',
           }}>
             <div style={{
-              textAlign: 'center',
-              padding: '6px 4px',
-              borderRight: '1px solid #ccc',
-              fontSize: '16px',
-              fontWeight: 'bold'
+              fontSize: '20px',
+              fontWeight: '900',
+              color: fabricData.express ? '#dc2626' : 'transparent',
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              minWidth: '80px',
             }}>
-              Order ID: {fabricData.orderId || "N/A"}
+              EXPRESS
+            </div>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                Order ID: {fabricData.orderId || "N/A"}
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>
+                Mobile: {fabricData.customerMobile || "N/A"}
+              </div>
             </div>
             <div style={{
-              textAlign: 'center',
-              padding: '6px 4px',
-              fontSize: '16px',
-              fontWeight: 'bold'
+              fontSize: '20px',
+              fontWeight: '900',
+              color: fabricData.soaking ? '#2563eb' : 'transparent',
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              minWidth: '80px',
+              textAlign: 'right',
             }}>
-              Mobile: {fabricData.customerMobile || "N/A"}
+              SOAKING
             </div>
           </div>
 
@@ -175,8 +190,8 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               textAlign: 'center',
               padding: '5px 4px'
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Express Delivery</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.express ? 'Yes' : 'No'}</div>
+              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Measurement</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{fabricData.measurementId || "N/A"}</div>
             </div>
           </div>
 

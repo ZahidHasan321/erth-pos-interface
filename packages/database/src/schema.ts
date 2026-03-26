@@ -22,6 +22,9 @@ const numeric = (name: string, config?: { precision?: number; scale?: number }) 
 export const roleEnum = pgEnum("role", ["admin", "staff", "manager"]);
 export type Role = (typeof roleEnum.enumValues)[number];
 
+export const departmentEnum = pgEnum("department", ["workshop", "shop"]);
+export type Department = (typeof departmentEnum.enumValues)[number];
+
 // "OrderStatus" from Airtable (Drafting vs Completed)
 export const checkoutStatusEnum = pgEnum("checkout_status", [
     "draft",       // Was "Pending" - Customer is building order
@@ -121,10 +124,18 @@ export const prices = pgTable("prices", {
 // --- 1. USERS ---
 export const users = pgTable("users", {
     id: uuid("id").defaultRandom().primaryKey(),
+    username: text("username").unique().notNull(),
     name: text("name").notNull(),
     email: text("email").unique(),
+    country_code: text("country_code").default("+965"),
+    phone: text("phone"),
     role: roleEnum("role").default("staff"),
+    department: departmentEnum("department"),
+    brands: text("brands").array(),
+    is_active: boolean("is_active").default(true).notNull(),
+    pin: text("pin"),
     created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
 });
 
 // --- 2. CUSTOMERS ---
@@ -181,7 +192,7 @@ export const styles = pgTable("styles", {
     name: text("name").notNull(),
     type: text("type"),
     rate_per_item: numeric("rate_per_item", { precision: 10, scale: 3 }),
-    image_url: text("image_url"),
+    image_url: text("image_url").unique(),
 });
 
 export const fabrics = pgTable("fabrics", {
@@ -494,6 +505,7 @@ export const garmentFeedback = pgTable("garment_feedback", {
 // --- 6.6 RESOURCES (Workshop Workers & Units) ---
 export const resources = pgTable("resources", {
     id: uuid("id").defaultRandom().primaryKey(),
+    user_id: uuid("user_id").references(() => users.id),
     brand: brandEnum("brand"),
     responsibility: text("responsibility"),
     resource_name: text("resource_name").notNull(),

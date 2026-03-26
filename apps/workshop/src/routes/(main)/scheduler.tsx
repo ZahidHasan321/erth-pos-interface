@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, clickableProps, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
@@ -188,9 +188,7 @@ function SchedulerOrderCard({
       )}
     >
       <div
-        className="px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => setExpanded((v) => !v)}
-        {...clickableProps(() => setExpanded((v) => !v))}
+        className="px-3 py-2.5 transition-colors rounded-t-xl"
       >
         <div className="flex items-center justify-between gap-2">
           {/* Left: checkbox + identity */}
@@ -220,10 +218,17 @@ function SchedulerOrderCard({
                 {daysLabel}
               </span>
             )}
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground/40 hover:text-foreground">
+            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground/40 hover:text-foreground cursor-pointer">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
-            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
+            <button
+              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/40 hover:text-foreground")}
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse garments" : "Expand garments"}
+            >
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
+            </button>
           </div>
         </div>
 

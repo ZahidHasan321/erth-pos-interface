@@ -33,12 +33,17 @@ import {
   Truck,
   CircleCheckBig,
   Users,
+  DollarSign,
   LogOut,
   LayoutDashboard,
   ChevronDown,
+  TrendingUp,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/auth";
+import { isAdmin } from "@/lib/rbac";
 
 interface WorkshopSidebarProps {
   onLogout: () => void;
@@ -48,6 +53,7 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
   const { data: counts } = useSidebarCounts();
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
+  const { user: authUser } = useAuth();
 
   // Auto-close sidebar on navigation on mobile/tablet
   useEffect(() => {
@@ -68,10 +74,16 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
     { label: "Production Tracker", icon: Activity,        href: "/assigned" },
   ];
 
+  const peopleItems = [
+    { label: "Team",        icon: Users,       href: "/team" },
+    { label: "Performance", icon: TrendingUp,  href: "/performance" },
+    ...(isAdmin(authUser) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
+  ];
+
   const postProductionItems = [
     { label: "Dispatch",        icon: Truck,            href: "/dispatch",   count: counts?.dispatch,   badgeColor: "bg-green-100 text-green-700" },
     { label: "Completed",       icon: CircleCheckBig,   href: "/completed" },
-    { label: "Resources",       icon: Users,            href: "/resources" },
+    { label: "Pricing",         icon: DollarSign,       href: "/pricing" },
   ];
 
   const terminalItems = [
@@ -184,6 +196,26 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           )}
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>People</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {peopleItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarSeparator />

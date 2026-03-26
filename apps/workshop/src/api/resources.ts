@@ -36,3 +36,33 @@ export const deleteResource = async (id: string): Promise<void> => {
   const { error } = await db.from('resources').delete().eq('id', id);
   if (error) throw new Error(error.message);
 };
+
+export interface ResourceWithUser extends Resource {
+  user: { id: string; name: string; email: string | null; role: string | null; department: string | null; is_active: boolean } | null;
+}
+
+export const getResourcesWithUsers = async (): Promise<ResourceWithUser[]> => {
+  const { data, error } = await db
+    .from('resources')
+    .select('*, user:users!user_id(id, name, email, role, department, is_active)')
+    .order('responsibility')
+    .order('resource_name');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ResourceWithUser[];
+};
+
+export const linkResourceToUser = async (resourceId: string, userId: string): Promise<void> => {
+  const { error } = await db
+    .from('resources')
+    .update({ user_id: userId })
+    .eq('id', resourceId);
+  if (error) throw new Error(error.message);
+};
+
+export const unlinkResourceFromUser = async (resourceId: string): Promise<void> => {
+  const { error } = await db
+    .from('resources')
+    .update({ user_id: null })
+    .eq('id', resourceId);
+  if (error) throw new Error(error.message);
+};

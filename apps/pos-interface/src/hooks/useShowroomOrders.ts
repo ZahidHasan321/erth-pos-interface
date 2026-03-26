@@ -151,7 +151,8 @@ export function useShowroomOrders() {
         .eq('brand', getBrand())
         .eq('checkout_status', 'confirmed')
         .eq('order_type', 'WORK')
-        .eq('workOrder.order_phase', 'in_progress');
+        .eq('workOrder.order_phase', 'in_progress')
+        .limit(1000);
 
       if (error) {
         throw new Error(`Failed to fetch showroom orders: ${error.message}`);

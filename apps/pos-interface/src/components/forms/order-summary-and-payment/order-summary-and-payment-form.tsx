@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { 
+import {
   CheckIcon,
   AlertCircle,
   CalendarDays,
@@ -9,7 +9,10 @@ import {
   Printer,
   X,
   Receipt,
-  Loader2
+  Loader2,
+  Shirt,
+  ShoppingBag,
+  FileText,
 } from "lucide-react";
 import React from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
@@ -101,6 +104,8 @@ interface OrderSummaryAndPaymentFormProps {
   isLoadingFatoura?: boolean;
   orderType?: "WORK" | "SALES";
   deliveryDate?: string | null;
+  /** When true, hides payment/discount controls and shows a confirmation-only summary (ERTH brand) */
+  cashierHandlesPayment?: boolean;
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -117,6 +122,7 @@ export function OrderSummaryAndPaymentForm({
   isLoadingFatoura,
   orderType,
   deliveryDate,
+  cashierHandlesPayment,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice } = usePricing();
@@ -284,8 +290,18 @@ export function OrderSummaryAndPaymentForm({
 
   const showAddressWarning = home_delivery && !hasAddress;
 
+  // For ERTH: ensure payment_type is set so schema validation passes
+  React.useEffect(() => {
+    if (cashierHandlesPayment) {
+      const currentType = form.getValues("payment_type");
+      if (!currentType) {
+        form.setValue("payment_type", "cash", { shouldDirty: false });
+      }
+    }
+  }, [cashierHandlesPayment, form]);
+
   const handleSubmit = (data: z.infer<typeof orderSchema>) => {
-    if (showAddressWarning) {
+    if (!cashierHandlesPayment && showAddressWarning) {
       toast.error("Address Required", {
         description: "Please add the customer's address in Demographics before selecting Home Delivery."
       });
@@ -305,6 +321,8 @@ export function OrderSummaryAndPaymentForm({
     }
   };
 
+  // Count garments and shelf items for ERTH summary
+  const garmentCount = fabricSelections.length;
   return (
     <Form {...form}>
       <form
@@ -314,15 +332,231 @@ export function OrderSummaryAndPaymentForm({
         <div className="flex justify-between items-start mb-2">
           <div className="space-y-1">
             <h1 className="text-lg font-bold text-foreground">
-              Review & Payment
+              {cashierHandlesPayment ? "Review & Confirm" : "Review & Payment"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Review your order, apply discounts, and select payment method
+              {cashierHandlesPayment
+                ? "Review your order details and confirm — payment will be handled at the cashier"
+                : "Review your order, apply discounts, and select payment method"}
             </p>
           </div>
         </div>
 
-        <motion.div 
+        {/* ── ERTH Confirmation Summary ─────────────────────────────────── */}
+        {cashierHandlesPayment ? (
+          <motion.div
+            variants={PAGE_VARIANTS}
+            initial="hidden"
+            animate="visible"
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* LEFT: Items list */}
+              <div className="space-y-3">
+                {/* Garments */}
+                {garmentCount > 0 && (
+                  <section className="bg-card rounded-xl border border-border shadow-sm p-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 mb-1.5">
+                      <Shirt className="w-4 h-4 text-muted-foreground" />
+                      Garments ({garmentCount})
+                    </h3>
+                    <div className="space-y-1">
+                      {fabricSelections.map((g, i) => (
+                        <div key={g.garment_id || i} className="flex items-center gap-2 text-xs p-2 rounded-md bg-muted/40">
+                          <span className={`font-semibold px-1.5 py-0.5 rounded text-[10px] ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                            {g.garment_type === "brova" ? "B" : "F"}
+                          </span>
+                          <span className="font-medium truncate flex-1">
+                            {invoiceData?.fabrics?.find(f => f.id === g.fabric_id)?.name || (g.fabric_source === "OUT" ? `External (${g.shop_name || "—"})` : `Fabric #${g.fabric_id || "—"}`)}
+                          </span>
+                          {g.express && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">Express</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Shelf Items */}
+                {invoiceData?.shelfProducts && invoiceData.shelfProducts.length > 0 && (
+                  <section className="bg-card rounded-xl border border-border shadow-sm p-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 mb-1.5">
+                      <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+                      Shelf Items ({invoiceData.shelfProducts.length})
+                    </h3>
+                    <div className="space-y-1">
+                      {invoiceData.shelfProducts.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs p-2 rounded-md bg-muted/40">
+                          <span className="font-medium">{p.product_type || `Item ${i + 1}`}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">x{p.quantity}</span>
+                            <span className="font-semibold tabular-nums">{((p.unit_price ?? 0) * (p.quantity ?? 0)).toFixed(3)} KWD</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Notes + Order Taker */}
+                <section className="bg-card rounded-xl border border-border shadow-sm p-3 space-y-2.5">
+                  <FormField
+                    control={form.control}
+                    name="order_taker_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-semibold">Order Taker</FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            placeholder="Select order taker..."
+                            disabled={isOrderClosed}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-semibold">Order Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Special instructions or internal notes..."
+                            className="min-h-[60px] resize-none"
+                            disabled={isOrderClosed}
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </section>
+              </div>
+
+              {/* RIGHT: Charges & Total */}
+              <div className="space-y-3">
+                <section className="bg-card rounded-xl border border-border shadow-sm p-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    Order Summary
+                  </h3>
+
+                  {deliveryDate && (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/40 mb-2">
+                      <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-xs text-muted-foreground">Delivery</span>
+                      <span className="text-xs font-semibold ml-auto tabular-nums">
+                        {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Charges */}
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-muted-foreground">Fabric</span>
+                      <span className="font-medium tabular-nums">{Number(fabric_charge || 0).toFixed(3)} KWD</span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-muted-foreground">Stitching</span>
+                      <span className="font-medium tabular-nums">{Number(stitching_charge || 0).toFixed(3)} KWD</span>
+                    </div>
+                    {Number(style_charge) > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Style</span>
+                        <span className="font-medium tabular-nums">{Number(style_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {Number(delivery_charge) > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Delivery</span>
+                        <span className="font-medium tabular-nums">{Number(delivery_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {Number(shelf_charge) > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Shelf</span>
+                        <span className="font-medium tabular-nums">{Number(shelf_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-border pt-2 mt-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-base font-bold">Order Total</span>
+                      <span className="text-xl font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Discounts & payment at the cashier
+                    </p>
+                  </div>
+                </section>
+
+                {/* Confirmed state */}
+                {isOrderClosed && _checkoutStatus === "confirmed" && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-700">Order Confirmed</p>
+                      <p className="text-xs text-emerald-600">
+                        {fatoura ? `Invoice #${fatoura}` : "Pending invoice number"} — proceed to cashier for payment
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3 pt-1">
+              {!isOrderClosed && (
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={form.formState.isSubmitting}
+                >
+                  {form.formState.isSubmitting ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <Check className="w-5 h-5 mr-2" />
+                  )}
+                  {form.formState.isSubmitting ? "Processing..." : "Confirm Order"}
+                </Button>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrint}
+                  disabled={!isOrderClosed || isLoadingFatoura}
+                  className="h-10"
+                >
+                  {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+                  Print Invoice
+                </Button>
+
+                {!isOrderClosed && (
+                  <Button type="button" variant="destructive" onClick={onCancel} className="h-10">
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel Order
+                  </Button>
+                )}
+              </div>
+            </div>
+
+          </motion.div>
+        ) : (
+        /* ── Standard Payment Flow (non-ERTH) ───────────────────────────── */
+        <motion.div
           variants={PAGE_VARIANTS}
           initial="hidden"
           animate="visible"
@@ -950,6 +1184,7 @@ export function OrderSummaryAndPaymentForm({
             )}
           </div>
         </motion.div>
+        )}
 
         {/* Hidden Invoice Component */}
         <div style={{ display: 'none' }}>

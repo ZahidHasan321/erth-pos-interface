@@ -20,15 +20,55 @@ function TabsList({
   className,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List>) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const indicatorRef = React.useRef<HTMLDivElement>(null)
+
+  const updateIndicator = React.useCallback(() => {
+    const list = ref.current
+    const indicator = indicatorRef.current
+    if (!list || !indicator) return
+
+    const active = list.querySelector<HTMLElement>('[data-state="active"]')
+    if (!active) {
+      indicator.style.opacity = "0"
+      return
+    }
+
+    const listRect = list.getBoundingClientRect()
+    const activeRect = active.getBoundingClientRect()
+
+    indicator.style.opacity = "1"
+    indicator.style.width = `${activeRect.width}px`
+    indicator.style.height = `${activeRect.height}px`
+    indicator.style.transform = `translateX(${activeRect.left - listRect.left - list.clientLeft}px)`
+  }, [])
+
+  React.useEffect(() => {
+    const list = ref.current
+    if (!list) return
+    updateIndicator()
+    const observer = new MutationObserver(updateIndicator)
+    observer.observe(list, { attributes: true, subtree: true, attributeFilter: ["data-state"] })
+    return () => observer.disconnect()
+  }, [updateIndicator])
+
   return (
     <TabsPrimitive.List
+      ref={ref}
       data-slot="tabs-list"
       className={cn(
-        "inline-flex h-10 w-full items-center gap-1 rounded-xl bg-muted p-1",
+        "relative inline-flex h-10 w-full items-center gap-1 rounded-xl bg-foreground/10 p-1",
         className
       )}
       {...props}
-    />
+    >
+      <div
+        ref={indicatorRef}
+        className="absolute top-1 left-0 rounded-lg bg-white shadow-sm border border-border transition-[transform,width,opacity] duration-250 ease-out pointer-events-none"
+        style={{ opacity: 0 }}
+      />
+      {props.children}
+    </TabsPrimitive.List>
   )
 }
 
@@ -40,11 +80,11 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5",
-        "text-sm font-semibold whitespace-nowrap transition-all",
+        "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5",
+        "text-sm font-semibold whitespace-nowrap transition-colors duration-200",
         "text-muted-foreground cursor-pointer",
-        "hover:text-foreground hover:bg-white/60",
-        "data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border",
+        "hover:text-foreground",
+        "data-[state=active]:text-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         "disabled:pointer-events-none disabled:opacity-50",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

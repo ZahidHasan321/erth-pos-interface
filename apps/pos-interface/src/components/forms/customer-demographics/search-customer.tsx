@@ -270,7 +270,7 @@ export function SearchCustomer({
               selectedCustomerId ? "text-primary" : "text-muted-foreground group-focus-within:text-primary"
             )} />
             <Input
-              placeholder="Search name, mobile, or nickname…"
+              placeholder="Search name, mobile, or nickname"
               value={searchValue}
               onChange={(e) => {
                 const newValue = e.target.value;
@@ -294,7 +294,7 @@ export function SearchCustomer({
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="p-1 hover:bg-muted rounded-full transition-colors"
+                  className="p-1.5 hover:bg-muted rounded-full transition-colors touch-manipulation active:scale-90"
                   aria-label="Clear search"
                 >
                   <X className="size-4 text-muted-foreground" />
@@ -346,7 +346,7 @@ export function SearchCustomer({
                               key={`recent-${customer.id}`}
                               value={customer.id.toString()}
                               onSelect={() => handleSelectCustomer(customer, true)}
-                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 active:scale-[0.99] active:bg-primary/10 touch-manipulation"
                             >
                                <div className="flex items-start gap-4">
                                 <div className="bg-muted p-2.5 rounded-full mt-0.5">
@@ -382,7 +382,7 @@ export function SearchCustomer({
                               key={customer.id}
                               value={customer.id.toString()}
                               onSelect={() => handleSelectCustomer(customer)}
-                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-none h-[76px]"
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 active:scale-[0.99] active:bg-primary/10 touch-manipulation"
                             >
                               <div className="flex items-start gap-4">
                                 <div className="bg-primary/10 p-2.5 rounded-full mt-0.5">

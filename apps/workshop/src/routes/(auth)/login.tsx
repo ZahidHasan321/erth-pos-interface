@@ -77,6 +77,29 @@ function LoginPage() {
               {loading ? "Signing in…" : "Sign In"}
             </Button>
           </form>
+
+          {/* Test credentials */}
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-2">Test Accounts (pw: 123)</p>
+            <div className="space-y-1">
+              {[
+                { user: "zahid", role: "Admin", dept: "Workshop" },
+                { user: "fahad", role: "Manager", dept: "Workshop" },
+                { user: "ahmed", role: "Staff", dept: "Shop" },
+                { user: "khalid", role: "Staff", dept: "Shop" },
+              ].map((a) => (
+                <button
+                  key={a.user}
+                  type="button"
+                  onClick={() => { setUsername(a.user); setPassword("123"); }}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs hover:bg-muted/50 transition-colors text-left"
+                >
+                  <span className="font-semibold">{a.user}</span>
+                  <span className="text-muted-foreground/50">{a.role} · {a.dept}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

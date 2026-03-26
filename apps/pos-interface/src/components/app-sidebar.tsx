@@ -300,6 +300,7 @@ export function AppSidebar({
 
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
+  const { isMobile } = useSidebar();
 
   return (
     <Sidebar {...props}>
@@ -400,14 +401,16 @@ export function AppSidebar({
               <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem className="hidden md:block">
-            <SidebarMenuButton asChild tooltip="Toggle Sidebar">
-              <SidebarTrigger>
-                <Menu className="h-4 w-4" aria-hidden="true" />
-                <span>Toggle Sidebar</span>
-              </SidebarTrigger>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {!isMobile && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Toggle Sidebar">
+                <SidebarTrigger>
+                  <Menu className="h-4 w-4" aria-hidden="true" />
+                  <span>Toggle Sidebar</span>
+                </SidebarTrigger>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />

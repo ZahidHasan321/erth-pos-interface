@@ -1,8 +1,8 @@
 import * as React from 'react';
+import { db } from '@/lib/db';
+import type { AuthUser } from '@/lib/rbac';
 
-export interface AuthUser {
-  username: string;
-}
+export type { AuthUser };
 
 export interface AuthContext {
   isAuthenticated: boolean;
@@ -17,7 +17,14 @@ const STORAGE_KEY = 'workshop.auth.user';
 
 function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as AuthUser) : null;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.id && parsed.username && parsed.role && parsed.department) return parsed as AuthUser;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function setStoredUser(user: AuthUser | null) {
@@ -33,17 +40,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = async (credentials: { username: string; password: string }) => {
-    await new Promise((r) => setTimeout(r, 300));
     if (credentials.password !== '123') {
       throw new Error('Invalid credentials');
     }
-    const newUser: AuthUser = { username: credentials.username };
+
+    // Look up user in the database by username
+    const { data, error } = await db
+      .from('users')
+      .select('id, username, name, role, department')
+      .ilike('username', credentials.username)
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      throw new Error('User not found. Ask an admin to create your account.');
+    }
+
+    const newUser: AuthUser = {
+      id: data.id,
+      username: data.name,
+      role: data.role ?? 'staff',
+      department: data.department ?? 'workshop',
+    };
     setStoredUser(newUser);
     setUser(newUser);
   };
 
   const logout = async () => {
-    await new Promise((r) => setTimeout(r, 200));
     setStoredUser(null);
     setUser(null);
   };

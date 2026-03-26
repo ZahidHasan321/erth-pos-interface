@@ -371,7 +371,8 @@ function AssignedPage() {
   const active = orderGroups.filter((og) =>
     og.garments.some((g) => {
       const so = STAGE_ORDER[g.piece_stage ?? ""] ?? 0;
-      return so >= 2 && so <= 7;
+      // Active = soaking (with start_time) through quality_check
+      return (so === 1 && g.start_time) || (so >= 2 && so <= 7);
     }),
   );
   const readyForDispatch = orderGroups.filter((og) =>

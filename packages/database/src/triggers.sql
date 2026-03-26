@@ -1,3 +1,13 @@
+-- 0a. Enable pg_trgm for fuzzy/trigram search (idempotent, available on Supabase)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- 0b. GIN trigram indexes for fast fuzzy customer search
+-- These allow indexed lookups for ILIKE '%term%' and similarity() queries.
+CREATE INDEX IF NOT EXISTS customers_name_trgm_idx ON customers USING GIN (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS customers_phone_trgm_idx ON customers USING GIN (phone gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS customers_arabic_name_trgm_idx ON customers USING GIN (arabic_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS customers_nick_name_trgm_idx ON customers USING GIN (nick_name gin_trgm_ops);
+
 -- 0. Cleanup old trigger and function
 DROP TRIGGER IF EXISTS trigger_assign_invoice ON orders;
 DROP FUNCTION IF EXISTS assign_invoice_number();
@@ -688,13 +698,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 13. RPC: Cashier dashboard summary (lightweight aggregates, no row transfer)
+-- Uses two sources: orders table for billing totals, payment_transactions for actual collections.
+-- "today_paid"/"month_paid" = paid-so-far on orders created in that period (order-centric).
+-- "today_collected"/"month_collected" = actual cash received in that period (cash-centric).
 CREATE OR REPLACE FUNCTION get_cashier_summary(p_brand TEXT, p_today DATE DEFAULT CURRENT_DATE)
 RETURNS JSONB AS $$
 DECLARE
   v_today DATE := p_today;
   v_month_start DATE := date_trunc('month', p_today)::date;
-  v_result JSONB;
+  v_order_stats JSONB;
+  v_tx_stats JSONB;
 BEGIN
+  -- 1. Order-level aggregates (billing, outstanding, counts)
   SELECT jsonb_build_object(
     'all_billed',       COALESCE(SUM(order_total::decimal), 0),
     'all_collected',    COALESCE(SUM(paid::decimal), 0),
@@ -712,10 +727,164 @@ BEGIN
     'sales_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES'), 0),
     'month_work_billed', COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK' AND order_date::date >= v_month_start), 0),
     'month_sales_billed',COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES' AND order_date::date >= v_month_start), 0)
-  ) INTO v_result
+  ) INTO v_order_stats
   FROM orders
-  WHERE brand = p_brand::brand AND checkout_status != 'draft';
+  WHERE brand = p_brand::brand AND checkout_status = 'confirmed';
+
+  -- 2. Transaction-level aggregates (actual cash received by date)
+  SELECT jsonb_build_object(
+    'today_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at::date = v_today AND pt.transaction_type = 'payment'), 0),
+    'today_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at::date = v_today AND pt.transaction_type = 'refund'), 0),
+    'month_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at::date >= v_month_start AND pt.transaction_type = 'payment'), 0),
+    'month_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at::date >= v_month_start AND pt.transaction_type = 'refund'), 0)
+  ) INTO v_tx_stats
+  FROM payment_transactions pt
+  JOIN orders o ON o.id = pt.order_id
+  WHERE o.brand = p_brand::brand AND o.checkout_status = 'confirmed';
+
+  RETURN v_order_stats || v_tx_stats;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 14. RPC: Get unpaid/paid order IDs (server-side column comparison)
+-- PostgREST can't compare two columns (order_total vs paid), so we do it here.
+CREATE OR REPLACE FUNCTION get_cashier_order_ids_by_payment(
+  p_brand TEXT,
+  p_filter TEXT,  -- 'unpaid' or 'paid'
+  p_limit INT DEFAULT 30
+)
+RETURNS SETOF INT AS $$
+BEGIN
+  IF p_filter = 'unpaid' THEN
+    RETURN QUERY
+      SELECT id FROM orders
+      WHERE brand = p_brand::brand
+        AND checkout_status = 'confirmed'
+        AND (order_total::decimal - COALESCE(paid::decimal, 0)) > 0.001
+      ORDER BY order_date DESC
+      LIMIT p_limit;
+  ELSIF p_filter = 'paid' THEN
+    RETURN QUERY
+      SELECT id FROM orders
+      WHERE brand = p_brand::brand
+        AND checkout_status = 'confirmed'
+        AND COALESCE(paid::decimal, 0) >= order_total::decimal
+      ORDER BY order_date DESC
+      LIMIT p_limit;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP FUNCTION IF EXISTS search_customers_fuzzy(TEXT, INT);
+-- 15. RPC: Fuzzy customer search using pg_trgm similarity
+-- Returns customers as JSONB array ranked by best match across name, phone, arabic_name, nick_name.
+-- Uses trigram similarity for typo tolerance + ILIKE as fallback for substring matches.
+-- Always returns a bounded result set (p_limit, default 15).
+CREATE OR REPLACE FUNCTION search_customers_fuzzy(
+  p_query TEXT,
+  p_limit INT DEFAULT 15
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_query TEXT := LOWER(TRIM(p_query));
+  v_result JSONB;
+BEGIN
+  IF LENGTH(v_query) < 1 THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  -- Set similarity threshold (lower = more fuzzy, default 0.3)
+  PERFORM set_config('pg_trgm.similarity_threshold', '0.15', TRUE);
+
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_result
+  FROM (
+    SELECT c.*,
+      GREATEST(
+        COALESCE(similarity(LOWER(c.name), v_query), 0),
+        COALESCE(similarity(LOWER(c.phone), v_query), 0),
+        COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
+        COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
+      ) AS match_score
+    FROM customers c
+    WHERE
+      LOWER(c.name) % v_query
+      OR LOWER(c.phone) % v_query
+      OR LOWER(c.arabic_name) % v_query
+      OR LOWER(c.nick_name) % v_query
+      OR c.name ILIKE '%' || v_query || '%'
+      OR c.phone ILIKE '%' || v_query || '%'
+      OR c.arabic_name ILIKE '%' || v_query || '%'
+      OR c.nick_name ILIKE '%' || v_query || '%'
+    ORDER BY match_score DESC, c.name ASC
+    LIMIT p_limit
+  ) sub;
 
   RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 16. RPC: Paginated customer search with fuzzy matching
+-- Used by the customers list page. Returns page of results + total count.
+CREATE OR REPLACE FUNCTION search_customers_paginated(
+  p_query TEXT DEFAULT NULL,
+  p_page INT DEFAULT 1,
+  p_page_size INT DEFAULT 20
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_query TEXT := LOWER(TRIM(COALESCE(p_query, '')));
+  v_offset INT := (p_page - 1) * p_page_size;
+  v_data JSONB;
+  v_count BIGINT;
+BEGIN
+  IF v_query = '' THEN
+    -- No search: return paginated list ordered by phone
+    SELECT COUNT(*) INTO v_count FROM customers;
+
+    SELECT COALESCE(jsonb_agg(row_to_json(c.*)), '[]'::jsonb) INTO v_data
+    FROM (
+      SELECT * FROM customers
+      ORDER BY phone ASC, account_type ASC, created_at DESC
+      OFFSET v_offset LIMIT p_page_size
+    ) c;
+  ELSE
+    -- Fuzzy search with count
+    PERFORM set_config('pg_trgm.similarity_threshold', '0.15', TRUE);
+
+    SELECT COUNT(*) INTO v_count
+    FROM customers c
+    WHERE LOWER(c.name) % v_query
+      OR LOWER(c.phone) % v_query
+      OR LOWER(c.arabic_name) % v_query
+      OR LOWER(c.nick_name) % v_query
+      OR c.name ILIKE '%' || v_query || '%'
+      OR c.phone ILIKE '%' || v_query || '%'
+      OR c.arabic_name ILIKE '%' || v_query || '%'
+      OR c.nick_name ILIKE '%' || v_query || '%';
+
+    SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_data
+    FROM (
+      SELECT c.*,
+        GREATEST(
+          COALESCE(similarity(LOWER(c.name), v_query), 0),
+          COALESCE(similarity(LOWER(c.phone), v_query), 0),
+          COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
+          COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
+        ) AS match_score
+      FROM customers c
+      WHERE LOWER(c.name) % v_query
+        OR LOWER(c.phone) % v_query
+        OR LOWER(c.arabic_name) % v_query
+        OR LOWER(c.nick_name) % v_query
+        OR c.name ILIKE '%' || v_query || '%'
+        OR c.phone ILIKE '%' || v_query || '%'
+        OR c.arabic_name ILIKE '%' || v_query || '%'
+        OR c.nick_name ILIKE '%' || v_query || '%'
+      ORDER BY match_score DESC, c.name ASC
+      OFFSET v_offset LIMIT p_page_size
+    ) sub;
+  END IF;
+
+  RETURN jsonb_build_object('data', v_data, 'count', v_count);
 END;
 $$ LANGUAGE plpgsql;

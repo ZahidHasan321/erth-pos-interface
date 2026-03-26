@@ -4,12 +4,12 @@ import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useDispatchGarments } from "@/hooks/useGarmentMutations";
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
-import { PageHeader, StatsCard, EmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Truck, Package, ArrowRightLeft } from "lucide-react";
+import { Truck, Package } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/dispatch")({
   component: DispatchPage,
@@ -22,8 +22,8 @@ function DispatchPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const dispatchMut = useDispatchGarments();
 
-  // Ready garments at workshop — includes accepted/completed garments that ended up back here
-  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed", "completed", "ready_for_pickup"]);
+  // Ready garments at workshop — ready_for_dispatch (passed QC) or brova_trialed (accepted, returning with order)
+  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed"]);
   const readyGarments = useMemo(
     () => allGarments
       .filter((g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""))
@@ -77,11 +77,6 @@ function DispatchPage() {
         title="Dispatch"
         subtitle={`${readyGarments.length} garment${readyGarments.length !== 1 ? "s" : ""} ready for dispatch`}
       />
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <StatsCard icon={Package} value={readyGarments.length} label="Ready" color="green" />
-        <StatsCard icon={ArrowRightLeft} value={inTransitGarments.length} label="In Transit" color="blue" dimOnZero />
-      </div>
 
       <Tabs defaultValue="ready">
         <TabsList className="mb-3 flex-nowrap overflow-x-auto">

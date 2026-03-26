@@ -5,14 +5,14 @@ import type { Shelf } from '@repo/database';
 const TABLE_NAME = 'shelf';
 
 export const getShelf = async (): Promise<ApiResponse<Shelf[]>> => {
-  const { data, error, count } = await db
+  const { data, error } = await db
     .from(TABLE_NAME)
-    .select('*', { count: 'exact' });
+    .select('*');
 
   if (error) {
-    return { status: 'error', message: error.message, data: [], count: 0 };
+    return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as Shelf[], count: count || 0 };
+  return { status: 'success', data: data as Shelf[] };
 };
 
 export const updateShelf = async (

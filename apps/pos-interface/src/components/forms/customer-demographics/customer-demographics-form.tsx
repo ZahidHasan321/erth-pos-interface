@@ -1,7 +1,6 @@
 import { debounce, cn } from "@/lib/utils";
 import { searchPrimaryAccountByPhone, updateCustomer, createCustomer } from "@/api/customers";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -318,12 +317,6 @@ export function CustomerDemographicsForm({
               <h1 className="text-lg font-bold text-transparent bg-linear-to-r from-primary to-secondary bg-clip-text">
                 {header}
               </h1>
-              {id && isOrderClosed && (
-                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 animate-in fade-in zoom-in duration-300">
-                  <Check className="size-3 mr-1" />
-                  Profile Loaded
-                </Badge>
-              )}
             </div>
             <p className="text-sm text-muted-foreground">{subheader}</p>
           </div>
@@ -355,47 +348,6 @@ export function CustomerDemographicsForm({
                     <FormControl>
                       <Input
                         placeholder="Enter full name (e.g., Nasser Al-Sabah)"
-                        {...field}
-                        className="bg-background border-border/60"
-                        readOnly={isReadOnly}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={<div>Arabic name field crashed</div>}>
-              <FormField
-                control={form.control}
-                name="arabic_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-medium">Arabic Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="أدخل الاسم بالعربي"
-                        {...field}
-                        className="bg-background border-border/60"
-                        readOnly={isReadOnly}
-                        dir="rtl"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={<div>Email field crashed</div>}>
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-medium">E-mail</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Enter email (e.g., nasser@erth.com)"
                         {...field}
                         className="bg-background border-border/60"
                         readOnly={isReadOnly}
@@ -530,6 +482,56 @@ export function CustomerDemographicsForm({
                 )}
               />
             </ErrorBoundary>
+            <ErrorBoundary fallback={<div>Nationality crashed</div>}>
+              <FormField
+                control={form.control}
+                name="nationality"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormLabel className="font-semibold">
+                      <span className="text-destructive">*</span> Nationality
+                    </FormLabel>
+                    <Combobox
+                      disabled={isReadOnly}
+                      options={countries.map((country) => ({
+                        value: country.name,
+                        label: country.name,
+                        node: (
+                          <span className="flex items-center gap-2">
+                            <FlagIcon code={country.code} />
+                            {country.name}
+                          </span>
+                        ),
+                      }))}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Select nationality"
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </ErrorBoundary>
+            <ErrorBoundary fallback={<div>Email field crashed</div>}>
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-medium">E-mail</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter email (e.g., nasser@erth.com)"
+                        {...field}
+                        className="bg-background border-border/60"
+                        readOnly={isReadOnly}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </ErrorBoundary>
             <ErrorBoundary
               fallback={<div>Alternative mobile number crashed</div>}
             >
@@ -613,6 +615,27 @@ export function CustomerDemographicsForm({
                 Personal Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ErrorBoundary fallback={<div>Arabic name field crashed</div>}>
+                  <FormField
+                    control={form.control}
+                    name="arabic_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">Arabic Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="أدخل الاسم بالعربي"
+                            {...field}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                            dir="rtl"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </ErrorBoundary>
                 <ErrorBoundary fallback={<div>Arabic nickname crashed</div>}>
                   <FormField
                     control={form.control}
@@ -631,36 +654,6 @@ export function CustomerDemographicsForm({
                             dir="rtl"
                           />
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </ErrorBoundary>
-                <ErrorBoundary fallback={<div>Nationality crashed</div>}>
-                  <FormField
-                    control={form.control}
-                    name="nationality"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <FormLabel className="font-semibold">
-                          <span className="text-destructive">*</span> Nationality
-                        </FormLabel>
-                        <Combobox
-                          disabled={isReadOnly}
-                          options={countries.map((country) => ({
-                            value: country.name,
-                            label: country.name,
-                            node: (
-                              <span className="flex items-center gap-2">
-                                <FlagIcon code={country.code} />
-                                {country.name}
-                              </span>
-                            ),
-                          }))}
-                          value={field.value || ""}
-                          onChange={field.onChange}
-                          placeholder="Select nationality"
-                        />
                         <FormMessage />
                       </FormItem>
                     )}

@@ -117,12 +117,11 @@ export function useToggleHomeDeliveryMutation() {
 
     return useMutation({
         mutationFn: toggleHomeDelivery,
-        onSuccess: (response, variables) => {
+        onSuccess: (response) => {
             if (response.status === "error") {
                 toast.error(`Failed to update delivery type: ${response.message}`);
                 return;
             }
-            toast.success(variables.homeDelivery ? "Switched to home delivery" : "Switched to pickup");
             invalidateCashierQueries(queryClient);
         },
         onError: (error) => {

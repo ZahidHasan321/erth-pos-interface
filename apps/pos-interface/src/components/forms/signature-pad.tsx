@@ -95,7 +95,7 @@ export function SignaturePad({ onSave }: SignaturePadProps) {
               }}
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="flex-row justify-between sm:justify-between">
             <Button type="button" variant="outline" onClick={clear}>
               Clear
             </Button>

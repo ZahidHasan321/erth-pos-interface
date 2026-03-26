@@ -1,6 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
+import { sanitizeFilterValue } from "@/lib/utils";
 
 export type OrderHistoryItem = {
   id: number;
@@ -96,26 +97,30 @@ export function useOrderHistory({
       }
 
       if (searchTerm) {
-        const term = searchTerm.toLowerCase().trim();
+        const term = sanitizeFilterValue(searchTerm.toLowerCase().trim());
         if (term.startsWith('#')) {
           const idQuery = term.slice(1);
           if (idQuery && !isNaN(parseInt(idQuery))) {
             query = query.or(`id.eq.${idQuery},workOrder.invoice_number.eq.${idQuery}`);
           }
-        } else {
-          // Complex OR condition across joined table
-          const orConditions = [
-            `customer.name.ilike.%${term}%`,
-            `customer.phone.ilike.%${term}%`,
-            `customer.nick_name.ilike.%${term}%`
-          ];
-          
-          if (!isNaN(parseInt(term))) {
-            orConditions.push(`id.eq.${term}`);
-            orConditions.push(`workOrder.invoice_number.eq.${term}`);
+        } else if (term) {
+          // Use fuzzy search RPC to find matching customer IDs, then filter orders
+          const { data: fuzzyCustomers } = await db.rpc('search_customers_fuzzy', {
+            p_query: term,
+            p_limit: 50,
+          });
+          const customerIds = (fuzzyCustomers || []).map((c: any) => c.id);
+
+          if (!isNaN(parseInt(term)) && customerIds.length > 0) {
+            query = query.or(`id.eq.${term},workOrder.invoice_number.eq.${term},customer_id.in.(${customerIds.join(',')})`);
+          } else if (!isNaN(parseInt(term))) {
+            query = query.or(`id.eq.${term},workOrder.invoice_number.eq.${term}`);
+          } else if (customerIds.length > 0) {
+            query = query.in('customer_id', customerIds);
+          } else {
+            // No matching customers and not a number — return empty
+            return { items: [], totalCount: 0 };
           }
-          
-          query = query.or(orConditions.join(','));
         }
       }
 

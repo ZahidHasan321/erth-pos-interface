@@ -11,9 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as mainRouteRouteImport } from './routes/(main)/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as mainUsersRouteImport } from './routes/(main)/users'
+import { Route as mainTeamRouteImport } from './routes/(main)/team'
 import { Route as mainSchedulerRouteImport } from './routes/(main)/scheduler'
-import { Route as mainResourcesRouteImport } from './routes/(main)/resources'
 import { Route as mainReceivingRouteImport } from './routes/(main)/receiving'
+import { Route as mainPricingRouteImport } from './routes/(main)/pricing'
+import { Route as mainPerformanceRouteImport } from './routes/(main)/performance'
 import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
@@ -41,19 +44,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const mainUsersRoute = mainUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainTeamRoute = mainTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainSchedulerRoute = mainSchedulerRouteImport.update({
   id: '/scheduler',
   path: '/scheduler',
   getParentRoute: () => mainRouteRoute,
 } as any)
-const mainResourcesRoute = mainResourcesRouteImport.update({
-  id: '/resources',
-  path: '/resources',
-  getParentRoute: () => mainRouteRoute,
-} as any)
 const mainReceivingRoute = mainReceivingRouteImport.update({
   id: '/receiving',
   path: '/receiving',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainPricingRoute = mainPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainPerformanceRoute = mainPerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainParkingRoute = mainParkingRouteImport.update({
@@ -154,9 +172,12 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
+  '/performance': typeof mainPerformanceRoute
+  '/pricing': typeof mainPricingRoute
   '/receiving': typeof mainReceivingRoute
-  '/resources': typeof mainResourcesRoute
   '/scheduler': typeof mainSchedulerRoute
+  '/team': typeof mainTeamRoute
+  '/users': typeof mainUsersRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -176,9 +197,12 @@ export interface FileRoutesByTo {
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
+  '/performance': typeof mainPerformanceRoute
+  '/pricing': typeof mainPricingRoute
   '/receiving': typeof mainReceivingRoute
-  '/resources': typeof mainResourcesRoute
   '/scheduler': typeof mainSchedulerRoute
+  '/team': typeof mainTeamRoute
+  '/users': typeof mainUsersRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -201,9 +225,12 @@ export interface FileRoutesById {
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/parking': typeof mainParkingRoute
+  '/(main)/performance': typeof mainPerformanceRoute
+  '/(main)/pricing': typeof mainPricingRoute
   '/(main)/receiving': typeof mainReceivingRoute
-  '/(main)/resources': typeof mainResourcesRoute
   '/(main)/scheduler': typeof mainSchedulerRoute
+  '/(main)/team': typeof mainTeamRoute
+  '/(main)/users': typeof mainUsersRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -226,9 +253,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dispatch'
     | '/parking'
+    | '/performance'
+    | '/pricing'
     | '/receiving'
-    | '/resources'
     | '/scheduler'
+    | '/team'
+    | '/users'
     | '/assigned/$orderId'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -248,9 +278,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dispatch'
     | '/parking'
+    | '/performance'
+    | '/pricing'
     | '/receiving'
-    | '/resources'
     | '/scheduler'
+    | '/team'
+    | '/users'
     | '/assigned/$orderId'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -272,9 +305,12 @@ export interface FileRouteTypes {
     | '/(main)/dashboard'
     | '/(main)/dispatch'
     | '/(main)/parking'
+    | '/(main)/performance'
+    | '/(main)/pricing'
     | '/(main)/receiving'
-    | '/(main)/resources'
     | '/(main)/scheduler'
+    | '/(main)/team'
+    | '/(main)/users'
     | '/(main)/assigned/$orderId'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
@@ -310,6 +346,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(main)/users': {
+      id: '/(main)/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof mainUsersRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/team': {
+      id: '/(main)/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof mainTeamRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/scheduler': {
       id: '/(main)/scheduler'
       path: '/scheduler'
@@ -317,18 +367,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainSchedulerRouteImport
       parentRoute: typeof mainRouteRoute
     }
-    '/(main)/resources': {
-      id: '/(main)/resources'
-      path: '/resources'
-      fullPath: '/resources'
-      preLoaderRoute: typeof mainResourcesRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
     '/(main)/receiving': {
       id: '/(main)/receiving'
       path: '/receiving'
       fullPath: '/receiving'
       preLoaderRoute: typeof mainReceivingRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/pricing': {
+      id: '/(main)/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof mainPricingRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/performance': {
+      id: '/(main)/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof mainPerformanceRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/parking': {
@@ -474,9 +531,12 @@ interface mainRouteRouteChildren {
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
   mainParkingRoute: typeof mainParkingRoute
+  mainPerformanceRoute: typeof mainPerformanceRoute
+  mainPricingRoute: typeof mainPricingRoute
   mainReceivingRoute: typeof mainReceivingRoute
-  mainResourcesRoute: typeof mainResourcesRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
+  mainTeamRoute: typeof mainTeamRoute
+  mainUsersRoute: typeof mainUsersRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
   mainTerminalsIroningRoute: typeof mainTerminalsIroningRoute
@@ -493,9 +553,12 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
   mainParkingRoute: mainParkingRoute,
+  mainPerformanceRoute: mainPerformanceRoute,
+  mainPricingRoute: mainPricingRoute,
   mainReceivingRoute: mainReceivingRoute,
-  mainResourcesRoute: mainResourcesRoute,
   mainSchedulerRoute: mainSchedulerRoute,
+  mainTeamRoute: mainTeamRoute,
+  mainUsersRoute: mainUsersRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,
   mainTerminalsIroningRoute: mainTerminalsIroningRoute,

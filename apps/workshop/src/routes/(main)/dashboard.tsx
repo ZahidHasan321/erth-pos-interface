@@ -68,7 +68,9 @@ function DashboardPage() {
         g.piece_stage === "waiting_cut"
     );
     const qcReturns = allGarments.filter(
-      (g) => g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo"
+      (g) =>
+        (g.location === "workshop" || g.location === "transit_to_workshop") &&
+        (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo")
     );
     const readyToDispatch = allGarments.filter(
       (g) => g.piece_stage === "ready_for_dispatch"
@@ -393,7 +395,7 @@ function DashboardPage() {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Production pipeline — from actual garment stages */}
-        <div className="lg:col-span-2 bg-card border rounded-xl p-4 shadow-sm">
+        <div className="lg:col-span-2 bg-[#F9F9FA] rounded-xl p-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
             Production Pipeline
           </h2>
@@ -425,7 +427,7 @@ function DashboardPage() {
         </div>
 
         {/* Delivery urgency — orders by due date */}
-        <div className="bg-card border rounded-xl p-4 shadow-sm">
+        <div className="bg-[#F9F9FA] rounded-xl p-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
             Delivery Urgency
           </h2>
@@ -467,7 +469,7 @@ function DashboardPage() {
 
       {/* Top 5 Busiest Workers */}
       {!isLoading && topWorkersData.length > 0 && (
-        <div className="bg-card border rounded-xl p-4 shadow-sm mb-4">
+        <div className="bg-[#F9F9FA] rounded-xl p-4 mb-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
             <Users className="w-4 h-4" aria-hidden="true" /> Busiest Workers
           </h2>

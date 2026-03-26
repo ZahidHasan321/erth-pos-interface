@@ -19,8 +19,8 @@ import { format, addDays, startOfDay, endOfDay, isToday, isTomorrow } from "date
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getOrdersList } from "@/api/orders";
-import { getCustomers } from "@/api/customers";
+import { getDashboardOrders } from "@/api/orders";
+import { getCustomerCount } from "@/api/customers";
 import { cn } from "@/lib/utils";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
@@ -38,51 +38,46 @@ function DashboardPage() {
 
   const { data: ordersRes, isLoading: isLoadingOrders } = useQuery({
     queryKey: ["dashboard-orders"],
-    queryFn: () => getOrdersList({}),
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60 * 24,
+    queryFn: () => getDashboardOrders(),
+    staleTime: 1000 * 60 * 5, // 5 min — dashboard should refresh reasonably
+    gcTime: 1000 * 60 * 60,
   });
 
-  const { data: customersRes, isLoading: isLoadingCustomers } = useQuery({
+  const { data: customerCount, isLoading: isLoadingCustomers } = useQuery({
     queryKey: ["dashboard-customers"],
-    queryFn: () => getCustomers(),
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60 * 24,
+    queryFn: () => getCustomerCount(),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 60,
   });
 
   const orders = ordersRes?.data || [];
-  const customers = customersRes?.data || [];
 
   const today = startOfDay(new Date());
   const sevenDaysFromNow = endOfDay(addDays(new Date(), 7));
 
+  // All orders from getDashboardOrders are already checkout_status='confirmed'
   const stats = {
-    totalCustomers: customers.length,
-    confirmedOrders: orders.filter(o => o.checkout_status === 'confirmed').length,
-    activeOrders: orders.filter(o => o.checkout_status === 'confirmed' && o.order_phase === 'in_progress').length,
+    totalCustomers: customerCount || 0,
+    confirmedOrders: orders.length,
+    activeOrders: orders.filter(o => o.order_phase === 'in_progress').length,
     completedOrders: orders.filter(o => o.order_phase === 'completed').length,
     upcomingDeliveries: orders.filter(o => {
-      if (!o.delivery_date || o.checkout_status !== 'confirmed') return false;
-      if (o.order_phase === 'completed') return false;
+      if (!o.delivery_date || o.order_phase === 'completed') return false;
       const deliveryDate = new Date(o.delivery_date);
       return deliveryDate >= today && deliveryDate <= sevenDaysFromNow;
     }),
     todayDeliveries: orders.filter(o => {
-      if (!o.delivery_date || o.checkout_status !== 'confirmed') return false;
-      if (o.order_phase === 'completed') return false;
+      if (!o.delivery_date || o.order_phase === 'completed') return false;
       const deliveryDate = new Date(o.delivery_date);
       return deliveryDate >= today && deliveryDate <= endOfDay(today);
     }),
     readyForPickup: orders.filter(o => {
-      if (o.checkout_status !== 'confirmed') return false;
       return getShowroomStatus(o.garments || []).label === "ready_for_pickup";
     }),
     brovaTrials: orders.filter(o => {
-      if (o.checkout_status !== 'confirmed') return false;
       return getShowroomStatus(o.garments || []).label === "brova_trial";
     }),
     needsAction: orders.filter(o => {
-      if (o.checkout_status !== 'confirmed') return false;
       return o.garments?.some((g: any) => (g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo') && g.location === 'shop');
     }),
   };

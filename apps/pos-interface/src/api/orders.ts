@@ -47,23 +47,23 @@ const FILTER_MAP: Record<string, string> = {
 };
 
 export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
-    const { data, error, count } = await db
+    const { data, error } = await db
         .from(TABLE_NAME)
-        .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
+        .select('*, workOrder:work_orders!order_id(*)')
         .eq('brand', getBrand());
 
     if (error) {
         console.error('Error fetching orders:', error);
-        return { status: 'error', message: error.message, data: [], count: 0 };
+        return { status: 'error', message: error.message, data: [] };
     }
-    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+    return { status: 'success', data: flattenOrder(data) };
 };
 
 export const searchOrders = async (
     query: Record<string, any>,
 ): Promise<ApiResponse<Order[]>> => {
     let builder = db.from(TABLE_NAME)
-        .select('*, workOrder:work_orders!order_id(*)', { count: 'exact' })
+        .select('*, workOrder:work_orders!order_id(*)')
         .eq('brand', getBrand());
 
     Object.entries(query).forEach(([key, value]) => {
@@ -73,12 +73,12 @@ export const searchOrders = async (
         }
     });
 
-    const { data, error, count } = await builder;
+    const { data, error } = await builder.limit(500);
 
     if (error) {
-        return { status: 'error', message: error.message, data: [], count: 0 };
+        return { status: 'error', message: error.message, data: [] };
     }
-    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+    return { status: 'success', data: flattenOrder(data) };
 };
 
 const ORDER_DETAILS_QUERY = `
@@ -161,10 +161,12 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
         `)
         .eq('id', idOrInvoice)
         .eq('brand', getBrand())
+        .eq('order_type', 'WORK')
+        .eq('checkout_status', 'confirmed')
         .maybeSingle();
-    
+
     if (resId) return { status: 'success', data: flattenOrder(resId) };
-    
+
     // 2. Try by Invoice Number
     const { data: resInv } = await db.from(TABLE_NAME)
         .select(`
@@ -175,10 +177,12 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
         `)
         .eq('workOrder.invoice_number', idOrInvoice)
         .eq('brand', getBrand())
+        .eq('order_type', 'WORK')
+        .eq('checkout_status', 'confirmed')
         .maybeSingle();
-        
+
     if (resInv) return { status: 'success', data: flattenOrder(resInv) };
-    
+
     return { status: 'error', message: "Order not found" };
 };
 
@@ -196,7 +200,8 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
             `, { count: 'exact' })
             .eq('garments.location', 'transit_to_shop')
             .eq('brand', getBrand())
-            .eq('checkout_status', 'confirmed');
+            .eq('checkout_status', 'confirmed')
+            .limit(500);
 
     if (error) {
         console.error('Error fetching dispatched orders:', error);
@@ -409,11 +414,35 @@ export const getOrdersList = async (filters: Record<string, any>): Promise<ApiRe
         }
     });
 
-    const { data, error } = await builder;
+    const { data, error } = await builder.limit(2000);
     if (error) return { status: 'error', message: error.message, data: [] };
     return { status: 'success', data: flattenOrder(data) };
 };
 
+
+/**
+ * Lightweight query for dashboard stats. Only fetches confirmed orders
+ * with minimal columns needed for stat computation. No fabric joins.
+ */
+export const getDashboardOrders = async (): Promise<ApiResponse<Order[]>> => {
+    const { data, error } = await db
+        .from(TABLE_NAME)
+        .select(`
+            id, checkout_status, order_type, order_date, paid, order_total, discount_value,
+            workOrder:work_orders!order_id(order_phase, delivery_date),
+            customer:customers(id, name),
+            garments:garments(piece_stage, location, garment_type, feedback_status, acceptance_status, trip_number)
+        `)
+        .eq('brand', getBrand())
+        .eq('checkout_status', 'confirmed')
+        .limit(2000);
+
+    if (error) {
+        console.error('Error fetching dashboard orders:', error);
+        return { status: 'error', message: error.message, data: [] };
+    }
+    return { status: 'success', data: flattenOrder(data) };
+};
 
 export const completeWorkOrder = async (
     orderId: number,
@@ -576,7 +605,8 @@ export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
             customer:customers!customer_id(*)
         `)
         .not('workOrder.linked_order_id', 'is', null)
-        .eq('brand', getBrand());
+        .eq('brand', getBrand())
+        .limit(500);
 
     if (error) {
         console.error('Error fetching linked orders:', error);
