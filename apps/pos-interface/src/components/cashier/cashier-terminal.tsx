@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import {
     Search, User, Receipt, Package, CreditCard,
     CheckCircle2, XCircle, Shirt, Tag, ArrowLeft, Clock, Loader2,
-    MapPin, Pencil, Truck, Store,
+    MapPin, Truck, Hash, CalendarDays,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,14 @@ import { PaymentHistory } from "@/components/cashier/payment-history";
 import { PaymentSummary } from "@/components/cashier/payment-summary";
 import { DiscountControls } from "@/components/cashier/discount-controls";
 import { GarmentCollection } from "@/components/cashier/garment-collection";
-import { AddressDialog } from "@/components/cashier/address-dialog";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
+import { updateCustomer } from "@/api/customers";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import HomeDeliveryIcon from "@/assets/home_delivery.png";
+import PickUpIcon from "@/assets/pickup.png";
 
 const PAGE_SIZE = 15;
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
@@ -61,24 +67,41 @@ if (typeof document !== "undefined" && !document.getElementById(CASHIER_KEYFRAME
             from { opacity: 0; transform: translateY(8px); }
             to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes cashier-new-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
     `;
     document.head.appendChild(style);
 }
 
 // ── Order List Row ──────────────────────────────────────────────────────────
+/** Check if an order was confirmed recently (within minutes) and hasn't been paid yet */
+function isNewUnprocessed(item: CashierOrderListItem, withinMinutes = 10): boolean {
+    if (item.checkout_status !== "confirmed") return false;
+    if (item.paid > 0) return false;
+    if (!item.order_date) return false;
+    const orderTime = new Date(item.order_date).getTime();
+    const cutoff = Date.now() - withinMinutes * 60 * 1000;
+    return orderTime >= cutoff;
+}
+
 function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; onSelect: (id: string) => void; isSelected?: boolean }) {
     const remaining = item.order_total - item.paid;
     const isPaid = remaining <= 0;
     const isCancelled = item.checkout_status === "cancelled";
     const hasReady = item.garment_ready > 0;
+    const isNew = isNewUnprocessed(item);
 
     const rowBg = isSelected
         ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-        : isCancelled
-            ? "bg-red-50 border-red-300 hover:bg-red-100"
-            : isPaid
-                ? "bg-emerald-50 border-emerald-300 hover:bg-emerald-100"
-                : "bg-amber-50 border-amber-300 hover:bg-amber-100 hover:shadow-sm";
+        : isNew
+            ? "bg-violet-50 border-violet-400 hover:bg-violet-100 hover:shadow-sm"
+            : isCancelled
+                ? "bg-red-50 border-red-300 hover:bg-red-100"
+                : isPaid
+                    ? "bg-emerald-50 border-emerald-300 hover:bg-emerald-100"
+                    : "bg-amber-50 border-amber-300 hover:bg-amber-100 hover:shadow-sm";
 
     const phaseColors: Record<string, string> = {
         new: "bg-sky-100 text-sky-700",
@@ -93,11 +116,19 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
         <button
             type="button"
             onClick={() => onSelect(String(item.id))}
-            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-colors cursor-pointer active:scale-[0.99] ${rowBg}`}
+            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-all duration-150 cursor-pointer active:scale-[0.99] ${rowBg}`}
         >
             {/* Top row: ID, customer, amount */}
             <div className="flex items-center gap-3">
-                <div className={`w-1.5 h-10 rounded-full shrink-0 ${isPaid ? "bg-emerald-500" : isCancelled ? "bg-red-400" : "bg-amber-400"}`} />
+                <div className="relative shrink-0">
+                    <div className={`w-1.5 h-10 rounded-full ${isNew ? "bg-violet-500" : isPaid ? "bg-emerald-500" : isCancelled ? "bg-red-400" : "bg-amber-400"}`} />
+                    {isNew && (
+                        <span
+                            className="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-violet-500 border-2 border-violet-50"
+                            style={{ animation: "cashier-new-pulse 1.5s ease-in-out infinite" }}
+                        />
+                    )}
+                </div>
                 <div className="w-16 shrink-0">
                     <span className="font-bold text-sm tabular-nums">#{item.id}</span>
                     {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}</p>}
@@ -115,6 +146,11 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
             </div>
             {/* Bottom row: badges and dates */}
             <div className="flex items-center gap-2 mt-2 ml-[28px]">
+                {isNew && (
+                    <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded bg-violet-500 text-white shrink-0">
+                        New
+                    </span>
+                )}
                 {item.order_phase && (
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded shrink-0 ${phaseColors[item.order_phase] || "bg-muted text-muted-foreground"}`}>
                         {ORDER_PHASE_LABELS[item.order_phase as keyof typeof ORDER_PHASE_LABELS] || item.order_phase}
@@ -269,154 +305,107 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
     const now = new Date();
     const monthName = now.toLocaleDateString("en-US", { month: "long" });
 
-    const allBilled = Number(summary.all_billed);
-    const allCollected = Number(summary.all_collected);
-    const totalUnpaidAmount = Number(summary.all_outstanding);
+    const todayCount = Number(summary.today_count);
+    const todayBilled = Number(summary.today_billed);
+    // Use actual cash collected today (from payment_transactions), fall back to order-based
+    const todayPaid = Number(summary.today_collected ?? summary.today_paid);
+    const todayDue = Math.max(0, todayBilled - Number(summary.today_paid));
+    const todayCollectionRate = todayBilled > 0 ? Math.round((Number(summary.today_paid) / todayBilled) * 100) : 0;
+
     const monthTotal = Number(summary.month_billed);
-    const monthPaid = Number(summary.month_paid);
+    // Use actual cash collected this month (from payment_transactions), fall back to order-based
+    const monthPaid = Number(summary.month_collected ?? summary.month_paid);
     const monthOutstanding = Number(summary.month_outstanding);
-    const collectionRate = monthTotal > 0 ? Math.round((monthPaid / monthTotal) * 100) : 0;
-    const workBilled = Number(summary.work_billed);
-    const salesBilled = Number(summary.sales_billed);
-    const monthWorkBilled = Number(summary.month_work_billed);
-    const monthSalesBilled = Number(summary.month_sales_billed);
+    const monthCollectionRate = monthTotal > 0 ? Math.round((monthPaid / monthTotal) * 100) : 0;
+
+    const totalUnpaidAmount = Number(summary.all_outstanding);
+    const unpaidCount = Number(summary.unpaid_count);
 
     return (
         <div className="space-y-2">
-            {/* Overall Payment Summary */}
+            {/* ── Today's Shift ─────────────────────────────────────── */}
             <Card className="p-2.5">
-                <h3 className="font-bold text-sm mb-2 flex items-center gap-1.5">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" /> Payment Summary
+                <h3 className="font-bold text-sm mb-2.5 flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-muted-foreground" /> Today
                 </h3>
-                {/* Today — simple addition-style, operational info */}
-                <div className="mb-1">
-                    <p className="text-xs font-bold mb-1.5">Today</p>
-                    {Number(summary.today_count) > 0 ? (
-                        <div className="text-xs tabular-nums space-y-1">
+                {todayCount > 0 ? (
+                    <div className="flex items-center gap-3">
+                        <DonutChart
+                            size={90}
+                            strokeWidth={11}
+                            hideLegend
+                            center={{ value: `${todayCollectionRate}%`, label: "collected" }}
+                            segments={[
+                                { value: todayPaid, color: "#047857", label: "Collected", amount: fmtK(todayPaid) },
+                                { value: todayDue, color: "#ea580c", label: "Due", amount: fmtK(todayDue) },
+                            ]}
+                        />
+                        <div className="flex-1 text-xs tabular-nums space-y-1">
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Orders</span>
-                                <span className="font-semibold">{Number(summary.today_count)}</span>
+                                <span className="font-semibold">{todayCount}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Collected</span>
-                                <span className="font-semibold">{fmtK(Number(summary.today_paid))}</span>
+                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
+                                <span className="font-semibold">{fmtK(todayPaid)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Due</span>
-                                <span className="font-semibold text-orange-600">{fmtK(Math.max(0, Number(summary.today_billed) - Number(summary.today_paid)))}</span>
+                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Due</span>
+                                <span className="font-semibold text-orange-600">{fmtK(todayDue)}</span>
                             </div>
                             <div className="border-t border-border pt-1 flex justify-between font-bold">
                                 <span>Billed</span>
-                                <span>{fmtK(Number(summary.today_billed))}</span>
+                                <span>{fmtK(todayBilled)}</span>
                             </div>
                         </div>
-                    ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">No orders today</p>
-                    )}
-                </div>
-
-                {/* Monthly — donuts + addition-style legend */}
-                <div className="mt-2 pt-1.5 border-t border-border">
-                    <p className="text-xs font-bold mb-1.5">{monthName}</p>
-                    {monthTotal > 0 ? (
-                        <div className="flex items-center gap-3">
-                            {/* Left: two donuts */}
-                            <div className="flex gap-3 shrink-0 items-center">
-                                <DonutChart
-                                    size={75}
-                                    strokeWidth={9}
-                                    hideLegend
-                                    center={{ value: `${(monthWorkBilled + monthSalesBilled) > 0 ? Math.round((monthWorkBilled / (monthWorkBilled + monthSalesBilled)) * 100) : 0}%`, label: "work" }}
-                                    segments={[
-                                        { value: monthWorkBilled, color: "#0d9488", label: "Work", amount: fmtK(monthWorkBilled) },
-                                        { value: monthSalesBilled, color: "#7c3aed", label: "Sales", amount: fmtK(monthSalesBilled) },
-                                    ]}
-                                />
-                                <DonutChart
-                                    size={95}
-                                    strokeWidth={12}
-                                    hideLegend
-                                    center={{ value: `${collectionRate}%`, label: "paid" }}
-                                    segments={[
-                                        { value: monthPaid, color: "#047857", label: "Collected", amount: fmtK(monthPaid) },
-                                        { value: monthOutstanding, color: "#ea580c", label: "Remaining", amount: fmtK(monthOutstanding) },
-                                    ]}
-                                />
-                            </div>
-                            {/* Right: addition-style breakdown */}
-                            <div className="flex-1 text-xs tabular-nums space-y-1">
-                                <div className="flex justify-between">
-                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Collected</span>
-                                    <span className="font-semibold">{fmtK(monthPaid)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Remaining</span>
-                                    <span className="font-semibold text-red-600">{fmtK(monthOutstanding)}</span>
-                                </div>
-                                <div className="border-t border-border pt-1 flex justify-between font-bold">
-                                    <span>Total</span>
-                                    <span>{fmtK(monthTotal)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">No orders this month</p>
-                    )}
-                </div>
-
-                {/* All Time — donuts + addition-style legend */}
-                <div className="mt-2 pt-1.5 border-t border-border">
-                    <p className="text-xs font-bold mb-1.5">All Time</p>
-                    {allBilled > 0 ? (
-                        <div className="flex items-center gap-3">
-                            <div className="flex gap-3 shrink-0 items-center">
-                                <DonutChart
-                                    size={80}
-                                    strokeWidth={10}
-                                    hideLegend
-                                    center={{ value: `${(workBilled + salesBilled) > 0 ? Math.round((workBilled / (workBilled + salesBilled)) * 100) : 0}%`, label: "work" }}
-                                    segments={[
-                                        { value: workBilled, color: "#0d9488", label: "Work", amount: fmtK(workBilled) },
-                                        { value: salesBilled, color: "#7c3aed", label: "Sales", amount: fmtK(salesBilled) },
-                                    ]}
-                                />
-                                <DonutChart
-                                    size={100}
-                                    strokeWidth={13}
-                                    hideLegend
-                                    center={{ value: `${Math.round((allCollected / allBilled) * 100)}%`, label: "paid" }}
-                                    segments={[
-                                        { value: allCollected, color: "#047857", label: "Collected", amount: fmtK(allCollected) },
-                                        { value: totalUnpaidAmount, color: "#ea580c", label: "Remaining", amount: fmtK(totalUnpaidAmount) },
-                                    ]}
-                                />
-                            </div>
-                            <div className="flex-1 text-xs tabular-nums space-y-1">
-                                <div className="flex justify-between">
-                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Collected</span>
-                                    <span className="font-semibold">{fmtK(allCollected)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Remaining</span>
-                                    <span className="font-semibold text-orange-600">{fmtK(totalUnpaidAmount)}</span>
-                                </div>
-                                <div className="border-t border-border pt-1 flex justify-between font-bold">
-                                    <span>Total</span>
-                                    <span>{fmtK(allBilled)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">No orders yet</p>
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <p className="text-xs text-muted-foreground text-center py-3">No orders today yet</p>
+                )}
             </Card>
 
-            {/* Remaining Payments — orders with outstanding balance */}
+            {/* ── This Month ────────────────────────────────────────── */}
+            <Card className="p-2.5">
+                <h3 className="font-bold text-sm mb-2.5 flex items-center gap-1.5">
+                    <CreditCard className="h-4 w-4 text-muted-foreground" /> {monthName}
+                </h3>
+                {monthTotal > 0 ? (
+                    <div className="flex items-center gap-3">
+                        <DonutChart
+                            size={90}
+                            strokeWidth={11}
+                            hideLegend
+                            center={{ value: `${monthCollectionRate}%`, label: "collected" }}
+                            segments={[
+                                { value: monthPaid, color: "#047857", label: "Collected", amount: fmtK(monthPaid) },
+                                { value: monthOutstanding, color: "#ea580c", label: "Remaining", amount: fmtK(monthOutstanding) },
+                            ]}
+                        />
+                        <div className="flex-1 text-xs tabular-nums space-y-1">
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
+                                <span className="font-semibold">{fmtK(monthPaid)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Remaining</span>
+                                <span className="font-semibold text-orange-600">{fmtK(monthOutstanding)}</span>
+                            </div>
+                            <div className="border-t border-border pt-1 flex justify-between font-bold">
+                                <span>Billed</span>
+                                <span>{fmtK(monthTotal)}</span>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-xs text-muted-foreground text-center py-3">No orders this month</p>
+                )}
+            </Card>
+
+            {/* ── Outstanding Payments ──────────────────────────────── */}
             <Card className={`p-2.5 ${unpaidOrders.length > 0 ? "border-red-200 bg-red-50/30" : ""}`}>
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-sm text-red-700 flex items-center gap-1.5">
-                        <CreditCard className="h-4 w-4" /> Remaining ({unpaidOrders.length})
+                        <CreditCard className="h-4 w-4" /> Outstanding ({unpaidCount || unpaidOrders.length})
                     </h3>
                     {totalUnpaidAmount > 0 && (
                         <span className="font-bold text-sm text-red-600 tabular-nums">{fmtK(totalUnpaidAmount)}</span>
@@ -435,7 +424,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 const paidPct = o.order_total > 0 ? Math.round((o.paid / o.order_total) * 100) : 0;
                                 return (
                                     <button key={o.id} type="button" onClick={() => onSelectOrder(String(o.id))}
-                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-colors cursor-pointer active:scale-[0.99] border border-transparent hover:border-red-200"
+                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-all duration-150 cursor-pointer active:scale-[0.99] border border-transparent hover:border-red-200"
                                         style={i < 8 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 40}ms both` } : undefined}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
@@ -469,6 +458,138 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
     );
 }
 
+// ── Delivery & Address (inline editing) ─────────────────────────────────────
+function DeliveryAndAddress({ order, isHomeDelivery, isOrderCompleted, toggleDeliveryMutation, onOptimisticToggle }: {
+    order: any;
+    isHomeDelivery: boolean;
+    isOrderCompleted: boolean;
+    toggleDeliveryMutation: any;
+    onOptimisticToggle: (value: boolean) => void;
+}) {
+    const queryClient = useQueryClient();
+    const c = order.customer;
+    const [city, setCity] = useState(c?.city || "");
+    const [area, setArea] = useState(c?.area || "");
+    const [block, setBlock] = useState(c?.block || "");
+    const [street, setStreet] = useState(c?.street || "");
+    const [houseNo, setHouseNo] = useState(c?.house_no || "");
+    const [note, setNote] = useState(c?.address_note || "");
+
+    // Sync when order changes
+    useEffect(() => {
+        setCity(c?.city || "");
+        setArea(c?.area || "");
+        setBlock(c?.block || "");
+        setStreet(c?.street || "");
+        setHouseNo(c?.house_no || "");
+        setNote(c?.address_note || "");
+    }, [c?.city, c?.area, c?.block, c?.street, c?.house_no, c?.address_note]);
+
+    const isDirty = city !== (c?.city || "") || area !== (c?.area || "") ||
+        block !== (c?.block || "") || street !== (c?.street || "") ||
+        houseNo !== (c?.house_no || "") || note !== (c?.address_note || "");
+
+    const saveMutation = useMutation({
+        mutationFn: () => updateCustomer(c?.id, {
+            city: city || null, area: area || null, block: block || null,
+            street: street || null, house_no: houseNo || null, address_note: note || null,
+        } as any),
+        onSuccess: (res) => {
+            if (res.status === "error") { toast.error(`Failed: ${res.message}`); return; }
+            toast.success("Address updated");
+            queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
+        },
+        onError: (err) => toast.error(`Error: ${err.message}`),
+    });
+
+    return (
+        <Card className="p-3">
+            <h3 className="font-semibold flex items-center gap-2 text-sm"><Truck className="h-4 w-4" />Delivery</h3>
+            {/* Delivery toggle — segmented control with sliding indicator */}
+            {!isOrderCompleted ? (
+                <div className={`relative flex rounded-lg bg-muted p-1 ${toggleDeliveryMutation.isPending ? "opacity-60 pointer-events-none" : ""}`}>
+                    {/* Sliding indicator */}
+                    <div
+                        className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-md bg-primary shadow-sm transition-transform duration-250 ease-out"
+                        style={{ transform: isHomeDelivery ? "translateX(calc(100% + 8px))" : "translateX(0)" }}
+                    />
+                    {([
+                        { value: false, label: "Pick Up", img: PickUpIcon },
+                        { value: true, label: "Home Delivery", img: HomeDeliveryIcon },
+                    ] as const).map((option) => {
+                        const isActive = isHomeDelivery === option.value;
+                        return (
+                            <button key={option.label} type="button"
+                                disabled={toggleDeliveryMutation.isPending}
+                                onClick={() => { if (!isActive) { onOptimisticToggle(option.value); toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: option.value }); } }}
+                                className="relative z-10 flex-1 flex items-center justify-center gap-2 rounded-md py-2 cursor-pointer select-none touch-manipulation active:scale-[0.97] transition-all duration-150">
+                                <img src={option.img} alt={option.label} className={`h-7 object-contain transition-all duration-200 ${isActive ? "brightness-0 invert" : ""}`} />
+                                <span className={`text-sm font-semibold transition-colors duration-200 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`}>{option.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="flex items-center gap-3 py-2 px-3 rounded-lg bg-muted/50 border border-border">
+                    <img src={isHomeDelivery ? HomeDeliveryIcon : PickUpIcon} alt="" className="h-7 object-contain" />
+                    <span className="font-semibold text-sm">{isHomeDelivery ? "Home Delivery" : "Pick Up"}</span>
+                </div>
+            )}
+            {/* Address fields — smooth expand via grid-rows + opacity */}
+            <div
+                className="grid transition-[grid-template-rows,opacity] duration-300 ease-out"
+                style={{
+                    gridTemplateRows: isHomeDelivery ? "1fr" : "0fr",
+                    opacity: isHomeDelivery ? 1 : 0,
+                }}
+            >
+                <div className="overflow-hidden">
+                    <div className="mt-3 rounded-lg bg-blue-50/60 border border-blue-200/60 p-3 space-y-2.5">
+                        <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Delivery Address</span>
+                            {toggleDeliveryMutation.isPending && <Loader2 className="h-3 w-3 animate-spin text-blue-400 ml-auto" />}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-blue-800/70">City</Label>
+                                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" className="h-8 text-sm border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-blue-800/70">Area</Label>
+                                <Input value={area} onChange={(e) => setArea(e.target.value)} placeholder="Area" className="h-8 text-sm border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-blue-800/70">Block</Label>
+                                <Input value={block} onChange={(e) => setBlock(e.target.value)} placeholder="Block" className="h-8 text-sm border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-blue-800/70">Street</Label>
+                                <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Street" className="h-8 text-sm border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-blue-800/70">House No.</Label>
+                                <Input value={houseNo} onChange={(e) => setHouseNo(e.target.value)} placeholder="House" className="h-8 text-sm border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs font-medium text-blue-800/70">Note</Label>
+                            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Delivery instructions..." rows={2} className="text-sm resize-none min-h-0 border-blue-200 bg-white focus-visible:border-blue-400 focus-visible:ring-blue-400/30" />
+                        </div>
+                        {isDirty && (
+                            <Button size="sm" className="w-full h-8 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                                {saveMutation.isPending ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Saving...</> : "Save Address"}
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
 // ── Shared Cashier Body ─────────────────────────────────────────────────────
 export function CashierBody() {
     const [listSearchInput, setListSearchInput] = useState("");
@@ -476,7 +597,6 @@ export function CashierBody() {
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
     const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("all");
-    const [addressDialogOpen, setAddressDialogOpen] = useState(false);
 
     const { data: recentResult, isLoading: isLoadingRecent, isFetching: isFetchingRecent } = useRecentCashierOrders(dashboardFilter);
     const recentOrders = recentResult?.data || [];
@@ -487,7 +607,7 @@ export function CashierBody() {
     const isInitialLoad = !hasLoadedOnce && isLoadingRecent;
 
     const { data: summaryResult } = useCashierSummary();
-    const summary: CashierSummary = summaryResult?.data || { all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0, month_billed: 0, month_paid: 0, month_outstanding: 0, work_count: 0, sales_count: 0, unpaid_count: 0, work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0 };
+    const summary: CashierSummary = summaryResult?.data || { all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0, today_collected: 0, today_refunded: 0, month_billed: 0, month_paid: 0, month_outstanding: 0, month_collected: 0, month_refunded: 0, work_count: 0, sales_count: 0, unpaid_count: 0, work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0 };
 
     const { data: listSearchResult, isFetching: isListSearching } = useCashierOrderListSearch(listSearchQuery);
     const searchedOrders = listSearchResult?.data || [];
@@ -541,7 +661,16 @@ export function CashierBody() {
     const isCancelled = order?.checkout_status === "cancelled";
     const isOrderCompleted = order?.order_phase === "completed";
     const isFullyPaid = remainingBalance <= 0;
-    const isHomeDelivery = !!(order as any)?.home_delivery;
+    const serverHomeDelivery = !!(order as any)?.home_delivery;
+    const [optimisticDelivery, setOptimisticDelivery] = useState<boolean | null>(null);
+    const isHomeDelivery = optimisticDelivery ?? serverHomeDelivery;
+    // Sync optimistic state back once server catches up, with delay so CSS animation finishes
+    useEffect(() => {
+        if (optimisticDelivery !== null && optimisticDelivery === serverHomeDelivery) {
+            const t = setTimeout(() => setOptimisticDelivery(null), 350);
+            return () => clearTimeout(t);
+        }
+    }, [serverHomeDelivery, optimisticDelivery]);
 
     const [collectGarmentIds, setCollectGarmentIds] = useState<Set<string>>(new Set());
 
@@ -608,110 +737,74 @@ export function CashierBody() {
                             <AlertDescription className="text-green-800">Fully completed — all garments collected and paid.</AlertDescription></Alert>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <div className="md:col-span-3 space-y-4">
-                            <Card className="p-3">
-                                <div className="flex gap-3">
-                                    {/* Customer */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
+                        <div className="md:col-span-3 space-y-2">
+                            {/* Customer & Order Info */}
+                            <div className="bg-card border rounded-xl p-2.5 space-y-1.5">
+                                {/* Customer row */}
+                                <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                        <User className="h-3 w-3 text-primary" />
+                                    </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1.5 mb-1">
-                                            <User className="h-3 w-3 text-muted-foreground" />
-                                            <span className="font-semibold text-sm">{order.customer?.name || "N/A"}</span>
-                                            <span className="text-xs text-muted-foreground">{order.customer?.phone || ""}</span>
-                                        </div>
-                                        {/* Address */}
-                                        <div className="flex items-start gap-1 text-xs">
-                                            <MapPin className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                                            {(() => {
-                                                const c = order.customer;
-                                                const parts = [c?.area, c?.block && `Blk ${c.block}`, c?.street && `St ${c.street}`, c?.house_no && `#${c.house_no}`].filter(Boolean);
-                                                return parts.length > 0 ? (
-                                                    <span className="text-muted-foreground">{parts.join(", ")}{c?.city ? ` - ${c.city}` : ""}</span>
-                                                ) : (
-                                                    <span className="text-red-500">No address</span>
-                                                );
-                                            })()}
-                                            <button type="button" onClick={() => setAddressDialogOpen(true)}
-                                                className="text-primary hover:text-primary/80 shrink-0 ml-1 cursor-pointer">
-                                                <Pencil className="h-3 w-3" />
-                                            </button>
-                                        </div>
-                                        {order.customer?.address_note && (
-                                            <p className="text-[10px] text-muted-foreground/60 italic ml-4">{order.customer.address_note}</p>
-                                        )}
-                                    </div>
-                                    <Separator orientation="vertical" className="h-10" />
-                                    {/* Order info */}
-                                    <div className="shrink-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-sm tabular-nums">#{order.id}</span>
-                                            {order.invoice_number && <span className="text-xs text-muted-foreground">INV {order.invoice_number}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <Badge variant="outline" className="text-[10px] px-1.5">{order.order_type}</Badge>
-                                            {order.order_phase && <Badge variant="secondary" className="text-[10px] px-1.5">{ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase}</Badge>}
-                                            {isCancelled && <Badge variant="destructive" className="text-[10px] px-1.5">Cancelled</Badge>}
+                                        <div className="flex items-baseline gap-2">
+                                            <p className="font-bold text-sm truncate leading-tight">{order.customer?.name || "N/A"}</p>
+                                            <span className="text-[11px] text-muted-foreground shrink-0">{order.customer?.country_code || "+965"} {order.customer?.phone || "—"}</span>
                                         </div>
                                     </div>
+                                    {order.customer?.account_type && (
+                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border shrink-0 ${order.customer.account_type === "Secondary" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-primary/30 bg-primary/5 text-primary"}`}>
+                                            {order.customer.account_type}
+                                            {order.customer.account_type === "Secondary" && order.customer.relation && <span className="font-normal"> · {order.customer.relation}</span>}
+                                        </span>
+                                    )}
                                 </div>
-                                {/* Delivery Type Toggle */}
-                                {order.order_type === "WORK" && !isCancelled && !isOrderCompleted && (
-                                    <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t">
-                                        <span className="text-xs text-muted-foreground">Delivery:</span>
-                                        <div className="flex rounded-lg border bg-muted p-0.5">
-                                            <ChipToggle
-                                                active={!isHomeDelivery}
-                                                onClick={() => { if (isHomeDelivery) toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: false }); }}
-                                                disabled={toggleDeliveryMutation.isPending}
-                                                className="px-3">
-                                                <Store className="h-3.5 w-3.5" /> Pickup
-                                            </ChipToggle>
-                                            <ChipToggle
-                                                active={isHomeDelivery}
-                                                activeVariant="blue"
-                                                onClick={() => { if (!isHomeDelivery) toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: true }); }}
-                                                disabled={toggleDeliveryMutation.isPending}
-                                                className="px-3">
-                                                <Truck className="h-3.5 w-3.5" /> Home Delivery
-                                            </ChipToggle>
-                                        </div>
-                                        {toggleDeliveryMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-                                    </div>
-                                )}
-                            </Card>
+                                {/* Order details — compact inline */}
+                                <div className="flex items-center gap-2.5 flex-wrap text-xs bg-muted/40 rounded-md px-2.5 py-1.5">
+                                    <span className="flex items-center gap-1 font-bold tabular-nums"><Hash className="h-3 w-3 text-muted-foreground" />{order.id}</span>
+                                    {order.invoice_number && <span className="flex items-center gap-1 tabular-nums text-muted-foreground"><Receipt className="h-3 w-3" />INV {order.invoice_number}</span>}
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-border">{order.order_type === "WORK" ? "Work" : "Sales"}</span>
+                                    {order.order_phase && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-secondary/10 text-secondary">{ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase}</span>}
+                                    {isCancelled && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive">Cancelled</span>}
+                                    {order.delivery_date && <span className="flex items-center gap-1 text-muted-foreground ml-auto tabular-nums"><CalendarDays className="h-3 w-3" />{shortDateFmt.format(new Date(order.delivery_date))}</span>}
+                                </div>
+                            </div>
 
-                            {/* Address Dialog */}
-                            {order.customer && (
-                                <AddressDialog
-                                    open={addressDialogOpen}
-                                    onOpenChange={setAddressDialogOpen}
-                                    customerId={order.customer.id}
-                                    currentAddress={{
-                                        city: order.customer.city ?? undefined,
-                                        area: order.customer.area ?? undefined,
-                                        block: order.customer.block ?? undefined,
-                                        street: order.customer.street ?? undefined,
-                                        house_no: order.customer.house_no ?? undefined,
-                                        address_note: order.customer.address_note ?? undefined,
-                                    }}
+                            {/* Delivery & Address */}
+                            {order.order_type === "WORK" && !isCancelled && (
+                                <DeliveryAndAddress
+                                    order={order}
+                                    isHomeDelivery={isHomeDelivery}
+                                    isOrderCompleted={isOrderCompleted}
+                                    toggleDeliveryMutation={toggleDeliveryMutation}
+                                    onOptimisticToggle={setOptimisticDelivery}
                                 />
                             )}
 
                             {(hasGarments || hasShelfItems) && (
                                 <div className={`grid grid-cols-1 ${hasGarments && hasShelfItems ? "xl:grid-cols-2" : ""} gap-4`}>
                                     {hasGarments && (
-                                        <Card className="p-4">
-                                            <h3 className="font-semibold flex items-center gap-2 mb-3"><Shirt className="h-4 w-4" />Garments ({garments.length})
-                                                {allGarmentsCompleted && <Badge className="bg-green-600 ml-auto text-xs">All Completed</Badge>}</h3>
-                                            {isCancelled ? <p className="text-sm text-muted-foreground text-center py-4">Cancelled.</p> : <GarmentCollection garments={garments} selectedIds={collectGarmentIds} onToggle={toggleCollectGarment} onToggleAll={toggleAllCollectGarments} />}
+                                        <Card className="p-3">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <h3 className="font-semibold flex items-center gap-2 text-sm"><Shirt className="h-4 w-4" />Garments ({garments.length})</h3>
+                                                {allGarmentsCompleted && <Badge className="bg-green-600 text-xs">All Completed</Badge>}
+                                                {(() => {
+                                                    const gTotal = (Number(order?.stitching_charge) || 0) + (Number(order?.fabric_charge) || 0) + (Number(order?.style_charge) || 0);
+                                                    return gTotal > 0 ? <span className="ml-auto text-sm font-bold tabular-nums text-muted-foreground">{fmtK(gTotal)}</span> : null;
+                                                })()}
+                                            </div>
+                                            {isCancelled ? <p className="text-sm text-muted-foreground text-center py-3">Cancelled.</p> : <GarmentCollection garments={garments} selectedIds={collectGarmentIds} onToggle={toggleCollectGarment} onToggleAll={toggleAllCollectGarments} />}
                                         </Card>
                                     )}
                                     {hasShelfItems && (
-                                        <Card className="p-4">
-                                            <h3 className="font-semibold flex items-center gap-2 mb-3"><Package className="h-4 w-4" />Shelf Items ({shelfItems.length})</h3>
-                                            <div className="space-y-2">
+                                        <Card className="p-3">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <h3 className="font-semibold flex items-center gap-2 text-sm"><Package className="h-4 w-4" />Shelf Items ({shelfItems.length})</h3>
+                                                <span className="ml-auto text-sm font-bold tabular-nums text-muted-foreground">{fmtK(shelfItems.reduce((s: number, i: any) => s + (i.unit_price * i.quantity), 0))}</span>
+                                            </div>
+                                            <div className="space-y-1.5">
                                                 {shelfItems.map((item: any) => (
-                                                    <div key={item.id} className="flex justify-between items-center text-sm p-2.5 bg-muted/50 rounded-lg">
+                                                    <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-lg">
                                                         <div><span className="font-medium">{item.shelf?.type || `Item #${item.shelf_id}`}</span><span className="text-muted-foreground ml-2">x{item.quantity}</span></div>
                                                         <span className="font-semibold">{fmtK(item.unit_price * item.quantity)}</span>
                                                     </div>
@@ -722,8 +815,8 @@ export function CashierBody() {
                                 </div>
                             )}
 
-                            <Card className="p-4">
-                                <h3 className="font-semibold flex items-center gap-2 mb-3"><Receipt className="h-4 w-4" />Payment History ({transactions.length})</h3>
+                            <Card className="p-3">
+                                <h3 className="font-semibold flex items-center gap-2 mb-1.5 text-sm"><Receipt className="h-4 w-4" />Payment History ({transactions.length})</h3>
                                 <PaymentHistory transactions={transactions} orderId={order.id} invoiceNumber={order.invoice_number ?? undefined}
                                     customerName={order.customer?.name ?? undefined} customerPhone={order.customer?.phone ?? undefined} orderTotal={orderTotal} totalPaid={totalPaid} />
                             </Card>
@@ -731,20 +824,20 @@ export function CashierBody() {
 
                         <div className="md:col-span-2 space-y-2.5">
                             <Card className="p-3">
-                                <h3 className="font-semibold flex items-center gap-2 mb-2 text-sm"><CreditCard className="h-4 w-4" />Payment Summary</h3>
+                                <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />Payment Summary</h3>
                                 <PaymentSummary order={order} totalPayments={totalPayments} totalRefunds={totalRefunds} />
                             </Card>
                             {!isCancelled && (
                                 <Card className={`p-3 ${discountValue > 0 ? "bg-green-50 border-green-300" : ""}`}>
-                                    <h3 className="font-semibold flex items-center gap-2 mb-2 text-sm"><Tag className="h-4 w-4" />Discount</h3>
+                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><Tag className="h-4 w-4" />Discount</h3>
                                     <DiscountControls orderId={order.id} currentDiscountType={(order as any).discount_type} currentDiscountValue={discountValue}
                                         currentDiscountPercentage={Number((order as any).discount_percentage) || 0} currentReferralCode={(order as any).referral_code} orderTotal={orderTotal} />
                                 </Card>
                             )}
                             {!isCancelled ? (
                                 <Card className={`p-3 ${isFullyPaid ? "bg-green-50 border-green-300" : ""}`}>
-                                    <h3 className="font-semibold flex items-center gap-2 mb-2 text-sm"><CreditCard className="h-4 w-4" />{isFullyPaid ? "Refund / Additional" : "Record Payment"}</h3>
-                                    {isFullyPaid && <Alert className="mb-3 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid.</AlertDescription></Alert>}
+                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />{isFullyPaid ? "Refund / Additional" : "Record Payment"}</h3>
+                                    {isFullyPaid && <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid.</AlertDescription></Alert>}
                                     <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} collectGarmentIds={collectGarmentIds} onCollected={() => setCollectGarmentIds(new Set())} />
                                 </Card>
                             ) : (
@@ -760,10 +853,70 @@ export function CashierBody() {
     // ── Loading ─────────────────────────────────────────────────────────────
     if (isOrderLoading && selectedOrderId) {
         return (
-            <div className="p-4 max-w-[1400px] mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="md:col-span-3 space-y-4"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>
-                    <div className="md:col-span-2 space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
+            <div className="h-full flex flex-col">
+                <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
+                    <Skeleton className="h-8 w-20 rounded" />
+                    <div className="flex-1" />
+                    <Skeleton className="h-4 w-12 rounded" />
+                </div>
+                <div className="flex-1 p-4 max-w-[1400px] mx-auto w-full">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
+                        <div className="md:col-span-3 space-y-2">
+                            {/* Customer & order info skeleton */}
+                            <Card className="p-3 space-y-3">
+                                <div className="flex items-center gap-2.5">
+                                    <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                                    <div className="flex-1 space-y-1.5">
+                                        <Skeleton className="h-4 w-36 rounded" />
+                                        <Skeleton className="h-3 w-28 rounded" />
+                                    </div>
+                                    <Skeleton className="h-5 w-16 rounded shrink-0" />
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-4 gap-3">
+                                    {Array.from({ length: 4 }).map((_, i) => (
+                                        <div key={i} className="space-y-1">
+                                            <Skeleton className="h-2.5 w-10 rounded" />
+                                            <Skeleton className="h-4 w-14 rounded" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                            {/* Delivery skeleton */}
+                            <Card className="p-3 space-y-2.5">
+                                <Skeleton className="h-4 w-24 rounded" />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Skeleton className="h-16 rounded-lg" />
+                                    <Skeleton className="h-16 rounded-lg" />
+                                </div>
+                            </Card>
+                            {/* Garments skeleton */}
+                            <Card className="p-4 space-y-3">
+                                <Skeleton className="h-4 w-28 rounded" />
+                                <Skeleton className="h-12 rounded-lg" />
+                                <Skeleton className="h-12 rounded-lg" />
+                            </Card>
+                        </div>
+                        <div className="md:col-span-2 space-y-2.5">
+                            <Card className="p-3 space-y-2">
+                                <Skeleton className="h-4 w-32 rounded" />
+                                <Skeleton className="h-3 w-full rounded" />
+                                <Skeleton className="h-3 w-full rounded" />
+                                <Skeleton className="h-3 w-3/4 rounded" />
+                                <Skeleton className="h-5 w-full rounded mt-1" />
+                            </Card>
+                            <Card className="p-3 space-y-2">
+                                <Skeleton className="h-4 w-20 rounded" />
+                                <Skeleton className="h-8 w-full rounded" />
+                            </Card>
+                            <Card className="p-3 space-y-2">
+                                <Skeleton className="h-4 w-28 rounded" />
+                                <Skeleton className="h-9 w-full rounded" />
+                                <Skeleton className="h-9 w-full rounded" />
+                                <Skeleton className="h-10 w-full rounded" />
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
