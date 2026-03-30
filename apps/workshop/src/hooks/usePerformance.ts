@@ -14,6 +14,7 @@ export interface WorkerKpi {
   actual: number;
   efficiency: number;
   rating: number | null;
+  reworkCount: number;
 }
 
 export interface StageKpi {
@@ -33,7 +34,9 @@ export interface PerformanceSummary {
   totalCompleted: number;
   avgEfficiency: number;
   bestPerformer: { name: string; efficiency: number } | null;
-  qcPassRate: number;
+  firstPassRate: number;
+  reworkCount: number;
+  dailyTarget: number;
 }
 
 const HISTORY_KEY_TO_STAGE: Record<string, string> = {
@@ -63,12 +66,21 @@ function computeKpis(
   daily: DailyTrend[];
   summary: PerformanceSummary;
 } {
-  // Count completions per worker name per stage
+  // Count completions per worker name per stage, plus rework tracking
   const workerCounts = new Map<string, Map<string, number>>();
+  const workerRework = new Map<string, number>();
+  let reworkCount = 0;
+  let firstPassCount = 0;
 
   for (const g of garments) {
     const history = g.worker_history;
     if (!history) continue;
+
+    // Track first-pass vs rework
+    const tripNum = g.trip_number ?? 1;
+    if (tripNum === 1) firstPassCount++;
+    else reworkCount++;
+
     for (const [historyKey, workerName] of Object.entries(history)) {
       const stage = HISTORY_KEY_TO_STAGE[historyKey];
       if (!stage || !workerName) continue;
@@ -76,6 +88,11 @@ function computeKpis(
       if (!workerCounts.has(key)) workerCounts.set(key, new Map());
       const m = workerCounts.get(key)!;
       m.set(stage, (m.get(stage) ?? 0) + 1);
+
+      // Track rework per worker
+      if (tripNum > 1) {
+        workerRework.set(key, (workerRework.get(key) ?? 0) + 1);
+      }
     }
   }
 
@@ -108,6 +125,7 @@ function computeKpis(
       actual,
       efficiency,
       rating: resource?.rating ?? null,
+      reworkCount: workerRework.get(key) ?? 0,
     });
 
     const sa = stageAgg.get(stage) ?? { target: 0, actual: 0, count: 0 };
@@ -131,6 +149,7 @@ function computeKpis(
         actual: 0,
         efficiency: 0,
         rating: r.rating ?? null,
+        reworkCount: 0,
       });
 
       const sa = stageAgg.get(r.responsibility) ?? { target: 0, actual: 0, count: 0 };
@@ -172,15 +191,19 @@ function computeKpis(
     ? { name: workers[0].name, efficiency: workers[0].efficiency }
     : null;
 
-  // QC pass rate — garments that reached ready_for_dispatch or beyond without trip > 1 on QC
-  const qcTotal = garments.filter((g) => g.worker_history?.quality_checker).length;
-  const qcPassRate = qcTotal > 0 ? Math.round((qcTotal / garments.length) * 100) : 100;
+  // First-pass rate — garments completed on trip 1 (no rework needed)
+  const firstPassRate = totalCompleted > 0
+    ? Math.round((firstPassCount / totalCompleted) * 100)
+    : 100;
+
+  // Aggregate daily target across all unique workers
+  const dailyTarget = workers.reduce((sum, w) => sum + w.dailyTarget, 0);
 
   return {
     workers,
     stages,
     daily,
-    summary: { totalCompleted, avgEfficiency, bestPerformer, qcPassRate },
+    summary: { totalCompleted, avgEfficiency, bestPerformer, firstPassRate, reworkCount, dailyTarget },
   };
 }
 

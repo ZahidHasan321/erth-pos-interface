@@ -9,6 +9,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -47,9 +48,9 @@ export function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const selectedOption = options.find((option) => option.value === value);
-  
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -68,42 +69,47 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent
+        align="start"
+        className="!w-[var(--radix-popover-trigger-width)] p-0 pointer-events-auto"
+      >
         <Command>
-          <CommandInput placeholder={placeholder} onValueChange={onSearch} />
-          <CommandEmpty>No option found.</CommandEmpty>
-          <CommandGroup className="max-h-[200px] overflow-y-auto">
-            {isLoading ? (
-              <div className="p-2 flex justify-center items-center">
-                <LoadingSpinner />
-              </div>
-            ) : (
-              options.map((option) => (
-                <CommandItem
-                  className="pl-0"
-                  key={option.value}
-                  value={option.label} // Search against the label
-                  onSelect={(selectedLabel) => {
-                    const selectedOption = options.find(
-                      (opt) => opt.label === selectedLabel
-                    );
-                    if (selectedOption) {
-                      onChange(selectedOption.value); // Return the actual value
-                    }
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.node || option.label}
-                </CommandItem>
-              ))
-            )}
-          </CommandGroup>
+          <CommandInput placeholder={placeholder} {...(onSearch ? { onValueChange: onSearch } : {})} />
+          <CommandList>
+            <CommandEmpty>No option found.</CommandEmpty>
+            <CommandGroup>
+              {isLoading ? (
+                <div className="p-2 flex justify-center items-center">
+                  <LoadingSpinner />
+                </div>
+              ) : (
+                options.map((option) => (
+                  <CommandItem
+                    className="pl-0"
+                    key={option.value}
+                    value={option.label} // Search against the label
+                    onSelect={(selectedLabel) => {
+                      const selectedOption = options.find(
+                        (opt) => opt.label === selectedLabel
+                      );
+                      if (selectedOption) {
+                        onChange(selectedOption.value); // Return the actual value
+                      }
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.node || option.label}
+                  </CommandItem>
+                ))
+              )}
+            </CommandGroup>
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>

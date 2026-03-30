@@ -22,6 +22,7 @@ import {
   Menu,
   History,
   Banknote,
+  CalendarDays,
 } from "lucide-react";
 
 import {
@@ -347,6 +348,24 @@ export function AppSidebar({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Home Visits — SAKKBA only */}
+        {main === BRAND_NAMES.fromHome && (
+          <SidebarGroup key="home-visits">
+            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
+              Home Visits
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarLink
+                  to={`${mainSegment}/appointments`}
+                  title="Appointments"
+                  icon={CalendarDays}
+                />
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Nav groups */}
         {data.navMain.map((item) => (

@@ -80,3 +80,37 @@ export const PAYMENT_TYPE_LABELS = {
     installments: "Installments",
     others: "Others",
 } as const;
+
+export const APPOINTMENT_STATUS_LABELS = {
+    scheduled: "Scheduled",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    no_show: "No Show",
+} as const;
+
+export const APPOINTMENT_STATUS_COLORS = {
+    scheduled: "blue",
+    completed: "emerald",
+    cancelled: "gray",
+    no_show: "red",
+} as const;
+
+export const EMPLOYEE_COLORS = [
+    { bg: "bg-blue-50", border: "border-l-blue-500", text: "text-blue-900", dot: "bg-blue-500" },
+    { bg: "bg-emerald-50", border: "border-l-emerald-500", text: "text-emerald-900", dot: "bg-emerald-500" },
+    { bg: "bg-orange-50", border: "border-l-orange-500", text: "text-orange-900", dot: "bg-orange-500" },
+    { bg: "bg-purple-50", border: "border-l-purple-500", text: "text-purple-900", dot: "bg-purple-500" },
+    { bg: "bg-rose-50", border: "border-l-rose-500", text: "text-rose-900", dot: "bg-rose-500" },
+    { bg: "bg-teal-50", border: "border-l-teal-500", text: "text-teal-900", dot: "bg-teal-500" },
+    { bg: "bg-amber-50", border: "border-l-amber-500", text: "text-amber-900", dot: "bg-amber-500" },
+    { bg: "bg-indigo-50", border: "border-l-indigo-500", text: "text-indigo-900", dot: "bg-indigo-500" },
+] as const;
+
+export function getEmployeeColor(employeeId: string) {
+    let hash = 0;
+    for (let i = 0; i < employeeId.length; i++) {
+        hash = ((hash << 5) - hash) + employeeId.charCodeAt(i);
+        hash |= 0;
+    }
+    return EMPLOYEE_COLORS[Math.abs(hash) % EMPLOYEE_COLORS.length];
+}

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useUsers, useCreateUser, useUpdateUser, useDeactivateUser, useActivateUser } from "@/hooks/useUsers";
-import { useResources } from "@/hooks/useResources";
+import { useResourcesWithUsers, useLinkResourceToUser, useUnlinkResourceFromUser } from "@/hooks/useResources";
 import { ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   UserCog, Plus, Search, Shield, Building2,
   Phone, Mail, Hash, Power, Pencil,
-  ChevronRight, Link2, CircleDot, Store,
+  Link2, Store, Users, Factory, ShoppingBag,
+  UserX, AlertTriangle,
 } from "lucide-react";
 import type { User, NewUser, Role, Department } from "@repo/database";
 
@@ -73,6 +73,19 @@ const DEPT_STYLE: Record<Department, string> = {
   shop:     "bg-sky-500/10 text-sky-700 border-sky-200",
 };
 
+const AVATAR_STYLE: Record<string, string> = {
+  admin: "bg-red-100 text-red-700 ring-red-200",
+  manager: "bg-amber-100 text-amber-700 ring-amber-200",
+  workshop: "bg-violet-100 text-violet-700 ring-violet-200",
+  shop: "bg-sky-100 text-sky-700 ring-sky-200",
+};
+
+function getAvatarStyle(role: Role, department: Department) {
+  if (role === "admin") return AVATAR_STYLE.admin;
+  if (role === "manager") return AVATAR_STYLE.manager;
+  return AVATAR_STYLE[department] ?? AVATAR_STYLE.workshop;
+}
+
 // ── User Form Sheet ─────────────────────────────────────────────────
 
 function UserFormSheet({
@@ -98,38 +111,46 @@ function UserFormSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="text-base font-black uppercase tracking-wider">
+      <SheetContent className="sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="pb-2">
+          <SheetTitle className="text-lg font-bold flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              {mode === "add" ? <Plus className="w-4 h-4 text-primary" /> : <Pencil className="w-4 h-4 text-primary" />}
+            </div>
             {mode === "add" ? "New User" : "Edit User"}
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-5 py-6">
-          {/* Identity */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Identity</p>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Username <span className="text-red-500">*</span></Label>
-              <Input
-                placeholder="e.g. ahmed"
-                value={form.username}
-                onChange={(e) => setForm((p) => ({ ...p, username: e.target.value.toLowerCase().replace(/\s/g, "") }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Full Name <span className="text-red-500">*</span></Label>
-              <Input
-                placeholder="e.g. Ahmed Al-Rashidi"
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              />
+        <div className="space-y-6 py-4">
+          {/* Identity Section */}
+          <div className="rounded-xl bg-muted/30 border p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <UserCog className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Identity</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Email</Label>
+                <Label className="text-xs font-medium">Username <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="e.g. ahmed"
+                  value={form.username}
+                  onChange={(e) => setForm((p) => ({ ...p, username: e.target.value.toLowerCase().replace(/\s/g, "") }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Full Name <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="e.g. Ahmed Al-Rashidi"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/30" />
+                  <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/40" />
                   <Input
                     className="pl-8"
                     placeholder="email@example.com"
@@ -139,16 +160,16 @@ function UserFormSheet({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Phone</Label>
+                <Label className="text-xs font-medium">Phone</Label>
                 <div className="flex gap-1.5">
                   <Input
-                    className="w-[72px] shrink-0 text-center text-xs"
+                    className="w-[68px] shrink-0 text-center text-xs"
                     placeholder="+965"
                     value={form.country_code}
                     onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))}
                   />
                   <div className="relative flex-1">
-                    <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/30" />
+                    <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/40" />
                     <Input
                       className="pl-8"
                       placeholder="Phone number"
@@ -161,14 +182,15 @@ function UserFormSheet({
             </div>
           </div>
 
-          <Separator />
-
-          {/* Access */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Access & Role</p>
+          {/* Access & Role Section */}
+          <div className="rounded-xl bg-muted/30 border p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Shield className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Access & Role</span>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Role <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-medium">Role <span className="text-red-500">*</span></Label>
                 <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v as Role }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -184,7 +206,7 @@ function UserFormSheet({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Department <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-medium">Department <span className="text-red-500">*</span></Label>
                 <Select value={form.department} onValueChange={(v) => setForm((p) => ({ ...p, department: v as Department }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -202,9 +224,9 @@ function UserFormSheet({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">PIN (optional)</Label>
+                <Label className="text-xs font-medium">PIN (optional)</Label>
                 <div className="relative">
-                  <Hash className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/30" />
+                  <Hash className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/40" />
                   <Input
                     className="pl-8"
                     placeholder="4-digit"
@@ -218,13 +240,13 @@ function UserFormSheet({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Status</Label>
+                <Label className="text-xs font-medium">Status</Label>
                 <div className="flex items-center gap-3 h-9 px-3 border rounded-md bg-background">
                   <Switch
                     checked={form.is_active}
                     onCheckedChange={(v) => setForm((p) => ({ ...p, is_active: v }))}
                   />
-                  <span className={cn("text-xs font-bold", form.is_active ? "text-emerald-600" : "text-muted-foreground/40")}>
+                  <span className={cn("text-xs font-semibold", form.is_active ? "text-emerald-600" : "text-muted-foreground/50")}>
                     {form.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
@@ -232,92 +254,92 @@ function UserFormSheet({
             </div>
           </div>
 
-          {/* Brand Access — for shop users */}
+          {/* Brand Access -- for shop users */}
           {form.department === "shop" && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Brand Access</p>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold">Assigned Brands <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-muted-foreground/50">
-                    Select which brand interfaces this user can access.
-                  </p>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {ALL_BRANDS.map((brand) => {
-                      const isSelected = form.brands.includes(brand);
-                      return (
-                        <button
-                          key={brand}
-                          type="button"
-                          onClick={() =>
-                            setForm((p) => ({
-                              ...p,
-                              brands: isSelected
-                                ? p.brands.filter((b) => b !== brand)
-                                : [...p.brands, brand],
-                            }))
-                          }
-                          className={cn(
-                            "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold transition-all duration-150",
-                            isSelected
-                              ? BRAND_STYLE[brand]
-                              : "bg-muted/20 text-muted-foreground/40 border-transparent hover:bg-muted/40",
-                          )}
-                        >
-                          <Store className="w-3 h-3" />
-                          {BRAND_LABELS[brand]}
-                        </button>
-                      );
-                    })}
-                  </div>
+            <div className="rounded-xl bg-muted/30 border p-4 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Store className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Brand Access</span>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Assigned Brands <span className="text-red-500">*</span></Label>
+                <p className="text-[11px] text-muted-foreground/60">
+                  Select which brand interfaces this user can access.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {ALL_BRANDS.map((brand) => {
+                    const isSelected = form.brands.includes(brand);
+                    return (
+                      <button
+                        key={brand}
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => ({
+                            ...p,
+                            brands: isSelected
+                              ? p.brands.filter((b) => b !== brand)
+                              : [...p.brands, brand],
+                          }))
+                        }
+                        className={cn(
+                          "flex items-center gap-1.5 px-4 py-2 rounded-lg border text-xs font-semibold transition-all duration-150",
+                          isSelected
+                            ? cn(BRAND_STYLE[brand], "ring-1 ring-offset-1", brand === "erth" ? "ring-emerald-300" : brand === "sakkba" ? "ring-indigo-300" : "ring-orange-300")
+                            : "bg-background text-muted-foreground/50 border-border hover:bg-muted/40 hover:text-muted-foreground",
+                        )}
+                      >
+                        <Store className="w-3 h-3" />
+                        {BRAND_LABELS[brand]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            </>
+            </div>
           )}
 
-          {/* Resource Link — conditional */}
+          {/* Resource Link -- conditional */}
           {showResourceLink && unlinkedResources.length > 0 && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Production Profile</p>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold">Link to Worker Profile</Label>
-                  <Select
-                    value={form.link_resource_id || "none"}
-                    onValueChange={(v) => setForm((p) => ({ ...p, link_resource_id: v === "none" ? "" : v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="No link" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <span className="text-muted-foreground">No link</span>
-                      </SelectItem>
-                      {unlinkedResources.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          <span className="flex items-center gap-2">
-                            <Link2 className="w-3 h-3 text-violet-500" />
-                            {r.name}
-                            {r.responsibility && (
-                              <span className="text-muted-foreground/50 text-[10px]">({r.responsibility})</span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground/50">
-                    Links this user account to an existing workshop worker record for KPI tracking.
-                  </p>
-                </div>
+            <div className="rounded-xl bg-violet-50/50 border border-violet-200/50 p-4 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Link2 className="w-3.5 h-3.5 text-violet-500" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-violet-600">Production Profile</span>
               </div>
-            </>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Link to Worker Profile</Label>
+                <Select
+                  value={form.link_resource_id || "none"}
+                  onValueChange={(v) => setForm((p) => ({ ...p, link_resource_id: v === "none" ? "" : v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No link" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="text-muted-foreground">No link</span>
+                    </SelectItem>
+                    {unlinkedResources.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        <span className="flex items-center gap-2">
+                          <Link2 className="w-3 h-3 text-violet-500" />
+                          {r.name}
+                          {r.responsibility && (
+                            <span className="text-muted-foreground/50 text-[10px]">({r.responsibility})</span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground/60">
+                  Links this user account to an existing workshop worker record for KPI tracking.
+                </p>
+              </div>
+            </div>
           )}
         </div>
 
-        <SheetFooter className="gap-2">
+        <SheetFooter className="gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
             Cancel
           </Button>
@@ -326,7 +348,7 @@ function UserFormSheet({
             disabled={!form.username || !form.name || !form.role || !form.department || (form.department === "shop" && form.brands.length === 0) || isPending}
             className="flex-1"
           >
-            {mode === "add" ? "Create User" : "Save Changes"}
+            {isPending ? "Saving..." : mode === "add" ? "Create User" : "Save Changes"}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -354,23 +376,38 @@ function DeactivateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-sm font-black uppercase tracking-wider">
+          <div className={cn(
+            "mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-2",
+            isActive ? "bg-red-100" : "bg-emerald-100",
+          )}>
+            {isActive
+              ? <AlertTriangle className="w-6 h-6 text-red-600" />
+              : <Power className="w-6 h-6 text-emerald-600" />
+            }
+          </div>
+          <DialogTitle className="text-center text-base font-bold">
             {isActive ? "Deactivate User" : "Reactivate User"}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-center text-sm">
             {isActive
-              ? `${user?.name} will no longer be able to log in. This can be reversed later.`
-              : `${user?.name} will be able to log in again.`}
+              ? <>
+                  <span className="font-semibold text-foreground">{user?.name}</span> will no longer be able to log in. This can be reversed later.
+                </>
+              : <>
+                  <span className="font-semibold text-foreground">{user?.name}</span> will be able to log in again.
+                </>
+            }
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">Cancel</Button>
           <Button
             variant={isActive ? "destructive" : "default"}
             onClick={onConfirm}
             disabled={isPending}
+            className="flex-1"
           >
-            {isActive ? "Deactivate" : "Reactivate"}
+            {isPending ? "Processing..." : isActive ? "Deactivate" : "Reactivate"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -378,15 +415,182 @@ function DeactivateDialog({
   );
 }
 
+// ── Stat Card ───────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  className,
+}: {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-3 rounded-xl border bg-card px-4 py-3", className)}>
+      <div className="h-9 w-9 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+      </div>
+      <div>
+        <p className="text-xl font-bold leading-none tabular-nums">{value}</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── User Card ───────────────────────────────────────────────────────
+
+function UserCard({
+  user,
+  linkedResourceName,
+  onEdit,
+  onToggleActive,
+}: {
+  user: User;
+  linkedResourceName: string | null;
+  onEdit: () => void;
+  onToggleActive: () => void;
+}) {
+  const isInactive = user.is_active === false;
+  const role = (user.role as Role) ?? "staff";
+  const department = (user.department as Department) ?? "workshop";
+  const brands = (user as any).brands as string[] | null;
+
+  return (
+    <div
+      onClick={onEdit}
+      className={cn(
+        "group relative rounded-xl border bg-card p-4 transition-all duration-200 cursor-pointer",
+        isInactive
+          ? "opacity-50 bg-muted/20 border-dashed"
+          : "hover:shadow-md hover:border-primary/20 hover:-translate-y-0.5",
+      )}
+    >
+      {/* Action buttons - top right */}
+      <div className="absolute top-3 right-3 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+          title="Edit user"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
+          className={cn(
+            "p-1.5 rounded-lg transition-colors",
+            isInactive
+              ? "text-muted-foreground/40 hover:text-emerald-600 hover:bg-emerald-50"
+              : "text-muted-foreground/40 hover:text-red-600 hover:bg-red-50",
+          )}
+          title={isInactive ? "Reactivate" : "Deactivate"}
+        >
+          <Power className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Avatar + Name */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className="relative shrink-0">
+          <div className={cn(
+            "w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold ring-2 ring-offset-1",
+            getAvatarStyle(role, department),
+          )}>
+            {user.name.slice(0, 2).toUpperCase()}
+          </div>
+          {/* Active indicator dot */}
+          <div className={cn(
+            "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card",
+            isInactive ? "bg-zinc-300" : "bg-emerald-500",
+          )} />
+        </div>
+        <div className="min-w-0 flex-1 pr-14">
+          <p className="text-sm font-semibold truncate leading-tight">{user.name}</p>
+          {user.username && (
+            <p className="text-[11px] text-muted-foreground/60 truncate">@{user.username}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Contact info */}
+      <div className="space-y-1 mb-3">
+        {user.email && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70 truncate">
+            <Mail className="w-3 h-3 shrink-0" />
+            <span className="truncate">{user.email}</span>
+          </div>
+        )}
+        {user.phone && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
+            <Phone className="w-3 h-3 shrink-0" />
+            <span>{[user.country_code, user.phone].filter(Boolean).join(" ")}</span>
+          </div>
+        )}
+        {!user.email && !user.phone && (
+          <p className="text-[11px] text-muted-foreground/40 italic">No contact info</p>
+        )}
+      </div>
+
+      {/* Badges */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={cn(
+          "inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border",
+          ROLE_STYLE[role],
+        )}>
+          <Shield className="w-2.5 h-2.5" />
+          {ROLE_LABELS[role]}
+        </span>
+        <span className={cn(
+          "inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border",
+          DEPT_STYLE[department],
+        )}>
+          {department === "workshop" ? <Factory className="w-2.5 h-2.5" /> : <ShoppingBag className="w-2.5 h-2.5" />}
+          {DEPARTMENT_LABELS[department]}
+        </span>
+      </div>
+
+      {/* Brand badges for shop users */}
+      {department === "shop" && brands && brands.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {brands.map((b) => (
+            <span
+              key={b}
+              className={cn(
+                "text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full border",
+                BRAND_STYLE[b] ?? "bg-muted/20 text-muted-foreground/40 border-transparent",
+              )}
+            >
+              {BRAND_LABELS[b] ?? b}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Linked worker profile indicator */}
+      {linkedResourceName && (
+        <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-violet-600 bg-violet-50 border border-violet-200/50 rounded-lg px-2 py-1">
+          <Link2 className="w-3 h-3" />
+          <span className="font-medium truncate">Linked: {linkedResourceName}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────
 
 function UsersPage() {
   const { data: users = [], isLoading } = useUsers();
-  const { data: resources = [] } = useResources();
+  const { data: resources = [] } = useResourcesWithUsers();
   const createMut = useCreateUser();
   const updateMut = useUpdateUser();
   const deactivateMut = useDeactivateUser();
   const activateMut = useActivateUser();
+  const linkMut = useLinkResourceToUser();
+  const unlinkMut = useUnlinkResourceFromUser();
 
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<"all" | Department>("all");
@@ -401,13 +605,24 @@ function UsersPage() {
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
 
-  // Unlinked resources for the link dropdown
+  // Unlinked resources for the link dropdown (plus the currently-linked one when editing)
   const unlinkedResources = useMemo(() =>
     resources
-      .filter((r) => !(r as any).user_id)
+      .filter((r) => !r.user_id)
       .map((r) => ({ id: r.id, name: r.resource_name, responsibility: r.responsibility })),
     [resources],
   );
+
+  // Find resource currently linked to a user
+  const getLinkedResourceId = (userId: string) => {
+    const linked = resources.find((r) => r.user_id === userId);
+    return linked?.id ?? "";
+  };
+
+  const getLinkedResourceName = (userId: string) => {
+    const linked = resources.find((r) => r.user_id === userId);
+    return linked?.resource_name ?? null;
+  };
 
   // Filtered users
   const filtered = useMemo(() => {
@@ -455,7 +670,7 @@ function UsersPage() {
       brands: (u as any).brands ?? [],
       is_active: u.is_active !== false,
       pin: u.pin ?? "",
-      link_resource_id: "",
+      link_resource_id: getLinkedResourceId(u.id),
     });
     setSheetOpen(true);
   };
@@ -476,13 +691,29 @@ function UsersPage() {
     };
 
     try {
+      let userId = editingId;
       if (sheetMode === "add") {
-        await createMut.mutateAsync(payload);
+        const created = await createMut.mutateAsync(payload);
+        userId = created.id;
         toast.success(`${form.name} created`);
       } else if (editingId) {
         await updateMut.mutateAsync({ id: editingId, updates: payload });
         toast.success(`${form.name} updated`);
       }
+
+      // Handle resource linking/unlinking
+      if (userId && form.department === "workshop" && form.role === "staff") {
+        const previouslyLinked = resources.find((r) => r.user_id === userId);
+        const newLinkId = form.link_resource_id || "";
+
+        if (previouslyLinked && previouslyLinked.id !== newLinkId) {
+          await unlinkMut.mutateAsync(previouslyLinked.id);
+        }
+        if (newLinkId && (!previouslyLinked || previouslyLinked.id !== newLinkId)) {
+          await linkMut.mutateAsync({ resourceId: newLinkId, userId });
+        }
+      }
+
       setSheetOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save user");
@@ -506,288 +737,146 @@ function UsersPage() {
     }
   };
 
-  const formatDate = (d?: string | Date | null) => {
-    if (!d) return "—";
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  };
-
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2.5">
-            <UserCog className="w-5 h-5" />
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
+            <UserCog className="w-6 h-6 text-primary" />
             User Management
           </h1>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="text-xs text-muted-foreground">
-              <span className="font-bold text-foreground">{stats.active}</span> active users
-            </span>
-            <span className="w-px h-3 bg-border" />
-            <span className="text-xs text-muted-foreground">
-              <span className="font-bold text-violet-600">{stats.workshop}</span> workshop
-            </span>
-            <span className="text-xs text-muted-foreground">
-              <span className="font-bold text-sky-600">{stats.shop}</span> shop
-            </span>
-          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage staff accounts, roles, and department access
+          </p>
         </div>
-        <Button onClick={openAdd} className="shadow-sm">
-          <Plus className="w-4 h-4 mr-2" /> Add User
+        <Button onClick={openAdd} size="default" className="shadow-sm gap-2 shrink-0">
+          <Plus className="w-4 h-4" />
+          Add User
         </Button>
       </div>
 
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <StatCard label="Total Users" value={stats.total} icon={Users} />
+        <StatCard label="Active" value={stats.active} icon={UserCog} />
+        <StatCard label="Workshop" value={stats.workshop} icon={Factory} />
+        <StatCard label="Shop" value={stats.shop} icon={ShoppingBag} />
+      </div>
+
       {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground/40" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+        <div className="relative flex-1 min-w-[200px] max-w-sm w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
           <Input
-            className="pl-8 h-9 text-sm"
+            className="pl-9 h-10"
             placeholder="Search by name, email, or phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        {/* Department toggle */}
-        <div className="flex rounded-lg border bg-muted/30 p-0.5">
-          {(["all", "workshop", "shop"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDeptFilter(d)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-bold rounded-md transition-all duration-150",
-                deptFilter === d
-                  ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background/50 active:bg-background/80 active:scale-[0.97]",
-              )}
-            >
-              {d === "all" ? "All" : DEPARTMENT_LABELS[d]}
-            </button>
-          ))}
-        </div>
-
-        {/* Role filter */}
-        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as "all" | Role)}>
-          <SelectTrigger className="w-[130px] h-9">
-            <SelectValue placeholder="All Roles" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            {(["admin", "manager", "staff"] as Role[]).map((r) => (
-              <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Inactive toggle */}
-        <button
-          onClick={() => setShowInactive(!showInactive)}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors",
-            showInactive
-              ? "bg-zinc-100 border-zinc-300 text-zinc-700"
-              : "bg-background text-muted-foreground/50 hover:text-muted-foreground",
-          )}
-        >
-          <Power className="w-3 h-3" />
-          {showInactive ? "Showing inactive" : "Show inactive"}
-        </button>
-      </div>
-
-      {/* Table */}
-      {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-12 rounded-lg" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground/40">
-          <UserCog className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-semibold">No users found</p>
-          <p className="text-xs mt-1">Try adjusting your filters or add a new user.</p>
-        </div>
-      ) : (
-        <div className="border rounded-lg overflow-hidden bg-card">
-          {/* Column headers */}
-          <div className="hidden md:grid grid-cols-[1fr_120px_90px_90px_70px_100px_60px] gap-2 px-4 py-2.5 bg-muted/40 border-b">
-            {["User", "Phone", "Role", "Dept", "Status", "Created", ""].map((h) => (
-              <span key={h} className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/50">
-                {h}
-              </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Department toggle pills */}
+          <div className="flex rounded-lg border bg-muted/30 p-0.5">
+            {(["all", "workshop", "shop"] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDeptFilter(d)}
+                className={cn(
+                  "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
+                  deptFilter === d
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {d === "all" ? "All" : DEPARTMENT_LABELS[d]}
+              </button>
             ))}
           </div>
 
-          {/* Rows */}
-          {filtered.map((u) => {
-            const isInactive = u.is_active === false;
-            return (
-              <div
-                key={u.id}
-                onClick={() => openEdit(u)}
-                className={cn(
-                  "border-b last:border-b-0 transition-colors cursor-pointer group",
-                  isInactive ? "opacity-50 bg-muted/10" : "hover:bg-muted/20",
-                )}
-              >
-                {/* Desktop row */}
-                <div className="hidden md:grid grid-cols-[1fr_120px_90px_90px_70px_100px_60px] gap-2 px-4 py-2.5 items-center">
-                  {/* Name + avatar */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0",
-                      u.role === "admin" ? "bg-red-100 text-red-700"
-                        : u.role === "manager" ? "bg-amber-100 text-amber-700"
-                        : u.department === "workshop" ? "bg-violet-100 text-violet-700"
-                        : "bg-sky-100 text-sky-700",
-                    )}>
-                      {u.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{u.name}</p>
-                      {u.email && <p className="text-[10px] text-muted-foreground/50 truncate">{u.email}</p>}
-                    </div>
-                  </div>
+          {/* Role filter */}
+          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as "all" | Role)}>
+            <SelectTrigger className="w-[130px] h-9">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              {(["admin", "manager", "staff"] as Role[]).map((r) => (
+                <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-                  {/* Phone */}
-                  <span className="text-xs text-muted-foreground font-medium truncate">
-                    {u.phone ? [u.country_code, u.phone].filter(Boolean).join(" ") : "—"}
-                  </span>
+          {/* Inactive toggle */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-background">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
+              onCheckedChange={setShowInactive}
+              className="scale-75 origin-left"
+            />
+            <label htmlFor="show-inactive" className="text-xs font-medium text-muted-foreground cursor-pointer whitespace-nowrap">
+              Show inactive
+            </label>
+          </div>
+        </div>
+      </div>
 
-                  {/* Role badge */}
-                  <div>
-                    <span className={cn(
-                      "inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border",
-                      ROLE_STYLE[(u.role as Role) ?? "staff"],
-                    )}>
-                      {ROLE_LABELS[(u.role as Role) ?? "staff"]}
-                    </span>
-                  </div>
-
-                  {/* Department + Brands */}
-                  <div className="flex flex-col gap-0.5">
-                    <span className={cn(
-                      "inline-flex items-center text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border w-fit",
-                      DEPT_STYLE[(u.department as Department) ?? "workshop"],
-                    )}>
-                      {DEPARTMENT_LABELS[(u.department as Department) ?? "workshop"]}
-                    </span>
-                    {u.department === "shop" && (u as any).brands?.length > 0 && (
-                      <div className="flex gap-0.5 flex-wrap">
-                        {((u as any).brands as string[]).map((b) => (
-                          <span
-                            key={b}
-                            className={cn(
-                              "text-[9px] font-bold uppercase px-1 py-0 rounded border",
-                              BRAND_STYLE[b] ?? "bg-muted/20 text-muted-foreground/40 border-transparent",
-                            )}
-                          >
-                            {BRAND_LABELS[b] ?? b}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Status dot */}
-                  <div className="flex items-center gap-1.5">
-                    <CircleDot className={cn("w-3 h-3", isInactive ? "text-zinc-300" : "text-emerald-500")} />
-                    <span className="text-[10px] font-bold text-muted-foreground/50">
-                      {isInactive ? "Off" : "On"}
-                    </span>
-                  </div>
-
-                  {/* Created */}
-                  <span className="text-[11px] text-muted-foreground/60 tabular-nums">
-                    {formatDate(u.created_at)}
-                  </span>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openEdit(u); }}
-                      className="p-1.5 rounded-md text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeactivateTarget(u);
-                        setDeactivateDialogOpen(true);
-                      }}
-                      className={cn(
-                        "p-1.5 rounded-md transition-colors",
-                        isInactive
-                          ? "text-muted-foreground/30 hover:text-emerald-500 hover:bg-emerald-50"
-                          : "text-muted-foreground/30 hover:text-red-500 hover:bg-red-50",
-                      )}
-                    >
-                      <Power className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Mobile row */}
-                <div className="md:hidden px-4 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0",
-                        u.role === "admin" ? "bg-red-100 text-red-700"
-                          : u.role === "manager" ? "bg-amber-100 text-amber-700"
-                          : u.department === "workshop" ? "bg-violet-100 text-violet-700"
-                          : "bg-sky-100 text-sky-700",
-                      )}>
-                        {u.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{u.name}</p>
-                        <p className="text-[10px] text-muted-foreground/50">{u.phone || u.email || "No contact"}</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground/20 shrink-0" />
-                  </div>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border",
-                      ROLE_STYLE[(u.role as Role) ?? "staff"],
-                    )}>
-                      {ROLE_LABELS[(u.role as Role) ?? "staff"]}
-                    </span>
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border",
-                      DEPT_STYLE[(u.department as Department) ?? "workshop"],
-                    )}>
-                      {DEPARTMENT_LABELS[(u.department as Department) ?? "workshop"]}
-                    </span>
-                    {u.department === "shop" && (u as any).brands?.length > 0 && (
-                      ((u as any).brands as string[]).map((b) => (
-                        <span
-                          key={b}
-                          className={cn(
-                            "text-[9px] font-bold uppercase px-1 py-0 rounded border",
-                            BRAND_STYLE[b] ?? "bg-muted/20 text-muted-foreground/40 border-transparent",
-                          )}
-                        >
-                          {BRAND_LABELS[b] ?? b}
-                        </span>
-                      ))
-                    )}
-                    <CircleDot className={cn("w-3 h-3 ml-auto", isInactive ? "text-zinc-300" : "text-emerald-500")} />
-                  </div>
+      {/* User Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="rounded-xl border bg-card p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <Skeleton className="w-11 h-11 rounded-full shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
               </div>
-            );
-          })}
+              <Skeleton className="h-3 w-full" />
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+            <UserX className="w-8 h-8 text-muted-foreground/30" />
+          </div>
+          <h3 className="text-base font-semibold text-foreground mb-1">No users found</h3>
+          <p className="text-sm text-muted-foreground/60 max-w-xs">
+            Try adjusting your search or filters, or add a new user to get started.
+          </p>
+          <Button onClick={openAdd} variant="outline" className="mt-4 gap-2">
+            <Plus className="w-4 h-4" />
+            Add User
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((u) => (
+            <UserCard
+              key={u.id}
+              user={u}
+              linkedResourceName={getLinkedResourceName(u.id)}
+              onEdit={() => openEdit(u)}
+              onToggleActive={() => {
+                setDeactivateTarget(u);
+                setDeactivateDialogOpen(true);
+              }}
+            />
+          ))}
         </div>
       )}
 
       {/* Footer count */}
       {!isLoading && filtered.length > 0 && (
-        <p className="text-[10px] text-muted-foreground/40 mt-2 px-1">
+        <p className="text-xs text-muted-foreground/50 mt-4 text-center">
           Showing {filtered.length} of {users.length} user{users.length !== 1 ? "s" : ""}
         </p>
       )}
@@ -799,8 +888,19 @@ function UsersPage() {
         form={form}
         setForm={setForm}
         onSubmit={handleSubmit}
-        isPending={createMut.isPending || updateMut.isPending}
-        unlinkedResources={unlinkedResources}
+        isPending={createMut.isPending || updateMut.isPending || linkMut.isPending || unlinkMut.isPending}
+        unlinkedResources={
+          // Include the currently-linked resource in the dropdown when editing
+          editingId
+            ? (() => {
+                const linked = resources.find((r) => r.user_id === editingId);
+                if (linked && !unlinkedResources.some((u) => u.id === linked.id)) {
+                  return [{ id: linked.id, name: linked.resource_name, responsibility: linked.responsibility }, ...unlinkedResources];
+                }
+                return unlinkedResources;
+              })()
+            : unlinkedResources
+        }
       />
 
       <DeactivateDialog

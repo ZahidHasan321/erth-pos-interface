@@ -111,6 +111,9 @@ export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final"]);
 export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
 export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refund"]);
+
+export const appointmentStatusEnum = pgEnum("appointment_status", ["scheduled", "completed", "cancelled", "no_show"]);
+export type AppointmentStatus = (typeof appointmentStatusEnum.enumValues)[number];
 export type TransactionType = (typeof transactionTypeEnum.enumValues)[number];
 
 // --- 0. PRICES ---
@@ -544,6 +547,48 @@ export const paymentTransactions = pgTable("payment_transactions", {
     orderIdx: index("payment_transactions_order_idx").on(t.order_id),
 }));
 
+// --- 9. APPOINTMENTS (Home Visit Bookings — SAKKBA) ---
+export const appointments = pgTable("appointments", {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    // Customer
+    customer_id: integer("customer_id").references(() => customers.id),
+    customer_name: text("customer_name").notNull(),
+    customer_phone: text("customer_phone").notNull(),
+
+    // Staff
+    assigned_to: uuid("assigned_to").references(() => users.id).notNull(),
+    booked_by: uuid("booked_by").references(() => users.id).notNull(),
+
+    // Schedule
+    appointment_date: date("appointment_date").notNull(),
+    start_time: text("start_time").notNull(), // "09:00" (24h)
+    end_time: text("end_time").notNull(),     // "10:30" (24h)
+
+    // Status
+    status: appointmentStatusEnum("status").default("scheduled").notNull(),
+
+    // Address
+    city: text("city"),
+    block: text("block"),
+    street: text("street"),
+    house_no: text("house_no"),
+    area: text("area"),
+    address_note: text("address_note"),
+
+    // Meta
+    notes: text("notes"),
+    order_id: integer("order_id").references(() => orders.id),
+    brand: brandEnum("brand").notNull(),
+
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+    dateIdx: index("appointments_date_idx").on(t.appointment_date),
+    assignedIdx: index("appointments_assigned_idx").on(t.assigned_to),
+    customerIdx: index("appointments_customer_idx").on(t.customer_id),
+}));
+
 // --- RELATIONS ---
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
@@ -587,6 +632,13 @@ export const orderShelfItemsRelations = relations(orderShelfItems, ({ one }) => 
 export const paymentTransactionsRelations = relations(paymentTransactions, ({ one }) => ({
     order: one(orders, { fields: [paymentTransactions.order_id], references: [orders.id] }),
     cashier: one(users, { fields: [paymentTransactions.cashier_id], references: [users.id] }),
+}));
+
+export const appointmentsRelations = relations(appointments, ({ one }) => ({
+    customer: one(customers, { fields: [appointments.customer_id], references: [customers.id] }),
+    assignee: one(users, { fields: [appointments.assigned_to], references: [users.id], relationName: "appointment_assignee" }),
+    booker: one(users, { fields: [appointments.booked_by], references: [users.id], relationName: "appointment_booker" }),
+    order: one(orders, { fields: [appointments.order_id], references: [orders.id] }),
 }));
 
 // --- TYPE EXPORTS ---
@@ -651,3 +703,6 @@ export type NewPaymentTransaction = InferInsertModel<typeof paymentTransactions>
 
 export type Resource = InferSelectModel<typeof resources>;
 export type NewResource = InferInsertModel<typeof resources>;
+
+export type Appointment = InferSelectModel<typeof appointments>;
+export type NewAppointment = InferInsertModel<typeof appointments>;

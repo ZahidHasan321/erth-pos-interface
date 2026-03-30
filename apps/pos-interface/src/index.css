@@ -316,6 +316,12 @@ input[type="number"] {
   animation: simple-fade-in 0.6s ease-out forwards;
 }
 
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(-100%); }
+}
+
 /* Touch-optimized scrollable areas */
 @layer base {
   [data-slot="select-content"],
