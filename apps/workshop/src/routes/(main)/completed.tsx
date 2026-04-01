@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCompletedOrders } from "@/hooks/useWorkshopGarments";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
-import { MetadataChip } from "@/components/shared/PageShell";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader, MetadataChip, LoadingSkeleton } from "@/components/shared/PageShell";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
   CheckCircle2,
@@ -72,11 +73,87 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
   );
 }
 
+// ── Table (desktop) ───────────────────────────────────────────
+
+function CompletedOrderTable({
+  groups,
+  onOrderClick,
+}: {
+  groups: OrderGroup[];
+  onOrderClick: (orderId: number) => void;
+}) {
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40">
+            <TableHead className="w-[90px]">Order</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead className="w-[100px]">Brand</TableHead>
+            <TableHead>Garments</TableHead>
+            <TableHead className="w-[120px]">Delivery</TableHead>
+            <TableHead className="w-[120px]">Invoice</TableHead>
+            <TableHead className="w-[110px]">Express</TableHead>
+            <TableHead className="w-[110px]">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {groups.map((group) => (
+            <TableRow
+              key={group.order_id}
+              onClick={() => onOrderClick(group.order_id)}
+              {...clickableProps(() => onOrderClick(group.order_id))}
+              className="cursor-pointer hover:bg-muted/50 border-l-4 border-l-green-400"
+            >
+              <TableCell className="font-mono font-bold text-sm">
+                #{group.order_id}
+              </TableCell>
+              <TableCell className="text-sm">
+                {group.customer_name ?? "—"}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {group.brands.map((b) => (
+                    <BrandBadge key={b} brand={b} />
+                  ))}
+                </div>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {garmentSummary(group.garments)}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {group.delivery_date ? formatDate(group.delivery_date) : "—"}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {group.invoice_number ? `INV-${group.invoice_number}` : "—"}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {group.express && <ExpressBadge />}
+                  {group.home_delivery && (
+                    <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
+                  Completed
+                </span>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────
 
 function CompletedOrdersPage() {
   const { data: all = [], isLoading } = useCompletedOrders();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const orderGroups = groupByOrder(all).sort((a, b) => {
     // Most recent delivery date first
@@ -91,20 +168,15 @@ function CompletedOrdersPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-10">
-      <div className="mb-4">
-        <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-green-600" /> Completed Orders
-        </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {orderGroups.length} order{orderGroups.length !== 1 ? "s" : ""} fully completed
-        </p>
-      </div>
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
+      <PageHeader
+        icon={CheckCircle2}
+        title="Completed Orders"
+        subtitle={`${orderGroups.length} order${orderGroups.length !== 1 ? "s" : ""} fully completed`}
+      />
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        </div>
+        <LoadingSkeleton />
       ) : orderGroups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
           <CheckCircle2 className="w-8 h-8 text-muted-foreground/20 mb-3" />
@@ -112,15 +184,22 @@ function CompletedOrdersPage() {
         </div>
       ) : (
         <>
-          <div className="space-y-2">
-            {pagination.paged.map((group) => (
-              <CompletedOrderCard
-                key={group.order_id}
-                group={group}
-                onClick={() => handleOrderClick(group.order_id)}
-              />
-            ))}
-          </div>
+          {isMobile ? (
+            <div className="space-y-2">
+              {pagination.paged.map((group) => (
+                <CompletedOrderCard
+                  key={group.order_id}
+                  group={group}
+                  onClick={() => handleOrderClick(group.order_id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <CompletedOrderTable
+              groups={pagination.paged}
+              onOrderClick={handleOrderClick}
+            />
+          )}
           <Pagination
             page={pagination.page}
             totalPages={pagination.totalPages}

@@ -15,17 +15,17 @@ import {
   HISTORY_KEY_MAP,
 } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@repo/ui/skeleton";
+import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@repo/ui/dialog";
 import { toast } from "sonner";
 import {
   PIECE_STAGE_LABELS,

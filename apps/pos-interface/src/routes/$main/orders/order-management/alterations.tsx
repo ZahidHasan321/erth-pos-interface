@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
+import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { Truck, Package, RotateCcw } from "lucide-react";
 import type { Garment, Order } from "@repo/database";
@@ -58,6 +58,10 @@ async function sendToWorkshop(garmentId: string, currentTripNumber: number): Pro
       in_production: false,
       piece_stage: "waiting_cut",
       trip_number: currentTripNumber + 1,
+      production_plan: null,
+      worker_history: null,
+      completion_time: null,
+      start_time: null,
     })
     .eq("id", garmentId);
   if (error) throw new Error(error.message);

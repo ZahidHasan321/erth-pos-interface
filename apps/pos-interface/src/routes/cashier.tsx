@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import { useAuth } from "@/context/auth";
 import { router } from "@/router";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { CashierBody } from "@/components/cashier/cashier-terminal";
 import ErthLogo from "@/assets/erth-light.svg";
 import SakhtbaLogo from "@/assets/Sakkba.png";

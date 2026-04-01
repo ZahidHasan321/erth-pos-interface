@@ -6,7 +6,7 @@ import { getBrand } from "./orders";
 
 const CASHIER_ORDER_QUERY = `
     *,
-    workOrder:work_orders!order_id(invoice_number, order_phase, delivery_date, home_delivery, campaign_id, campaign:campaigns(name)),
+    workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
     garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, shelf:shelf(type)),
@@ -36,7 +36,7 @@ function flattenCashierOrder(data: any): Order | null {
 // Lightweight select for order list (no garments, no transactions)
 const CASHIER_ORDER_LIST_QUERY = `
     id, order_type, checkout_status, order_total, paid, order_date, brand, discount_value,
-    workOrder:work_orders!order_id(invoice_number, order_phase, delivery_date, home_delivery),
+    workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery),
     customer:customers(name, phone),
     garments:garments(piece_stage, location)
 `;
@@ -49,6 +49,7 @@ export interface CashierOrderListItem {
     paid: number;
     order_date: string;
     invoice_number?: number;
+    invoice_revision?: number;
     order_phase?: string;
     customer_name?: string;
     customer_phone?: string;
@@ -71,6 +72,7 @@ function flattenOrderListItem(data: any): CashierOrderListItem {
         paid: Number(data.paid) || 0,
         order_date: data.order_date,
         invoice_number: workData?.invoice_number,
+        invoice_revision: workData?.invoice_revision ?? 0,
         order_phase: workData?.order_phase,
         delivery_date: workData?.delivery_date,
         home_delivery: workData?.home_delivery,

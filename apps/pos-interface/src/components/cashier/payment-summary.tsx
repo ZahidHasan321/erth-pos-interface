@@ -1,4 +1,4 @@
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@repo/ui/separator";
 import { Tag } from "lucide-react";
 import { usePricing } from "@/hooks/usePricing";
 

@@ -12,24 +12,24 @@ import { Check, Link as LinkIcon, X, User, Phone, Clock, Crown, Hash, Search } f
 import { motion, AnimatePresence } from "framer-motion";
 
 // UI Components
-import { Button } from "../ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "../ui/dialog";
-import { Checkbox } from "../ui/checkbox";
-import { Badge } from "../ui/badge";
+} from "@repo/ui/dialog";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Badge } from "@repo/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ErrorBoundary } from "../global/error-boundary";
 import { SearchCustomer } from "../forms/customer-demographics/search-customer";
 import { LinkConfigurationPanel } from "./link-configuration-panel";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
 
 import type { Order, Customer } from "@repo/database";
 

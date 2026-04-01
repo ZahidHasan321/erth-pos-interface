@@ -3,17 +3,17 @@ import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Package, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ChipToggle } from "@/components/ui/chip-toggle";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@repo/ui/button";
+import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import { usePaymentMutation } from "@/hooks/useCashier";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
@@ -38,10 +38,11 @@ interface PaymentFormProps {
     advance?: number;
     collectGarmentIds?: Set<string>;
     onCollected?: () => void;
+    refundOnly?: boolean;
 }
 
-export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected }: PaymentFormProps) {
-    const [isRefund, setIsRefund] = useState(false);
+export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected, refundOnly }: PaymentFormProps) {
+    const [isRefund, setIsRefund] = useState(refundOnly ?? false);
     const paymentMutation = usePaymentMutation();
 
     const { data: employeesRaw } = useQuery({
@@ -110,20 +111,22 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
             {/* Payment / Refund Toggle */}
-            <div className="relative flex rounded-lg bg-muted/80 p-0.5 border border-border/50">
-                <div
-                    className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md transition-all duration-300 ease-in-out ${isRefund ? "translate-x-[calc(100%+2px)] bg-red-100 ring-1 ring-red-200" : "translate-x-0 bg-background shadow-sm ring-1 ring-border/50"}`}
-                    style={{ left: 2 }}
-                />
-                <button type="button" onClick={() => setIsRefund(false)}
-                    className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${!isRefund ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                    Payment
-                </button>
-                <button type="button" onClick={() => setIsRefund(true)}
-                    className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${isRefund ? "text-red-700" : "text-muted-foreground hover:text-foreground"}`}>
-                    Refund
-                </button>
-            </div>
+            {!refundOnly && (
+                <div className="relative flex rounded-lg bg-muted/80 p-0.5 border border-border/50">
+                    <div
+                        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md transition-all duration-300 ease-in-out ${isRefund ? "translate-x-[calc(100%+2px)] bg-red-100 ring-1 ring-red-200" : "translate-x-0 bg-background shadow-sm ring-1 ring-border/50"}`}
+                        style={{ left: 2 }}
+                    />
+                    <button type="button" onClick={() => setIsRefund(false)}
+                        className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${!isRefund ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                        Payment
+                    </button>
+                    <button type="button" onClick={() => setIsRefund(true)}
+                        className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${isRefund ? "text-red-700" : "text-muted-foreground hover:text-foreground"}`}>
+                        Refund
+                    </button>
+                </div>
+            )}
 
             {/* Amount + Quick fills */}
             <div className="space-y-1">

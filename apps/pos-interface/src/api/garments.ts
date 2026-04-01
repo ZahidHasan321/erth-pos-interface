@@ -71,6 +71,9 @@ export const dispatchGarmentToWorkshop = async (
       piece_stage: 'waiting_cut',
       in_production: false,
       trip_number: currentTripNumber + 1,
+      production_plan: null,
+      completion_time: null,
+      start_time: null,
     })
     .eq('id', garmentId)
     .select()

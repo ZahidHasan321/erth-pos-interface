@@ -11,19 +11,20 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as mainRouteRouteImport } from './routes/(main)/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as mainUsersRouteImport } from './routes/(main)/users'
 import { Route as mainTeamRouteImport } from './routes/(main)/team'
 import { Route as mainSchedulerRouteImport } from './routes/(main)/scheduler'
 import { Route as mainReceivingRouteImport } from './routes/(main)/receiving'
 import { Route as mainPricingRouteImport } from './routes/(main)/pricing'
-import { Route as mainPerformanceRouteImport } from './routes/(main)/performance'
 import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
 import { Route as mainCompletedRouteImport } from './routes/(main)/completed'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as mainAssignedRouteRouteImport } from './routes/(main)/assigned/route'
+import { Route as mainUsersIndexRouteImport } from './routes/(main)/users/index'
+import { Route as mainPerformanceIndexRouteImport } from './routes/(main)/performance/index'
 import { Route as mainAssignedIndexRouteImport } from './routes/(main)/assigned/index'
+import { Route as mainUsersUserIdRouteImport } from './routes/(main)/users/$userId'
 import { Route as mainTerminalsSoakingRouteImport } from './routes/(main)/terminals/soaking'
 import { Route as mainTerminalsSewingRouteImport } from './routes/(main)/terminals/sewing'
 import { Route as mainTerminalsQualityCheckRouteImport } from './routes/(main)/terminals/quality-check'
@@ -33,6 +34,7 @@ import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/term
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
+import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
 import { Route as mainAssignedGarmentGarmentIdRouteImport } from './routes/(main)/assigned/garment.$garmentId'
 
 const mainRouteRoute = mainRouteRouteImport.update({
@@ -43,11 +45,6 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const mainUsersRoute = mainUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => mainRouteRoute,
 } as any)
 const mainTeamRoute = mainTeamRouteImport.update({
   id: '/team',
@@ -67,11 +64,6 @@ const mainReceivingRoute = mainReceivingRouteImport.update({
 const mainPricingRoute = mainPricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
-  getParentRoute: () => mainRouteRoute,
-} as any)
-const mainPerformanceRoute = mainPerformanceRouteImport.update({
-  id: '/performance',
-  path: '/performance',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainParkingRoute = mainParkingRouteImport.update({
@@ -104,10 +96,25 @@ const mainAssignedRouteRoute = mainAssignedRouteRouteImport.update({
   path: '/assigned',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainUsersIndexRoute = mainUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainPerformanceIndexRoute = mainPerformanceIndexRouteImport.update({
+  id: '/performance/',
+  path: '/performance/',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainAssignedIndexRoute = mainAssignedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => mainAssignedRouteRoute,
+} as any)
+const mainUsersUserIdRoute = mainUsersUserIdRouteImport.update({
+  id: '/users/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => mainRouteRoute,
 } as any)
 const mainTerminalsSoakingRoute = mainTerminalsSoakingRouteImport.update({
   id: '/terminals/soaking',
@@ -157,6 +164,12 @@ const mainTerminalsGarmentGarmentIdRoute =
     path: '/terminals/garment/$garmentId',
     getParentRoute: () => mainRouteRoute,
   } as any)
+const mainPerformanceWorkerWorkerNameRoute =
+  mainPerformanceWorkerWorkerNameRouteImport.update({
+    id: '/performance/worker/$workerName',
+    path: '/performance/worker/$workerName',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainAssignedGarmentGarmentIdRoute =
   mainAssignedGarmentGarmentIdRouteImport.update({
     id: '/garment/$garmentId',
@@ -172,12 +185,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
-  '/performance': typeof mainPerformanceRoute
   '/pricing': typeof mainPricingRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
-  '/users': typeof mainUsersRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -186,8 +197,12 @@ export interface FileRoutesByFullPath {
   '/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/terminals/sewing': typeof mainTerminalsSewingRoute
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
+  '/users/$userId': typeof mainUsersUserIdRoute
   '/assigned/': typeof mainAssignedIndexRoute
+  '/performance/': typeof mainPerformanceIndexRoute
+  '/users/': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
+  '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRoutesByTo {
@@ -197,12 +212,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
-  '/performance': typeof mainPerformanceRoute
   '/pricing': typeof mainPricingRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
-  '/users': typeof mainUsersRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -211,8 +224,12 @@ export interface FileRoutesByTo {
   '/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/terminals/sewing': typeof mainTerminalsSewingRoute
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
+  '/users/$userId': typeof mainUsersUserIdRoute
   '/assigned': typeof mainAssignedIndexRoute
+  '/performance': typeof mainPerformanceIndexRoute
+  '/users': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
+  '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRoutesById {
@@ -225,12 +242,10 @@ export interface FileRoutesById {
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/parking': typeof mainParkingRoute
-  '/(main)/performance': typeof mainPerformanceRoute
   '/(main)/pricing': typeof mainPricingRoute
   '/(main)/receiving': typeof mainReceivingRoute
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
-  '/(main)/users': typeof mainUsersRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -239,8 +254,12 @@ export interface FileRoutesById {
   '/(main)/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/(main)/terminals/sewing': typeof mainTerminalsSewingRoute
   '/(main)/terminals/soaking': typeof mainTerminalsSoakingRoute
+  '/(main)/users/$userId': typeof mainUsersUserIdRoute
   '/(main)/assigned/': typeof mainAssignedIndexRoute
+  '/(main)/performance/': typeof mainPerformanceIndexRoute
+  '/(main)/users/': typeof mainUsersIndexRoute
   '/(main)/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
+  '/(main)/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/(main)/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRouteTypes {
@@ -253,12 +272,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dispatch'
     | '/parking'
-    | '/performance'
     | '/pricing'
     | '/receiving'
     | '/scheduler'
     | '/team'
-    | '/users'
     | '/assigned/$orderId'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -267,8 +284,12 @@ export interface FileRouteTypes {
     | '/terminals/quality-check'
     | '/terminals/sewing'
     | '/terminals/soaking'
+    | '/users/$userId'
     | '/assigned/'
+    | '/performance/'
+    | '/users/'
     | '/assigned/garment/$garmentId'
+    | '/performance/worker/$workerName'
     | '/terminals/garment/$garmentId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -278,12 +299,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dispatch'
     | '/parking'
-    | '/performance'
     | '/pricing'
     | '/receiving'
     | '/scheduler'
     | '/team'
-    | '/users'
     | '/assigned/$orderId'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -292,8 +311,12 @@ export interface FileRouteTypes {
     | '/terminals/quality-check'
     | '/terminals/sewing'
     | '/terminals/soaking'
+    | '/users/$userId'
     | '/assigned'
+    | '/performance'
+    | '/users'
     | '/assigned/garment/$garmentId'
+    | '/performance/worker/$workerName'
     | '/terminals/garment/$garmentId'
   id:
     | '__root__'
@@ -305,12 +328,10 @@ export interface FileRouteTypes {
     | '/(main)/dashboard'
     | '/(main)/dispatch'
     | '/(main)/parking'
-    | '/(main)/performance'
     | '/(main)/pricing'
     | '/(main)/receiving'
     | '/(main)/scheduler'
     | '/(main)/team'
-    | '/(main)/users'
     | '/(main)/assigned/$orderId'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
@@ -319,8 +340,12 @@ export interface FileRouteTypes {
     | '/(main)/terminals/quality-check'
     | '/(main)/terminals/sewing'
     | '/(main)/terminals/soaking'
+    | '/(main)/users/$userId'
     | '/(main)/assigned/'
+    | '/(main)/performance/'
+    | '/(main)/users/'
     | '/(main)/assigned/garment/$garmentId'
+    | '/(main)/performance/worker/$workerName'
     | '/(main)/terminals/garment/$garmentId'
   fileRoutesById: FileRoutesById
 }
@@ -345,13 +370,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/(main)/users': {
-      id: '/(main)/users'
-      path: '/users'
-      fullPath: '/users'
-      preLoaderRoute: typeof mainUsersRouteImport
-      parentRoute: typeof mainRouteRoute
     }
     '/(main)/team': {
       id: '/(main)/team'
@@ -379,13 +397,6 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof mainPricingRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
-    '/(main)/performance': {
-      id: '/(main)/performance'
-      path: '/performance'
-      fullPath: '/performance'
-      preLoaderRoute: typeof mainPerformanceRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/parking': {
@@ -430,12 +441,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainAssignedRouteRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/users/': {
+      id: '/(main)/users/'
+      path: '/users'
+      fullPath: '/users/'
+      preLoaderRoute: typeof mainUsersIndexRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/performance/': {
+      id: '/(main)/performance/'
+      path: '/performance'
+      fullPath: '/performance/'
+      preLoaderRoute: typeof mainPerformanceIndexRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/assigned/': {
       id: '/(main)/assigned/'
       path: '/'
       fullPath: '/assigned/'
       preLoaderRoute: typeof mainAssignedIndexRouteImport
       parentRoute: typeof mainAssignedRouteRoute
+    }
+    '/(main)/users/$userId': {
+      id: '/(main)/users/$userId'
+      path: '/users/$userId'
+      fullPath: '/users/$userId'
+      preLoaderRoute: typeof mainUsersUserIdRouteImport
+      parentRoute: typeof mainRouteRoute
     }
     '/(main)/terminals/soaking': {
       id: '/(main)/terminals/soaking'
@@ -500,6 +532,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTerminalsGarmentGarmentIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/performance/worker/$workerName': {
+      id: '/(main)/performance/worker/$workerName'
+      path: '/performance/worker/$workerName'
+      fullPath: '/performance/worker/$workerName'
+      preLoaderRoute: typeof mainPerformanceWorkerWorkerNameRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/assigned/garment/$garmentId': {
       id: '/(main)/assigned/garment/$garmentId'
       path: '/garment/$garmentId'
@@ -531,12 +570,10 @@ interface mainRouteRouteChildren {
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
   mainParkingRoute: typeof mainParkingRoute
-  mainPerformanceRoute: typeof mainPerformanceRoute
   mainPricingRoute: typeof mainPricingRoute
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
-  mainUsersRoute: typeof mainUsersRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
   mainTerminalsIroningRoute: typeof mainTerminalsIroningRoute
@@ -544,6 +581,10 @@ interface mainRouteRouteChildren {
   mainTerminalsQualityCheckRoute: typeof mainTerminalsQualityCheckRoute
   mainTerminalsSewingRoute: typeof mainTerminalsSewingRoute
   mainTerminalsSoakingRoute: typeof mainTerminalsSoakingRoute
+  mainUsersUserIdRoute: typeof mainUsersUserIdRoute
+  mainPerformanceIndexRoute: typeof mainPerformanceIndexRoute
+  mainUsersIndexRoute: typeof mainUsersIndexRoute
+  mainPerformanceWorkerWorkerNameRoute: typeof mainPerformanceWorkerWorkerNameRoute
   mainTerminalsGarmentGarmentIdRoute: typeof mainTerminalsGarmentGarmentIdRoute
 }
 
@@ -553,12 +594,10 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
   mainParkingRoute: mainParkingRoute,
-  mainPerformanceRoute: mainPerformanceRoute,
   mainPricingRoute: mainPricingRoute,
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,
-  mainUsersRoute: mainUsersRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,
   mainTerminalsIroningRoute: mainTerminalsIroningRoute,
@@ -566,6 +605,10 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainTerminalsQualityCheckRoute: mainTerminalsQualityCheckRoute,
   mainTerminalsSewingRoute: mainTerminalsSewingRoute,
   mainTerminalsSoakingRoute: mainTerminalsSoakingRoute,
+  mainUsersUserIdRoute: mainUsersUserIdRoute,
+  mainPerformanceIndexRoute: mainPerformanceIndexRoute,
+  mainUsersIndexRoute: mainUsersIndexRoute,
+  mainPerformanceWorkerWorkerNameRoute: mainPerformanceWorkerWorkerNameRoute,
   mainTerminalsGarmentGarmentIdRoute: mainTerminalsGarmentGarmentIdRoute,
 }
 

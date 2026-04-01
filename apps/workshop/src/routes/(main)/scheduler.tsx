@@ -10,9 +10,9 @@ import { BrandBadge } from "@/components/shared/StageBadge";
 import {
   PageHeader, EmptyState, LoadingSkeleton,
 } from "@/components/shared/PageShell";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@repo/ui/button";
+import { Badge } from "@repo/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
@@ -75,7 +75,7 @@ function SchedulerGarmentRow({
       className={cn(
         "bg-card border rounded-xl px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
         "hover:bg-muted/20 active:scale-[0.995]",
-        g.express && "border-l-[3px] border-l-orange-400",
+        g.express && "border-l-4 border-l-orange-400",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
       onClick={() => onSelect(g.id, !selected)}
@@ -90,7 +90,7 @@ function SchedulerGarmentRow({
           className="w-4 h-4 accent-primary cursor-pointer shrink-0"
         />
         <span className={cn(
-          "font-bold uppercase text-[10px] px-1.5 py-0.5 rounded shrink-0",
+          "font-bold uppercase text-xs px-1.5 py-0.5 rounded shrink-0",
           g.garment_type === "brova" ? "text-purple-700 bg-purple-100" : "text-blue-700 bg-blue-100",
         )}>
           {g.garment_type === "brova" ? "B" : "F"}
@@ -105,34 +105,34 @@ function SchedulerGarmentRow({
       {/* Row 2 — Context: alteration # · feedback · fabric · delivery */}
       <div className="flex items-center gap-1.5 mt-1.5 ml-6 flex-wrap">
         {isAlt && altNum !== null && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 ring-1 ring-orange-300/40">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 ring-1 ring-orange-300/40">
             Alt #{altNum}
           </span>
         )}
         {!isAlt && (g.trip_number ?? 1) > 1 && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 ring-1 ring-purple-300/40">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 ring-1 ring-purple-300/40">
             Return #{(g.trip_number ?? 1) - 1}
           </span>
         )}
         {fb && (
-          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded ring-1", fb.cls)}>
+          <span className={cn("text-xs font-bold px-1.5 py-0.5 rounded ring-1", fb.cls)}>
             {fb.label}
           </span>
         )}
         {g.soaking && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 ring-1 ring-sky-300/40">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 ring-1 ring-sky-300/40">
             Soak
           </span>
         )}
         <span className="flex-1" />
         {g.fabric_name && (
-          <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+          <span className="text-xs text-muted-foreground truncate max-w-[140px]">
             {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
           </span>
         )}
         {daysLabel ? (
           <span className={cn(
-            "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded",
+            "text-xs font-bold tabular-nums px-1.5 py-0.5 rounded",
             isOverdue && "bg-red-100 text-red-700",
             isUrgent && "bg-amber-100 text-amber-700",
             !isUrgent && !isOverdue && "text-muted-foreground",
@@ -140,7 +140,7 @@ function SchedulerGarmentRow({
             {daysLabel}
           </span>
         ) : g.delivery_date_order ? (
-          <span className="text-[10px] text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {formatDate(g.delivery_date_order)}
           </span>
         ) : null}
@@ -176,7 +176,7 @@ function SchedulerOrderCard({
     <>
     <div
       className={cn(
-        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-[3px]",
+        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
         group.express
           ? "border-l-orange-400"
           : isOverdue
@@ -201,7 +201,7 @@ function SchedulerOrderCard({
               aria-label={`Select order #${group.order_id}`}
               className="w-4 h-4 accent-primary cursor-pointer shrink-0"
             />
-            <span className="font-mono font-bold shrink-0">#{group.order_id}</span>
+            <span className="font-mono font-bold text-sm shrink-0">#{group.order_id}</span>
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
             <span className="text-sm text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
           </div>
@@ -236,8 +236,8 @@ function SchedulerOrderCard({
         <div className="flex items-center gap-1.5 mt-1 ml-6 flex-wrap">
           <span className="text-xs text-muted-foreground">{garmentSummary(group.garments)}</span>
           {group.home_delivery && (
-            <span className="text-[10px] font-semibold text-indigo-600">
-              <Home className="w-2.5 h-2.5 inline mr-0.5" />Delivery
+            <span className="text-xs font-semibold text-indigo-600">
+              <Home className="w-3 h-3 inline mr-0.5" />Delivery
             </span>
           )}
           {deliveryDate && !daysLabel && (
@@ -259,7 +259,7 @@ function SchedulerOrderCard({
                 isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
               )}>
                 <span className={cn(
-                  "font-bold uppercase text-[10px] px-1 py-0.5 rounded shrink-0",
+                  "font-bold uppercase text-xs px-1 py-0.5 rounded shrink-0",
                   g.garment_type === "brova" ? "text-purple-700 bg-purple-50" : "text-blue-700 bg-blue-50",
                 )}>
                   {g.garment_type === "brova" ? "B" : "F"}
@@ -271,9 +271,9 @@ function SchedulerOrderCard({
                   <span className="text-muted-foreground/50 truncate">Outside fabric</span>
                 )}
                 <div className="flex items-center gap-1 ml-auto shrink-0">
-                  {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded text-[10px]">Soak</span>}
-                  {g.express && <span className="font-bold text-red-700 bg-red-100 px-1 py-0.5 rounded text-[10px]">Express</span>}
-                  {isParked && <span className="text-muted-foreground/60 italic text-[10px]">parked</span>}
+                  {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded text-xs">Soak</span>}
+                  {g.express && <span className="font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded text-xs">Express</span>}
+                  {isParked && <span className="text-muted-foreground/60 italic text-xs">parked</span>}
                 </div>
               </div>
             );
@@ -517,7 +517,7 @@ function WorkloadSummary({
                       <User className="w-3 h-3 text-muted-foreground/40 shrink-0" />
                       <span className="text-sm font-medium truncate flex-1">{w.name}</span>
                       {showUnits && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                        <span className="text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                           {w.unit}
                         </span>
                       )}
@@ -861,7 +861,7 @@ function SchedulerPage() {
         <div className="min-w-0">
           <Tabs defaultValue="orders" value={activeTab} onValueChange={setActiveTab}>
             <div className="flex items-center justify-between mb-3 gap-2">
-              <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto max-w-full">
+              <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden max-w-full">
                 <TabsTrigger value="orders" className="text-xs px-2.5">
                   Orders{" "}
                   <Badge variant="secondary" className="ml-1 text-[10px] bg-blue-100 text-blue-700">

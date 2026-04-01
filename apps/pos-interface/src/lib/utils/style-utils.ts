@@ -9,7 +9,7 @@ function buildStylePriceMap(styles: Style[]): Map<string, number> {
     const map = new Map<string, number>();
     styles.forEach((s) => {
         if (s.image_url) {
-            map.set(s.image_url, s.rate_per_item ?? 0);
+            map.set(s.image_url, Number(s.rate_per_item) || 0);
         }
     });
     return map;

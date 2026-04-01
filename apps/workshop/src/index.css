@@ -3,6 +3,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@source "../../../packages/ui/src";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -150,50 +152,62 @@ input[type="number"] {
 }
 
 /* ── Touch feedback for interactive elements ────────── */
+/* Scale/opacity on :active only for touch devices (coarse pointer).
+   Mouse users get color/bg transitions but no press-in scale. */
 
 @layer base {
   button:not(:disabled) {
     transition: transform 0.12s ease, opacity 0.12s ease, color 0.12s ease,
                 background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
-    &:active {
-      transform: scale(0.97);
-      opacity: 0.92;
-    }
   }
 
   a[href]:not([data-slot="button"]) {
     transition: transform 0.12s ease, opacity 0.12s ease;
-    &:active {
-      transform: scale(0.98);
-      opacity: 0.8;
-    }
   }
 
-  /* Clickable cards — subtle press-in */
+  /* Clickable cards */
   [data-slot="card"][role="button"],
   [data-slot="card"].cursor-pointer {
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    &:active {
-      transform: scale(0.985);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-    }
   }
 
-  /* Generic role="button" elements (divs, spans acting as buttons) */
+  /* Generic role="button" elements */
   [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
     transition: transform 0.12s ease, opacity 0.12s ease;
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-      opacity: 0.9;
-    }
   }
 
-  /* Clickable table rows — bg change only, no scale */
+  /* Clickable table rows — bg change only, no scale (both touch & mouse) */
   tr.cursor-pointer,
   tr:has(> td > a) {
     transition: background-color 0.1s ease;
     &:active {
       background-color: var(--accent) !important;
+    }
+  }
+}
+
+/* Touch-only press-in feedback */
+@media (pointer: coarse) {
+  @layer base {
+    button:not(:disabled):active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+
+    a[href]:not([data-slot="button"]):active {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+
+    [data-slot="card"][role="button"]:active,
+    [data-slot="card"].cursor-pointer:active {
+      transform: scale(0.985);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]):active:not(:disabled) {
+      transform: scale(0.97);
+      opacity: 0.9;
     }
   }
 }

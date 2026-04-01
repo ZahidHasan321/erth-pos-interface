@@ -16,11 +16,11 @@ import {
     User,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Input } from "@repo/ui/input";
+import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 

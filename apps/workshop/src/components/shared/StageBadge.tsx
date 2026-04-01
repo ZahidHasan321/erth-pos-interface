@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@repo/ui/badge";
 import { PIECE_STAGE_LABELS, FEEDBACK_STATUS_LABELS, FEEDBACK_STATUS_COLORS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PieceStage } from "@repo/database";

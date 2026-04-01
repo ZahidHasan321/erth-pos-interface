@@ -5,7 +5,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@repo/ui/popover";
 
 // 15-min intervals, full 24 hours
 const TIME_SLOTS: { value: string; label: string }[] = [];

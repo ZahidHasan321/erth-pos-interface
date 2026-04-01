@@ -4,10 +4,12 @@ import { ErrorBoundary } from "@/components/global/error-boundary";
 import { NotFoundPage } from "@/components/not-found-page";
 import type { AuthContext } from "@/context/auth";
 import { createRootRouteWithContext, HeadContent, Outlet } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
 interface MyRouterContext {
   auth: AuthContext;
+  queryClient: QueryClient;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({

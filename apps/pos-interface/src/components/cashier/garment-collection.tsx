@@ -1,5 +1,5 @@
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@repo/ui/badge";
+import { Checkbox } from "@repo/ui/checkbox";
 import type { Garment } from "@repo/database";
 
 interface GarmentCollectionProps {
@@ -16,11 +16,13 @@ function isEligibleForCollection(g: Garment): boolean {
     );
 }
 
-// Cashier-friendly status: Ready / In Production / Completed / In Transit
+// Cashier-friendly status: Ready / Pending / In Production / Completed / In Transit
 function getCashierStatus(g: Garment): { label: string; color: string } {
     if (g.piece_stage === "completed") return { label: "Completed", color: "bg-slate-100 text-slate-600" };
     if (g.location === "shop" && (g.piece_stage === "ready_for_pickup" || g.piece_stage === "brova_trialed" || g.piece_stage === "awaiting_trial"))
         return { label: "Ready", color: "bg-emerald-100 text-emerald-700" };
+    if (g.location === "shop" && (g.piece_stage === "waiting_cut" || g.piece_stage === "waiting_for_acceptance"))
+        return { label: "Pending", color: "bg-gray-100 text-gray-600" };
     if (g.location === "transit_to_shop")
         return { label: "In Transit", color: "bg-blue-100 text-blue-700" };
     return { label: "In Production", color: "bg-amber-100 text-amber-700" };
@@ -79,6 +81,16 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         >
                             {isBrova ? "Brova" : "Final"}
                         </Badge>
+                        {g.express && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-red-50 text-red-700 border-red-300">
+                                Express
+                            </Badge>
+                        )}
+                        {g.soaking && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-cyan-50 text-cyan-700 border-cyan-300">
+                                Soaking
+                            </Badge>
+                        )}
                         {fabricData?.name && (
                             <span className="text-xs text-muted-foreground truncate">{fabricData.name}</span>
                         )}

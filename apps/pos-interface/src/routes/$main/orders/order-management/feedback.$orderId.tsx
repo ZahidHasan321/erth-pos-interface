@@ -21,7 +21,6 @@ import {
   Banknote,
   ArrowLeft,
   ArrowUp,
-  Loader2,
   Mic,
   MicOff,
   ChevronDown,
@@ -31,20 +30,20 @@ import {
 } from "lucide-react";
 
 // UI Components
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
+import { Textarea } from "@repo/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Skeleton } from "@repo/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import {
   Table,
   TableBody,
@@ -52,27 +51,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@repo/ui/table";
+import { Label } from "@repo/ui/label";
+import { Checkbox } from "@repo/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
+import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { SignaturePad } from "@/components/forms/signature-pad";
 
 // API and Types
-import { getOrderById, updateOrder } from "@/api/orders";
+import { getOrderById } from "@/api/orders";
 import { getMeasurementById } from "@/api/measurements";
 import { updateGarment } from "@/api/garments";
-import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip, getFeedbackByOrderId } from "@/api/feedback";
+import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 // Storage helpers ready but not active — enable when Supabase Storage bucket is set up
 // import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
@@ -221,9 +213,7 @@ function UnifiedFeedbackInterface() {
   const [garmentStates, setGarmentStates] = useState<Record<string, GarmentFeedbackState>>({});
 
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [isProductionConfirmOpen, setIsProductionConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isStartingProduction, setIsStartingProduction] = useState(false);
 
   // Voice recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -258,47 +248,32 @@ function UnifiedFeedbackInterface() {
   // Derive activeTab from garment type
   const activeTab = activeGarment?.garment_type === "brova" ? "brova" : "final";
 
-  // Order-level feedback for determining eligible garments
-  const { data: orderFeedbackData } = useQuery({
-    queryKey: ["order-feedback", paramOrderId],
-    queryFn: () => getFeedbackByOrderId(paramOrderId),
-    enabled: !!paramOrderId,
-  });
-  const orderFeedback = orderFeedbackData?.data || [];
-
-  // Eligible garments: at shop (any stage including completed), or dispatched but with editable feedback
+  // Eligible garments: at shop and in a stage that expects feedback
   const eligibleGarments = useMemo(() => {
     if (!activeOrder?.garments) return [];
-    return activeOrder.garments.filter(g => {
-      // Garments at shop are always eligible
-      if (g.location === 'shop') return true;
-      // Garments in transit/workshop that have feedback for previous trip are visible (read-only or editable)
-      const fb = orderFeedback.find(f => f.garment_id === g.id && f.trip_number === (g.trip_number || 1) - 1);
-      return !!fb;
-    });
-  }, [activeOrder?.garments, orderFeedback]);
+    return activeOrder.garments.filter(g =>
+      g.location === 'shop' &&
+      g.piece_stage !== 'waiting_for_acceptance' &&
+      g.piece_stage !== 'completed'
+    );
+  }, [activeOrder?.garments]);
 
-  // 1. Garment Selection Effect
+  // 1. Garment Selection Effect — auto-select first eligible garment
   useEffect(() => {
-    if (activeOrder?.garments?.length) {
-      // Honour deep-link garmentId if provided
+    if (eligibleGarments.length > 0) {
+      // Honour deep-link garmentId if provided and eligible
       if (deepLinkGarmentId) {
-        const linked = activeOrder.garments.find(g => g.id === deepLinkGarmentId);
+        const linked = eligibleGarments.find(g => g.id === deepLinkGarmentId);
         if (linked) {
           setSelectedGarmentId(linked.id);
           return;
         }
       }
-
-      const shopGarments = activeOrder.garments.filter(g => g.location === 'shop');
-
-      if (shopGarments.length > 0) {
-          setSelectedGarmentId(shopGarments[0].id);
-      } else {
-          setSelectedGarmentId(activeOrder.garments[0]?.id || null);
-      }
+      setSelectedGarmentId(eligibleGarments[0].id);
+    } else {
+      setSelectedGarmentId(null);
     }
-  }, [activeOrder, deepLinkGarmentId]);
+  }, [eligibleGarments, deepLinkGarmentId]);
 
   // Pre-populate form when selecting a garment with existing feedback for current trip
   useEffect(() => {
@@ -460,37 +435,6 @@ function UnifiedFeedbackInterface() {
     updateGarmentState(selectedGarmentId, {
       voiceNotes: { ...currentState.voiceNotes, [optionId]: null },
     });
-  };
-
-  const handleStartProduction = async () => {
-    if (!activeOrder) return;
-    const finalsToRelease = activeOrder.garments?.filter(
-      g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
-    ) || [];
-    if (finalsToRelease.length === 0) return;
-
-    setIsStartingProduction(true);
-    try {
-      for (const final of finalsToRelease) {
-        await updateGarment(final.id, { piece_stage: "waiting_cut" });
-      }
-      toast.success(`${finalsToRelease.length} final(s) released to production!`);
-      setActiveOrder(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          garments: prev.garments?.map(g =>
-            g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
-              ? { ...g, piece_stage: "waiting_cut" as any }
-              : g
-          ),
-        };
-      });
-    } catch {
-      toast.error("Failed to release finals to production");
-    } finally {
-      setIsStartingProduction(false);
-    }
   };
 
   const onConfirmClick = () => {
@@ -968,25 +912,16 @@ function UnifiedFeedbackInterface() {
                 {eligibleGarments.map((garment) => {
                     const gState = garmentStates[garment.id];
                     const isSubmitted = gState?.submitted;
-                    const isNotAtShop = garment.location !== 'shop';
                     return (
                     <TabsTrigger
                         key={garment.id}
                         value={garment.id}
-                        className={cn(
-                          "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all",
-                          isNotAtShop && "opacity-60"
-                        )}
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
                     >
                         <div className="text-left w-full space-y-0.5">
                             <div className="flex items-center justify-between gap-2">
                                 <span className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</span>
                                 <div className="flex items-center gap-1">
-                                    {isNotAtShop && (
-                                        <Badge className="h-3 px-1 text-[6px] font-black uppercase border-none bg-purple-100 text-purple-700 data-[state=active]:bg-purple-500 data-[state=active]:text-white">
-                                            {garment.location === 'transit_to_workshop' ? "In Transit" : "At Workshop"}
-                                        </Badge>
-                                    )}
                                     {isSubmitted && (
                                         <div className="size-3.5 rounded-full bg-emerald-500 flex items-center justify-center">
                                             <Check className="size-2 text-white" />
@@ -1021,7 +956,7 @@ function UnifiedFeedbackInterface() {
             <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-4 focus-visible:ring-0">
 
                  {/* MEASUREMENT feedback SECTION */}
-                <Card className="border border-border shadow-sm overflow-hidden rounded-xl py-0 gap-0">
+                <Card className="border border-border shadow-sm overflow-clip rounded-xl py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
@@ -1149,7 +1084,7 @@ function UnifiedFeedbackInterface() {
                 </Card>
 
                 {/* STYLE feedback SECTION */}
-                <Card className="border border-border shadow-sm rounded-xl overflow-hidden py-0 gap-0">
+                <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center gap-2.5">
                             <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
@@ -1404,7 +1339,7 @@ function UnifiedFeedbackInterface() {
 
                 {/* PREVIOUS FEEDBACK HISTORY */}
                 {feedbackHistory.length > 0 && (
-                    <Card className="border border-border shadow-sm rounded-xl overflow-hidden py-0 gap-0">
+                    <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
                         <CardHeader
                             className="bg-muted/30 border-b px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
                             onClick={() => setHistoryOpen(!historyOpen)}
@@ -1475,7 +1410,7 @@ function UnifiedFeedbackInterface() {
 
           {/* FINAL ACTIONS CONTROL PANEL */}
           {/* CUSTOMER SENTIMENTS */}
-          <Card className="border border-border shadow-sm rounded-xl overflow-hidden">
+          <Card className="border border-border shadow-sm rounded-xl overflow-clip">
               <CardHeader className="bg-muted/30 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
@@ -1535,29 +1470,20 @@ function UnifiedFeedbackInterface() {
                                   </button>
                               </div>
                           ) : (
-                              <Dialog>
-                                  <DialogTrigger asChild>
-                                      <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
-                                          <div className="p-2.5 rounded-full bg-muted/30">
-                                              <PenTool className="size-5 text-muted-foreground/50" />
-                                          </div>
-                                          <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
-                                      </button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-[95vw] sm:max-w-[550px] p-0 overflow-hidden">
-                                      <DialogHeader className="px-4 pt-4 pb-2">
-                                          <DialogTitle className="text-base font-black uppercase tracking-tight">Customer Signature</DialogTitle>
-                                      </DialogHeader>
-                                      <div className="px-4 pb-4">
-                                          <SignaturePad
-                                              onSave={(sig) => {
-                                                  updateGarmentState(selectedGarmentId, { customerSignature: sig });
-                                                  toast.success("Signature saved");
-                                              }}
-                                          />
+                              <SignaturePad
+                              onSave={(sig) => {
+                                  updateGarmentState(selectedGarmentId, { customerSignature: sig });
+                                  toast.success("Signature saved");
+                              }}
+                              trigger={
+                                  <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
+                                      <div className="p-2.5 rounded-full bg-muted/30">
+                                          <PenTool className="size-5 text-muted-foreground/50" />
                                       </div>
-                                  </DialogContent>
-                              </Dialog>
+                                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
+                                  </button>
+                              }
+                          />
                           )}
                       </div>
                   )}
@@ -1565,7 +1491,7 @@ function UnifiedFeedbackInterface() {
           </Card>
 
           {/* GARMENT ACTION */}
-          <Card className="border border-primary/20 shadow-sm rounded-xl overflow-hidden">
+          <Card className="border border-primary/20 shadow-sm rounded-xl overflow-clip">
               <CardHeader className="bg-primary/5 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
@@ -1674,86 +1600,6 @@ function UnifiedFeedbackInterface() {
               </CardContent>
           </Card>
 
-          {/* ═══ ORDER-LEVEL ACTIONS ═══ */}
-          <Card className="border border-border shadow-sm rounded-xl overflow-hidden py-0 gap-0">
-              <CardHeader className="bg-muted/30 border-b px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                          <Clock className="w-4 h-4" />
-                      </div>
-                      <CardTitle className="text-base font-black uppercase tracking-tight">Order Actions</CardTitle>
-                  </div>
-              </CardHeader>
-              <CardContent className="p-4">
-                  <div className="grid grid-cols-2 gap-3">
-                      {/* Delivery Type */}
-                      <div className="space-y-1.5">
-                          <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Delivery</Label>
-                          <button
-                              onClick={async () => {
-                                  const newVal = !(activeOrder as any).home_delivery;
-                                  await updateOrder({ home_delivery: newVal } as any, activeOrder.id);
-                                  setActiveOrder(prev => prev ? { ...prev, home_delivery: newVal } as any : prev);
-                                  toast.success(newVal ? "Switched to Home Delivery" : "Switched to Pickup");
-                              }}
-                              className={cn(
-                                  "w-full flex items-center justify-center gap-2 h-10 rounded-lg border-2 font-bold uppercase tracking-tight text-xs transition-all cursor-pointer active:scale-[0.97] shadow-sm hover:shadow-md",
-                                  (activeOrder as any).home_delivery
-                                      ? "border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                                      : "border-primary/30 bg-card text-foreground hover:bg-primary/5 hover:border-primary/50"
-                              )}
-                          >
-                              {(activeOrder as any).home_delivery
-                                  ? <><Home className="size-3.5" />Home Delivery</>
-                                  : <><MapPin className="size-3.5" />Pickup</>
-                              }
-                              <ChevronDown className="size-3 text-muted-foreground/60 ml-0.5" />
-                          </button>
-                      </div>
-
-                      {/* Release Finals */}
-                      {(() => {
-                          const blockedFinals = activeOrder.garments?.filter(
-                              g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
-                          ) || [];
-                          const anyBrovaAccepted = activeOrder.garments?.some(
-                              g => g.garment_type === "brova" && g.acceptance_status === true
-                          );
-                          if (blockedFinals.length === 0) return null;
-                          return (
-                              <div className="space-y-1.5">
-                                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                      Finals ({blockedFinals.length})
-                                  </Label>
-                                  <Button
-                                      disabled={!anyBrovaAccepted || isStartingProduction}
-                                      onClick={() => setIsProductionConfirmOpen(true)}
-                                      variant={anyBrovaAccepted ? "default" : "outline"}
-                                      className={cn(
-                                          "w-full h-10 font-bold uppercase tracking-tight text-xs rounded-lg shadow-sm",
-                                          anyBrovaAccepted && "hover:shadow-md active:scale-[0.97]",
-                                          !anyBrovaAccepted && "border-2 border-amber-300 text-amber-600 bg-amber-50/50 cursor-not-allowed opacity-70"
-                                      )}
-                                  >
-                                      {isStartingProduction ? (
-                                          <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                                      ) : !anyBrovaAccepted ? (
-                                          <AlertCircle className="size-3.5 mr-1.5" />
-                                      ) : (
-                                          <RefreshCw className="size-3.5 mr-1.5" />
-                                      )}
-                                      {anyBrovaAccepted ? "Start Production" : "Accept Brova First"}
-                                  </Button>
-                                  {anyBrovaAccepted && (
-                                      <p className="text-xs font-bold text-emerald-600 text-center">Ready to release</p>
-                                  )}
-                              </div>
-                          );
-                      })()}
-                  </div>
-              </CardContent>
-          </Card>
-
           <ConfirmationDialog
               isOpen={isConfirmDialogOpen}
               onClose={() => setIsConfirmDialogOpen(false)}
@@ -1764,15 +1610,6 @@ function UnifiedFeedbackInterface() {
               cancelText="Go Back"
           />
 
-          <ConfirmationDialog
-              isOpen={isProductionConfirmOpen}
-              onClose={() => setIsProductionConfirmOpen(false)}
-              onConfirm={() => { setIsProductionConfirmOpen(false); handleStartProduction(); }}
-              title="Start Final Production"
-              description={`This will release all waiting finals to production. They will move from "Waiting for Acceptance" to "Waiting Cut" and become available for scheduling at the workshop.`}
-              confirmText="Release Finals"
-              cancelText="Cancel"
-          />
 
       </div>
 

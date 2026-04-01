@@ -1,22 +1,23 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@repo/ui/dialog";
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Pen } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 
 interface SignaturePadProps {
   onSave?: (signature: string) => void;
+  trigger?: React.ReactNode;
 }
 
-export function SignaturePad({ onSave }: SignaturePadProps) {
+export function SignaturePad({ onSave, trigger }: SignaturePadProps) {
   const [open, setOpen] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,15 +66,19 @@ export function SignaturePad({ onSave }: SignaturePadProps) {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setOpen(true)}
-        className="gap-2"
-      >
-        <Pen className="w-4 h-4" />
-        Sign
-      </Button>
+      {trigger ? (
+        <div onClick={() => setOpen(true)}>{trigger}</div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          className="gap-2"
+        >
+          <Pen className="w-4 h-4" />
+          Sign
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl">

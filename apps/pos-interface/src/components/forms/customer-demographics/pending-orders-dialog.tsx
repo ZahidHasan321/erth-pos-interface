@@ -8,9 +8,9 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+} from "@repo/ui/dialog";
+import { Button } from "@repo/ui/button";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import type { Order } from "@repo/database";
 import { Calendar, Package, Loader2, Truck, Scissors, XCircle } from "lucide-react";
 import { ErrorBoundary } from "@/components/global/error-boundary";

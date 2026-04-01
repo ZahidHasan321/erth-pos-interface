@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { ChipToggle } from "@/components/ui/chip-toggle";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@repo/ui/button";
+import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
 import { Loader2 } from "lucide-react";
 import { useUpdateDiscountMutation } from "@/hooks/useCashier";
 

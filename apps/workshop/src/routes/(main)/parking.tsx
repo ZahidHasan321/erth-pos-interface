@@ -10,14 +10,15 @@ import {
 import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import {
-  MetadataChip, GarmentTypeBadge,
+  PageHeader, MetadataChip, GarmentTypeBadge,
 } from "@/components/shared/PageShell";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
+import { Button } from "@repo/ui/button";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Badge } from "@repo/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Skeleton } from "@repo/ui/skeleton";
+import { DatePicker } from "@repo/ui/date-picker";
+import { Label } from "@repo/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -25,16 +26,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { BrandBadge, ExpressBadge, StageBadge } from "@/components/shared/StageBadge";
+} from "@repo/ui/dialog";
+import { BrandBadge, ExpressBadge, StageBadge, AlterationBadge } from "@/components/shared/StageBadge";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { useResources } from "@/hooks/useResources";
 import { toast } from "sonner";
 import {
-  ParkingSquare, Clock, RotateCcw, Zap, Unlock, ChevronDown, ChevronUp,
-  Package, Home, AlertTriangle, ClipboardList, Check, Eye,
+  ParkingSquare, Clock, RotateCcw, Unlock, ChevronDown, ChevronUp,
+  Package, Home, AlertTriangle, Eye,
   CalendarDays, Pencil, Scissors, Shirt, Sparkles, Flame, ShieldCheck, Droplets,
-  type LucideIcon,
 } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
 import type { WorkshopGarment } from "@repo/database";
@@ -123,25 +125,24 @@ function ParkingOrderCard({
       )}
     >
       <div
-        className="px-4 py-3 transition-colors rounded-t-xl"
+        className="px-3 py-2.5 transition-colors rounded-t-xl"
       >
         {/* Row 1: Identity + actions */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <input
-              type="checkbox"
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Checkbox
               checked={selected}
-              onChange={(e) => { e.stopPropagation(); onToggle(e.target.checked); }}
+              onCheckedChange={(checked) => { onToggle(!!checked); }}
               onClick={(e) => e.stopPropagation()}
               disabled={allParked}
-              className="w-4 h-4 accent-primary cursor-pointer shrink-0 disabled:cursor-not-allowed"
+              className="size-4"
             />
-            <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
+            <span className="font-mono font-bold text-sm shrink-0">#{group.order_id}</span>
             {group.invoice_number && (
-              <span className="text-sm text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
+              <span className="text-xs text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
             )}
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-            <span className="text-base text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
+            <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -165,7 +166,7 @@ function ParkingOrderCard({
         </div>
 
         {/* Row 2: Status (left) + Logistics (right) */}
-        <div className="flex items-center justify-between gap-3 mt-2">
+        <div className="flex items-center justify-between gap-2 mt-1.5">
           <div className="flex items-center gap-2 flex-wrap min-w-0">
             {allParked && brovaBlock === "in_production" && (
               <Badge variant="outline" className="border-0 bg-purple-500 text-white text-xs font-semibold uppercase">
@@ -177,7 +178,7 @@ function ParkingOrderCard({
                 Waiting for brova trial
               </Badge>
             )}
-            <span className="text-sm text-muted-foreground/60">{garmentSummary(group.garments)}</span>
+            <span className="text-xs text-muted-foreground/60">{garmentSummary(group.garments)}</span>
             {group.express && <ExpressBadge />}
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
@@ -201,7 +202,7 @@ function ParkingOrderCard({
       </div>
 
       {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-2.5 space-y-1.5">
+        <div className="border-t bg-muted/20 px-3 py-2 space-y-1.5">
           {group.garments.map((g) => (
             <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2">
               <GarmentTypeBadge type={g.garment_type ?? "final"} />
@@ -265,23 +266,22 @@ function WaitingFinalsCard({
       )}
     >
       <div
-        className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
+        className="px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex items-start gap-3">
-          <input
-            type="checkbox"
+        <div className="flex items-start gap-2">
+          <Checkbox
             checked={selected}
-            onChange={(e) => onToggle(e.target.checked)}
+            onCheckedChange={(checked) => onToggle(!!checked)}
             onClick={(e) => e.stopPropagation()}
-            className="w-4 h-4 accent-primary cursor-pointer shrink-0 mt-0.5"
+            className="size-4 mt-0.5"
           />
           <div className="flex-1 min-w-0">
             {/* Row 1: Identity + status (left) + Delivery & actions (right) */}
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
-                  <span className="font-mono font-bold text-lg shrink-0">#{group.order_id}</span>
+                  <span className="font-mono font-bold text-sm shrink-0">#{group.order_id}</span>
                   <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
                   {group.brands.map((b) => (
                     <BrandBadge key={b} brand={b} />
@@ -377,7 +377,7 @@ function WaitingFinalsCard({
       </div>
 
       {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-3 space-y-2">
+        <div className="border-t bg-muted/20 px-3 py-2 space-y-1.5">
           {group.garments.map((g) => (
             <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
@@ -791,6 +791,7 @@ function LoadingSkeleton() {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function ParkingPage() {
+  const isMobile = useIsMobile();
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const sendMut = useSendToScheduler();
   const sendReturnMut = useSendReturnToProduction();
@@ -869,23 +870,23 @@ function ParkingPage() {
   const [finalsFilter, setFinalsFilter] = useState("all");
   const [returnFilter, setReturnFilter] = useState("all");
 
-  // Stats per tab
-  const orderStats: StatCard[] = [
-    { label: "Total", value: ordersTabGroups.length, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: ClipboardList },
-    { label: "Overdue", value: overdueOrderGroups.length, key: "overdue", color: "bg-red-50 text-red-700 border-red-200", icon: AlertTriangle },
-    { label: "Has Finals", value: mixedOrders.length, key: "has-finals", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Clock },
-    { label: "Express", value: expressOrderGroups.length, key: "express", color: "bg-orange-50 text-orange-700 border-orange-200", icon: Zap },
+  // Filter chip data per tab
+  const orderChips = [
+    { label: "All", value: ordersTabGroups.length, key: "all" },
+    { label: "Overdue", value: overdueOrderGroups.length, key: "overdue" },
+    { label: "Has Finals", value: mixedOrders.length, key: "has-finals" },
+    { label: "Express", value: expressOrderGroups.length, key: "express" },
   ];
 
-  const finalsStats: StatCard[] = [
-    { label: "Total", value: sortedWaitingGroups.length, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: ClipboardList },
-    { label: "Ready", value: readyCount, key: "ready", color: "bg-green-50 text-green-700 border-green-200", icon: Check },
-    { label: "Awaiting Trial", value: notReadyCount, key: "awaiting", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Clock },
+  const finalsChips = [
+    { label: "All", value: sortedWaitingGroups.length, key: "all" },
+    { label: "Ready", value: readyCount, key: "ready" },
+    { label: "Awaiting Trial", value: notReadyCount, key: "awaiting" },
   ];
 
-  const returnStats: StatCard[] = [
-    { label: "Total", value: returnCount, key: "all", color: "bg-zinc-50 text-zinc-700 border-zinc-200", icon: RotateCcw },
-    { label: "Express", value: returnsGarments.filter((g) => g.express).length, key: "express", color: "bg-orange-50 text-orange-700 border-orange-200", icon: Zap },
+  const returnChips = [
+    { label: "All", value: returnCount, key: "all" },
+    { label: "Express", value: returnsGarments.filter((g) => g.express).length, key: "express" },
   ];
 
   // Filtered data
@@ -958,6 +959,9 @@ function ParkingPage() {
 
   // Returns tab selection (by garment id)
   const [selectedReturnIds, setSelectedReturnIds] = useState<Set<string>>(new Set());
+
+  // Peek sheet state for desktop tables
+  const [peekOrderId, setPeekOrderId] = useState<number | null>(null);
 
   const toggleReturn = (id: string, checked: boolean) =>
     setSelectedReturnIds((prev) => {
@@ -1097,18 +1101,15 @@ function ParkingPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto pb-28">
-      <div className="mb-6">
-        <h1 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-          <ParkingSquare className="w-6 h-6" /> Order Parking
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Received orders awaiting scheduling
-        </p>
-      </div>
+    <div className="p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28">
+      <PageHeader
+        icon={ParkingSquare}
+        title="Order Parking"
+        subtitle="Received orders awaiting scheduling"
+      />
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto">
+        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="orders">
             Orders{" "}
             <Badge variant="secondary" className="ml-1 text-xs">
@@ -1135,15 +1136,15 @@ function ParkingPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab-aware KPIs */}
+        {/* Inline filter chips */}
         {activeTab === "orders" && (
-          <StatsBar stats={orderStats} filter={orderFilter} onFilter={setOrderFilter} />
+          <FilterChips chips={orderChips} active={orderFilter} onFilter={setOrderFilter} />
         )}
         {activeTab === "waiting-finals" && (
-          <StatsBar stats={finalsStats} filter={finalsFilter} onFilter={setFinalsFilter} />
+          <FilterChips chips={finalsChips} active={finalsFilter} onFilter={setFinalsFilter} />
         )}
         {activeTab === "returns" && (
-          <StatsBar stats={returnStats} filter={returnFilter} onFilter={setReturnFilter} />
+          <FilterChips chips={returnChips} active={returnFilter} onFilter={setReturnFilter} />
         )}
 
         {/* ── ORDERS tab — order level ── */}
@@ -1155,7 +1156,7 @@ function ParkingPage() {
               icon={<ParkingSquare className="w-10 h-10" />}
               message={orderFilter === "all" ? "Parking bay empty" : "No orders match this filter"}
             />
-          ) : (
+          ) : isMobile ? (
             <div className="space-y-3">
               {filteredOrders.map((group) => (
                 <ParkingOrderCard
@@ -1168,6 +1169,107 @@ function ParkingPage() {
                   isSending={sendMut.isPending}
                 />
               ))}
+            </div>
+          ) : (
+            <div className="border rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-10" />
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Garments</TableHead>
+                    <TableHead>Express</TableHead>
+                    <TableHead>Delivery</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((group) => {
+                    const allParked = isAllWaitingAcceptance(group.garments);
+                    const brovaBlock = getBrovaBlockReason(allGarmentsByOrder.get(group.order_id) ?? group.garments);
+                    const deliveryDate = group.garments[0]?.delivery_date_order;
+                    const daysLeft = deliveryDate
+                      ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+                      : null;
+                    const isOverdue = daysLeft !== null && daysLeft < 0;
+                    const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+                    return (
+                      <TableRow key={group.order_id} className={cn(selectedOrderIds.has(group.order_id) && "bg-primary/5")}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedOrderIds.has(group.order_id)}
+                            onCheckedChange={(checked) => toggleOrder(group.order_id, !!checked)}
+                            disabled={allParked}
+                            className="size-4"
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono font-bold">
+                          #{group.order_id}
+                          {group.invoice_number && (
+                            <span className="text-xs text-muted-foreground/50 ml-1">· #{group.invoice_number}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">{group.customer_name ?? "—"}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {allParked && brovaBlock === "in_production" && (
+                            <Badge variant="outline" className="border-0 bg-purple-500 text-white text-xs font-semibold uppercase">
+                              Brova in production
+                            </Badge>
+                          )}
+                          {allParked && brovaBlock === "awaiting_trial" && (
+                            <Badge variant="outline" className="border-0 bg-amber-500 text-white text-xs font-semibold uppercase">
+                              Waiting for brova trial
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{garmentSummary(group.garments)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {group.express && <ExpressBadge />}
+                            {group.home_delivery && (
+                              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
+                                <Home className="w-3 h-3" />
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {deliveryDate && (
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
+                              isOverdue && "bg-red-100 text-red-800",
+                              isUrgent && "bg-amber-100 text-amber-800",
+                              !isUrgent && !isOverdue && "text-muted-foreground",
+                            )}>
+                              {formatDate(deliveryDate)}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {!allParked && (
+                              <Button size="sm" onClick={() => handleSendSingleOrder(group)} disabled={sendMut.isPending} className="text-xs h-7">
+                                → Scheduler
+                              </Button>
+                            )}
+                            <button onClick={() => setPeekOrderId(group.order_id)} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
+                              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
           <BatchActionBar
@@ -1189,7 +1291,7 @@ function ParkingPage() {
               icon={<Unlock className="w-10 h-10" />}
               message={finalsFilter === "all" ? "No finals waiting for release" : "No finals match this filter"}
             />
-          ) : (
+          ) : isMobile ? (
             <>
               <p className="text-sm text-muted-foreground mb-4">
                 Orders with finals awaiting release. Green = brovas trialed &amp; accepted, ready to release.
@@ -1206,6 +1308,113 @@ function ParkingPage() {
                     brovaStatus={brovaStatusMap[group.order_id]}
                   />
                 ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                Orders with finals awaiting release. Green = brovas trialed &amp; accepted, ready to release.
+              </p>
+              <div className="border rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-10" />
+                      <TableHead>Order</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Brand</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Garments</TableHead>
+                      <TableHead>Delivery</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredWaitingGroups.map((group) => {
+                      const bs = brovaStatusMap[group.order_id];
+                      const noBrovas = !bs || bs.total === 0;
+                      const isReady = noBrovas || bs.accepted > 0;
+                      const allRejected = !!(bs && bs.total > 0 && bs.trialed === bs.total && bs.accepted === 0);
+                      const posReleased = group.garments.some(
+                        (g) => g.garment_type === "final" && g.piece_stage === "waiting_cut" && !g.in_production,
+                      );
+                      const deliveryDate = group.garments[0]?.delivery_date_order;
+                      return (
+                        <TableRow key={group.order_id} className={cn(selectedWaitingIds.has(group.order_id) && "bg-primary/5")}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedWaitingIds.has(group.order_id)}
+                              onCheckedChange={(checked) => toggleWaiting(group.order_id, !!checked)}
+                              className="size-4"
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono font-bold">#{group.order_id}</TableCell>
+                          <TableCell className="text-sm">{group.customer_name ?? "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {allRejected ? (
+                                <Badge variant="outline" className="border-0 bg-red-100 text-red-800 text-xs font-semibold uppercase">
+                                  All brovas rejected
+                                </Badge>
+                              ) : isReady ? (
+                                <Badge variant="outline" className="border-0 bg-green-600 text-white text-xs font-semibold uppercase">
+                                  {noBrovas ? "No brovas — ready" : "Ready for finals"}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                                  Awaiting trial ({bs!.trialed}/{bs!.total} trialed)
+                                </Badge>
+                              )}
+                              {isReady && !noBrovas && bs!.trialed < bs!.total && (
+                                <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                                  {bs!.trialed}/{bs!.total} trialed
+                                </Badge>
+                              )}
+                              {posReleased && (
+                                <Badge variant="outline" className="border-0 bg-blue-100 text-blue-800 text-xs font-semibold uppercase">
+                                  Shop approved
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{garmentSummary(group.garments)}</TableCell>
+                          <TableCell>
+                            {deliveryDate && (
+                              <span className="text-sm font-bold text-amber-700">{formatDate(deliveryDate)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReleaseFinals(group)}
+                              disabled={releaseWithPlanMut.isPending}
+                              className={cn(
+                                "text-xs h-7",
+                                isReady
+                                  ? "bg-green-600 hover:bg-green-700"
+                                  : allRejected
+                                    ? "bg-red-600 hover:bg-red-700"
+                                    : "bg-amber-600 hover:bg-amber-700",
+                              )}
+                            >
+                              {isReady ? (
+                                <Unlock className="w-3 h-3 mr-1" />
+                              ) : (
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                              )}
+                              Release Finals
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             </>
           )}
@@ -1234,7 +1443,7 @@ function ParkingPage() {
               icon={<RotateCcw className="w-10 h-10" />}
               message={returnFilter === "all" ? "No returns in parking" : "No returns match this filter"}
             />
-          ) : (
+          ) : isMobile ? (
             <div className="space-y-3">
               {filteredReturns.map((g, i) => (
                 <ReturnGarmentCard
@@ -1247,6 +1456,63 @@ function ParkingPage() {
                   index={i}
                 />
               ))}
+            </div>
+          ) : (
+            <div className="border rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-10" />
+                    <TableHead>Type</TableHead>
+                    <TableHead>Garment</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Trip / Alt</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Express</TableHead>
+                    <TableHead>Delivery</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReturns.map((g) => (
+                    <TableRow key={g.id} className={cn(selectedReturnIds.has(g.id) && "bg-primary/5")}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedReturnIds.has(g.id)}
+                          onCheckedChange={(checked) => toggleReturn(g.id, !!checked)}
+                          className="size-4"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <GarmentTypeBadge type={g.garment_type ?? "final"} />
+                      </TableCell>
+                      <TableCell className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</TableCell>
+                      <TableCell className="text-sm">{g.customer_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{g.invoice_number ? `#${g.invoice_number}` : "—"}</TableCell>
+                      <TableCell>
+                        <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
+                      </TableCell>
+                      <TableCell>
+                        <StageBadge stage={g.piece_stage} />
+                      </TableCell>
+                      <TableCell>
+                        {g.express && <ExpressBadge />}
+                      </TableCell>
+                      <TableCell>
+                        {g.delivery_date_order && (
+                          <span className="text-sm text-muted-foreground">{formatDate(g.delivery_date_order)}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => handleSendReturnSingle(g.id)} disabled={sendReturnMut.isPending} className="text-xs h-7">
+                          → Scheduler
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
           <BatchActionBar
@@ -1272,6 +1538,9 @@ function ParkingPage() {
         defaultPlan={releaseDefaultPlan}
         isPending={releaseWithPlanMut.isPending}
       />
+
+      {/* Shared peek sheet for desktop tables */}
+      <OrderPeekSheet orderId={peekOrderId} open={peekOrderId !== null} onOpenChange={(open) => { if (!open) setPeekOrderId(null); }} />
 
       {/* Warning dialog for releasing finals without brova acceptance */}
       <Dialog open={warningOpen} onOpenChange={setWarningOpen}>
@@ -1319,50 +1588,41 @@ function ParkingPage() {
   );
 }
 
-// ── StatsBar (clickable filterable KPIs) ─────────────────────
+// ── FilterChips (lightweight inline filter toggles) ─────────────────────
 
-interface StatCard {
-  label: string;
-  value: number;
-  key: string;
-  color: string;
-  icon: LucideIcon;
-}
-
-function StatsBar({
-  stats,
-  filter,
+function FilterChips({
+  chips,
+  active,
   onFilter,
 }: {
-  stats: StatCard[];
-  filter: string;
+  chips: { label: string; value: number; key: string }[];
+  active: string;
   onFilter: (key: string) => void;
 }) {
   return (
-    <div className={cn(
-      "grid gap-2 mb-5",
-      stats.length <= 5 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3 sm:grid-cols-6",
-    )}>
-      {stats.map((s) => {
-        const Icon = s.icon;
-        return (
-          <button
-            key={s.key}
-            onClick={() => onFilter(s.key)}
-            className={cn(
-              "border rounded-xl p-2 text-center transition-all",
-              s.color,
-              filter === s.key
-                ? "ring-2 ring-primary/40 shadow-md scale-[1.02]"
-                : "shadow-sm hover:shadow-md",
-            )}
-          >
-            <Icon className="w-3.5 h-3.5 mx-auto mb-0.5 opacity-60" />
-            <p className="text-lg font-black leading-none">{s.value}</p>
-            <p className="text-xs mt-0.5 uppercase tracking-wider font-bold opacity-70">{s.label}</p>
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+      {chips.map((c) => (
+        <button
+          key={c.key}
+          onClick={() => onFilter(c.key)}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
+            active === c.key
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted",
+          )}
+        >
+          {c.label}
+          <span className={cn(
+            "tabular-nums font-bold px-1.5 py-0.5 rounded-full text-[10px] leading-none",
+            active === c.key
+              ? "bg-primary-foreground/20 text-primary-foreground"
+              : "bg-background text-foreground/60",
+          )}>
+            {c.value}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

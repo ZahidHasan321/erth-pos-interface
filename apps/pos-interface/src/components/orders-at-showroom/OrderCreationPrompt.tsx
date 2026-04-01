@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Button } from "@repo/ui/button";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { Plus, Search } from "lucide-react";
 
 type OrderCreationPromptProps = {

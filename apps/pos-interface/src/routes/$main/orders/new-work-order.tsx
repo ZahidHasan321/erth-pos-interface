@@ -5,7 +5,10 @@ import {
 } from "@/api/measurements";
 import { getEmployees } from "@/api/employees";
 import { getFabrics } from "@/api/fabrics";
+import { getPrices } from "@/api/prices";
+import { getStyles } from "@/api/styles";
 import { getOrderDetails, updateOrder } from "@/api/orders";
+import { LazySection } from "@/components/global/lazy-section";
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import {
     customerDemographicsDefaults,
@@ -33,9 +36,9 @@ import {
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
 
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { HorizontalStepper } from "@/components/ui/horizontal-stepper";
-import { ScrollProgress } from "@/components/ui/scroll-progress";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
+import { HorizontalStepper } from "@repo/ui/horizontal-stepper";
+import { ScrollProgress } from "@repo/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
 import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
 import { useStepNavigation } from "@/hooks/useStepNavigation";
@@ -58,26 +61,33 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { useAuth } from "@/context/auth";
+import { format } from "date-fns";
+import { CalendarClock } from "lucide-react";
+import { getAppointmentById, updateAppointment } from "@/api/appointments";
+import { getCustomerById } from "@/api/customers";
+import type { AppointmentWithRelations } from "@/api/appointments";
 
 type OrderSearch = {
     orderId?: number;
+    appointmentId?: string;
 };
 
 export const Route = createFileRoute("/$main/orders/new-work-order")({
     validateSearch: (search: Record<string, unknown>): OrderSearch => {
         return {
             orderId: search.orderId ? Number(search.orderId) : undefined,
+            appointmentId: search.appointmentId ? String(search.appointmentId) : undefined,
         };
     },
+    loader: ({ context }) => {
+        // Prefetch all lookup data in parallel before component mounts
+        const { queryClient } = context;
+        queryClient.ensureQueryData({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: Infinity });
+        queryClient.ensureQueryData({ queryKey: ["employees"], queryFn: getEmployees, staleTime: Infinity });
+        queryClient.ensureQueryData({ queryKey: ["prices"], queryFn: getPrices, staleTime: Infinity });
+        queryClient.ensureQueryData({ queryKey: ["styles"], queryFn: getStyles, staleTime: Infinity });
+    },
     component: NewWorkOrder,
-    pendingComponent: () => (
-        <FullScreenLoader
-            title="Initializing Work Order"
-            subtitle="Setting up your workstation..."
-        />
-    ),
-    pendingMs: 0,
-    pendingMinMs: 500,
     head: () => ({
         meta: [{ title: "New Work Order" }],
     }),
@@ -98,7 +108,7 @@ const getSteps = (cashierHandlesPayment: boolean) => [
 const useCurrentWorkOrderStore = createWorkOrderStore("main");
 
 function NewWorkOrder() {
-    const { orderId: searchOrderId } = Route.useSearch();
+    const { orderId: searchOrderId, appointmentId: searchAppointmentId } = Route.useSearch();
     // ============================================================================
     // NAVIGATION & BRAND
     // ============================================================================
@@ -153,6 +163,10 @@ function NewWorkOrder() {
     // Track loading state when fetching order data
     const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
     const loadingOrderIdRef = React.useRef<number | null>(null);
+
+    // Appointment context (when started from appointment detail)
+    const [linkedAppointment, setLinkedAppointment] = React.useState<AppointmentWithRelations | null>(null);
+    const appointmentLoadedRef = React.useRef<string | null>(null);
 
     // ============================================================================
     // FORMS SETUP
@@ -236,11 +250,34 @@ function NewWorkOrder() {
     // ============================================================================
     const { dialog, openDialog, closeDialog } = useConfirmationDialog();
 
-    const { sectionRefs, handleStepChange, handleProceed, visibleSteps } = useStepNavigation({
+    // Track which sections have been force-mounted (via stepper click or proceed)
+    const [mountedSections, setMountedSections] = React.useState<Set<number>>(() => new Set());
+    const forceMount = React.useCallback((step: number) => {
+        setMountedSections((prev) => {
+            if (prev.has(step)) return prev;
+            const next = new Set(prev);
+            next.add(step);
+            return next;
+        });
+    }, []);
+
+    const { sectionRefs, handleStepChange: rawHandleStepChange, handleProceed: rawHandleProceed, visibleSteps } = useStepNavigation({
         steps,
         setCurrentStep,
         addSavedStep,
     });
+
+    // Wrap handleStepChange to force-mount the target section
+    const handleStepChange = React.useCallback((i: number) => {
+        forceMount(i);
+        rawHandleStepChange(i);
+    }, [forceMount, rawHandleStepChange]);
+
+    // Wrap handleProceed to force-mount the next section
+    const handleProceed = React.useCallback((step: number) => {
+        forceMount(step + 1);
+        rawHandleProceed(step);
+    }, [forceMount, rawHandleProceed]);
 
     const fatoura = order.invoice_number;
 
@@ -262,6 +299,15 @@ function NewWorkOrder() {
             fabricSelectionForm.reset();
             shelfForm.reset();
             OrderForm.reset();
+
+            // Link appointment to this order if started from an appointment
+            if (id && linkedAppointment) {
+                updateAppointment(linkedAppointment.id, { order_id: id } as any).then((res) => {
+                    if (res.status === "success") {
+                        toast.success("Appointment linked to this order");
+                    }
+                });
+            }
 
             // Move to next step (Measurements)
             handleProceed(0);
@@ -410,6 +456,9 @@ function NewWorkOrder() {
                 // Wait for measurements check to finish (was running in parallel)
                 if (measurementsPromise) await measurementsPromise;
 
+                // Force-mount all sections when loading a pending order
+                setMountedSections(new Set([1, 2, 3, 4]));
+
                 // Navigate to review step if confirmed, otherwise to measurements
                 setCurrentStep(isConfirmed ? 4 : 1);
 
@@ -472,6 +521,31 @@ function NewWorkOrder() {
             handlePendingOrderSelected({ id: searchOrderId } as Order);
         }
     }, [searchOrderId, orderId, handlePendingOrderSelected]);
+
+    // Load appointment from search params and pre-fill customer
+    React.useEffect(() => {
+        if (!searchAppointmentId || appointmentLoadedRef.current === searchAppointmentId) return;
+        appointmentLoadedRef.current = searchAppointmentId;
+
+        (async () => {
+            const aptRes = await getAppointmentById(searchAppointmentId);
+            if (aptRes.status !== "success" || !aptRes.data) {
+                toast.error("Failed to load appointment");
+                return;
+            }
+            setLinkedAppointment(aptRes.data);
+
+            // If appointment has a customer_id, load and pre-fill that customer
+            if (aptRes.data.customer_id) {
+                const custRes = await getCustomerById(aptRes.data.customer_id);
+                if (custRes.status === "success" && custRes.data) {
+                    loadCustomerFresh(custRes.data);
+                    return;
+                }
+            }
+            toast.info("Appointment loaded — please select or create a customer");
+        })();
+    }, [searchAppointmentId, loadCustomerFresh]);
 
     // ============================================================================
     // DEMOGRAPHICS FORM HANDLERS
@@ -851,6 +925,20 @@ function NewWorkOrder() {
                 description={dialog.description}
             />
 
+            {/* Appointment context banner */}
+            {linkedAppointment && (
+                <div className="bg-primary/5 border-b border-primary/20 px-4 py-2.5 flex items-center gap-3 text-xs font-medium">
+                    <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+                    <span>
+                        From appointment: <span className="font-bold">{linkedAppointment.customer_name}</span>
+                        {" — "}
+                        {format(new Date(linkedAppointment.appointment_date + "T00:00:00"), "EEE d MMM")}
+                        {linkedAppointment.people_count && <>, {linkedAppointment.people_count} people</>}
+                        {linkedAppointment.estimated_pieces && <>, ~{linkedAppointment.estimated_pieces} pieces</>}
+                    </span>
+                </div>
+            )}
+
             {/* Sticky Header with Stepper */}
             <div className="sticky top-0 z-50 bg-background">
                 <HorizontalStepper
@@ -951,14 +1039,16 @@ function NewWorkOrder() {
                     }}
                     className="w-full flex flex-col items-center"
                 >
-                    <ErrorBoundary fallback={<div>Customer Measurements crashed</div>}>
-                        <CustomerMeasurementsForm
-                            form={measurementsForm}
-                            isOrderClosed={isOrderClosed}
-                            customerId={customerDemographics.id || null}
-                            onProceed={handleMeasurementsProceed}
-                        />
-                    </ErrorBoundary>
+                    <LazySection forceMount={mountedSections.has(1)}>
+                        <ErrorBoundary fallback={<div>Customer Measurements crashed</div>}>
+                            <CustomerMeasurementsForm
+                                form={measurementsForm}
+                                isOrderClosed={isOrderClosed}
+                                customerId={customerDemographics.id || null}
+                                onProceed={handleMeasurementsProceed}
+                            />
+                        </ErrorBoundary>
+                    </LazySection>
                 </div>
 
                 {/* STEP 2: Fabric Selection */}
@@ -969,6 +1059,7 @@ function NewWorkOrder() {
                     }}
                     className="w-full flex flex-col items-center"
                 >
+                    <LazySection forceMount={mountedSections.has(2)}>
                     <ErrorBoundary fallback={<div>Fabric Selection crashed</div>}>
                         <FabricSelectionForm
                             customerId={customerDemographics.id || null}
@@ -1002,6 +1093,7 @@ function NewWorkOrder() {
                             initialCampaigns={order.campaign_id ? [order.campaign_id.toString()] : []}
                         />
                     </ErrorBoundary>
+                    </LazySection>
                 </div>
 
                 {/* STEP 3: Shelf Products */}
@@ -1012,14 +1104,16 @@ function NewWorkOrder() {
                     }}
                     className="w-full flex flex-col items-center"
                 >
-                    <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
-                        <ShelfForm
-                            form={shelfForm}
-                            isOrderDisabled={isOrderClosed}
-                            onProceed={handleShelfProceed}
-                            hasOrder={!!orderId}
-                        />
-                    </ErrorBoundary>
+                    <LazySection forceMount={mountedSections.has(3)}>
+                        <ErrorBoundary fallback={<div>Shelf Products crashed</div>}>
+                            <ShelfForm
+                                form={shelfForm}
+                                isOrderDisabled={isOrderClosed}
+                                onProceed={handleShelfProceed}
+                                hasOrder={!!orderId}
+                            />
+                        </ErrorBoundary>
+                    </LazySection>
                 </div>
 
                 {/* STEP 4: Review & Payment */}
@@ -1030,6 +1124,7 @@ function NewWorkOrder() {
                     }}
                     className="w-full flex flex-col items-center"
                 >
+                    <LazySection forceMount={mountedSections.has(4)}>
                     <ErrorBoundary fallback={<div>Order and Payment crashed</div>}>
                         <OrderSummaryAndPaymentForm
                             form={OrderForm}
@@ -1087,6 +1182,7 @@ function NewWorkOrder() {
                             }}
                         />
                     </ErrorBoundary>
+                    </LazySection>
                 </div>
             </div>
         </>

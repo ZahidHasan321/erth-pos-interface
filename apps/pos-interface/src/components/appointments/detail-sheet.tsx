@@ -3,13 +3,14 @@ import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@repo/ui/dialog";
+import { Button } from "@repo/ui/button";
+import { Badge } from "@repo/ui/badge";
 import { useUpdateAppointment } from "@/hooks/useAppointments";
 import { APPOINTMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatTime24to12 } from "./time-picker";
 import type { AppointmentWithRelations } from "@/api/appointments";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   User,
   Phone,
@@ -25,6 +26,9 @@ import {
   Pencil,
   Link2,
   Timer,
+  Users,
+  Shirt,
+  ShoppingBag,
 } from "lucide-react";
 
 interface DetailSheetProps {
@@ -32,7 +36,6 @@ interface DetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (appointment: AppointmentWithRelations) => void;
-  onLinkOrder: (appointment: AppointmentWithRelations) => void;
 }
 
 function statusBadgeVariant(status: string) {
@@ -62,8 +65,9 @@ export function DetailSheet({
   open,
   onOpenChange,
   onEdit,
-  onLinkOrder,
 }: DetailSheetProps) {
+  const navigate = useNavigate();
+  const { main } = useParams({ strict: false }) as { main: string };
   const updateMutation = useUpdateAppointment();
 
   if (!appointment) return null;
@@ -163,6 +167,24 @@ export function DetailSheet({
               }
             />
           </div>
+
+          {/* Estimate */}
+          {(appointment.people_count || appointment.estimated_pieces || appointment.fabric_type) && (
+            <>
+              <Divider />
+              <div className="px-5 py-4 space-y-2.5">
+                {appointment.people_count && (
+                  <DetailRow icon={Users} label={<><span className="text-muted-foreground">People:</span> <span className="font-medium">{appointment.people_count}</span></>} />
+                )}
+                {appointment.estimated_pieces && (
+                  <DetailRow icon={Shirt} label={<><span className="text-muted-foreground">Pieces:</span> <span className="font-medium">{appointment.estimated_pieces}</span></>} />
+                )}
+                {appointment.fabric_type && (
+                  <DetailRow icon={Shirt} label={<><span className="text-muted-foreground">Fabric:</span> <span className="font-medium capitalize">{appointment.fabric_type}</span></>} />
+                )}
+              </div>
+            </>
+          )}
 
           <Divider />
 
@@ -283,11 +305,15 @@ export function DetailSheet({
                       size="sm"
                       onClick={() => {
                         onOpenChange(false);
-                        onLinkOrder(appointment);
+                        navigate({
+                          to: "/$main/orders/new-work-order",
+                          params: { main },
+                          search: { appointmentId: appointment.id },
+                        });
                       }}
                     >
-                      <Link2 className="h-3.5 w-3.5 mr-1" />
-                      Link Order
+                      <ShoppingBag className="h-3.5 w-3.5 mr-1" />
+                      Start Order
                     </Button>
                   )}
                 </div>

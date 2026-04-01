@@ -1,10 +1,10 @@
 import { debounce, cn } from "@/lib/utils";
 import { searchPrimaryAccountByPhone, updateCustomer, createCustomer } from "@/api/customers";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Combobox } from "@/components/ui/combobox";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@repo/ui/button";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Combobox } from "@repo/ui/combobox";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
+import { DatePicker } from "@repo/ui/date-picker";
 
 import {
   Form,
@@ -13,16 +13,16 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from "@repo/ui/form";
+import { Input } from "@repo/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "@repo/ui/select";
+import { Textarea } from "@repo/ui/textarea";
 import { getSortedCountries } from "@/lib/countries";
 import type { Customer } from "@repo/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,10 +42,10 @@ import { AnimatedMessage } from "@/components/animation/AnimatedMessage";
 import WhatsappLogo from "@/assets/whatsapp.svg";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { FlagIcon } from "@/components/ui/flag-icon";
+import { FlagIcon } from "@repo/ui/flag-icon";
 import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin } from "lucide-react";
 import { SearchCustomer } from "./search-customer";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@repo/ui/dialog";
 
 interface CustomerDemographicsFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

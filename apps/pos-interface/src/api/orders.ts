@@ -210,16 +210,22 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
     return { status: 'success', data: flattenOrder(data), count: count || 0 };
 };
 
-export const dispatchOrder = async (orderId: number): Promise<ApiResponse<Order>> => {
+export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
     // 1. Update work order phase
     const res = await updateOrder({ order_phase: "in_progress" }, orderId);
     if (res.status === 'error') return res;
 
-    // 2. Update all garments of this order
-    const { error } = await db
+    // 2. Update selected garments (or all if no IDs provided)
+    let query = db
         .from('garments')
         .update({ location: 'transit_to_workshop' })
         .eq('order_id', orderId);
+
+    if (garmentIds) {
+        query = query.in('id', garmentIds);
+    }
+
+    const { error } = await query;
 
     if (error) {
         console.error('Error updating garments location:', error);
@@ -404,7 +410,7 @@ export const getOrdersList = async (filters: Record<string, any>): Promise<ApiRe
         *,
         workOrder:work_orders!order_id${hasWorkOrderFilter ? '!inner' : ''}(*),
         customer:customers(*),
-        garments:garments(*)
+        garments:garments(*, fabric:fabrics(name))
     `).eq('brand', getBrand());
 
     Object.entries(filters).forEach(([key, value]) => {

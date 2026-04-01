@@ -1,24 +1,41 @@
 import "dotenv/config";
 import { db } from "../src/client";
-import { garments, orders, workOrders } from "../src/schema";
+import { garments, orders } from "../src/schema";
 import { eq } from "drizzle-orm";
 
 async function main() {
-  // Get order 10 garments
-  const orderRows = await db.select().from(orders).where(eq(orders.id, 10));
-  console.log("=== Order 10 ===");
-  console.log(`checkout_status=${orderRows[0]?.checkout_status} order_phase=${(orderRows[0] as any)?.order_phase}`);
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      checkout_status: orders.checkout_status,
+      order_type: orders.order_type,
+      brand: orders.brand,
+    })
+    .from(orders)
+    .where(eq(orders.id, 19));
+  console.log("=== ORDER ===");
+  for (const o of orderRows) console.log(JSON.stringify(o, null, 2));
 
-  const wo = await db.select().from(workOrders).where(eq(workOrders.order_id, 10));
-  if (wo[0]) console.log(`work_order phase=${wo[0].order_phase}`);
+  console.log("\n=== GARMENTS ===");
+  const rows = await db
+    .select({
+      garment_id: garments.garment_id,
+      garment_type: garments.garment_type,
+      piece_stage: garments.piece_stage,
+      location: garments.location,
+      in_production: garments.in_production,
+      trip_number: garments.trip_number,
+      feedback_status: garments.feedback_status,
+      acceptance_status: garments.acceptance_status,
+      production_plan: garments.production_plan,
+      assigned_date: garments.assigned_date,
+    })
+    .from(garments)
+    .where(eq(garments.order_id, 19));
 
-  const gs = await db.select().from(garments).where(eq(garments.order_id, 10));
-  console.log(`\n=== Garments (${gs.length}) ===`);
-  for (const g of gs) {
-    console.log(`[${g.garment_id}] type=${g.garment_type} stage=${g.piece_stage} location=${g.location} trip=${g.trip_number} feedback=${g.feedback_status} acceptance=${g.acceptance_status}`);
+  for (const g of rows) {
+    console.log(JSON.stringify(g, null, 2));
   }
-
   process.exit(0);
 }
-
 main().catch(console.error);

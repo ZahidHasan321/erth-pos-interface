@@ -1,12 +1,12 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { NotFoundPage } from "@/components/not-found-page";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import { LogOut, ShieldAlert } from "lucide-react";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar";
+} from "@repo/ui/sidebar";
 import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
 import { router } from "@/router";
@@ -26,7 +26,7 @@ import { getFabrics } from "@/api/fabrics";
 import { getEmployees } from "@/api/employees";
 import { getPrices } from "@/api/prices";
 import { getStyles } from "@/api/styles";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 
 type MainParam = (typeof BRAND_NAMES)[keyof typeof BRAND_NAMES];
 

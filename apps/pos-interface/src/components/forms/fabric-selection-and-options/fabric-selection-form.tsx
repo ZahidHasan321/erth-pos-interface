@@ -5,19 +5,19 @@ import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
 import { getCampaigns } from "@/api/campaigns";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
+import { Button } from "@repo/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
+import { Input } from "@repo/ui/input";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+} from "@repo/ui/select";
+import { DatePicker } from "@repo/ui/date-picker";
+import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Badge } from "@repo/ui/badge";
 import { SignaturePad } from "@/components/forms/signature-pad";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -128,8 +128,12 @@ export function FabricSelectionForm({
     const [tempStockUsage, setTempStockUsage] = React.useState<
         Map<string, number>
     >(new Map());
+    const [stockValidationActive, setStockValidationActive] = React.useState(
+        checkoutStatus !== "confirmed"
+    );
 
     const printAllRef = React.useRef<HTMLDivElement>(null);
+    const watchedGarments = form.watch("garments");
 
     const handlePrintAll = useReactToPrint({
         contentRef: printAllRef,
@@ -227,7 +231,7 @@ export function FabricSelectionForm({
 
     // Compute whether any fabric exceeds available stock
     const hasStockError = React.useMemo(() => {
-        if (!fabrics.length) return false;
+        if (!stockValidationActive || !fabrics.length) return false;
         for (const [fabricIdStr, totalUsed] of tempStockUsage) {
             const fabric = fabrics.find(f => f.id.toString() === fabricIdStr);
             if (fabric) {
@@ -236,7 +240,7 @@ export function FabricSelectionForm({
             }
         }
         return false;
-    }, [tempStockUsage, fabrics]);
+    }, [stockValidationActive, tempStockUsage, fabrics]);
 
 
     React.useEffect(() => {
@@ -345,6 +349,7 @@ export function FabricSelectionForm({
 
             setIsSaved(true);
             setIsEditing(false);
+            setStockValidationActive(false);
 
             // Sync lists & refresh fabric stock for accurate validation on next save
             queryClient.invalidateQueries({ queryKey: ["fabrics"] });
@@ -774,19 +779,19 @@ export function FabricSelectionForm({
                                 customerName={customerName || undefined}
                                 customerMobile={customerMobile || undefined}
                                 tempStockUsage={tempStockUsage}
+                                stockValidationActive={stockValidationActive}
                             />
                         </div>
 
                         <div style={{ display: "none" }}>
                             <div ref={printAllRef}>
                                 {garmentFields.map((_, index) => {
-                                    const currentRowData = form.getValues(
-                                        `garments.${index}`,
-                                    ) as GarmentSchema;
+                                    const currentRowData = (watchedGarments?.[index] ??
+                                        form.getValues(`garments.${index}`)) as GarmentSchema;
                                     const measurementDisplay =
                                         measurementOptions.find(
                                             (m) => m.id === currentRowData.measurement_id,
-                                        )?.id || currentRowData.measurement_id;
+                                        )?.MeasurementID || currentRowData.measurement_id;
 
                                     const fabricData = {
                                         orderId: orderId || "N/A",
@@ -963,7 +968,10 @@ export function FabricSelectionForm({
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                setTimeout(() => setIsEditing(true), 0);
+                                                setTimeout(() => {
+                                                    setIsEditing(true);
+                                                    setStockValidationActive(true);
+                                                }, 0);
                                             }}
                                         >
                                             <Pencil className="w-4 h-4 mr-2" />

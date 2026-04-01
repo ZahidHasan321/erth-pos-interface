@@ -20,7 +20,7 @@ const queryClient = new QueryClient({
 function InnerApp() {
   const auth = useAuth()
   return (
-    <RouterProvider router={router} context={{ auth }} />
+    <RouterProvider router={router} context={{ auth, queryClient }} />
   )
 }
 

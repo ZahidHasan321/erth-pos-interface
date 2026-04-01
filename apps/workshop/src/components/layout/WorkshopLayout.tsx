@@ -1,5 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@repo/ui/sidebar";
 import { WorkshopSidebar } from "./WorkshopSidebar";
 
 interface WorkshopLayoutProps {

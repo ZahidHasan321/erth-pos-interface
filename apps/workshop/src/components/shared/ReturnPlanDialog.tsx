@@ -1,22 +1,23 @@
 import { useState, useEffect, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
+import { Button } from "@repo/ui/button";
+import { Label } from "@repo/ui/label";
+import { DatePicker } from "@repo/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Droplets, Scissors, Package, Shirt, Sparkles, Flame, ShieldCheck, Check } from "lucide-react";
+import { Droplets, Scissors, Check } from "lucide-react";
+import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import type { ProductionPlan } from "@repo/database";
 
 const STEPS = [
   { planKey: "soaker",          historyKey: "soaking",       label: "Soaking",       responsibility: "soaking",       icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
   { planKey: "cutter",          historyKey: "cutting",       label: "Cutting",       responsibility: "cutting",       icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
-  { planKey: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: Package,     color: "text-orange-600",  accent: "bg-orange-500" },
-  { planKey: "sewer",           historyKey: "sewing",        label: "Sewing",        responsibility: "sewing",        icon: Shirt,       color: "text-purple-600",  accent: "bg-purple-500" },
-  { planKey: "finisher",        historyKey: "finishing",      label: "Finishing",      responsibility: "finishing",     icon: Sparkles,    color: "text-emerald-600", accent: "bg-emerald-500" },
-  { planKey: "ironer",          historyKey: "ironing",        label: "Ironing",        responsibility: "ironing",       icon: Flame,       color: "text-red-600",     accent: "bg-red-500" },
-  { planKey: "quality_checker", historyKey: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: ShieldCheck, color: "text-indigo-600",  accent: "bg-indigo-500" },
+  { planKey: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
+  { planKey: "sewer",           historyKey: "sewing",        label: "Sewing",        responsibility: "sewing",        icon: IconNeedle,    color: "text-purple-600",  accent: "bg-purple-500" },
+  { planKey: "finisher",        historyKey: "finishing",      label: "Finishing",      responsibility: "finishing",     icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
+  { planKey: "ironer",          historyKey: "ironing",        label: "Ironing",        responsibility: "ironing",       icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },
+  { planKey: "quality_checker", historyKey: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: IconRosette,   color: "text-indigo-600",  accent: "bg-indigo-500" },
 ];
 
 const REENTRY_STAGES = STEPS.slice(0, -1); // can't re-enter at quality_check

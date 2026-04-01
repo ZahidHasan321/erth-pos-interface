@@ -10,9 +10,7 @@ import {
   X,
   Receipt,
   Loader2,
-  Shirt,
-  ShoppingBag,
-  FileText,
+  StickyNote,
 } from "lucide-react";
 import React from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
@@ -21,7 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import { 
   Form, 
   FormControl, 
@@ -29,12 +27,12 @@ import {
   FormItem, 
   FormLabel, 
   FormMessage 
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Combobox } from "@/components/ui/combobox";
+} from "@repo/ui/form";
+import { Input } from "@repo/ui/input";
+import { Textarea } from "@repo/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
+import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
+import { Combobox } from "@repo/ui/combobox";
 import { cn } from "@/lib/utils";
 import { getEmployees } from "@/api/employees";
 import { OrderInvoice, SalesInvoice, type InvoiceData } from "@/components/invoice";
@@ -350,116 +348,88 @@ export function OrderSummaryAndPaymentForm({
             animate="visible"
             className="space-y-4"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* LEFT: Items list */}
-              <div className="space-y-3">
-                {/* Garments */}
-                {garmentCount > 0 && (
-                  <section className="bg-card rounded-xl border border-border shadow-sm p-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2 mb-1.5">
-                      <Shirt className="w-4 h-4 text-muted-foreground" />
-                      Garments ({garmentCount})
-                    </h3>
-                    <div className="space-y-1">
-                      {fabricSelections.map((g, i) => (
-                        <div key={g.garment_id || i} className="flex items-center gap-2 text-xs p-2 rounded-md bg-muted/40">
-                          <span className={`font-semibold px-1.5 py-0.5 rounded text-[10px] ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+            <div className="space-y-3">
+              {/* ── Garment cards grid ──────────────────────────────────── */}
+              {garmentCount > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {fabricSelections.map((g, i) => {
+                    const fabric = invoiceData?.fabrics?.find(f => f.id === g.fabric_id);
+                    const fabricName = fabric?.name || (g.fabric_source === "OUT" ? `External (${g.shop_name || "—"})` : `Fabric #${g.fabric_id || "—"}`);
+
+                    return (
+                      <div key={g.garment_id || i} className="bg-card rounded-lg border border-border p-2.5 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-semibold px-1.5 py-0.5 rounded text-[10px] shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
                             {g.garment_type === "brova" ? "B" : "F"}
                           </span>
-                          <span className="font-medium truncate flex-1">
-                            {invoiceData?.fabrics?.find(f => f.id === g.fabric_id)?.name || (g.fabric_source === "OUT" ? `External (${g.shop_name || "—"})` : `Fabric #${g.fabric_id || "—"}`)}
-                          </span>
-                          {g.express && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">Express</span>}
+                          <span className="text-xs font-semibold truncate">{fabricName}</span>
                         </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* Shelf Items */}
-                {invoiceData?.shelfProducts && invoiceData.shelfProducts.length > 0 && (
-                  <section className="bg-card rounded-xl border border-border shadow-sm p-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2 mb-1.5">
-                      <ShoppingBag className="w-4 h-4 text-muted-foreground" />
-                      Shelf Items ({invoiceData.shelfProducts.length})
-                    </h3>
-                    <div className="space-y-1">
-                      {invoiceData.shelfProducts.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs p-2 rounded-md bg-muted/40">
-                          <span className="font-medium">{p.product_type || `Item ${i + 1}`}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">x{p.quantity}</span>
-                            <span className="font-semibold tabular-nums">{((p.unit_price ?? 0) * (p.quantity ?? 0)).toFixed(3)} KWD</span>
-                          </div>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {[
+                            g.style && <span key="style" className="capitalize">{g.style}</span>,
+                            fabric?.color,
+                            g.fabric_length ? `${g.fabric_length}m` : null,
+                          ].filter(Boolean).map((item, idx) => (
+                            <React.Fragment key={idx}>{idx > 0 && " · "}{item}</React.Fragment>
+                          ))}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {g.express && (
+                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-red-100 text-red-600">Express</span>
+                          )}
+                          {g.soaking && (
+                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-sky-100 text-sky-600">Soak</span>
+                          )}
+                          {g.delivery_date && (
+                            <span className="text-[9px] px-1 py-px rounded-full bg-muted text-muted-foreground">
+                              {new Date(g.delivery_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            </span>
+                          )}
                         </div>
-                      ))}
+                        {g.notes && (
+                          <p className="text-[10px] text-muted-foreground italic truncate">
+                            <StickyNote className="w-2.5 h-2.5 inline mr-0.5 -mt-px" />{g.notes}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Shelf Items grid */}
+              {invoiceData?.shelfProducts && invoiceData.shelfProducts.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {invoiceData.shelfProducts.map((p, i) => (
+                    <div key={i} className="bg-card rounded-lg border border-border p-2.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{p.product_type || `Item ${i + 1}`}</p>
+                        {p.brand && <p className="text-[10px] text-muted-foreground">{p.brand}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-semibold tabular-nums">{((p.unit_price ?? 0) * (p.quantity ?? 0)).toFixed(3)}</p>
+                        <p className="text-[10px] text-muted-foreground">x{p.quantity}</p>
+                      </div>
                     </div>
-                  </section>
-                )}
+                  ))}
+                </div>
+              )}
 
-                {/* Notes + Order Taker */}
-                <section className="bg-card rounded-xl border border-border shadow-sm p-3 space-y-2.5">
-                  <FormField
-                    control={form.control}
-                    name="order_taker_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-semibold">Order Taker</FormLabel>
-                        <FormControl>
-                          <Combobox
-                            options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
-                            value={field.value ?? ""}
-                            onChange={field.onChange}
-                            placeholder="Select order taker..."
-                            disabled={isOrderClosed}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-semibold">Order Notes</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Special instructions or internal notes..."
-                            className="min-h-[60px] resize-none"
-                            disabled={isOrderClosed}
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </section>
-              </div>
-
-              {/* RIGHT: Charges & Total */}
-              <div className="space-y-3">
-                <section className="bg-card rounded-xl border border-border shadow-sm p-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    Order Summary
-                  </h3>
-
+              {/* ── Two columns: Prices (left) | Notes + Order Taker (right) ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* LEFT: Price breakdown */}
+                <section className="bg-card rounded-xl border border-border shadow-sm p-3 flex flex-col">
                   {deliveryDate && (
-                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/40 mb-2">
+                    <div className="flex items-center gap-2 p-1.5 rounded-md bg-muted/40 mb-2 text-xs">
                       <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="text-xs text-muted-foreground">Delivery</span>
-                      <span className="text-xs font-semibold ml-auto tabular-nums">
+                      <span className="text-muted-foreground">Delivery</span>
+                      <span className="font-semibold ml-auto tabular-nums">
                         {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                       </span>
                     </div>
                   )}
 
-                  {/* Charges */}
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm flex-1">
                     <div className="flex justify-between py-0.5">
                       <span className="text-muted-foreground">Fabric</span>
                       <span className="font-medium tabular-nums">{Number(fabric_charge || 0).toFixed(3)} KWD</span>
@@ -488,69 +458,91 @@ export function OrderSummaryAndPaymentForm({
                     )}
                   </div>
 
-                  <div className="border-t border-border pt-2 mt-2">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-base font-bold">Order Total</span>
-                      <span className="text-xl font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
+                  <div className="border-t border-border pt-2 mt-2 flex justify-between items-baseline">
+                    <div>
+                      <span className="text-sm font-bold">Order Total</span>
+                      <p className="text-[11px] text-muted-foreground">Discounts & payment at the cashier</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Discounts & payment at the cashier
-                    </p>
+                    <span className="text-lg font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
                   </div>
                 </section>
 
-                {/* Confirmed state */}
-                {isOrderClosed && _checkoutStatus === "confirmed" && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-700">Order Confirmed</p>
-                      <p className="text-xs text-emerald-600">
-                        {fatoura ? `Invoice #${fatoura}` : "Pending invoice number"} — proceed to cashier for payment
-                      </p>
-                    </div>
-                  </div>
-                )}
+                {/* RIGHT: Notes (flex-grows) + Order Taker */}
+                <div className="bg-card rounded-xl border border-border shadow-sm p-3 flex flex-col gap-2">
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem className="flex-1 flex flex-col">
+                        <FormLabel className="text-xs font-semibold">Order Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Special instructions or internal notes..."
+                            className="flex-1 min-h-[60px] resize-none"
+                            disabled={isOrderClosed}
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="order_taker_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-semibold">Order Taker</FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            placeholder="Select order taker..."
+                            disabled={isOrderClosed}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-3 pt-1">
-              {!isOrderClosed && (
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full h-12 text-base font-semibold"
-                  disabled={form.formState.isSubmitting}
-                >
-                  {form.formState.isSubmitting ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <Check className="w-5 h-5 mr-2" />
-                  )}
-                  {form.formState.isSubmitting ? "Processing..." : "Confirm Order"}
-                </Button>
+              {/* Confirmed state */}
+              {isOrderClosed && _checkoutStatus === "confirmed" && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-700">Order Confirmed</p>
+                    <p className="text-xs text-emerald-600">Proceed to cashier for payment & invoicing</p>
+                  </div>
+                </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePrint}
-                  disabled={!isOrderClosed || isLoadingFatoura}
-                  className="h-10"
-                >
-                  {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-                  Print Invoice
-                </Button>
-
-                {!isOrderClosed && (
-                  <Button type="button" variant="destructive" onClick={onCancel} className="h-10">
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel Order
+              {/* Action Buttons */}
+              {!isOrderClosed && (
+                <div className="flex gap-3">
+                  <Button type="button" variant="destructive" onClick={onCancel} className="h-12">
+                    <X className="w-5 h-5 mr-2" />
+                    Cancel
                   </Button>
-                )}
-              </div>
+                  <Button
+                    type="submit"
+                    size="lg"
+                    className="flex-1 h-12 text-base font-semibold"
+                    disabled={form.formState.isSubmitting}
+                  >
+                    {form.formState.isSubmitting ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="w-5 h-5 mr-2" />
+                    )}
+                    {form.formState.isSubmitting ? "Processing..." : "Confirm Order"}
+                  </Button>
+                </div>
+              )}
             </div>
 
           </motion.div>

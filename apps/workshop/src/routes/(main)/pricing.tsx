@@ -2,11 +2,11 @@ import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { usePrices, useUpdatePrice, useStyles, useUpdateStylePrice } from "@/hooks/usePricing";
 import { PageHeader, LoadingSkeleton } from "@/components/shared/PageShell";
-import { Input } from "@/components/ui/input";
+import { Input } from "@repo/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Tag, Pencil, Check, X, ChevronDown, Shirt, Truck, Zap } from "lucide-react";
-import type { Price, Style } from "@repo/database";
+import type { Brand, Price, Style } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/pricing")({
   component: PricingPage,
@@ -97,7 +97,7 @@ function InlineEditor({
 
 // ── System Charges — card grid with prominent values ────────────────────────
 
-function SystemCharges({ prices }: { prices: Price[] }) {
+function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
   const updatePrice = useUpdatePrice();
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -140,7 +140,7 @@ function SystemCharges({ prices }: { prices: Price[] }) {
                     value={String(price.value)}
                     onSave={(v) =>
                       updatePrice.mutate(
-                        { key: price.key, value: v },
+                        { key: price.key, brand, value: v },
                         {
                           onSuccess: () => { toast.success(`${meta.label} updated`); setEditing(null); },
                           onError: (e) => toast.error(e.message),
@@ -299,11 +299,20 @@ function StyleGroups({ styles }: { styles: Style[] }) {
   );
 }
 
+// ── Brand Tabs ─────────────────────────────────────────────────────────────
+
+const BRAND_TABS: { value: Brand; label: string; color: string; bg: string; active: string }[] = [
+  { value: "ERTH",   label: "ERTH",   color: "text-emerald-700", bg: "hover:bg-emerald-50", active: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300" },
+  { value: "SAKKBA", label: "SAKKBA", color: "text-blue-700",    bg: "hover:bg-blue-50",    active: "bg-blue-100 text-blue-800 ring-1 ring-blue-300" },
+  { value: "QASS",   label: "QASS",   color: "text-violet-700",  bg: "hover:bg-violet-50",  active: "bg-violet-100 text-violet-800 ring-1 ring-violet-300" },
+];
+
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 function PricingPage() {
-  const { data: prices, isLoading: pricesLoading } = usePrices();
-  const { data: styles, isLoading: stylesLoading } = useStyles();
+  const [brand, setBrand] = useState<Brand>("ERTH");
+  const { data: prices, isLoading: pricesLoading } = usePrices(brand);
+  const { data: styles, isLoading: stylesLoading } = useStyles(brand);
 
   const isLoading = pricesLoading || stylesLoading;
 
@@ -324,12 +333,28 @@ function PricingPage() {
         }
       />
 
+      {/* Brand tabs */}
+      <div className="flex gap-1.5 mb-5">
+        {BRAND_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setBrand(tab.value)}
+            className={cn(
+              "px-4 py-1.5 rounded-lg text-xs font-black tracking-wide transition-all",
+              brand === tab.value ? tab.active : `${tab.color} ${tab.bg} bg-transparent`,
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <LoadingSkeleton count={5} />
       ) : (
         <div className="space-y-6">
           {/* System charges — card grid */}
-          {prices?.length ? <SystemCharges prices={prices} /> : null}
+          {prices?.length ? <SystemCharges prices={prices} brand={brand} /> : null}
 
           {/* Style options — collapsible groups */}
           <div>

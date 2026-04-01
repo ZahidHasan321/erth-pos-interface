@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@repo/ui/button";
+import { Badge } from "@repo/ui/badge";
 import {
     Table,
     TableBody,
@@ -10,7 +10,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { PaymentReceipt, type PaymentReceiptData } from "./payment-receipt";
 
@@ -18,6 +18,7 @@ interface PaymentHistoryProps {
     transactions: any[];
     orderId: number;
     invoiceNumber?: number;
+    invoiceRevision?: number;
     customerName?: string;
     customerPhone?: string;
     orderTotal: number;
@@ -28,6 +29,7 @@ export function PaymentHistory({
     transactions,
     orderId,
     invoiceNumber,
+    invoiceRevision,
     customerName,
     customerPhone,
     orderTotal,
@@ -44,9 +46,10 @@ export function PaymentHistory({
             .filter((t) => new Date(t.created_at) <= new Date(tx.created_at))
             .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
+        const invoiceDisplay = invoiceNumber ? `${invoiceNumber}${invoiceRevision ? `-R${invoiceRevision}` : ""}` : undefined;
         printReceiptRef.current = {
             orderId,
-            invoiceNumber,
+            invoiceDisplay,
             customerName,
             customerPhone,
             transactionAmount: tx.amount,

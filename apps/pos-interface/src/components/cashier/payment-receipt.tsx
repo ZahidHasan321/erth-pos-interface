@@ -5,7 +5,7 @@ import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 
 export interface PaymentReceiptData {
     orderId: number;
-    invoiceNumber?: number;
+    invoiceDisplay?: string;
     customerName?: string;
     customerPhone?: string;
     transactionAmount: number;
@@ -54,9 +54,9 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                         <span className="font-semibold">{data.orderId}</span>
                         <span className="text-gray-600">رقم الطلب</span>
                     </div>
-                    {data.invoiceNumber && (
+                    {data.invoiceDisplay && (
                         <div className="flex justify-between">
-                            <span className="font-semibold">{data.invoiceNumber}</span>
+                            <span className="font-semibold">{data.invoiceDisplay}</span>
                             <span className="text-gray-600">رقم الفاتورة</span>
                         </div>
                     )}

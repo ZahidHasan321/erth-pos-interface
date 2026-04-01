@@ -18,12 +18,13 @@ import {
 } from "lucide-react";
 
 // UI Components
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Skeleton } from "@repo/ui/skeleton";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 
 // API and Types
 import { getOrdersList, dispatchOrder } from "@/api/orders";
@@ -32,13 +33,16 @@ import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
 import { cn, clickableProps } from "@/lib/utils";
 
+interface GarmentWithFabric extends Garment {
+    fabric?: { name: string } | null;
+}
 interface OrderWithDetails extends Order {
     customer?: Customer;
-    garments?: Garment[];
+    garments?: GarmentWithFabric[];
 }
 interface OrderCardProps {
   order: OrderWithDetails;
-  onDispatch: (orderId: number) => Promise<void>;
+  onDispatch: (orderId: number, garmentIds?: string[]) => Promise<void>;
   isUpdating: boolean;
 }
 
@@ -53,13 +57,33 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
   const garments = order.garments || [];
   const numGarments = garments.length || order.num_of_fabrics || 0;
 
+  // All garments pre-selected by default
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(garments.map(g => g.id))
+  );
+
+  const toggleGarment = (id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  };
+
+  const allSelected = garments.length > 0 && selectedIds.size === garments.length;
+  const toggleAll = (checked: boolean) => {
+    setSelectedIds(checked ? new Set(garments.map(g => g.id)) : new Set());
+  };
+
   const brovaCount = garments.filter(g => g.garment_type === "brova").length;
   const finalCount = garments.filter(g => g.garment_type === "final").length;
 
   const handleDispatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isUpdating) {
-      await onDispatch(order.id);
+    if (!isUpdating && selectedIds.size > 0) {
+      const ids = [...selectedIds];
+      // Pass garment IDs only if not all are selected
+      await onDispatch(order.id, ids.length < garments.length ? ids : undefined);
     }
   };
 
@@ -113,9 +137,9 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 {garments.some(g => g.express) && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
               </div>
             </div>
-            <div className="w-[180px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
-              <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={handleDispatch} disabled={isUpdating}>
-                {isUpdating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><span>Dispatch</span><ChevronRight className="w-3 h-3 ml-1" /></>}
+            <div className="w-[210px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+              <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={handleDispatch} disabled={isUpdating || selectedIds.size === 0}>
+                {isUpdating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><span>Dispatch{selectedIds.size < garments.length ? ` (${selectedIds.size})` : ""}</span><ChevronRight className="w-3 h-3 ml-1" /></>}
               </Button>
               <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0" aria-label={isExpanded ? "Collapse" : "Expand"} aria-expanded={isExpanded}>
                 <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
@@ -151,65 +175,94 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
                 {garments.some(g => g.express) && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
               </div>
-              <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={handleDispatch} disabled={isUpdating}>
-                {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : "Dispatch"}
+              <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={handleDispatch} disabled={isUpdating || selectedIds.size === 0}>
+                {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : `Dispatch${selectedIds.size < garments.length ? ` (${selectedIds.size})` : ""}`}
               </Button>
             </div>
           </div>
         </div>
 
         {/* Expanded garment table */}
-        {isExpanded && garments.length > 0 && (
-          <div className="border-t-2 border-border/40 bg-muted/5">
+        {garments.length > 0 && (
+          <div className={cn(
+            "grid transition-[grid-template-rows] duration-300 ease-in-out",
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          )}>
+          <div className={cn(
+            "overflow-hidden",
+            isExpanded && "border-t-2 border-border/40 bg-muted/5"
+          )}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                  <th className="py-2.5 px-3 w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={(checked) => toggleAll(!!checked)}
+                    />
+                  </th>
                   <th className="text-left py-2.5 px-5">Garment</th>
                   <th className="text-left py-2.5 px-5">Type</th>
                   <th className="text-left py-2.5 px-5">Style</th>
-                  <th className="text-left py-2.5 px-5">Stage</th>
-                  <th className="text-left py-2.5 px-5">Location</th>
+                  <th className="text-left py-2.5 px-5">Fabric</th>
+                  <th className="text-left py-2.5 px-5">Notes</th>
                 </tr>
               </thead>
               <tbody>
-                {garments.map((g) => (
-                  <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
-                    <td className="py-2.5 px-5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn(
-                          "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
-                          g.garment_type === "brova"
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-emerald-50 text-emerald-700"
-                        )}>
-                          {g.garment_type}
-                        </span>
-                        {g.express && (
-                          <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
-                            Express
+                {garments.map((g) => {
+                  const isSelected = selectedIds.has(g.id);
+                  return (
+                    <tr key={g.id} className={cn(
+                      "border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors",
+                      !isSelected && "opacity-50"
+                    )}>
+                      <td className="py-2.5 px-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => toggleGarment(g.id, !!checked)}
+                        />
+                      </td>
+                      <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
+                      <td className="py-2.5 px-5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn(
+                            "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
+                            g.garment_type === "brova"
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-emerald-50 text-emerald-700"
+                          )}>
+                            {g.garment_type}
                           </span>
+                          {g.express && (
+                            <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                              Express
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
+                      <td className="py-2.5 px-5">
+                        {g.fabric_source === "IN" ? (
+                          <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
+                            {g.fabric?.name || "IN"}
+                          </span>
+                        ) : g.fabric_source === "OUT" ? (
+                          <span className="text-xs font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
+                            OUT
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
-                    <td className="py-2.5 px-5">
-                      <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded capitalize">
-                        {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage ?? "—"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-5">
-                      <span className={cn(
-                        "text-xs font-bold px-2 py-0.5 rounded capitalize",
-                        g.location === "shop" ? "bg-emerald-50 text-emerald-700" : "bg-muted text-muted-foreground"
-                      )}>
-                        {g.location?.replace(/_/g, " ") || "—"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-2.5 px-5 text-muted-foreground text-xs max-w-[200px] truncate">
+                        {g.notes || "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
           </div>
         )}
       </CardContent>
@@ -514,10 +567,10 @@ export default function DispatchOrderPage() {
   });
   const returnCount = redispatchResponse?.data?.length || 0;
 
-  const handleDispatch = async (orderId: number) => {
+  const handleDispatch = async (orderId: number, garmentIds?: string[]) => {
     setUpdatingOrderIds((prev) => new Set(prev).add(orderId));
     try {
-      await dispatchOrder(orderId);
+      await dispatchOrder(orderId, garmentIds);
       toast.success(`Order #${orderId} dispatched successfully!`);
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
     } catch (error) {

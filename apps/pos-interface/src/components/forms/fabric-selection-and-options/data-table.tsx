@@ -15,7 +15,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 
 declare module "@tanstack/react-table" {
     interface ColumnMeta<TData extends RowData, TValue> {
@@ -39,6 +39,7 @@ interface DataTableProps<TData, TValue> {
     customerName?: string;
     customerMobile?: string;
     tempStockUsage?: Map<string, number>;
+    stockValidationActive?: boolean;
     stitchingPrice?: number;
 }
 
@@ -58,6 +59,7 @@ export function DataTable<TData, TValue>({
     customerName,
     customerMobile,
     tempStockUsage,
+    stockValidationActive,
     stitchingPrice,
 }: DataTableProps<TData, TValue>) {
     const table = useReactTable({
@@ -78,6 +80,7 @@ export function DataTable<TData, TValue>({
             customerName,
             customerMobile,
             tempStockUsage,
+            stockValidationActive,
             stitchingPrice,
         } as {
             measurementOptions?: { id: string; MeasurementID: string }[];
@@ -93,6 +96,7 @@ export function DataTable<TData, TValue>({
             customerName?: string;
             customerMobile?: string;
             tempStockUsage?: Map<string, number>;
+            stockValidationActive?: boolean;
             stitchingPrice?: number;
         },
     });

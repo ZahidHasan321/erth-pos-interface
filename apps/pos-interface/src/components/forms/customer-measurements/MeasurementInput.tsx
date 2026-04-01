@@ -5,14 +5,14 @@ import {
   FormField,
   FormItem,
   FormLabel,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from "@repo/ui/form";
+import { Input } from "@repo/ui/input";
 import { cn } from "@/lib/utils";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
 
-// Convert decimal to mixed fraction
-function decimalToMixedFraction(decimal: number): string {
-  if (decimal === 0 || isNaN(decimal)) return "";
+// Convert decimal to mixed fraction parts
+function decimalToFractionParts(decimal: number): { whole: number; numerator: number; denominator: number; isNegative: boolean } | null {
+  if (decimal === 0 || isNaN(decimal)) return null;
 
   const isNegative = decimal < 0;
   const absDecimal = Math.abs(decimal);
@@ -21,27 +21,40 @@ function decimalToMixedFraction(decimal: number): string {
   const fractionalPart = absDecimal - whole;
 
   if (fractionalPart < 0.001) {
-    return isNegative ? `-${whole}` : `${whole}`;
+    return null; // whole number, no fraction to show
   }
 
-  // Find best fraction approximation
   const gcd = (a: number, b: number): number =>
     b < 0.0001 ? a : gcd(b, a % b);
 
-  const precision = 1000000; // Higher precision for better accuracy
+  const precision = 1000000;
   const numerator = Math.round(fractionalPart * precision);
   const denominator = precision;
   const divisor = gcd(numerator, denominator);
 
-  const simplifiedNum = Math.round(numerator / divisor);
-  const simplifiedDen = Math.round(denominator / divisor);
+  return {
+    whole,
+    numerator: Math.round(numerator / divisor),
+    denominator: Math.round(denominator / divisor),
+    isNegative,
+  };
+}
 
-  // Format as mixed fraction
-  if (whole === 0) {
-    return `${isNegative ? "-" : ""}${simplifiedNum}/${simplifiedDen}`;
-  }
+function StackedFraction({ value }: { value: number }) {
+  const parts = decimalToFractionParts(value);
+  if (!parts) return null;
 
-  return `${isNegative ? "-" : ""}${whole} ${simplifiedNum}/${simplifiedDen}`;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+      {parts.isNegative && <span>-</span>}
+      {parts.whole > 0 && <span>{parts.whole}</span>}
+      <span className="inline-flex flex-col items-center leading-none">
+        <span className="text-[10px]">{parts.numerator}</span>
+        <span className="w-full h-px bg-muted-foreground/60" />
+        <span className="text-[10px]">{parts.denominator}</span>
+      </span>
+    </span>
+  );
 }
 
 interface MeasurementInputProps {
@@ -132,9 +145,7 @@ export const MeasurementInput = forwardRef<
                   {field.value &&
                     typeof field.value === "number" &&
                     field.value !== 0 && (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {decimalToMixedFraction(field.value)}
-                      </span>
+                      <StackedFraction value={field.value} />
                     )}
                 </div>
               </FormControl>

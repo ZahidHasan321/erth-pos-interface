@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@repo/ui/card";
+import { Checkbox } from "@repo/ui/checkbox";
 import { cn, clickableProps, formatDate } from "@/lib/utils";
 import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";

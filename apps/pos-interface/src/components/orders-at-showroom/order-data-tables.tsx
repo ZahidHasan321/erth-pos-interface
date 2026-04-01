@@ -16,7 +16,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Table,
   TableBody,
@@ -24,7 +24,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { cn, clickableProps } from "@/lib/utils";
@@ -38,7 +38,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 
 type OrderDataTableProps = {
   columns: ColumnDef<OrderRow, unknown>[];

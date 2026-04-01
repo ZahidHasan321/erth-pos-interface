@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"; // Import useNavigate
-import { Button } from "./ui/button";
+import { Button } from "@repo/ui/button";
 
 export function NotFoundPage() {
   const homepagePath = '/'

@@ -9,8 +9,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@repo/ui/select";
+import { Checkbox } from "@repo/ui/checkbox";
 import { Plus } from "lucide-react";
 import {
   collarButtons,

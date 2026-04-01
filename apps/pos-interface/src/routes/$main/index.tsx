@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import { format, addDays, startOfDay, endOfDay, isToday, isTomorrow } from "date-fns";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Skeleton } from "@repo/ui/skeleton";
 import { getDashboardOrders } from "@/api/orders";
 import { getCustomerCount } from "@/api/customers";
 import { cn } from "@/lib/utils";

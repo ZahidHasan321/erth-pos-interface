@@ -5,7 +5,7 @@ import * as React from "react";
 import { type UseFormReturn, useWatch } from "react-hook-form";
 
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Form,
   FormControl,
@@ -13,17 +13,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from "@repo/ui/form";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Combobox } from "@/components/ui/combobox";
+} from "@repo/ui/select";
+import { Input } from "@repo/ui/input";
+import { Textarea } from "@repo/ui/textarea";
+import { Combobox } from "@repo/ui/combobox";
 import { GroupedMeasurementFields } from "./GroupedMeasurementFields";
 import { useAutoNavigation } from "./useAutoNavigation";
 
@@ -633,49 +633,45 @@ export function CustomerMeasurementsForm({
             )}
           </div>
         </div>
-        {/* ---- Measurement Groups ---- */}
+        {/* ---- Auto-Tape Measurements (sequence 1-18) ---- */}
         <div className="space-y-3 pt-4">
-          {/* Row 1: Chest (5) + Waist (5) — widest cards together */}
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Auto Tape Measurements</h3>
+          {/* Row 1: Chest & Shoulder area (seq 1-8) */}
           <div className="flex flex-wrap gap-3">
             <GroupedMeasurementFields
               form={form}
-              title="Chest"
+              title="Chest & Shoulder"
               unit={unit}
               isDisabled={!isEditing}
               fields={[
-                { name: "chest_upper", label: "Upper" },
-                [
-                  { name: "chest_full", label: "Full" },
-                  { name: "chest_front", label: "Front" },
-                  {
-                    name: "chest_provision",
-                    label: "Provision",
-                    isDisabled: true,
-                  },
-                ],
-                { name: "chest_back", label: "Back" },
+                { name: "chest_full", label: "1. Full Chest" },
+                { name: "shoulder", label: "2. Shoulder" },
+                { name: "sleeve_length", label: "3. Sleeve Length" },
+                { name: "sleeve_width", label: "4. Sleeve Width" },
+                { name: "elbow", label: "5. Elbow" },
+                { name: "armhole_front", label: "6. Armhole Front" },
+                { name: "chest_upper", label: "7. Upper Chest" },
+                { name: "chest_front", label: "8. Front Chest" },
               ]}
-              wrapperClassName="flex-1 min-w-[280px]"
+              wrapperClassName="flex-1 min-w-[320px]"
               getFieldRef={getFieldRef}
               getEnterHandler={getEnterHandler}
             />
+          </div>
+
+          {/* Row 2: Waist, Pocket, Jabzour, Lengths (seq 9-13) */}
+          <div className="flex flex-wrap gap-3">
             <GroupedMeasurementFields
               form={form}
-              title="Waist"
+              title="Waist & Length"
               unit={unit}
               isDisabled={!isEditing}
               fields={[
-                [
-                  { name: "waist_full", label: "Full" },
-                  { name: "waist_front", label: "Front" },
-                  { name: "waist_back", label: "Back" },
-                  {
-                    name: "waist_provision",
-                    label: "Provision",
-                    isDisabled: true,
-                  },
-                ],
-                { name: "bottom", label: "Bottom" },
+                { name: "waist_front", label: "9. Front Waist" },
+                { name: "top_pocket_distance", label: "10. Pocket Distance" },
+                { name: "jabzour_length", label: "11. Jabzour Length" },
+                { name: "length_front", label: "12. Front Length" },
+                { name: "bottom", label: "13. Bottom" },
               ]}
               wrapperClassName="flex-1 min-w-[280px]"
               getFieldRef={getFieldRef}
@@ -683,121 +679,85 @@ export function CustomerMeasurementsForm({
             />
           </div>
 
-          {/* Row 2: Armhole (3) + Top Pocket (3) + Side Pocket (4) — medium cards */}
+          {/* Row 3: Collar & Back measurements (seq 14-18) */}
           <div className="flex flex-wrap gap-3">
             <GroupedMeasurementFields
               form={form}
-              title="Armhole"
+              title="Collar & Back"
               unit={unit}
               isDisabled={!isEditing}
               fields={[
-                { name: "armhole", label: "Full" },
-                { name: "armhole_front", label: "Front" },
+                { name: "collar_width", label: "14. Collar Width" },
+                { name: "collar_height", label: "15. Collar Height" },
+                { name: "chest_back", label: "16. Back Chest" },
+                { name: "waist_back", label: "17. Back Waist" },
+                { name: "length_back", label: "18. Back Length" },
+              ]}
+              wrapperClassName="flex-1 min-w-[280px]"
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+          </div>
+        </div>
+
+        {/* ---- Manual Measurements ---- */}
+        <div className="space-y-3 pt-2">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Manual Measurements</h3>
+          <div className="flex flex-wrap gap-3">
+            <GroupedMeasurementFields
+              form={form}
+              title="Armhole, Waist & Jabzour"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                { name: "armhole", label: "Armhole Full" },
+                { name: "waist_full", label: "Waist Full" },
+                { name: "jabzour_width", label: "Jabzour Width" },
+              ]}
+              wrapperClassName="flex-1 min-w-[200px]"
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+            <GroupedMeasurementFields
+              form={form}
+              title="Pockets"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                { name: "top_pocket_length", label: "Top Length" },
+                { name: "top_pocket_width", label: "Top Width" },
+                { name: "side_pocket_length", label: "Side Length" },
+                { name: "side_pocket_width", label: "Side Width" },
+                { name: "side_pocket_distance", label: "Side Distance" },
+                { name: "side_pocket_opening", label: "Side Opening" },
+              ]}
+              wrapperClassName="flex-1 min-w-[280px]"
+              getFieldRef={getFieldRef}
+              getEnterHandler={getEnterHandler}
+            />
+            <GroupedMeasurementFields
+              form={form}
+              title="Provisions"
+              unit={unit}
+              isDisabled={!isEditing}
+              fields={[
+                {
+                  name: "chest_provision",
+                  label: "Chest",
+                  isDisabled: true,
+                },
+                {
+                  name: "waist_provision",
+                  label: "Waist",
+                  isDisabled: true,
+                },
                 {
                   name: "armhole_provision",
-                  label: "Provision",
+                  label: "Armhole",
                   isDisabled: true,
                 },
               ]}
-              wrapperClassName="flex-1 min-w-[220px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Top Pocket"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "top_pocket_distance", label: "Distance" },
-                { name: "top_pocket_length", label: "Length" },
-                { name: "top_pocket_width", label: "Width" },
-              ]}
-              wrapperClassName="flex-1 min-w-[220px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Side Pocket"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "side_pocket_length", label: "Length" },
-                { name: "side_pocket_width", label: "Width" },
-                { name: "side_pocket_distance", label: "Distance" },
-                { name: "side_pocket_opening", label: "Opening" },
-              ]}
-              wrapperClassName="flex-1 min-w-[220px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-          </div>
-
-          {/* Row 3: All 2-field cards — small, 5 across */}
-          <div className="flex flex-wrap gap-3">
-            <GroupedMeasurementFields
-              form={form}
-              title="Collar"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "collar_width", label: "Length" },
-                { name: "collar_height", label: "Height" },
-              ]}
-              wrapperClassName="flex-1 min-w-[150px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Lengths"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "length_front", label: "Front" },
-                { name: "length_back", label: "Back" },
-              ]}
-              wrapperClassName="flex-1 min-w-[150px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Sleeve"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "sleeve_length", label: "Length" },
-                { name: "sleeve_width", label: "Width" },
-              ]}
-              wrapperClassName="flex-1 min-w-[150px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Shoulder & Elbow"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "shoulder", label: "Shoulder" },
-                { name: "elbow", label: "Elbow" },
-              ]}
-              wrapperClassName="flex-1 min-w-[150px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-            <GroupedMeasurementFields
-              form={form}
-              title="Jabzour"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "jabzour_length", label: "Length" },
-                { name: "jabzour_width", label: "Width" },
-              ]}
-              wrapperClassName="flex-1 min-w-[150px]"
+              wrapperClassName="flex-1 min-w-[200px]"
               getFieldRef={getFieldRef}
               getEnterHandler={getEnterHandler}
             />

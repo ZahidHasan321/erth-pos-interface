@@ -11,8 +11,8 @@ import {
   Ruler,
   Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
 import {
   Table,
   TableBody,
@@ -20,11 +20,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { useCustomers } from "@/hooks/use-customers";
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@repo/ui/card";
+import { Skeleton } from "@repo/ui/skeleton";
 
 import {
   Select,
@@ -32,14 +32,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetDescription
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import { CustomerMeasurementsStandalone } from "@/components/forms/customer-measurements";
 import type { Customer } from "@repo/database";
 

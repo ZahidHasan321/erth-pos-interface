@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   receiveGarments,
   receiveAndStartGarments,
+  markLostInTransit,
   sendToScheduler,
   sendReturnToProduction,
   scheduleGarments,
@@ -82,6 +83,19 @@ export function useReceiveAndStart() {
     onMutate: (ids) => optimisticPatch(qc, ids, {
       location: 'workshop' as any,
       in_production: true,
+    }),
+    onError: (_err, _ids, rollback) => rollback?.(),
+    onSettled: () => invalidateAll(qc),
+  });
+}
+
+export function useMarkLostInTransit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => markLostInTransit(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      location: 'lost_in_transit' as any,
+      in_production: false,
     }),
     onError: (_err, _ids, rollback) => rollback?.(),
     onSettled: () => invalidateAll(qc),
@@ -270,7 +284,7 @@ export function useReleaseFinalsWithPlan() {
 // ── Detail updates ─────────────────────────────────────────────────────────
 
 export function useUpdateGarmentDetails() {
-  return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null } }) =>
+  return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null; piece_stage?: string | null } }) =>
     updateGarmentDetails(args.id, args.updates),
   );
 }

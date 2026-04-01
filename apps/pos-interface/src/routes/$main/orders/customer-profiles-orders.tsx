@@ -7,7 +7,7 @@ import {
     customerDemographicsDefaults,
     type CustomerDemographicsSchema,
 } from '@/components/forms/customer-demographics/demographics-form.schema';
-import { Button } from '@/components/ui/button';
+import { Button } from '@repo/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
 export const Route = createFileRoute('/$main/orders/customer-profiles-orders')({

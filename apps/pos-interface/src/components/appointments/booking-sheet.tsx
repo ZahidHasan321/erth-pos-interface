@@ -9,7 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@repo/ui/dialog";
 import {
   Form,
   FormField,
@@ -17,20 +17,21 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
-import { Calendar } from "@/components/ui/calendar";
+} from "@repo/ui/form";
+import { Input } from "@repo/ui/input";
+import { Textarea } from "@repo/ui/textarea";
+import { Button } from "@repo/ui/button";
+import { Combobox } from "@repo/ui/combobox";
+import { Calendar } from "@repo/ui/calendar";
 import { TimePicker } from "./time-picker";
-import { FlagIcon } from "@/components/ui/flag-icon";
+import { FlagIcon } from "@repo/ui/flag-icon";
 import { useCreateAppointment, useUpdateAppointment, useBrandEmployees } from "@/hooks/useAppointments";
 import { fuzzySearchCustomers, createCustomer } from "@/api/customers";
 import { getSortedCountries } from "@/lib/countries";
 import type { Customer } from "@repo/database";
 import type { AppointmentWithRelations } from "@/api/appointments";
-import { Phone, User, X, UserPlus, MapPin, Check } from "lucide-react";
+import { Phone, User, X, UserPlus, MapPin, Check, Users, Shirt } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,9 @@ const bookingSchema = z.object({
   area: z.string().optional(),
   address_note: z.string().optional(),
   notes: z.string().optional(),
+  people_count: z.coerce.number().int().min(1).optional(),
+  estimated_pieces: z.coerce.number().int().min(1).optional(),
+  fabric_type: z.string().optional(),
 }).refine((data) => data.end_time > data.start_time, {
   message: "End time must be after start time",
   path: ["end_time"],
@@ -81,6 +85,9 @@ const NEW_DEFAULTS = {
   area: "",
   address_note: "",
   notes: "",
+  people_count: undefined as number | undefined,
+  estimated_pieces: undefined as number | undefined,
+  fabric_type: "",
 };
 
 export function BookingSheet({
@@ -128,7 +135,7 @@ export function BookingSheet({
   const isEditing = !!editingAppointment;
 
   const form = useForm<BookingFormValues>({
-    resolver: zodResolver(bookingSchema),
+    resolver: zodResolver(bookingSchema) as never,
     defaultValues: {
       ...NEW_DEFAULTS,
       appointment_date: defaultDate ?? new Date(),
@@ -165,6 +172,9 @@ export function BookingSheet({
           area: editingAppointment.area ?? "",
           address_note: editingAppointment.address_note ?? "",
           notes: editingAppointment.notes ?? "",
+          people_count: editingAppointment.people_count ?? undefined,
+          estimated_pieces: editingAppointment.estimated_pieces ?? undefined,
+          fabric_type: editingAppointment.fabric_type ?? "",
         });
       } else {
         setSelectedCustomer(null);
@@ -277,6 +287,9 @@ export function BookingSheet({
       area: values.area || null,
       address_note: values.address_note || null,
       notes: values.notes || null,
+      people_count: values.people_count ?? null,
+      estimated_pieces: values.estimated_pieces ?? null,
+      fabric_type: (values.fabric_type || null) as "summer" | "winter" | null,
     };
 
     if (isEditing) {
@@ -637,6 +650,7 @@ export function BookingSheet({
                           onSelect={(date) => date && field.onChange(date)}
                           weekStartsOn={6}
                           defaultMonth={field.value}
+                          disabled={{ before: new Date() }}
                           className="[--cell-size:--spacing(8)]"
                         />
                       </div>
@@ -710,6 +724,82 @@ export function BookingSheet({
                           className={cn("border-border", errors.assigned_to && "border-destructive ring-1 ring-destructive/20")}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </section>
+
+              {/* Estimate */}
+              <section className="space-y-2">
+                <SectionLabel>
+                  <Users className="h-3.5 w-3.5" />
+                  Estimate
+                </SectionLabel>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <FormField
+                    control={form.control}
+                    name="people_count"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-semibold">People</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="—"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseInt(e.target.value))}
+                            className={INPUT_CLS}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="estimated_pieces"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-semibold">Pieces</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="—"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseInt(e.target.value))}
+                            className={INPUT_CLS}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="fabric_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold">
+                        <Shirt className="h-3 w-3 inline mr-1" />
+                        Fabric Type
+                      </FormLabel>
+                      <Select value={field.value || ""} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className={cn(INPUT_CLS, "w-full")}>
+                            <SelectValue placeholder="Select fabric..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="summer">Summer</SelectItem>
+                          <SelectItem value="winter">Winter</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

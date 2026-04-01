@@ -19,21 +19,21 @@ import {
     ArrowUpDown
 } from "lucide-react";
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/useOrderHistory";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
+} from "@repo/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Input } from "@repo/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DatePicker } from "@repo/ui/date-picker";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 
 export const Route = createFileRoute("/$main/orders/order-history")({

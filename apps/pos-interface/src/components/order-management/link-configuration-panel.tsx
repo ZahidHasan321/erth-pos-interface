@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Link as LinkIcon, RefreshCw } from "lucide-react";
-import { Button } from "../ui/button";
-import { Calendar } from "../ui/calendar";
+import { Button } from "@repo/ui/button";
+import { Calendar } from "@repo/ui/calendar";
 import { cn } from "@/lib/utils";
 
 type LinkConfigurationPanelProps = {

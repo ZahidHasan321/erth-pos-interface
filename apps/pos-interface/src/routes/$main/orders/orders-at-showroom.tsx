@@ -24,12 +24,12 @@ import { OrderDataTable } from "@/components/orders-at-showroom/order-data-table
 import { OrderFilters, type FilterState } from "@/components/orders-at-showroom/order-filters";
 import { TableSkeleton } from "@/components/orders-at-showroom/table-skeleton";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@repo/ui/button";
+import { Card } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Label } from "@repo/ui/label";
+import { Textarea } from "@repo/ui/textarea";
+import { DatePicker } from "@repo/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -37,14 +37,14 @@ import {
   DialogTitle,
   DialogFooter,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@repo/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import { toast } from "sonner";
 import { useOrderMutations } from "@/hooks/useOrderMutations";
 import type { OrderRow } from "@/components/orders-at-showroom/types";

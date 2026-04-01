@@ -3,9 +3,9 @@
 import * as React from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { type ShelfProduct } from './shelf-form.schema'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@repo/ui/button'
+import { Input } from '@repo/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/select'
 import { Trash2 } from 'lucide-react'
 
 export const columns: ColumnDef<ShelfProduct>[] = [

@@ -47,6 +47,7 @@ function flattenGarment(raw: any): WorkshopGarment {
     invoice_number: wo?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
+    order_phase: wo?.order_phase ?? undefined,
     customer_name: cust?.name ?? undefined,
     customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
     measurement: measurement ?? null,
@@ -64,7 +65,7 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
   const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
-    .in('location', ['workshop', 'transit_to_workshop', 'transit_to_shop'])
+    .in('location', ['workshop', 'transit_to_workshop', 'transit_to_shop', 'lost_in_transit'])
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {
@@ -117,7 +118,14 @@ export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
     console.error('getAssignedViewGarments error:', error);
     return [];
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+  return (data ?? [])
+    .filter((g: any) => g.order !== null)
+    .filter((g: any) => {
+      // Exclude completed orders — they belong in the completed view
+      const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
+      return wo?.order_phase !== 'completed';
+    })
+    .map(flattenGarment);
 };
 
 /**
@@ -231,6 +239,16 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
   if (e2) throw new Error(e2.message);
+
+  // Clear stale production fields for returning garments (trip > 1)
+  // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
+  // Keep worker_history — needed by ReturnPlanDialog to auto-populate the same team.
+  const { error: e3 } = await db
+    .from('garments')
+    .update({ production_plan: null, completion_time: null, start_time: null })
+    .in('id', ids)
+    .gt('trip_number', 1);
+  if (e3) throw new Error(e3.message);
 };
 
 export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
@@ -251,12 +269,14 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 
   // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
   // (finals parked for brova trial must stay out of production)
+  // Note: .neq() excludes NULLs in PostgREST, so we use .or() to include
+  // garments where feedback_status is null (first-trip) or non-accepted (returns)
   const { error: e2 } = await db
     .from('garments')
     .update({ in_production: true })
     .in('id', ids)
-    .neq('piece_stage', 'waiting_for_acceptance')
-    .neq('feedback_status', 'accepted');
+    .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null')
+    .or('feedback_status.neq.accepted,feedback_status.is.null');
   if (e2) throw new Error(e2.message);
 
   // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
@@ -269,6 +289,16 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
   if (e3) throw new Error(e3.message);
+
+  // Clear stale production fields for returning garments (trip > 1)
+  // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
+  // Keep worker_history — needed by ReturnPlanDialog to auto-populate the same team.
+  const { error: e4 } = await db
+    .from('garments')
+    .update({ production_plan: null, completion_time: null, start_time: null })
+    .in('id', ids)
+    .gt('trip_number', 1);
+  if (e4) throw new Error(e4.message);
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
@@ -536,6 +566,7 @@ export const updateGarmentDetails = async (
     assigned_date?: string | null;
     delivery_date?: string | null;
     production_plan?: Record<string, string> | null;
+    piece_stage?: string | null;
   },
 ): Promise<void> => {
   const { error } = await db
@@ -629,12 +660,21 @@ export const getBrovaStatusForOrders = async (
   return result;
 };
 
+/** Mark garments as lost in transit — they were dispatched but never arrived */
+export const markLostInTransit = async (ids: string[]): Promise<void> => {
+  const { error } = await db
+    .from('garments')
+    .update({ location: 'lost_in_transit' as any, in_production: false })
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+};
+
 /** Bulk update assigned_date for all garments in an order */
 export const updateOrderAssignedDate = async (orderId: number, date: string): Promise<void> => {
   const { error } = await db
     .from('garments')
     .update({ assigned_date: date })
     .eq('order_id', orderId)
-    .neq('piece_stage', 'waiting_for_acceptance');
+    .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null');
   if (error) throw new Error(error.message);
 };

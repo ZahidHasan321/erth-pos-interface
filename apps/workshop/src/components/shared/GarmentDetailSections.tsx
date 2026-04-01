@@ -68,10 +68,14 @@ export function GarmentHeader({
   garment,
   showExtras,
   children,
+  reentryStage,
+  qcFailCount,
 }: {
   garment: WorkshopGarment;
   showExtras?: boolean;
   children?: React.ReactNode;
+  reentryStage?: string | null;
+  qcFailCount?: number;
 }) {
   return (
     <div className={cn(
@@ -148,6 +152,8 @@ export function GarmentHeader({
         <ProductionPipeline
           currentStage={garment.piece_stage}
           hasSoaking={!!garment.soaking}
+          reentryStage={(garment.trip_number ?? 1) > 1 ? reentryStage : undefined}
+          qcFailCount={qcFailCount}
         />
       </div>
     </div>
@@ -262,17 +268,28 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
 export function WorkerHistorySection({
   garment,
   onEditPlan,
+  reentryStage,
 }: {
   garment: WorkshopGarment;
   onEditPlan?: () => void;
+  reentryStage?: string | null;
 }) {
   const plan = garment.production_plan as ProductionPlan | null;
   const history = garment.worker_history as WorkerHistory | null;
   const currentStage = garment.piece_stage ?? "";
+  const isReturn = (garment.trip_number ?? 1) > 1;
 
-  const stages = PRODUCTION_STAGES.filter(
+  let stages = PRODUCTION_STAGES.filter(
     (s) => s !== "soaking" || garment.soaking,
   );
+
+  // For re-entry garments, only show stages from re-entry point onward
+  if (isReturn && reentryStage) {
+    const reentryIdx = stages.indexOf(reentryStage as any);
+    if (reentryIdx > 0) {
+      stages = stages.slice(reentryIdx);
+    }
+  }
 
   const stageOrder = stages.map((s) => s);
   const currentIdx = stageOrder.indexOf(currentStage as any);
@@ -443,55 +460,77 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                 </div>
               )}
 
-              {/* QC attempts */}
+              {/* Production cycles — show flow with QC attempts */}
               {entry.qc_attempts?.length > 0 && (
-                <div className="space-y-2.5 ml-3 border-l-2 border-muted pl-4">
-                  {entry.qc_attempts.map((qc, j) => (
-                    <div key={j} className={cn(
-                      "flex items-start gap-3 rounded-xl px-4 py-3",
-                      qc.result === "pass" ? "bg-emerald-50" : "bg-red-50",
-                    )}>
-                      <div className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                        qc.result === "pass" ? "bg-emerald-500 text-white" : "bg-red-500 text-white",
-                      )}>
-                        {qc.result === "pass" ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <X className="w-3.5 h-3.5" aria-hidden="true" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold">
-                            QC {qc.result === "pass" ? "Passed" : "Failed"}
-                          </span>
-                          {qc.inspector && (
-                            <span className="text-sm text-muted-foreground">by {qc.inspector}</span>
-                          )}
-                          {qc.date && (
-                            <span className="text-sm text-muted-foreground ml-auto">{formatDate(qc.date)}</span>
-                          )}
-                        </div>
-                        {qc.result === "fail" && qc.fail_reason && (
-                          <p className="text-sm text-red-700 mt-1">{qc.fail_reason}</p>
-                        )}
-                        {qc.result === "fail" && qc.return_stage && (
-                          <div className="flex items-center gap-1.5 mt-1 text-sm text-red-600">
-                            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                            <span>Sent back to {PIECE_STAGE_LABELS[qc.return_stage as keyof typeof PIECE_STAGE_LABELS] ?? qc.return_stage}</span>
+                <div className="space-y-3 ml-3 border-l-2 border-muted pl-4">
+                  {entry.qc_attempts.map((qc, j) => {
+                    // Show the path this cycle took: re-entry/return stage → ... → QC
+                    const cycleStart = j === 0
+                      ? (entry.reentry_stage ?? "soaking")
+                      : entry.qc_attempts[j - 1]?.return_stage ?? "soaking";
+                    const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
+
+                    return (
+                      <div key={j}>
+                        {/* Cycle path label */}
+                        {j > 0 && (
+                          <div className="flex items-center gap-1.5 mb-1.5 text-xs text-orange-600 font-semibold">
+                            <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                            Re-entered at {startLabel}
                           </div>
                         )}
-                        {qc.result === "pass" && qc.ratings && (
-                          <div className="flex flex-wrap gap-3 mt-2">
-                            {Object.entries(qc.ratings).map(([cat, score]) => (
-                              <span key={cat} className="inline-flex items-center gap-1 text-sm text-emerald-700">
-                                <span className="capitalize">{cat}</span>
-                                <Star className="w-4 h-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                                <span className="font-bold">{score}</span>
+                        <div className={cn(
+                          "flex items-start gap-3 rounded-xl px-4 py-3",
+                          qc.result === "pass" ? "bg-emerald-50" : "bg-red-50",
+                        )}>
+                          <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                            qc.result === "pass" ? "bg-emerald-500 text-white" : "bg-red-500 text-white",
+                          )}>
+                            {qc.result === "pass" ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <X className="w-3.5 h-3.5" aria-hidden="true" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold">
+                                QC {qc.result === "pass" ? "Passed" : "Failed"}
+                                {entry.qc_attempts.length > 1 && (
+                                  <span className="text-muted-foreground font-normal ml-1">
+                                    (attempt {j + 1}/{entry.qc_attempts.length})
+                                  </span>
+                                )}
                               </span>
-                            ))}
+                              {qc.inspector && (
+                                <span className="text-sm text-muted-foreground">by {qc.inspector}</span>
+                              )}
+                              {qc.date && (
+                                <span className="text-sm text-muted-foreground ml-auto">{formatDate(qc.date)}</span>
+                              )}
+                            </div>
+                            {qc.result === "fail" && qc.fail_reason && (
+                              <p className="text-sm text-red-700 mt-1">{qc.fail_reason}</p>
+                            )}
+                            {qc.result === "fail" && qc.return_stage && (
+                              <div className="flex items-center gap-1.5 mt-1 text-sm text-red-600">
+                                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>Sent back to {PIECE_STAGE_LABELS[qc.return_stage as keyof typeof PIECE_STAGE_LABELS] ?? qc.return_stage}</span>
+                              </div>
+                            )}
+                            {qc.result === "pass" && qc.ratings && (
+                              <div className="flex flex-wrap gap-3 mt-2">
+                                {Object.entries(qc.ratings).map(([cat, score]) => (
+                                  <span key={cat} className="inline-flex items-center gap-1 text-sm text-emerald-700">
+                                    <span className="capitalize">{cat}</span>
+                                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                                    <span className="font-bold">{score}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

@@ -13,9 +13,6 @@ import {
   Link2,
   Unlink,
   PackageCheck,
-  Palette,
-  Ruler,
-  XCircle,
   BarChart,
   PackagePlus,
   FileText,
@@ -42,9 +39,11 @@ import {
   SidebarFooter,
   SidebarTrigger,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@repo/ui/sidebar";
 import { BRAND_NAMES } from "@/lib/constants";
 import { LogOut, Home } from "lucide-react";
+import { IconRulerMeasure } from "@tabler/icons-react";
+import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
 
 const data = {
   navTop: [
@@ -90,6 +89,11 @@ const data = {
           icon: Banknote,
         },
         {
+          title: "Alterations",
+          url: "orders/order-management/alterations",
+          icon: IconRulerMeasure,
+        },
+        {
           title: "Order Management",
           isCollapsible: true,
           icon: ClipboardList,
@@ -113,21 +117,6 @@ const data = {
               title: "Receiving Brova / Final",
               url: "orders/order-management/receiving-brova-final",
               icon: PackageCheck,
-            },
-            {
-              title: "Change Options",
-              url: "orders/order-management/change-options",
-              icon: Palette,
-            },
-            {
-              title: "Alterations",
-              url: "orders/order-management/alterations",
-              icon: Ruler,
-            },
-            {
-              title: "Cancel Order",
-              url: "orders/order-management/cancel-order",
-              icon: XCircle,
             },
           ],
         },
@@ -224,7 +213,7 @@ export function AppSidebar({
   type CollapsibleMenuItemProps = {
     title: string;
     icon?: React.ComponentType<{ className?: string }>;
-    items: Array<{ title: string; url: string; icon?: React.ComponentType<{ className?: string }> }>;
+    items: Array<{ title: string; url: string; icon?: React.ComponentType<{ className?: string }>; count?: number }>;
     mainSegment: string;
   };
 
@@ -237,6 +226,7 @@ export function AppSidebar({
     const [isOpen, setIsOpen] = React.useState(false);
     const matchRoute = useMatchRoute();
     const { setOpen } = useSidebar();
+    const totalCount = items.reduce((sum, item) => sum + (item.count ?? 0), 0);
 
     const hasActiveChild = items.some((item) =>
       matchRoute({ to: `${mainSegment}/${item.url}`, fuzzy: true })
@@ -260,14 +250,19 @@ export function AppSidebar({
         >
           {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           <span>{title}</span>
+          {!isOpen && totalCount > 0 && (
+            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
+              {totalCount}
+            </span>
+          )}
           <ChevronDown
-            className={`ml-auto h-4 w-4 transition-transform duration-200 ${
-              isOpen ? "rotate-180" : ""
-            }`}
+            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+              !isOpen && !totalCount ? "ml-auto" : ""
+            } ${isOpen ? "rotate-180" : ""}`}
           />
         </SidebarMenuButton>
         {isOpen && (
-          <SidebarMenuSub className="ml-3 mt-1 space-y-0.5 border-l-2 border-primary/15 pl-3">
+          <SidebarMenuSub className="mt-1 space-y-0.5 border-l-2 border-primary/15">
             {items.map((subItem) => {
               const match = matchRoute({
                 to: `${mainSegment}/${subItem.url}`,
@@ -287,7 +282,12 @@ export function AppSidebar({
                         : {})}
                     >
                       {subItem.icon && <subItem.icon className="h-3.5 w-3.5" aria-hidden="true" />}
-                      <span>{subItem.title}</span>
+                      <span className="flex-1">{subItem.title}</span>
+                      {!!subItem.count && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
+                          {subItem.count}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
@@ -302,6 +302,8 @@ export function AppSidebar({
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
   const { isMobile } = useSidebar();
+  const { data: dispatchedOrders } = useDispatchedOrders();
+  const receivingCount = dispatchedOrders?.length ?? 0;
 
   return (
     <Sidebar {...props}>
@@ -331,7 +333,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="mt-2 flex-1 overflow-y-auto">
+      <SidebarContent className="mt-2 flex-1 overflow-y-auto pb-4">
         {/* Dashboard */}
         <SidebarGroup key="top">
           <SidebarGroupContent>
@@ -377,12 +379,16 @@ export function AppSidebar({
               <SidebarMenu>
                 {item.items.map((subItem: any) => {
                   if (subItem.isCollapsible && subItem.items) {
+                    const itemsWithCounts = subItem.items.map((si: any) => ({
+                      ...si,
+                      count: si.url === "orders/order-management/receiving-brova-final" ? receivingCount : undefined,
+                    }));
                     return (
                       <CollapsibleMenuItem
                         key={subItem.title}
                         title={subItem.title}
                         icon={subItem.icon}
-                        items={subItem.items}
+                        items={itemsWithCounts}
                         mainSegment={mainSegment}
                       />
                     );
@@ -404,7 +410,7 @@ export function AppSidebar({
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto border-t border-sidebar-border pt-2">
+      <SidebarFooter className="mt-auto border-t border-sidebar-border pt-2 pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Switch Brand">

@@ -2,15 +2,15 @@
 
 import { fuzzySearchCustomers, getCustomerById } from "@/api/customers";
 import { getPendingOrdersByCustomer } from "@/api/orders";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@repo/ui/badge";
+import { Input } from "@repo/ui/input";
+import { Skeleton } from "@repo/ui/skeleton";
 import {
   Command,
   CommandGroup,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from "@repo/ui/command";
 import type { Customer, Order } from "@repo/database";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, SearchIcon, UserIcon, X, AlertCircle, History } from "lucide-react";

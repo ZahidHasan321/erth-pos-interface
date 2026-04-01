@@ -538,6 +538,11 @@ BEGIN
     IF v_current_paid - ABS(p_amount) < 0 THEN
       RAISE EXCEPTION 'Refund amount (%) exceeds total paid (%)', ABS(p_amount), v_current_paid;
     END IF;
+
+    -- Bump invoice revision on refund
+    UPDATE work_orders
+    SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+    WHERE order_id = p_order_id;
   END IF;
 
   -- Insert the transaction (trigger will sync orders.paid)
@@ -622,9 +627,10 @@ BEGIN
       order_total = v_new_total
   WHERE id = p_order_id;
 
-  -- Update work_orders flag
+  -- Update work_orders flag + bump invoice revision
   UPDATE work_orders
-  SET home_delivery = p_home_delivery
+  SET home_delivery = p_home_delivery,
+      invoice_revision = COALESCE(invoice_revision, 0) + 1
   WHERE order_id = p_order_id;
 
   -- Update all garments on this order
@@ -686,6 +692,11 @@ BEGIN
     referral_code = p_referral_code,
     order_total = v_final_total
   WHERE id = p_order_id;
+
+  -- Bump invoice revision on discount change
+  UPDATE work_orders
+  SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+  WHERE order_id = p_order_id;
 
   RETURN jsonb_build_object(
     'status', 'success',

@@ -23,22 +23,22 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 
 // UI Components
-import { Button } from "../ui/button";
-import { Card, CardContent } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { Skeleton } from "../ui/skeleton";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Skeleton } from "@repo/ui/skeleton";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter,
-} from "../ui/dialog";
-import { Label } from "../ui/label";
+} from "@repo/ui/dialog";
+import { Label } from "@repo/ui/label";
 import { toast } from "sonner";
-import { DatePicker } from "../ui/date-picker";
+import { DatePicker } from "@repo/ui/date-picker";
 import { cn, clickableProps } from "@/lib/utils";
-import { Input } from "../ui/input";
+import { Input } from "@repo/ui/input";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 
 import type { Order } from "@repo/database";

@@ -8,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@repo/ui/dialog";
+import { Button } from "@repo/ui/button";
 import { clickableProps } from "@/lib/utils";
 import type { Customer } from "@repo/database";
 

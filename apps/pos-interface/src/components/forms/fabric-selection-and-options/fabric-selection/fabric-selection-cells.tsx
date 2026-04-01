@@ -8,12 +8,12 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Combobox } from "@/components/ui/combobox";
+} from "@repo/ui/select";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Input } from "@repo/ui/input";
+import { Textarea } from "@repo/ui/textarea";
+import { DatePicker } from "@repo/ui/date-picker";
+import { Combobox } from "@repo/ui/combobox";
 import { getFabrics } from "@/api/fabrics";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -451,9 +451,11 @@ export const FabricLengthCell = ({
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
         tempStockUsage?: Map<string, number>;
+        stockValidationActive?: boolean;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
     const tempStockUsage = meta?.tempStockUsage;
+    const stockValidationActive = meta?.stockValidationActive ?? true;
 
     const [fabricSourceWatch, fabricIdWatch] = useWatch({
         name: [
@@ -488,7 +490,7 @@ export const FabricLengthCell = ({
                 name={`garments.${row.index}.fabric_length`}
                 control={control}
                 render={({ field, fieldState: { error } }) => {
-                    const exceedsStock = isInternal && selectedFabric && (field.value ?? 0) > available;
+                    const exceedsStock = stockValidationActive && isInternal && selectedFabric && (field.value ?? 0) > available;
                     return (
                         <div className="flex flex-col gap-1">
                             <Input
@@ -652,7 +654,7 @@ export const FabricAmountCell = ({
         if (fabricSource === "IN" && fabricId !== undefined && fabricId !== null) {
             const selectedFabric = fabrics.find((f) => f.id === Number(fabricId));
             if (selectedFabric) {
-                const pricePerMeter = selectedFabric.price_per_meter ?? 0;
+                const pricePerMeter = Number(selectedFabric.price_per_meter) || 0;
                 const amount = length * pricePerMeter;
                 setValue(
                     `garments.${row.index}.fabric_amount`,

@@ -1,7 +1,7 @@
 "use client";
 import { type ColumnDef } from "@tanstack/react-table";
 import { type GarmentSchema } from "./garment-form.schema";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import * as FabricCells from "./fabric-selection-cells";
 import * as React from "react";
 import { useReactToPrint } from "react-to-print";
@@ -13,7 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@repo/ui/dropdown-menu";
 import { MoreHorizontal, Printer, Trash2 } from "lucide-react";
 
 export const columns: ColumnDef<GarmentSchema>[] = [
@@ -40,7 +40,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "fabric_id",
     header: "Fabric",
-    size: 160,
+    size: 220,
     cell: FabricCells.IfInsideCell,
   },
   {

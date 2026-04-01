@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey } from "drizzle-orm/pg-core";
 import { relations, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 
 // --- CUSTOM TYPES ---
@@ -74,6 +74,7 @@ export const locationEnum = pgEnum("location", [
     "workshop",
     "transit_to_shop",
     "transit_to_workshop",
+    "lost_in_transit",
 ]);
 export type Location = (typeof locationEnum.enumValues)[number];
 
@@ -113,16 +114,22 @@ export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refund"]);
 
 export const appointmentStatusEnum = pgEnum("appointment_status", ["scheduled", "completed", "cancelled", "no_show"]);
+
+export const fabricTypeEnum = pgEnum("fabric_type", ["summer", "winter"]);
 export type AppointmentStatus = (typeof appointmentStatusEnum.enumValues)[number];
 export type TransactionType = (typeof transactionTypeEnum.enumValues)[number];
 
+
 // --- 0. PRICES ---
 export const prices = pgTable("prices", {
-    key: text("key").primaryKey(),
+    key: text("key").notNull(),
+    brand: brandEnum("brand").notNull().default("ERTH"),
     value: numeric("value", { precision: 10, scale: 3 }).notNull(),
     description: text("description"),
     updated_at: timestamp("updated_at").defaultNow(),
-});
+}, (t) => ({
+    pk: primaryKey({ columns: [t.key, t.brand] }),
+}));
 
 // --- 1. USERS ---
 export const users = pgTable("users", {
@@ -137,6 +144,10 @@ export const users = pgTable("users", {
     brands: text("brands").array(),
     is_active: boolean("is_active").default(true).notNull(),
     pin: text("pin"),
+    employee_id: text("employee_id"),
+    nationality: text("nationality"),
+    hire_date: date("hire_date"),
+    notes: text("notes"),
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow(),
 });
@@ -195,8 +206,11 @@ export const styles = pgTable("styles", {
     name: text("name").notNull(),
     type: text("type"),
     rate_per_item: numeric("rate_per_item", { precision: 10, scale: 3 }),
-    image_url: text("image_url").unique(),
-});
+    image_url: text("image_url"),
+    brand: brandEnum("brand").notNull().default("ERTH"),
+}, (t) => ({
+    nameTypeBrandIdx: uniqueIndex("styles_name_type_brand_idx").on(t.name, t.type, t.brand),
+}));
 
 export const fabrics = pgTable("fabrics", {
     id: serial("id").primaryKey(),
@@ -317,6 +331,7 @@ export const workOrders = pgTable("work_orders", {
     
     // Identity
     invoice_number: integer("invoice_number"),
+    invoice_revision: integer("invoice_revision").default(0).notNull(),
     campaign_id: integer("campaign_id").references(() => campaigns.id),
     linked_order_id: integer("linked_order_id").references(() => orders.id, { onDelete: 'set null' }),
 
@@ -575,6 +590,11 @@ export const appointments = pgTable("appointments", {
     house_no: text("house_no"),
     area: text("area"),
     address_note: text("address_note"),
+
+    // Estimate
+    people_count: integer("people_count"),
+    estimated_pieces: integer("estimated_pieces"),
+    fabric_type: fabricTypeEnum("fabric_type"),
 
     // Meta
     notes: text("notes"),

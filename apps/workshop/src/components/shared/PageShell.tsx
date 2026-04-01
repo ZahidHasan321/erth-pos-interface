@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
-import type { LucideIcon } from "lucide-react";
+import { Skeleton } from "@repo/ui/skeleton";
+// Icon type that works with both lucide-react and @tabler/icons-react
+type IconComponent = React.ComponentType<{ className?: string }>;
 
 // ── Page Header ─────────────────────────────────────────────────────────────
 
 interface PageHeaderProps {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   subtitle?: string;
   children?: React.ReactNode;
@@ -30,7 +31,7 @@ export function PageHeader({ icon: Icon, title, subtitle, children }: PageHeader
 // ── Stats Card ──────────────────────────────────────────────────────────────
 
 interface StatsCardProps {
-  icon: LucideIcon;
+  icon: IconComponent;
   value: number;
   label: string;
   color: "blue" | "purple" | "orange" | "green" | "red" | "emerald" | "amber" | "zinc";
@@ -65,7 +66,7 @@ export function StatsCard({ icon: Icon, value, label, color, dimOnZero }: StatsC
 // ── Empty State ─────────────────────────────────────────────────────────────
 
 interface EmptyStateProps {
-  icon?: LucideIcon | React.ReactNode;
+  icon?: IconComponent | React.ReactNode;
   message: string;
 }
 
@@ -78,7 +79,7 @@ export function EmptyState({ icon: IconOrNode, message }: EmptyStateProps) {
     <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5 animate-fade-in">
       {isComponent ? (
         (() => {
-          const Icon = IconOrNode as LucideIcon;
+          const Icon = IconOrNode as IconComponent;
           return <Icon className="w-8 h-8 text-muted-foreground/20 mb-2" />;
         })()
       ) : IconOrNode ? (
@@ -104,7 +105,7 @@ export function LoadingSkeleton({ count = 3 }: { count?: number }) {
 // ── Metadata Chip ───────────────────────────────────────────────────────────
 
 interface MetadataChipProps {
-  icon?: LucideIcon;
+  icon?: IconComponent;
   children: React.ReactNode;
   variant?: "muted" | "amber" | "indigo";
   className?: string;

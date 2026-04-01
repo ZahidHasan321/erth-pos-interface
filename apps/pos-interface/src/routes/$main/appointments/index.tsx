@@ -1,82 +1,63 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  addDays,
-  startOfWeek,
+  addMonths,
   format,
+  startOfMonth,
+  endOfMonth,
 } from "date-fns";
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
   CalendarDays,
+  Printer,
+  List,
+  LayoutGrid,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { WeekView } from "@/components/appointments/week-view";
-import { DayView } from "@/components/appointments/day-view";
+import { Button } from "@repo/ui/button";
+import { Combobox } from "@repo/ui/combobox";
+import { MonthView } from "@/components/appointments/month-view";
+import { ListView } from "@/components/appointments/list-view";
+import { DayDialog } from "@/components/appointments/day-dialog";
 import { BookingSheet } from "@/components/appointments/booking-sheet";
 import { DetailSheet } from "@/components/appointments/detail-sheet";
-import { LinkOrderDialog } from "@/components/appointments/link-order-dialog";
 import { useAppointments, useBrandEmployees } from "@/hooks/useAppointments";
 import type { AppointmentWithRelations } from "@/api/appointments";
+import { PrintView, usePrint } from "@/components/appointments/print-view";
 
 export const Route = createFileRoute("/$main/appointments/")({
   component: AppointmentsPage,
 });
 
-type ViewMode = "week" | "day";
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState(
-    () => typeof window !== "undefined" && window.innerWidth < 768,
-  );
-  React.useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return isMobile;
-}
-
-function getWeekDates(anchorDate: Date): Date[] {
-  const start = startOfWeek(anchorDate, { weekStartsOn: 6 });
-  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-}
+type ViewMode = "calendar" | "list";
 
 function AppointmentsPage() {
-  const isMobile = useIsMobile();
-  const [viewMode, setViewMode] = React.useState<ViewMode>(isMobile ? "day" : "week");
-  const [currentDate, setCurrentDate] = React.useState(new Date());
+  const [viewMode, setViewMode] = React.useState<ViewMode>("calendar");
+  const [currentMonth, setCurrentMonth] = React.useState(new Date());
   const [employeeFilter, setEmployeeFilter] = React.useState("");
-  const [datePickerOpen, setDatePickerOpen] = React.useState(false);
 
-  // Sync view mode when crossing breakpoint
-  React.useEffect(() => {
-    if (isMobile && viewMode === "week") setViewMode("day");
-  }, [isMobile]);
+  // Day dialog state
+  const [dayDialogOpen, setDayDialogOpen] = React.useState(false);
+  const [selectedDay, setSelectedDay] = React.useState<Date | null>(null);
+  const [selectedDayAppointments, setSelectedDayAppointments] = React.useState<AppointmentWithRelations[]>([]);
 
-  // Dialog state
+  // Booking / detail / link dialog state
   const [bookingOpen, setBookingOpen] = React.useState(false);
   const [detailOpen, setDetailOpen] = React.useState(false);
-  const [linkOrderOpen, setLinkOrderOpen] = React.useState(false);
   const [selectedAppointment, setSelectedAppointment] = React.useState<AppointmentWithRelations | null>(null);
   const [editingAppointment, setEditingAppointment] = React.useState<AppointmentWithRelations | null>(null);
   const [defaultBookingDate, setDefaultBookingDate] = React.useState<Date | undefined>();
   const [defaultBookingTime, setDefaultBookingTime] = React.useState<string | undefined>();
 
-  // Get current user for booked_by
+  // Current user for booked_by
   const rawUser = localStorage.getItem("tanstack.auth.user");
   const currentUser = rawUser ? JSON.parse(rawUser) : null;
   const bookedByUserId = currentUser?.id ?? "";
 
-  // Compute date range for query
-  const weekDates = React.useMemo(() => getWeekDates(currentDate), [currentDate]);
-  const startDate = format(weekDates[0], "yyyy-MM-dd");
-  const endDate = format(weekDates[6], "yyyy-MM-dd");
+  // Fetch entire month's appointments
+  const startDate = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+  const endDate = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
   const { data: appointments = [], isLoading } = useAppointments(
     startDate,
@@ -85,6 +66,7 @@ function AppointmentsPage() {
   );
 
   const { data: employees = [] } = useBrandEmployees();
+  const { printRef, triggerPrint } = usePrint();
 
   const employeeOptions = [
     { value: "", label: "All employees" },
@@ -92,34 +74,29 @@ function AppointmentsPage() {
   ];
 
   // Navigation
-  function navigateWeek(direction: number) {
-    setCurrentDate((prev) => addDays(prev, direction * 7));
+  function navigateMonth(direction: number) {
+    setCurrentMonth((prev) => addMonths(prev, direction));
   }
 
-  function navigateDay(direction: number) {
-    setCurrentDate((prev) => addDays(prev, direction));
+  function goToToday() {
+    setCurrentMonth(new Date());
   }
 
-  function handleDatePickerSelect(date: Date | undefined) {
-    if (date) {
-      setCurrentDate(date);
-      setDatePickerOpen(false);
-    }
+  // Day click from month grid
+  function handleDayClick(date: Date, dayAppointments: AppointmentWithRelations[]) {
+    setSelectedDay(date);
+    setSelectedDayAppointments(dayAppointments);
+    setDayDialogOpen(true);
   }
 
-  // Calendar interactions
-  function handleSlotClick(date: Date, hour: number) {
-    setDefaultBookingDate(date);
-    setDefaultBookingTime(`${hour.toString().padStart(2, "0")}:00`);
-    setEditingAppointment(null);
-    setBookingOpen(true);
-  }
-
+  // Appointment click (from day dialog or list view)
   function handleAppointmentClick(appointment: AppointmentWithRelations) {
+    setDayDialogOpen(false);
     setSelectedAppointment(appointment);
     setDetailOpen(true);
   }
 
+  // New appointment
   function handleNewAppointment() {
     setDefaultBookingDate(undefined);
     setDefaultBookingTime(undefined);
@@ -127,26 +104,23 @@ function AppointmentsPage() {
     setBookingOpen(true);
   }
 
+  function handleNewAppointmentOnDay(date: Date) {
+    setDayDialogOpen(false);
+    setDefaultBookingDate(date);
+    setDefaultBookingTime(undefined);
+    setEditingAppointment(null);
+    setBookingOpen(true);
+  }
+
+  // Edit from detail sheet
   function handleEdit(appointment: AppointmentWithRelations) {
     setDetailOpen(false);
     setEditingAppointment(appointment);
     setBookingOpen(true);
   }
 
-  function handleLinkOrder(appointment: AppointmentWithRelations) {
-    setDetailOpen(false);
-    setSelectedAppointment(appointment);
-    setLinkOrderOpen(true);
-  }
 
-  // Filter appointments for day view
-  const dayAppointments = React.useMemo(() => {
-    const dateStr = format(currentDate, "yyyy-MM-dd");
-    return appointments.filter((a) => a.appointment_date === dateStr);
-  }, [appointments, currentDate]);
-
-  // Week range label
-  const weekLabel = `${format(weekDates[0], "d MMM")} – ${format(weekDates[6], "d MMM yyyy")}`;
+  const monthLabel = format(currentMonth, "MMMM yyyy");
 
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)] p-3 sm:p-4 gap-3 sm:gap-4">
@@ -156,10 +130,16 @@ function AppointmentsPage() {
           <CalendarDays className="h-5 w-5 text-primary hidden sm:block" />
           <h1 className="text-lg sm:text-xl font-semibold">Appointments</h1>
         </div>
-        <Button onClick={handleNewAppointment} size="sm">
-          <Plus className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">New Appointment</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={triggerPrint}>
+            <Printer className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Print Month</span>
+          </Button>
+          <Button onClick={handleNewAppointment} size="sm">
+            <Plus className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">New Appointment</span>
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -169,42 +149,24 @@ function AppointmentsPage() {
             variant="outline"
             size="icon"
             className="h-8 w-8"
-            onClick={() =>
-              viewMode === "week" ? navigateWeek(-1) : navigateDay(-1)
-            }
+            onClick={() => navigateMonth(-1)}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="text-sm font-medium px-2 py-1 rounded-md hover:bg-accent transition-colors cursor-pointer"
-              >
-                {viewMode === "week"
-                  ? weekLabel
-                  : format(currentDate, isMobile ? "d MMM yyyy" : "EEEE, d MMMM yyyy")}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={currentDate}
-                onSelect={handleDatePickerSelect}
-                weekStartsOn={6}
-                defaultMonth={currentDate}
-              />
-            </PopoverContent>
-          </Popover>
+          <button
+            type="button"
+            className="text-sm font-medium px-3 py-1 rounded-md hover:bg-accent transition-colors cursor-pointer min-w-[140px] text-center"
+            onClick={goToToday}
+          >
+            {monthLabel}
+          </button>
 
           <Button
             variant="outline"
             size="icon"
             className="h-8 w-8"
-            onClick={() =>
-              viewMode === "week" ? navigateWeek(1) : navigateDay(1)
-            }
+            onClick={() => navigateMonth(1)}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -221,57 +183,65 @@ function AppointmentsPage() {
             />
           </div>
 
-          {!isMobile && (
-            <div className="flex rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setViewMode("week")}
-                className={`px-3 py-1 text-xs font-medium transition-colors ${
-                  viewMode === "week"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted"
-                }`}
-              >
-                Week
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("day")}
-                className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
-                  viewMode === "day"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted"
-                }`}
-              >
-                Day
-              </button>
-            </div>
-          )}
+          {/* View toggle */}
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode("calendar")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors ${
+                viewMode === "calendar"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Calendar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors border-l ${
+                viewMode === "list"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">List</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Calendar grid */}
+      {/* Main content */}
       <div className="flex-1 min-h-0">
-        {viewMode === "week" ? (
-          <WeekView
-            weekDates={weekDates}
+        {viewMode === "calendar" ? (
+          <MonthView
+            currentMonth={currentMonth}
             appointments={appointments}
             isLoading={isLoading}
-            onSlotClick={handleSlotClick}
-            onAppointmentClick={handleAppointmentClick}
+            onDayClick={handleDayClick}
           />
         ) : (
-          <DayView
-            date={currentDate}
-            appointments={dayAppointments}
+          <ListView
+            appointments={appointments}
             isLoading={isLoading}
-            onSlotClick={handleSlotClick}
             onAppointmentClick={handleAppointmentClick}
           />
         )}
       </div>
 
-      {/* Dialogs */}
+      {/* Day dialog (calendar view only) */}
+      <DayDialog
+        date={selectedDay}
+        appointments={selectedDayAppointments}
+        open={dayDialogOpen}
+        onOpenChange={setDayDialogOpen}
+        onAppointmentClick={handleAppointmentClick}
+        onNewAppointment={handleNewAppointmentOnDay}
+      />
+
+      {/* Booking sheet */}
       <BookingSheet
         open={bookingOpen}
         onOpenChange={setBookingOpen}
@@ -281,19 +251,22 @@ function AppointmentsPage() {
         bookedByUserId={bookedByUserId}
       />
 
+      {/* Detail sheet */}
       <DetailSheet
         appointment={selectedAppointment}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onEdit={handleEdit}
-        onLinkOrder={handleLinkOrder}
       />
 
-      <LinkOrderDialog
-        appointment={selectedAppointment}
-        open={linkOrderOpen}
-        onOpenChange={setLinkOrderOpen}
-      />
+      {/* Hidden print content — month print */}
+      <div ref={printRef} className="hidden">
+        <PrintView
+          mode="month"
+          appointments={appointments}
+          currentMonth={currentMonth}
+        />
+      </div>
     </div>
   );
 }

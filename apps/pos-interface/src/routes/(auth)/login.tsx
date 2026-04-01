@@ -3,7 +3,7 @@ import * as React from "react";
 import { z } from "zod";
 import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
-import { Input } from "@/components/ui/input";
+import { Input } from "@repo/ui/input";
 import { AlertCircle, LogIn } from "lucide-react";
 import { db } from "@/lib/db";
 import ErthLogoDark from "@/assets/erth-dark.svg";

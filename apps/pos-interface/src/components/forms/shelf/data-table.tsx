@@ -13,7 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import type { Shelf } from '@repo/database'
 
 declare module "@tanstack/react-table" {

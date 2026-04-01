@@ -45,6 +45,7 @@ export type WorkshopGarment = Omit<Garment, 'production_plan' | 'worker_history'
     order_brand?: string;
     delivery_date_order?: string;
     home_delivery_order?: boolean;
+    order_phase?: string;
     style_name?: string;
     style_image_url?: string;
     fabric_name?: string;

@@ -10,10 +10,10 @@ import {
     type CustomerDemographicsSchema,
 } from '@/components/forms/customer-demographics/demographics-form.schema';
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/card';
+import { Button } from '@repo/ui/button';
 import { Pencil, Phone, MapPin, Users, User, Mail, MessageSquare, ArrowLeft, Ruler } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@repo/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useCustomer } from '@/hooks/use-customers';
 import { 
@@ -22,7 +22,7 @@ import {
     SheetHeader, 
     SheetTitle, 
     SheetDescription 
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import { CustomerMeasurementsStandalone } from "@/components/forms/customer-measurements";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 

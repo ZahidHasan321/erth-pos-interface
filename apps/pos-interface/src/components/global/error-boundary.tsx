@@ -1,7 +1,7 @@
 import React from "react";
 import { AlertTriangle, RefreshCw, XCircle } from "lucide-react";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 
 interface ErrorBoundaryState {
   hasError: boolean;

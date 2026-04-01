@@ -2,7 +2,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Phone, AlertTriangle, MessageSquare, Truck, ClipboardCheck, Link as LinkIcon } from "lucide-react";
 import type { OrderRow } from "./types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import { Settings2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@repo/ui/tooltip";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",

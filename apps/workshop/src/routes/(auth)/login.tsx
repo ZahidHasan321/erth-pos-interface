@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/(auth)/login")({

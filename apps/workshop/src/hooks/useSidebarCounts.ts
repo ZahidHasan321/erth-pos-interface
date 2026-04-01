@@ -19,9 +19,9 @@ async function fetchCounts(): Promise<SidebarCounts> {
   const { data, error } = await db
     .from('garments')
     .select('piece_stage, location, in_production, production_plan')
-    .in('location', ['workshop', 'transit_to_workshop'])
+    .in('location', ['workshop', 'transit_to_workshop', 'lost_in_transit'])
     .in('piece_stage', [
-      'waiting_cut',
+      'waiting_for_acceptance', 'waiting_cut',
       'soaking', 'cutting', 'post_cutting', 'sewing', 'finishing', 'ironing',
       'quality_check', 'ready_for_dispatch', 'brova_trialed',
     ]);
@@ -34,7 +34,7 @@ async function fetchCounts(): Promise<SidebarCounts> {
   };
 
   return {
-    receiving:     data.filter((g) => g.location === 'transit_to_workshop').length,
+    receiving:     data.filter((g) => g.location === 'transit_to_workshop' || g.location === 'lost_in_transit').length,
     parking:       data.filter((g) => g.location === 'workshop' && !g.in_production).length,
     scheduler:     data.filter((g) => g.location === 'workshop' && g.in_production && !g.production_plan && g.piece_stage === 'waiting_cut').length,
     soaking:       data.filter((g) => g.piece_stage === 'soaking').length,

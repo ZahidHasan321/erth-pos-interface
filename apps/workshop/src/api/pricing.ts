@@ -1,12 +1,13 @@
 import { db } from "@/lib/db";
-import type { Price, Style } from "@repo/database";
+import type { Brand, Price, Style } from "@repo/database";
 
 // ── Prices (key-value system prices) ────────────────────────────────────────
 
-export const getPrices = async (): Promise<Price[]> => {
+export const getPrices = async (brand: Brand): Promise<Price[]> => {
   const { data, error } = await db
     .from("prices")
     .select("*")
+    .eq("brand", brand)
     .order("key");
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -14,6 +15,7 @@ export const getPrices = async (): Promise<Price[]> => {
 
 export const updatePrice = async (
   key: string,
+  brand: Brand,
   value: number,
   description?: string,
 ): Promise<Price> => {
@@ -23,6 +25,7 @@ export const updatePrice = async (
     .from("prices")
     .update(updates)
     .eq("key", key)
+    .eq("brand", brand)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -31,10 +34,11 @@ export const updatePrice = async (
 
 // ── Styles (style option pricing) ───────────────────────────────────────────
 
-export const getStyles = async (): Promise<Style[]> => {
+export const getStyles = async (brand: Brand): Promise<Style[]> => {
   const { data, error } = await db
     .from("styles")
     .select("*")
+    .eq("brand", brand)
     .order("type")
     .order("name");
   if (error) throw new Error(error.message);

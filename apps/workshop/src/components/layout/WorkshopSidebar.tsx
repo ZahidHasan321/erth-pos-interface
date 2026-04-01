@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@repo/ui/sidebar";
 import { useSidebarCounts } from "@/hooks/useSidebarCounts";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -25,11 +25,6 @@ import {
   Activity,
   Droplets,
   Scissors,
-  Layers,
-  Shirt,
-  Sparkles,
-  Flame,
-  ShieldCheck,
   Truck,
   CircleCheckBig,
   Users,
@@ -40,7 +35,8 @@ import {
   TrendingUp,
   UserCog,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
+import { Button } from "@repo/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { isAdmin } from "@/lib/rbac";
@@ -89,11 +85,11 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
   const terminalItems = [
     { label: "Soaking",       icon: Droplets,     href: "/terminals/soaking",       count: counts?.soaking,       color: "text-sky-500" },
     { label: "Cutting",       icon: Scissors,     href: "/terminals/cutting",       count: counts?.cutting,       color: "text-amber-500" },
-    { label: "Post-Cutting",  icon: Layers,       href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
-    { label: "Sewing",        icon: Shirt,        href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-500" },
-    { label: "Finishing",     icon: Sparkles,     href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-500" },
-    { label: "Ironing",       icon: Flame,        href: "/terminals/ironing",       count: counts?.ironing,       color: "text-rose-500" },
-    { label: "Quality Check", icon: ShieldCheck,  href: "/terminals/quality-check", count: counts?.quality_check, color: "text-indigo-500" },
+    { label: "Post-Cutting",  icon: IconStack2,    href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
+    { label: "Sewing",        icon: IconNeedle,   href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-500" },
+    { label: "Finishing",     icon: IconSparkles, href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-500" },
+    { label: "Ironing",       icon: IconIroning1, href: "/terminals/ironing",       count: counts?.ironing,       color: "text-rose-500" },
+    { label: "Quality Check", icon: IconRosette,  href: "/terminals/quality-check", count: counts?.quality_check, color: "text-indigo-500" },
   ];
 
   const totalTerminalCount = terminalItems.reduce((s, t) => s + (t.count ?? 0), 0);

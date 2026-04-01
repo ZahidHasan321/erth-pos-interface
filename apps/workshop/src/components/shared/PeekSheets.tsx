@@ -5,13 +5,13 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import { AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { GarmentTypeBadge } from "./PageShell";
 import { MeasurementGrid } from "./MeasurementGrid";
 import { useOrderGarments, useGarment } from "@/hooks/useWorkshopGarments";
 import { cn, formatDate } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@repo/ui/skeleton";
 import {
   User,
   Phone,

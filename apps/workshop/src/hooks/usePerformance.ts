@@ -207,6 +207,28 @@ function computeKpis(
   };
 }
 
+export function getWorkerDailyBreakdown(
+  garments: GarmentPerformanceRow[],
+  workerName: string,
+  stage: string,
+): DailyTrend[] {
+  const historyKey = Object.entries(HISTORY_KEY_TO_STAGE).find(([, v]) => v === stage)?.[0];
+  if (!historyKey) return [];
+
+  const dailyMap = new Map<string, number>();
+  for (const g of garments) {
+    if (!g.completion_time || !g.worker_history) continue;
+    const wh = g.worker_history as Record<string, string>;
+    if (wh[historyKey] !== workerName) continue;
+    const day = g.completion_time.slice(0, 10);
+    dailyMap.set(day, (dailyMap.get(day) ?? 0) + 1);
+  }
+
+  return Array.from(dailyMap.entries())
+    .map(([date, completed]) => ({ date, completed }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function usePerformanceData(dateRange: { from: string; to: string }) {
   const { data: resources = [] } = useResources();
   const {
@@ -226,5 +248,5 @@ export function usePerformanceData(dateRange: { from: string; to: string }) {
     [garments, resources, days],
   );
 
-  return { ...result, isLoading, error };
+  return { ...result, garments, isLoading, error };
 }

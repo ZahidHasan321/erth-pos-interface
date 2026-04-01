@@ -2,14 +2,15 @@ import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useResources } from "@/hooks/useResources";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/shared/PageShell";
+import { Skeleton } from "@repo/ui/skeleton";
 import { cn, getLocalDateStr } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   Cell,
 } from "recharts";
 import {
-  Inbox, CalendarDays, ClipboardList,
+  Inbox, CalendarDays, ClipboardList, LayoutDashboard,
   Truck, ArrowRight, Zap, AlertTriangle,
   Unlock, PackageCheck, RotateCcw, Clock,
   ParkingSquare, Users,
@@ -316,11 +317,7 @@ function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-10">
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-xl font-black uppercase tracking-tight">Workshop Overview</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Live production status</p>
-      </div>
+      <PageHeader icon={LayoutDashboard} title="Workshop Overview" subtitle="Live production status" />
 
       {/* ── ACTION REQUIRED ────────────────────────────────────────── */}
       {!isLoading && actionCards.length > 0 && (

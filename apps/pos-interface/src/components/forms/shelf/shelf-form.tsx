@@ -1,6 +1,6 @@
 'use client'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@repo/ui/button'
+import { Badge } from '@repo/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useWatch, useFieldArray, type UseFormReturn } from 'react-hook-form'

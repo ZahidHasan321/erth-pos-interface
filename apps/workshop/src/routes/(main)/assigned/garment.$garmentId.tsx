@@ -11,19 +11,33 @@ import {
   NotesSection,
   TripHistorySection,
 } from "@/components/shared/GarmentDetailSections";
-import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { Label } from "@repo/ui/label";
+import { DatePicker } from "@repo/ui/date-picker";
+import { Skeleton } from "@repo/ui/skeleton";
+import { Button } from "@repo/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, Clock, Timer } from "lucide-react";
 import { toLocalDateStr } from "@/lib/utils";
-import type { WorkshopGarment } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/garment/$garmentId")({
   component: AssignedGarmentDetailPage,
   head: () => ({ meta: [{ title: "Garment Details" }] }),
 });
+
+/** Extract current trip entry from trip_history */
+function getCurrentTripEntry(garment: WorkshopGarment): TripHistoryEntry | null {
+  const raw = garment.trip_history;
+  const entries: TripHistoryEntry[] = !raw
+    ? []
+    : typeof raw === "string"
+      ? JSON.parse(raw)
+      : Array.isArray(raw)
+        ? (raw as TripHistoryEntry[])
+        : [];
+  const tripNum = garment.trip_number ?? 1;
+  return entries.find((t) => t.trip === tripNum) ?? null;
+}
 
 // ── Main Page ──────────────────────────────────────────────────
 
@@ -56,15 +70,21 @@ function AssignedGarmentDetailPage() {
   }
 
   const hasSoaking = !!garment.soaking;
+  const hasStarted = !!garment.start_time;
+  const isReturn = (garment.trip_number ?? 1) > 1;
+  const currentTripEntry = getCurrentTripEntry(garment);
+  const reentryStage = currentTripEntry?.reentry_stage ?? null;
+  const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
 
-  const handlePlanConfirm = async (newPlan: Record<string, string>, date: string) => {
-    await updateMut.mutateAsync({
-      id: garment.id,
-      updates: {
-        assigned_date: date || null,
-        production_plan: newPlan,
-      },
-    });
+  const handlePlanConfirm = async (newPlan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
+    const updates: Record<string, unknown> = {
+      assigned_date: date || null,
+      production_plan: newPlan,
+    };
+    if (reentryStage) {
+      updates.piece_stage = reentryStage;
+    }
+    await updateMut.mutateAsync({ id: garment.id, updates });
     toast.success(`${garment.garment_id ?? "Garment"} plan updated`);
   };
 
@@ -78,14 +98,14 @@ function AssignedGarmentDetailPage() {
         Back to Order
       </button>
 
-      <GarmentHeader garment={garment} showExtras>
-        <EditableDates garment={garment} updateMut={updateMut} />
+      <GarmentHeader garment={garment} showExtras reentryStage={reentryStage} qcFailCount={qcFailCount}>
+        {!hasStarted && <EditableDates garment={garment} updateMut={updateMut} />}
       </GarmentHeader>
 
       {/* Content — 3 columns on lg */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
         <StyleSection garment={garment} />
-        <WorkerHistorySection garment={garment} onEditPlan={() => setPlanOpen(true)} />
+        <WorkerHistorySection garment={garment} onEditPlan={hasStarted ? undefined : () => setPlanOpen(true)} reentryStage={reentryStage} />
         <MeasurementsSection garment={garment} />
       </div>
 
@@ -101,17 +121,20 @@ function AssignedGarmentDetailPage() {
         </div>
       )}
 
-      <PlanDialog
-        open={planOpen}
-        onOpenChange={setPlanOpen}
-        onConfirm={handlePlanConfirm}
-        garmentCount={1}
-        defaultDate={garment.assigned_date ?? undefined}
-        defaultPlan={garment.production_plan as Record<string, string> | null}
-        title={`Edit Plan — ${garment.garment_id}`}
-        confirmLabel="Save Changes"
-        hasSoaking={hasSoaking}
-      />
+      {!hasStarted && (
+        <PlanDialog
+          open={planOpen}
+          onOpenChange={setPlanOpen}
+          onConfirm={handlePlanConfirm}
+          garmentCount={1}
+          defaultDate={garment.assigned_date ?? undefined}
+          defaultPlan={garment.production_plan as Record<string, string> | null}
+          title={`Edit Plan — ${garment.garment_id}`}
+          confirmLabel="Save Changes"
+          hasSoaking={hasSoaking}
+          isAlteration={isReturn}
+        />
+      )}
     </div>
   );
 }

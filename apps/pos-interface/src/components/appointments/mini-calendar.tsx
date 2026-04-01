@@ -1,5 +1,5 @@
-import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Calendar } from "@repo/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { useTodayAppointments } from "@/hooks/useAppointments";
 import type { AppointmentWithRelations } from "@/api/appointments";
 

@@ -4,14 +4,14 @@ import {
     CheckCircle2, XCircle, Shirt, Tag, ArrowLeft, Clock, Loader2,
     MapPin, Truck, Hash, CalendarDays,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ChipToggle } from "@/components/ui/chip-toggle";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@repo/ui/input";
+import { Button } from "@repo/ui/button";
+import { Card } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Separator } from "@repo/ui/separator";
+import { Alert, AlertDescription } from "@repo/ui/alert";
+import { Skeleton } from "@repo/ui/skeleton";
 import {
     useCashierOrderSearch,
     usePaymentTransactions,
@@ -30,8 +30,8 @@ import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { updateCustomer } from "@/api/customers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@repo/ui/label";
+import { Textarea } from "@repo/ui/textarea";
 import HomeDeliveryIcon from "@/assets/home_delivery.png";
 import PickUpIcon from "@/assets/pickup.png";
 
@@ -131,7 +131,7 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
                 </div>
                 <div className="w-16 shrink-0">
                     <span className="font-bold text-sm tabular-nums">#{item.id}</span>
-                    {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}</p>}
+                    {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}{item.invoice_revision ? `-R${item.invoice_revision}` : ""}</p>}
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base truncate leading-tight">{item.customer_name || "Unknown"}</p>
@@ -762,7 +762,7 @@ export function CashierBody() {
                                 {/* Order details — compact inline */}
                                 <div className="flex items-center gap-2.5 flex-wrap text-xs bg-muted/40 rounded-md px-2.5 py-1.5">
                                     <span className="flex items-center gap-1 font-bold tabular-nums"><Hash className="h-3 w-3 text-muted-foreground" />{order.id}</span>
-                                    {order.invoice_number && <span className="flex items-center gap-1 tabular-nums text-muted-foreground"><Receipt className="h-3 w-3" />INV {order.invoice_number}</span>}
+                                    {order.invoice_number && <span className="flex items-center gap-1 tabular-nums text-muted-foreground"><Receipt className="h-3 w-3" />INV {order.invoice_number}{order.invoice_revision ? `-R${order.invoice_revision}` : ""}</span>}
                                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-border">{order.order_type === "WORK" ? "Work" : "Sales"}</span>
                                     {order.order_phase && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-secondary/10 text-secondary">{ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase}</span>}
                                     {isCancelled && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive">Cancelled</span>}
@@ -818,7 +818,7 @@ export function CashierBody() {
                             <Card className="p-3">
                                 <h3 className="font-semibold flex items-center gap-2 mb-1.5 text-sm"><Receipt className="h-4 w-4" />Payment History ({transactions.length})</h3>
                                 <PaymentHistory transactions={transactions} orderId={order.id} invoiceNumber={order.invoice_number ?? undefined}
-                                    customerName={order.customer?.name ?? undefined} customerPhone={order.customer?.phone ?? undefined} orderTotal={orderTotal} totalPaid={totalPaid} />
+                                    invoiceRevision={order.invoice_revision ?? 0} customerName={order.customer?.name ?? undefined} customerPhone={order.customer?.phone ?? undefined} orderTotal={orderTotal} totalPaid={totalPaid} />
                             </Card>
                         </div>
 
@@ -834,14 +834,20 @@ export function CashierBody() {
                                         currentDiscountPercentage={Number((order as any).discount_percentage) || 0} currentReferralCode={(order as any).referral_code} orderTotal={orderTotal} />
                                 </Card>
                             )}
-                            {!isCancelled ? (
+                            {isCancelled ? (
+                                <Card className="p-3"><Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Cancelled. No payments allowed.</AlertDescription></Alert></Card>
+                            ) : isFullyPaid && allGarmentsCompleted ? (
+                                <Card className="p-3 bg-green-50 border-green-300">
+                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />Refund Only</h3>
+                                    <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid and all garments collected.</AlertDescription></Alert>
+                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} refundOnly />
+                                </Card>
+                            ) : (
                                 <Card className={`p-3 ${isFullyPaid ? "bg-green-50 border-green-300" : ""}`}>
                                     <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />{isFullyPaid ? "Refund / Additional" : "Record Payment"}</h3>
                                     {isFullyPaid && <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid.</AlertDescription></Alert>}
                                     <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} collectGarmentIds={collectGarmentIds} onCollected={() => setCollectGarmentIds(new Set())} />
                                 </Card>
-                            ) : (
-                                <Card className="p-3"><Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Cancelled. No payments allowed.</AlertDescription></Alert></Card>
                             )}
                         </div>
                     </div>
