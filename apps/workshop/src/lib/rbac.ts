@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   username: string;
   role: Role;
-  department: Department;
+  department: Department | null;
 }
 
 type Permission = "full" | "view" | "own" | "none";
@@ -24,13 +24,14 @@ const PERMISSIONS: Record<string, Record<string, Permission>> = {
 };
 
 function getUserKey(user: AuthUser): string {
-  return user.role === "admin" ? "admin" : `${user.role}:${user.department}`;
+  if (user.role === "super_admin" || user.role === "admin") return "admin";
+  return `${user.role}:${user.department}`;
 }
 
 export function getPermission(user: AuthUser | null, page: string): Permission {
   if (!user) return "none";
   const pagePerms = PERMISSIONS[page];
-  if (!pagePerms) return user.role === "admin" ? "full" : "view";
+  if (!pagePerms) return user.role === "super_admin" || user.role === "admin" ? "full" : "view";
   return pagePerms[getUserKey(user)] ?? "none";
 }
 
@@ -44,14 +45,15 @@ export function canEdit(user: AuthUser | null, page: string): boolean {
 }
 
 export function isAdmin(user: AuthUser | null): boolean {
-  return user?.role === "admin";
+  return user?.role === "super_admin" || user?.role === "admin";
 }
 
 export function isManager(user: AuthUser | null): boolean {
-  return user?.role === "admin" || user?.role === "manager";
+  return user?.role === "super_admin" || user?.role === "admin" || user?.role === "manager";
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
+  super_admin: "Super Admin",
   admin: "Admin",
   manager: "Manager",
   staff: "Staff",

@@ -21,7 +21,7 @@ export function useUsers() {
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (u: Omit<NewUser, "id" | "created_at" | "updated_at">) =>
+    mutationFn: (u: Omit<NewUser, "id" | "created_at" | "updated_at"> & { pin?: string }) =>
       createUser(u),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });

@@ -23,6 +23,7 @@ import { DayDialog } from "@/components/appointments/day-dialog";
 import { BookingSheet } from "@/components/appointments/booking-sheet";
 import { DetailSheet } from "@/components/appointments/detail-sheet";
 import { useAppointments, useBrandEmployees } from "@/hooks/useAppointments";
+import { useAuth } from "@/context/auth";
 import type { AppointmentWithRelations } from "@/api/appointments";
 import { PrintView, usePrint } from "@/components/appointments/print-view";
 
@@ -51,8 +52,7 @@ function AppointmentsPage() {
   const [defaultBookingTime, setDefaultBookingTime] = React.useState<string | undefined>();
 
   // Current user for booked_by
-  const rawUser = localStorage.getItem("tanstack.auth.user");
-  const currentUser = rawUser ? JSON.parse(rawUser) : null;
+  const { user: currentUser } = useAuth();
   const bookedByUserId = currentUser?.id ?? "";
 
   // Fetch entire month's appointments

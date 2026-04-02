@@ -547,6 +547,17 @@ function NewWorkOrder() {
         })();
     }, [searchAppointmentId, loadCustomerFresh]);
 
+    // Auto-fill measurer & order taker with logged-in user for new orders
+    React.useEffect(() => {
+        if (!user?.id || searchOrderId) return;
+        if (!measurementsForm.getValues("measurer_id")) {
+            measurementsForm.setValue("measurer_id", user.id);
+        }
+        if (!OrderForm.getValues("order_taker_id")) {
+            OrderForm.setValue("order_taker_id", user.id);
+        }
+    }, [user?.id, searchOrderId, measurementsForm, OrderForm]);
+
     // ============================================================================
     // DEMOGRAPHICS FORM HANDLERS
     // ============================================================================
@@ -1015,6 +1026,7 @@ function NewWorkOrder() {
                         isOrderClosed={isOrderClosed}
                         orderId={orderId}
                         onCustomerChange={handleCustomerFound}
+                        hideAddress
                         onSave={(data) => {
                             setCustomerDemographics(data);
                             // Only add saved step if we already have an order

@@ -267,7 +267,7 @@ function UserDetailPage() {
                 <Select value={form.role} onValueChange={(v) => setForm((p: any) => ({ ...p, role: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(["admin", "manager", "staff"] as Role[]).map((r) => (
+                    {(["super_admin", "admin", "manager", "staff"] as Role[]).map((r) => (
                       <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
                     ))}
                   </SelectContent>

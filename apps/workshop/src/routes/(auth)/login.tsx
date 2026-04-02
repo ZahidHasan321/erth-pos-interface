@@ -20,14 +20,14 @@ function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await auth.login({ username, password });
+      await auth.login({ username, pin });
       navigate({ to: "/receiving" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
@@ -61,15 +61,17 @@ function LoginPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="pin">PIN</Label>
               <Input
-                id="password"
-                name="password"
-                autoComplete="current-password"
+                id="pin"
+                name="pin"
+                autoComplete="off"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
                 required
               />
             </div>
@@ -80,22 +82,22 @@ function LoginPage() {
 
           {/* Test credentials */}
           <div className="mt-4 pt-4 border-t">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-2">Test Accounts (pw: 123)</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-2">Quick Login (PIN: 1234)</p>
             <div className="space-y-1">
               {[
-                { user: "zahid", role: "Admin", dept: "Workshop" },
-                { user: "fahad", role: "Manager", dept: "Workshop" },
-                { user: "ahmed", role: "Staff", dept: "Shop" },
-                { user: "khalid", role: "Staff", dept: "Shop" },
+                { user: "zahid", pin: "1234", role: "Super Admin", dept: "" },
+                { user: "fahad", pin: "1234", role: "Manager", dept: "Workshop" },
+                { user: "ahmed", pin: "1234", role: "Staff", dept: "Shop" },
+                { user: "khalid", pin: "1234", role: "Staff", dept: "Shop" },
               ].map((a) => (
                 <button
                   key={a.user}
                   type="button"
-                  onClick={() => { setUsername(a.user); setPassword("123"); }}
+                  onClick={() => { setUsername(a.user); setPin(a.pin); }}
                   className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs hover:bg-muted/50 transition-colors text-left"
                 >
                   <span className="font-semibold">{a.user}</span>
-                  <span className="text-muted-foreground/50">{a.role} · {a.dept}</span>
+                  <span className="text-muted-foreground/50">{a.role}{a.dept ? ` · ${a.dept}` : ""}</span>
                 </button>
               ))}
             </div>

@@ -460,6 +460,10 @@ function GarmentPlanCard({
   const isAtShopPostProduction =
     garment.location === "shop" && !needsRepairAtShop;
   const hasStarted = !!garment.start_time;
+  const isReturn = (garment.trip_number ?? 1) > 1;
+  const currentTripEntry = getCurrentTripEntry(garment);
+  const reentryStage = currentTripEntry?.reentry_stage ?? null;
+  const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
   // For current trip: check if any stage from the re-entry point onward has been completed
   // by comparing worker_history against the current trip's expected stages
   const hasCurrentTripProgress = (() => {
@@ -468,7 +472,7 @@ function GarmentPlanCard({
     // for stages at or after the re-entry point (not leftover from prev trip)
     if (reentryStage) {
       const stageKeys = PLAN_STEPS.map((s) => s.responsibility);
-      const reentryIdx = stageKeys.indexOf(reentryStage);
+      const reentryIdx = stageKeys.indexOf(reentryStage as typeof stageKeys[number]);
       if (reentryIdx < 0) return false;
       const relevantStages = stageKeys.slice(reentryIdx);
       const relevantKeys = relevantStages.map((s) => PLAN_STEPS.find((p) => p.responsibility === s)?.key).filter(Boolean);
@@ -487,11 +491,6 @@ function GarmentPlanCard({
   const visibleSteps = PLAN_STEPS.filter(
     (s) => s.key !== "soaker" || hasSoaking,
   );
-
-  const isReturn = (garment.trip_number ?? 1) > 1;
-  const currentTripEntry = getCurrentTripEntry(garment);
-  const reentryStage = currentTripEntry?.reentry_stage ?? null;
-  const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
 
   const contextMessage = (() => {
     // Done states

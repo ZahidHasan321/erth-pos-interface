@@ -31,6 +31,7 @@ type ShopUser = {
   username: string;
   name: string;
   role: string | null;
+  department: string | null;
   brands: string[] | null;
 };
 
@@ -54,16 +55,17 @@ function LoginComponent() {
   const [userType, setUserType] =
     React.useState<(typeof BRAND_NAMES)[keyof typeof BRAND_NAMES]>(initialUserType);
 
-  // Fetch shop users for quick login
+  // Fetch users for quick login via public RPC (bypasses RLS)
   React.useEffect(() => {
-    db.from("users")
-      .select("id, username, name, role, brands")
-      .eq("department", "shop")
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }) => {
-        if (data) setShopUsers(data);
-      });
+    db.rpc("get_login_users").then(({ data }) => {
+      if (data) {
+        // Show shop users and super admins (they can access everything)
+        const eligible = (data as ShopUser[]).filter(
+          (u) => u.department === "shop" || u.role === "super_admin"
+        );
+        setShopUsers(eligible);
+      }
+    });
   }, []);
 
   // Apply brand theme class so CSS variables resolve correctly
@@ -74,11 +76,11 @@ function LoginComponent() {
     return () => { root.classList.remove(userType); };
   }, [userType]);
 
-  const doLogin = async (username: string, password: string) => {
+  const doLogin = async (username: string, pin: string) => {
     setIsSubmitting(true);
     setError(null);
     try {
-      await auth.login({ username, password, userType });
+      await auth.login({ username, pin, userType });
       await router.invalidate();
 
       if (userType === initialUserType && search.redirect) {
@@ -97,9 +99,9 @@ function LoginComponent() {
     evt.preventDefault();
     const data = new FormData(evt.currentTarget);
     const identifier = data.get("username")?.toString();
-    const password = data.get("password")?.toString();
-    if (!identifier || !password) return;
-    await doLogin(identifier, password);
+    const pin = data.get("pin")?.toString();
+    if (!identifier || !pin) return;
+    await doLogin(identifier, pin);
   };
 
   // Filter test accounts to those that have access to the selected brand
@@ -234,26 +236,26 @@ function LoginComponent() {
               />
             </div>
 
-            {/* Password */}
+            {/* PIN */}
             <div className="space-y-1.5">
               <label
-                htmlFor="password-input"
+                htmlFor="pin-input"
                 className="text-xs font-medium tracking-[0.1em] uppercase"
                 style={{ color: "#d4cdaa99", fontFamily: "'Montserrat', sans-serif" }}
               >
-                Password
+                PIN
               </label>
               <Input
-                id="password-input"
-                name="password"
-                placeholder="Enter your password"
+                id="pin-input"
+                name="pin"
+                placeholder="••••"
                 type="password"
+                inputMode="numeric"
+                maxLength={4}
+                pattern="[0-9]{4}"
                 required
                 className="h-11 bg-white/[0.06] border-white/[0.12] text-[#e8e2c4] placeholder:text-white/30 focus:border-[#d4cdaa60] focus:ring-[#d4cdaa30] rounded-lg"
               />
-              <p className="text-xs" style={{ color: "#d4cdaa70", fontFamily: "'Montserrat', sans-serif" }}>
-                Hint: password is 123
-              </p>
             </div>
 
             {/* Brand Selection */}
@@ -347,7 +349,7 @@ function LoginComponent() {
               className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3"
               style={{ color: "#d4cdaa40", fontFamily: "'Montserrat', sans-serif" }}
             >
-              Test Accounts (pw: 123)
+              Quick Login (PIN: 1234)
             </p>
             <div className="space-y-1">
               {filteredUsers.map((u) => (
@@ -355,7 +357,7 @@ function LoginComponent() {
                   key={u.id}
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => doLogin(u.username, "123")}
+                  onClick={() => doLogin(u.username, "1234")}
                   className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 group"
                   style={{
                     background: "rgba(255,255,255,0.03)",
@@ -391,22 +393,6 @@ function LoginComponent() {
                       </p>
                     </div>
                   </div>
-                  {u.brands && u.brands.length > 1 && (
-                    <div className="flex gap-1">
-                      {u.brands.map((b) => (
-                        <span
-                          key={b}
-                          className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                          style={{
-                            background: b === userType ? "rgba(212,205,170,0.15)" : "rgba(255,255,255,0.05)",
-                            color: b === userType ? "#d4cdaa" : "#d4cdaa40",
-                          }}
-                        >
-                          {b}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </button>
               ))}
             </div>

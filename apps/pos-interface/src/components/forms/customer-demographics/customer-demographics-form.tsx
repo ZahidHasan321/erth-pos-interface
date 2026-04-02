@@ -1,7 +1,6 @@
 import { debounce, cn } from "@/lib/utils";
 import { searchPrimaryAccountByPhone, updateCustomer, createCustomer } from "@/api/customers";
 import { Button } from "@repo/ui/button";
-import { Checkbox } from "@repo/ui/checkbox";
 import { Combobox } from "@repo/ui/combobox";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { DatePicker } from "@repo/ui/date-picker";
@@ -39,7 +38,7 @@ import {
 } from "./demographics-form.schema";
 import { mapCustomerToFormValues, mapFormValuesToCustomer } from "./demographics-form.mapper";
 import { AnimatedMessage } from "@/components/animation/AnimatedMessage";
-import WhatsappLogo from "@/assets/whatsapp.svg";
+import { IoLogoWhatsapp } from "react-icons/io5";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@repo/ui/flag-icon";
@@ -62,6 +61,7 @@ interface CustomerDemographicsFormProps {
   subheader?: string;
   proceedButtonText?: string;
   initialIsEditing?: boolean;
+  hideAddress?: boolean;
 }
 
 export function CustomerDemographicsForm({
@@ -78,6 +78,7 @@ export function CustomerDemographicsForm({
   subheader = "Customer information and contact details",
   proceedButtonText = "Confirm Order",
   initialIsEditing,
+  hideAddress,
 }: CustomerDemographicsFormProps) {
   const [isEditing, setIsEditing] = useState(initialIsEditing ?? true);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
@@ -322,295 +323,315 @@ export function CustomerDemographicsForm({
           </div>
         </div>
 
-        {/* Two-column layout: Basic Info (left) | Personal Details + Account (right) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+        {/* Two-column layout: Basic Info + Account (left) | Personal Details + Customer (right) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* LEFT COLUMN: Basic Information */}
-          <div className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base font-semibold text-foreground">
-                Basic Information
-              </h3>
-              {form.watch("id") && (
-                <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
-                  ID: {form.watch("id")}
-                </span>
-              )}
-            </div>
-            <ErrorBoundary fallback={<div>Name field crashed</div>}>
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold">
-                      <span className="text-destructive">*</span> Name
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Enter full name (e.g., Nasser Al-Sabah)"
-                        {...field}
-                        className="bg-background border-border/60"
-                        readOnly={isReadOnly}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          <div className="flex flex-col gap-3">
+            <div className="flex-1 space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+              <div className="flex justify-between items-center">
+                <h3 className="text-base font-semibold text-foreground">
+                  Basic Information
+                </h3>
+                {form.watch("id") && (
+                  <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
+                    ID: {form.watch("id")}
+                  </span>
                 )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={<div>Mobile number crashed</div>}>
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold">
-                      <span className="text-destructive">*</span> Mobile No
-                    </FormLabel>
-                    <div className="flex flex-col md:flex-row gap-2">
-                      <FormField
-                        control={form.control}
-                        name="country_code"
-                        disabled={isReadOnly}
-                        render={({ field }) => (
-                          <FormItem className="min-w-42">
-                            <Combobox
-                              disabled={isReadOnly}
-                              options={countries.map((country) => ({
-                                value: country.phoneCode,
-                                label: `${country.name} ${country.phoneCode}`,
-                                node: (
-                                  <span className="flex items-center gap-2">
-                                    <FlagIcon code={country.code} />
-                                    {country.name} {country.phoneCode}
-                                  </span>
-                                ),
-                              }))}
-                              value={field.value || ""}
-                              onChange={field.onChange}
-                              placeholder="Code"
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+              </div>
+              <ErrorBoundary fallback={<div>Name field crashed</div>}>
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold">
+                        <span className="text-destructive">*</span> Name
+                      </FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter mobile number"
+                          placeholder="Enter full name (e.g., Nasser Al-Sabah)"
                           {...field}
                           className="bg-background border-border/60"
                           readOnly={isReadOnly}
-                          onChange={(e) => {
-                            field.onChange(e);
-                            handleMobileChange(e.target.value);
-                          }}
                         />
                       </FormControl>
-                      <FormField
-                        control={form.control}
-                        name="whatsapp"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-2">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                className="bg-background border-border/60"
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </ErrorBoundary>
+              <ErrorBoundary fallback={<div>Mobile number crashed</div>}>
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold">
+                        <span className="text-destructive">*</span> Mobile No
+                      </FormLabel>
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <FormField
+                          control={form.control}
+                          name="country_code"
+                          disabled={isReadOnly}
+                          render={({ field }) => (
+                            <FormItem className="min-w-52">
+                              <Combobox
                                 disabled={isReadOnly}
+                                options={countries.map((country) => ({
+                                  value: country.phoneCode,
+                                  label: `${country.name} ${country.phoneCode}`,
+                                  node: (
+                                    <span className="flex items-center gap-2">
+                                      <FlagIcon code={country.code} />
+                                      {country.name} {country.phoneCode}
+                                    </span>
+                                  ),
+                                }))}
+                                value={field.value || ""}
+                                onChange={field.onChange}
+                                placeholder="Code"
                               />
-                            </FormControl>
-                            <FormLabel>
-                              <img
-                                src={WhatsappLogo}
-                                alt="WhatsApp"
-                                className="min-w-8"
-                              />
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormMessage />
-
-                    <AnimatePresence>
-                      {primaryAccount && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="mt-2 overflow-hidden"
-                        >
-                          <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 shadow-xs">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-full bg-blue-100 text-blue-600">
-                                <Users className="size-4" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Linked Primary Account</span>
-                                <span className="text-sm font-bold text-foreground">{primaryAccount.name}</span>
-                              </div>
-                            </div>
-                            <Button
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormControl>
+                          <Input
+                            placeholder="Enter mobile number"
+                            {...field}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              handleMobileChange(e.target.value);
+                            }}
+                          />
+                        </FormControl>
+                        <FormField
+                          control={form.control}
+                          name="whatsapp"
+                          render={({ field }) => (
+                            <button
                               type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-100/50"
-                              onClick={() => setIsPrimaryDetailsOpen(true)}
-                            >
-                              <Eye className="size-4 mr-2" />
-                              View Details
-                            </Button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatedMessage
-                      info={
-                        isFetching ? "Checking existing accounts..." : undefined
-                      }
-                      warning={
-                        warnings.phone &&
-                        !isFetching &&
-                        existingUsers?.count &&
-                        existingUsers.count > 0
-                          ? warnings.phone
-                          : undefined
-                      }
-                    />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={<div>Nationality crashed</div>}>
-              <FormField
-                control={form.control}
-                name="nationality"
-                render={({ field }) => (
-                  <FormItem className="w-full">
-                    <FormLabel className="font-semibold">
-                      <span className="text-destructive">*</span> Nationality
-                    </FormLabel>
-                    <Combobox
-                      disabled={isReadOnly}
-                      options={countries.map((country) => ({
-                        value: country.name,
-                        label: country.name,
-                        node: (
-                          <span className="flex items-center gap-2">
-                            <FlagIcon code={country.code} />
-                            {country.name}
-                          </span>
-                        ),
-                      }))}
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      placeholder="Select nationality"
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={<div>Email field crashed</div>}>
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-medium">E-mail</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Enter email (e.g., nasser@erth.com)"
-                        {...field}
-                        className="bg-background border-border/60"
-                        readOnly={isReadOnly}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
-            <ErrorBoundary
-              fallback={<div>Alternative mobile number crashed</div>}
-            >
-              <FormField
-                control={form.control}
-                name="alternate_mobile"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-medium">
-                      Alternative Mobile No
-                    </FormLabel>
-                    <div className="flex flex-col md:flex-row gap-2">
-                      <FormField
-                        control={form.control}
-                        name="alternative_country_code"
-                        render={({ field }) => (
-                          <FormItem className="min-w-42">
-                            <Combobox
                               disabled={isReadOnly}
-                              options={countries.map((country) => ({
-                                value: country.phoneCode,
-                                label: `${country.name} ${country.phoneCode}`,
-                                node: (
-                                  <span className="flex items-center gap-2">
-                                    <FlagIcon code={country.code} />
-                                    {country.name} {country.phoneCode}
-                                  </span>
-                                ),
-                              }))}
-                              value={field.value || ""}
-                              onChange={field.onChange}
-                              placeholder="Code"
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormControl>
-                        <Input
-                          placeholder="Enter alternative mobile number"
-                          {...field}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
+                              onClick={() => field.onChange(!field.value)}
+                              className={cn(
+                                "size-9 flex items-center justify-center rounded-md border transition-colors shrink-0",
+                                field.value
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : "bg-background border-border/60 text-muted-foreground hover:border-green-400 hover:text-green-500",
+                                isReadOnly && "opacity-50 cursor-not-allowed"
+                              )}
+                              title={field.value ? "WhatsApp enabled" : "Enable WhatsApp"}
+                            >
+                              <IoLogoWhatsapp className="size-5" />
+                            </button>
+                          )}
                         />
-                      </FormControl>
-                      <FormField
-                        control={form.control}
-                        name="whatsapp_alt"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-2">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                className="bg-background border-border/60"
-                                disabled={isReadOnly}
-                              />
-                            </FormControl>
-                            <FormLabel>
-                              <img
-                                src={WhatsappLogo}
-                                alt="WhatsApp"
-                                className="min-w-8"
-                              />
-                            </FormLabel>
-                          </FormItem>
+                      </div>
+                      <FormMessage />
+
+                      <AnimatePresence>
+                        {primaryAccount && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-2 overflow-hidden"
+                          >
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 shadow-xs">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                                  <Users className="size-4" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Linked Primary Account</span>
+                                  <span className="text-sm font-bold text-foreground">{primaryAccount.name}</span>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-100/50"
+                                onClick={() => setIsPrimaryDetailsOpen(true)}
+                              >
+                                <Eye className="size-4 mr-2" />
+                                View Details
+                              </Button>
+                            </div>
+                          </motion.div>
                         )}
+                      </AnimatePresence>
+
+                      <AnimatedMessage
+                        info={
+                          isFetching ? "Checking existing accounts..." : undefined
+                        }
+                        warning={
+                          warnings.phone &&
+                          !isFetching &&
+                          existingUsers?.count &&
+                          existingUsers.count > 0
+                            ? warnings.phone
+                            : undefined
+                        }
                       />
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </ErrorBoundary>
+                    </FormItem>
+                  )}
+                />
+              </ErrorBoundary>
+              <ErrorBoundary fallback={<div>Nationality crashed</div>}>
+                <FormField
+                  control={form.control}
+                  name="nationality"
+                  render={({ field }) => (
+                    <FormItem className="w-full">
+                      <FormLabel className="font-semibold">
+                        <span className="text-destructive">*</span> Nationality
+                      </FormLabel>
+                      <Combobox
+                        disabled={isReadOnly}
+                        options={countries.map((country) => ({
+                          value: country.name,
+                          label: country.name,
+                          node: (
+                            <span className="flex items-center gap-2">
+                              <FlagIcon code={country.code} />
+                              {country.name}
+                            </span>
+                          ),
+                        }))}
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        placeholder="Select nationality"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </ErrorBoundary>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <ErrorBoundary fallback={<div>Email field crashed</div>}>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">E-mail</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter email (e.g., nasser@erth.com)"
+                            {...field}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </ErrorBoundary>
+                <ErrorBoundary fallback={<div>DOB crashed</div>}>
+                  <FormField
+                    control={form.control}
+                    name="dob"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">DOB</FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            value={field.value ? new Date(field.value) : null}
+                            onChange={(date) => field.onChange(date ? date.toISOString() : null)}
+                            disabled={isReadOnly}
+                            clearable
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </ErrorBoundary>
+              </div>
+              <ErrorBoundary
+                fallback={<div>Alternative mobile number crashed</div>}
+              >
+                <FormField
+                  control={form.control}
+                  name="alternate_mobile"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-medium">
+                        Alternative Mobile No
+                      </FormLabel>
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <FormField
+                          control={form.control}
+                          name="alternative_country_code"
+                          render={({ field }) => (
+                            <FormItem className="min-w-52">
+                              <Combobox
+                                disabled={isReadOnly}
+                                options={countries.map((country) => ({
+                                  value: country.phoneCode,
+                                  label: `${country.name} ${country.phoneCode}`,
+                                  node: (
+                                    <span className="flex items-center gap-2">
+                                      <FlagIcon code={country.code} />
+                                      {country.name} {country.phoneCode}
+                                    </span>
+                                  ),
+                                }))}
+                                value={field.value || ""}
+                                onChange={field.onChange}
+                                placeholder="Code"
+                              />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormControl>
+                          <Input
+                            placeholder="Enter alternative mobile number"
+                            {...field}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormField
+                          control={form.control}
+                          name="whatsapp_alt"
+                          render={({ field }) => (
+                            <button
+                              type="button"
+                              disabled={isReadOnly}
+                              onClick={() => field.onChange(!field.value)}
+                              className={cn(
+                                "size-9 flex items-center justify-center rounded-md border transition-colors shrink-0",
+                                field.value
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : "bg-background border-border/60 text-muted-foreground hover:border-green-400 hover:text-green-500",
+                                isReadOnly && "opacity-50 cursor-not-allowed"
+                              )}
+                              title={field.value ? "WhatsApp enabled" : "Enable WhatsApp"}
+                            >
+                              <IoLogoWhatsapp className="size-5" />
+                            </button>
+                          )}
+                        />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </ErrorBoundary>
+            </div>
           </div>
 
-          {/* RIGHT COLUMN: Personal Details + Account/Customer */}
-          <div className="space-y-4">
-            <div className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+          {/* RIGHT COLUMN: Personal Details */}
+          <div className="flex flex-col gap-3">
+            <div className="flex-1 space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
               <h3 className="text-base font-semibold text-foreground">
                 Personal Details
               </h3>
@@ -679,56 +700,34 @@ export function CustomerDemographicsForm({
                     )}
                   />
                 </ErrorBoundary>
-                <ErrorBoundary fallback={<div>DOB crashed</div>}>
-                  <FormField
-                    control={form.control}
-                    name="dob"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-medium">DOB</FormLabel>
+                <FormField
+                  control={form.control}
+                  name="customer_segment"
+                  render={({ field }) => (
+                    <FormItem className="w-full">
+                      <FormLabel className="font-medium">
+                        Customer Segment
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isReadOnly}
+                      >
                         <FormControl>
-                          <DatePicker
-                            value={field.value ? new Date(field.value) : null}
-                            onChange={(date) => field.onChange(date ? date.toISOString() : null)}
-                            disabled={isReadOnly}
-                            clearable
-                          />
+                          <SelectTrigger className="bg-background border-border/60">
+                            <SelectValue placeholder="Select customer segment" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </ErrorBoundary>
-                <ErrorBoundary fallback={<div>Note crashed</div>}>
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel className="font-medium">Note</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Add any notes about the customer"
-                            {...field}
-                            value={field.value || ""}
-                            className="bg-background border-border/60 min-h-[80px]"
-                            readOnly={isReadOnly}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </ErrorBoundary>
-              </div>
-            </div>
-
-            <ErrorBoundary fallback={<div>Account Info crashed</div>}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <section className="flex flex-col rounded-xl bg-card p-4 gap-3 border border-border shadow-sm">
-                  <h3 className="text-base font-semibold text-foreground">
-                    Account Information
-                  </h3>
+                        <SelectContent>
+                          <SelectItem value="High">High</SelectItem>
+                          <SelectItem value="Low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <ErrorBoundary fallback={<div>Account Info crashed</div>}>
                   <FormField
                     control={form.control}
                     name="account_type"
@@ -754,241 +753,230 @@ export function CustomerDemographicsForm({
                       </FormItem>
                     )}
                   />
-
-                  <FormField
-                    control={form.control}
-                    name="relation"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <FormLabel
-                          className={
-                            AccountType === "Secondary"
-                              ? "font-semibold"
-                              : "font-medium"
-                          }
-                        >
-                          {AccountType === "Secondary" && (
-                            <span className="text-destructive">*</span>
-                          )}{" "}
-                          Account Relation
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || ""}
-                          disabled={isReadOnly || AccountType !== "Secondary"}
-                        >
-                          <FormControl>
-                            <SelectTrigger className={cn(
-                              "bg-background border-border/60 transition-colors duration-300",
-                              AccountType === "Secondary" && !field.value && "ring-2 ring-primary/40 border-primary/50"
-                            )}>
-                              <SelectValue
-                                placeholder={
-                                  AccountType === "Primary"
-                                    ? "Account is primary"
-                                    : "Select account type"
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Son">Son</SelectItem>
-                            <SelectItem value="Father">Father</SelectItem>
-                            <SelectItem value="Cousin">Cousin</SelectItem>
-                            <SelectItem value="Brother">Brother</SelectItem>
-                            <SelectItem value="Grandfather">Grandfather</SelectItem>
-                            <SelectItem value="Grandson">Grandson</SelectItem>
-                            <SelectItem value="Nephew">Nephew</SelectItem>
-                            <SelectItem value="Friend">Friend</SelectItem>
-                            <SelectItem value="Others">Others</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </section>
-
-                <section className="space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
-                  <h3 className="text-base font-semibold text-foreground">
-                    Customer Details
-                  </h3>
-                  <FormField
-                    control={form.control}
-                    name="customer_segment"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <FormLabel className="font-medium">
-                          Customer Segment
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={isReadOnly}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="bg-background border-border/60">
-                              <SelectValue placeholder="Select customer segment" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="High">High</SelectItem>
-                            <SelectItem value="Low">Low</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </section>
+                </ErrorBoundary>
+                <FormField
+                  control={form.control}
+                  name="relation"
+                  render={({ field }) => (
+                    <FormItem className="w-full">
+                      <FormLabel
+                        className={
+                          AccountType === "Secondary"
+                            ? "font-semibold"
+                            : "font-medium"
+                        }
+                      >
+                        {AccountType === "Secondary" && (
+                          <span className="text-destructive">*</span>
+                        )}{" "}
+                        Account Relation
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || ""}
+                        disabled={isReadOnly || AccountType !== "Secondary"}
+                      >
+                        <FormControl>
+                          <SelectTrigger className={cn(
+                            "bg-background border-border/60 transition-colors duration-300",
+                            AccountType === "Secondary" && !field.value && "ring-2 ring-primary/40 border-primary/50"
+                          )}>
+                            <SelectValue
+                              placeholder={
+                                AccountType === "Primary"
+                                  ? "Account is primary"
+                                  : "Select account type"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Son">Son</SelectItem>
+                          <SelectItem value="Father">Father</SelectItem>
+                          <SelectItem value="Cousin">Cousin</SelectItem>
+                          <SelectItem value="Brother">Brother</SelectItem>
+                          <SelectItem value="Grandfather">Grandfather</SelectItem>
+                          <SelectItem value="Grandson">Grandson</SelectItem>
+                          <SelectItem value="Nephew">Nephew</SelectItem>
+                          <SelectItem value="Friend">Friend</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-            </ErrorBoundary>
+              <ErrorBoundary fallback={<div>Note crashed</div>}>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-medium">Customer's Note</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Add any notes about the customer"
+                          {...field}
+                          value={field.value || ""}
+                          className="bg-background border-border/60"
+                          readOnly={isReadOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </ErrorBoundary>
+            </div>
           </div>
         </div>
 
-        {/* Address - full width below */}
-        <div className="bg-card p-4 rounded-xl space-y-3 border border-border shadow-sm">
-          <ErrorBoundary fallback={<div>Address fields crashed</div>}>
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                <MapPin className="size-5 text-primary" />
-                Address
-              </h3>
-              {AccountType === "Secondary" && primaryAccount && !isReadOnly && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="bg-primary/5 border-primary/20 text-primary hover:bg-primary/10"
-                  onClick={copyPrimaryAddress}
-                >
-                  <Copy className="size-4 mr-2" />
-                  Copy Primary Address
-                </Button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-                <FormField
-                  control={form.control}
-                  name="city"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-medium">City</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="City"
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="area"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-medium">Area</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Area"
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="block"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-medium">Block</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Block"
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="street"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-medium">Street</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Street"
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="house_no"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-medium">
-                        House / Bldg no.
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="House no."
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="address_note"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2 md:col-span-3 lg:col-span-5">
-                      <FormLabel className="font-medium">
-                        Address Note
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Add any address details or delivery instructions"
-                          {...field}
-                          value={field.value || ""}
-                          className="bg-background border-border/60"
-                          readOnly={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-            </div>
-          </ErrorBoundary>
-        </div>
+        {/* Address - full width below, conditionally hidden */}
+        {!hideAddress && (
+          <div className="bg-card p-4 rounded-xl space-y-3 border border-border shadow-sm">
+            <ErrorBoundary fallback={<div>Address fields crashed</div>}>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <MapPin className="size-5 text-primary" />
+                  Address
+                </h3>
+                {AccountType === "Secondary" && primaryAccount && !isReadOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="bg-primary/5 border-primary/20 text-primary hover:bg-primary/10"
+                    onClick={copyPrimaryAddress}
+                  >
+                    <Copy className="size-4 mr-2" />
+                    Copy Primary Address
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">City</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="City"
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="area"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">Area</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Area"
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="block"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">Block</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Block"
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="street"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">Street</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Street"
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="house_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">
+                          House / Bldg no.
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="House no."
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="address_note"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2 md:col-span-3 lg:col-span-5">
+                        <FormLabel className="font-medium">
+                          Address Note
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Add any address details or delivery instructions"
+                            {...field}
+                            value={field.value || ""}
+                            className="bg-background border-border/60"
+                            readOnly={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              </div>
+            </ErrorBoundary>
+          </div>
+        )}
 
         <div className="flex gap-4 justify-end">
           <ErrorBoundary fallback={<div>Action buttons crashed</div>}>

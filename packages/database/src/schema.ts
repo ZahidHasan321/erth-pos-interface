@@ -19,7 +19,7 @@ const numeric = (name: string, config?: { precision?: number; scale?: number }) 
 
 // --- ENUMS (Normalized from JSON) ---
 
-export const roleEnum = pgEnum("role", ["admin", "staff", "manager"]);
+export const roleEnum = pgEnum("role", ["super_admin", "admin", "staff", "manager"]);
 export type Role = (typeof roleEnum.enumValues)[number];
 
 export const departmentEnum = pgEnum("department", ["workshop", "shop"]);
@@ -134,6 +134,7 @@ export const prices = pgTable("prices", {
 // --- 1. USERS ---
 export const users = pgTable("users", {
     id: uuid("id").defaultRandom().primaryKey(),
+    auth_id: uuid("auth_id").unique(), // links to supabase auth.users.id — null until auth account created
     username: text("username").unique().notNull(),
     name: text("name").notNull(),
     email: text("email").unique(),
@@ -144,12 +145,23 @@ export const users = pgTable("users", {
     brands: text("brands").array(),
     is_active: boolean("is_active").default(true).notNull(),
     pin: text("pin"),
+    failed_login_attempts: integer("failed_login_attempts").default(0).notNull(),
+    locked_until: timestamp("locked_until"),
     employee_id: text("employee_id"),
     nationality: text("nationality"),
     hire_date: date("hire_date"),
     notes: text("notes"),
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// --- 1.5 USER SESSIONS (Presence / Heartbeat) ---
+export const userSessions = pgTable("user_sessions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    user_id: uuid("user_id").notNull().references(() => users.id),
+    last_active_at: timestamp("last_active_at").notNull().defaultNow(),
+    device_info: text("device_info"),
+    started_at: timestamp("started_at").notNull().defaultNow(),
 });
 
 // --- 2. CUSTOMERS ---
@@ -726,3 +738,6 @@ export type NewResource = InferInsertModel<typeof resources>;
 
 export type Appointment = InferSelectModel<typeof appointments>;
 export type NewAppointment = InferInsertModel<typeof appointments>;
+
+export type UserSession = InferSelectModel<typeof userSessions>;
+export type NewUserSession = InferInsertModel<typeof userSessions>;

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useUsers, useCreateUser, useUpdateUser, useDeactivateUser, useActivateUser } from "@/hooks/useUsers";
+import { setUserPin } from "@/api/users";
 import { useResourcesWithUsers, useLinkResourceToUser, useUnlinkResourceFromUser } from "@/hooks/useResources";
 import { ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/rbac";
 import { Button } from "@repo/ui/button";
@@ -18,9 +19,10 @@ import {
   UserCog, Plus, Search, Shield, Building2,
   Phone, Mail, Hash, Power, Pencil,
   Link2, Store, Users, Factory, ShoppingBag,
-  UserX, AlertTriangle, Briefcase, CalendarDays, Globe,
+  UserX, AlertTriangle, Briefcase, CalendarDays, Globe, Wifi,
 } from "lucide-react";
-import type { User, NewUser, Role, Department } from "@repo/database";
+import { useOnlineUserIds } from "@/hooks/useSessions";
+import type { User, Role, Department } from "@repo/database";
 
 const ALL_BRANDS = ["erth", "sakkba", "qass"] as const;
 const BRAND_LABELS: Record<string, string> = { erth: "Erth", sakkba: "Sakkba", qass: "Qass" };
@@ -67,6 +69,7 @@ const EMPTY_FORM: UserForm = {
 };
 
 const ROLE_STYLE: Record<Role, string> = {
+  super_admin: "bg-zinc-950 text-white border-zinc-950",
   admin:   "bg-zinc-900 text-white border-zinc-900",
   manager: "bg-zinc-200 text-zinc-800 border-zinc-300",
   staff:   "bg-zinc-100 text-zinc-500 border-zinc-200",
@@ -191,10 +194,10 @@ function UserFormSheet({
                 <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v as Role }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(["admin", "manager", "staff"] as Role[]).map((r) => (
+                    {(["super_admin", "admin", "manager", "staff"] as Role[]).map((r) => (
                       <SelectItem key={r} value={r}>
                         <span className="flex items-center gap-2">
-                          <Shield className={cn("w-3 h-3", r === "admin" ? "text-zinc-900" : r === "manager" ? "text-zinc-500" : "text-zinc-300")} />
+                          <Shield className={cn("w-3 h-3", r === "super_admin" ? "text-amber-500" : r === "admin" ? "text-zinc-900" : r === "manager" ? "text-zinc-500" : "text-zinc-300")} />
                           {ROLE_LABELS[r]}
                         </span>
                       </SelectItem>
@@ -221,6 +224,7 @@ function UserFormSheet({
             </div>
             {/* Role description */}
             <div className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground">
+              {form.role === "super_admin" && "Full access to all pages across all apps. Can manage everything."}
               {form.role === "admin" && "Full access to all pages. Can manage users, schedules, pricing, and all operations."}
               {form.role === "manager" && form.department === "workshop" && "Full access to workshop operations: scheduling, receiving, dispatch, team management, and performance."}
               {form.role === "manager" && form.department === "shop" && "View-only access to workshop data. Can view team, performance, production tracker, and dashboard."}
@@ -229,7 +233,7 @@ function UserFormSheet({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">PIN (optional)</Label>
+                <Label className="text-xs font-medium">PIN <span className="text-red-500">*</span></Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
@@ -404,7 +408,7 @@ function UserFormSheet({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={!form.username || !form.name || !form.role || !form.department || (form.department === "shop" && form.brands.length === 0) || isPending}
+            disabled={!form.username || !form.name || !form.role || (form.role !== "super_admin" && !form.department) || (form.department === "shop" && form.brands.length === 0) || isPending}
             className="flex-1"
           >
             {isPending ? "Saving..." : mode === "add" ? "Create User" : "Save Changes"}
@@ -503,11 +507,13 @@ function StatCard({
 function UserCard({
   user,
   linkedResourceName,
+  isOnline,
   onEdit,
   onToggleActive,
 }: {
   user: User;
   linkedResourceName: string | null;
+  isOnline: boolean;
   onEdit: () => void;
   onToggleActive: () => void;
 }) {
@@ -558,10 +564,10 @@ function UserCard({
           )}>
             {user.name.slice(0, 2).toUpperCase()}
           </div>
-          {/* Active indicator dot */}
+          {/* Online indicator dot */}
           <div className={cn(
             "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card",
-            isInactive ? "bg-zinc-300" : "bg-emerald-500",
+            isInactive ? "bg-zinc-300" : isOnline ? "bg-emerald-500" : "bg-zinc-300",
           )} />
         </div>
         <div className="min-w-0 flex-1 pr-14">
@@ -652,6 +658,7 @@ function UsersPage() {
   const navigate = useNavigate();
   const { data: users = [], isLoading } = useUsers();
   const { data: resources = [] } = useResourcesWithUsers();
+  const onlineUserIds = useOnlineUserIds();
   const createMut = useCreateUser();
   const updateMut = useUpdateUser();
   const deactivateMut = useDeactivateUser();
@@ -706,9 +713,10 @@ function UsersPage() {
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter((u) => u.is_active !== false).length,
+    online: users.filter((u) => onlineUserIds.has(u.id)).length,
     workshop: users.filter((u) => u.department === "workshop" && u.is_active !== false).length,
     shop: users.filter((u) => u.department === "shop" && u.is_active !== false).length,
-  }), [users]);
+  }), [users, onlineUserIds]);
 
   const openAdd = () => {
     setSheetMode("add");
@@ -720,32 +728,55 @@ function UsersPage() {
 
   const handleSubmit = async () => {
     if (!form.name) return;
-    const payload: Omit<NewUser, "id" | "created_at" | "updated_at"> = {
-      username: form.username,
-      name: form.name,
-      email: form.email || null,
-      country_code: form.country_code || null,
-      phone: form.phone || null,
-      role: form.role,
-      department: form.department,
-      brands: form.department === "shop" ? form.brands : null,
-      is_active: form.is_active,
-      pin: form.pin || null,
-      employee_id: form.employee_id || null,
-      nationality: form.nationality || null,
-      hire_date: form.hire_date || null,
-      notes: form.notes || null,
-    };
 
     try {
       let userId = editingId;
       if (sheetMode === "add") {
-        const created = await createMut.mutateAsync(payload);
+        // Create via Edge Function (handles Supabase Auth + users table + PIN hashing)
+        const created = await createMut.mutateAsync({
+          username: form.username,
+          name: form.name,
+          email: form.email || null,
+          country_code: form.country_code || null,
+          phone: form.phone || null,
+          role: form.role,
+          department: form.department,
+          brands: form.department === "shop" ? form.brands : null,
+          is_active: form.is_active,
+          pin: form.pin || undefined,
+          employee_id: form.employee_id || null,
+          nationality: form.nationality || null,
+          hire_date: form.hire_date || null,
+          notes: form.notes || null,
+        });
         userId = created.id;
         toast.success(`${form.name} created`);
       } else if (editingId) {
-        await updateMut.mutateAsync({ id: editingId, updates: payload });
+        // Update non-auth fields directly
+        await updateMut.mutateAsync({
+          id: editingId,
+          updates: {
+            username: form.username,
+            name: form.name,
+            email: form.email || null,
+            country_code: form.country_code || null,
+            phone: form.phone || null,
+            role: form.role,
+            department: form.department,
+            brands: form.department === "shop" ? form.brands : null,
+            is_active: form.is_active,
+            employee_id: form.employee_id || null,
+            nationality: form.nationality || null,
+            hire_date: form.hire_date || null,
+            notes: form.notes || null,
+          },
+        });
         toast.success(`${form.name} updated`);
+
+        // Update PIN via Edge Function if changed
+        if (form.pin) {
+          await setUserPin(editingId, form.pin);
+        }
       }
 
       // Handle resource linking/unlinking
@@ -798,9 +829,10 @@ function UsersPage() {
       </PageHeader>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         <StatCard label="Total Users" value={stats.total} icon={Users} />
         <StatCard label="Active" value={stats.active} icon={UserCog} />
+        <StatCard label="Online Now" value={stats.online} icon={Wifi} />
         <StatCard label="Workshop" value={stats.workshop} icon={Factory} />
         <StatCard label="Shop" value={stats.shop} icon={ShoppingBag} />
       </div>
@@ -843,7 +875,7 @@ function UsersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Roles</SelectItem>
-              {(["admin", "manager", "staff"] as Role[]).map((r) => (
+              {(["super_admin", "admin", "manager", "staff"] as Role[]).map((r) => (
                 <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
               ))}
             </SelectContent>
@@ -905,6 +937,7 @@ function UsersPage() {
               key={u.id}
               user={u}
               linkedResourceName={getLinkedResourceName(u.id)}
+              isOnline={onlineUserIds.has(u.id)}
               onEdit={() => navigate({ to: "/users/$userId", params: { userId: u.id } })}
               onToggleActive={() => {
                 setDeactivateTarget(u);

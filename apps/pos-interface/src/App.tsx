@@ -19,6 +19,10 @@ const queryClient = new QueryClient({
 
 function InnerApp() {
   const auth = useAuth()
+
+  // Don't render router until session restore completes
+  if (auth.isLoading) return null
+
   return (
     <RouterProvider router={router} context={{ auth, queryClient }} />
   )

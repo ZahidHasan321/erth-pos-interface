@@ -7,9 +7,10 @@
  * of the app stays untouched.
  *
  * Current backend: Supabase (PostgREST + RPC via @supabase/supabase-js)
+ * Session stored in cookies (Secure, SameSite=Strict) instead of localStorage.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -18,4 +19,10 @@ if (!url || !anonKey) {
   throw new Error('Missing database environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)');
 }
 
-export const db = createClient(url, anonKey);
+export const db = createBrowserClient(url, anonKey, {
+  cookieOptions: {
+    secure: true,
+    sameSite: 'strict',
+    path: '/',
+  },
+});

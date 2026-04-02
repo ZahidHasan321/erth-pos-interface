@@ -14,81 +14,134 @@ export interface AuthUser {
 
 export interface AuthContext {
   isAuthenticated: boolean
-  login: (credentials: { username: string; password: string; userType: BrandName }) => Promise<void>
+  isLoading: boolean
+  login: (credentials: { username: string; pin: string; userType: BrandName }) => Promise<void>
   logout: () => Promise<void>
   user: AuthUser | null
 }
 
 const AuthContext = React.createContext<AuthContext | null>(null)
 
-const key = 'tanstack.auth.user'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const BRAND_KEY = 'pos.selected_brand'
 
-function getStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(key)
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed.id && parsed.username && parsed.userType) return parsed as AuthUser
-    return null
-  } catch {
-    return null
-  }
-}
+async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
+  const { data } = await db
+    .from('users')
+    .select('id, username, name, brands')
+    .eq('id', userId)
+    .single()
 
-function setStoredUser(user: AuthUser | null) {
-  if (user) {
-    localStorage.setItem(key, JSON.stringify(user))
-  } else {
-    localStorage.removeItem(key)
+  if (!data) return null
+
+  const savedBrand = localStorage.getItem(BRAND_KEY) as BrandName | null
+  return {
+    id: data.id,
+    username: data.username,
+    name: data.name,
+    brands: data.brands ?? [],
+    userType: savedBrand || 'erth',
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<AuthUser | null>(getStoredUser)
+  const [user, setUser] = React.useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = React.useState(true)
   const isAuthenticated = !!user
 
-  const logout = async () => {
-    setStoredUser(null)
-    setUser(null)
-  }
+  React.useEffect(() => {
+    let cancelled = false
 
-  const login = async (credentials: { username: string; password: string; userType: BrandName }) => {
-    if (credentials.password !== '123') {
-      throw new Error('Invalid credentials')
+    // Initial session restore
+    db.auth.getSession().then(async ({ data: { session } }) => {
+      if (cancelled) return
+      if (session?.user?.app_metadata?.user_id) {
+        const restored = await fetchUserFromSession(session.user.app_metadata.user_id)
+        if (!cancelled) setUser(restored)
+      }
+      if (!cancelled) setIsLoading(false)
+    })
+
+    // React to all auth state changes
+    const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
+      if (cancelled) return
+
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null)
+        return
+      }
+
+      // On token refresh or sign in, re-fetch user data (role/brands may have changed)
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        const userId = session.user.app_metadata?.user_id
+        if (userId) {
+          const refreshed = await fetchUserFromSession(userId)
+          if (!cancelled) {
+            if (refreshed) {
+              setUser(refreshed)
+            } else {
+              // User deleted or deactivated — force logout
+              await db.auth.signOut()
+            }
+          }
+        }
+      }
+    })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const login = async (credentials: { username: string; pin: string; userType: BrandName }) => {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: credentials.username, pin: credentials.pin }),
+    })
+
+    const result = await res.json()
+
+    if (!res.ok) {
+      throw new Error(result.error || 'Login failed')
     }
 
-    // Look up user in the database by username
-    const { data, error } = await db
-      .from('users')
-      .select('id, username, name, role, department, brands')
-      .ilike('username', credentials.username)
-      .eq('is_active', true)
-      .limit(1)
-      .single()
-
-    if (error || !data) {
-      throw new Error('User not found. Ask an admin to create your account.')
+    // Set the Supabase session so all subsequent db calls carry the JWT
+    if (result.session) {
+      await db.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      })
     }
 
-    // Verify the user has access to the selected brand
-    const userBrands: string[] = data.brands ?? []
+    // Verify brand access
+    const userBrands: string[] = result.user.brands ?? []
     if (userBrands.length > 0 && !userBrands.includes(credentials.userType)) {
+      await db.auth.signOut()
       throw new Error(`You don't have access to this brand. Your brands: ${userBrands.join(', ')}`)
     }
 
-    const newUser: AuthUser = {
-      id: data.id,
-      username: data.username,
-      name: data.name,
+    // Persist brand choice
+    localStorage.setItem(BRAND_KEY, credentials.userType)
+
+    setUser({
+      id: result.user.id,
+      username: result.user.username,
+      name: result.user.name,
       brands: userBrands,
       userType: credentials.userType,
-    }
-    setStoredUser(newUser)
-    setUser(newUser)
+    })
+  }
+
+  const logout = async () => {
+    await db.auth.signOut()
+    localStorage.removeItem(BRAND_KEY)
+    setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

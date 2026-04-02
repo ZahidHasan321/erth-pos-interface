@@ -899,3 +899,427 @@ BEGIN
   RETURN jsonb_build_object('data', v_data, 'count', v_count);
 END;
 $$ LANGUAGE plpgsql;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- PIN AUTHENTICATION (pgcrypto-based hashing)
+-- ═══════════════════════════════════════════════════════════════════════
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Hash a plaintext PIN using bcrypt
+CREATE OR REPLACE FUNCTION hash_pin(p_pin TEXT)
+RETURNS TEXT AS $$
+BEGIN
+  RETURN crypt(p_pin, gen_salt('bf', 8));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Set a user's PIN (hashes before storing)
+CREATE OR REPLACE FUNCTION set_user_pin(p_user_id UUID, p_pin TEXT)
+RETURNS VOID AS $$
+BEGIN
+  IF length(p_pin) < 4 THEN
+    RAISE EXCEPTION 'PIN must be at least 4 digits';
+  END IF;
+
+  UPDATE users
+  SET pin = crypt(p_pin, gen_salt('bf', 8)),
+      updated_at = now()
+  WHERE id = p_user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Verify PIN and return user data (handles lockout logic server-side)
+CREATE OR REPLACE FUNCTION verify_pin(p_username TEXT, p_pin TEXT)
+RETURNS JSONB AS $$
+DECLARE
+  v_user RECORD;
+  v_attempts INT;
+  v_max_attempts INT := 5;
+  v_lockout_minutes INT := 15;
+BEGIN
+  -- Look up user (case-insensitive)
+  SELECT id, username, name, role, department, pin, brands,
+         failed_login_attempts, locked_until, is_active
+  INTO v_user
+  FROM users
+  WHERE lower(username) = lower(p_username)
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  IF NOT v_user.is_active THEN
+    RAISE EXCEPTION 'Account is deactivated';
+  END IF;
+
+  -- Check lockout
+  IF v_user.locked_until IS NOT NULL AND v_user.locked_until > now() THEN
+    RAISE EXCEPTION 'Account locked. Try again in % minutes.',
+      ceil(extract(epoch FROM (v_user.locked_until - now())) / 60)::int;
+  END IF;
+
+  -- Reset if lock expired
+  IF v_user.locked_until IS NOT NULL AND v_user.locked_until <= now() THEN
+    UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = v_user.id;
+    v_user.failed_login_attempts := 0;
+  END IF;
+
+  -- Check PIN is set
+  IF v_user.pin IS NULL THEN
+    RAISE EXCEPTION 'No PIN set. Ask an admin to set your PIN.';
+  END IF;
+
+  -- Verify PIN
+  IF v_user.pin = crypt(p_pin, v_user.pin) THEN
+    -- Success: reset attempts
+    UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = v_user.id;
+
+    RETURN jsonb_build_object(
+      'id', v_user.id,
+      'username', v_user.username,
+      'name', v_user.name,
+      'role', v_user.role,
+      'department', v_user.department,
+      'brands', v_user.brands
+    );
+  ELSE
+    -- Failed: increment attempts
+    v_attempts := coalesce(v_user.failed_login_attempts, 0) + 1;
+
+    IF v_attempts >= v_max_attempts THEN
+      UPDATE users
+      SET failed_login_attempts = v_attempts,
+          locked_until = now() + (v_lockout_minutes || ' minutes')::interval
+      WHERE id = v_user.id;
+      RAISE EXCEPTION 'Too many failed attempts. Account locked for % minutes.', v_lockout_minutes;
+    ELSE
+      UPDATE users SET failed_login_attempts = v_attempts WHERE id = v_user.id;
+      RAISE EXCEPTION 'Invalid PIN. % attempts remaining.', (v_max_attempts - v_attempts);
+    END IF;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Migrate existing plaintext PINs to hashed (run once, idempotent)
+-- Plaintext PINs are short numeric strings; bcrypt hashes start with '$2'
+CREATE OR REPLACE FUNCTION migrate_plaintext_pins()
+RETURNS INT AS $$
+DECLARE
+  v_count INT := 0;
+BEGIN
+  UPDATE users
+  SET pin = crypt(pin, gen_salt('bf', 8))
+  WHERE pin IS NOT NULL
+    AND pin NOT LIKE '$2%';
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Link a Supabase Auth user to our users table (called from Edge Functions)
+CREATE OR REPLACE FUNCTION link_auth_id(p_user_id UUID, p_auth_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE users SET auth_id = p_auth_id WHERE id = p_user_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found: %', p_user_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Public RPC: returns active users for login page (no auth required, minimal fields)
+CREATE OR REPLACE FUNCTION get_login_users()
+RETURNS JSONB AS $$
+  SELECT coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', id,
+      'username', username,
+      'name', name,
+      'role', role,
+      'department', department,
+      'brands', brands
+    ) ORDER BY name
+  ), '[]'::jsonb)
+  FROM users
+  WHERE is_active = true;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- RLS HELPER FUNCTIONS
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- Get the current user's role from auth.uid() → users.auth_id
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS TEXT AS $$
+  SELECT role::text FROM users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Get the current user's department from auth.uid() → users.auth_id
+CREATE OR REPLACE FUNCTION get_my_department()
+RETURNS TEXT AS $$
+  SELECT department::text FROM users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Get the current user's id (users.id, NOT auth.uid()) from auth.uid() → users.auth_id
+CREATE OR REPLACE FUNCTION get_my_user_id()
+RETURNS UUID AS $$
+  SELECT id FROM users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Check if current user is admin
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role IN ('super_admin', 'admin'));
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Check if current user is admin or manager
+CREATE OR REPLACE FUNCTION is_manager_or_above()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role IN ('super_admin', 'admin', 'manager'));
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Check if current user can access a given brand
+-- super_admin and workshop users see all brands; shop users only see their assigned brands
+CREATE OR REPLACE FUNCTION can_access_brand(brand_value TEXT)
+RETURNS BOOLEAN AS $$
+  SELECT
+    -- super_admin sees everything
+    EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'super_admin')
+    -- workshop department sees all brands (they process orders for every brand)
+    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND department = 'workshop')
+    -- no brands set = unrestricted (backwards compat)
+    OR NOT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND brands IS NOT NULL AND array_length(brands, 1) > 0)
+    -- brand is in the user's brands array
+    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND brand_value = ANY(brands));
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- ROW LEVEL SECURITY POLICIES
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- ── Users table ─────────────────────────────────────────────────────
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Everyone can read users (needed for displaying names, assignments, etc.)
+DROP POLICY IF EXISTS "users_select" ON users;
+CREATE POLICY "users_select" ON users FOR SELECT USING (true);
+
+-- Only admins can insert users (creation goes through Edge Function anyway)
+DROP POLICY IF EXISTS "users_insert" ON users;
+CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (is_admin());
+
+-- Admins can update any user; others can update their own non-sensitive fields
+DROP POLICY IF EXISTS "users_update" ON users;
+CREATE POLICY "users_update" ON users FOR UPDATE USING (
+  is_admin() OR id = get_my_user_id()
+);
+
+-- ── User Sessions (Presence) ────────────────────────────────────────
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Everyone can read sessions (needed for online indicators)
+DROP POLICY IF EXISTS "sessions_select" ON user_sessions;
+CREATE POLICY "sessions_select" ON user_sessions FOR SELECT USING (true);
+
+-- Users can manage their own sessions
+DROP POLICY IF EXISTS "sessions_insert" ON user_sessions;
+CREATE POLICY "sessions_insert" ON user_sessions FOR INSERT WITH CHECK (
+  user_id = get_my_user_id()
+);
+
+DROP POLICY IF EXISTS "sessions_update" ON user_sessions;
+CREATE POLICY "sessions_update" ON user_sessions FOR UPDATE USING (
+  user_id = get_my_user_id()
+);
+
+DROP POLICY IF EXISTS "sessions_delete" ON user_sessions;
+CREATE POLICY "sessions_delete" ON user_sessions FOR DELETE USING (
+  user_id = get_my_user_id()
+);
+
+-- ── Customers ───────────────────────────────────────────────────────
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "customers_select" ON customers;
+CREATE POLICY "customers_select" ON customers FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "customers_insert" ON customers;
+CREATE POLICY "customers_insert" ON customers FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "customers_update" ON customers;
+CREATE POLICY "customers_update" ON customers FOR UPDATE USING (is_manager_or_above() OR get_my_department() = 'shop');
+
+-- ── Prices ──────────────────────────────────────────────────────────
+ALTER TABLE prices ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "prices_select" ON prices;
+CREATE POLICY "prices_select" ON prices FOR SELECT USING (
+  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "prices_modify" ON prices;
+CREATE POLICY "prices_modify" ON prices FOR ALL USING (
+  is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
+);
+
+-- ── Lookups (campaigns, styles, fabrics, shelf) ─────────────────────
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE styles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fabrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shelf ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaigns_select" ON campaigns;
+CREATE POLICY "campaigns_select" ON campaigns FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "styles_select" ON styles;
+CREATE POLICY "styles_select" ON styles FOR SELECT USING (
+  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+);
+DROP POLICY IF EXISTS "fabrics_select" ON fabrics;
+CREATE POLICY "fabrics_select" ON fabrics FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "shelf_select" ON shelf;
+CREATE POLICY "shelf_select" ON shelf FOR SELECT USING (
+  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+);
+
+DROP POLICY IF EXISTS "campaigns_modify" ON campaigns;
+CREATE POLICY "campaigns_modify" ON campaigns FOR ALL USING (is_manager_or_above());
+DROP POLICY IF EXISTS "styles_modify" ON styles;
+CREATE POLICY "styles_modify" ON styles FOR ALL USING (is_manager_or_above());
+DROP POLICY IF EXISTS "fabrics_modify" ON fabrics;
+CREATE POLICY "fabrics_modify" ON fabrics FOR ALL USING (is_manager_or_above());
+DROP POLICY IF EXISTS "shelf_modify" ON shelf;
+CREATE POLICY "shelf_modify" ON shelf FOR ALL USING (is_manager_or_above());
+
+-- ── Measurements ────────────────────────────────────────────────────
+ALTER TABLE measurements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "measurements_select" ON measurements;
+CREATE POLICY "measurements_select" ON measurements FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "measurements_insert" ON measurements;
+CREATE POLICY "measurements_insert" ON measurements FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "measurements_update" ON measurements;
+CREATE POLICY "measurements_update" ON measurements FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+-- ── Orders ──────────────────────────────────────────────────────────
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "orders_select" ON orders;
+CREATE POLICY "orders_select" ON orders FOR SELECT USING (
+  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "orders_insert" ON orders;
+CREATE POLICY "orders_insert" ON orders FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop') AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "orders_update" ON orders;
+CREATE POLICY "orders_update" ON orders FOR UPDATE USING (
+  (is_manager_or_above() OR order_taker_id = get_my_user_id()) AND can_access_brand(brand::text)
+);
+
+-- ── Work Orders ─────────────────────────────────────────────────────
+ALTER TABLE work_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "work_orders_select" ON work_orders;
+CREATE POLICY "work_orders_select" ON work_orders FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "work_orders_insert" ON work_orders;
+CREATE POLICY "work_orders_insert" ON work_orders FOR INSERT WITH CHECK (
+  is_manager_or_above() OR get_my_department() = 'shop'
+);
+
+DROP POLICY IF EXISTS "work_orders_update" ON work_orders;
+CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (is_manager_or_above());
+
+-- ── Garments ────────────────────────────────────────────────────────
+ALTER TABLE garments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "garments_select" ON garments;
+CREATE POLICY "garments_select" ON garments FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "garments_insert" ON garments;
+CREATE POLICY "garments_insert" ON garments FOR INSERT WITH CHECK (
+  is_manager_or_above() OR get_my_department() = 'shop'
+);
+
+DROP POLICY IF EXISTS "garments_update" ON garments;
+CREATE POLICY "garments_update" ON garments FOR UPDATE USING (is_manager_or_above());
+
+-- ── Garment Feedback ────────────────────────────────────────────────
+ALTER TABLE garment_feedback ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "feedback_select" ON garment_feedback;
+CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "feedback_insert" ON garment_feedback;
+CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "feedback_update" ON garment_feedback;
+CREATE POLICY "feedback_update" ON garment_feedback FOR UPDATE USING (is_manager_or_above());
+
+-- ── Resources (Workshop Workers) ────────────────────────────────────
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "resources_select" ON resources;
+CREATE POLICY "resources_select" ON resources FOR SELECT USING (
+  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+);
+
+DROP POLICY IF EXISTS "resources_modify" ON resources;
+CREATE POLICY "resources_modify" ON resources FOR ALL USING (
+  is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
+);
+
+-- ── Order Shelf Items ───────────────────────────────────────────────
+ALTER TABLE order_shelf_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "shelf_items_select" ON order_shelf_items;
+CREATE POLICY "shelf_items_select" ON order_shelf_items FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "shelf_items_insert" ON order_shelf_items;
+CREATE POLICY "shelf_items_insert" ON order_shelf_items FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "shelf_items_update" ON order_shelf_items;
+CREATE POLICY "shelf_items_update" ON order_shelf_items FOR UPDATE USING (is_manager_or_above());
+
+-- ── Payment Transactions ────────────────────────────────────────────
+ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "payments_select" ON payment_transactions;
+CREATE POLICY "payments_select" ON payment_transactions FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "payments_insert" ON payment_transactions;
+CREATE POLICY "payments_insert" ON payment_transactions FOR INSERT WITH CHECK (
+  is_manager_or_above() OR get_my_department() = 'shop'
+);
+
+DROP POLICY IF EXISTS "payments_update" ON payment_transactions;
+CREATE POLICY "payments_update" ON payment_transactions FOR UPDATE USING (is_admin());
+
+-- ── Appointments ────────────────────────────────────────────────────
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "appointments_select" ON appointments;
+CREATE POLICY "appointments_select" ON appointments FOR SELECT USING (
+  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+);
+
+DROP POLICY IF EXISTS "appointments_insert" ON appointments;
+CREATE POLICY "appointments_insert" ON appointments FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+);
+
+DROP POLICY IF EXISTS "appointments_update" ON appointments;
+CREATE POLICY "appointments_update" ON appointments FOR UPDATE USING (
+  (is_manager_or_above() OR assigned_to = get_my_user_id()) AND (brand IS NULL OR can_access_brand(brand::text))
+);

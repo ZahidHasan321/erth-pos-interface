@@ -6,10 +6,9 @@ import { BRAND_NAMES } from "../lib/constants";
 const TABLE_NAME = "orders";
 
 export const getBrand = (): "ERTH" | "SAKKBA" | "QASS" => {
-    const raw = localStorage.getItem('tanstack.auth.user');
-    const user = raw ? JSON.parse(raw) : null;
-    if (user?.userType === 'qass') return "QASS";
-    return user?.userType === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
+    const brand = localStorage.getItem('pos.selected_brand');
+    if (brand === 'qass') return "QASS";
+    return brand === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
 };
 
 /**
