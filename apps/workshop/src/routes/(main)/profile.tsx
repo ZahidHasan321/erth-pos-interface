@@ -3,8 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import { Badge } from "@repo/ui/badge";
 import { Separator } from "@repo/ui/separator";
+import { ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/rbac";
 
-export const Route = createFileRoute("/$main/profile")({
+export const Route = createFileRoute("/(main)/profile")({
   component: ProfilePage,
   head: () => ({
     meta: [{ title: "Profile" }],
@@ -16,11 +17,6 @@ const ROLE_COLORS: Record<string, string> = {
   admin: "bg-amber-100 text-amber-800 border-amber-200",
   manager: "bg-blue-100 text-blue-800 border-blue-200",
   staff: "bg-slate-100 text-slate-700 border-slate-200",
-};
-
-const DEPARTMENT_LABELS: Record<string, string> = {
-  shop: "Showroom",
-  workshop: "Workshop",
 };
 
 function ProfilePage() {
@@ -35,10 +31,7 @@ function ProfilePage() {
     .toUpperCase()
     .slice(0, 2);
 
-  const roleLabel = user.role
-    ? user.role.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : null;
-
+  const roleLabel = ROLE_LABELS[user.role] ?? user.role;
   const departmentLabel = user.department
     ? (DEPARTMENT_LABELS[user.department] ?? user.department)
     : null;
@@ -62,14 +55,12 @@ function ProfilePage() {
             <h2 className="mt-4 text-lg font-bold">{user.name}</h2>
             <p className="text-sm text-muted-foreground">@{user.username}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-              {roleLabel && (
-                <Badge
-                  variant="outline"
-                  className={ROLE_COLORS[user.role ?? ""] ?? ""}
-                >
-                  {roleLabel}
-                </Badge>
-              )}
+              <Badge
+                variant="outline"
+                className={ROLE_COLORS[user.role] ?? ""}
+              >
+                {roleLabel}
+              </Badge>
               {departmentLabel && (
                 <Badge variant="secondary">{departmentLabel}</Badge>
               )}
@@ -96,7 +87,7 @@ function ProfilePage() {
             <div className="grid gap-px bg-border sm:grid-cols-2">
               <DetailCell label="Full Name" value={user.name} />
               <DetailCell label="Username" value={user.username} />
-              <DetailCell label="Role" value={roleLabel ?? "Not assigned"} />
+              <DetailCell label="Role" value={roleLabel} />
               <DetailCell
                 label="Department"
                 value={departmentLabel ?? "Not assigned"}
@@ -106,37 +97,6 @@ function ProfilePage() {
             </div>
           </div>
 
-          {/* Brand access */}
-          <div className="rounded-xl border bg-card">
-            <div className="border-b px-6 py-4">
-              <h3 className="text-sm font-semibold">Brand Access</h3>
-            </div>
-            <div className="px-6 py-5">
-              <div className="flex flex-wrap gap-2">
-                {user.brands.length > 0 ? (
-                  user.brands.map((brand) => (
-                    <Badge
-                      key={brand}
-                      variant="outline"
-                      className="capitalize"
-                    >
-                      {brand}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    All brands
-                  </span>
-                )}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Currently viewing:{" "}
-                <span className="font-semibold capitalize text-foreground">
-                  {user.userType}
-                </span>
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

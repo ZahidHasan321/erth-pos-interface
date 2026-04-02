@@ -3,8 +3,12 @@ import type { Role, Department } from "@repo/database";
 export interface AuthUser {
   id: string;
   username: string;
+  name: string;
   role: Role;
   department: Department | null;
+  email: string | null;
+  phone: string | null;
+  employee_id: string | null;
 }
 
 type Permission = "full" | "view" | "own" | "none";

@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as mainTeamRouteImport } from './routes/(main)/team'
 import { Route as mainSchedulerRouteImport } from './routes/(main)/scheduler'
 import { Route as mainReceivingRouteImport } from './routes/(main)/receiving'
+import { Route as mainProfileRouteImport } from './routes/(main)/profile'
 import { Route as mainPricingRouteImport } from './routes/(main)/pricing'
 import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
@@ -59,6 +60,11 @@ const mainSchedulerRoute = mainSchedulerRouteImport.update({
 const mainReceivingRoute = mainReceivingRouteImport.update({
   id: '/receiving',
   path: '/receiving',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainProfileRoute = mainProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainPricingRoute = mainPricingRouteImport.update({
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
+  '/profile': typeof mainProfileRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/dispatch': typeof mainDispatchRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
+  '/profile': typeof mainProfileRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/parking': typeof mainParkingRoute
   '/(main)/pricing': typeof mainPricingRoute
+  '/(main)/profile': typeof mainProfileRoute
   '/(main)/receiving': typeof mainReceivingRoute
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
@@ -273,6 +282,7 @@ export interface FileRouteTypes {
     | '/dispatch'
     | '/parking'
     | '/pricing'
+    | '/profile'
     | '/receiving'
     | '/scheduler'
     | '/team'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/dispatch'
     | '/parking'
     | '/pricing'
+    | '/profile'
     | '/receiving'
     | '/scheduler'
     | '/team'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/(main)/dispatch'
     | '/(main)/parking'
     | '/(main)/pricing'
+    | '/(main)/profile'
     | '/(main)/receiving'
     | '/(main)/scheduler'
     | '/(main)/team'
@@ -390,6 +402,13 @@ declare module '@tanstack/react-router' {
       path: '/receiving'
       fullPath: '/receiving'
       preLoaderRoute: typeof mainReceivingRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/profile': {
+      id: '/(main)/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof mainProfileRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/pricing': {
@@ -571,6 +590,7 @@ interface mainRouteRouteChildren {
   mainDispatchRoute: typeof mainDispatchRoute
   mainParkingRoute: typeof mainParkingRoute
   mainPricingRoute: typeof mainPricingRoute
+  mainProfileRoute: typeof mainProfileRoute
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
@@ -595,6 +615,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainDispatchRoute: mainDispatchRoute,
   mainParkingRoute: mainParkingRoute,
   mainPricingRoute: mainPricingRoute,
+  mainProfileRoute: mainProfileRoute,
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,

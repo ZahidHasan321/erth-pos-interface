@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/(auth)/login")({
 
 function LoginPage() {
   const auth = useAuth();
+  const router = useRouter();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
@@ -28,6 +29,7 @@ function LoginPage() {
     setLoading(true);
     try {
       await auth.login({ username, pin });
+      await router.invalidate();
       navigate({ to: "/receiving" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");

@@ -32,14 +32,24 @@ import {
   LogOut,
   LayoutDashboard,
   ChevronDown,
+  ChevronsUpDown,
   TrendingUp,
+  User,
   UserCog,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
-import { Button } from "@repo/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/rbac";
+import { Avatar, AvatarFallback } from "@repo/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@repo/ui/dropdown-menu";
 
 interface WorkshopSidebarProps {
   onLogout: () => void;
@@ -239,13 +249,83 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-2 border-t">
-        <Button variant="ghost" size="sm" onClick={onLogout} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground">
-          <LogOut className="w-4 h-4" aria-hidden="true" />
-          <span className="group-data-[collapsible=icon]:hidden">Logout</span>
-        </Button>
-        {/* Only show collapse trigger on desktop sidebar, not in sheet mode */}
-        {!isMobile && <SidebarTrigger className="w-full" />}
+      <SidebarFooter className="mt-auto border-t pt-2 pb-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  tooltip={authUser?.username ?? "Profile"}
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                      {authUser?.username?.slice(0, 2).toUpperCase() ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate font-semibold capitalize">
+                      {authUser?.username}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {authUser ? ROLE_LABELS[authUser.role] : ""}
+                      {authUser?.department ? ` · ${DEPARTMENT_LABELS[authUser.department]}` : ""}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="top"
+                align="start"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                        {authUser?.username?.slice(0, 2).toUpperCase() ?? "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold capitalize">
+                        {authUser?.username}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {authUser ? ROLE_LABELS[authUser.role] : ""}
+                        {authUser?.department ? ` · ${DEPARTMENT_LABELS[authUser.department]}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/profile">
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onLogout}>
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+          {!isMobile && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Toggle Sidebar">
+                <SidebarTrigger>
+                  <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden="true" />
+                  <span>Toggle Sidebar</span>
+                </SidebarTrigger>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

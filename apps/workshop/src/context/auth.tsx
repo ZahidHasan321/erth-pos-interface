@@ -20,7 +20,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data } = await db
     .from('users')
-    .select('id, username, name, role, department')
+    .select('id, username, name, role, department, email, phone, employee_id')
     .eq('id', userId)
     .single();
 
@@ -28,9 +28,13 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
 
   return {
     id: data.id,
-    username: data.name,
+    username: data.username,
+    name: data.name,
     role: data.role ?? 'staff',
     department: data.department ?? null,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
+    employee_id: data.employee_id ?? null,
   };
 }
 
@@ -105,12 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    setUser({
-      id: result.user.id,
-      username: result.user.name,
-      role: result.user.role ?? 'staff',
-      department: result.user.department ?? null,
-    });
+    const fullUser = await fetchUserFromSession(result.user.id);
+    if (!fullUser) throw new Error('Failed to load user profile');
+    setUser(fullUser);
   };
 
   const logout = async () => {
