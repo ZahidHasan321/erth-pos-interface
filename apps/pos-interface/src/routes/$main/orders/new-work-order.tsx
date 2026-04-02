@@ -182,6 +182,7 @@ function NewWorkOrder() {
         defaultValues: {
             ...customerMeasurementsDefaults,
             measurement_date: new Date().toISOString(), // Set to today for new measurements
+            measurer_id: user?.id ?? (undefined as any),
         },
     });
 
@@ -207,6 +208,7 @@ function NewWorkOrder() {
         defaultValues: {
             ...orderDefaults,
             stitching_price: stitchingPrice,
+            order_taker_id: user?.id ?? undefined,
         },
     });
 
@@ -215,15 +217,16 @@ function NewWorkOrder() {
         measurementsForm.reset({
             ...customerMeasurementsDefaults,
             measurement_date: new Date().toISOString(),
+            measurer_id: user?.id ?? (undefined as any),
         });
         fabricSelectionForm.reset({
             garments: [],
             signature: "",
         });
         shelfForm.reset({ products: [] });
-        OrderForm.reset(orderDefaults);
+        OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
         setIsLoadingOrderData(false);
-    }, [demographicsForm, measurementsForm, fabricSelectionForm, shelfForm, OrderForm]);
+    }, [demographicsForm, measurementsForm, fabricSelectionForm, shelfForm, OrderForm, user?.id]);
 
     // Watch form values
     const checkoutStatus = useWatch({
@@ -295,10 +298,14 @@ function NewWorkOrder() {
             setOrderId(id || null);
             setOrder(formattedOrder);
             // demographicsForm.reset(); // Don't reset demographics as we just filled it
-            measurementsForm.reset();
+            measurementsForm.reset({
+                ...customerMeasurementsDefaults,
+                measurement_date: new Date().toISOString(),
+                measurer_id: user?.id ?? (undefined as any),
+            });
             fabricSelectionForm.reset();
             shelfForm.reset();
-            OrderForm.reset();
+            OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
 
             // Link appointment to this order if started from an appointment
             if (id && linkedAppointment) {
@@ -450,7 +457,7 @@ function NewWorkOrder() {
                         addSavedStep(4);
                     }
                 } else {
-                    OrderForm.reset(orderDefaults);
+                    OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
                 }
 
                 // Wait for measurements check to finish (was running in parallel)
@@ -472,7 +479,7 @@ function NewWorkOrder() {
         } finally {
             setIsLoadingOrderData(false);
         }
-    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep]);
+    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep, user?.id]);
 
     const loadCustomerFresh = React.useCallback((customer: Customer) => {
         resetWorkOrder();
@@ -726,6 +733,8 @@ function NewWorkOrder() {
                 stitchingCharge: data.stitching_charge ?? 0,
                 styleCharge: data.style_charge ?? 0,
                 deliveryCharge: data.delivery_charge ?? 0,
+                expressCharge: data.express_charge ?? 0,
+                soakingCharge: data.soaking_charge ?? 0,
                 shelfCharge: data.shelf_charge ?? 0,
                 homeDelivery: cashierHandlesPayment ? false : data.home_delivery,
                 deliveryDate: order.delivery_date ?? undefined,

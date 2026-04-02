@@ -6,10 +6,19 @@ import {
     recordPaymentTransaction,
     updateOrderDiscount,
     toggleHomeDelivery,
+    collectGarments,
     getRecentCashierOrders,
     searchCashierOrderList,
     getCashierSummary,
+    getEodReport,
+    getEodTransactions,
+    getEodTransactionsPaginated,
+    getRegisterSession,
+    openRegister,
+    closeRegister,
+    addCashMovement,
 } from "@/api/cashier";
+import type { EodTransactionFilters } from "@/api/cashier";
 
 /**
  * Invalidate cashier-related + order queries.
@@ -26,6 +35,7 @@ function invalidateCashierQueries(queryClient: QueryClient, orderId?: number) {
     queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["register-session"], refetchType: "active" });
 }
 
 export function useCashierOrderSearch(query: string) {
@@ -109,6 +119,109 @@ export function useUpdateDiscountMutation() {
         onError: (error) => {
             toast.error(`Discount error: ${error.message}`);
         },
+    });
+}
+
+export function useCollectGarmentsMutation() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: collectGarments,
+        onSuccess: (response, variables) => {
+            if (response.status === "error") {
+                toast.error(`Collection failed: ${response.message}`);
+                return;
+            }
+            toast.success("Garments collected successfully");
+            invalidateCashierQueries(queryClient, variables.orderId);
+        },
+        onError: (error) => {
+            toast.error(`Collection error: ${error.message}`);
+        },
+    });
+}
+
+export function useEodReport(dateFrom: string, dateTo: string) {
+    return useQuery({
+        queryKey: ["eod-report", dateFrom, dateTo],
+        queryFn: () => getEodReport(dateFrom, dateTo),
+        staleTime: 1000 * 60 * 5,
+    });
+}
+
+export function useEodTransactions(dateFrom: string, dateTo: string) {
+    return useQuery({
+        queryKey: ["eod-transactions", dateFrom, dateTo],
+        queryFn: () => getEodTransactions(dateFrom, dateTo),
+        staleTime: 1000 * 60 * 5,
+    });
+}
+
+export function useEodTransactionsPaginated(dateFrom: string, dateTo: string, filters: EodTransactionFilters) {
+    return useQuery({
+        queryKey: ["eod-transactions-paginated", dateFrom, dateTo, filters],
+        queryFn: () => getEodTransactionsPaginated(dateFrom, dateTo, filters),
+        staleTime: 1000 * 30,
+        placeholderData: (prev) => prev, // keep previous data while loading next page
+    });
+}
+
+// ── Register Session ──────────────────────────────────────────────────────────
+
+export function useRegisterSession() {
+    return useQuery({
+        queryKey: ["register-session"],
+        queryFn: () => getRegisterSession(),
+        staleTime: 1000 * 30,
+    });
+}
+
+export function useOpenRegisterMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: openRegister,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to open register: ${response.message}`);
+                return;
+            }
+            toast.success("Register opened");
+            queryClient.invalidateQueries({ queryKey: ["register-session"] });
+        },
+        onError: (error) => toast.error(`Error: ${error.message}`),
+    });
+}
+
+export function useCloseRegisterMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: closeRegister,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to close register: ${response.message}`);
+                return;
+            }
+            toast.success("Register closed");
+            queryClient.invalidateQueries({ queryKey: ["register-session"] });
+            queryClient.invalidateQueries({ queryKey: ["eod-report"], refetchType: "active" });
+        },
+        onError: (error) => toast.error(`Error: ${error.message}`),
+    });
+}
+
+export function useAddCashMovementMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: addCashMovement,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed: ${response.message}`);
+                return;
+            }
+            toast.success("Cash movement recorded");
+            queryClient.invalidateQueries({ queryKey: ["register-session"] });
+        },
+        onError: (error) => toast.error(`Error: ${error.message}`),
     });
 }
 

@@ -10,6 +10,11 @@ export interface AuthUser {
   name: string
   brands: string[]
   userType: BrandName
+  role: string | null
+  department: string | null
+  email: string | null
+  phone: string | null
+  employee_id: string | null
 }
 
 export interface AuthContext {
@@ -28,7 +33,7 @@ const BRAND_KEY = 'pos.selected_brand'
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data } = await db
     .from('users')
-    .select('id, username, name, brands')
+    .select('id, username, name, brands, role, department, email, phone, employee_id')
     .eq('id', userId)
     .single()
 
@@ -41,6 +46,11 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
     name: data.name,
     brands: data.brands ?? [],
     userType: savedBrand || 'erth',
+    role: data.role,
+    department: data.department,
+    email: data.email,
+    phone: data.phone,
+    employee_id: data.employee_id,
   }
 }
 
@@ -131,6 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: result.user.name,
       brands: userBrands,
       userType: credentials.userType,
+      role: result.user.role ?? null,
+      department: result.user.department ?? null,
+      email: result.user.email ?? null,
+      phone: result.user.phone ?? null,
+      employee_id: result.user.employee_id ?? null,
     })
   }
 

@@ -180,26 +180,30 @@ export function OrderSummaryAndPaymentForm({
     return fabricSelections.filter((fabric) => fabric.express).length;
   }, [fabricSelections]);
 
-  const hasAnyExpressDelivery = expressGarmentCount > 0;
+  const soakingGarmentCount = React.useMemo(() => {
+    return fabricSelections.filter((fabric) => fabric.soaking).length;
+  }, [fabricSelections]);
 
   React.useEffect(() => {
-    let newDeliveryCharge = 0;
-    if (home_delivery) {
-      newDeliveryCharge += getPrice("HOME_DELIVERY") || 5;
-    }
-
-    if (expressGarmentCount > 0) {
-      newDeliveryCharge += expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2);
-    }
+    const newDeliveryCharge = home_delivery ? (getPrice("HOME_DELIVERY") || 5) : 0;
+    const newExpressCharge = expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2);
+    const newSoakingCharge = soakingGarmentCount * (getPrice("SOAKING_CHARGE") || 0);
 
     form.setValue("delivery_charge", newDeliveryCharge, { shouldDirty: false });
-  }, [home_delivery, expressGarmentCount, form, getPrice]);
+    form.setValue("express_charge", newExpressCharge, { shouldDirty: false });
+    form.setValue("soaking_charge", newSoakingCharge, { shouldDirty: false });
+  }, [home_delivery, expressGarmentCount, soakingGarmentCount, form, getPrice]);
 
   // Pricing logic
-  const totalDue = (Number(fabric_charge) || 0) + 
-                   (Number(stitching_charge) || 0) + 
-                   (Number(style_charge) || 0) + 
-                   (Number(delivery_charge) || 0) + 
+  const express_charge = useWatch({ control: form.control, name: "express_charge" });
+  const soaking_charge = useWatch({ control: form.control, name: "soaking_charge" });
+
+  const totalDue = (Number(fabric_charge) || 0) +
+                   (Number(stitching_charge) || 0) +
+                   (Number(style_charge) || 0) +
+                   (Number(delivery_charge) || 0) +
+                   (Number(express_charge) || 0) +
+                   (Number(soaking_charge) || 0) +
                    (Number(shelf_charge) || 0);
 
   const toggleDiscountType = (type: OrderSchemaType["discount_type"]) => {
@@ -250,15 +254,17 @@ export function OrderSummaryAndPaymentForm({
   const finalAmount = totalDue - safeDiscountValue;
   const balance = finalAmount - safePaid;
 
-  // Advance = 50% of stitching charge + full fabric + full shelf + full style + full delivery
+  // Advance = 50% of stitching charge + full fabric + full shelf + full style + full delivery + full express + full soaking
   const advance = React.useMemo(() => {
     const halfStitching = (Number(stitching_charge) || 0) * 0.5;
     const fullFabric = Number(fabric_charge) || 0;
     const fullShelf = Number(shelf_charge) || 0;
     const fullStyle = Number(style_charge) || 0;
     const fullDelivery = Number(delivery_charge) || 0;
-    return parseFloat((halfStitching + fullFabric + fullShelf + fullStyle + fullDelivery).toFixed(3));
-  }, [stitching_charge, fabric_charge, shelf_charge, style_charge, delivery_charge]);
+    const fullExpress = Number(express_charge) || 0;
+    const fullSoaking = Number(soaking_charge) || 0;
+    return parseFloat((halfStitching + fullFabric + fullShelf + fullStyle + fullDelivery + fullExpress + fullSoaking).toFixed(3));
+  }, [stitching_charge, fabric_charge, shelf_charge, style_charge, delivery_charge, express_charge, soaking_charge]);
 
   React.useEffect(() => {
     if (form.getValues("advance") !== advance) {
@@ -448,6 +454,18 @@ export function OrderSummaryAndPaymentForm({
                       <div className="flex justify-between py-0.5">
                         <span className="text-muted-foreground">Delivery</span>
                         <span className="font-medium tabular-nums">{Number(delivery_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {Number(express_charge) > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Express{expressGarmentCount > 1 ? ` (${expressGarmentCount})` : ""}</span>
+                        <span className="font-medium tabular-nums">{Number(express_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {Number(soaking_charge) > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Soaking{soakingGarmentCount > 1 ? ` (${soakingGarmentCount})` : ""}</span>
+                        <span className="font-medium tabular-nums">{Number(soaking_charge).toFixed(3)} KWD</span>
                       </div>
                     )}
                     {Number(shelf_charge) > 0 && (
@@ -1048,12 +1066,18 @@ export function OrderSummaryAndPaymentForm({
                   )}
                   <div className="flex justify-between">
                     <span>Home Delivery</span>
-                    <span>{(home_delivery ? (getPrice("HOME_DELIVERY") || 5) : 0).toFixed(3)} KWD</span>
+                    <span>{Number(delivery_charge || 0).toFixed(3)} KWD</span>
                   </div>
-                  {(order_type === "WORK" || hasAnyExpressDelivery) && (
+                  {Number(express_charge) > 0 && (
                     <div className="flex justify-between">
-                      <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount} x ${(getPrice("EXPRESS_SURCHARGE") || 2).toFixed(3)})` : ""}</span>
-                      <span>{(expressGarmentCount > 0 ? expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2) : 0).toFixed(3)} KWD</span>
+                      <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount})` : ""}</span>
+                      <span>{Number(express_charge).toFixed(3)} KWD</span>
+                    </div>
+                  )}
+                  {Number(soaking_charge) > 0 && (
+                    <div className="flex justify-between">
+                      <span>Soaking{soakingGarmentCount > 1 ? ` (${soakingGarmentCount})` : ""}</span>
+                      <span>{Number(soaking_charge).toFixed(3)} KWD</span>
                     </div>
                   )}
                   <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>

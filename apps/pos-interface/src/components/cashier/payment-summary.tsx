@@ -1,6 +1,5 @@
 import { Separator } from "@repo/ui/separator";
 import { Tag } from "lucide-react";
-import { usePricing } from "@/hooks/usePricing";
 
 const DISCOUNT_TYPE_LABELS: Record<string, string> = {
     flat: "Flat",
@@ -16,8 +15,6 @@ interface PaymentSummaryProps {
 }
 
 export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSummaryProps) {
-    const { getPrice } = usePricing();
-
     const orderTotal = Number(order?.order_total) || 0;
     const totalPaid = Number(order?.paid) || 0;
     const remainingBalance = orderTotal - totalPaid;
@@ -25,6 +22,8 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
     const discountPercentage = Number(order?.discount_percentage) || 0;
     const discountType = order?.discount_type;
     const deliveryCharge = Number(order?.delivery_charge) || 0;
+    const expressCharge = Number(order?.express_charge) || 0;
+    const soakingCharge = Number(order?.soaking_charge) || 0;
     const fabricCharge = Number(order?.fabric_charge) || 0;
     const stitchingCharge = Number(order?.stitching_charge) || 0;
     const styleCharge = Number(order?.style_charge) || 0;
@@ -32,16 +31,10 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
 
     const isWorkOrder = order?.order_type === "WORK";
 
-    // Express: count express garments and compute charge from DB price
-    const orderGarments = Array.isArray(order?.garments) ? order.garments : [];
-    const expressGarmentCount = orderGarments.filter((g: any) => g.express).length;
-    const expressSurcharge = getPrice("EXPRESS_SURCHARGE") || 2;
-    const expressCharge = expressGarmentCount * expressSurcharge;
-
     const subtotal = orderTotal + discountValue;
 
-    // Advance = 50% stitching + 100% (fabric + style + delivery + shelf)
-    const advance = (stitchingCharge * 0.5) + fabricCharge + styleCharge + deliveryCharge + shelfCharge;
+    // Advance = 50% stitching + 100% everything else
+    const advance = (stitchingCharge * 0.5) + fabricCharge + styleCharge + deliveryCharge + expressCharge + soakingCharge + shelfCharge;
 
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
@@ -73,13 +66,19 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                         <span className="tabular-nums">{fmt(deliveryCharge)} KD</span>
                     </div>
                 )}
-                {(expressCharge > 0) && (
+                {expressCharge > 0 && (
                     <div className="flex justify-between text-muted-foreground">
-                        <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount} x ${fmt(expressSurcharge)})` : ""}</span>
+                        <span>Express</span>
                         <span className="tabular-nums">{fmt(expressCharge)} KD</span>
                     </div>
                 )}
-                {(shelfCharge > 0) && (
+                {soakingCharge > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                        <span>Soaking</span>
+                        <span className="tabular-nums">{fmt(soakingCharge)} KD</span>
+                    </div>
+                )}
+                {shelfCharge > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Shelf Items</span>
                         <span className="tabular-nums">{fmt(shelfCharge)} KD</span>

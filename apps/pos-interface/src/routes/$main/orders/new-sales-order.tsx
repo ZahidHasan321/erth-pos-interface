@@ -275,7 +275,9 @@ function NewSalesOrder() {
             notes: data.notes ?? undefined,
             total: data.order_total,
             shelf_charge: data.shelf_charge,
-            deliveryCharge: data.delivery_charge
+            deliveryCharge: data.delivery_charge,
+            expressCharge: data.express_charge ?? 0,
+            soakingCharge: data.soaking_charge ?? 0,
         };
 
         if (orderId) {

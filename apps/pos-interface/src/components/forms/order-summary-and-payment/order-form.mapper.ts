@@ -42,6 +42,8 @@ export function mapOrderToFormValues(order: Order): OrderSchema {
         stitching_charge: parseNumeric(order.stitching_charge) ?? 0,
         style_charge: parseNumeric(order.style_charge) ?? 0,
         delivery_charge: parseNumeric(order.delivery_charge) ?? 0,
+        express_charge: parseNumeric(order.express_charge) ?? 0,
+        soaking_charge: parseNumeric(order.soaking_charge) ?? 0,
         shelf_charge: parseNumeric(order.shelf_charge) ?? 0,
         advance: parseNumeric(order.advance),
         paid: parseNumeric(order.paid),

@@ -79,6 +79,8 @@ function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): P
     if (schema.stitching_charge !== undefined) order.stitching_charge = schema.stitching_charge;
     if (schema.style_charge !== undefined) order.style_charge = schema.style_charge;
     if (schema.delivery_charge !== undefined) order.delivery_charge = schema.delivery_charge;
+    if (schema.express_charge !== undefined) order.express_charge = schema.express_charge;
+    if (schema.soaking_charge !== undefined) order.soaking_charge = schema.soaking_charge;
     if (schema.shelf_charge !== undefined) order.shelf_charge = schema.shelf_charge;
 
     if (schema.advance !== undefined) order.advance = schema.advance;
@@ -308,6 +310,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 stitchingCharge?: number;
                 styleCharge?: number;
                 deliveryCharge?: number;
+                expressCharge?: number;
+                soakingCharge?: number;
                 shelfCharge?: number;
                 homeDelivery?: boolean;
                 deliveryDate?: string;

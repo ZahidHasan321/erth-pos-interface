@@ -113,6 +113,9 @@ export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
 export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refund"]);
 
+export const registerSessionStatusEnum = pgEnum("register_session_status", ["open", "closed"]);
+export const cashMovementTypeEnum = pgEnum("cash_movement_type", ["cash_in", "cash_out"]);
+
 export const appointmentStatusEnum = pgEnum("appointment_status", ["scheduled", "completed", "cancelled", "no_show"]);
 
 export const fabricTypeEnum = pgEnum("fabric_type", ["summer", "winter"]);
@@ -327,6 +330,8 @@ export const orders = pgTable("orders", {
 
     // Charges & Totals
     delivery_charge: numeric("delivery_charge", { precision: 10, scale: 3 }),
+    express_charge: numeric("express_charge", { precision: 10, scale: 3 }),
+    soaking_charge: numeric("soaking_charge", { precision: 10, scale: 3 }),
     shelf_charge: numeric("shelf_charge", { precision: 10, scale: 3 }),
     order_total: numeric("order_total", { precision: 10, scale: 3 }),
 
@@ -467,6 +472,13 @@ export const garments = pgTable("garments", {
     completion_time: timestamp("completion_time", { withTimezone: true }),
     quality_check_ratings: jsonb("quality_check_ratings"),
     trip_history: jsonb("trip_history").$type<TripHistoryEntry[]>(),
+
+    // Refund tracking (which price components have been refunded)
+    refunded_fabric: boolean("refunded_fabric").default(false),
+    refunded_stitching: boolean("refunded_stitching").default(false),
+    refunded_style: boolean("refunded_style").default(false),
+    refunded_express: boolean("refunded_express").default(false),
+    refunded_soaking: boolean("refunded_soaking").default(false),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
 }));
@@ -556,6 +568,7 @@ export const orderShelfItems = pgTable("order_shelf_items", {
     shelf_id: integer("shelf_id").references(() => shelf.id).notNull(),
     quantity: integer("quantity").default(1),
     unit_price: numeric("unit_price", { precision: 10, scale: 3 }),
+    refunded_qty: integer("refunded_qty").default(0),
 });
 
 // --- 8. PAYMENT TRANSACTIONS ---
@@ -569,9 +582,11 @@ export const paymentTransactions = pgTable("payment_transactions", {
     cashier_id: uuid("cashier_id").references(() => users.id),
     transaction_type: transactionTypeEnum("transaction_type").notNull(),
     refund_reason: text("refund_reason"),
+    refund_items: jsonb("refund_items"),  // [{garment_id, fabric, stitching, style, amount}, {shelf_item_id, quantity, amount}]
     created_at: timestamp("created_at").defaultNow(),
 }, (t) => ({
     orderIdx: index("payment_transactions_order_idx").on(t.order_id),
+    createdAtIdx: index("payment_transactions_created_at_idx").on(t.created_at),
 }));
 
 // --- 9. APPOINTMENTS (Home Visit Bookings — SAKKBA) ---
@@ -619,6 +634,38 @@ export const appointments = pgTable("appointments", {
     dateIdx: index("appointments_date_idx").on(t.appointment_date),
     assignedIdx: index("appointments_assigned_idx").on(t.assigned_to),
     customerIdx: index("appointments_customer_idx").on(t.customer_id),
+}));
+
+// --- 10. REGISTER SESSIONS ---
+export const registerSessions = pgTable("register_sessions", {
+    id: serial("id").primaryKey(),
+    brand: brandEnum("brand").notNull(),
+    date: date("date").notNull(),
+    status: registerSessionStatusEnum("status").notNull().default("open"),
+    opened_by: uuid("opened_by").references(() => users.id).notNull(),
+    opened_at: timestamp("opened_at").notNull().defaultNow(),
+    opening_float: numeric("opening_float", { precision: 10, scale: 3 }).notNull(),
+    closed_by: uuid("closed_by").references(() => users.id),
+    closed_at: timestamp("closed_at"),
+    closing_counted_cash: numeric("closing_counted_cash", { precision: 10, scale: 3 }),
+    expected_cash: numeric("expected_cash", { precision: 10, scale: 3 }),
+    variance: numeric("variance", { precision: 10, scale: 3 }),
+    closing_notes: text("closing_notes"),
+}, (t) => ({
+    brandDateIdx: uniqueIndex("register_sessions_brand_date_idx").on(t.brand, t.date),
+}));
+
+// --- 11. REGISTER CASH MOVEMENTS ---
+export const registerCashMovements = pgTable("register_cash_movements", {
+    id: serial("id").primaryKey(),
+    register_session_id: integer("register_session_id").references(() => registerSessions.id).notNull(),
+    type: cashMovementTypeEnum("type").notNull(),
+    amount: numeric("amount", { precision: 10, scale: 3 }).notNull(),
+    reason: text("reason").notNull(),
+    performed_by: uuid("performed_by").references(() => users.id).notNull(),
+    created_at: timestamp("created_at").defaultNow(),
+}, (t) => ({
+    sessionIdx: index("cash_movements_session_idx").on(t.register_session_id),
 }));
 
 // --- RELATIONS ---
@@ -671,6 +718,17 @@ export const appointmentsRelations = relations(appointments, ({ one }) => ({
     assignee: one(users, { fields: [appointments.assigned_to], references: [users.id], relationName: "appointment_assignee" }),
     booker: one(users, { fields: [appointments.booked_by], references: [users.id], relationName: "appointment_booker" }),
     order: one(orders, { fields: [appointments.order_id], references: [orders.id] }),
+}));
+
+export const registerSessionsRelations = relations(registerSessions, ({ one, many }) => ({
+    openedBy: one(users, { fields: [registerSessions.opened_by], references: [users.id], relationName: "register_opener" }),
+    closedBy: one(users, { fields: [registerSessions.closed_by], references: [users.id], relationName: "register_closer" }),
+    cashMovements: many(registerCashMovements),
+}));
+
+export const registerCashMovementsRelations = relations(registerCashMovements, ({ one }) => ({
+    session: one(registerSessions, { fields: [registerCashMovements.register_session_id], references: [registerSessions.id] }),
+    performedBy: one(users, { fields: [registerCashMovements.performed_by], references: [users.id] }),
 }));
 
 // --- TYPE EXPORTS ---
@@ -741,3 +799,8 @@ export type NewAppointment = InferInsertModel<typeof appointments>;
 
 export type UserSession = InferSelectModel<typeof userSessions>;
 export type NewUserSession = InferInsertModel<typeof userSessions>;
+
+export type RegisterSession = InferSelectModel<typeof registerSessions>;
+export type NewRegisterSession = InferInsertModel<typeof registerSessions>;
+export type RegisterCashMovement = InferSelectModel<typeof registerCashMovements>;
+export type NewRegisterCashMovement = InferInsertModel<typeof registerCashMovements>;

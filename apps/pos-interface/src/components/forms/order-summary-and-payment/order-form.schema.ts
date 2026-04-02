@@ -33,6 +33,8 @@ export const orderSchema = z.object({
   stitching_charge: z.number().default(0),
   style_charge: z.number().default(0),
   delivery_charge: z.number().default(0),
+  express_charge: z.number().default(0),
+  soaking_charge: z.number().default(0),
   shelf_charge: z.number().default(0),
 
   advance: z.number().optional().nullable(),
@@ -103,6 +105,8 @@ export const orderDefaults: OrderSchema = {
   stitching_charge: 0,
   style_charge: 0,
   delivery_charge: 0,
+  express_charge: 0,
+  soaking_charge: 0,
   shelf_charge: 0,
 
   advance: undefined,

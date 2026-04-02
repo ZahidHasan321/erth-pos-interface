@@ -2,6 +2,7 @@ import { Link, useMatchRoute, useParams } from "@tanstack/react-router";
 import * as React from "react";
 import {
   ChevronDown,
+  ChevronsUpDown,
   LayoutDashboard,
   ShoppingCart,
   Users,
@@ -20,6 +21,7 @@ import {
   History,
   Banknote,
   CalendarDays,
+  User,
 } from "lucide-react";
 
 import {
@@ -44,6 +46,17 @@ import { BRAND_NAMES } from "@/lib/constants";
 import { LogOut, Home } from "lucide-react";
 import { IconRulerMeasure } from "@tabler/icons-react";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
+import { useAuth } from "@/context/auth";
+import { Avatar, AvatarFallback } from "@repo/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@repo/ui/dropdown-menu";
 
 const data = {
   navTop: [
@@ -304,6 +317,20 @@ export function AppSidebar({
   const { isMobile } = useSidebar();
   const { data: dispatchedOrders } = useDispatchedOrders();
   const receivingCount = dispatchedOrders?.length ?? 0;
+  const { user } = useAuth();
+
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
+
+  const roleLabel = user?.role
+    ? user.role.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : null;
 
   return (
     <Sidebar {...props}>
@@ -413,18 +440,76 @@ export function AppSidebar({
       <SidebarFooter className="mt-auto border-t border-sidebar-border pt-2 pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Switch Brand">
-              <Link to="/home">
-                <Home className="h-4 w-4" aria-hidden="true" />
-                <span>Switch Brand</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={onLogout} tooltip="Logout">
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              <span>Logout</span>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  tooltip={user?.name ?? "Profile"}
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate font-semibold">
+                      {user?.name}
+                    </span>
+                    {roleLabel && (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {roleLabel}
+                      </span>
+                    )}
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="top"
+                align="start"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">
+                        {user?.name}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {user?.username}
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link to={`${mainSegment}/profile`}>
+                      <User className="h-4 w-4" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/home">
+                      <Home className="h-4 w-4" />
+                      Switch Brand
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onLogout}>
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
           {!isMobile && (
             <SidebarMenuItem>

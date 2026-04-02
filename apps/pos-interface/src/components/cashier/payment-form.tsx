@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +18,7 @@ import { usePaymentMutation } from "@/hooks/useCashier";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import type { RefundItem } from "@/api/cashier";
 
 const paymentSchema = z.object({
     amount: z.coerce.number().positive("Amount must be greater than 0"),
@@ -39,10 +40,15 @@ interface PaymentFormProps {
     collectGarmentIds?: Set<string>;
     onCollected?: () => void;
     refundOnly?: boolean;
+    isRefund?: boolean;
+    onRefundModeChange?: (isRefund: boolean) => void;
+    refundItems?: RefundItem[];
+    refundTotal?: number;
 }
 
-export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected, refundOnly }: PaymentFormProps) {
-    const [isRefund, setIsRefund] = useState(refundOnly ?? false);
+export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected, refundOnly, isRefund: controlledRefund, onRefundModeChange, refundItems, refundTotal }: PaymentFormProps) {
+    const [internalRefund, setInternalRefund] = useState(refundOnly ?? false);
+    const isRefund = controlledRefund ?? internalRefund;
     const paymentMutation = usePaymentMutation();
 
     const { data: employeesRaw } = useQuery({
@@ -69,13 +75,35 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
         },
     });
 
+    // Auto-fill refund amount when refund items change
+    useEffect(() => {
+        if (isRefund && refundTotal && refundTotal > 0) {
+            form.setValue("amount", Number(refundTotal.toFixed(3)));
+        }
+    }, [isRefund, refundTotal, form]);
+
+    const setRefundMode = (val: boolean) => {
+        if (onRefundModeChange) onRefundModeChange(val);
+        else setInternalRefund(val);
+    };
+
     const onSubmit = (values: PaymentFormValues) => {
-        if (isRefund && (!values.refund_reason || values.refund_reason.trim() === "")) {
-            form.setError("refund_reason", { message: "Refund reason is required" });
-            return;
+        if (isRefund) {
+            if (!values.refund_reason || values.refund_reason.trim() === "") {
+                form.setError("refund_reason", { message: "Refund reason is required" });
+                return;
+            }
+            if (!refundItems || refundItems.length === 0) {
+                form.setError("amount", { message: "Select items to refund" });
+                return;
+            }
+            if (values.amount > totalPaid) {
+                form.setError("amount", { message: `Cannot refund more than paid (${totalPaid.toFixed(3)})` });
+                return;
+            }
         }
 
-        if (!values.payment_ref_no?.trim()) {
+        if (values.payment_type !== "cash" && !values.payment_ref_no?.trim()) {
             form.setError("payment_ref_no", { message: "Reference number is required" });
             return;
         }
@@ -95,12 +123,13 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
                 transactionType: isRefund ? "refund" : "payment",
                 refundReason: isRefund ? values.refund_reason : undefined,
                 collectGarmentIds: garmentIds,
+                refundItems: isRefund && refundItems && refundItems.length > 0 ? refundItems : undefined,
             },
             {
                 onSuccess: (response) => {
                     if (response.status === "success") {
                         form.reset();
-                        setIsRefund(false);
+                        setRefundMode(refundOnly ?? false);
                         if (garmentIds && onCollected) onCollected();
                     }
                 },
@@ -117,14 +146,22 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
                         className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md transition-all duration-300 ease-in-out ${isRefund ? "translate-x-[calc(100%+2px)] bg-red-100 ring-1 ring-red-200" : "translate-x-0 bg-background shadow-sm ring-1 ring-border/50"}`}
                         style={{ left: 2 }}
                     />
-                    <button type="button" onClick={() => setIsRefund(false)}
+                    <button type="button" onClick={() => setRefundMode(false)}
                         className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${!isRefund ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                         Payment
                     </button>
-                    <button type="button" onClick={() => setIsRefund(true)}
+                    <button type="button" onClick={() => setRefundMode(true)}
                         className={`relative z-10 flex-1 text-xs font-semibold py-1.5 rounded-md cursor-pointer transition-colors duration-300 ${isRefund ? "text-red-700" : "text-muted-foreground hover:text-foreground"}`}>
                         Refund
                     </button>
+                </div>
+            )}
+
+            {/* Refund items summary */}
+            {isRefund && refundItems && refundItems.length > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium">
+                    <Package className="h-3 w-3" />
+                    {refundItems.length} item{refundItems.length !== 1 ? "s" : ""} selected — {Number((refundTotal || 0).toFixed(3))} KWD
                 </div>
             )}
 
@@ -139,6 +176,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
                         {...form.register("amount")}
                         placeholder="0.000"
                         className="w-28 text-right font-bold tabular-nums border-2 border-border"
+                        readOnly={isRefund && !!refundItems && refundItems.length > 0}
                     />
                     {!isRefund && totalPaid === 0 && advance != null && advance > 0 && (
                         <button type="button" onClick={() => form.setValue("amount", Number(advance.toFixed(3)))}

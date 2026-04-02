@@ -140,12 +140,14 @@ export function useOrderHistory({
         const stitchingCharge = parseFloat(mergedOrder.stitching_charge?.toString() || "0");
         const styleCharge = parseFloat(mergedOrder.style_charge?.toString() || "0");
         const deliveryCharge = parseFloat(mergedOrder.delivery_charge?.toString() || "0");
+        const expressCharge = parseFloat(mergedOrder.express_charge?.toString() || "0");
+        const soakingCharge = parseFloat(mergedOrder.soaking_charge?.toString() || "0");
         const shelfCharge = parseFloat(mergedOrder.shelf_charge?.toString() || "0");
         const discountValue = parseFloat(mergedOrder.discount_value?.toString() || "0");
 
         const total = mergedOrder.order_total != null
           ? parseFloat(mergedOrder.order_total.toString())
-          : (fabricCharge + stitchingCharge + styleCharge + deliveryCharge + shelfCharge - discountValue);
+          : (fabricCharge + stitchingCharge + styleCharge + deliveryCharge + expressCharge + soakingCharge + shelfCharge - discountValue);
 
         const paid = parseFloat(mergedOrder.paid?.toString() || "0");
 

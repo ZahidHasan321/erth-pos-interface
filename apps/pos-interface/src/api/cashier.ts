@@ -1,16 +1,22 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { db } from "@/lib/db";
-import { getBrand } from "./orders";
+
+/** Cashier is ERTH-only — no SAKKBA or QASS orders */
+const CASHIER_BRAND = "ERTH" as const;
+
+function toLocalDateStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 
 const CASHIER_ORDER_QUERY = `
     *,
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
-    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express),
-    shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, shelf:shelf(type)),
-    payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, created_at, cashier_id, cashier:users(name))
+    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking),
+    shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type)),
+    payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
 `;
 
 // Same as above but with !inner join on work_orders (for filtering by invoice_number)
@@ -109,7 +115,7 @@ export interface CashierSummary {
 }
 
 export const getCashierSummary = async (brand?: string): Promise<{ status: 'success'; data: CashierSummary }> => {
-    const currentBrand = brand || getBrand();
+    const currentBrand = brand || CASHIER_BRAND;
     // Pass local date to handle timezone correctly (Supabase runs in UTC)
     const now = new Date();
     const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -124,7 +130,7 @@ export const getCashierSummary = async (brand?: string): Promise<{ status: 'succ
 export type CashierFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sales";
 
 export const getRecentCashierOrders = async (filter: CashierFilter = "all", brand?: string): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
-    const currentBrand = brand || getBrand();
+    const currentBrand = brand || CASHIER_BRAND;
 
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -191,7 +197,7 @@ export const searchOrderForCashier = async (
     query: string,
     brand?: string
 ): Promise<ApiResponse<Order>> => {
-    const currentBrand = brand || getBrand();
+    const currentBrand = brand || CASHIER_BRAND;
     const trimmed = query.trim();
 
     if (!trimmed) {
@@ -254,7 +260,7 @@ export const searchCashierOrderList = async (
     query: string,
     brand?: string
 ): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
-    const currentBrand = brand || getBrand();
+    const currentBrand = brand || CASHIER_BRAND;
     const trimmed = query.trim();
     if (!trimmed) return { status: 'success', data: [] };
 
@@ -310,6 +316,18 @@ export const getPaymentTransactions = async (orderId: number) => {
     return { status: 'success' as const, data: data || [] };
 };
 
+export interface RefundItem {
+    garment_id?: string;
+    fabric?: boolean;
+    stitching?: boolean;
+    style?: boolean;
+    express?: boolean;
+    soaking?: boolean;
+    shelf_item_id?: number;
+    quantity?: number;
+    amount: number;
+}
+
 export const recordPaymentTransaction = async (params: {
     orderId: number;
     amount: number;
@@ -320,6 +338,7 @@ export const recordPaymentTransaction = async (params: {
     transactionType: 'payment' | 'refund';
     refundReason?: string;
     collectGarmentIds?: string[];
+    refundItems?: RefundItem[];
 }) => {
     const { data, error } = await db.rpc('record_payment_transaction', {
         p_order_id: params.orderId,
@@ -331,6 +350,7 @@ export const recordPaymentTransaction = async (params: {
         p_transaction_type: params.transactionType,
         p_refund_reason: params.refundReason || null,
         p_collect_garment_ids: params.collectGarmentIds || null,
+        p_refund_items: params.refundItems ? JSON.stringify(params.refundItems) : null,
     });
 
     if (error) {
@@ -374,6 +394,278 @@ export const toggleHomeDelivery = async (params: {
     if (error) {
         return { status: 'error' as const, message: error.message };
     }
+    return { status: 'success' as const, data };
+};
+
+export const collectGarments = async (params: {
+    orderId: number;
+    garmentIds: string[];
+}) => {
+    const { data, error } = await db.rpc('collect_garments', {
+        p_order_id: params.orderId,
+        p_garment_ids: params.garmentIds,
+    });
+
+    if (error) {
+        return { status: 'error' as const, message: error.message };
+    }
+    return { status: 'success' as const, data };
+};
+
+// ── End of Day Report ──────────────────────────────────────────────────────
+
+export interface EodPaymentMethodBreakdown {
+    payment_type: string;
+    total: number;
+    count: number;
+    refund_total: number;
+}
+
+export interface EodDailyData {
+    date: string;
+    collected: number;
+    refunded: number;
+    payment_count: number;
+    refund_count: number;
+}
+
+export interface EodCashierData {
+    cashier_name: string | null;
+    collected: number;
+    refunded: number;
+    transaction_count: number;
+}
+
+export interface EodReportSummary {
+    total_collected: number;
+    total_refunded: number;
+    net_revenue: number;
+    transaction_count: number;
+    order_count: number;
+    work_count: number;
+    sales_count: number;
+    total_billed: number;
+    outstanding: number;
+    avg_order_value: number;
+    by_payment_method: EodPaymentMethodBreakdown[];
+    daily: EodDailyData[];
+    by_cashier: EodCashierData[];
+}
+
+export interface EodTransaction {
+    id: number;
+    order_id: number;
+    amount: number;
+    payment_type: string;
+    payment_ref_no: string | null;
+    payment_note: string | null;
+    transaction_type: 'payment' | 'refund';
+    refund_reason: string | null;
+    created_at: string;
+    cashier_name: string | null;
+    customer_name: string | null;
+    customer_phone: string | null;
+    order_type: string | null;
+    order_total: number | null;
+    order_paid: number | null;
+    invoice_number: number | null;
+}
+
+export interface EodTransactionFilters {
+    search?: string;
+    paymentType?: string;
+    transactionType?: string;
+    orderType?: string;
+    page?: number;
+    pageSize?: number;
+}
+
+export interface EodTransactionPage {
+    transactions: EodTransaction[];
+    total_count: number;
+    page: number;
+    page_size: number;
+}
+
+export const getEodReport = async (
+    dateFrom: string,
+    dateTo: string,
+    brand?: string,
+): Promise<{ status: 'success'; data: EodReportSummary }> => {
+    const currentBrand = brand || CASHIER_BRAND;
+    const { data, error } = await db.rpc('get_eod_report', {
+        p_brand: currentBrand,
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+    });
+
+    if (error) {
+        console.error('Error fetching EOD report:', error.message);
+        return {
+            status: 'success',
+            data: {
+                total_collected: 0, total_refunded: 0, net_revenue: 0, transaction_count: 0,
+                order_count: 0, work_count: 0, sales_count: 0, total_billed: 0,
+                outstanding: 0, avg_order_value: 0, by_payment_method: [],
+                daily: [], by_cashier: [],
+            },
+        };
+    }
+
+    return { status: 'success', data: data as EodReportSummary };
+};
+
+/** Fetch ALL transactions for print/PDF — uses the paginated RPC with a large page size */
+export const getEodTransactions = async (
+    dateFrom: string,
+    dateTo: string,
+    brand?: string,
+): Promise<{ status: 'success'; data: EodTransaction[] }> => {
+    const currentBrand = brand || CASHIER_BRAND;
+    const { data, error } = await db.rpc('get_eod_transactions_paginated', {
+        p_brand: currentBrand,
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_page: 1,
+        p_page_size: 10000,
+    });
+    if (error) {
+        console.error('Error fetching EOD transactions:', error.message);
+        return { status: 'success', data: [] };
+    }
+    return { status: 'success', data: (data as EodTransactionPage).transactions };
+};
+
+/** Fetch paginated + filtered transactions for the table view */
+export const getEodTransactionsPaginated = async (
+    dateFrom: string,
+    dateTo: string,
+    filters: EodTransactionFilters = {},
+    brand?: string,
+): Promise<{ status: 'success'; data: EodTransactionPage }> => {
+    const currentBrand = brand || CASHIER_BRAND;
+    const { data, error } = await db.rpc('get_eod_transactions_paginated', {
+        p_brand: currentBrand,
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_page: filters.page || 1,
+        p_page_size: filters.pageSize || 25,
+        p_search: filters.search || null,
+        p_payment_type: filters.paymentType || null,
+        p_transaction_type: filters.transactionType || null,
+        p_order_type: filters.orderType || null,
+    });
+    if (error) {
+        console.error('Error fetching EOD transactions:', error.message);
+        return { status: 'success', data: { transactions: [], total_count: 0, page: 1, page_size: 25 } };
+    }
+    return { status: 'success', data: data as EodTransactionPage };
+};
+
+// ── Register Session ──────────────────────────────────────────────────────────
+
+export interface CashMovementData {
+    id: number;
+    type: "cash_in" | "cash_out";
+    amount: number;
+    reason: string;
+    performed_by_name: string;
+    created_at: string;
+}
+
+export interface RegisterSessionData {
+    id: number;
+    brand: string;
+    date: string;
+    status: "open" | "closed";
+    opened_by: string;
+    opened_by_name: string;
+    opened_at: string;
+    opening_float: number;
+    closed_by: string | null;
+    closed_by_name: string | null;
+    closed_at: string | null;
+    closing_counted_cash: number | null;
+    expected_cash: number | null;
+    variance: number | null;
+    closing_notes: string | null;
+    cash_movements: CashMovementData[];
+}
+
+export interface CloseRegisterResult {
+    status: string;
+    opening_float: number;
+    cash_payments: number;
+    cash_refunds: number;
+    cash_in: number;
+    cash_out: number;
+    expected_cash: number;
+    counted_cash: number;
+    variance: number;
+}
+
+export const getRegisterSession = async (brand?: string, date?: string) => {
+    const currentBrand = brand || CASHIER_BRAND;
+    const localDate = date || toLocalDateStr(new Date());
+    const { data, error } = await db.rpc('get_register_session', {
+        p_brand: currentBrand,
+        p_date: localDate,
+    });
+    if (error) {
+        console.error('Error fetching register session:', error.message);
+        return { status: 'success' as const, data: null };
+    }
+    return { status: 'success' as const, data: data as RegisterSessionData | null };
+};
+
+export const openRegister = async (params: {
+    userId: string;
+    openingFloat: number;
+    brand?: string;
+}) => {
+    const currentBrand = params.brand || CASHIER_BRAND;
+    const localDate = toLocalDateStr(new Date());
+    const { data, error } = await db.rpc('open_register', {
+        p_brand: currentBrand,
+        p_date: localDate,
+        p_user_id: params.userId,
+        p_opening_float: params.openingFloat,
+    });
+    if (error) return { status: 'error' as const, message: error.message };
+    return { status: 'success' as const, data };
+};
+
+export const closeRegister = async (params: {
+    sessionId: number;
+    userId: string;
+    countedCash: number;
+    notes?: string;
+}) => {
+    const { data, error } = await db.rpc('close_register', {
+        p_session_id: params.sessionId,
+        p_user_id: params.userId,
+        p_counted_cash: params.countedCash,
+        p_notes: params.notes || null,
+    });
+    if (error) return { status: 'error' as const, message: error.message };
+    return { status: 'success' as const, data: data as CloseRegisterResult };
+};
+
+export const addCashMovement = async (params: {
+    sessionId: number;
+    type: "cash_in" | "cash_out";
+    amount: number;
+    reason: string;
+    userId: string;
+}) => {
+    const { data, error } = await db.rpc('add_cash_movement', {
+        p_session_id: params.sessionId,
+        p_type: params.type,
+        p_amount: params.amount,
+        p_reason: params.reason,
+        p_user_id: params.userId,
+    });
+    if (error) return { status: 'error' as const, message: error.message };
     return { status: 'success' as const, data };
 };
 

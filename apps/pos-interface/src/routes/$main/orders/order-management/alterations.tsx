@@ -1,3 +1,4 @@
+import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -9,6 +10,9 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { Truck, Package, RotateCcw } from "lucide-react";
 import type { Garment, Order } from "@repo/database";
+import { useState } from "react";
+import { SvgFormOverlay } from "@/components/alteration/svg-form-overlay";
+import { defaultTemplateFieldLayout } from "@/components/alteration/field-layout";
 
 export const Route = createFileRoute("/$main/orders/order-management/alterations")({
   component: AlterationsPage,
@@ -67,7 +71,22 @@ async function sendToWorkshop(garmentId: string, currentTripNumber: number): Pro
   if (error) throw new Error(error.message);
 }
 
+const createEmptyValues = () =>
+  Object.fromEntries(defaultTemplateFieldLayout.map((f) => [f.id, ""])) as Record<string, string>;
+
 function AlterationsPage() {
+  const [expandedGarment, setExpandedGarment] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState<Record<string, string>>(createEmptyValues);
+
+  const toggleForm = (garmentId: string) => {
+    if (expandedGarment === garmentId) {
+      setExpandedGarment(null);
+    } else {
+      setExpandedGarment(garmentId);
+      setFormValues(createEmptyValues());
+    }
+  };
+
   const qc = useQueryClient();
   const { data: garments = [], isLoading } = useQuery({
     queryKey: ["alteration-garments"],
@@ -156,8 +175,8 @@ function AlterationsPage() {
                 </CardHeader>
                 <CardContent className="p-0 divide-y">
                   {items.map((g, gi) => (
+                  <React.Fragment key={g.id}>
                     <div
-                      key={g.id}
                       className="flex items-center justify-between px-4 py-3 hover:bg-muted/10 transition-colors animate-fade-in"
                       style={{ animationDelay: `${(oi * 3 + gi) * 25}ms` }}
                     >
@@ -194,16 +213,37 @@ function AlterationsPage() {
                         )}
                       </div>
 
-                      <Button
-                        size="sm"
-                        className="gap-2"
-                        disabled={sendMut.isPending}
-                        onClick={() => sendMut.mutate({ id: g.id, trip: g.trip_number ?? 1 })}
-                      >
-                        <Truck className="w-3.5 h-3.5" />
-                        Send to Workshop
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={expandedGarment === g.id ? "secondary" : "outline"}
+                          onClick={() => toggleForm(g.id)}
+                        >
+                          Alteration Form
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          disabled={sendMut.isPending}
+                          onClick={() => sendMut.mutate({ id: g.id, trip: g.trip_number ?? 1 })}
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          Send to Workshop
+                        </Button>
+                      </div>
                     </div>
+                    {expandedGarment === g.id && (
+                      <div className="px-4 py-4 border-t bg-muted/5">
+                        <SvgFormOverlay
+                          values={formValues}
+                          onValueChange={(fieldId, value) =>
+                            setFormValues((prev) => ({ ...prev, [fieldId]: value }))
+                          }
+                          className="max-w-[480px]"
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
                   ))}
                 </CardContent>
               </Card>

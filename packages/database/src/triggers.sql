@@ -54,6 +54,8 @@ BEGIN
     referral_code = (p_checkout_details->>'referralCode'),
     order_total = (p_checkout_details->>'orderTotal')::decimal,
     delivery_charge = (p_checkout_details->>'deliveryCharge')::decimal,
+    express_charge = (p_checkout_details->>'expressCharge')::decimal,
+    soaking_charge = (p_checkout_details->>'soakingCharge')::decimal,
     shelf_charge = (p_checkout_details->>'shelfCharge')::decimal,
     notes = COALESCE(p_checkout_details->>'notes', notes),
     order_date = NOW()
@@ -170,6 +172,8 @@ BEGIN
     order_total = (p_checkout_details->>'total')::decimal,
     shelf_charge = (p_checkout_details->>'shelfCharge')::decimal,
     delivery_charge = (p_checkout_details->>'deliveryCharge')::decimal,
+    express_charge = (p_checkout_details->>'expressCharge')::decimal,
+    soaking_charge = (p_checkout_details->>'soakingCharge')::decimal,
     order_date = NOW(),
     order_type = 'SALES'
   WHERE id = p_order_id
@@ -512,7 +516,8 @@ CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_cashier_id UUID DEFAULT NULL,
   p_transaction_type TEXT DEFAULT 'payment',
   p_refund_reason TEXT DEFAULT NULL,
-  p_collect_garment_ids UUID[] DEFAULT NULL
+  p_collect_garment_ids UUID[] DEFAULT NULL,
+  p_refund_items JSONB DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -521,6 +526,9 @@ DECLARE
   v_transaction RECORD;
   v_garment_id UUID;
   v_collected_count INT := 0;
+  v_refund_item JSONB;
+  v_shelf_item_id INT;
+  v_refund_qty INT;
 BEGIN
   -- Validate order exists
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
@@ -538,17 +546,17 @@ BEGIN
     IF v_current_paid - ABS(p_amount) < 0 THEN
       RAISE EXCEPTION 'Refund amount (%) exceeds total paid (%)', ABS(p_amount), v_current_paid;
     END IF;
-
-    -- Bump invoice revision on refund
-    UPDATE work_orders
-    SET invoice_revision = COALESCE(invoice_revision, 0) + 1
-    WHERE order_id = p_order_id;
   END IF;
+
+  -- Bump invoice revision on every payment/refund recording
+  UPDATE work_orders
+  SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+  WHERE order_id = p_order_id;
 
   -- Insert the transaction (trigger will sync orders.paid)
   INSERT INTO payment_transactions (
     order_id, amount, payment_type, payment_ref_no, payment_note,
-    cashier_id, transaction_type, refund_reason
+    cashier_id, transaction_type, refund_reason, refund_items
   ) VALUES (
     p_order_id,
     CASE WHEN p_transaction_type = 'refund' THEN -ABS(p_amount) ELSE ABS(p_amount) END,
@@ -557,7 +565,8 @@ BEGIN
     p_payment_note,
     p_cashier_id,
     p_transaction_type::transaction_type,
-    p_refund_reason
+    p_refund_reason,
+    p_refund_items
   )
   RETURNING * INTO v_transaction;
 
@@ -576,6 +585,31 @@ BEGIN
 
       IF FOUND THEN
         v_collected_count := v_collected_count + 1;
+      END IF;
+    END LOOP;
+  END IF;
+
+  -- Mark refunded items on garments and shelf items
+  IF p_transaction_type = 'refund' AND p_refund_items IS NOT NULL AND jsonb_array_length(p_refund_items) > 0 THEN
+    FOR v_refund_item IN SELECT * FROM jsonb_array_elements(p_refund_items)
+    LOOP
+      IF v_refund_item ? 'garment_id' THEN
+        UPDATE garments
+        SET
+          refunded_fabric = refunded_fabric OR COALESCE((v_refund_item->>'fabric')::boolean, false),
+          refunded_stitching = refunded_stitching OR COALESCE((v_refund_item->>'stitching')::boolean, false),
+          refunded_style = refunded_style OR COALESCE((v_refund_item->>'style')::boolean, false),
+          refunded_express = refunded_express OR COALESCE((v_refund_item->>'express')::boolean, false),
+          refunded_soaking = refunded_soaking OR COALESCE((v_refund_item->>'soaking')::boolean, false)
+        WHERE id = (v_refund_item->>'garment_id')::uuid
+          AND order_id = p_order_id;
+      ELSIF v_refund_item ? 'shelf_item_id' THEN
+        v_shelf_item_id := (v_refund_item->>'shelf_item_id')::int;
+        v_refund_qty := COALESCE((v_refund_item->>'quantity')::int, 0);
+        UPDATE order_shelf_items
+        SET refunded_qty = LEAST(COALESCE(refunded_qty, 0) + v_refund_qty, COALESCE(quantity, 0))
+        WHERE id = v_shelf_item_id
+          AND order_id = p_order_id;
       END IF;
     END LOOP;
   END IF;
@@ -627,10 +661,9 @@ BEGIN
       order_total = v_new_total
   WHERE id = p_order_id;
 
-  -- Update work_orders flag + bump invoice revision
+  -- Update work_orders flag (revision bumped only on payment/refund recording)
   UPDATE work_orders
-  SET home_delivery = p_home_delivery,
-      invoice_revision = COALESCE(invoice_revision, 0) + 1
+  SET home_delivery = p_home_delivery
   WHERE order_id = p_order_id;
 
   -- Update all garments on this order
@@ -644,6 +677,48 @@ BEGIN
     'home_delivery', p_home_delivery,
     'delivery_charge', v_new_delivery,
     'order_total', v_new_total
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11b. RPC: Collect garments without payment (for already-paid orders)
+CREATE OR REPLACE FUNCTION collect_garments(
+  p_order_id INT,
+  p_garment_ids UUID[]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_garment_id UUID;
+  v_collected_count INT := 0;
+BEGIN
+  -- Validate order exists and is not cancelled/draft
+  IF NOT EXISTS (SELECT 1 FROM orders WHERE id = p_order_id AND checkout_status = 'confirmed') THEN
+    RAISE EXCEPTION 'Order % not found or not confirmed', p_order_id;
+  END IF;
+
+  IF p_garment_ids IS NULL OR array_length(p_garment_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'No garments specified for collection';
+  END IF;
+
+  FOREACH v_garment_id IN ARRAY p_garment_ids
+  LOOP
+    UPDATE garments
+    SET
+      fulfillment_type = 'collected',
+      piece_stage = 'completed'
+    WHERE id = v_garment_id
+      AND order_id = p_order_id
+      AND location = 'shop'
+      AND piece_stage IN ('brova_trialed', 'awaiting_trial', 'ready_for_pickup');
+
+    IF FOUND THEN
+      v_collected_count := v_collected_count + 1;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'collected_count', v_collected_count,
+    'order_id', p_order_id
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -693,10 +768,7 @@ BEGIN
     order_total = v_final_total
   WHERE id = p_order_id;
 
-  -- Bump invoice revision on discount change
-  UPDATE work_orders
-  SET invoice_revision = COALESCE(invoice_revision, 0) + 1
-  WHERE order_id = p_order_id;
+  -- Revision bumped only on payment/refund recording, not on discount change
 
   RETURN jsonb_build_object(
     'status', 'success',
@@ -1323,3 +1395,369 @@ DROP POLICY IF EXISTS "appointments_update" ON appointments;
 CREATE POLICY "appointments_update" ON appointments FOR UPDATE USING (
   (is_manager_or_above() OR assigned_to = get_my_user_id()) AND (brand IS NULL OR can_access_brand(brand::text))
 );
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- END OF DAY REPORT
+-- ═══════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION get_eod_report(p_brand TEXT, p_date_from DATE, p_date_to DATE)
+RETURNS JSONB AS $$
+DECLARE
+  v_order_stats JSONB;
+  v_tx_stats JSONB;
+  v_by_method JSONB;
+  v_daily JSONB;
+  v_by_cashier JSONB;
+BEGIN
+  -- 1. Order-level aggregates for the date range
+  SELECT jsonb_build_object(
+    'order_count',     COUNT(*),
+    'work_count',      COUNT(*) FILTER (WHERE order_type = 'WORK'),
+    'sales_count',     COUNT(*) FILTER (WHERE order_type = 'SALES'),
+    'total_billed',    COALESCE(SUM(order_total::decimal), 0),
+    'outstanding',     COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0),
+    'avg_order_value', COALESCE(
+      CASE WHEN COUNT(*) > 0 THEN ROUND(SUM(order_total::decimal) / COUNT(*), 3) ELSE 0 END,
+      0
+    )
+  ) INTO v_order_stats
+  FROM orders
+  WHERE brand = p_brand::brand
+    AND checkout_status = 'confirmed'
+    AND order_date >= p_date_from::timestamp
+    AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+
+  -- 2. Transaction-level aggregates (actual money movement)
+  SELECT jsonb_build_object(
+    'total_collected', COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
+    'total_refunded',  COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0),
+    'net_revenue',
+      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0) -
+      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0),
+    'transaction_count', COUNT(*)
+  ) INTO v_tx_stats
+  FROM payment_transactions pt
+  JOIN orders o ON o.id = pt.order_id
+  WHERE o.brand = p_brand::brand
+    AND o.checkout_status = 'confirmed'
+    AND pt.created_at >= p_date_from::timestamp
+    AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp;
+
+  -- 3. Breakdown by payment method
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_by_method
+  FROM (
+    SELECT
+      pt.payment_type,
+      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0) AS total,
+      COUNT(*) FILTER (WHERE pt.transaction_type = 'payment') AS count,
+      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0) AS refund_total
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    WHERE o.brand = p_brand::brand
+      AND o.checkout_status = 'confirmed'
+      AND pt.created_at >= p_date_from::timestamp
+      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+    GROUP BY pt.payment_type
+    ORDER BY total DESC
+  ) sub;
+
+  -- 4. Daily breakdown (for trend charts)
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*) ORDER BY sub.date), '[]'::jsonb) INTO v_daily
+  FROM (
+    SELECT
+      pt.created_at::date AS date,
+      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0) AS collected,
+      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0) AS refunded,
+      COUNT(*) FILTER (WHERE pt.transaction_type = 'payment') AS payment_count,
+      COUNT(*) FILTER (WHERE pt.transaction_type = 'refund') AS refund_count
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    WHERE o.brand = p_brand::brand
+      AND o.checkout_status = 'confirmed'
+      AND pt.created_at >= p_date_from::timestamp
+      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+    GROUP BY pt.created_at::date
+    ORDER BY pt.created_at::date
+  ) sub;
+
+  -- 5. Per-cashier breakdown
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_by_cashier
+  FROM (
+    SELECT
+      u.name AS cashier_name,
+      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0) AS collected,
+      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0) AS refunded,
+      COUNT(*) AS transaction_count
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    LEFT JOIN users u ON u.id = pt.cashier_id
+    WHERE o.brand = p_brand::brand
+      AND o.checkout_status = 'confirmed'
+      AND pt.created_at >= p_date_from::timestamp
+      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+    GROUP BY u.name
+    ORDER BY collected DESC
+  ) sub;
+
+  RETURN v_order_stats || v_tx_stats
+    || jsonb_build_object('by_payment_method', v_by_method)
+    || jsonb_build_object('daily', v_daily)
+    || jsonb_build_object('by_cashier', v_by_cashier);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- REGISTER SESSION MANAGEMENT
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- Get today's register session (or null)
+CREATE OR REPLACE FUNCTION get_register_session(p_brand TEXT, p_date DATE DEFAULT CURRENT_DATE)
+RETURNS JSONB AS $$
+DECLARE
+  v_session JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'id', rs.id,
+    'brand', rs.brand,
+    'date', rs.date,
+    'status', rs.status,
+    'opened_by', rs.opened_by,
+    'opened_by_name', ou.name,
+    'opened_at', rs.opened_at,
+    'opening_float', rs.opening_float,
+    'closed_by', rs.closed_by,
+    'closed_by_name', cu.name,
+    'closed_at', rs.closed_at,
+    'closing_counted_cash', rs.closing_counted_cash,
+    'expected_cash', rs.expected_cash,
+    'variance', rs.variance,
+    'closing_notes', rs.closing_notes,
+    'cash_movements', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', cm.id, 'type', cm.type, 'amount', cm.amount,
+        'reason', cm.reason, 'performed_by_name', pu.name, 'created_at', cm.created_at
+      ) ORDER BY cm.created_at)
+      FROM register_cash_movements cm
+      LEFT JOIN users pu ON pu.id = cm.performed_by
+      WHERE cm.register_session_id = rs.id
+    ), '[]'::jsonb)
+  ) INTO v_session
+  FROM register_sessions rs
+  LEFT JOIN users ou ON ou.id = rs.opened_by
+  LEFT JOIN users cu ON cu.id = rs.closed_by
+  WHERE rs.brand = p_brand::brand AND rs.date = p_date;
+
+  RETURN COALESCE(v_session, 'null'::jsonb);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Open register for the day
+CREATE OR REPLACE FUNCTION open_register(p_brand TEXT, p_date DATE, p_user_id UUID, p_opening_float DECIMAL)
+RETURNS JSONB AS $$
+DECLARE
+  v_id INT;
+BEGIN
+  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND date = p_date) THEN
+    RAISE EXCEPTION 'Register already opened for % on %', p_brand, p_date;
+  END IF;
+
+  INSERT INTO register_sessions (brand, date, opened_by, opening_float, status)
+  VALUES (p_brand::brand, p_date, p_user_id, p_opening_float, 'open')
+  RETURNING id INTO v_id;
+
+  RETURN jsonb_build_object('id', v_id, 'status', 'open');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Close register — computes expected cash server-side
+CREATE OR REPLACE FUNCTION close_register(
+  p_session_id INT,
+  p_user_id UUID,
+  p_counted_cash DECIMAL,
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_session RECORD;
+  v_cash_payments DECIMAL;
+  v_cash_refunds DECIMAL;
+  v_cash_in DECIMAL;
+  v_cash_out DECIMAL;
+  v_expected DECIMAL;
+  v_variance DECIMAL;
+BEGIN
+  SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Register session not found or already closed';
+  END IF;
+
+  -- Sum cash payments/refunds for the day (use timestamp range to avoid timezone issues)
+  SELECT
+    COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
+    COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0)
+  INTO v_cash_payments, v_cash_refunds
+  FROM payment_transactions pt
+  JOIN orders o ON o.id = pt.order_id
+  WHERE o.brand = v_session.brand
+    AND pt.payment_type = 'cash'
+    AND pt.created_at >= (v_session.date)::timestamp
+    AND pt.created_at < (v_session.date + INTERVAL '1 day')::timestamp;
+
+  -- Sum cash movements
+  SELECT
+    COALESCE(SUM(amount) FILTER (WHERE type = 'cash_in'), 0),
+    COALESCE(SUM(amount) FILTER (WHERE type = 'cash_out'), 0)
+  INTO v_cash_in, v_cash_out
+  FROM register_cash_movements
+  WHERE register_session_id = p_session_id;
+
+  v_expected := v_session.opening_float + v_cash_payments - v_cash_refunds + v_cash_in - v_cash_out;
+  v_variance := p_counted_cash - v_expected;
+
+  UPDATE register_sessions SET
+    status = 'closed',
+    closed_by = p_user_id,
+    closed_at = NOW(),
+    closing_counted_cash = p_counted_cash,
+    expected_cash = v_expected,
+    variance = v_variance,
+    closing_notes = p_notes
+  WHERE id = p_session_id;
+
+  RETURN jsonb_build_object(
+    'status', 'closed',
+    'opening_float', v_session.opening_float,
+    'cash_payments', v_cash_payments,
+    'cash_refunds', v_cash_refunds,
+    'cash_in', v_cash_in,
+    'cash_out', v_cash_out,
+    'expected_cash', v_expected,
+    'counted_cash', p_counted_cash,
+    'variance', v_variance
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add a cash movement (cash in or cash out)
+CREATE OR REPLACE FUNCTION add_cash_movement(
+  p_session_id INT,
+  p_type TEXT,
+  p_amount DECIMAL,
+  p_reason TEXT,
+  p_user_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_id INT;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM register_sessions WHERE id = p_session_id AND status = 'open') THEN
+    RAISE EXCEPTION 'Register session not found or not open';
+  END IF;
+
+  INSERT INTO register_cash_movements (register_session_id, type, amount, reason, performed_by)
+  VALUES (p_session_id, p_type::cash_movement_type, p_amount, p_reason, p_user_id)
+  RETURNING id INTO v_id;
+
+  RETURN jsonb_build_object('id', v_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- PAGINATED EOD TRANSACTIONS
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION get_eod_transactions_paginated(
+  p_brand TEXT,
+  p_date_from DATE,
+  p_date_to DATE,
+  p_page INT DEFAULT 1,
+  p_page_size INT DEFAULT 25,
+  p_search TEXT DEFAULT NULL,
+  p_payment_type TEXT DEFAULT NULL,
+  p_transaction_type TEXT DEFAULT NULL,
+  p_order_type TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_offset INT;
+  v_total BIGINT;
+  v_transactions JSONB;
+  v_search TEXT;
+BEGIN
+  v_offset := (GREATEST(p_page, 1) - 1) * p_page_size;
+  v_search := NULLIF(TRIM(COALESCE(p_search, '')), '');
+
+  -- Count total matching
+  SELECT COUNT(*) INTO v_total
+  FROM payment_transactions pt
+  JOIN orders o ON o.id = pt.order_id
+  LEFT JOIN customers c ON c.id = o.customer_id
+  LEFT JOIN work_orders wo ON wo.order_id = o.id
+  WHERE o.brand = p_brand::brand
+    AND o.checkout_status = 'confirmed'
+    AND pt.created_at >= p_date_from::timestamp
+    AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+    AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)
+    AND (p_transaction_type IS NULL OR pt.transaction_type = p_transaction_type::transaction_type)
+    AND (p_order_type IS NULL OR o.order_type = p_order_type::order_type)
+    AND (v_search IS NULL OR
+      o.id::text = v_search OR
+      wo.invoice_number::text = v_search OR
+      pt.payment_ref_no ILIKE '%' || v_search || '%' OR
+      c.name % v_search OR
+      c.phone ILIKE '%' || v_search || '%'
+    );
+
+  -- Get paginated results
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb)
+  INTO v_transactions
+  FROM (
+    SELECT
+      pt.id,
+      pt.order_id,
+      pt.amount,
+      pt.payment_type::text,
+      pt.payment_ref_no,
+      pt.payment_note,
+      pt.transaction_type::text,
+      pt.refund_reason,
+      pt.created_at,
+      u.name AS cashier_name,
+      c.name AS customer_name,
+      c.phone AS customer_phone,
+      o.order_type::text,
+      o.order_total,
+      o.paid AS order_paid,
+      wo.invoice_number
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    LEFT JOIN users u ON u.id = pt.cashier_id
+    LEFT JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN work_orders wo ON wo.order_id = o.id
+    WHERE o.brand = p_brand::brand
+      AND o.checkout_status = 'confirmed'
+      AND pt.created_at >= p_date_from::timestamp
+      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+      AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)
+      AND (p_transaction_type IS NULL OR pt.transaction_type = p_transaction_type::transaction_type)
+      AND (p_order_type IS NULL OR o.order_type = p_order_type::order_type)
+      AND (v_search IS NULL OR
+        o.id::text = v_search OR
+        wo.invoice_number::text = v_search OR
+        pt.payment_ref_no ILIKE '%' || v_search || '%' OR
+        c.name % v_search OR
+        c.phone ILIKE '%' || v_search || '%'
+      )
+    ORDER BY pt.created_at DESC
+    LIMIT p_page_size
+    OFFSET v_offset
+  ) sub;
+
+  RETURN jsonb_build_object(
+    'transactions', v_transactions,
+    'total_count', v_total,
+    'page', p_page,
+    'page_size', p_page_size
+  );
+END;
+$$ LANGUAGE plpgsql;

@@ -19,6 +19,7 @@ import {
     useCashierOrderListSearch,
     useCashierSummary,
     useToggleHomeDeliveryMutation,
+    useCollectGarmentsMutation,
 } from "@/hooks/useCashier";
 import type { CashierOrderListItem, CashierSummary } from "@/api/cashier";
 import { PaymentForm } from "@/components/cashier/payment-form";
@@ -26,7 +27,10 @@ import { PaymentHistory } from "@/components/cashier/payment-history";
 import { PaymentSummary } from "@/components/cashier/payment-summary";
 import { DiscountControls } from "@/components/cashier/discount-controls";
 import { GarmentCollection } from "@/components/cashier/garment-collection";
+import { RefundItemSelector } from "@/components/cashier/refund-item-selector";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
+import { DonutChart } from "@/components/charts/donut-chart";
+import { usePricing } from "@/hooks/usePricing";
 import { updateCustomer } from "@/api/customers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,6 +38,7 @@ import { Label } from "@repo/ui/label";
 import { Textarea } from "@repo/ui/textarea";
 import HomeDeliveryIcon from "@/assets/home_delivery.png";
 import PickUpIcon from "@/assets/pickup.png";
+import { RegisterGate } from "./register-gate";
 
 const PAGE_SIZE = 15;
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
@@ -131,7 +136,7 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
                 </div>
                 <div className="w-16 shrink-0">
                     <span className="font-bold text-sm tabular-nums">#{item.id}</span>
-                    {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}{item.invoice_revision ? `-R${item.invoice_revision}` : ""}</p>}
+                    {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}</p>}
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base truncate leading-tight">{item.customer_name || "Unknown"}</p>
@@ -182,112 +187,6 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
                 </div>
             </div>
         </button>
-    );
-}
-
-// ── Donut Chart ─────────────────────────────────────────────────────────────
-function DonutChart({ segments, size = 120, strokeWidth = 14, center, summaryLine, hideLegend }: {
-    segments: { value: number; color: string; label: string; amount: string }[];
-    size?: number;
-    strokeWidth?: number;
-    center?: { label: string; value: string };
-    summaryLine?: { label: string; amount: string };
-    hideLegend?: boolean;
-}) {
-    const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-    const [mounted, setMounted] = useState(false);
-    const pad = 6;
-    const svgSize = size + pad * 2;
-    const cx = svgSize / 2;
-    const cy = svgSize / 2;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const total = segments.reduce((s, seg) => s + seg.value, 0);
-
-    useEffect(() => {
-        const raf = requestAnimationFrame(() => setMounted(true));
-        return () => cancelAnimationFrame(raf);
-    }, []);
-
-    if (total === 0) return null;
-
-    let accumulated = 0;
-    const arcs = segments.filter(s => s.value > 0).map((seg, origIdx) => {
-        const pct = seg.value / total;
-        const offset = circumference * (1 - accumulated) + circumference * 0.25;
-        accumulated += pct;
-        return { ...seg, origIdx, pct, dashArray: `${circumference * pct} ${circumference * (1 - pct)}`, dashOffset: offset };
-    });
-
-    const hovered = hoveredIdx !== null ? arcs.find(a => a.origIdx === hoveredIdx) : null;
-
-    return (
-        <div className="flex flex-col items-center gap-2.5">
-            <div className="relative" style={{ width: size, height: size }}>
-                <svg width={svgSize} height={svgSize} className="-rotate-90" style={{ overflow: "visible", margin: -pad }}>
-                    <circle cx={cx} cy={cy} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth - 2} className="text-muted/20" />
-                    {arcs.map((arc, i) => (
-                        <circle key={i} cx={cx} cy={cy} r={radius} fill="none"
-                            stroke={arc.color}
-                            strokeWidth={hoveredIdx === arc.origIdx ? strokeWidth + 5 : strokeWidth}
-                            strokeLinecap="round"
-                            strokeDasharray={mounted ? arc.dashArray : `0 ${circumference}`}
-                            strokeDashoffset={arc.dashOffset}
-                            onMouseEnter={() => setHoveredIdx(arc.origIdx)}
-                            onMouseLeave={() => setHoveredIdx(null)}
-                            onTouchStart={(e) => { e.stopPropagation(); setHoveredIdx(hoveredIdx === arc.origIdx ? null : arc.origIdx); }}
-                            className="cursor-pointer"
-                            style={{
-                                transition: `stroke-dasharray 800ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 150}ms, stroke-width 300ms ease`,
-                            }} />
-                    ))}
-                </svg>
-                {/* Center text */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={mounted ? { animation: "cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) 400ms both" } : { opacity: 0 }}>
-                    {hovered && !hideLegend ? (
-                        <>
-                            <span className="text-lg font-bold tabular-nums leading-tight transition-colors duration-200" style={{ color: hovered.color }}>{Math.round(hovered.pct * 100)}%</span>
-                            <span className="text-[10px] text-muted-foreground leading-tight">{hovered.label}</span>
-                            <span className="text-[10px] font-semibold tabular-nums leading-tight">{hovered.amount}</span>
-                        </>
-                    ) : center ? (
-                        <>
-                            <span className="text-xl font-bold tabular-nums leading-tight">{center.value}</span>
-                            <span className="text-[10px] text-muted-foreground leading-tight">{center.label}</span>
-                        </>
-                    ) : null}
-                </div>
-                {/* Floating tooltip */}
-                {hideLegend && hovered && hovered.label && (
-                    <div className="absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none"
-                        style={{ top: size + 4, animation: "cashier-pop 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both" }}>
-                        <div className="w-2 h-2 bg-foreground rotate-45 mx-auto -mb-1" />
-                        <div className="bg-foreground text-background text-[10px] font-semibold px-2.5 py-1 rounded-md shadow-lg whitespace-nowrap tabular-nums">
-                            <span style={{ color: hovered.color === "#3730a3" ? "#a5b4fc" : "#fcd34d" }}>{hovered.label}</span> {hovered.amount}
-                        </div>
-                    </div>
-                )}
-            </div>
-            {/* Legend — hidden when all labels are empty or hideLegend is set */}
-            {!hideLegend && (arcs.some(a => a.label) || summaryLine) && (
-                <div className="flex flex-col items-center gap-1" style={mounted ? { animation: "cashier-number-count 400ms cubic-bezier(0.2, 0, 0, 1) 600ms both" } : { opacity: 0 }}>
-                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
-                        {arcs.filter(a => a.label).map((arc, i) => (
-                            <div key={i} className="flex items-center gap-1.5 text-xs">
-                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: arc.color }} />
-                                <span className="text-muted-foreground">{arc.label}</span>
-                                <span className="font-bold tabular-nums">{arc.amount}</span>
-                            </div>
-                        ))}
-                    </div>
-                    {summaryLine && (
-                        <div className="text-[11px] text-muted-foreground pt-0.5">
-                            {summaryLine.label}: <span className="font-bold text-foreground tabular-nums">{summaryLine.amount}</span>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
     );
 }
 
@@ -592,6 +491,14 @@ function DeliveryAndAddress({ order, isHomeDelivery, isOrderCompleted, toggleDel
 
 // ── Shared Cashier Body ─────────────────────────────────────────────────────
 export function CashierBody() {
+    return (
+        <RegisterGate>
+            <CashierTerminalContent />
+        </RegisterGate>
+    );
+}
+
+function CashierTerminalContent() {
     const [listSearchInput, setListSearchInput] = useState("");
     const [listSearchQuery, setListSearchQuery] = useState("");
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -657,6 +564,8 @@ export function CashierBody() {
     }, [transactions]);
 
     const toggleDeliveryMutation = useToggleHomeDeliveryMutation();
+    const { getPrice } = usePricing();
+    const collectGarmentsMutation = useCollectGarmentsMutation();
 
     const isCancelled = order?.checkout_status === "cancelled";
     const isOrderCompleted = order?.order_phase === "completed";
@@ -673,6 +582,18 @@ export function CashierBody() {
     }, [serverHomeDelivery, optimisticDelivery]);
 
     const [collectGarmentIds, setCollectGarmentIds] = useState<Set<string>>(new Set());
+    const [isRefundMode, setIsRefundMode] = useState(false);
+    const [refundItems, setRefundItems] = useState<import("@/api/cashier").RefundItem[]>([]);
+    const [refundTotal, setRefundTotal] = useState(0);
+
+    const handleRefundModeChange = (val: boolean) => {
+        setIsRefundMode(val);
+        if (!val) {
+            // Clear refund state when switching back to payment mode
+            setRefundItems([]);
+            setRefundTotal(0);
+        }
+    };
 
     const garments = Array.isArray(order?.garments) ? order.garments : [];
     const shelfItems = Array.isArray(order?.shelf_items) ? order.shelf_items : [];
@@ -711,8 +632,10 @@ export function CashierBody() {
         const fabric = Number((order as any)?.fabric_charge) || 0;
         const style = Number((order as any)?.style_charge) || 0;
         const delivery = Number((order as any)?.delivery_charge) || 0;
+        const express = Number((order as any)?.express_charge) || 0;
+        const soaking = Number((order as any)?.soaking_charge) || 0;
         const shelf = Number((order as any)?.shelf_charge) || 0;
-        return parseFloat(((stitching * 0.5) + fabric + style + delivery + shelf).toFixed(3));
+        return parseFloat(((stitching * 0.5) + fabric + style + delivery + express + soaking + shelf).toFixed(3));
     }, [order]);
 
     // ── Order Detail ────────────────────────────────────────────────────────
@@ -762,10 +685,11 @@ export function CashierBody() {
                                 {/* Order details — compact inline */}
                                 <div className="flex items-center gap-2.5 flex-wrap text-xs bg-muted/40 rounded-md px-2.5 py-1.5">
                                     <span className="flex items-center gap-1 font-bold tabular-nums"><Hash className="h-3 w-3 text-muted-foreground" />{order.id}</span>
-                                    {order.invoice_number && <span className="flex items-center gap-1 tabular-nums text-muted-foreground"><Receipt className="h-3 w-3" />INV {order.invoice_number}{order.invoice_revision ? `-R${order.invoice_revision}` : ""}</span>}
+                                    {order.invoice_number && <span className="flex items-center gap-1 tabular-nums text-muted-foreground"><Receipt className="h-3 w-3" />INV {order.invoice_number}</span>}
                                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-border">{order.order_type === "WORK" ? "Work" : "Sales"}</span>
                                     {order.order_phase && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-secondary/10 text-secondary">{ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase}</span>}
                                     {isCancelled && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive">Cancelled</span>}
+                                    {(order as any).campaign?.name && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">{(order as any).campaign.name}</span>}
                                     {order.delivery_date && <span className="flex items-center gap-1 text-muted-foreground ml-auto tabular-nums"><CalendarDays className="h-3 w-3" />{shortDateFmt.format(new Date(order.delivery_date))}</span>}
                                 </div>
                             </div>
@@ -781,7 +705,7 @@ export function CashierBody() {
                                 />
                             )}
 
-                            {(hasGarments || hasShelfItems) && (
+                            {(hasGarments || hasShelfItems) && !isRefundMode && (
                                 <div className={`grid grid-cols-1 ${hasGarments && hasShelfItems ? "xl:grid-cols-2" : ""} gap-4`}>
                                     {hasGarments && (
                                         <Card className="p-3">
@@ -815,6 +739,21 @@ export function CashierBody() {
                                 </div>
                             )}
 
+                            {/* Refund item selector — replaces collection UI when in refund mode */}
+                            {(hasGarments || hasShelfItems) && isRefundMode && (
+                                <Card className="p-3 border-red-200 bg-red-50/30">
+                                    <h3 className="font-semibold flex items-center gap-2 text-sm mb-2"><Shirt className="h-4 w-4 text-red-600" />Select Items to Refund</h3>
+                                    <RefundItemSelector
+                                        garments={garments as any}
+                                        shelfItems={shelfItems as any}
+                                        expressSurcharge={getPrice("EXPRESS_SURCHARGE") || 2}
+                                        soakingPrice={getPrice("SOAKING_CHARGE") || 0}
+                                        totalPaid={totalPaid}
+                                        onRefundItemsChange={(items, total) => { setRefundItems(items); setRefundTotal(total); }}
+                                    />
+                                </Card>
+                            )}
+
                             <Card className="p-3">
                                 <h3 className="font-semibold flex items-center gap-2 mb-1.5 text-sm"><Receipt className="h-4 w-4" />Payment History ({transactions.length})</h3>
                                 <PaymentHistory transactions={transactions} orderId={order.id} invoiceNumber={order.invoice_number ?? undefined}
@@ -834,19 +773,44 @@ export function CashierBody() {
                                         currentDiscountPercentage={Number((order as any).discount_percentage) || 0} currentReferralCode={(order as any).referral_code} orderTotal={orderTotal} />
                                 </Card>
                             )}
+                            {/* Collect Only — when garments are selected, allow collection without payment */}
+                            {!isCancelled && collectGarmentIds.size > 0 && (
+                                <Card className="p-3 bg-emerald-50 border-emerald-300">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <h3 className="font-semibold flex items-center gap-2 text-sm"><Package className="h-4 w-4" />Collect Only</h3>
+                                        <span className="text-xs text-emerald-700 font-medium">{collectGarmentIds.size} garment{collectGarmentIds.size !== 1 ? "s" : ""}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mb-2">Hand over garments without recording a payment.</p>
+                                    <Button
+                                        size="sm"
+                                        className="w-full h-9 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700"
+                                        disabled={collectGarmentsMutation.isPending}
+                                        onClick={() => {
+                                            collectGarmentsMutation.mutate(
+                                                { orderId: order.id, garmentIds: Array.from(collectGarmentIds) },
+                                                { onSuccess: (res) => { if (res.status === "success") setCollectGarmentIds(new Set()); } }
+                                            );
+                                        }}
+                                    >
+                                        {collectGarmentsMutation.isPending
+                                            ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Collecting...</>
+                                            : `Collect ${collectGarmentIds.size} Garment${collectGarmentIds.size !== 1 ? "s" : ""}`}
+                                    </Button>
+                                </Card>
+                            )}
                             {isCancelled ? (
                                 <Card className="p-3"><Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Cancelled. No payments allowed.</AlertDescription></Alert></Card>
                             ) : isFullyPaid && allGarmentsCompleted ? (
                                 <Card className="p-3 bg-green-50 border-green-300">
                                     <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />Refund Only</h3>
                                     <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid and all garments collected.</AlertDescription></Alert>
-                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} refundOnly />
+                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} refundOnly isRefund={true} onRefundModeChange={() => {}} refundItems={refundItems} refundTotal={refundTotal} />
                                 </Card>
                             ) : (
                                 <Card className={`p-3 ${isFullyPaid ? "bg-green-50 border-green-300" : ""}`}>
-                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />{isFullyPaid ? "Refund / Additional" : "Record Payment"}</h3>
-                                    {isFullyPaid && <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid.</AlertDescription></Alert>}
-                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} collectGarmentIds={collectGarmentIds} onCollected={() => setCollectGarmentIds(new Set())} />
+                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />{isRefundMode ? "Record Refund" : isFullyPaid ? "Refund / Additional" : "Record Payment"}</h3>
+                                    {isFullyPaid && !isRefundMode && <Alert className="mb-2 bg-green-50 border-green-200"><CheckCircle2 className="h-4 w-4 text-green-600" /><AlertDescription className="text-green-800 text-xs">Fully paid.</AlertDescription></Alert>}
+                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} collectGarmentIds={isRefundMode ? undefined : collectGarmentIds} onCollected={() => setCollectGarmentIds(new Set())} isRefund={isRefundMode} onRefundModeChange={handleRefundModeChange} refundItems={refundItems} refundTotal={refundTotal} />
                                 </Card>
                             )}
                         </div>

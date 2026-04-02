@@ -81,6 +81,14 @@ export const PAYMENT_TYPE_LABELS = {
     others: "Others",
 } as const;
 
+export const PAYMENT_METHOD_COLORS: Record<string, string> = {
+    knet: "#3d8b6e",      // teal-green
+    cash: "#c2723a",      // warm orange-brown
+    link_payment: "#b8982e", // golden
+    installments: "#7c5aad", // muted purple
+    others: "#c45a4a",    // coral-red
+} as const;
+
 export const APPOINTMENT_STATUS_LABELS = {
     scheduled: "Scheduled",
     completed: "Completed",

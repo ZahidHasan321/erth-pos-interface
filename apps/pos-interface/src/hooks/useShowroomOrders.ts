@@ -29,6 +29,8 @@ export function calculateTotal(order: any): number {
     (parseFloat(order.stitching_charge?.toString() || "0")) +
     (parseFloat(order.style_charge?.toString() || "0")) +
     (parseFloat(order.delivery_charge?.toString() || "0")) +
+    (parseFloat(order.express_charge?.toString() || "0")) +
+    (parseFloat(order.soaking_charge?.toString() || "0")) +
     (parseFloat(order.shelf_charge?.toString() || "0"))
   );
 }
