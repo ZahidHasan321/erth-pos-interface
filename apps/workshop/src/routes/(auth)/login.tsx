@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -19,21 +19,27 @@ export const Route = createFileRoute("/(auth)/login")({
 function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
-  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Navigate after React has re-rendered with the new auth context
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      router.invalidate().then(() => {
+        router.navigate({ to: "/receiving" });
+      });
+    }
+  }, [auth.isAuthenticated]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await auth.login({ username, pin });
-      await router.invalidate();
-      navigate({ to: "/receiving" });
+      // Navigation handled by useEffect after auth state propagates
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
-    } finally {
       setLoading(false);
     }
   };

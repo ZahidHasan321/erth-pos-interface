@@ -76,21 +76,27 @@ function LoginComponent() {
     return () => { root.classList.remove(userType); };
   }, [userType]);
 
+  // Navigate after React has re-rendered with the new auth context
+  React.useEffect(() => {
+    if (auth.isAuthenticated) {
+      router.invalidate().then(() => {
+        if (userType === initialUserType && search.redirect) {
+          navigate({ to: search.redirect });
+        } else {
+          navigate({ to: `/${userType}` });
+        }
+      });
+    }
+  }, [auth.isAuthenticated]);
+
   const doLogin = async (username: string, pin: string) => {
     setIsSubmitting(true);
     setError(null);
     try {
       await auth.login({ username, pin, userType });
-      await router.invalidate();
-
-      if (userType === initialUserType && search.redirect) {
-        await navigate({ to: search.redirect });
-      } else {
-        await navigate({ to: `/${userType}` });
-      }
+      // Navigation handled by useEffect after auth state propagates
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
       setIsSubmitting(false);
     }
   };

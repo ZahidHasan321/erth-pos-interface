@@ -41,6 +41,8 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  // Track whether login() is in progress so onAuthStateChange doesn't interfere
+  const loginInProgress = React.useRef(false);
   const isAuthenticated = !!user;
 
   React.useEffect(() => {
@@ -56,16 +58,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!cancelled) setIsLoading(false);
     });
 
-    // React to all auth state changes
+    // React to auth state changes (token refresh, external sign-out)
     const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
+
+      // Skip if login() is handling the session — avoids race condition
+      if (loginInProgress.current) return;
 
       if (event === 'SIGNED_OUT' || !session) {
         setUser(null);
         return;
       }
 
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+      if (event === 'TOKEN_REFRESHED') {
         const userId = session.user.app_metadata?.user_id;
         if (userId) {
           const refreshed = await fetchUserFromSession(userId);
@@ -90,28 +95,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useHeartbeat(user?.id ?? null);
 
   const login = async (credentials: { username: string; pin: string }) => {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: credentials.username, pin: credentials.pin }),
-    });
-
-    const result = await res.json();
-
-    if (!res.ok) {
-      throw new Error(result.error || 'Login failed');
-    }
-
-    if (result.session) {
-      await db.auth.setSession({
-        access_token: result.session.access_token,
-        refresh_token: result.session.refresh_token,
+    loginInProgress.current = true;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: credentials.username, pin: credentials.pin }),
       });
-    }
 
-    const fullUser = await fetchUserFromSession(result.user.id);
-    if (!fullUser) throw new Error('Failed to load user profile');
-    setUser(fullUser);
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Login failed');
+      }
+
+      if (result.session) {
+        await db.auth.setSession({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+        });
+      }
+
+      const fullUser = await fetchUserFromSession(result.user.id);
+      if (!fullUser) throw new Error('Failed to load user profile');
+      setUser(fullUser);
+    } finally {
+      loginInProgress.current = false;
+    }
   };
 
   const logout = async () => {
