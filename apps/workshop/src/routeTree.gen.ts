@@ -33,6 +33,9 @@ import { Route as mainTerminalsPostCuttingRouteImport } from './routes/(main)/te
 import { Route as mainTerminalsIroningRouteImport } from './routes/(main)/terminals/ironing'
 import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/terminals/finishing'
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
+import { Route as mainStoreRequestDeliveryRouteImport } from './routes/(main)/store/request-delivery'
+import { Route as mainStoreReceivingDeliveriesRouteImport } from './routes/(main)/store/receiving-deliveries'
+import { Route as mainStoreApproveRequestsRouteImport } from './routes/(main)/store/approve-requests'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
@@ -159,6 +162,24 @@ const mainTerminalsCuttingRoute = mainTerminalsCuttingRouteImport.update({
   path: '/terminals/cutting',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainStoreRequestDeliveryRoute =
+  mainStoreRequestDeliveryRouteImport.update({
+    id: '/store/request-delivery',
+    path: '/store/request-delivery',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
+const mainStoreReceivingDeliveriesRoute =
+  mainStoreReceivingDeliveriesRouteImport.update({
+    id: '/store/receiving-deliveries',
+    path: '/store/receiving-deliveries',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
+const mainStoreApproveRequestsRoute =
+  mainStoreApproveRequestsRouteImport.update({
+    id: '/store/approve-requests',
+    path: '/store/approve-requests',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainAssignedOrderIdRoute = mainAssignedOrderIdRouteImport.update({
   id: '/$orderId',
   path: '/$orderId',
@@ -197,6 +218,9 @@ export interface FileRoutesByFullPath {
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
+  '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -225,6 +249,9 @@ export interface FileRoutesByTo {
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
+  '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -256,6 +283,9 @@ export interface FileRoutesById {
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/(main)/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/(main)/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
+  '/(main)/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/(main)/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -287,6 +317,9 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/team'
     | '/assigned/$orderId'
+    | '/store/approve-requests'
+    | '/store/receiving-deliveries'
+    | '/store/request-delivery'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -315,6 +348,9 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/team'
     | '/assigned/$orderId'
+    | '/store/approve-requests'
+    | '/store/receiving-deliveries'
+    | '/store/request-delivery'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -345,6 +381,9 @@ export interface FileRouteTypes {
     | '/(main)/scheduler'
     | '/(main)/team'
     | '/(main)/assigned/$orderId'
+    | '/(main)/store/approve-requests'
+    | '/(main)/store/receiving-deliveries'
+    | '/(main)/store/request-delivery'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
     | '/(main)/terminals/ironing'
@@ -537,6 +576,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTerminalsCuttingRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/store/request-delivery': {
+      id: '/(main)/store/request-delivery'
+      path: '/store/request-delivery'
+      fullPath: '/store/request-delivery'
+      preLoaderRoute: typeof mainStoreRequestDeliveryRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/store/receiving-deliveries': {
+      id: '/(main)/store/receiving-deliveries'
+      path: '/store/receiving-deliveries'
+      fullPath: '/store/receiving-deliveries'
+      preLoaderRoute: typeof mainStoreReceivingDeliveriesRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/store/approve-requests': {
+      id: '/(main)/store/approve-requests'
+      path: '/store/approve-requests'
+      fullPath: '/store/approve-requests'
+      preLoaderRoute: typeof mainStoreApproveRequestsRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/assigned/$orderId': {
       id: '/(main)/assigned/$orderId'
       path: '/$orderId'
@@ -594,6 +654,9 @@ interface mainRouteRouteChildren {
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
+  mainStoreApproveRequestsRoute: typeof mainStoreApproveRequestsRoute
+  mainStoreReceivingDeliveriesRoute: typeof mainStoreReceivingDeliveriesRoute
+  mainStoreRequestDeliveryRoute: typeof mainStoreRequestDeliveryRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
   mainTerminalsIroningRoute: typeof mainTerminalsIroningRoute
@@ -619,6 +682,9 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,
+  mainStoreApproveRequestsRoute: mainStoreApproveRequestsRoute,
+  mainStoreReceivingDeliveriesRoute: mainStoreReceivingDeliveriesRoute,
+  mainStoreRequestDeliveryRoute: mainStoreRequestDeliveryRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,
   mainTerminalsIroningRoute: mainTerminalsIroningRoute,

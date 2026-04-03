@@ -122,6 +122,49 @@ export const fabricTypeEnum = pgEnum("fabric_type", ["summer", "winter"]);
 export type AppointmentStatus = (typeof appointmentStatusEnum.enumValues)[number];
 export type TransactionType = (typeof transactionTypeEnum.enumValues)[number];
 
+// --- TRANSFER / INVENTORY ENUMS ---
+export const transferStatusEnum = pgEnum("transfer_status", [
+    "requested",
+    "approved",
+    "rejected",
+    "dispatched",
+    "received",
+    "partially_received",
+]);
+export type TransferStatus = (typeof transferStatusEnum.enumValues)[number];
+
+export const transferDirectionEnum = pgEnum("transfer_direction", [
+    "shop_to_workshop",
+    "workshop_to_shop",
+]);
+export type TransferDirection = (typeof transferDirectionEnum.enumValues)[number];
+
+export const transferItemTypeEnum = pgEnum("transfer_item_type", [
+    "fabric",
+    "shelf",
+    "accessory",
+]);
+export type TransferItemType = (typeof transferItemTypeEnum.enumValues)[number];
+
+export const accessoryCategoryEnum = pgEnum("accessory_category", [
+    "buttons",
+    "zippers",
+    "thread",
+    "lining",
+    "elastic",
+    "interlining",
+    "other",
+]);
+export type AccessoryCategory = (typeof accessoryCategoryEnum.enumValues)[number];
+
+export const unitOfMeasureEnum = pgEnum("unit_of_measure", [
+    "pieces",
+    "meters",
+    "rolls",
+    "kg",
+]);
+export type UnitOfMeasure = (typeof unitOfMeasureEnum.enumValues)[number];
+
 
 // --- 0. PRICES ---
 export const prices = pgTable("prices", {
@@ -232,7 +275,9 @@ export const fabrics = pgTable("fabrics", {
     name: text("name").notNull().unique(),
     color: text("color"),             // Shop's internal color code (e.g. "C04", "CREAM")
     color_hex: text("color_hex"),     // Hex value for UI display (e.g. "#FFFFF0")
-    real_stock: numeric("real_stock", { precision: 10, scale: 2 }),
+    real_stock: numeric("real_stock", { precision: 10, scale: 2 }),  // DEPRECATED: use shop_stock + workshop_stock
+    shop_stock: numeric("shop_stock", { precision: 10, scale: 2 }).default(0),
+    workshop_stock: numeric("workshop_stock", { precision: 10, scale: 2 }).default(0),
     price_per_meter: numeric("price_per_meter", { precision: 10, scale: 3 }),
 });
 
@@ -240,9 +285,25 @@ export const shelf = pgTable("shelf", {
     id: serial("id").primaryKey(),
     type: text("type").unique(),
     brand: text("brand"),
-    stock: integer("stock"),
+    stock: integer("stock"),  // DEPRECATED: use shop_stock + workshop_stock
+    shop_stock: integer("shop_stock").default(0),
+    workshop_stock: integer("workshop_stock").default(0),
     price: numeric("price", { precision: 10, scale: 3 }),
 });
+
+// --- 3B. ACCESSORIES ---
+export const accessories = pgTable("accessories", {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    category: accessoryCategoryEnum("category").notNull(),
+    unit_of_measure: unitOfMeasureEnum("unit_of_measure").notNull().default("pieces"),
+    price: numeric("price", { precision: 10, scale: 3 }),
+    shop_stock: numeric("shop_stock", { precision: 10, scale: 2 }).default(0),
+    workshop_stock: numeric("workshop_stock", { precision: 10, scale: 2 }).default(0),
+    created_at: timestamp("created_at").defaultNow(),
+}, (t) => ({
+    nameCategoryIdx: uniqueIndex("accessories_name_category_idx").on(t.name, t.category),
+}));
 
 // --- 4. MEASUREMENTS ---
 export const measurements = pgTable("measurements", {
@@ -668,6 +729,42 @@ export const registerCashMovements = pgTable("register_cash_movements", {
     sessionIdx: index("cash_movements_session_idx").on(t.register_session_id),
 }));
 
+// --- 12. TRANSFER REQUESTS ---
+export const transferRequests = pgTable("transfer_requests", {
+    id: serial("id").primaryKey(),
+    direction: transferDirectionEnum("direction").notNull(),
+    item_type: transferItemTypeEnum("item_type").notNull(),
+    status: transferStatusEnum("status").notNull().default("requested"),
+    requested_by: uuid("requested_by").references(() => users.id).notNull(),
+    notes: text("notes"),
+    rejection_reason: text("rejection_reason"),
+    parent_request_id: integer("parent_request_id"),
+    revision_number: integer("revision_number").default(0),
+    created_at: timestamp("created_at").defaultNow(),
+    approved_at: timestamp("approved_at"),
+    dispatched_at: timestamp("dispatched_at"),
+    received_at: timestamp("received_at"),
+}, (t) => ({
+    statusIdx: index("transfer_requests_status_idx").on(t.status),
+    createdAtIdx: index("transfer_requests_created_at_idx").on(t.created_at),
+}));
+
+// --- 13. TRANSFER REQUEST ITEMS ---
+export const transferRequestItems = pgTable("transfer_request_items", {
+    id: serial("id").primaryKey(),
+    transfer_request_id: integer("transfer_request_id").references(() => transferRequests.id, { onDelete: 'cascade' }).notNull(),
+    fabric_id: integer("fabric_id").references(() => fabrics.id),
+    shelf_id: integer("shelf_id").references(() => shelf.id),
+    accessory_id: integer("accessory_id").references(() => accessories.id),
+    requested_qty: numeric("requested_qty", { precision: 10, scale: 2 }).notNull(),
+    approved_qty: numeric("approved_qty", { precision: 10, scale: 2 }),
+    dispatched_qty: numeric("dispatched_qty", { precision: 10, scale: 2 }),
+    received_qty: numeric("received_qty", { precision: 10, scale: 2 }),
+    discrepancy_note: text("discrepancy_note"),
+}, (t) => ({
+    transferRequestIdx: index("transfer_items_request_idx").on(t.transfer_request_id),
+}));
+
 // --- RELATIONS ---
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
@@ -729,6 +826,19 @@ export const registerSessionsRelations = relations(registerSessions, ({ one, man
 export const registerCashMovementsRelations = relations(registerCashMovements, ({ one }) => ({
     session: one(registerSessions, { fields: [registerCashMovements.register_session_id], references: [registerSessions.id] }),
     performedBy: one(users, { fields: [registerCashMovements.performed_by], references: [users.id] }),
+}));
+
+export const transferRequestsRelations = relations(transferRequests, ({ one, many }) => ({
+    requestedBy: one(users, { fields: [transferRequests.requested_by], references: [users.id] }),
+    parentRequest: one(transferRequests, { fields: [transferRequests.parent_request_id], references: [transferRequests.id], relationName: "transfer_revisions" }),
+    items: many(transferRequestItems),
+}));
+
+export const transferRequestItemsRelations = relations(transferRequestItems, ({ one }) => ({
+    transferRequest: one(transferRequests, { fields: [transferRequestItems.transfer_request_id], references: [transferRequests.id] }),
+    fabric: one(fabrics, { fields: [transferRequestItems.fabric_id], references: [fabrics.id] }),
+    shelfItem: one(shelf, { fields: [transferRequestItems.shelf_id], references: [shelf.id] }),
+    accessory: one(accessories, { fields: [transferRequestItems.accessory_id], references: [accessories.id] }),
 }));
 
 // --- TYPE EXPORTS ---
@@ -804,3 +914,12 @@ export type RegisterSession = InferSelectModel<typeof registerSessions>;
 export type NewRegisterSession = InferInsertModel<typeof registerSessions>;
 export type RegisterCashMovement = InferSelectModel<typeof registerCashMovements>;
 export type NewRegisterCashMovement = InferInsertModel<typeof registerCashMovements>;
+
+export type Accessory = InferSelectModel<typeof accessories>;
+export type NewAccessory = InferInsertModel<typeof accessories>;
+
+export type TransferRequest = InferSelectModel<typeof transferRequests>;
+export type NewTransferRequest = InferInsertModel<typeof transferRequests>;
+
+export type TransferRequestItem = InferSelectModel<typeof transferRequestItems>;
+export type NewTransferRequestItem = InferInsertModel<typeof transferRequestItems>;

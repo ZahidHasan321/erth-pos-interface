@@ -26,6 +26,7 @@ import {
   Droplets,
   Scissors,
   Truck,
+  ClipboardCheck,
   CircleCheckBig,
   Users,
   DollarSign,
@@ -90,6 +91,12 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
     { label: "Dispatch",        icon: Truck,            href: "/dispatch",   count: counts?.dispatch,   badgeColor: "bg-green-100 text-green-700" },
     { label: "Completed",       icon: CircleCheckBig,   href: "/completed" },
     { label: "Pricing",         icon: DollarSign,       href: "/pricing" },
+  ];
+
+  const storeItems = [
+    { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
+    { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries" },
+    { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests" },
   ];
 
   const terminalItems = [
@@ -242,6 +249,26 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
                       {item.count}
                     </SidebarMenuBadge>
                   )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Store Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {storeItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

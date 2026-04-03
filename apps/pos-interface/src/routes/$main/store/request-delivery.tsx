@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import RequestDeliveryPage from '@/components/store/request-delivery-page'
 
 export const Route = createFileRoute('/$main/store/request-delivery')({
   component: RouteComponent,
@@ -10,5 +11,5 @@ export const Route = createFileRoute('/$main/store/request-delivery')({
 })
 
 function RouteComponent() {
-  return <div>Coming soon</div>
+  return <RequestDeliveryPage />
 }

@@ -8,6 +8,7 @@ import {
   Users,
   Store,
   ClipboardList,
+  ClipboardCheck,
   Truck,
   PackageOpen,
   ArrowUpFromLine,
@@ -153,6 +154,11 @@ const data = {
           title: "Request Delivery",
           url: "store/request-delivery",
           icon: Truck,
+        },
+        {
+          title: "Approve Requests",
+          url: "store/approve-requests",
+          icon: ClipboardCheck,
         },
         {
           title: "End of Day Report",

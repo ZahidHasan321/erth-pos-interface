@@ -103,7 +103,8 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
     UPDATE shelf
-    SET stock = stock - (v_item->>'quantity')::int
+    SET stock = stock - (v_item->>'quantity')::int,
+        shop_stock = shop_stock - (v_item->>'quantity')::int
     WHERE id = (v_item->>'id')::int;
 
     INSERT INTO order_shelf_items (order_id, shelf_id, quantity, unit_price)
@@ -119,7 +120,8 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
   LOOP
     UPDATE fabrics
-    SET real_stock = real_stock - (v_item->>'length')::decimal
+    SET real_stock = real_stock - (v_item->>'length')::decimal,
+        shop_stock = shop_stock - (v_item->>'length')::decimal
     WHERE id = (v_item->>'id')::int;
   END LOOP;
 
@@ -188,7 +190,8 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
     UPDATE shelf
-    SET stock = stock - (v_item->>'quantity')::int
+    SET stock = stock - (v_item->>'quantity')::int,
+        shop_stock = shop_stock - (v_item->>'quantity')::int
     WHERE id = (v_item->>'id')::int;
 
     INSERT INTO order_shelf_items (order_id, shelf_id, quantity, unit_price)
@@ -278,7 +281,8 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
     UPDATE shelf
-    SET stock = stock - (v_item->>'quantity')::int
+    SET stock = stock - (v_item->>'quantity')::int,
+        shop_stock = shop_stock - (v_item->>'quantity')::int
     WHERE id = (v_item->>'id')::int;
 
     INSERT INTO order_shelf_items (order_id, shelf_id, quantity, unit_price)
@@ -1759,5 +1763,143 @@ BEGIN
     'page', p_page,
     'page_size', p_page_size
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- TRANSFER RPCs
+-- ============================================================
+
+-- Dispatch a transfer: deduct stock from source location
+CREATE OR REPLACE FUNCTION dispatch_transfer(
+  p_transfer_id INT,
+  p_dispatched_by UUID,
+  p_items JSONB  -- [{ id: number, dispatched_qty: number }]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_transfer RECORD;
+  v_item JSONB;
+  v_transfer_item RECORD;
+BEGIN
+  -- 1. Lock and verify transfer
+  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
+  END IF;
+  IF v_transfer.status != 'approved' THEN
+    RAISE EXCEPTION 'Transfer % is not in approved status (current: %)', p_transfer_id, v_transfer.status;
+  END IF;
+
+  -- 2. Process each item
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    -- Update dispatched_qty on the transfer item
+    UPDATE transfer_request_items
+    SET dispatched_qty = (v_item->>'dispatched_qty')::decimal
+    WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
+
+    -- Get the transfer item to know which table to deduct from
+    SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
+
+    -- Deduct from source location
+    IF v_transfer.direction = 'shop_to_workshop' THEN
+      -- Source is shop
+      IF v_transfer_item.fabric_id IS NOT NULL THEN
+        UPDATE fabrics SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+      ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
+        UPDATE shelf SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::int WHERE id = v_transfer_item.shelf_id;
+      ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
+        UPDATE accessories SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+      END IF;
+    ELSE
+      -- Source is workshop (workshop_to_shop)
+      IF v_transfer_item.fabric_id IS NOT NULL THEN
+        UPDATE fabrics SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+      ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
+        UPDATE shelf SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::int WHERE id = v_transfer_item.shelf_id;
+      ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
+        UPDATE accessories SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+      END IF;
+    END IF;
+  END LOOP;
+
+  -- 3. Update transfer status
+  UPDATE transfer_requests
+  SET status = 'dispatched', dispatched_at = NOW()
+  WHERE id = p_transfer_id;
+
+  RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Receive a transfer: add stock to destination location
+CREATE OR REPLACE FUNCTION receive_transfer(
+  p_transfer_id INT,
+  p_received_by UUID,
+  p_items JSONB  -- [{ id: number, received_qty: number, discrepancy_note?: string }]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_transfer RECORD;
+  v_item JSONB;
+  v_transfer_item RECORD;
+  v_has_discrepancy BOOLEAN := false;
+BEGIN
+  -- 1. Lock and verify transfer
+  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
+  END IF;
+  IF v_transfer.status != 'dispatched' THEN
+    RAISE EXCEPTION 'Transfer % is not in dispatched status (current: %)', p_transfer_id, v_transfer.status;
+  END IF;
+
+  -- 2. Process each item
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    -- Update received_qty and discrepancy_note on the transfer item
+    UPDATE transfer_request_items
+    SET received_qty = (v_item->>'received_qty')::decimal,
+        discrepancy_note = v_item->>'discrepancy_note'
+    WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
+
+    -- Get the transfer item
+    SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
+
+    -- Check for discrepancy
+    IF v_transfer_item.dispatched_qty IS NOT NULL AND (v_item->>'received_qty')::decimal != v_transfer_item.dispatched_qty THEN
+      v_has_discrepancy := true;
+    END IF;
+
+    -- Add to destination location
+    IF v_transfer.direction = 'shop_to_workshop' THEN
+      -- Destination is workshop
+      IF v_transfer_item.fabric_id IS NOT NULL THEN
+        UPDATE fabrics SET workshop_stock = workshop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+      ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
+        UPDATE shelf SET workshop_stock = workshop_stock + (v_item->>'received_qty')::int WHERE id = v_transfer_item.shelf_id;
+      ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
+        UPDATE accessories SET workshop_stock = workshop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+      END IF;
+    ELSE
+      -- Destination is shop (workshop_to_shop)
+      IF v_transfer_item.fabric_id IS NOT NULL THEN
+        UPDATE fabrics SET shop_stock = shop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+      ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
+        UPDATE shelf SET shop_stock = shop_stock + (v_item->>'received_qty')::int WHERE id = v_transfer_item.shelf_id;
+      ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
+        UPDATE accessories SET shop_stock = shop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+      END IF;
+    END IF;
+  END LOOP;
+
+  -- 3. Update transfer status
+  UPDATE transfer_requests
+  SET status = CASE WHEN v_has_discrepancy THEN 'partially_received' ELSE 'received' END,
+      received_at = NOW()
+  WHERE id = p_transfer_id;
+
+  RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
 END;
 $$ LANGUAGE plpgsql;
