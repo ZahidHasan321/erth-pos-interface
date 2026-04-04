@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, PackageOpen, Check, AlertTriangle, Search, History, Package } from "lucide-react";
+import {
+  Loader2,
+  PackageOpen,
+  Check,
+  AlertTriangle,
+  Search,
+  History,
+  Package,
+} from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
@@ -32,7 +40,8 @@ import type { TransferRequestWithItems } from "@/api/transfers";
 function getItemName(item: TransferRequestWithItems["items"][0]) {
   if (item.fabric) return item.fabric.name;
   if (item.shelf_item) return item.shelf_item.type;
-  if (item.accessory) return `${item.accessory.name} (${item.accessory.category})`;
+  if (item.accessory)
+    return `${item.accessory.name} (${item.accessory.category})`;
   return "Unknown";
 }
 
@@ -63,19 +72,22 @@ export default function ReceivingDeliveriesPage() {
     status: "dispatched",
     direction: "workshop_to_shop",
   });
-  const { data: historyTransfers = [], isLoading: historyLoading } = useTransferRequests({
-    status: ["received", "partially_received"],
-    direction: "workshop_to_shop",
-  });
+  const { data: historyTransfers = [], isLoading: historyLoading } =
+    useTransferRequests({
+      status: ["received", "partially_received"],
+      direction: "workshop_to_shop",
+    });
 
   const totalItems = useMemo(() => {
     return transfers.reduce((sum, t) => sum + t.items.length, 0);
   }, [transfers]);
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-5">
       <div>
-        <h1 className="text-xl font-bold tracking-tight">Receiving Deliveries</h1>
+        <h1 className="text-xl font-bold tracking-tight">
+          Receiving Deliveries
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Receive items dispatched from the workshop
         </p>
@@ -83,20 +95,24 @@ export default function ReceivingDeliveriesPage() {
 
       {/* Summary cards */}
       {!isLoading && transfers.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card>
-            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <CardContent className="py-4 flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-amber-50">
                 <Package className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Pending Deliveries</p>
-                <p className="text-2xl font-bold tabular-nums">{transfers.length}</p>
+                <p className="text-sm text-muted-foreground">
+                  Pending Deliveries
+                </p>
+                <p className="text-2xl font-bold tabular-nums">
+                  {transfers.length}
+                </p>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <CardContent className="py-4 flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-sky-50">
                 <PackageOpen className="h-5 w-5 text-sky-600" />
               </div>
@@ -110,7 +126,7 @@ export default function ReceivingDeliveriesPage() {
       )}
 
       {/* Search */}
-      <div className="relative">
+      <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search by item name or transfer ID..."
@@ -121,10 +137,13 @@ export default function ReceivingDeliveriesPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto sm:w-fit [&>[data-slot=tabs-trigger]]:shrink-0">
           <TabsTrigger value="pending">
-            Awaiting Receipt {transfers.length > 0 && (
-              <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 rounded-full px-1.5 font-bold">{transfers.length}</span>
+            Awaiting Receipt{" "}
+            {transfers.length > 0 && (
+              <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 rounded-full px-1.5 font-bold">
+                {transfers.length}
+              </span>
             )}
           </TabsTrigger>
           <TabsTrigger value="history">
@@ -133,24 +152,46 @@ export default function ReceivingDeliveriesPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending">
-          <PendingDeliveries transfers={transfers} isLoading={isLoading} search={search} />
+        <TabsContent value="pending" className="mt-4">
+          <PendingDeliveries
+            transfers={transfers}
+            isLoading={isLoading}
+            search={search}
+          />
         </TabsContent>
 
-        <TabsContent value="history">
-          <ReceivedHistory transfers={historyTransfers} isLoading={historyLoading} search={search} />
+        <TabsContent value="history" className="mt-4">
+          <ReceivedHistory
+            transfers={historyTransfers}
+            isLoading={historyLoading}
+            search={search}
+          />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function PendingDeliveries({ transfers, isLoading, search }: { transfers: TransferRequestWithItems[]; isLoading: boolean; search: string }) {
+function PendingDeliveries({
+  transfers,
+  isLoading,
+  search,
+}: {
+  transfers: TransferRequestWithItems[];
+  isLoading: boolean;
+  search: string;
+}) {
   const receiveTransfer = useReceiveTransfer();
-  const [receivingTransfer, setReceivingTransfer] = useState<TransferRequestWithItems | null>(null);
-  const [receivingQtys, setReceivingQtys] = useState<Map<number, { qty: number; note: string }>>(new Map());
+  const [receivingTransfer, setReceivingTransfer] =
+    useState<TransferRequestWithItems | null>(null);
+  const [receivingQtys, setReceivingQtys] = useState<
+    Map<number, { qty: number; note: string }>
+  >(new Map());
 
-  const filtered = useMemo(() => filterRequests(transfers, search), [transfers, search]);
+  const filtered = useMemo(
+    () => filterRequests(transfers, search),
+    [transfers, search],
+  );
 
   const openReceiving = (transfer: TransferRequestWithItems) => {
     setReceivingTransfer(transfer);
@@ -164,11 +205,13 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
   const handleReceive = async () => {
     if (!receivingTransfer) return;
 
-    const items = Array.from(receivingQtys.entries()).map(([id, { qty, note }]) => ({
-      id,
-      received_qty: qty,
-      ...(note ? { discrepancy_note: note } : {}),
-    }));
+    const items = Array.from(receivingQtys.entries()).map(
+      ([id, { qty, note }]) => ({
+        id,
+        received_qty: qty,
+        ...(note ? { discrepancy_note: note } : {}),
+      }),
+    );
 
     try {
       const result = await receiveTransfer.mutateAsync({
@@ -193,7 +236,11 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
   }, [receivingTransfer, receivingQtys]);
 
   if (isLoading) {
-    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (transfers.length === 0) {
@@ -220,10 +267,10 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
 
   return (
     <>
-      <div className="space-y-3">
+      <div className="space-y-4">
         {filtered.map((transfer) => (
           <Card key={transfer.id}>
-            <CardContent className="pt-4 pb-4">
+            <CardContent className="py-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -233,47 +280,63 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {transfer.items.length} item(s) &middot; Dispatched{" "}
-                    {transfer.dispatched_at ? parseUtcTimestamp(transfer.dispatched_at).toLocaleDateString() : "N/A"}
+                    {transfer.dispatched_at
+                      ? parseUtcTimestamp(
+                          transfer.dispatched_at,
+                        ).toLocaleDateString()
+                      : "N/A"}
                     {transfer.requested_by_user && (
-                      <> &middot; Requested by {transfer.requested_by_user.name}</>
+                      <>
+                        {" "}
+                        &middot; Requested by {transfer.requested_by_user.name}
+                      </>
                     )}
                   </p>
                   {transfer.notes && (
-                    <p className="text-xs text-muted-foreground italic">{transfer.notes}</p>
+                    <p className="text-xs text-muted-foreground italic">
+                      {transfer.notes}
+                    </p>
                   )}
                 </div>
-                <Button onClick={() => openReceiving(transfer)} size="sm" className="shrink-0 self-start sm:self-center">
+                <Button
+                  onClick={() => openReceiving(transfer)}
+                  size="sm"
+                  className="shrink-0 self-start sm:self-center"
+                >
                   <PackageOpen className="h-4 w-4 mr-1.5" />
                   Receive
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <Table className="mt-3">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Dispatched Qty</TableHead>
+              <Table className="mt-3 min-w-[520px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Dispatched Qty</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transfer.items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{getItemName(item)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {item.dispatched_qty}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transfer.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{getItemName(item)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{item.dispatched_qty}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Receiving Dialog */}
-      <Dialog open={!!receivingTransfer} onOpenChange={(open) => !open && setReceivingTransfer(null)}>
-        <DialogContent className="max-w-lg">
+      <Dialog
+        open={!!receivingTransfer}
+        onOpenChange={(open) => !open && setReceivingTransfer(null)}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Receive Transfer #{receivingTransfer?.id}</DialogTitle>
             <DialogDescription>
@@ -281,23 +344,30 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
             {receivingTransfer?.items.map((item) => {
               const entry = receivingQtys.get(item.id) ?? { qty: 0, note: "" };
               const hasDiscrepancy = entry.qty !== (item.dispatched_qty ?? 0);
               const step = getItemStep(item);
 
               return (
-                <div key={item.id} className={`border rounded-lg p-3 space-y-2 ${hasDiscrepancy ? "border-amber-300 bg-amber-50/50" : ""}`}>
+                <div
+                  key={item.id}
+                  className={`border rounded-lg p-3 space-y-2 ${hasDiscrepancy ? "border-amber-300 bg-amber-50/50" : ""}`}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <span className="font-medium text-sm block truncate">{getItemName(item)}</span>
+                      <span className="font-medium text-sm block truncate">
+                        {getItemName(item)}
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         Dispatched: {item.dispatched_qty}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <label className="text-xs text-muted-foreground">Received:</label>
+                      <label className="text-xs text-muted-foreground">
+                        Received:
+                      </label>
                       <Input
                         type="number"
                         min={0}
@@ -305,7 +375,10 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
                         value={entry.qty}
                         onChange={(e) => {
                           const next = new Map(receivingQtys);
-                          next.set(item.id, { ...entry, qty: Number(e.target.value) });
+                          next.set(item.id, {
+                            ...entry,
+                            qty: Number(e.target.value),
+                          });
                           setReceivingQtys(next);
                         }}
                         className="w-24 h-8 text-sm"
@@ -341,10 +414,16 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReceivingTransfer(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setReceivingTransfer(null)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleReceive} disabled={receiveTransfer.isPending}>
+            <Button
+              onClick={handleReceive}
+              disabled={receiveTransfer.isPending}
+            >
               {receiveTransfer.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
               ) : (
@@ -359,11 +438,26 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
   );
 }
 
-function ReceivedHistory({ transfers, isLoading, search }: { transfers: TransferRequestWithItems[]; isLoading: boolean; search: string }) {
-  const filtered = useMemo(() => filterRequests(transfers, search), [transfers, search]);
+function ReceivedHistory({
+  transfers,
+  isLoading,
+  search,
+}: {
+  transfers: TransferRequestWithItems[];
+  isLoading: boolean;
+  search: string;
+}) {
+  const filtered = useMemo(
+    () => filterRequests(transfers, search),
+    [transfers, search],
+  );
 
   if (isLoading) {
-    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (transfers.length === 0) {
@@ -389,10 +483,10 @@ function ReceivedHistory({ transfers, isLoading, search }: { transfers: Transfer
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {filtered.slice(0, 30).map((transfer) => (
         <Card key={transfer.id} className="opacity-90">
-          <CardContent className="pt-4 pb-4">
+          <CardContent className="py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -402,43 +496,57 @@ function ReceivedHistory({ transfers, isLoading, search }: { transfers: Transfer
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {transfer.items.length} item(s) &middot; Received{" "}
-                  {transfer.received_at ? parseUtcTimestamp(transfer.received_at).toLocaleDateString() : "N/A"}
+                  {transfer.received_at
+                    ? parseUtcTimestamp(
+                        transfer.received_at,
+                      ).toLocaleDateString()
+                    : "N/A"}
                   {transfer.requested_by_user && (
-                    <> &middot; Requested by {transfer.requested_by_user.name}</>
+                    <>
+                      {" "}
+                      &middot; Requested by {transfer.requested_by_user.name}
+                    </>
                   )}
                 </p>
                 {transfer.notes && (
-                  <p className="text-xs text-muted-foreground italic">{transfer.notes}</p>
+                  <p className="text-xs text-muted-foreground italic">
+                    {transfer.notes}
+                  </p>
                 )}
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table className="mt-3">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Dispatched</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transfer.items.map((item) => {
-                    const hasDiscrepancy = item.received_qty != null && item.dispatched_qty != null && item.received_qty !== item.dispatched_qty;
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>{getItemName(item)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{item.dispatched_qty ?? "—"}</TableCell>
-                        <TableCell className={`text-right tabular-nums ${hasDiscrepancy ? "text-amber-600 font-medium" : ""}`}>
-                          {item.received_qty ?? "—"}
-                          {hasDiscrepancy && " *"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <Table className="mt-3 min-w-[560px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead className="text-right">Dispatched</TableHead>
+                  <TableHead className="text-right">Received</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transfer.items.map((item) => {
+                  const hasDiscrepancy =
+                    item.received_qty != null &&
+                    item.dispatched_qty != null &&
+                    item.received_qty !== item.dispatched_qty;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>{getItemName(item)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {item.dispatched_qty ?? "—"}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right tabular-nums ${hasDiscrepancy ? "text-amber-600 font-medium" : ""}`}
+                      >
+                        {item.received_qty ?? "—"}
+                        {hasDiscrepancy && " *"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       ))}
