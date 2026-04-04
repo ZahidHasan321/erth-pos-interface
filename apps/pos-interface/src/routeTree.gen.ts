@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as MainIndexRouteImport } from './routes/$main/index'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as MainProfileRouteImport } from './routes/$main/profile'
+import { Route as MainNotificationsRouteImport } from './routes/$main/notifications'
 import { Route as MainCashierRouteImport } from './routes/$main/cashier'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
@@ -81,6 +82,11 @@ const authLoginRoute = authLoginRouteImport.update({
 const MainProfileRoute = MainProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => MainRouteRoute,
+} as any)
+const MainNotificationsRoute = MainNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => MainRouteRoute,
 } as any)
 const MainCashierRoute = MainCashierRouteImport.update({
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
   '/$main/cashier': typeof MainCashierRoute
+  '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
   '/$main/': typeof MainIndexRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
   '/$main/cashier': typeof MainCashierRoute
+  '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
   '/$main': typeof MainIndexRoute
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
   '/$main/cashier': typeof MainCashierRoute
+  '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/(auth)/login': typeof authLoginRoute
   '/$main/': typeof MainIndexRoute
@@ -339,6 +348,7 @@ export interface FileRouteTypes {
     | '/cashier'
     | '/home'
     | '/$main/cashier'
+    | '/$main/notifications'
     | '/$main/profile'
     | '/login'
     | '/$main/'
@@ -373,6 +383,7 @@ export interface FileRouteTypes {
     | '/cashier'
     | '/home'
     | '/$main/cashier'
+    | '/$main/notifications'
     | '/$main/profile'
     | '/login'
     | '/$main'
@@ -408,6 +419,7 @@ export interface FileRouteTypes {
     | '/cashier'
     | '/home'
     | '/$main/cashier'
+    | '/$main/notifications'
     | '/$main/profile'
     | '/(auth)/login'
     | '/$main/'
@@ -502,6 +514,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/$main/profile'
       preLoaderRoute: typeof MainProfileRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/notifications': {
+      id: '/$main/notifications'
+      path: '/notifications'
+      fullPath: '/$main/notifications'
+      preLoaderRoute: typeof MainNotificationsRouteImport
       parentRoute: typeof MainRouteRoute
     }
     '/$main/cashier': {
@@ -684,6 +703,7 @@ declare module '@tanstack/react-router' {
 
 interface MainRouteRouteChildren {
   MainCashierRoute: typeof MainCashierRoute
+  MainNotificationsRoute: typeof MainNotificationsRoute
   MainProfileRoute: typeof MainProfileRoute
   MainIndexRoute: typeof MainIndexRoute
   MainCustomersCustomerIdRoute: typeof MainCustomersCustomerIdRoute
@@ -714,6 +734,7 @@ interface MainRouteRouteChildren {
 
 const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainCashierRoute: MainCashierRoute,
+  MainNotificationsRoute: MainNotificationsRoute,
   MainProfileRoute: MainProfileRoute,
   MainIndexRoute: MainIndexRoute,
   MainCustomersCustomerIdRoute: MainCustomersCustomerIdRoute,

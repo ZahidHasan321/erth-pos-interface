@@ -1,12 +1,12 @@
-import { Fragment, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Fragment, useState, useCallback } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAssignedViewGarments } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrandBadge, StageBadge } from "@/components/shared/StageBadge";
 import { PageHeader, GarmentTypeBadgeCompact } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Badge } from "@repo/ui/badge";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
@@ -20,15 +20,24 @@ import {
   Zap,
   Droplets,
   ArrowRight,
+  AlertTriangle,
+  Activity,
+  CheckCircle2,
+  LayoutDashboard,
+  List,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/")({
   component: AssignedPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+    filter: (search.filter as string) || undefined,
+  }),
   head: () => ({ meta: [{ title: "Production Tracker" }] }),
 });
 
-// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
+// ── Helpers ───────────────────────────────────────────────────
 
 const STAGE_ORDER: Record<string, number> = {
   waiting_cut: 0, soaking: 1, cutting: 2, post_cutting: 3,
@@ -44,8 +53,6 @@ function getDeliveryUrgency(date?: string) {
   if (diff <= 5) return { cls: "text-yellow-700", border: "border-l-yellow-400", days: diff };
   return { cls: "text-green-700", border: "border-l-green-400", days: diff };
 }
-
-// ── Extracted helpers for status/location ─────────────────────
 
 function getOrderStatusLabel(
   group: OrderGroup,
@@ -94,9 +101,6 @@ function getOrderStatusLabel(
   return { text: "In production", cls: "text-zinc-600" };
 }
 
-
-// ── Garment Mini Cards (shared between card & table) ─────────
-
 function getWorkerName(garment: WorkshopGarment): string | null {
   const plan = garment.production_plan as Record<string, string> | null;
   if (!plan) return null;
@@ -107,6 +111,64 @@ function getWorkerName(garment: WorkshopGarment): string | null {
   };
   return plan[stageToKey[stage ?? ""] ?? ""] || null;
 }
+
+function getDaysLabel(days: number | null) {
+  if (days === null) return null;
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Due today";
+  return `${days}d left`;
+}
+
+// ── Order group classification helpers ───────────────────────
+
+function isActive(og: OrderGroup) {
+  return og.garments.some((g) => {
+    const so = STAGE_ORDER[g.piece_stage ?? ""] ?? 0;
+    return (so === 1 && g.start_time) || (so >= 2 && so <= 7);
+  });
+}
+
+function isReadyForDispatch(og: OrderGroup) {
+  const workshopGarments = og.garments.filter((g) => g.location === "workshop");
+  return workshopGarments.length > 0 && workshopGarments.every((g) => g.piece_stage === "ready_for_dispatch");
+}
+
+function isOverdue(og: OrderGroup) {
+  if (!og.delivery_date) return false;
+  return parseUtcTimestamp(og.delivery_date).getTime() < Date.now();
+}
+
+function isDueSoon(og: OrderGroup) {
+  if (!og.delivery_date) return false;
+  const diff = Math.ceil((parseUtcTimestamp(og.delivery_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  return diff >= 0 && diff <= 2;
+}
+
+function hasReturns(og: OrderGroup) {
+  return og.garments.some((g) => (g.trip_number ?? 1) > 1);
+}
+
+function isExpressOrder(og: OrderGroup) { return og.express; }
+function isHomeDelivery(og: OrderGroup) { return og.home_delivery; }
+function hasSoaking(og: OrderGroup) { return og.garments.some((g) => g.soaking); }
+
+// ── Sort: overdue first, then express, then delivery date asc ─
+
+function sortByUrgency(orders: OrderGroup[]) {
+  return [...orders].sort((a, b) => {
+    const now = Date.now();
+    const daysA = a.delivery_date ? Math.ceil((parseUtcTimestamp(a.delivery_date).getTime() - now) / 86400000) : 999;
+    const daysB = b.delivery_date ? Math.ceil((parseUtcTimestamp(b.delivery_date).getTime() - now) / 86400000) : 999;
+    const overdueA = daysA < 0 ? 1 : 0;
+    const overdueB = daysB < 0 ? 1 : 0;
+    if (overdueA !== overdueB) return overdueB - overdueA;
+    if (a.express && !b.express) return -1;
+    if (!a.express && b.express) return 1;
+    return daysA - daysB;
+  });
+}
+
+// ── Garment Mini Cards ──────────────────────────────────────
 
 function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
   return (
@@ -125,7 +187,6 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
               g.express && "ring-1 ring-red-200",
             )}
           >
-            {/* Header: ID + badges */}
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5">
                 <GarmentTypeBadgeCompact type={g.garment_type ?? "final"} />
@@ -143,7 +204,6 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
               <StageBadge stage={g.piece_stage} className="text-[10px] py-0" />
             </div>
 
-            {/* Details */}
             <div className="space-y-1">
               {worker && (
                 <div className="flex items-center justify-between">
@@ -164,6 +224,38 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
   );
 }
 
+// ── Order Indicators ────────────────────────────────────────
+
+function OrderIndicators({ group }: { group: OrderGroup }) {
+  const hasReturns = group.garments.some((g) => (g.trip_number ?? 1) > 1);
+  const hasSoaking = group.garments.some((g) => g.soaking);
+
+  return (
+    <span className="inline-flex items-center gap-1 ml-1.5">
+      {group.express && (
+        <span className="text-red-500" title="Express">
+          <Zap className="w-3.5 h-3.5 fill-red-500" />
+        </span>
+      )}
+      {group.home_delivery && (
+        <span className="text-indigo-500" title="Home delivery">
+          <Home className="w-3.5 h-3.5" />
+        </span>
+      )}
+      {hasSoaking && (
+        <span className="text-sky-500" title="Soaking required">
+          <Droplets className="w-3.5 h-3.5" />
+        </span>
+      )}
+      {hasReturns && (
+        <span className="text-amber-500" title="Has returns">
+          <RotateCcw className="w-3.5 h-3.5" />
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Order Card (mobile) ──────────────────────────────────────
 
 function AssignedOrderCard({
@@ -179,14 +271,7 @@ function AssignedOrderCard({
   const brovas = group.garments.filter((g) => g.garment_type === "brova");
   const finals = group.garments.filter((g) => g.garment_type === "final");
   const statusLabel = getOrderStatusLabel(group, brovas, finals);
-
-  const daysLabel = urgency.days !== null
-    ? urgency.days < 0
-      ? `${Math.abs(urgency.days)}d overdue`
-      : urgency.days === 0
-        ? "Due today"
-        : `${urgency.days}d left`
-    : null;
+  const daysLabel = getDaysLabel(urgency.days);
 
   return (
     <div
@@ -201,7 +286,6 @@ function AssignedOrderCard({
         onClick={onToggle}
         {...clickableProps(onToggle)}
       >
-        {/* Row 1: identity left, metadata right */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-mono font-bold text-sm">#{group.order_id}</span>
@@ -218,7 +302,6 @@ function AssignedOrderCard({
           </div>
         </div>
 
-        {/* Row 2: details spread */}
         <div className="flex items-center justify-between flex-wrap gap-2 mt-1.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {group.invoice_number && <span>INV-{group.invoice_number}</span>}
@@ -248,45 +331,12 @@ function AssignedOrderCard({
         </div>
       </div>
 
-      {/* Expanded garment cards */}
       {expanded && (
         <div className="px-3 pb-3 pt-2 border-t">
           <GarmentMiniCards garments={group.garments} />
         </div>
       )}
     </div>
-  );
-}
-
-// ── Inline order indicators ──────────────────────────────────
-
-function OrderIndicators({ group }: { group: OrderGroup }) {
-  const hasReturns = group.garments.some((g) => (g.trip_number ?? 1) > 1);
-  const hasSoaking = group.garments.some((g) => g.soaking);
-
-  return (
-    <span className="inline-flex items-center gap-1 ml-1.5">
-      {group.express && (
-        <span className="text-red-500" title="Express">
-          <Zap className="w-3.5 h-3.5 fill-red-500" />
-        </span>
-      )}
-      {group.home_delivery && (
-        <span className="text-indigo-500" title="Home delivery">
-          <Home className="w-3.5 h-3.5" />
-        </span>
-      )}
-      {hasSoaking && (
-        <span className="text-sky-500" title="Soaking required">
-          <Droplets className="w-3.5 h-3.5" />
-        </span>
-      )}
-      {hasReturns && (
-        <span className="text-amber-500" title="Has returns">
-          <RotateCcw className="w-3.5 h-3.5" />
-        </span>
-      )}
-    </span>
   );
 }
 
@@ -322,13 +372,7 @@ function OrdersTable({
           const finals = group.garments.filter((g) => g.garment_type === "final");
           const statusLabel = getOrderStatusLabel(group, brovas, finals);
           const isExpanded = expandedId === group.order_id;
-          const daysLabel = urgency.days !== null
-            ? urgency.days < 0
-              ? `${Math.abs(urgency.days)}d overdue`
-              : urgency.days === 0
-                ? "Due today"
-                : `${urgency.days}d left`
-            : null;
+          const daysLabel = getDaysLabel(urgency.days);
 
           return (
             <Fragment key={group.order_id}>
@@ -409,92 +453,282 @@ function OrdersTable({
   );
 }
 
-// ── Filter Chips (no component needed — uses shared Tabs) ─
+// ── Overview Dashboard ───────────────────────────────────────
 
-// ── Page ───────────────────────────────────────────────────────
+function OverviewDashboard({
+  orderGroups,
+  counts,
+  onNavigate,
+}: {
+  orderGroups: OrderGroup[];
+  counts: { overdue: number; dueSoon: number; active: number; ready: number; returns: number; total: number };
+  onNavigate: (tab: string) => void;
+}) {
+  const cards = [
+    { key: "attention", label: "Overdue", count: counts.overdue, icon: AlertTriangle, color: "bg-red-50 border-red-200 text-red-700", iconColor: "text-red-500", hoverBg: "hover:bg-red-100/60" },
+    { key: "attention", label: "Due Soon", count: counts.dueSoon, icon: Clock, color: "bg-orange-50 border-orange-200 text-orange-700", iconColor: "text-orange-500", hoverBg: "hover:bg-orange-100/60" },
+    { key: "production", label: "In Production", count: counts.active, icon: Activity, color: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-blue-500", hoverBg: "hover:bg-blue-100/60" },
+    { key: "ready", label: "Ready to Dispatch", count: counts.ready, icon: CheckCircle2, color: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500", hoverBg: "hover:bg-emerald-100/60" },
+    { key: "attention", label: "Returns", count: counts.returns, icon: RotateCcw, color: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500", hoverBg: "hover:bg-amber-100/60" },
+    { key: "all", label: "Total Orders", count: counts.total, icon: List, color: "bg-zinc-50 border-zinc-200 text-zinc-700", iconColor: "text-zinc-500", hoverBg: "hover:bg-zinc-100/60" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <button
+              key={card.label}
+              onClick={() => onNavigate(card.key)}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-xl border cursor-pointer transition-all pointer-coarse:active:scale-95",
+                card.color,
+                card.hoverBg,
+              )}
+            >
+              <Icon className={cn("w-6 h-6", card.iconColor)} />
+              <span className="text-2xl font-black tabular-nums">{card.count}</span>
+              <span className="text-xs font-semibold uppercase tracking-wider">{card.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Quick list of overdue orders if any */}
+      {counts.overdue > 0 && (
+        <div className="bg-red-50/50 border border-red-200 rounded-xl p-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-red-700 flex items-center gap-1.5 mb-2">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Overdue Orders
+          </h3>
+          <div className="space-y-1.5">
+            {orderGroups
+              .filter(isOverdue)
+              .slice(0, 5)
+              .map((og) => {
+                const urgency = getDeliveryUrgency(og.delivery_date);
+                return (
+                  <Link
+                    key={og.order_id}
+                    to="/assigned/$orderId"
+                    params={{ orderId: String(og.order_id) }}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-white rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono font-bold text-sm">#{og.order_id}</span>
+                      <span className="text-sm truncate">{og.customer_name}</span>
+                      {og.express && <Zap className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />}
+                    </div>
+                    <span className={cn("text-xs font-bold shrink-0", urgency.cls)}>
+                      {getDaysLabel(urgency.days)}
+                    </span>
+                  </Link>
+                );
+              })}
+            {counts.overdue > 5 && (
+              <button
+                onClick={() => onNavigate("attention")}
+                className="text-xs font-semibold text-red-600 hover:underline cursor-pointer pl-2"
+              >
+                View all {counts.overdue} overdue orders
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Secondary Filter Chips ──────────────────────────────────
+
+function FilterChips({
+  filters,
+  active,
+  onToggle,
+}: {
+  filters: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; count: number }[];
+  active: Set<string>;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-xs text-muted-foreground font-medium mr-0.5">Filter:</span>
+      {filters.map((f) => {
+        const Icon = f.icon;
+        const isActive = active.has(f.key);
+        return (
+          <button
+            key={f.key}
+            onClick={() => onToggle(f.key)}
+            className={cn(
+              "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md border cursor-pointer transition-colors",
+              isActive
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground border-border hover:bg-muted/50",
+            )}
+          >
+            <Icon className="w-3 h-3" />
+            {f.label}
+            <Badge variant="secondary" className={cn("ml-0.5 text-[10px] px-1 py-0", isActive && "bg-primary-foreground/20 text-primary-foreground")}>
+              {f.count}
+            </Badge>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Order List (shared between tabs) ────────────────────────
+
+function OrderList({
+  orders,
+  isMobile,
+  emptyText,
+}: {
+  orders: OrderGroup[];
+  isMobile: boolean;
+  emptyText?: string;
+}) {
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const toggleExpanded = (id: number) =>
+    setExpandedOrderId((prev) => (prev === id ? null : id));
+  const pagination = usePagination(orders, 20);
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
+        <ClipboardList className="w-8 h-8 text-muted-foreground/20 mb-3" />
+        <p className="font-semibold text-muted-foreground">{emptyText ?? "No orders match this filter"}</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {isMobile ? (
+        <div className="space-y-2">
+          {pagination.paged.map((group) => (
+            <AssignedOrderCard
+              key={group.order_id}
+              group={group}
+              expanded={expandedOrderId === group.order_id}
+              onToggle={() => toggleExpanded(group.order_id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="border rounded-xl overflow-hidden">
+          <OrdersTable
+            orders={pagination.paged}
+            expandedId={expandedOrderId}
+            onToggle={toggleExpanded}
+          />
+        </div>
+      )}
+      <Pagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        onPageChange={pagination.setPage}
+        totalItems={pagination.totalItems}
+        pageSize={pagination.pageSize}
+      />
+    </>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────
+
+const VALID_TABS = new Set(["overview", "production", "ready", "attention", "all"]);
+const VALID_FILTERS = new Set(["express", "delivery", "soaking"]);
 
 function AssignedPage() {
   const { data: all = [], isLoading } = useAssignedViewGarments();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const { tab: searchTab, filter: searchFilter } = Route.useSearch();
 
-  // Group ALL garments by order (including returns/alterations)
-  const orderGroupsUnsorted = groupByOrder(all);
-
-  // Sort: overdue first, then due soon, then express, then delivery date asc
-  const orderGroups = [...orderGroupsUnsorted].sort((a, b) => {
-    const now = Date.now();
-    const daysA = a.delivery_date ? Math.ceil((parseUtcTimestamp(a.delivery_date).getTime() - now) / 86400000) : 999;
-    const daysB = b.delivery_date ? Math.ceil((parseUtcTimestamp(b.delivery_date).getTime() - now) / 86400000) : 999;
-    const overdueA = daysA < 0 ? 1 : 0;
-    const overdueB = daysB < 0 ? 1 : 0;
-    if (overdueA !== overdueB) return overdueB - overdueA;
-    if (a.express && !b.express) return -1;
-    if (!a.express && b.express) return 1;
-    return daysA - daysB;
-  });
-
-  // Order-level classifications
-  const active = orderGroups.filter((og) =>
-    og.garments.some((g) => {
-      const so = STAGE_ORDER[g.piece_stage ?? ""] ?? 0;
-      // Active = soaking (with start_time) through quality_check
-      return (so === 1 && g.start_time) || (so >= 2 && so <= 7);
-    }),
-  );
-  const readyForDispatch = orderGroups.filter((og) =>
-    og.garments.every((g) => g.piece_stage === "ready_for_dispatch"),
-  );
-  const expressOrders = orderGroups.filter((og) => og.express);
-  const overdueOrders = orderGroups.filter((og) => {
-    if (!og.delivery_date) return false;
-    return parseUtcTimestamp(og.delivery_date).getTime() < Date.now();
-  });
-  const dueSoonOrders = orderGroups.filter((og) => {
-    if (!og.delivery_date) return false;
-    const diff = Math.ceil((parseUtcTimestamp(og.delivery_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return diff >= 0 && diff <= 2;
-  });
-  const returningOrders = orderGroups.filter((og) =>
-    og.garments.some((g) => (g.trip_number ?? 1) > 1),
-  );
-  const homeDeliveryOrders = orderGroups.filter((og) => og.home_delivery);
-  const soakingOrders = orderGroups.filter((og) =>
-    og.garments.some((g) => g.soaking),
+  // Derive state from URL
+  const primaryTab = VALID_TABS.has(searchTab ?? "") ? searchTab! : "overview";
+  const chipFilters = new Set(
+    (searchFilter ?? "").split(",").filter((f) => VALID_FILTERS.has(f)),
   );
 
-  const [orderFilter, setOrderFilter] = useState("all");
-  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const setTab = useCallback((tab: string, filter?: string) => {
+    navigate({
+      to: "/assigned",
+      search: { tab: tab === "overview" ? undefined : tab, filter: filter || undefined },
+      replace: true,
+    });
+  }, [navigate]);
 
-  const toggleExpanded = (id: number) =>
-    setExpandedOrderId((prev) => (prev === id ? null : id));
+  const setPrimaryTab = useCallback((tab: string) => {
+    setTab(tab);
+  }, [setTab]);
 
-  const filters = [
-    { label: "All", count: orderGroups.length, key: "all" },
-    { label: "Overdue", count: overdueOrders.length, key: "overdue", badgeCls: "bg-red-100 text-red-700" },
-    { label: "Due Soon", count: dueSoonOrders.length, key: "due-soon", badgeCls: "bg-orange-100 text-orange-700" },
-    { label: "Active", count: active.length, key: "active", badgeCls: "bg-emerald-100 text-emerald-700" },
-    { label: "Ready", count: readyForDispatch.length, key: "ready", badgeCls: "bg-green-100 text-green-700" },
-    { label: "Express", count: expressOrders.length, key: "express", badgeCls: "bg-red-100 text-red-700" },
-    { label: "Returns", count: returningOrders.length, key: "returns", badgeCls: "bg-amber-100 text-amber-700" },
-    { label: "Delivery", count: homeDeliveryOrders.length, key: "home-delivery", badgeCls: "bg-indigo-100 text-indigo-700" },
-    { label: "Soaking", count: soakingOrders.length, key: "soaking", badgeCls: "bg-sky-100 text-sky-700" },
+  const orderGroups = sortByUrgency(groupByOrder(all));
+
+  // Classify order groups
+  const overdueOrders = orderGroups.filter(isOverdue);
+  const dueSoonOrders = orderGroups.filter(isDueSoon);
+  const activeOrders = orderGroups.filter(isActive);
+  const readyOrders = orderGroups.filter(isReadyForDispatch);
+  const returningOrders = orderGroups.filter(hasReturns);
+  const expressOrders = orderGroups.filter(isExpressOrder);
+  const homeDeliveryOrders = orderGroups.filter(isHomeDelivery);
+  const soakingOrders = orderGroups.filter(hasSoaking);
+
+  const toggleChip = useCallback((key: string) => {
+    const next = new Set(chipFilters);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    const filterStr = Array.from(next).join(",");
+    setTab(primaryTab, filterStr);
+  }, [chipFilters, primaryTab, setTab]);
+
+  const chipOptions = [
+    { key: "express", label: "Express", icon: Zap, count: expressOrders.length },
+    { key: "delivery", label: "Delivery", icon: Home, count: homeDeliveryOrders.length },
+    { key: "soaking", label: "Soaking", icon: Droplets, count: soakingOrders.length },
   ];
 
-  const filteredOrders = (() => {
-    switch (orderFilter) {
-      case "overdue": return overdueOrders;
-      case "due-soon": return dueSoonOrders;
-      case "active": return active;
-      case "ready": return readyForDispatch;
-      case "express": return expressOrders;
-      case "returns": return returningOrders;
-      case "home-delivery": return homeDeliveryOrders;
-      case "soaking": return soakingOrders;
+  // Get base orders for current primary tab
+  const baseOrders = (() => {
+    switch (primaryTab) {
+      case "production": return activeOrders;
+      case "ready": return readyOrders;
+      case "attention": return sortByUrgency([
+        ...new Map([
+          ...overdueOrders,
+          ...dueSoonOrders,
+          ...returningOrders,
+        ].map((o) => [o.order_id, o])).values(),
+      ]);
+      case "all": return orderGroups;
       default: return orderGroups;
     }
   })();
 
-  const ordersPagination = usePagination(filteredOrders, 20);
+  // Apply chip filters
+  const filteredOrders = chipFilters.size === 0
+    ? baseOrders
+    : baseOrders.filter((og) => {
+      if (chipFilters.has("express") && !og.express) return false;
+      if (chipFilters.has("delivery") && !og.home_delivery) return false;
+      if (chipFilters.has("soaking") && !og.garments.some((g) => g.soaking)) return false;
+      return true;
+    });
+
+  const primaryTabs = [
+    { key: "overview", label: "Overview", icon: LayoutDashboard },
+    { key: "production", label: "In Production", icon: Activity, count: activeOrders.length, badgeCls: "bg-blue-100 text-blue-700" },
+    { key: "ready", label: "Ready", icon: CheckCircle2, count: readyOrders.length, badgeCls: "bg-emerald-100 text-emerald-700" },
+    { key: "attention", label: "Attention", icon: AlertTriangle, count: overdueOrders.length + dueSoonOrders.length, badgeCls: overdueOrders.length > 0 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700" },
+    { key: "all", label: "All Orders", icon: List, count: orderGroups.length },
+  ];
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
@@ -504,77 +738,85 @@ function AssignedPage() {
         subtitle={`${all.length} garment${all.length !== 1 ? "s" : ""} across ${orderGroups.length} order${orderGroups.length !== 1 ? "s" : ""}${returningOrders.length > 0 ? ` · ${returningOrders.length} with returns` : ""}`}
       />
 
-      <Tabs value={orderFilter} onValueChange={setOrderFilter} className="mb-3">
-        <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-          {filters.map((f) => (
-            <TabsTrigger key={f.key} value={f.key} className="gap-1.5">
-              {f.label}
-              <Badge variant="secondary" className={cn("ml-0.5 text-xs", f.badgeCls)}>
-                {f.count}
-              </Badge>
-            </TabsTrigger>
-          ))}
+      <Tabs value={primaryTab} onValueChange={(v) => setTab(v)}>
+        <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden mb-3">
+          {primaryTabs.map((t) => {
+            const Icon = t.icon;
+            return (
+              <TabsTrigger key={t.key} value={t.key} className="gap-1.5">
+                <Icon className="w-3.5 h-3.5" />
+                {t.label}
+                {t.count !== undefined && (
+                  <Badge variant="secondary" className={cn("ml-0.5 text-xs", t.badgeCls)}>
+                    {t.count}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
-      </Tabs>
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="bg-card border rounded-xl border-l-4 border-l-border p-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-16 rounded" />
-                  <Skeleton className="h-4 w-24 rounded" />
-                  <Skeleton className="h-4 w-12 rounded" />
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="bg-card border rounded-xl border-l-4 border-l-border p-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-16 rounded" />
+                    <Skeleton className="h-4 w-24 rounded" />
+                    <Skeleton className="h-4 w-12 rounded" />
+                  </div>
+                  <Skeleton className="h-4 w-28 rounded" />
                 </div>
-                <Skeleton className="h-4 w-28 rounded" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-3.5 w-16 rounded" />
-                  <Skeleton className="h-3.5 w-20 rounded" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-3.5 w-16 rounded" />
+                    <Skeleton className="h-3.5 w-20 rounded" />
+                  </div>
+                  <Skeleton className="h-3.5 w-24 rounded" />
                 </div>
-                <Skeleton className="h-3.5 w-24 rounded" />
               </div>
-            </div>
-          ))}
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
-          <ClipboardList className="w-8 h-8 text-muted-foreground/20 mb-3" />
-          <p className="font-semibold text-muted-foreground">No orders match this filter</p>
-        </div>
-      ) : (
-        <>
-          {isMobile ? (
-            <div className="space-y-2">
-              {ordersPagination.paged.map((group) => (
-                <AssignedOrderCard
-                  key={group.order_id}
-                  group={group}
-                  expanded={expandedOrderId === group.order_id}
-                  onToggle={() => toggleExpanded(group.order_id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="border rounded-xl overflow-hidden">
-              <OrdersTable
-                orders={ordersPagination.paged}
-                expandedId={expandedOrderId}
-                onToggle={toggleExpanded}
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Overview tab */}
+            <TabsContent value="overview">
+              <OverviewDashboard
+                orderGroups={orderGroups}
+                counts={{
+                  overdue: overdueOrders.length,
+                  dueSoon: dueSoonOrders.length,
+                  active: activeOrders.length,
+                  ready: readyOrders.length,
+                  returns: returningOrders.length,
+                  total: orderGroups.length,
+                }}
+                onNavigate={setPrimaryTab}
               />
-            </div>
-          )}
-          <Pagination
-            page={ordersPagination.page}
-            totalPages={ordersPagination.totalPages}
-            onPageChange={ordersPagination.setPage}
-            totalItems={ordersPagination.totalItems}
-            pageSize={ordersPagination.pageSize}
-          />
-        </>
-      )}
+            </TabsContent>
+
+            {/* List tabs */}
+            {["production", "ready", "attention", "all"].map((tabKey) => (
+              <TabsContent key={tabKey} value={tabKey}>
+                <div className="space-y-3">
+                  <FilterChips filters={chipOptions} active={chipFilters} onToggle={toggleChip} />
+                  <OrderList
+                    orders={filteredOrders}
+                    isMobile={isMobile}
+                    emptyText={
+                      tabKey === "production" ? "No orders in production"
+                        : tabKey === "ready" ? "No orders ready for dispatch"
+                        : tabKey === "attention" ? "No orders need attention"
+                        : "No orders found"
+                    }
+                  />
+                </div>
+              </TabsContent>
+            ))}
+          </>
+        )}
+      </Tabs>
     </div>
   );
 }

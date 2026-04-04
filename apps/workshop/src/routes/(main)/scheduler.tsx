@@ -14,7 +14,7 @@ import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, getKuwaitMidnight, type OrderGroup } from "@/lib/utils";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, CheckSquare, Home, User, AlertTriangle, Eye,
@@ -73,7 +73,7 @@ function SchedulerGarmentRow({
     <div
       className={cn(
         "bg-card border rounded-xl px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
-        "hover:bg-muted/20 active:scale-[0.995]",
+        "hover:bg-muted/20 pointer-coarse:active:scale-[0.995]",
         g.express && "border-l-4 border-l-orange-400",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
@@ -298,8 +298,7 @@ function HeatCalendar({
   scheduledDates: Record<string, number>;
   maxPerDay: number;
 }) {
-  const todayObj = new Date();
-  todayObj.setHours(0, 0, 0, 0);
+  const todayObj = getKuwaitMidnight();
 
   const [viewDate, setViewDate] = useState(() => new Date(todayObj));
 
@@ -395,7 +394,7 @@ function HeatCalendar({
                 "relative h-10 rounded-md text-xs font-semibold transition-[color,background-color,border-color,box-shadow] touch-manipulation",
                 "flex flex-col items-center justify-center",
                 isPast && "text-muted-foreground/20 cursor-not-allowed",
-                !isPast && !isSelected && "hover:bg-primary/10 active:scale-95 cursor-pointer",
+                !isPast && !isSelected && "hover:bg-primary/10 pointer-coarse:active:scale-95 cursor-pointer",
                 !isPast && !isSelected && HEAT_BG[heat],
                 isToday && !isSelected && "ring-2 ring-primary/50 font-black text-primary",
                 isSelected && "bg-primary text-primary-foreground shadow-md",

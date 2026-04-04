@@ -662,7 +662,7 @@ function ReleaseFinalsDialog({
                                   onClick={(e) => { e.stopPropagation(); handleUnitChange(step.key, u); }}
                                   className={cn(
                                     "px-4 py-2 rounded-lg text-sm font-semibold border-2 transition-all shadow-sm",
-                                    "active:scale-95",
+                                    "pointer-coarse:active:scale-95",
                                     selectedUnit === u
                                       ? "border-primary bg-primary text-white shadow-md"
                                       : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-400 hover:shadow-md",
@@ -699,7 +699,7 @@ function ReleaseFinalsDialog({
                                   }}
                                   className={cn(
                                     "inline-flex items-center gap-1.5 border-2 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all shadow-sm",
-                                    "active:scale-95",
+                                    "pointer-coarse:active:scale-95",
                                     isSelected
                                       ? "border-primary bg-primary text-white shadow-md"
                                       : isOver

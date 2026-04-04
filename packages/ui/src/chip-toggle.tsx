@@ -28,7 +28,7 @@ const ChipToggle = React.forwardRef<HTMLButtonElement, ChipToggleProps>(
           // Base
           "inline-flex items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150",
           // Touch
-          "cursor-pointer select-none touch-manipulation active:scale-[0.96] active:brightness-[0.97]",
+          "cursor-pointer select-none touch-manipulation pointer-coarse:active:scale-[0.96] pointer-coarse:active:brightness-[0.97]",
           // States
           active
             ? activeClasses[activeVariant]

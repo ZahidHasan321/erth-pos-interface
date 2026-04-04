@@ -121,7 +121,7 @@ function OrderRow({ item, onSelect, isSelected }: { item: CashierOrderListItem; 
         <button
             type="button"
             onClick={() => onSelect(String(item.id))}
-            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-all duration-150 cursor-pointer active:scale-[0.99] ${rowBg}`}
+            className={`w-full text-left px-3.5 py-3 rounded-lg border transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] ${rowBg}`}
         >
             {/* Top row: ID, customer, amount */}
             <div className="flex items-center gap-3">
@@ -324,7 +324,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 const paidPct = o.order_total > 0 ? Math.round((o.paid / o.order_total) * 100) : 0;
                                 return (
                                     <button key={o.id} type="button" onClick={() => onSelectOrder(String(o.id))}
-                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-all duration-150 cursor-pointer active:scale-[0.99] border border-transparent hover:border-red-200"
+                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] border border-transparent hover:border-red-200"
                                         style={i < 8 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 40}ms both` } : undefined}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
@@ -421,7 +421,7 @@ function DeliveryAndAddress({ order, isHomeDelivery, isOrderCompleted, toggleDel
                             <button key={option.label} type="button"
                                 disabled={toggleDeliveryMutation.isPending}
                                 onClick={() => { if (!isActive) { onOptimisticToggle(option.value); toggleDeliveryMutation.mutate({ orderId: order.id, homeDelivery: option.value }); } }}
-                                className="relative z-10 flex-1 flex items-center justify-center gap-2 rounded-md py-2 cursor-pointer select-none touch-manipulation active:scale-[0.97] transition-all duration-150">
+                                className="relative z-10 flex-1 flex items-center justify-center gap-2 rounded-md py-2 cursor-pointer select-none touch-manipulation pointer-coarse:active:scale-[0.97] transition-all duration-150">
                                 <img src={option.img} alt={option.label} className={`h-7 object-contain transition-all duration-200 ${isActive ? "brightness-0 invert" : ""}`} />
                                 <span className={`text-sm font-semibold transition-colors duration-200 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`}>{option.label}</span>
                             </button>

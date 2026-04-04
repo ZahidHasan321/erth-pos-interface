@@ -1,5 +1,5 @@
 import { type ColumnDef } from "@tanstack/react-table";
-import { cn } from "@/lib/utils";
+import { cn, getKuwaitMidnight } from "@/lib/utils";
 import { ChevronRight, Phone, AlertTriangle, MessageSquare, Truck, ClipboardCheck, Link as LinkIcon } from "lucide-react";
 import type { OrderRow } from "./types";
 import { Button } from "@repo/ui/button";
@@ -15,6 +15,7 @@ import {
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",
   month: "short",
+  timeZone: "Asia/Kuwait",
 });
 
 function formatDate(value?: string | null) {
@@ -26,10 +27,8 @@ function formatDate(value?: string | null) {
 
 function getDaysOverdue(deliveryDate?: string | null): number {
   if (!deliveryDate) return 0;
-  const delivery = new Date(deliveryDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  delivery.setHours(0, 0, 0, 0);
+  const delivery = getKuwaitMidnight(new Date(deliveryDate));
+  const today = getKuwaitMidnight();
   const diff = Math.ceil((today.getTime() - delivery.getTime()) / (1000 * 60 * 60 * 24));
   return diff > 0 ? diff : 0;
 }

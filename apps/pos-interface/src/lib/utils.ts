@@ -6,14 +6,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Get a date as YYYY-MM-DD in the user's local timezone */
+const TZ = "Asia/Kuwait";
+
+/** Get a date as YYYY-MM-DD in Kuwait timezone */
 export function getLocalDateStr(date?: Date): string {
-  return new Intl.DateTimeFormat("en-CA").format(date ?? new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(date ?? new Date());
 }
 
-/** Client's UTC offset in minutes (positive = east of UTC). Kuwait UTC+3 = 180. */
+/** Kuwait UTC+3 = 180 minutes. */
 export function getLocalTzOffsetMinutes(): number {
-  return -new Date().getTimezoneOffset();
+  return 180;
+}
+
+/** Get Kuwait midnight as a UTC Date (for date boundary comparisons) */
+export function getKuwaitMidnight(date?: Date): Date {
+  const kuwaitDateStr = getLocalDateStr(date);
+  return new Date(kuwaitDateStr + "T00:00:00+03:00");
 }
 
 /**

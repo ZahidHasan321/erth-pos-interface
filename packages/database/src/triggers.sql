@@ -2259,7 +2259,8 @@ CREATE TRIGGER transfer_status_notification
 -- --- NOTIFICATION RPCs ---
 
 -- Fetch notifications for a specific department with read status for the current user
-CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL)
+DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT);
+CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL, p_offset INTEGER DEFAULT 0)
 RETURNS JSONB AS $$
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
   FROM (
@@ -2281,6 +2282,7 @@ RETURNS JSONB AS $$
       AND n.expires_at > now()
     ORDER BY n.created_at DESC
     LIMIT p_limit
+    OFFSET p_offset
   ) t;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 

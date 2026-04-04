@@ -122,7 +122,7 @@ export function DirectLookupCard({
           size="sm"
           onClick={handleSubmit}
           disabled={!hasInput || isSearching || disabled}
-          className="h-11 px-6 font-black uppercase tracking-widest text-xs rounded-xl shadow-md shrink-0 w-full sm:w-auto transition-all active:scale-[0.98]"
+          className="h-11 px-6 font-black uppercase tracking-widest text-xs rounded-xl shadow-md shrink-0 w-full sm:w-auto transition-all pointer-coarse:active:scale-[0.98]"
         >
           {isSearching ? (
             <RefreshCw className="size-4 animate-spin" />

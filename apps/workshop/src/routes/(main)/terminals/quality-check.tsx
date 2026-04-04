@@ -6,39 +6,29 @@ import { PageHeader, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { IconRosette } from "@tabler/icons-react";
 import type { WorkshopGarment } from "@repo/database";
+import { getLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 
 export const Route = createFileRoute("/(main)/terminals/quality-check")({
   component: QualityCheckTerminal,
   head: () => ({ meta: [{ title: "Quality Check" }] }),
 });
 
-function isSameDay(d1: Date, d2: Date) {
-  return d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-}
-
 function QualityCheckTerminal() {
   const { data: garments = [], isLoading } = useTerminalGarments("quality_check");
   const { data: allGarments = [] } = useWorkshopGarments();
   const navigate = useNavigate();
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  const todayStr = useMemo(() => getLocalDateStr(), []);
 
   const passedToday = useMemo(() => {
     return allGarments.filter((g) => {
       if (g.piece_stage !== "ready_for_dispatch") return false;
       if (!g.completion_time) return false;
-      const ct = new Date(g.completion_time);
-      if (!isSameDay(ct, today)) return false;
+      if (getLocalDateStr(typeof g.completion_time === 'string' ? parseUtcTimestamp(g.completion_time) : g.completion_time) !== todayStr) return false;
       const wh = g.worker_history as Record<string, string> | null;
       return wh?.quality_checker != null;
     });
-  }, [allGarments, today]);
+  }, [allGarments, todayStr]);
 
   const handleCardClick = (g: WorkshopGarment) => {
     navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });

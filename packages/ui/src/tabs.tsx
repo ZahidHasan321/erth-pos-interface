@@ -90,7 +90,7 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 cursor-pointer select-none touch-manipulation active:scale-[0.97] text-muted-foreground",
+        "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 cursor-pointer select-none touch-manipulation pointer-coarse:active:scale-[0.97] text-muted-foreground",
         "data-[state=active]:text-foreground",
         "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring outline-none",
         "disabled:pointer-events-none disabled:opacity-50",

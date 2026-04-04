@@ -346,7 +346,7 @@ export function SearchCustomer({
                               key={`recent-${customer.id}`}
                               value={customer.id.toString()}
                               onSelect={() => handleSelectCustomer(customer, true)}
-                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 active:scale-[0.99] active:bg-primary/10 touch-manipulation"
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 pointer-coarse:active:scale-[0.99] active:bg-primary/10 touch-manipulation"
                             >
                                <div className="flex items-start gap-4">
                                 <div className="bg-muted p-2.5 rounded-full mt-0.5">
@@ -382,7 +382,7 @@ export function SearchCustomer({
                               key={customer.id}
                               value={customer.id.toString()}
                               onSelect={() => handleSelectCustomer(customer)}
-                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 active:scale-[0.99] active:bg-primary/10 touch-manipulation"
+                              className="flex items-center justify-between p-4 py-5 mx-1 rounded-lg cursor-pointer hover:bg-primary/5 data-[selected=true]:bg-primary/5 data-[selected=true]:text-accent-foreground border-b border-border/30 last:border-0 transition-[background-color,transform] duration-150 pointer-coarse:active:scale-[0.99] active:bg-primary/10 touch-manipulation"
                             >
                               <div className="flex items-start gap-4">
                                 <div className="bg-primary/10 p-2.5 rounded-full mt-0.5">

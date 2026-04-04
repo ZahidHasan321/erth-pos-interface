@@ -49,7 +49,7 @@ export function GarmentCard({
         {...clickableProps(onClick)}
         className={cn(
           "border border-border/60 transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out py-0 gap-0",
-          "cursor-pointer hover:border-primary/30 hover:shadow-md active:scale-[0.97]",
+          "cursor-pointer hover:border-primary/30 hover:shadow-md pointer-coarse:active:scale-[0.97]",
           garment.express && "!border-orange-300",
           garment.start_time ? "bg-emerald-50/50 !border-emerald-200" : "bg-card",
         )}

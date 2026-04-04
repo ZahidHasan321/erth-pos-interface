@@ -272,7 +272,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
               </div>
             )}
             <Button
-              className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all"
+              className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 pointer-coarse:active:scale-95 transition-all"
               onClick={() => setConfirmOpen(true)}
               disabled={!worker || completeMut.isPending}
             >

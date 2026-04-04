@@ -997,7 +997,7 @@ function NewWorkOrder() {
                                 resetLocalState();
                                 navigate({ to: "/$main/orders/new-work-order", params: { main: user?.userType || "erth" }, search: {} });
                             }}
-                            className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation active:scale-[0.97]"
+                            className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
                         >
                             + New Order
                         </button>

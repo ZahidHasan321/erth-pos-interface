@@ -1,7 +1,7 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { db } from "@/lib/db";
-import { getLocalDateStr, getLocalTzOffsetMinutes } from "@/lib/utils";
+import { getLocalDateStr, getLocalTzOffsetMinutes, getKuwaitMidnight } from "@/lib/utils";
 
 /** Cashier is ERTH-only — no SAKKBA or QASS orders */
 const CASHIER_BRAND = "ERTH" as const;
@@ -164,11 +164,9 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
 
     switch (filter) {
         case "today": {
-            // order_date stores UTC. Convert local day boundaries to UTC for correct filtering.
-            const startOfDay = new Date(today);
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(today);
-            endOfDay.setHours(23, 59, 59, 999);
+            // order_date stores UTC. Convert Kuwait day boundaries to UTC for correct filtering.
+            const startOfDay = getKuwaitMidnight(new Date(today));
+            const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
             query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
             break;
         }

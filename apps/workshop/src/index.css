@@ -186,6 +186,26 @@ input[type="number"] {
   }
 }
 
+/* ── Mouse click feedback (fine pointer / desktop) ── */
+@media (pointer: fine) {
+  @layer base {
+    button:not(:disabled) {
+      transition: opacity 0.1s ease, color 0.1s ease,
+                  background-color 0.1s ease, border-color 0.1s ease;
+      &:active {
+        opacity: 0.85;
+      }
+    }
+
+    a[href]:not([data-slot="button"]) {
+      transition: opacity 0.1s ease;
+      &:active {
+        opacity: 0.75;
+      }
+    }
+  }
+}
+
 /* Touch-only press-in feedback */
 @media (pointer: coarse) {
   @layer base {

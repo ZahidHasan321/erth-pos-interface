@@ -102,6 +102,7 @@ function DashboardPage() {
       count: number;
       desc: string;
       href: string;
+      search?: Record<string, string>;
       icon: typeof Inbox;
       urgency: "critical" | "warning" | "info";
     }[] = [];
@@ -113,6 +114,7 @@ function DashboardPage() {
         count: actionItems.overdueOrders,
         desc: "Past delivery date — still at workshop",
         href: "/assigned",
+        search: { tab: "attention" },
         icon: AlertTriangle,
         urgency: "critical",
       });
@@ -124,6 +126,7 @@ function DashboardPage() {
         count: actionItems.express.length,
         desc: "Rush orders in production",
         href: "/assigned",
+        search: { tab: "production", filter: "express" },
         icon: Zap,
         urgency: "critical",
       });
@@ -157,6 +160,7 @@ function DashboardPage() {
         count: actionItems.incoming.length,
         desc: "In transit to workshop — receive them",
         href: "/receiving",
+        search: { tab: "incoming" },
         icon: Inbox,
         urgency: "info",
       });
@@ -339,6 +343,7 @@ function DashboardPage() {
                 <Link
                   key={card.key}
                   to={card.href}
+                  search={card.search}
                   className={cn(
                     "border rounded-xl p-4 flex items-start gap-3 transition-all hover:shadow-md group",
                     style.card,
@@ -506,7 +511,7 @@ function DashboardPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { label: "Receive Orders", desc: `${actionItems.incoming.length} incoming`, href: "/receiving", icon: Inbox },
+            { label: "Receive Orders", desc: `${actionItems.incoming.length} incoming`, href: "/receiving", search: { tab: "incoming" }, icon: Inbox },
             { label: "Schedule Production", desc: `${actionItems.needsScheduling.length} awaiting`, href: "/scheduler", icon: CalendarDays },
             { label: "Dispatch Ready", desc: `${actionItems.readyToDispatch.length} ready`, href: "/dispatch", icon: Truck },
           ].map((action) => {
@@ -515,6 +520,7 @@ function DashboardPage() {
               <Link
                 key={action.href}
                 to={action.href}
+                search={(action as any).search}
                 className="bg-card border rounded-xl p-4 flex items-center gap-3 transition-all hover:shadow-md hover:bg-muted/40"
               >
                 <Icon className="w-6 h-6 opacity-60 shrink-0" aria-hidden="true" />

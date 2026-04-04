@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWorkshopGarments } from '@/api/garments';
-import { WORKSHOP_GARMENTS_KEY } from './useWorkshopGarments';
+import { getWorkshopGarments, getAssignedViewGarments } from '@/api/garments';
+import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
+import { groupByOrder, parseUtcTimestamp } from '@/lib/utils';
 import type { WorkshopGarment } from '@repo/database';
 
 export interface SidebarCounts {
@@ -44,5 +45,25 @@ export function useSidebarCounts() {
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
     select: computeCounts,
+  });
+}
+
+/** Count of orders that are overdue or due within 2 days — used for the Production Tracker badge */
+export function useAttentionCount() {
+  return useQuery({
+    queryKey: ASSIGNED_VIEW_KEY,
+    queryFn: getAssignedViewGarments,
+    staleTime: 30_000,
+    select: (data) => {
+      const groups = groupByOrder(data);
+      const now = Date.now();
+      let count = 0;
+      for (const og of groups) {
+        if (!og.delivery_date) continue;
+        const diff = Math.ceil((parseUtcTimestamp(og.delivery_date).getTime() - now) / (1000 * 60 * 60 * 24));
+        if (diff <= 2) count++;
+      }
+      return count;
+    },
   });
 }

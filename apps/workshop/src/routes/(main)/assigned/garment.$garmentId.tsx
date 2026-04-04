@@ -11,11 +11,12 @@ import {
   NotesSection,
   TripHistorySection,
 } from "@/components/shared/GarmentDetailSections";
+import { getGarmentEditability } from "@/lib/editability";
 import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
-import { ArrowLeft, Clock, Timer } from "lucide-react";
+import { ArrowLeft, Clock, Timer, Lock } from "lucide-react";
 import { toLocalDateStr } from "@/lib/utils";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 
@@ -69,11 +70,13 @@ function AssignedGarmentDetailPage() {
   }
 
   const hasSoaking = !!garment.soaking;
-  const hasStarted = !!garment.start_time;
   const isReturn = (garment.trip_number ?? 1) > 1;
   const currentTripEntry = getCurrentTripEntry(garment);
   const reentryStage = currentTripEntry?.reentry_stage ?? null;
   const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
+
+  const editability = getGarmentEditability(garment);
+  const showDates = editability.canEditPlan || editability.canEditDeliveryDate;
 
   const handlePlanConfirm = async (newPlan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
     const updates: Record<string, unknown> = {
@@ -97,13 +100,19 @@ function AssignedGarmentDetailPage() {
       </button>
 
       <GarmentHeader garment={garment} showExtras reentryStage={reentryStage} qcFailCount={qcFailCount}>
-        {!hasStarted && <EditableDates garment={garment} updateMut={updateMut} />}
+        {showDates && <EditableDates garment={garment} updateMut={updateMut} editability={editability} />}
+        {!showDates && editability.readOnlyReason && (
+          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-dashed text-xs text-muted-foreground">
+            <Lock className="w-3 h-3" />
+            <span>{editability.readOnlyReason}</span>
+          </div>
+        )}
       </GarmentHeader>
 
       {/* Content — 3 columns on lg */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
         <StyleSection garment={garment} />
-        <WorkerHistorySection garment={garment} onEditPlan={hasStarted ? undefined : () => setPlanOpen(true)} reentryStage={reentryStage} />
+        <WorkerHistorySection garment={garment} onEditPlan={editability.canEditPlan ? () => setPlanOpen(true) : undefined} reentryStage={reentryStage} />
         <MeasurementsSection garment={garment} />
       </div>
 
@@ -119,7 +128,7 @@ function AssignedGarmentDetailPage() {
         </div>
       )}
 
-      {!hasStarted && (
+      {editability.canEditPlan && (
         <PlanDialog
           open={planOpen}
           onOpenChange={setPlanOpen}
@@ -142,9 +151,11 @@ function AssignedGarmentDetailPage() {
 function EditableDates({
   garment,
   updateMut,
+  editability,
 }: {
   garment: WorkshopGarment;
   updateMut: ReturnType<typeof useUpdateGarmentDetails>;
+  editability: ReturnType<typeof getGarmentEditability>;
 }) {
   const handleDeliveryChange = async (d: Date | null) => {
     if (!d) return;
@@ -164,27 +175,30 @@ function EditableDates({
 
   return (
     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-dashed">
-      <div className="space-y-1">
-        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Clock className="w-3 h-3" /> Garment Delivery
-        </Label>
-        <DatePicker
-          value={garment.delivery_date ?? ""}
-          onChange={handleDeliveryChange}
-          className="h-8 text-sm font-semibold"
-        />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Timer className="w-3 h-3" /> Assigned
-        </Label>
-        <DatePicker
-          value={garment.assigned_date ?? ""}
-          onChange={handleAssignedChange}
-          className="h-8 text-sm font-semibold"
-        />
-      </div>
+      {editability.canEditDeliveryDate && (
+        <div className="space-y-1">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <Clock className="w-3 h-3" /> Garment Delivery
+          </Label>
+          <DatePicker
+            value={garment.delivery_date ?? ""}
+            onChange={handleDeliveryChange}
+            className="h-8 text-sm font-semibold"
+          />
+        </div>
+      )}
+      {editability.canEditPlan && (
+        <div className="space-y-1">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <Timer className="w-3 h-3" /> Assigned
+          </Label>
+          <DatePicker
+            value={garment.assigned_date ?? ""}
+            onChange={handleAssignedChange}
+            className="h-8 text-sm font-semibold"
+          />
+        </div>
+      )}
     </div>
   );
 }
-

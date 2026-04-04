@@ -13,7 +13,7 @@ function Checkbox({
       data-slot="checkbox"
       className={cn(
         // Base layout — size-5 visible, with expanded 44px touch target via padding
-        "peer size-5 shrink-0 rounded-[5px] border shadow-xs outline-none transition-[color,transform] duration-150 touch-manipulation active:scale-90",
+        "peer size-5 shrink-0 rounded-[5px] border shadow-xs outline-none transition-[color,transform] duration-150 touch-manipulation pointer-coarse:active:scale-90",
         // Base colors
         "border-border bg-background text-foreground dark:bg-input/30",
         // Checked state: brighter green, accessible contrast

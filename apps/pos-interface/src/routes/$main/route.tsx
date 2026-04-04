@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { NotFoundPage } from "@/components/not-found-page";
 import { Button } from "@repo/ui/button";
-import { LogOut, ShieldAlert } from "lucide-react";
+import { LogOut, ShieldAlert, User, Home } from "lucide-react";
 import {
   SidebarInset,
   SidebarProvider,
@@ -24,6 +24,16 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { Avatar, AvatarFallback } from "@repo/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@repo/ui/dropdown-menu";
 
 type MainParam = (typeof BRAND_NAMES)[keyof typeof BRAND_NAMES];
 
@@ -113,6 +123,20 @@ function RouteComponent() {
 
   const brandLogo = main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo;
   const brandName = main === BRAND_NAMES.showroom ? BRAND_NAMES.showroom : BRAND_NAMES.fromHome;
+  const mainSegment = `/${main}`;
+
+  const initials = auth.user?.name
+    ? auth.user.name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
+
+  const roleLabel = auth.user?.role
+    ? auth.user.role.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : null;
 
   const attemptedBrandName =
     loaderData.attemptedBrand === BRAND_NAMES.showroom ? "Erth" : "Sakkba";
@@ -170,28 +194,7 @@ function RouteComponent() {
       collapsible="icon"
       brandLogo={brandLogo}
       brandName={brandName}
-      onLogout={handleLogout}
     />
-  ), [brandLogo, brandName, handleLogout]);
-
-  const mobileHeader = useMemo(() => (
-    <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b bg-background/95 backdrop-blur-sm px-4 xl:hidden">
-      <div className="flex items-center gap-3">
-        <SidebarTrigger />
-        <div className="h-5 w-px bg-border" />
-        <div className="flex items-center gap-2">
-          <img
-            src={brandLogo}
-            alt="Logo"
-            className="h-6 w-6 object-contain"
-          />
-          <span className="text-base brand-font capitalize tracking-wide">
-            {brandName}
-          </span>
-        </div>
-      </div>
-      <NotificationBell />
-    </header>
   ), [brandLogo, brandName]);
 
   const mainLayout = (
@@ -199,7 +202,79 @@ function RouteComponent() {
       <div className="flex h-screen w-screen">
         {sidebar}
         <SidebarInset className="flex-1 flex flex-col min-w-0">
-          {mobileHeader}
+          <header className="flex items-center justify-between px-4 h-12 border-b bg-card shrink-0">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="size-8" />
+              <div className="flex items-center gap-2 xl:hidden">
+                <img
+                  src={brandLogo}
+                  alt="Logo"
+                  className="h-6 w-6 object-contain"
+                />
+                <span className="text-base brand-font capitalize tracking-wide">
+                  {brandName}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors">
+                    <Avatar className="h-7 w-7 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden sm:grid text-left text-sm leading-tight">
+                      <span className="truncate font-medium text-xs">
+                        {auth.user?.name}
+                      </span>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-lg" sideOffset={4}>
+                  <DropdownMenuLabel className="p-0 font-normal">
+                    <div className="flex items-center gap-2 px-2 py-2 text-left text-sm">
+                      <Avatar className="h-8 w-8 rounded-lg">
+                        <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-semibold">
+                          {auth.user?.name}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {roleLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem asChild>
+                      <Link to={`${mainSegment}/profile`}>
+                        <User className="h-4 w-4" />
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/home">
+                        <Home className="h-4 w-4" />
+                        Switch Brand
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
             <Outlet />
           </main>

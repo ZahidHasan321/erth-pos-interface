@@ -24,7 +24,6 @@ import {
 import { Input } from "@repo/ui/input";
 import { Textarea } from "@repo/ui/textarea";
 import { Combobox } from "@repo/ui/combobox";
-import { GroupedMeasurementFields } from "./GroupedMeasurementFields";
 import { MeasurementTable } from "./MeasurementTable";
 import { useAutoNavigation } from "./useAutoNavigation";
 
@@ -59,8 +58,6 @@ interface CustomerMeasurementsFormProps {
   isOrderClosed: boolean;
   hideHeader?: boolean;
 }
-
-const unit = "in";
 
 // ---------------------------------------
 // Custom hook for auto provision updates
@@ -694,23 +691,7 @@ export function CustomerMeasurementsForm({
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
-          {/* Provisions (auto-calculated) */}
-          <div className="flex gap-3">
-            <GroupedMeasurementFields
-              form={form}
-              title="Provisions"
-              unit={unit}
-              isDisabled={!isEditing}
-              fields={[
-                { name: "chest_provision", label: "Chest", isDisabled: true },
-                { name: "waist_provision", label: "Waist", isDisabled: true },
-                { name: "armhole_provision", label: "Armhole", isDisabled: true },
-              ]}
-              wrapperClassName="min-w-[200px]"
-              getFieldRef={getFieldRef}
-              getEnterHandler={getEnterHandler}
-            />
-          </div>
+          {/* Provisions hidden — auto-calculation still runs in background */}
         </div>
         <div className="bg-card p-4 rounded-xl border border-border shadow-sm">
           <FormField

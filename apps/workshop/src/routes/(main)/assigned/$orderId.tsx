@@ -10,12 +10,14 @@ import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } f
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
+import { getGarmentEditability } from "@/lib/editability";
 import {
   ArrowLeft,
   Check,
   ChevronDown,
   Clock,
   History,
+  Lock,
   Package,
   Home,
   Edit3,
@@ -350,12 +352,7 @@ function SharedPlanSection({
   const [planOpen, setPlanOpen] = useState(false);
   const hasSoaking = garments.some((g) => g.soaking);
   const anyStarted = garments.some((g) => g.start_time);
-  const anyCanEdit = garments.some(
-    (g) =>
-      g.location === "workshop" &&
-      !g.start_time &&
-      !["ready_for_dispatch", "completed", "ready_for_pickup"].includes(g.piece_stage ?? ""),
-  );
+  const anyCanEdit = garments.some((g) => getGarmentEditability(g).canEditPlan);
 
   const visibleSteps = PLAN_STEPS.filter(
     (s) => s.key !== "soaker" || hasSoaking,
@@ -462,27 +459,8 @@ function GarmentPlanCard({
   const currentTripEntry = getCurrentTripEntry(garment);
   const reentryStage = currentTripEntry?.reentry_stage ?? null;
   const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
-  // For current trip: check if any stage from the re-entry point onward has been completed
-  // by comparing worker_history against the current trip's expected stages
-  const hasCurrentTripProgress = (() => {
-    if (!currentTripEntry || !history || Object.keys(history).length === 0) return false;
-    // If this is a re-entry, only count progress if worker_history has entries
-    // for stages at or after the re-entry point (not leftover from prev trip)
-    if (reentryStage) {
-      const stageKeys = PLAN_STEPS.map((s) => s.responsibility);
-      const reentryIdx = stageKeys.indexOf(reentryStage as typeof stageKeys[number]);
-      if (reentryIdx < 0) return false;
-      const relevantStages = stageKeys.slice(reentryIdx);
-      const relevantKeys = relevantStages.map((s) => PLAN_STEPS.find((p) => p.responsibility === s)?.key).filter(Boolean);
-      return relevantKeys.some((k) => k && history[k]);
-    }
-    return Object.keys(history).length > 0;
-  })();
-  const canEdit =
-    garment.location === "workshop" &&
-    !hasStarted &&
-    !hasCurrentTripProgress &&
-    !["ready_for_dispatch", "completed", "ready_for_pickup"].includes(garment.piece_stage ?? "");
+  const editability = getGarmentEditability(garment);
+  const canEdit = editability.canEditPlan;
 
   const [planOpen, setPlanOpen] = useState(false);
 
@@ -635,9 +613,9 @@ function GarmentPlanCard({
             >
               <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
-          ) : hasStarted ? (
-            <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5" title="In progress — cannot edit">
-              <Play className="w-3 h-3" />
+          ) : editability.readOnlyReason ? (
+            <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5" title={editability.readOnlyReason}>
+              <Lock className="w-3 h-3" />
             </span>
           ) : null}
         </div>

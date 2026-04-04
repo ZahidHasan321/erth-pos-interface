@@ -678,7 +678,7 @@ export function OrderSummaryAndPaymentForm({
                               onClick={() => toggleDiscountType(opt.value)}
                               className={cn(
                                 "flex items-center justify-between rounded-lg border p-3 transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 w-full select-none touch-manipulation",
-                                "active:scale-[0.97] active:brightness-[0.97]",
+                                "pointer-coarse:active:scale-[0.97] active:brightness-[0.97]",
                                 active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background hover:bg-accent/30 hover:border-primary/30",
                                 isOrderClosed ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
                               )}

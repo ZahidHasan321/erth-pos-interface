@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@repo/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
 import type { NotificationItem } from "@/api/notifications";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 const TYPE_ICONS: Record<string, typeof Bell> = {
   garment_dispatched_to_shop: Truck,
@@ -31,7 +32,7 @@ function getNotificationLink(notification: NotificationItem): NotificationLink |
 }
 
 function formatTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseUtcTimestamp(dateStr);
   const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "just now";
@@ -152,6 +153,15 @@ export function NotificationBell() {
               />
             ))
           )}
+        </div>
+        <div className="border-t px-4 py-2">
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="block text-center text-xs font-medium text-primary hover:underline"
+          >
+            View all notifications
+          </Link>
         </div>
       </PopoverContent>
     </Popover>

@@ -4,17 +4,15 @@ import { ORDER_PHASE_LABELS, PIECE_STAGE_LABELS, LOCATION_LABELS } from "@/lib/c
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
 import { getShowroomStatus } from "@repo/database";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
 
 /**
  * Calculate delay in days between promised delivery date and today
  */
 export function calculateDelay(promisedDeliveryDate: string): number {
   // DB stores delivery_date as UTC in timestamp-without-tz column
-  const promised = parseUtcTimestamp(promisedDeliveryDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  promised.setHours(0, 0, 0, 0);
+  const promised = getKuwaitMidnight(parseUtcTimestamp(promisedDeliveryDate));
+  const today = getKuwaitMidnight();
 
   const diffTime = today.getTime() - promised.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

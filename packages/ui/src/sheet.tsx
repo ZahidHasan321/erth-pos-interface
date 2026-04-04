@@ -58,7 +58,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background overscroll-contain data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          "bg-background overscroll-contain data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
           side === "right" &&
             "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&
@@ -72,7 +72,7 @@ function SheetContent({
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="data-[state=open]:bg-secondary absolute top-3 right-3 rounded-md opacity-70 transition-[opacity,transform] hover:opacity-100 disabled:pointer-events-none size-9 flex items-center justify-center touch-manipulation active:scale-90 active:opacity-100 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring">
+        <SheetPrimitive.Close className="data-[state=open]:bg-secondary absolute top-3 right-3 rounded-md opacity-70 transition-[opacity,transform] hover:opacity-100 disabled:pointer-events-none size-9 flex items-center justify-center touch-manipulation pointer-coarse:active:scale-90 active:opacity-100 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring">
           <XIcon className="size-5" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

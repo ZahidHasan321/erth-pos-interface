@@ -17,6 +17,7 @@ import { Route as mainReceivingRouteImport } from './routes/(main)/receiving'
 import { Route as mainProfileRouteImport } from './routes/(main)/profile'
 import { Route as mainPricingRouteImport } from './routes/(main)/pricing'
 import { Route as mainParkingRouteImport } from './routes/(main)/parking'
+import { Route as mainNotificationsRouteImport } from './routes/(main)/notifications'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
 import { Route as mainCompletedRouteImport } from './routes/(main)/completed'
@@ -81,6 +82,11 @@ const mainPricingRoute = mainPricingRouteImport.update({
 const mainParkingRoute = mainParkingRouteImport.update({
   id: '/parking',
   path: '/parking',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainNotificationsRoute = mainNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainDispatchRoute = mainDispatchRouteImport.update({
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/completed': typeof mainCompletedRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
+  '/notifications': typeof mainNotificationsRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
   '/profile': typeof mainProfileRoute
@@ -263,6 +270,7 @@ export interface FileRoutesByTo {
   '/completed': typeof mainCompletedRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
+  '/notifications': typeof mainNotificationsRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
   '/profile': typeof mainProfileRoute
@@ -300,6 +308,7 @@ export interface FileRoutesById {
   '/(main)/completed': typeof mainCompletedRoute
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
+  '/(main)/notifications': typeof mainNotificationsRoute
   '/(main)/parking': typeof mainParkingRoute
   '/(main)/pricing': typeof mainPricingRoute
   '/(main)/profile': typeof mainProfileRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/completed'
     | '/dashboard'
     | '/dispatch'
+    | '/notifications'
     | '/parking'
     | '/pricing'
     | '/profile'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/completed'
     | '/dashboard'
     | '/dispatch'
+    | '/notifications'
     | '/parking'
     | '/pricing'
     | '/profile'
@@ -407,6 +418,7 @@ export interface FileRouteTypes {
     | '/(main)/completed'
     | '/(main)/dashboard'
     | '/(main)/dispatch'
+    | '/(main)/notifications'
     | '/(main)/parking'
     | '/(main)/pricing'
     | '/(main)/profile'
@@ -498,6 +510,13 @@ declare module '@tanstack/react-router' {
       path: '/parking'
       fullPath: '/parking'
       preLoaderRoute: typeof mainParkingRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/notifications': {
+      id: '/(main)/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof mainNotificationsRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/dispatch': {
@@ -705,6 +724,7 @@ interface mainRouteRouteChildren {
   mainCompletedRoute: typeof mainCompletedRoute
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
+  mainNotificationsRoute: typeof mainNotificationsRoute
   mainParkingRoute: typeof mainParkingRoute
   mainPricingRoute: typeof mainPricingRoute
   mainProfileRoute: typeof mainProfileRoute
@@ -736,6 +756,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainCompletedRoute: mainCompletedRoute,
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
+  mainNotificationsRoute: mainNotificationsRoute,
   mainParkingRoute: mainParkingRoute,
   mainPricingRoute: mainPricingRoute,
   mainProfileRoute: mainProfileRoute,

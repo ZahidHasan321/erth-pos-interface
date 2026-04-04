@@ -402,6 +402,14 @@ export const scheduleGarments = async (
 };
 
 export const startGarment = async (id: string): Promise<void> => {
+  // Idempotency: don't overwrite if already started
+  const { data: existing } = await db
+    .from('garments')
+    .select('start_time')
+    .eq('id', id)
+    .single();
+  if (existing?.start_time) return;
+
   const { error } = await db
     .from('garments')
     .update({ start_time: new Date().toISOString() })
@@ -415,14 +423,19 @@ export const completeAndAdvance = async (
   stage: string,
   nextStage: string,
 ): Promise<void> => {
-  // Build worker_history patch via RPC-style update — fetch first then patch
+  // Fetch current state and validate stage matches before advancing
   const { data: existing, error: fetchErr } = await db
     .from('garments')
-    .select('worker_history')
+    .select('worker_history, piece_stage')
     .eq('id', id)
     .single();
 
   if (fetchErr) throw new Error(fetchErr.message);
+
+  // Stage validation: reject if garment is not at the claimed stage
+  if (existing?.piece_stage !== stage) {
+    throw new Error(`Cannot advance: garment is at "${existing?.piece_stage}", not "${stage}"`);
+  }
 
   const history = (existing?.worker_history as Record<string, string>) ?? {};
   const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
@@ -559,7 +572,8 @@ export const releaseFinalsWithPlan = async (
   if (error) throw new Error(error.message);
 };
 
-/** Update garment details (dates, production plan) — used by Assigned Orders editing */
+/** Update garment details (dates, production plan) — used by Assigned Orders editing.
+ *  Enforces editability rules: rejects plan/date changes on locked garments. */
 export const updateGarmentDetails = async (
   id: string,
   updates: {
@@ -569,9 +583,46 @@ export const updateGarmentDetails = async (
     piece_stage?: string | null;
   },
 ): Promise<void> => {
+  // Fetch current garment state for validation
+  const { data: current, error: fetchErr } = await db
+    .from('garments')
+    .select('location, piece_stage, start_time')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!current) throw new Error('Garment not found');
+
+  const location = current.location ?? '';
+  const stage = current.piece_stage ?? '';
+  const hasStarted = !!current.start_time;
+
+  const DONE_STAGES = ['completed', 'ready_for_pickup'];
+  const NO_PLAN_STAGES = ['completed', 'ready_for_pickup', 'ready_for_dispatch', 'waiting_for_acceptance'];
+
+  // Determine what's allowed
+  const isAtWorkshop = location === 'workshop';
+  const canEditPlan = isAtWorkshop && !hasStarted && !NO_PLAN_STAGES.includes(stage);
+  const canEditDeliveryDate = isAtWorkshop && !DONE_STAGES.includes(stage)
+    || location === 'transit_to_workshop';
+
+  // Strip disallowed fields
+  const filtered = { ...updates };
+  if (!canEditPlan) {
+    delete filtered.production_plan;
+    delete filtered.assigned_date;
+    delete filtered.piece_stage;
+  }
+  if (!canEditDeliveryDate) {
+    delete filtered.delivery_date;
+  }
+
+  // If nothing left to update, skip
+  if (Object.keys(filtered).length === 0) return;
+
   const { error } = await db
     .from('garments')
-    .update(updates)
+    .update(filtered)
     .eq('id', id);
   if (error) throw new Error(error.message);
 };

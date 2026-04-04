@@ -7,9 +7,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Get a date as YYYY-MM-DD in the user's local timezone */
+const TZ = "Asia/Kuwait";
+
+/** Get a date as YYYY-MM-DD in Kuwait timezone */
 export function getLocalDateStr(date?: Date): string {
-  return new Intl.DateTimeFormat("en-CA").format(date ?? new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(date ?? new Date());
+}
+
+/** Get Kuwait midnight as a UTC Date (for date boundary comparisons) */
+export function getKuwaitMidnight(date?: Date): Date {
+  const kuwaitDateStr = getLocalDateStr(date);
+  return new Date(kuwaitDateStr + "T00:00:00+03:00");
 }
 
 /**
@@ -30,11 +38,9 @@ export function toLocalDateStr(value: string | Date | null | undefined): string 
   return isNaN(d.getTime()) ? null : getLocalDateStr(d);
 }
 
-/** Get local midnight as a UTC ISO string (for DB timestamp queries) */
+/** Get Kuwait midnight as a UTC ISO string (for DB timestamp queries) */
 export function getLocalMidnightUtc(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return getKuwaitMidnight().toISOString();
 }
 
 /** Format an ISO date/timestamp to a readable short date like "Mar 22" or "Mar 22, 2025" (if not current year) */
@@ -45,6 +51,7 @@ export function formatDate(value?: string | null): string {
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   return d.toLocaleDateString("en-US", {
+    timeZone: TZ,
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),

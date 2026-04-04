@@ -1,7 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
-import { sanitizeFilterValue } from "@/lib/utils";
+import { sanitizeFilterValue, getKuwaitMidnight } from "@/lib/utils";
 
 export type OrderHistoryItem = {
   id: number;
@@ -87,11 +87,9 @@ export function useOrderHistory({
       }
 
       if (dateFilter) {
-        // order_date stores UTC (from Supabase now()). Convert local day boundaries to UTC.
-        const startOfDay = new Date(dateFilter);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(dateFilter);
-        endOfDay.setHours(23, 59, 59, 999);
+        // order_date stores UTC. Convert Kuwait day boundaries to UTC for correct filtering.
+        const startOfDay = getKuwaitMidnight(new Date(dateFilter));
+        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
         query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
       }
 

@@ -13,7 +13,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { Truck, Package } from "lucide-react";
-import { formatDate, cn, parseUtcTimestamp } from "@/lib/utils";
+import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/dispatch")({
@@ -25,10 +25,8 @@ export const Route = createFileRoute("/(main)/dispatch")({
 
 function deliveryUrgency(deliveryDate: string | null | undefined) {
   if (!deliveryDate) return { label: null, className: "text-muted-foreground" };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const delivery = parseUtcTimestamp(deliveryDate);
-  delivery.setHours(0, 0, 0, 0);
+  const today = getKuwaitMidnight();
+  const delivery = getKuwaitMidnight(parseUtcTimestamp(deliveryDate));
   const daysLeft = Math.ceil((delivery.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (daysLeft < 0)
     return { label: `+${Math.abs(daysLeft)}d`, className: "text-red-700 bg-red-100 px-1.5 py-0.5 rounded" };

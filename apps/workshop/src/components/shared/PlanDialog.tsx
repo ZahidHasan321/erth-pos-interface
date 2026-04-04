@@ -135,7 +135,7 @@ function WorkerSelect({
               onClick={() => onChange(isSelected ? "" : r.resource_name)}
               aria-pressed={isSelected}
               className={cn(
-                "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow] cursor-pointer touch-manipulation active:scale-[0.97]",
+                "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow] cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]",
                 isSelected
                   ? "border-primary bg-primary text-white shadow-sm"
                   : isOverloaded
@@ -445,7 +445,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                                 onClick={() => handleUnitChange(step.key, u)}
                                 aria-pressed={unitSelections[step.key] === u}
                                 className={cn(
-                                  "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer touch-manipulation active:scale-[0.97]",
+                                  "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]",
                                   unitSelections[step.key] === u
                                     ? "border-primary bg-primary/5 text-primary"
                                     : "border-zinc-200 bg-card text-zinc-600 hover:border-zinc-300",

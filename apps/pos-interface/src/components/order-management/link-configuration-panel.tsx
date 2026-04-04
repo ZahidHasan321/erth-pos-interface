@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { CalendarIcon, Link as LinkIcon, RefreshCw } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Calendar } from "@repo/ui/calendar";
-import { cn } from "@/lib/utils";
+import { cn, getKuwaitMidnight } from "@/lib/utils";
 
 type LinkConfigurationPanelProps = {
   hasOrders: boolean;
@@ -53,7 +53,7 @@ export function LinkConfigurationPanel({
           selected={reviseDate}
           onSelect={setReviseDate}
           className="rounded-lg border border-border/40 p-2 [--cell-size:--spacing(8)] w-full"
-          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+          disabled={(date) => date < getKuwaitMidnight()}
         />
       </div>
 

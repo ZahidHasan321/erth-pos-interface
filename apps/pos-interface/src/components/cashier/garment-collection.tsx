@@ -51,7 +51,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                     isCompleted
                         ? "bg-muted/30 border-muted opacity-40"
                         : eligible
-                          ? "bg-emerald-50 border-emerald-300 hover:border-emerald-400 cursor-pointer active:scale-[0.99]"
+                          ? "bg-emerald-50 border-emerald-300 hover:border-emerald-400 cursor-pointer pointer-coarse:active:scale-[0.99]"
                           : "bg-muted/20 border-border opacity-50"
                 } ${isSelected ? "ring-2 ring-primary ring-offset-0 border-primary !bg-primary/5" : ""}`}
             >

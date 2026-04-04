@@ -13,7 +13,13 @@ export interface NotificationItem {
 }
 
 export async function getNotifications(limit = 50): Promise<NotificationItem[]> {
-  const { data, error } = await db.rpc("get_my_notifications", { p_limit: limit, p_department: "workshop" });
+  const { data, error } = await db.rpc("get_my_notifications", { p_limit: limit, p_department: "workshop", p_offset: 0 });
+  if (error) throw error;
+  return (data as NotificationItem[]) ?? [];
+}
+
+export async function getNotificationsPaginated(limit: number, offset: number): Promise<NotificationItem[]> {
+  const { data, error } = await db.rpc("get_my_notifications", { p_limit: limit, p_offset: offset, p_department: "workshop" });
   if (error) throw error;
   return (data as NotificationItem[]) ?? [];
 }
