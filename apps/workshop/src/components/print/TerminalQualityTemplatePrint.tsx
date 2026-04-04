@@ -1,9 +1,5 @@
 import templateSvg from "@/assets/print/template.svg";
-import {
-  ACCESSORY_ICONS,
-  STYLE_IMAGE_MAP,
-  THICKNESS_LABELS,
-} from "@/lib/style-images";
+import { ACCESSORY_ICONS, STYLE_IMAGE_MAP } from "@/lib/style-images";
 import type { Measurement, WorkshopGarment } from "@repo/database";
 import {
   qualityCheckTemplateFields,
@@ -56,7 +52,15 @@ function formatMeasuredValue(raw: unknown, degree: number): string {
 
 function formatThickness(value: string | null | undefined): string {
   if (!value) return EMPTY_VALUE;
-  return THICKNESS_LABELS[value] ?? value;
+
+  const normalized = String(value).trim().toUpperCase();
+
+  if (normalized === "S" || normalized === "SINGLE") return "SINGLE";
+  if (normalized === "D" || normalized === "DOUBLE") return "DOUBLE";
+  if (normalized === "T" || normalized === "TRIPLE") return "TRIPLE";
+  if (normalized === "N" || normalized === "NO HASHWA") return "NO HASHWA";
+
+  return normalized;
 }
 
 function optionFor(key: string | null | undefined) {
@@ -78,6 +82,8 @@ export function TerminalQualityTemplatePrint({
 
   const styleLabel = String(garment.style ?? "kuwaiti").toUpperCase();
   const lineCount = String(garment.lines ?? 1);
+  const lineLabel =
+    lineCount === "1" ? "SINGLE" : lineCount === "2" ? "DOUBLE" : lineCount;
 
   const frontPocket = optionFor(garment.front_pocket_type);
   const collarType = optionFor(garment.collar_type);
@@ -177,7 +183,7 @@ export function TerminalQualityTemplatePrint({
         <aside className="terminal-qc-style-panel">
           <div className="terminal-qc-style-meta">
             <span>{styleLabel}</span>
-            <span>LINES {lineCount}</span>
+            <span>LINE {lineLabel}</span>
             <span>{(garment.garment_type ?? "FINAL").toUpperCase()}</span>
           </div>
 
