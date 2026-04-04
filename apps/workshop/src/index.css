@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -55,7 +55,7 @@
   --popover-foreground: oklch(0.13 0.01 260);
 
   /* Primary — workshop green, clean and modern */
-  --primary: oklch(0.40 0.09 160);
+  --primary: oklch(0.4 0.09 160);
   --primary-foreground: oklch(0.97 0.005 160);
 
   /* Secondary — cool slate for contrast moments */
@@ -82,9 +82,9 @@
   --sidebar-primary: oklch(0.37 0.09 160);
   --sidebar-primary-foreground: oklch(0.97 0.005 160);
   --sidebar-accent: oklch(0.94 0.003 260);
-  --sidebar-accent-foreground: oklch(0.20 0.01 260);
+  --sidebar-accent-foreground: oklch(0.2 0.01 260);
   --sidebar-border: oklch(0.93 0.005 260);
-  --sidebar-ring: oklch(0.40 0.08 160);
+  --sidebar-ring: oklch(0.4 0.08 160);
 }
 
 @layer base {
@@ -99,22 +99,27 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: "Montserrat", "Cairo", sans-serif;
     overscroll-behavior: none;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Marcellus', 'Cairo', serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Marcellus", "Cairo", serif;
   }
 
   button {
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: "Montserrat", "Cairo", sans-serif;
     font-weight: 600;
     touch-action: manipulation;
   }
 
   label {
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: "Montserrat", "Cairo", sans-serif;
     font-weight: 500;
   }
 
@@ -127,13 +132,25 @@
   }
 
   /* Prevent text selection on interactive elements during touch */
-  [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"] {
     -webkit-user-select: none;
     user-select: none;
   }
 
-  a, button, [role="button"], [role="tab"], [role="checkbox"], [role="radio"],
-  [role="switch"], [role="menuitem"], [role="option"], select, summary,
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="menuitem"],
+  [role="option"],
+  select,
+  summary,
   [role="combobox"] {
     touch-action: manipulation;
     cursor: pointer;
@@ -157,23 +174,38 @@ input[type="number"] {
 
 @layer base {
   button:not(:disabled) {
-    transition: transform 0.12s ease, opacity 0.12s ease, color 0.12s ease,
-                background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease,
+      color 0.12s ease,
+      background-color 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
   }
 
   a[href]:not([data-slot="button"]) {
-    transition: transform 0.12s ease, opacity 0.12s ease;
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease;
   }
 
   /* Clickable cards */
   [data-slot="card"][role="button"],
   [data-slot="card"].cursor-pointer {
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   /* Generic role="button" elements */
-  [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]) {
-    transition: transform 0.12s ease, opacity 0.12s ease;
+  [role="button"]:not(button):not(tr):not([data-slot="card"]):not(
+      [data-slot="checkbox"]
+    ):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not(
+      [data-slot="sidebar-menu-button"]
+    ) {
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease;
   }
 
   /* Clickable table rows — bg change only, no scale (both touch & mouse) */
@@ -190,8 +222,11 @@ input[type="number"] {
 @media (pointer: fine) {
   @layer base {
     button:not(:disabled) {
-      transition: opacity 0.1s ease, color 0.1s ease,
-                  background-color 0.1s ease, border-color 0.1s ease;
+      transition:
+        opacity 0.1s ease,
+        color 0.1s ease,
+        background-color 0.1s ease,
+        border-color 0.1s ease;
       &:active {
         opacity: 0.85;
       }
@@ -225,7 +260,11 @@ input[type="number"] {
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
     }
 
-    [role="button"]:not(button):not(tr):not([data-slot="card"]):not([data-slot="checkbox"]):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not([data-slot="sidebar-menu-button"]):active:not(:disabled) {
+    [role="button"]:not(button):not(tr):not([data-slot="card"]):not(
+        [data-slot="checkbox"]
+      ):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not(
+        [data-slot="sidebar-menu-button"]
+      ):active:not(:disabled) {
       transform: scale(0.97);
       opacity: 0.9;
     }
@@ -235,27 +274,53 @@ input[type="number"] {
 /* ── CSS Animations ────────────────────────────────── */
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-in-left {
-  from { opacity: 0; transform: translateX(-16px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes shimmer {
-  to { transform: translateX(100%); }
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .animate-fade-in {
@@ -278,17 +343,39 @@ input[type="number"] {
 .stagger-children > * {
   animation: fade-in 0.2s ease-out both;
 }
-.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2)  { animation-delay: 30ms; }
-.stagger-children > *:nth-child(3)  { animation-delay: 60ms; }
-.stagger-children > *:nth-child(4)  { animation-delay: 90ms; }
-.stagger-children > *:nth-child(5)  { animation-delay: 120ms; }
-.stagger-children > *:nth-child(6)  { animation-delay: 150ms; }
-.stagger-children > *:nth-child(7)  { animation-delay: 180ms; }
-.stagger-children > *:nth-child(8)  { animation-delay: 210ms; }
-.stagger-children > *:nth-child(9)  { animation-delay: 240ms; }
-.stagger-children > *:nth-child(10) { animation-delay: 270ms; }
-.stagger-children > *:nth-child(n+11) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-children > *:nth-child(2) {
+  animation-delay: 30ms;
+}
+.stagger-children > *:nth-child(3) {
+  animation-delay: 60ms;
+}
+.stagger-children > *:nth-child(4) {
+  animation-delay: 90ms;
+}
+.stagger-children > *:nth-child(5) {
+  animation-delay: 120ms;
+}
+.stagger-children > *:nth-child(6) {
+  animation-delay: 150ms;
+}
+.stagger-children > *:nth-child(7) {
+  animation-delay: 180ms;
+}
+.stagger-children > *:nth-child(8) {
+  animation-delay: 210ms;
+}
+.stagger-children > *:nth-child(9) {
+  animation-delay: 240ms;
+}
+.stagger-children > *:nth-child(10) {
+  animation-delay: 270ms;
+}
+.stagger-children > *:nth-child(n + 11) {
+  animation-delay: 300ms;
+}
 
 /* Shimmer skeleton effect */
 .skeleton-shimmer {
@@ -296,12 +383,287 @@ input[type="number"] {
   overflow: hidden;
 }
 .skeleton-shimmer::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, oklch(1 0 260 / 35%), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(1 0 260 / 35%),
+    transparent
+  );
   animation: shimmer 1.5s infinite;
+}
+
+/* ── Terminal Template Print ───────────────────────── */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body.terminal-printing {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.terminal-printing * {
+    visibility: hidden !important;
+  }
+
+  body.terminal-printing .terminal-print-only,
+  body.terminal-printing .terminal-print-only * {
+    visibility: visible !important;
+  }
+
+  body.terminal-printing .terminal-print-only {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.terminal-printing .terminal-qc-print-sheet {
+    width: 194mm;
+    min-height: 276mm;
+    margin: 0 auto;
+    padding: 4mm;
+    border: 0.6mm solid #111827;
+    border-radius: 2.5mm;
+    box-sizing: border-box;
+    background: #fff;
+    font-family: "Montserrat", "Cairo", sans-serif;
+    color: #111827;
+  }
+
+  body.terminal-printing .terminal-qc-print-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 3mm;
+    margin-bottom: 3mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7mm;
+    border: 0.4mm solid #111827;
+    border-radius: 2mm;
+    padding: 1.2mm 1.6mm;
+    min-width: 32mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-label {
+    font-size: 2.4mm;
+    font-weight: 700;
+    letter-spacing: 0.2mm;
+    text-transform: uppercase;
+    color: #4b5563;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-value {
+    font-size: 4.8mm;
+    font-weight: 800;
+    letter-spacing: 0.25mm;
+    line-height: 1;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer {
+    border: 0.3mm solid #94a3b8;
+    border-radius: 2mm;
+    padding: 1.4mm 1.8mm;
+    font-size: 2.9mm;
+    line-height: 1.35;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer p {
+    margin: 0;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer span {
+    font-weight: 700;
+  }
+
+  body.terminal-printing .terminal-qc-print-brand {
+    border: 0.4mm solid #111827;
+    border-radius: 999px;
+    padding: 1mm 2.4mm;
+    font-size: 3.1mm;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.25mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 3mm;
+  }
+
+  body.terminal-printing .terminal-qc-template-frame {
+    position: relative;
+    width: 112mm;
+    aspect-ratio: 793.76001 / 1122.5601;
+    border: 0.35mm solid #94a3b8;
+    border-radius: 1.5mm;
+    overflow: hidden;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  body.terminal-printing .terminal-qc-template-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0.26mm solid #95a981;
+    border-radius: 0.7mm;
+    background: rgba(255, 255, 255, 0.96);
+    font-size: 2.25mm;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 0.04mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6mm;
+    min-width: 0;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta span {
+    border: 0.35mm solid #111827;
+    border-radius: 1.2mm;
+    text-align: center;
+    font-size: 2.4mm;
+    font-weight: 800;
+    padding: 1mm 0.8mm;
+    text-transform: uppercase;
+    letter-spacing: 0.1mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-block {
+    border: 0.3mm solid #cbd5e1;
+    border-radius: 1.6mm;
+    padding: 1.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-block h4 {
+    margin: 0 0 0.8mm;
+    font-size: 2.4mm;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12mm;
+    color: #334155;
+  }
+
+  body.terminal-printing .terminal-qc-style-row {
+    display: grid;
+    grid-template-columns: 22mm minmax(0, 1fr);
+    gap: 1.3mm;
+    align-items: center;
+  }
+
+  body.terminal-printing .terminal-qc-style-image,
+  body.terminal-printing .terminal-qc-style-placeholder {
+    width: 100%;
+    height: 15mm;
+    border: 0.25mm solid #cbd5e1;
+    border-radius: 1mm;
+    object-fit: contain;
+    background: #f8fafc;
+  }
+
+  body.terminal-printing .terminal-qc-style-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2mm;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.1mm;
+  }
+
+  body.terminal-printing .terminal-qc-jabzour-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-values {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55mm;
+    font-size: 2.2mm;
+    font-weight: 700;
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2mm;
+    margin-top: 0.85mm;
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8mm;
+    font-size: 2.05mm;
+    font-weight: 700;
+    border: 0.24mm solid #cbd5e1;
+    border-radius: 999px;
+    padding: 0.45mm 1.2mm;
+    background: #f8fafc;
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row img {
+    width: 3.4mm;
+    height: 3.4mm;
+    object-fit: contain;
+  }
+
+  body.terminal-printing .terminal-qc-collar-row img {
+    width: 4.2mm;
+    height: 4.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-notes {
+    margin-top: 2.4mm;
+    border-top: 0.28mm dashed #94a3b8;
+    padding-top: 1.6mm;
+    font-size: 2.6mm;
+    line-height: 1.35;
+  }
 }
 
 /* Respect reduced motion preference */

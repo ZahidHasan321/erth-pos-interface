@@ -15,10 +15,17 @@ import {
   HISTORY_KEY_MAP,
 } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
+import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -37,11 +44,16 @@ import {
   ArrowLeft,
   ArrowRight,
   Play,
+  Printer,
   Star,
   Check,
   X,
 } from "lucide-react";
-import type { WorkshopGarment, PieceStage, ProductionPlan } from "@repo/database";
+import type {
+  WorkshopGarment,
+  PieceStage,
+  ProductionPlan,
+} from "@repo/database";
 
 export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
   component: TerminalGarmentPage,
@@ -98,6 +110,12 @@ function TerminalGarmentPage() {
   const { data: garment, isLoading } = useGarment(garmentId);
   const router = useRouter();
 
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove("terminal-printing");
+    };
+  }, []);
+
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
@@ -111,8 +129,14 @@ function TerminalGarmentPage() {
   if (!garment) {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto text-center py-24">
-        <p className="text-lg font-semibold text-muted-foreground">Garment not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => router.history.back()}>
+        <p className="text-lg font-semibold text-muted-foreground">
+          Garment not found
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => router.history.back()}
+        >
           Go Back
         </Button>
       </div>
@@ -126,43 +150,76 @@ function TerminalGarmentPage() {
   const isProductionStage = PRODUCTION_STAGES.includes(stage as any);
   const showFloatingBar = isProductionStage && !isQC;
 
+  const handlePrint = () => {
+    const className = "terminal-printing";
+
+    const cleanup = () => {
+      document.body.classList.remove(className);
+      window.removeEventListener("afterprint", cleanup);
+    };
+
+    document.body.classList.add(className);
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(cleanup, 2000);
+
+    window.print();
+  };
+
   return (
-    <div className={cn(
-      "p-3 sm:p-4 max-w-7xl mx-auto",
-      showFloatingBar ? "pb-24" : "pb-8",
-    )}>
-      <button
-        onClick={() => router.history.back()}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors mb-3"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to {stageLabel}
-      </button>
+    <div
+      className={cn(
+        "p-3 sm:p-4 max-w-7xl mx-auto",
+        showFloatingBar ? "pb-24" : "pb-8",
+      )}
+    >
+      <div className="terminal-screen-content">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <button
+            onClick={() => router.history.back()}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to {stageLabel}
+          </button>
 
-      <GarmentHeader garment={garment} />
-
-      {/* Main content: overlay + production team + QC */}
-      <div className="mt-3 flex flex-col lg:flex-row gap-3 items-start">
-        {/* Dishdasha spec sheet */}
-        <div className="lg:w-[55%] shrink-0">
-          <DishdashaOverlay garment={garment} measurement={garment.measurement} />
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="w-4 h-4 mr-1.5" />
+            Print
+          </Button>
         </div>
 
-        {/* Production team + notes */}
-        <div className="flex-1 min-w-0 space-y-3">
-          <WorkerHistorySection garment={garment} />
-          {garment.notes && <NotesSection notes={garment.notes} />}
-        </div>
+        <GarmentHeader garment={garment} />
 
-        {/* QC panel (only on quality_check stage) */}
-        {isQC && (
-          <div className="lg:w-[320px] shrink-0 lg:sticky lg:top-4 lg:self-start">
-            <QCActions garment={garment} />
+        {/* Main content: overlay + production team + QC */}
+        <div className="mt-3 flex flex-col lg:flex-row gap-3 items-start">
+          {/* Dishdasha spec sheet */}
+          <div className="lg:w-[55%] shrink-0">
+            <DishdashaOverlay
+              garment={garment}
+              measurement={garment.measurement}
+            />
           </div>
-        )}
+
+          {/* Production team + notes */}
+          <div className="flex-1 min-w-0 space-y-3">
+            <WorkerHistorySection garment={garment} />
+            {garment.notes && <NotesSection notes={garment.notes} />}
+          </div>
+
+          {/* QC panel (only on quality_check stage) */}
+          {isQC && (
+            <div className="lg:w-[320px] shrink-0 lg:sticky lg:top-4 lg:self-start">
+              <QCActions garment={garment} />
+            </div>
+          )}
+        </div>
+
+        {showFloatingBar && <TerminalActions garment={garment} />}
       </div>
 
-      {showFloatingBar && <TerminalActions garment={garment} />}
+      <div className="terminal-print-only hidden" aria-hidden="true">
+        <TerminalQualityTemplatePrint garment={garment} />
+      </div>
     </div>
   );
 }
@@ -212,13 +269,19 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
   if (!nextStage) return null;
 
   const nextLabel =
-    PIECE_STAGE_LABELS[nextStage as keyof typeof PIECE_STAGE_LABELS] ?? nextStage;
+    PIECE_STAGE_LABELS[nextStage as keyof typeof PIECE_STAGE_LABELS] ??
+    nextStage;
 
   const handleComplete = async () => {
     if (!worker) return;
     setConfirmOpen(false);
     try {
-      await completeMut.mutateAsync({ id: garment.id, worker, stage, nextStage });
+      await completeMut.mutateAsync({
+        id: garment.id,
+        worker,
+        stage,
+        nextStage,
+      });
       router.history.back();
     } catch (err: any) {
       toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`);
@@ -235,15 +298,22 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 onClick={() => setWorkerOverride(true)}
                 className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80 transition-opacity"
               >
-                <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">By</span>
-                <span className="font-bold text-emerald-900 truncate text-base">{worker}</span>
+                <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
+                  By
+                </span>
+                <span className="font-bold text-emerald-900 truncate text-base">
+                  {worker}
+                </span>
                 <span className="text-xs text-muted-foreground">(change)</span>
               </button>
             ) : (
               <WorkerDropdown
                 responsibility={stage}
                 value={worker}
-                onChange={(v) => { setWorker(v); setWorkerOverride(false); }}
+                onChange={(v) => {
+                  setWorker(v);
+                  setWorkerOverride(false);
+                }}
                 placeholder="Who completed this?"
               />
             )}
@@ -256,7 +326,10 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 className="h-12 px-5 text-base font-bold"
                 onClick={() => {
                   startMut.mutate(garment.id, {
-                    onError: (err) => toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`),
+                    onError: (err) =>
+                      toast.error(
+                        `Failed to start: ${err?.message ?? "Unknown error"}`,
+                      ),
                   });
                 }}
                 disabled={startMut.isPending}
@@ -267,7 +340,9 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
             ) : (
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="text-sm font-bold text-emerald-700">In Progress</span>
+                <span className="text-sm font-bold text-emerald-700">
+                  In Progress
+                </span>
                 <ElapsedTimer since={garment.start_time} />
               </div>
             )}
@@ -291,15 +366,26 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
           </DialogHeader>
           <div className="py-2 space-y-2">
             <p className="text-sm text-muted-foreground">
-              Mark <span className="font-bold text-foreground">{garment.garment_id}</span> as done and move to <span className="font-bold text-foreground">{nextLabel}</span>?
+              Mark{" "}
+              <span className="font-bold text-foreground">
+                {garment.garment_id}
+              </span>{" "}
+              as done and move to{" "}
+              <span className="font-bold text-foreground">{nextLabel}</span>?
             </p>
             <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">By</span>
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">
+                By
+              </span>
               <span className="font-bold text-base">{worker}</span>
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="h-11 flex-1 text-base" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              className="h-11 flex-1 text-base"
+              onClick={() => setConfirmOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -363,7 +449,9 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
         <button
           onClick={() => setMode("pass")}
           className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${
-            mode === "pass" ? "bg-emerald-600 text-white shadow" : "text-muted-foreground hover:text-foreground"
+            mode === "pass"
+              ? "bg-emerald-600 text-white shadow"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Check className="w-4 h-4 inline mr-1" /> Pass
@@ -371,7 +459,9 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
         <button
           onClick={() => setMode("fail")}
           className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${
-            mode === "fail" ? "bg-red-600 text-white shadow" : "text-muted-foreground hover:text-foreground"
+            mode === "fail"
+              ? "bg-red-600 text-white shadow"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <X className="w-4 h-4 inline mr-1" /> Fail
@@ -384,23 +474,43 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             {worker && !workerOverride ? (
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-emerald-600 font-bold">QC Inspector</p>
-                  <p className="text-sm font-semibold text-emerald-900">{worker}</p>
+                  <p className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
+                    QC Inspector
+                  </p>
+                  <p className="text-sm font-semibold text-emerald-900">
+                    {worker}
+                  </p>
                 </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setWorkerOverride(true)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={() => setWorkerOverride(true)}
+                >
                   Change
                 </Button>
               </div>
             ) : (
-              <WorkerDropdown responsibility="quality_check" value={worker} onChange={setWorker} placeholder="QC Inspector" />
+              <WorkerDropdown
+                responsibility="quality_check"
+                value={worker}
+                onChange={setWorker}
+                placeholder="QC Inspector"
+              />
             )}
           </div>
 
           <div className="space-y-3">
             {QC_CATEGORIES.map((cat) => (
-              <div key={cat.key} className="flex items-center justify-between gap-2 py-1">
+              <div
+                key={cat.key}
+                className="flex items-center justify-between gap-2 py-1"
+              >
                 <span className="text-sm font-medium">{cat.label}</span>
-                <StarRating value={ratings[cat.key] ?? 0} onChange={(v) => setRatings((p) => ({ ...p, [cat.key]: v }))} />
+                <StarRating
+                  value={ratings[cat.key] ?? 0}
+                  onChange={(v) => setRatings((p) => ({ ...p, [cat.key]: v }))}
+                />
               </div>
             ))}
           </div>
@@ -414,18 +524,29 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
           </Button>
 
           {!allRated && worker && (
-            <p className="text-xs text-muted-foreground text-center">Rate all 5 categories to pass</p>
+            <p className="text-xs text-muted-foreground text-center">
+              Rate all 5 categories to pass
+            </p>
           )}
         </div>
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Return to Stage</label>
-            <Select value={returnStage} onValueChange={(v) => setReturnStage(v as PieceStage)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <label className="text-sm font-medium mb-1.5 block">
+              Return to Stage
+            </label>
+            <Select
+              value={returnStage}
+              onValueChange={(v) => setReturnStage(v as PieceStage)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {FAIL_RETURN_STAGES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -433,10 +554,19 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
 
           <div>
             <label className="text-sm font-medium mb-1.5 block">Reason</label>
-            <Input placeholder="Describe the issue…" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input
+              placeholder="Describe the issue…"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </div>
 
-          <Button variant="destructive" className="w-full h-10 text-sm font-bold" onClick={handleFail} disabled={!canFail || failMut.isPending}>
+          <Button
+            variant="destructive"
+            className="w-full h-10 text-sm font-bold"
+            onClick={handleFail}
+            disabled={!canFail || failMut.isPending}
+          >
             <X className="w-4 h-4 mr-1.5" /> Send Back
           </Button>
         </div>
