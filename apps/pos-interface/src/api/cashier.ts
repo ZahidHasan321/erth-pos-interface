@@ -1,13 +1,10 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { db } from "@/lib/db";
+import { getLocalDateStr, getLocalTzOffsetMinutes } from "@/lib/utils";
 
 /** Cashier is ERTH-only — no SAKKBA or QASS orders */
 const CASHIER_BRAND = "ERTH" as const;
-
-function toLocalDateStr(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 
 const CASHIER_ORDER_QUERY = `
@@ -117,9 +114,7 @@ export interface CashierSummary {
 export const getCashierSummary = async (brand?: string): Promise<{ status: 'success'; data: CashierSummary }> => {
     const currentBrand = brand || CASHIER_BRAND;
     // Pass local date to handle timezone correctly (Supabase runs in UTC)
-    const now = new Date();
-    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const { data, error } = await db.rpc('get_cashier_summary', { p_brand: currentBrand, p_today: localToday });
+    const { data, error } = await db.rpc('get_cashier_summary', { p_brand: currentBrand, p_today: getLocalDateStr(), p_tz_offset_minutes: getLocalTzOffsetMinutes() });
     if (error) {
         console.error('Error fetching cashier summary:', error.message);
         return { status: 'success', data: { all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0, today_collected: 0, today_refunded: 0, month_billed: 0, month_paid: 0, month_outstanding: 0, month_collected: 0, month_refunded: 0, work_count: 0, sales_count: 0, unpaid_count: 0, work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0 } };
@@ -133,8 +128,6 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
     const currentBrand = brand || CASHIER_BRAND;
 
     const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
     // For paid/unpaid: use server-side RPC to get exact IDs (column comparison done in SQL)
     if (filter === "paid" || filter === "unpaid") {
         const { data: ids, error: rpcError } = await db.rpc('get_cashier_order_ids_by_payment', {
@@ -170,9 +163,15 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
         .neq('checkout_status', 'draft');
 
     switch (filter) {
-        case "today":
-            query = query.gte('order_date', `${todayStr}T00:00:00`).lte('order_date', `${todayStr}T23:59:59`);
+        case "today": {
+            // order_date stores UTC. Convert local day boundaries to UTC for correct filtering.
+            const startOfDay = new Date(today);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(today);
+            endOfDay.setHours(23, 59, 59, 999);
+            query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
             break;
+        }
         case "work":
             query = query.eq('order_type', 'WORK');
             break;
@@ -351,6 +350,7 @@ export const recordPaymentTransaction = async (params: {
         p_refund_reason: params.refundReason || null,
         p_collect_garment_ids: params.collectGarmentIds || null,
         p_refund_items: params.refundItems ? JSON.stringify(params.refundItems) : null,
+        p_local_date: getLocalDateStr(),
     });
 
     if (error) {
@@ -497,6 +497,7 @@ export const getEodReport = async (
         p_brand: currentBrand,
         p_date_from: dateFrom,
         p_date_to: dateTo,
+        p_tz_offset_minutes: getLocalTzOffsetMinutes(),
     });
 
     if (error) {
@@ -528,6 +529,7 @@ export const getEodTransactions = async (
         p_date_to: dateTo,
         p_page: 1,
         p_page_size: 10000,
+        p_tz_offset_minutes: getLocalTzOffsetMinutes(),
     });
     if (error) {
         console.error('Error fetching EOD transactions:', error.message);
@@ -554,6 +556,7 @@ export const getEodTransactionsPaginated = async (
         p_payment_type: filters.paymentType || null,
         p_transaction_type: filters.transactionType || null,
         p_order_type: filters.orderType || null,
+        p_tz_offset_minutes: getLocalTzOffsetMinutes(),
     });
     if (error) {
         console.error('Error fetching EOD transactions:', error.message);
@@ -606,7 +609,7 @@ export interface CloseRegisterResult {
 
 export const getRegisterSession = async (brand?: string, date?: string) => {
     const currentBrand = brand || CASHIER_BRAND;
-    const localDate = date || toLocalDateStr(new Date());
+    const localDate = date || getLocalDateStr();
     const { data, error } = await db.rpc('get_register_session', {
         p_brand: currentBrand,
         p_date: localDate,
@@ -624,7 +627,7 @@ export const openRegister = async (params: {
     brand?: string;
 }) => {
     const currentBrand = params.brand || CASHIER_BRAND;
-    const localDate = toLocalDateStr(new Date());
+    const localDate = getLocalDateStr();
     const { data, error } = await db.rpc('open_register', {
         p_brand: currentBrand,
         p_date: localDate,
@@ -646,9 +649,22 @@ export const closeRegister = async (params: {
         p_user_id: params.userId,
         p_counted_cash: params.countedCash,
         p_notes: params.notes || null,
+        p_tz_offset_minutes: getLocalTzOffsetMinutes(),
     });
     if (error) return { status: 'error' as const, message: error.message };
     return { status: 'success' as const, data: data as CloseRegisterResult };
+};
+
+export const reopenRegister = async (params: {
+    sessionId: number;
+    userId: string;
+}) => {
+    const { data, error } = await db.rpc('reopen_register', {
+        p_session_id: params.sessionId,
+        p_user_id: params.userId,
+    });
+    if (error) return { status: 'error' as const, message: error.message };
+    return { status: 'success' as const, data };
 };
 
 export const addCashMovement = async (params: {
@@ -664,6 +680,7 @@ export const addCashMovement = async (params: {
         p_amount: params.amount,
         p_reason: params.reason,
         p_user_id: params.userId,
+        p_tz_offset_minutes: getLocalTzOffsetMinutes(),
     });
     if (error) return { status: 'error' as const, message: error.message };
     return { status: 'success' as const, data };

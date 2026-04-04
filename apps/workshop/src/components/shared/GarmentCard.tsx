@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@repo/ui/card";
 import { Checkbox } from "@repo/ui/checkbox";
-import { cn, clickableProps, formatDate } from "@/lib/utils";
+import { cn, clickableProps, formatDate, parseUtcTimestamp } from "@/lib/utils";
 import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
 import { GarmentTypeBadge, GarmentTypeBadgeCompact } from "./PageShell";
@@ -37,7 +37,7 @@ export function GarmentCard({
   const hasSoaking = !!garment.soaking;
 
   const daysLeft = garment.delivery_date_order
-    ? Math.ceil((new Date(garment.delivery_date_order).getTime() - Date.now()) / 86400000)
+    ? Math.ceil((parseUtcTimestamp(garment.delivery_date_order).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;

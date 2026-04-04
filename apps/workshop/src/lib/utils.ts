@@ -12,6 +12,16 @@ export function getLocalDateStr(date?: Date): string {
   return new Intl.DateTimeFormat("en-CA").format(date ?? new Date());
 }
 
+/**
+ * Parse a DB timestamp correctly as UTC.
+ * Supabase returns `timestamp without tz` as "2025-04-04T21:00:00" (no Z),
+ * so JS would parse it as local time. The value is actually UTC — append Z.
+ */
+export function parseUtcTimestamp(value: string): Date {
+  if (value.endsWith("Z") || value.includes("+")) return new Date(value);
+  return new Date(value + "Z");
+}
+
 /** Parse any date value to local YYYY-MM-DD string */
 export function toLocalDateStr(value: string | Date | null | undefined): string | null {
   if (!value) return null;

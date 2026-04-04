@@ -8,30 +8,17 @@ export const upsertSession = async (
   userId: string,
   deviceInfo?: string
 ): Promise<void> => {
-  // Try update first (most common path)
-  const { data: existing } = await db
+  const { error } = await db
     .from("user_sessions")
-    .select("id")
-    .eq("user_id", userId)
-    .limit(1)
-    .single();
-
-  if (existing) {
-    const { error } = await db
-      .from("user_sessions")
-      .update({ last_active_at: new Date().toISOString(), device_info: deviceInfo })
-      .eq("user_id", userId);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await db
-      .from("user_sessions")
-      .insert({
+    .upsert(
+      {
         user_id: userId,
         last_active_at: new Date().toISOString(),
         device_info: deviceInfo,
-      });
-    if (error) throw new Error(error.message);
-  }
+      },
+      { onConflict: "user_id" },
+    );
+  if (error) throw new Error(error.message);
 };
 
 /** Remove session on logout */

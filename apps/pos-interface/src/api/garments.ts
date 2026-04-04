@@ -1,6 +1,7 @@
 import type { ApiResponse } from "../types/api";
 import type { Garment } from "@repo/database";
 import { db } from "@/lib/db";
+import { parseUtcTimestamp } from "@/lib/utils";
 import { getBrand } from "./orders";
 
 const TABLE_NAME = "garments";
@@ -53,7 +54,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> =>
   const filtered = (data || []).filter(g => {
     const latestWorkshopFeedback = g.garment_feedback
       ?.filter((f: any) => f.distribution === 'workshop')
-      ?.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+      ?.sort((a: any, b: any) => parseUtcTimestamp(b.created_at || 0).getTime() - parseUtcTimestamp(a.created_at || 0).getTime())[0];
     return latestWorkshopFeedback && latestWorkshopFeedback.trip_number === (g.trip_number || 1);
   });
 

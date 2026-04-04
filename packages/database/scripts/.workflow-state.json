@@ -1,0 +1,27 @@
+{
+  "staffUserId": "b5169963-dd9e-4a5d-8963-b1f86fffd7aa",
+  "customerId": 14,
+  "fabricIds": [
+    11,
+    12
+  ],
+  "styleId": 1,
+  "resourceIds": [
+    "db856ab9-6db2-4bd1-a265-e2f8e953a0d7",
+    "b31df0be-4e92-4836-90bc-1b18705889ea",
+    "68bf0eea-513b-4b2d-908a-c7684fcd527c",
+    "195d30a6-7df9-4736-a058-fd2bdcf01e5d",
+    "f19d1192-d9ba-4fb0-abfa-f7ea287f0385",
+    "141d1d30-3cad-4436-aee9-eb88da3ad201",
+    "d70a27b6-f277-4fed-aa81-1e30fe2f1e2e"
+  ],
+  "measurementId": "fe6985b0-8879-4dc6-9ec2-a9d915a55f2e",
+  "orderId": 28,
+  "garmentIds": [
+    "75156f6a-b704-41c1-9948-0a7562b26187",
+    "3a619b82-ce4a-47a5-b462-d4d71792435c",
+    "7c706726-04bc-43a2-81eb-c7158f901bd1",
+    "133367f3-fade-4382-8957-edd5842fb5cb"
+  ],
+  "invoiceNumber": 5010
+}

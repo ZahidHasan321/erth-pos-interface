@@ -1,4 +1,3 @@
-import type { ApiResponse } from '../types/api';
 import { db } from "@/lib/db";
 import type { TransferRequest, TransferRequestItem } from '@repo/database';
 
@@ -30,7 +29,7 @@ export interface TransferFilters {
 
 export const getTransferRequests = async (
   filters?: TransferFilters
-): Promise<ApiResponse<TransferRequestWithItems[]>> => {
+): Promise<TransferRequestWithItems[]> => {
   let query = db.from('transfer_requests').select(TRANSFER_QUERY).order('created_at', { ascending: false });
 
   if (filters?.status) {
@@ -48,11 +47,8 @@ export const getTransferRequests = async (
   }
 
   const { data, error } = await query;
-
-  if (error) {
-    return { status: 'error', message: error.message, data: [] };
-  }
-  return { status: 'success', data: data as unknown as TransferRequestWithItems[] };
+  if (error) throw error;
+  return data as unknown as TransferRequestWithItems[];
 };
 
 export const createTransferRequest = async (request: {
@@ -61,7 +57,7 @@ export const createTransferRequest = async (request: {
   requested_by: string;
   notes?: string;
   items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
-}): Promise<ApiResponse<TransferRequest>> => {
+}): Promise<TransferRequest> => {
   const { items, ...requestData } = request;
 
   const { data: transferData, error: transferError } = await db
@@ -70,9 +66,7 @@ export const createTransferRequest = async (request: {
     .select()
     .single();
 
-  if (transferError) {
-    return { status: 'error', message: transferError.message };
-  }
+  if (transferError) throw transferError;
 
   const itemsToInsert = items.map(item => ({
     ...item,
@@ -83,26 +77,21 @@ export const createTransferRequest = async (request: {
     .from('transfer_request_items')
     .insert(itemsToInsert);
 
-  if (itemsError) {
-    return { status: 'error', message: itemsError.message };
-  }
+  if (itemsError) throw itemsError;
 
-  return { status: 'success', data: transferData as TransferRequest };
+  return transferData as TransferRequest;
 };
 
 export const approveTransferRequest = async (
   id: number,
   items: { id: number; approved_qty: number }[],
-): Promise<ApiResponse<TransferRequest>> => {
-  // Update each item's approved_qty
+): Promise<TransferRequest> => {
   for (const item of items) {
     const { error } = await db
       .from('transfer_request_items')
       .update({ approved_qty: item.approved_qty })
       .eq('id', item.id);
-    if (error) {
-      return { status: 'error', message: error.message };
-    }
+    if (error) throw error;
   }
 
   const { data, error } = await db
@@ -112,16 +101,14 @@ export const approveTransferRequest = async (
     .select()
     .single();
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as TransferRequest };
+  if (error) throw error;
+  return data as TransferRequest;
 };
 
 export const rejectTransferRequest = async (
   id: number,
   rejection_reason: string,
-): Promise<ApiResponse<TransferRequest>> => {
+): Promise<TransferRequest> => {
   const { data, error } = await db
     .from('transfer_requests')
     .update({ status: 'rejected', rejection_reason })
@@ -129,10 +116,8 @@ export const rejectTransferRequest = async (
     .select()
     .single();
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as TransferRequest };
+  if (error) throw error;
+  return data as TransferRequest;
 };
 
 export const reviseTransferRequest = async (
@@ -145,7 +130,7 @@ export const reviseTransferRequest = async (
     revision_number: number;
     items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
   },
-): Promise<ApiResponse<TransferRequest>> => {
+): Promise<TransferRequest> => {
   const { items, ...requestData } = request;
 
   const { data: transferData, error: transferError } = await db
@@ -154,9 +139,7 @@ export const reviseTransferRequest = async (
     .select()
     .single();
 
-  if (transferError) {
-    return { status: 'error', message: transferError.message };
-  }
+  if (transferError) throw transferError;
 
   const itemsToInsert = items.map(item => ({
     ...item,
@@ -167,43 +150,37 @@ export const reviseTransferRequest = async (
     .from('transfer_request_items')
     .insert(itemsToInsert);
 
-  if (itemsError) {
-    return { status: 'error', message: itemsError.message };
-  }
+  if (itemsError) throw itemsError;
 
-  return { status: 'success', data: transferData as TransferRequest };
+  return transferData as TransferRequest;
 };
 
 export const dispatchTransfer = async (
   transferId: number,
   dispatchedBy: string,
   items: { id: number; dispatched_qty: number }[],
-): Promise<ApiResponse<{ success: boolean; transfer_id: number }>> => {
+): Promise<{ success: boolean; transfer_id: number }> => {
   const { data, error } = await db.rpc('dispatch_transfer', {
     p_transfer_id: transferId,
     p_dispatched_by: dispatchedBy,
     p_items: items,
   });
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as { success: boolean; transfer_id: number } };
+  if (error) throw error;
+  return data as { success: boolean; transfer_id: number };
 };
 
 export const receiveTransfer = async (
   transferId: number,
   receivedBy: string,
   items: { id: number; received_qty: number; discrepancy_note?: string }[],
-): Promise<ApiResponse<{ success: boolean; transfer_id: number; has_discrepancy: boolean }>> => {
+): Promise<{ success: boolean; transfer_id: number; has_discrepancy: boolean }> => {
   const { data, error } = await db.rpc('receive_transfer', {
     p_transfer_id: transferId,
     p_received_by: receivedBy,
     p_items: items,
   });
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as { success: boolean; transfer_id: number; has_discrepancy: boolean } };
+  if (error) throw error;
+  return data as { success: boolean; transfer_id: number; has_discrepancy: boolean };
 };

@@ -521,7 +521,8 @@ CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_transaction_type TEXT DEFAULT 'payment',
   p_refund_reason TEXT DEFAULT NULL,
   p_collect_garment_ids UUID[] DEFAULT NULL,
-  p_refund_items JSONB DEFAULT NULL
+  p_refund_items JSONB DEFAULT NULL,
+  p_local_date DATE DEFAULT CURRENT_DATE
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -538,6 +539,16 @@ BEGIN
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  -- Block payments/refunds when register is closed
+  -- Use p_local_date (client's local date) instead of CURRENT_DATE (server UTC)
+  -- to avoid timezone mismatch (e.g. Kuwait UTC+3 vs Supabase UTC)
+  IF NOT EXISTS (
+    SELECT 1 FROM register_sessions
+    WHERE brand = v_order.brand AND date = p_local_date AND status = 'open'
+  ) THEN
+    RAISE EXCEPTION 'Register is not open. Open the register before recording transactions.';
   END IF;
 
   -- For refunds: validate reason and ensure paid won't go below 0
@@ -614,6 +625,14 @@ BEGIN
         SET refunded_qty = LEAST(COALESCE(refunded_qty, 0) + v_refund_qty, COALESCE(quantity, 0))
         WHERE id = v_shelf_item_id
           AND order_id = p_order_id;
+
+        -- Restore shelf stock for refunded items
+        IF v_refund_qty > 0 THEN
+          UPDATE shelf
+          SET stock = stock + v_refund_qty,
+              shop_stock = shop_stock + v_refund_qty
+          WHERE id = (SELECT shelf_id FROM order_shelf_items WHERE id = v_shelf_item_id);
+        END IF;
       END IF;
     END LOOP;
   END IF;
@@ -641,7 +660,7 @@ DECLARE
   v_new_total DECIMAL;
 BEGIN
   -- Validate order exists
-  SELECT order_total, delivery_charge, discount_value INTO v_order
+  SELECT order_total, delivery_charge, discount_value, paid INTO v_order
   FROM orders WHERE id = p_order_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
@@ -658,6 +677,11 @@ BEGIN
 
   -- Recalculate order total by swapping delivery charge
   v_new_total := COALESCE(v_order.order_total, 0) - v_old_delivery + v_new_delivery;
+
+  -- Prevent removing delivery charge if it would drop total below already-paid amount
+  IF v_new_total < COALESCE(v_order.paid, 0) THEN
+    RAISE EXCEPTION 'Removing delivery charge would reduce order total (%) below amount already paid (%). Refund the excess first.', v_new_total, COALESCE(v_order.paid, 0);
+  END IF;
 
   -- Update order charges
   UPDATE orders
@@ -741,12 +765,15 @@ DECLARE
   v_order RECORD;
   v_subtotal DECIMAL;
   v_final_total DECIMAL;
+  v_current_paid DECIMAL;
 BEGIN
   -- Validate order exists
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
+
+  v_current_paid := COALESCE(v_order.paid, 0);
 
   -- Compute subtotal (order_total + existing discount)
   v_subtotal := COALESCE(v_order.order_total, 0) + COALESCE(v_order.discount_value, 0);
@@ -760,6 +787,11 @@ BEGIN
 
   IF v_final_total < 0 THEN
     v_final_total := 0;
+  END IF;
+
+  -- Prevent discount from dropping order_total below already-paid amount
+  IF v_final_total < v_current_paid THEN
+    RAISE EXCEPTION 'Discount would reduce order total (%) below amount already paid (%). Refund the excess first.', v_final_total, v_current_paid;
   END IF;
 
   -- Update order
@@ -788,15 +820,30 @@ $$ LANGUAGE plpgsql;
 -- Uses two sources: orders table for billing totals, payment_transactions for actual collections.
 -- "today_paid"/"month_paid" = paid-so-far on orders created in that period (order-centric).
 -- "today_collected"/"month_collected" = actual cash received in that period (cash-centric).
-CREATE OR REPLACE FUNCTION get_cashier_summary(p_brand TEXT, p_today DATE DEFAULT CURRENT_DATE)
+CREATE OR REPLACE FUNCTION get_cashier_summary(
+  p_brand TEXT,
+  p_today DATE DEFAULT CURRENT_DATE,
+  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
+)
 RETURNS JSONB AS $$
 DECLARE
   v_today DATE := p_today;
   v_month_start DATE := date_trunc('month', p_today)::date;
   v_order_stats JSONB;
   v_tx_stats JSONB;
+  v_tz_interval INTERVAL;
+  v_today_start TIMESTAMP;
+  v_today_end TIMESTAMP;
+  v_month_utc_start TIMESTAMP;
 BEGIN
+  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
+  v_tz_interval := (p_tz_offset_minutes || ' minutes')::interval;
+  v_today_start := v_today::timestamp - v_tz_interval;
+  v_today_end := (v_today + INTERVAL '1 day')::timestamp - v_tz_interval;
+  v_month_utc_start := v_month_start::timestamp - v_tz_interval;
+
   -- 1. Order-level aggregates (billing, outstanding, counts)
+  --    order_date is stored as local date, so direct date comparison is correct
   SELECT jsonb_build_object(
     'all_billed',       COALESCE(SUM(order_total::decimal), 0),
     'all_collected',    COALESCE(SUM(paid::decimal), 0),
@@ -818,12 +865,13 @@ BEGIN
   FROM orders
   WHERE brand = p_brand::brand AND checkout_status = 'confirmed';
 
-  -- 2. Transaction-level aggregates (actual cash received by date)
+  -- 2. Transaction-level aggregates (actual cash received)
+  --    created_at is stored as UTC, so use timezone-corrected boundaries
   SELECT jsonb_build_object(
-    'today_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at::date = v_today AND pt.transaction_type = 'payment'), 0),
-    'today_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at::date = v_today AND pt.transaction_type = 'refund'), 0),
-    'month_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at::date >= v_month_start AND pt.transaction_type = 'payment'), 0),
-    'month_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at::date >= v_month_start AND pt.transaction_type = 'refund'), 0)
+    'today_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at >= v_today_start AND pt.created_at < v_today_end AND pt.transaction_type = 'payment'), 0),
+    'today_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at >= v_today_start AND pt.created_at < v_today_end AND pt.transaction_type = 'refund'), 0),
+    'month_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at >= v_month_utc_start AND pt.transaction_type = 'payment'), 0),
+    'month_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at >= v_month_utc_start AND pt.transaction_type = 'refund'), 0)
   ) INTO v_tx_stats
   FROM payment_transactions pt
   JOIN orders o ON o.id = pt.order_id
@@ -1404,7 +1452,12 @@ CREATE POLICY "appointments_update" ON appointments FOR UPDATE USING (
 -- END OF DAY REPORT
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE FUNCTION get_eod_report(p_brand TEXT, p_date_from DATE, p_date_to DATE)
+CREATE OR REPLACE FUNCTION get_eod_report(
+  p_brand TEXT,
+  p_date_from DATE,
+  p_date_to DATE,
+  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
+)
 RETURNS JSONB AS $$
 DECLARE
   v_order_stats JSONB;
@@ -1412,8 +1465,17 @@ DECLARE
   v_by_method JSONB;
   v_daily JSONB;
   v_by_cashier JSONB;
+  v_tz_interval INTERVAL;
+  v_tx_start TIMESTAMP;
+  v_tx_end TIMESTAMP;
 BEGIN
+  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
+  v_tz_interval := (p_tz_offset_minutes || ' minutes')::interval;
+  v_tx_start := p_date_from::timestamp - v_tz_interval;
+  v_tx_end := (p_date_to + INTERVAL '1 day')::timestamp - v_tz_interval;
+
   -- 1. Order-level aggregates for the date range
+  --    order_date is stored as local date, so direct comparison is correct
   SELECT jsonb_build_object(
     'order_count',     COUNT(*),
     'work_count',      COUNT(*) FILTER (WHERE order_type = 'WORK'),
@@ -1432,6 +1494,7 @@ BEGIN
     AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
 
   -- 2. Transaction-level aggregates (actual money movement)
+  --    created_at is UTC, so use timezone-corrected boundaries
   SELECT jsonb_build_object(
     'total_collected', COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
     'total_refunded',  COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0),
@@ -1444,8 +1507,8 @@ BEGIN
   JOIN orders o ON o.id = pt.order_id
   WHERE o.brand = p_brand::brand
     AND o.checkout_status = 'confirmed'
-    AND pt.created_at >= p_date_from::timestamp
-    AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp;
+    AND pt.created_at >= v_tx_start
+    AND pt.created_at < v_tx_end;
 
   -- 3. Breakdown by payment method
   SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_by_method
@@ -1459,17 +1522,18 @@ BEGIN
     JOIN orders o ON o.id = pt.order_id
     WHERE o.brand = p_brand::brand
       AND o.checkout_status = 'confirmed'
-      AND pt.created_at >= p_date_from::timestamp
-      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+      AND pt.created_at >= v_tx_start
+      AND pt.created_at < v_tx_end
     GROUP BY pt.payment_type
     ORDER BY total DESC
   ) sub;
 
   -- 4. Daily breakdown (for trend charts)
+  --    Group by local date (shift UTC created_at to local time before extracting date)
   SELECT COALESCE(jsonb_agg(row_to_json(sub.*) ORDER BY sub.date), '[]'::jsonb) INTO v_daily
   FROM (
     SELECT
-      pt.created_at::date AS date,
+      (pt.created_at + v_tz_interval)::date AS date,
       COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0) AS collected,
       COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0) AS refunded,
       COUNT(*) FILTER (WHERE pt.transaction_type = 'payment') AS payment_count,
@@ -1478,10 +1542,10 @@ BEGIN
     JOIN orders o ON o.id = pt.order_id
     WHERE o.brand = p_brand::brand
       AND o.checkout_status = 'confirmed'
-      AND pt.created_at >= p_date_from::timestamp
-      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
-    GROUP BY pt.created_at::date
-    ORDER BY pt.created_at::date
+      AND pt.created_at >= v_tx_start
+      AND pt.created_at < v_tx_end
+    GROUP BY (pt.created_at + v_tz_interval)::date
+    ORDER BY (pt.created_at + v_tz_interval)::date
   ) sub;
 
   -- 5. Per-cashier breakdown
@@ -1497,8 +1561,8 @@ BEGIN
     LEFT JOIN users u ON u.id = pt.cashier_id
     WHERE o.brand = p_brand::brand
       AND o.checkout_status = 'confirmed'
-      AND pt.created_at >= p_date_from::timestamp
-      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+      AND pt.created_at >= v_tx_start
+      AND pt.created_at < v_tx_end
     GROUP BY u.name
     ORDER BY collected DESC
   ) sub;
@@ -1578,7 +1642,8 @@ CREATE OR REPLACE FUNCTION close_register(
   p_session_id INT,
   p_user_id UUID,
   p_counted_cash DECIMAL,
-  p_notes TEXT DEFAULT NULL
+  p_notes TEXT DEFAULT NULL,
+  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1589,13 +1654,20 @@ DECLARE
   v_cash_out DECIMAL;
   v_expected DECIMAL;
   v_variance DECIMAL;
+  v_day_start TIMESTAMP;
+  v_day_end TIMESTAMP;
 BEGIN
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or already closed';
   END IF;
 
-  -- Sum cash payments/refunds for the day (use timestamp range to avoid timezone issues)
+  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
+  -- e.g. Kuwait 2026-04-04 00:00 local = 2026-04-03 21:00 UTC (offset -180 min)
+  v_day_start := (v_session.date)::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+  v_day_end := (v_session.date + INTERVAL '1 day')::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+
+  -- Sum cash payments/refunds for the day using timezone-corrected boundaries
   SELECT
     COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
     COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0)
@@ -1604,8 +1676,8 @@ BEGIN
   JOIN orders o ON o.id = pt.order_id
   WHERE o.brand = v_session.brand
     AND pt.payment_type = 'cash'
-    AND pt.created_at >= (v_session.date)::timestamp
-    AND pt.created_at < (v_session.date + INTERVAL '1 day')::timestamp;
+    AND pt.created_at >= v_day_start
+    AND pt.created_at < v_day_end;
 
   -- Sum cash movements
   SELECT
@@ -1648,14 +1720,55 @@ CREATE OR REPLACE FUNCTION add_cash_movement(
   p_type TEXT,
   p_amount DECIMAL,
   p_reason TEXT,
-  p_user_id UUID
+  p_user_id UUID,
+  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
 )
 RETURNS JSONB AS $$
 DECLARE
   v_id INT;
+  v_session RECORD;
+  v_cash_payments DECIMAL;
+  v_cash_refunds DECIMAL;
+  v_cash_in DECIMAL;
+  v_cash_out DECIMAL;
+  v_drawer_balance DECIMAL;
+  v_day_start TIMESTAMP;
+  v_day_end TIMESTAMP;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM register_sessions WHERE id = p_session_id AND status = 'open') THEN
+  SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or not open';
+  END IF;
+
+  -- For cash_out, verify sufficient drawer balance
+  IF p_type = 'cash_out' THEN
+    -- Convert local date boundaries to UTC for timestamp comparison
+    v_day_start := (v_session.date)::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+    v_day_end := (v_session.date + INTERVAL '1 day')::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+
+    SELECT
+      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
+      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0)
+    INTO v_cash_payments, v_cash_refunds
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    WHERE o.brand = v_session.brand
+      AND pt.payment_type = 'cash'
+      AND pt.created_at >= v_day_start
+      AND pt.created_at < v_day_end;
+
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE type = 'cash_in'), 0),
+      COALESCE(SUM(amount) FILTER (WHERE type = 'cash_out'), 0)
+    INTO v_cash_in, v_cash_out
+    FROM register_cash_movements
+    WHERE register_session_id = p_session_id;
+
+    v_drawer_balance := v_session.opening_float + v_cash_payments - v_cash_refunds + v_cash_in - v_cash_out;
+
+    IF p_amount > v_drawer_balance THEN
+      RAISE EXCEPTION 'Cash out amount (%) exceeds drawer balance (%)', p_amount, v_drawer_balance;
+    END IF;
   END IF;
 
   INSERT INTO register_cash_movements (register_session_id, type, amount, reason, performed_by)
@@ -1663,6 +1776,35 @@ BEGIN
   RETURNING id INTO v_id;
 
   RETURN jsonb_build_object('id', v_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Reopen a closed register session
+CREATE OR REPLACE FUNCTION reopen_register(p_session_id INT, p_user_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_session RECORD;
+BEGIN
+  SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Register session not found';
+  END IF;
+
+  IF v_session.status = 'open' THEN
+    RAISE EXCEPTION 'Register is already open';
+  END IF;
+
+  UPDATE register_sessions SET
+    status = 'open',
+    closed_by = NULL,
+    closed_at = NULL,
+    closing_counted_cash = NULL,
+    expected_cash = NULL,
+    variance = NULL,
+    closing_notes = NULL
+  WHERE id = p_session_id;
+
+  RETURN jsonb_build_object('id', p_session_id, 'status', 'open');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1679,7 +1821,8 @@ CREATE OR REPLACE FUNCTION get_eod_transactions_paginated(
   p_search TEXT DEFAULT NULL,
   p_payment_type TEXT DEFAULT NULL,
   p_transaction_type TEXT DEFAULT NULL,
-  p_order_type TEXT DEFAULT NULL
+  p_order_type TEXT DEFAULT NULL,
+  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1687,9 +1830,15 @@ DECLARE
   v_total BIGINT;
   v_transactions JSONB;
   v_search TEXT;
+  v_tx_start TIMESTAMP;
+  v_tx_end TIMESTAMP;
 BEGIN
   v_offset := (GREATEST(p_page, 1) - 1) * p_page_size;
   v_search := NULLIF(TRIM(COALESCE(p_search, '')), '');
+
+  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
+  v_tx_start := p_date_from::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+  v_tx_end := (p_date_to + INTERVAL '1 day')::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
 
   -- Count total matching
   SELECT COUNT(*) INTO v_total
@@ -1699,8 +1848,8 @@ BEGIN
   LEFT JOIN work_orders wo ON wo.order_id = o.id
   WHERE o.brand = p_brand::brand
     AND o.checkout_status = 'confirmed'
-    AND pt.created_at >= p_date_from::timestamp
-    AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+    AND pt.created_at >= v_tx_start
+    AND pt.created_at < v_tx_end
     AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)
     AND (p_transaction_type IS NULL OR pt.transaction_type = p_transaction_type::transaction_type)
     AND (p_order_type IS NULL OR o.order_type = p_order_type::order_type)
@@ -1740,8 +1889,8 @@ BEGIN
     LEFT JOIN work_orders wo ON wo.order_id = o.id
     WHERE o.brand = p_brand::brand
       AND o.checkout_status = 'confirmed'
-      AND pt.created_at >= p_date_from::timestamp
-      AND pt.created_at < (p_date_to + INTERVAL '1 day')::timestamp
+      AND pt.created_at >= v_tx_start
+      AND pt.created_at < v_tx_end
       AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)
       AND (p_transaction_type IS NULL OR pt.transaction_type = p_transaction_type::transaction_type)
       AND (p_order_type IS NULL OR o.order_type = p_order_type::order_type)
@@ -1903,3 +2052,204 @@ BEGIN
   RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- NOTIFICATION SYSTEM — Triggers & RPCs
+-- ============================================================
+
+-- --- TRIGGER FUNCTIONS ---
+
+-- 1. Garment location change → notify destination department
+CREATE OR REPLACE FUNCTION notify_garment_location_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.location = 'transit_to_workshop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_workshop') THEN
+    INSERT INTO notifications (department, type, title, body, metadata)
+    VALUES (
+      'workshop',
+      'garment_dispatched_to_workshop',
+      'Garments dispatched to workshop',
+      format('Garment %s (Order #%s) dispatched to workshop', NEW.garment_id, NEW.order_id),
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id)
+    );
+  END IF;
+
+  IF NEW.location = 'transit_to_shop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_shop') THEN
+    INSERT INTO notifications (department, type, title, body, metadata)
+    VALUES (
+      'shop',
+      'garment_dispatched_to_shop',
+      'Garments dispatched to shop',
+      format('Garment %s (Order #%s) dispatched to shop', NEW.garment_id, NEW.order_id),
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id)
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS garment_location_notification ON garments;
+CREATE TRIGGER garment_location_notification
+  AFTER UPDATE OF location ON garments
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_garment_location_change();
+
+-- 2. Garment stage change → notify shop for pickup/trial
+CREATE OR REPLACE FUNCTION notify_garment_stage_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.piece_stage = 'ready_for_pickup' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'ready_for_pickup') THEN
+    INSERT INTO notifications (department, type, title, body, metadata)
+    VALUES (
+      'shop',
+      'garment_ready_for_pickup',
+      'Garment ready for pickup',
+      format('Garment %s (Order #%s) is ready for customer pickup', NEW.garment_id, NEW.order_id),
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type)
+    );
+  END IF;
+
+  IF NEW.piece_stage = 'awaiting_trial' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'awaiting_trial') THEN
+    INSERT INTO notifications (department, type, title, body, metadata)
+    VALUES (
+      'shop',
+      'garment_awaiting_trial',
+      'Garment awaiting trial',
+      format('Garment %s (Order #%s) is awaiting customer trial', NEW.garment_id, NEW.order_id),
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type)
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS garment_stage_notification ON garments;
+CREATE TRIGGER garment_stage_notification
+  AFTER UPDATE OF piece_stage ON garments
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_garment_stage_change();
+
+-- 3. Transfer request created → notify workshop
+CREATE OR REPLACE FUNCTION notify_transfer_created()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO notifications (department, type, title, body, metadata)
+  VALUES (
+    'workshop',
+    'transfer_requested',
+    'New transfer request',
+    format('New %s transfer request created', NEW.item_type),
+    jsonb_build_object('transfer_request_id', NEW.id, 'direction', NEW.direction, 'item_type', NEW.item_type)
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS transfer_created_notification ON transfer_requests;
+CREATE TRIGGER transfer_created_notification
+  AFTER INSERT ON transfer_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_transfer_created();
+
+-- 4. Transfer request status change → notify shop
+CREATE OR REPLACE FUNCTION notify_transfer_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status IN ('approved', 'dispatched', 'received', 'partially_received') AND NEW.status != OLD.status THEN
+    INSERT INTO notifications (department, type, title, body, metadata)
+    VALUES (
+      'shop',
+      'transfer_status_changed',
+      format('Transfer request %s', NEW.status),
+      format('Transfer request #%s has been %s', NEW.id, NEW.status),
+      jsonb_build_object('transfer_request_id', NEW.id, 'status', NEW.status, 'direction', NEW.direction)
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS transfer_status_notification ON transfer_requests;
+CREATE TRIGGER transfer_status_notification
+  AFTER UPDATE OF status ON transfer_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_transfer_status_change();
+
+-- --- NOTIFICATION RPCs ---
+
+-- Fetch notifications for the current user's department with read status
+CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50)
+RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
+  FROM (
+    SELECT
+      n.id,
+      n.type,
+      n.title,
+      n.body,
+      n.metadata,
+      n.created_at,
+      n.expires_at,
+      (nr.read_at IS NOT NULL) AS is_read,
+      nr.read_at
+    FROM notifications n
+    LEFT JOIN notification_reads nr
+      ON nr.notification_id = n.id
+      AND nr.user_id = get_my_user_id()
+    WHERE n.department = get_my_department()::department
+      AND n.expires_at > now()
+    ORDER BY n.created_at DESC
+    LIMIT p_limit
+  ) t;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Get unread notification count for the current user
+CREATE OR REPLACE FUNCTION get_unread_notification_count()
+RETURNS INTEGER AS $$
+  SELECT count(*)::integer
+  FROM notifications n
+  WHERE n.department = get_my_department()::department
+    AND n.expires_at > now()
+    AND NOT EXISTS (
+      SELECT 1 FROM notification_reads nr
+      WHERE nr.notification_id = n.id
+        AND nr.user_id = get_my_user_id()
+    );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Mark a single notification as read
+CREATE OR REPLACE FUNCTION mark_notification_read(p_notification_id INTEGER)
+RETURNS void AS $$
+BEGIN
+  INSERT INTO notification_reads (notification_id, user_id)
+  VALUES (p_notification_id, get_my_user_id())
+  ON CONFLICT (notification_id, user_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Mark all notifications as read for the current user
+CREATE OR REPLACE FUNCTION mark_all_notifications_read()
+RETURNS void AS $$
+BEGIN
+  INSERT INTO notification_reads (notification_id, user_id)
+  SELECT n.id, get_my_user_id()
+  FROM notifications n
+  WHERE n.department = get_my_department()::department
+    AND n.expires_at > now()
+    AND NOT EXISTS (
+      SELECT 1 FROM notification_reads nr
+      WHERE nr.notification_id = n.id
+        AND nr.user_id = get_my_user_id()
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Cleanup expired notifications (housekeeping — call periodically)
+CREATE OR REPLACE FUNCTION expire_old_notifications()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM notifications WHERE expires_at < now();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

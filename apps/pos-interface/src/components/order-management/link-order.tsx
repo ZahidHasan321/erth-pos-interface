@@ -22,7 +22,7 @@ import {
 } from "@repo/ui/dialog";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { toast } from "sonner";
 import { ErrorBoundary } from "../global/error-boundary";
 import { SearchCustomer } from "../forms/customer-demographics/search-customer";
@@ -440,7 +440,7 @@ export default function LinkOrder() {
                                 <span className="flex items-center gap-1">
                                   <Clock className="size-2.5 shrink-0" />
                                   {order.deliveryDate
-                                    ? format(new Date(order.deliveryDate), "d MMM")
+                                    ? format(parseUtcTimestamp(order.deliveryDate), "d MMM")
                                     : "No date"}
                                 </span>
                               </div>
@@ -580,7 +580,7 @@ export default function LinkOrder() {
                           <td className="p-3">
                             {order.delivery_date ? (
                               <span className="text-xs font-medium">
-                                {format(new Date(order.delivery_date), "d MMM yyyy")}
+                                {format(parseUtcTimestamp(order.delivery_date), "d MMM yyyy")}
                               </span>
                             ) : (
                               <span className="text-xs text-muted-foreground">

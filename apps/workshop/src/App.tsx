@@ -3,7 +3,13 @@ import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "./context/auth";
 import { router } from "./router";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function InnerApp() {
   const auth = useAuth();

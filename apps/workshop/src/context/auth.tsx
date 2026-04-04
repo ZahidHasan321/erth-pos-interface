@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { db } from '@/lib/db';
 import { useHeartbeat } from '@/hooks/useSessions';
+import { endSession } from '@/api/sessions';
 import type { AuthUser } from '@/lib/rbac';
 
 export type { AuthUser };
@@ -125,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    if (user?.id) await endSession(user.id).catch(() => {});
     await db.auth.signOut();
     setUser(null);
   };

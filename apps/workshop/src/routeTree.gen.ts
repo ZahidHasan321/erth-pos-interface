@@ -33,8 +33,11 @@ import { Route as mainTerminalsPostCuttingRouteImport } from './routes/(main)/te
 import { Route as mainTerminalsIroningRouteImport } from './routes/(main)/terminals/ironing'
 import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/terminals/finishing'
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
+import { Route as mainStoreStockReportRouteImport } from './routes/(main)/store/stock-report'
+import { Route as mainStoreSendToShopRouteImport } from './routes/(main)/store/send-to-shop'
 import { Route as mainStoreRequestDeliveryRouteImport } from './routes/(main)/store/request-delivery'
 import { Route as mainStoreReceivingDeliveriesRouteImport } from './routes/(main)/store/receiving-deliveries'
+import { Route as mainStoreInventoryRouteImport } from './routes/(main)/store/inventory'
 import { Route as mainStoreApproveRequestsRouteImport } from './routes/(main)/store/approve-requests'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
@@ -162,6 +165,16 @@ const mainTerminalsCuttingRoute = mainTerminalsCuttingRouteImport.update({
   path: '/terminals/cutting',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainStoreStockReportRoute = mainStoreStockReportRouteImport.update({
+  id: '/store/stock-report',
+  path: '/store/stock-report',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainStoreSendToShopRoute = mainStoreSendToShopRouteImport.update({
+  id: '/store/send-to-shop',
+  path: '/store/send-to-shop',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainStoreRequestDeliveryRoute =
   mainStoreRequestDeliveryRouteImport.update({
     id: '/store/request-delivery',
@@ -174,6 +187,11 @@ const mainStoreReceivingDeliveriesRoute =
     path: '/store/receiving-deliveries',
     getParentRoute: () => mainRouteRoute,
   } as any)
+const mainStoreInventoryRoute = mainStoreInventoryRouteImport.update({
+  id: '/store/inventory',
+  path: '/store/inventory',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainStoreApproveRequestsRoute =
   mainStoreApproveRequestsRouteImport.update({
     id: '/store/approve-requests',
@@ -219,8 +237,11 @@ export interface FileRoutesByFullPath {
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/store/inventory': typeof mainStoreInventoryRoute
   '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
+  '/store/send-to-shop': typeof mainStoreSendToShopRoute
+  '/store/stock-report': typeof mainStoreStockReportRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -250,8 +271,11 @@ export interface FileRoutesByTo {
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/store/inventory': typeof mainStoreInventoryRoute
   '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
+  '/store/send-to-shop': typeof mainStoreSendToShopRoute
+  '/store/stock-report': typeof mainStoreStockReportRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -284,8 +308,11 @@ export interface FileRoutesById {
   '/(main)/team': typeof mainTeamRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/(main)/store/approve-requests': typeof mainStoreApproveRequestsRoute
+  '/(main)/store/inventory': typeof mainStoreInventoryRoute
   '/(main)/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/(main)/store/request-delivery': typeof mainStoreRequestDeliveryRoute
+  '/(main)/store/send-to-shop': typeof mainStoreSendToShopRoute
+  '/(main)/store/stock-report': typeof mainStoreStockReportRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/(main)/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -318,8 +345,11 @@ export interface FileRouteTypes {
     | '/team'
     | '/assigned/$orderId'
     | '/store/approve-requests'
+    | '/store/inventory'
     | '/store/receiving-deliveries'
     | '/store/request-delivery'
+    | '/store/send-to-shop'
+    | '/store/stock-report'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -349,8 +379,11 @@ export interface FileRouteTypes {
     | '/team'
     | '/assigned/$orderId'
     | '/store/approve-requests'
+    | '/store/inventory'
     | '/store/receiving-deliveries'
     | '/store/request-delivery'
+    | '/store/send-to-shop'
+    | '/store/stock-report'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -382,8 +415,11 @@ export interface FileRouteTypes {
     | '/(main)/team'
     | '/(main)/assigned/$orderId'
     | '/(main)/store/approve-requests'
+    | '/(main)/store/inventory'
     | '/(main)/store/receiving-deliveries'
     | '/(main)/store/request-delivery'
+    | '/(main)/store/send-to-shop'
+    | '/(main)/store/stock-report'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
     | '/(main)/terminals/ironing'
@@ -576,6 +612,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTerminalsCuttingRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/store/stock-report': {
+      id: '/(main)/store/stock-report'
+      path: '/store/stock-report'
+      fullPath: '/store/stock-report'
+      preLoaderRoute: typeof mainStoreStockReportRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/store/send-to-shop': {
+      id: '/(main)/store/send-to-shop'
+      path: '/store/send-to-shop'
+      fullPath: '/store/send-to-shop'
+      preLoaderRoute: typeof mainStoreSendToShopRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/store/request-delivery': {
       id: '/(main)/store/request-delivery'
       path: '/store/request-delivery'
@@ -588,6 +638,13 @@ declare module '@tanstack/react-router' {
       path: '/store/receiving-deliveries'
       fullPath: '/store/receiving-deliveries'
       preLoaderRoute: typeof mainStoreReceivingDeliveriesRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/store/inventory': {
+      id: '/(main)/store/inventory'
+      path: '/store/inventory'
+      fullPath: '/store/inventory'
+      preLoaderRoute: typeof mainStoreInventoryRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/store/approve-requests': {
@@ -655,8 +712,11 @@ interface mainRouteRouteChildren {
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
   mainStoreApproveRequestsRoute: typeof mainStoreApproveRequestsRoute
+  mainStoreInventoryRoute: typeof mainStoreInventoryRoute
   mainStoreReceivingDeliveriesRoute: typeof mainStoreReceivingDeliveriesRoute
   mainStoreRequestDeliveryRoute: typeof mainStoreRequestDeliveryRoute
+  mainStoreSendToShopRoute: typeof mainStoreSendToShopRoute
+  mainStoreStockReportRoute: typeof mainStoreStockReportRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
   mainTerminalsIroningRoute: typeof mainTerminalsIroningRoute
@@ -683,8 +743,11 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,
   mainStoreApproveRequestsRoute: mainStoreApproveRequestsRoute,
+  mainStoreInventoryRoute: mainStoreInventoryRoute,
   mainStoreReceivingDeliveriesRoute: mainStoreReceivingDeliveriesRoute,
   mainStoreRequestDeliveryRoute: mainStoreRequestDeliveryRoute,
+  mainStoreSendToShopRoute: mainStoreSendToShopRoute,
+  mainStoreStockReportRoute: mainStoreStockReportRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,
   mainTerminalsIroningRoute: mainTerminalsIroningRoute,

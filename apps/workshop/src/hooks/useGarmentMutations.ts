@@ -26,7 +26,6 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
   qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
   qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
-  qc.invalidateQueries({ queryKey: ['sidebar-counts'] });
   qc.invalidateQueries({ queryKey: ['completed-today-garments'] });
 }
 

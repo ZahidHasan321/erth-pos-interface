@@ -183,21 +183,13 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         mutationFn: (shelfData: ShelfFormValues) => {
             const promises = shelfData.products.map((item) => {
                 if (item.id && item.stock !== undefined && item.quantity) {
-                    return updateShelf(item.id.toString(), { stock: item.stock - item.quantity });
+                    return updateShelf(item.id.toString(), { shop_stock: item.stock - item.quantity });
                 }
                 return Promise.resolve(null);
             });
             return Promise.all(promises);
         },
-        onSuccess: (responses) => {
-            const errorResponses = responses.filter(r => r !== null && r.status === "error");
-
-            if (errorResponses.length > 0) {
-                const errorMessages = errorResponses.map(r => r !== null ? (r.message || "Unknown error") : "Unknown error").join(", ");
-                toast.error(`Failed to update shelf stock: ${errorMessages}`);
-                return;
-            }
-
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["products"] });
         },
         onError: () => {
@@ -230,7 +222,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     return Promise.resolve(null);
                 }
 
-                const currentStock = parseFloat(currentFabric.real_stock?.toString() || "0");
+                const currentStock = parseFloat(currentFabric.shop_stock?.toString() || "0");
                 const usedLength = fabricSelection.fabric_length ?? 0;
 
                 if (isNaN(usedLength) || usedLength <= 0) {
@@ -248,21 +240,13 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 }
 
                 return updateFabric(Number(currentId), {
-                    real_stock: newStock,
+                    shop_stock: newStock,
                 } as any);
             });
 
             return Promise.all(promises);
         },
         onSuccess: (results) => {
-            const errorResponses = results.filter(r => r !== null && r.status === "error");
-
-            if (errorResponses.length > 0) {
-                const errorMessages = errorResponses.map(r => r !== null ? (r.message || "Unknown error") : "Unknown error").join(", ");
-                toast.error(`Failed to update fabric stock: ${errorMessages}`);
-                return;
-            }
-
             const successCount = results.filter((r) => r !== null).length;
             if (successCount > 0) {
                 queryClient.invalidateQueries({ queryKey: ["fabrics"] });

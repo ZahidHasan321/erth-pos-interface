@@ -1,6 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { WorkshopLayout } from "@/components/layout/WorkshopLayout";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { router } from "@/router";
 
 export const Route = createFileRoute("/(main)")({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/(main)")({
 function MainRoute() {
   const auth = useAuth();
   const navigate = useNavigate();
+  useRealtimeInvalidation();
 
   const handleLogout = () => {
     auth.logout().then(() => {

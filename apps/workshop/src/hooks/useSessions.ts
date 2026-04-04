@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { upsertSession, endSession, getActiveSessions } from "@/api/sessions";
+import { upsertSession, getActiveSessions } from "@/api/sessions";
 
 const KEY = ["active-sessions"] as const;
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -45,19 +45,8 @@ export function useHeartbeat(userId: string | null) {
       upsertSession(userId, device).catch(() => {});
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Cleanup: end session on tab close
-    const handleUnload = () => {
-      endSession(userId).catch(() => {});
-    };
-    window.addEventListener("beforeunload", handleUnload);
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      window.removeEventListener("beforeunload", handleUnload);
-      // End session when hook unmounts (logout)
-      endSession(userId).then(() => {
-        qc.invalidateQueries({ queryKey: KEY });
-      }).catch(() => {});
     };
   }, [userId, qc]);
 }

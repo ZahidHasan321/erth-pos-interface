@@ -141,7 +141,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
     contentRef: printRef,
     documentTitle: `Fabric-Order-${currentRowData.garment_id}`,
     pageStyle: `
-      @page { size: 5in 4in; margin: 0; }
+      @page { size: 5in 4in; margin: 16px 0 0 0; }
       @media print {
         html,body{margin:0;padding:0;width:5in;height:4in;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       }`,
@@ -167,6 +167,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
       express: data.express || false,
       soaking: data.soaking || false,
       deliveryDate: data.delivery_date ? new Date(data.delivery_date) : null,
+      notes: data.notes || "",
     };
   };
 

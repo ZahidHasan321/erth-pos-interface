@@ -11,7 +11,6 @@ export function useWorkshopGarments() {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 }
 
@@ -20,7 +19,6 @@ export function useReceivingGarments() {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
     select: (data: WorkshopGarment[]) =>
       data.filter((g) => g.location === 'transit_to_workshop'),
   });
@@ -31,7 +29,6 @@ export function useParkingGarments() {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
     select: (data: WorkshopGarment[]) =>
       data.filter((g) => g.location === 'workshop' && !g.in_production),
   });
@@ -42,7 +39,6 @@ export function useSchedulerGarments() {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
     select: (data: WorkshopGarment[]) =>
       data.filter(
         (g) =>
@@ -60,7 +56,6 @@ export function useAssignedViewGarments() {
     queryKey: ASSIGNED_VIEW_KEY,
     queryFn: getAssignedViewGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 }
 
@@ -70,7 +65,6 @@ export function useCompletedOrders() {
     queryKey: COMPLETED_VIEW_KEY,
     queryFn: getCompletedOrderGarments,
     staleTime: 60_000,
-    refetchInterval: 120_000,
   });
 }
 
@@ -79,7 +73,6 @@ export function useOrderGarments(orderId: number) {
     queryKey: ['order-garments', orderId],
     queryFn: () => getOrderGarments(orderId),
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 }
 
@@ -96,7 +89,6 @@ export function useTerminalGarments(stage: string) {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
     select: (data: WorkshopGarment[]) =>
       data.filter((g) => g.location === 'workshop' && g.piece_stage === stage),
   });
@@ -107,7 +99,6 @@ export function useCompletedTodayGarments() {
     queryKey: ['completed-today-garments'],
     queryFn: getCompletedTodayGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 }
 
@@ -126,7 +117,6 @@ export function useBrovaStatus(orderIds: number[]) {
     queryFn: () => getBrovaStatusForOrders(orderIds),
     enabled: orderIds.length > 0,
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 }
 
@@ -137,7 +127,6 @@ export function useDispatchGarments() {
     queryKey: WORKSHOP_GARMENTS_KEY,
     queryFn: getWorkshopGarments,
     staleTime: 30_000,
-    refetchInterval: 60_000,
     select: (data: WorkshopGarment[]) =>
       data.filter((g) => g.location === 'workshop' && DISPATCH_STAGES.has(g.piece_stage ?? '')),
   });

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { db } from "@/lib/db";
+import { getWorkshopGarments } from '@/api/garments';
+import { WORKSHOP_GARMENTS_KEY } from './useWorkshopGarments';
+import type { WorkshopGarment } from '@repo/database';
 
-interface SidebarCounts {
+export interface SidebarCounts {
   receiving: number;
   parking: number;
   scheduler: number;
@@ -15,24 +17,7 @@ interface SidebarCounts {
   dispatch: number;
 }
 
-async function fetchCounts(): Promise<SidebarCounts> {
-  const { data, error } = await db
-    .from('garments')
-    .select('piece_stage, location, in_production, production_plan')
-    .in('location', ['workshop', 'transit_to_workshop', 'lost_in_transit'])
-    .in('piece_stage', [
-      'waiting_for_acceptance', 'waiting_cut',
-      'soaking', 'cutting', 'post_cutting', 'sewing', 'finishing', 'ironing',
-      'quality_check', 'ready_for_dispatch', 'brova_trialed',
-    ]);
-
-  if (error || !data) return {
-    receiving: 0, parking: 0, scheduler: 0,
-    soaking: 0, cutting: 0, post_cutting: 0,
-    sewing: 0, finishing: 0, ironing: 0,
-    quality_check: 0, dispatch: 0,
-  };
-
+function computeCounts(data: WorkshopGarment[]): SidebarCounts {
   return {
     receiving:     data.filter((g) => g.location === 'transit_to_workshop' || g.location === 'lost_in_transit').length,
     parking:       data.filter((g) => g.location === 'workshop' && !g.in_production).length,
@@ -48,11 +33,16 @@ async function fetchCounts(): Promise<SidebarCounts> {
   };
 }
 
+/**
+ * Derives sidebar badge counts from the shared workshop-garments cache.
+ * No separate query — counts update automatically when garments are
+ * optimistically patched by mutations.
+ */
 export function useSidebarCounts() {
   return useQuery({
-    queryKey: ['sidebar-counts'],
-    queryFn: fetchCounts,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    queryKey: WORKSHOP_GARMENTS_KEY,
+    queryFn: getWorkshopGarments,
+    staleTime: 30_000,
+    select: computeCounts,
   });
 }

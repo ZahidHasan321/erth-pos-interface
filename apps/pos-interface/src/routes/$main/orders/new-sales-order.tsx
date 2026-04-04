@@ -140,7 +140,7 @@ function NewSalesOrder() {
                         product_type: si.shelf?.type || "",
                         brand: si.shelf?.brand || "",
                         quantity: si.quantity,
-                        stock: si.shelf?.stock || 0,
+                        stock: si.shelf?.shop_stock || 0,
                         unit_price: Number(si.unit_price),
                     }));
                     shelfForm.reset({ products: mappedShelfProducts });

@@ -8,7 +8,7 @@ import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { Card } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
-import { useRegisterSession, useOpenRegisterMutation } from "@/hooks/useCashier";
+import { useRegisterSession, useOpenRegisterMutation, useReopenRegisterMutation } from "@/hooks/useCashier";
 import { useAuth } from "@/context/auth";
 import type { RegisterSessionData } from "@/api/cashier";
 import { CashMovementDialog } from "./cash-movement-dialog";
@@ -31,7 +31,7 @@ function OpenRegisterScreen() {
 
     const form = useForm<OpenFormValues>({
         resolver: zodResolver(openSchema) as any,
-        defaultValues: { opening_float: 0 },
+        defaultValues: { opening_float: undefined as unknown as number },
     });
 
     const onSubmit = (values: OpenFormValues) => {
@@ -84,10 +84,17 @@ function OpenRegisterScreen() {
 // ── Closed Register Screen ────────────────────────────────────────────────────
 
 function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
+    const { user } = useAuth();
+    const reopenMutation = useReopenRegisterMutation();
     const variance = Number(session.variance) || 0;
     const isOver = variance > 0;
     const isShort = variance < 0;
     const isExact = variance === 0;
+
+    const handleReopen = () => {
+        if (!user) return;
+        reopenMutation.mutate({ sessionId: session.id, userId: user.id });
+    };
 
     return (
         <div className="h-full flex items-center justify-center p-6">
@@ -133,6 +140,17 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                 {session.closing_notes && (
                     <p className="text-xs text-muted-foreground italic">"{session.closing_notes}"</p>
                 )}
+
+                <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleReopen}
+                    disabled={reopenMutation.isPending}
+                >
+                    {reopenMutation.isPending
+                        ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Reopening...</>
+                        : "Reopen Register"}
+                </Button>
             </Card>
         </div>
     );

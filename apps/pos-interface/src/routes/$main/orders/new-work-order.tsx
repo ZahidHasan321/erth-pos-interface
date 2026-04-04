@@ -53,7 +53,7 @@ import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payme
 import { createWorkOrderStore } from "@/store/current-work-order";
 import type { Customer, Order } from "@repo/database";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
@@ -79,13 +79,15 @@ export const Route = createFileRoute("/$main/orders/new-work-order")({
             appointmentId: search.appointmentId ? String(search.appointmentId) : undefined,
         };
     },
-    loader: ({ context }) => {
+    loader: async ({ context }) => {
         // Prefetch all lookup data in parallel before component mounts
         const { queryClient } = context;
-        queryClient.ensureQueryData({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: Infinity });
-        queryClient.ensureQueryData({ queryKey: ["employees"], queryFn: getEmployees, staleTime: Infinity });
-        queryClient.ensureQueryData({ queryKey: ["prices"], queryFn: getPrices, staleTime: Infinity });
-        queryClient.ensureQueryData({ queryKey: ["styles"], queryFn: getStyles, staleTime: Infinity });
+        await Promise.all([
+            queryClient.ensureQueryData({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: Infinity }),
+            queryClient.ensureQueryData({ queryKey: ["employees"], queryFn: getEmployees, staleTime: Infinity }),
+            queryClient.ensureQueryData({ queryKey: ["prices"], queryFn: getPrices, staleTime: Infinity }),
+            queryClient.ensureQueryData({ queryKey: ["styles"], queryFn: getStyles, staleTime: Infinity }),
+        ]);
     },
     component: NewWorkOrder,
     head: () => ({
@@ -113,6 +115,7 @@ function NewWorkOrder() {
     // NAVIGATION & BRAND
     // ============================================================================
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const cashierHandlesPayment = user?.userType === "erth";
     const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
@@ -187,8 +190,8 @@ function NewWorkOrder() {
     });
 
     const fabricSelectionResolver = React.useMemo(() => {
-        return zodResolver(createFabricSelectionFormSchema(fabricsResponse?.data || []));
-    }, [fabricsResponse?.data]);
+        return zodResolver(createFabricSelectionFormSchema(fabricsResponse || []));
+    }, [fabricsResponse]);
 
     const fabricSelectionForm = useForm<{
         garments: GarmentSchema[];
@@ -393,8 +396,14 @@ function NewWorkOrder() {
                     setCustomerDemographics(customerFormValues);
                     addSavedStep(0);
 
-                    // Fire measurements check without blocking — runs in parallel with garment/shelf/order loading below
-                    measurementsPromise = getMeasurementsByCustomerId(Number(orderData.customer.id)).then(measurementsRes => {
+                    // Fire measurements check without blocking — populates TanStack Query cache
+                    // so CustomerMeasurementsForm's useQuery reads from cache instead of refetching
+                    const custId = Number(orderData.customer.id);
+                    measurementsPromise = queryClient.fetchQuery({
+                        queryKey: ["measurements", custId],
+                        queryFn: () => getMeasurementsByCustomerId(custId),
+                        staleTime: Infinity,
+                    }).then(measurementsRes => {
                         if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
                             addSavedStep(1);
                         }
@@ -423,7 +432,7 @@ function NewWorkOrder() {
                         product_type: si.shelf?.type || "",
                         brand: si.shelf?.brand || "",
                         quantity: si.quantity,
-                        stock: si.shelf?.stock || 0,
+                        stock: si.shelf?.shop_stock || 0,
                         unit_price: Number(si.unit_price),
                     }));
                     shelfForm.reset({ products: mappedShelfProducts });
@@ -634,7 +643,7 @@ function NewWorkOrder() {
         let fabricPrice = 0;
         garments.forEach((garment) => {
             if (garment.fabric_id) {
-                const fabric = fabricsResponse?.data?.find(f => f.id === garment.fabric_id);
+                const fabric = fabricsResponse?.find(f => f.id === garment.fabric_id);
                 if (fabric) {
                     fabricPrice += (fabric.price_per_meter || 0) * (garment.fabric_length ?? 0);
                 }
@@ -891,7 +900,7 @@ function NewWorkOrder() {
             },
             fabricSelections: garmentsData,
             shelfProducts: shelfData,
-            fabrics: fabricsResponse?.data || [],
+            fabrics: fabricsResponse || [],
             charges: {
                 fabric: orderData.fabric_charge ?? 0,
                 stitching: orderData.stitching_charge ?? 0,

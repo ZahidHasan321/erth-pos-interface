@@ -259,14 +259,12 @@ export const IfInsideCell = ({
     const isInternal = fabricSource === "IN";
     const [searchQuery, setSearchQuery] = React.useState("");
 
-    const { data: fabricsResponse, isLoading: isLoadingFabrics } = useQuery({
+    const { data: fabrics = [], isLoading: isLoadingFabrics } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
         gcTime: Infinity,
     });
-
-    const fabrics = fabricsResponse?.data || [];
 
     React.useEffect(() => {
         if (isInternal && fabricId) {
@@ -306,7 +304,7 @@ export const IfInsideCell = ({
             : fabrics;
 
         return results.map((fabric) => {
-            const baseStock = fabric.real_stock ?? 0;
+            const baseStock = fabric.shop_stock ?? 0;
             const used = tempStockUsage?.get(fabric.id.toString()) ?? 0;
             const availableStock = baseStock - used;
 
@@ -464,13 +462,12 @@ export const FabricLengthCell = ({
         ],
     });
 
-    const { data: fabricsResponse } = useQuery({
+    const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
         gcTime: Infinity,
     });
-    const fabrics = fabricsResponse?.data || [];
 
     const isInternal = fabricSourceWatch === "IN";
     const selectedFabric = isInternal && fabricIdWatch
@@ -479,7 +476,7 @@ export const FabricLengthCell = ({
 
     // Available stock for THIS garment = base - what OTHER garments used (exclude current row)
     const currentLength = useWatch({ name: `garments.${row.index}.fabric_length` }) ?? 0;
-    const baseStock = selectedFabric?.real_stock ?? 0;
+    const baseStock = selectedFabric?.shop_stock ?? 0;
     const totalUsed = tempStockUsage?.get(String(fabricIdWatch)) ?? 0;
     const othersUsed = totalUsed - Number(currentLength);
     const available = baseStock - othersUsed;
@@ -623,13 +620,12 @@ export const FabricAmountCell = ({
     row,
 }: CellContext<GarmentSchema, unknown>) => {
     const { control, setValue } = useFormContext();
-    const { data: fabricsResponse } = useQuery({
+    const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
         gcTime: Infinity,
     });
-    const fabrics = fabricsResponse?.data || [];
 
     const [fabricSourceWatch, fabricIdWatch, fabricLengthWatch] = useWatch({
         name: [

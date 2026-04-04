@@ -9,7 +9,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Badge } from "@repo/ui/badge";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
 import {
   ClipboardList,
   ChevronDown,
@@ -38,7 +38,7 @@ const STAGE_ORDER: Record<string, number> = {
 
 function getDeliveryUrgency(date?: string) {
   if (!date) return { cls: null, border: "", days: null };
-  const diff = Math.ceil((new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const diff = Math.ceil((parseUtcTimestamp(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (diff < 0) return { cls: "text-red-600 font-bold", border: "border-l-red-500", days: diff };
   if (diff <= 2) return { cls: "text-orange-600 font-bold", border: "border-l-orange-400", days: diff };
   if (diff <= 5) return { cls: "text-yellow-700", border: "border-l-yellow-400", days: diff };
@@ -423,8 +423,8 @@ function AssignedPage() {
   // Sort: overdue first, then due soon, then express, then delivery date asc
   const orderGroups = [...orderGroupsUnsorted].sort((a, b) => {
     const now = Date.now();
-    const daysA = a.delivery_date ? Math.ceil((new Date(a.delivery_date).getTime() - now) / 86400000) : 999;
-    const daysB = b.delivery_date ? Math.ceil((new Date(b.delivery_date).getTime() - now) / 86400000) : 999;
+    const daysA = a.delivery_date ? Math.ceil((parseUtcTimestamp(a.delivery_date).getTime() - now) / 86400000) : 999;
+    const daysB = b.delivery_date ? Math.ceil((parseUtcTimestamp(b.delivery_date).getTime() - now) / 86400000) : 999;
     const overdueA = daysA < 0 ? 1 : 0;
     const overdueB = daysB < 0 ? 1 : 0;
     if (overdueA !== overdueB) return overdueB - overdueA;
@@ -447,11 +447,11 @@ function AssignedPage() {
   const expressOrders = orderGroups.filter((og) => og.express);
   const overdueOrders = orderGroups.filter((og) => {
     if (!og.delivery_date) return false;
-    return new Date(og.delivery_date).getTime() < Date.now();
+    return parseUtcTimestamp(og.delivery_date).getTime() < Date.now();
   });
   const dueSoonOrders = orderGroups.filter((og) => {
     if (!og.delivery_date) return false;
-    const diff = Math.ceil((new Date(og.delivery_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const diff = Math.ceil((parseUtcTimestamp(og.delivery_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     return diff >= 0 && diff <= 2;
   });
   const returningOrders = orderGroups.filter((og) =>

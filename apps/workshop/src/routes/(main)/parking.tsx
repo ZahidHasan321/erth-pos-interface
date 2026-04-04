@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments, useBrovaStatus, useBrovaPlans } from "@/hooks/useWorkshopGarments";
-import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
+import { getLocalDateStr, toLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import {
   useSendToScheduler,
   useSendReturnToProduction,
@@ -106,7 +106,7 @@ function ParkingOrderCard({
   const brovaBlock = getBrovaBlockReason(allOrderGarments);
   const deliveryDate = group.garments[0]?.delivery_date_order;
   const daysLeft = deliveryDate
-    ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+    ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
@@ -853,7 +853,7 @@ function ParkingPage() {
   const overdueOrderGroups = ordersTabGroups.filter((og) => {
     const dd = og.garments[0]?.delivery_date_order;
     if (!dd) return false;
-    return new Date(dd).getTime() < Date.now();
+    return parseUtcTimestamp(dd).getTime() < Date.now();
   });
 
   // Orders with mixed garments (some schedulable, some waiting_for_acceptance)
@@ -1192,7 +1192,7 @@ function ParkingPage() {
                     const brovaBlock = getBrovaBlockReason(allGarmentsByOrder.get(group.order_id) ?? group.garments);
                     const deliveryDate = group.garments[0]?.delivery_date_order;
                     const daysLeft = deliveryDate
-                      ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+                      ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
                       : null;
                     const isOverdue = daysLeft !== null && daysLeft < 0;
                     const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;

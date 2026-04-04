@@ -14,7 +14,7 @@ import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
@@ -58,7 +58,7 @@ function SchedulerGarmentRow({
   onSelect: (id: string, checked: boolean) => void;
 }) {
   const daysLeft = g.delivery_date_order
-    ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
+    ? Math.ceil((parseUtcTimestamp(g.delivery_date_order).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
@@ -164,7 +164,7 @@ function SchedulerOrderCard({
   const [peekOpen, setPeekOpen] = useState(false);
   const deliveryDate = group.garments[0]?.delivery_date_order;
   const daysLeft = deliveryDate
-    ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
+    ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;

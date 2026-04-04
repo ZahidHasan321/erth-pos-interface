@@ -1,37 +1,32 @@
-import type { ApiResponse } from '../types/api';
 import { db } from "@/lib/db";
 import type { Accessory } from '@repo/database';
 
-export const getAccessories = async (): Promise<ApiResponse<Accessory[]>> => {
+export const getAccessories = async (): Promise<Accessory[]> => {
   const { data, error } = await db
     .from('accessories')
     .select('*');
 
-  if (error) {
-    return { status: 'error', message: error.message, data: [] };
-  }
-  return { status: 'success', data: data as Accessory[] };
+  if (error) throw error;
+  return data as Accessory[];
 };
 
 export const createAccessory = async (
   accessory: Omit<Accessory, 'id' | 'created_at'>,
-): Promise<ApiResponse<Accessory>> => {
+): Promise<Accessory> => {
   const { data, error } = await db
     .from('accessories')
     .insert(accessory)
     .select()
     .single();
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as Accessory };
+  if (error) throw error;
+  return data as Accessory;
 };
 
 export const updateAccessory = async (
   id: number,
   accessory: Partial<Accessory>,
-): Promise<ApiResponse<Accessory>> => {
+): Promise<Accessory> => {
   const { data, error } = await db
     .from('accessories')
     .update(accessory)
@@ -39,8 +34,6 @@ export const updateAccessory = async (
     .select()
     .single();
 
-  if (error) {
-    return { status: 'error', message: error.message };
-  }
-  return { status: 'success', data: data as Accessory };
+  if (error) throw error;
+  return data as Accessory;
 };

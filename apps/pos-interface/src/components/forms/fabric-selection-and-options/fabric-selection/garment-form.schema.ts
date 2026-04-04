@@ -142,7 +142,7 @@ export const createFabricSelectionFormSchema = (fabrics: any[] = []) => {
     usage.forEach((totalUsed, fabricId) => {
       const fabric = fabrics.find(f => f.id === fabricId);
       if (fabric) {
-        const available = parseFloat(fabric.real_stock?.toString() || "0");
+        const available = parseFloat(fabric.shop_stock?.toString() || "0");
         if (totalUsed > available) {
           // Find all rows using this fabric to mark them
           data.garments.forEach((g, index) => {

@@ -206,14 +206,15 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
 
     const todayCount = Number(summary.today_count);
     const todayBilled = Number(summary.today_billed);
-    // Use actual cash collected today (from payment_transactions), fall back to order-based
-    const todayPaid = Number(summary.today_collected ?? summary.today_paid);
-    const todayDue = Math.max(0, todayBilled - Number(summary.today_paid));
-    const todayCollectionRate = todayBilled > 0 ? Math.round((Number(summary.today_paid) / todayBilled) * 100) : 0;
+    // Use order-based paid (orders.paid for today's orders) consistently with today_billed
+    // today_collected (transaction-based) measures different scope — cash received today for ANY order
+    const todayPaid = Number(summary.today_paid);
+    const todayDue = Math.max(0, todayBilled - todayPaid);
+    const todayCollectionRate = todayBilled > 0 ? Math.round((todayPaid / todayBilled) * 100) : 0;
 
     const monthTotal = Number(summary.month_billed);
-    // Use actual cash collected this month (from payment_transactions), fall back to order-based
-    const monthPaid = Number(summary.month_collected ?? summary.month_paid);
+    // Use order-based paid consistently with month_billed (same scoping: orders created this month)
+    const monthPaid = Number(summary.month_paid);
     const monthOutstanding = Number(summary.month_outstanding);
     const monthCollectionRate = monthTotal > 0 ? Math.round((monthPaid / monthTotal) * 100) : 0;
 

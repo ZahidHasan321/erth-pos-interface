@@ -46,8 +46,8 @@ import {
 import { BRAND_NAMES } from "@/lib/constants";
 import { LogOut, Home } from "lucide-react";
 import { IconRulerMeasure } from "@tabler/icons-react";
-import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
 import { useAuth } from "@/context/auth";
+import { NotificationBell } from "./notification-bell";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import {
   DropdownMenu,
@@ -321,8 +321,6 @@ export function AppSidebar({
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
   const { isMobile } = useSidebar();
-  const { data: dispatchedOrders } = useDispatchedOrders();
-  const receivingCount = dispatchedOrders?.length ?? 0;
   const { user } = useAuth();
 
   const initials = user?.name
@@ -343,25 +341,30 @@ export function AppSidebar({
       <SidebarHeader className="border-b border-sidebar-border pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip={brandName}>
-              <Link to="/$main" params={{ main: main ?? BRAND_NAMES.showroom }}>
-                <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10 group-data-[collapsible=icon]:size-8">
-                  <img
-                    src={brandLogo}
-                    alt="Logo"
-                    className="size-7 object-contain group-data-[collapsible=icon]:size-5"
-                  />
-                </div>
-                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-xl brand-font capitalize tracking-wide">
-                    {brandName}
-                  </span>
-                  <span className="truncate text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                    Tailoring System
-                  </span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
+            <div className="flex items-center">
+              <SidebarMenuButton size="lg" asChild tooltip={brandName} className="flex-1">
+                <Link to="/$main" params={{ main: main ?? BRAND_NAMES.showroom }}>
+                  <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10 group-data-[collapsible=icon]:size-8">
+                    <img
+                      src={brandLogo}
+                      alt="Logo"
+                      className="size-7 object-contain group-data-[collapsible=icon]:size-5"
+                    />
+                  </div>
+                  <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-xl brand-font capitalize tracking-wide">
+                      {brandName}
+                    </span>
+                    <span className="truncate text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+                      Tailoring System
+                    </span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+              <div className="group-data-[collapsible=icon]:hidden">
+                <NotificationBell />
+              </div>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -412,16 +415,12 @@ export function AppSidebar({
               <SidebarMenu>
                 {item.items.map((subItem: any) => {
                   if (subItem.isCollapsible && subItem.items) {
-                    const itemsWithCounts = subItem.items.map((si: any) => ({
-                      ...si,
-                      count: si.url === "orders/order-management/receiving-brova-final" ? receivingCount : undefined,
-                    }));
                     return (
                       <CollapsibleMenuItem
                         key={subItem.title}
                         title={subItem.title}
                         icon={subItem.icon}
-                        items={itemsWithCounts}
+                        items={subItem.items}
                         mainSegment={mainSegment}
                       />
                     );

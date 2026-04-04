@@ -21,12 +21,9 @@ import {
 import ErthLogo from "../../assets/erth-light.svg";
 import SakhtbaLogo from "../../assets/Sakkba.png";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { getFabrics } from "@/api/fabrics";
-import { getEmployees } from "@/api/employees";
-import { getPrices } from "@/api/prices";
-import { getStyles } from "@/api/styles";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
+import { NotificationBell } from "@/components/notification-bell";
 
 type MainParam = (typeof BRAND_NAMES)[keyof typeof BRAND_NAMES];
 
@@ -85,18 +82,7 @@ function RouteComponent() {
   const auth = useAuth();
   const navigate = Route.useNavigate();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-
-  // Prefetch static data at layout level so it's cached before any page needs it.
-  // These all use staleTime: Infinity at their call sites, so they fetch once and
-  // stay in cache until explicitly invalidated (e.g. after order mutations).
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    const opts = { staleTime: Infinity, gcTime: Infinity };
-    queryClient.prefetchQuery({ queryKey: ["fabrics"], queryFn: getFabrics, ...opts });
-    queryClient.prefetchQuery({ queryKey: ["employees"], queryFn: getEmployees, ...opts });
-    queryClient.prefetchQuery({ queryKey: ["prices"], queryFn: getPrices, ...opts });
-    queryClient.prefetchQuery({ queryKey: ["styles"], queryFn: getStyles, ...opts });
-  }, [queryClient]);
+  useRealtimeInvalidation();
 
   // Apply brand-specific theme
   useEffect(() => {
@@ -204,6 +190,7 @@ function RouteComponent() {
           </span>
         </div>
       </div>
+      <NotificationBell />
     </header>
   ), [brandLogo, brandName]);
 

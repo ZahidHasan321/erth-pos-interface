@@ -14,7 +14,6 @@ export function useDispatchedOrders() {
             }
             return res.data || [];
         },
-        staleTime: 1000 * 30, // 30 seconds
-        refetchInterval: 1000 * 60, // auto-refresh every 60 seconds
+        staleTime: 1000 * 60 * 2, // 2 minutes
     });
 }

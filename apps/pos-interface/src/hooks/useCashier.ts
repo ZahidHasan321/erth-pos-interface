@@ -16,6 +16,7 @@ import {
     getRegisterSession,
     openRegister,
     closeRegister,
+    reopenRegister,
     addCashMovement,
 } from "@/api/cashier";
 import type { EodTransactionFilters } from "@/api/cashier";
@@ -186,6 +187,22 @@ export function useOpenRegisterMutation() {
                 return;
             }
             toast.success("Register opened");
+            queryClient.invalidateQueries({ queryKey: ["register-session"] });
+        },
+        onError: (error) => toast.error(`Error: ${error.message}`),
+    });
+}
+
+export function useReopenRegisterMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: reopenRegister,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to reopen register: ${response.message}`);
+                return;
+            }
+            toast.success("Register reopened");
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Error: ${error.message}`),

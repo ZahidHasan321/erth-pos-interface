@@ -16,6 +16,11 @@ export const TRANSFER_STATUS_COLORS: Record<string, string> = {
   partially_received: "bg-orange-100 text-orange-700",
 };
 
+export const TRANSFER_DIRECTION_LABELS: Record<string, string> = {
+  shop_to_workshop: "Shop \u2192 Workshop",
+  workshop_to_shop: "Workshop \u2192 Shop",
+};
+
 export const ITEM_TYPE_LABELS: Record<string, string> = {
   fabric: "Fabrics",
   shelf: "Shelf Items",

@@ -17,6 +17,7 @@ export function useTransferRequests(filters?: TransferFilters) {
   return useQuery({
     queryKey: [...TRANSFER_KEY, filters],
     queryFn: () => getTransferRequests(filters),
+    staleTime: 30_000,
   });
 }
 

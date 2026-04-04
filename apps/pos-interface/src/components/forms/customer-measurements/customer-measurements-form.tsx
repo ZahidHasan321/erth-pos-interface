@@ -292,8 +292,8 @@ export function CustomerMeasurementsForm({
       return getMeasurementsByCustomerId(customerId);
     },
     enabled: !!customerId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 10,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   // Populate measurements when query data arrives

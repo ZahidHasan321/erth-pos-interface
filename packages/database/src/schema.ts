@@ -146,6 +146,17 @@ export const transferItemTypeEnum = pgEnum("transfer_item_type", [
 ]);
 export type TransferItemType = (typeof transferItemTypeEnum.enumValues)[number];
 
+// --- NOTIFICATION ENUMS ---
+export const notificationTypeEnum = pgEnum("notification_type", [
+    "garment_dispatched_to_workshop",
+    "garment_dispatched_to_shop",
+    "garment_ready_for_pickup",
+    "garment_awaiting_trial",
+    "transfer_requested",
+    "transfer_status_changed",
+]);
+export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
+
 export const accessoryCategoryEnum = pgEnum("accessory_category", [
     "buttons",
     "zippers",
@@ -204,7 +215,7 @@ export const users = pgTable("users", {
 // --- 1.5 USER SESSIONS (Presence / Heartbeat) ---
 export const userSessions = pgTable("user_sessions", {
     id: uuid("id").defaultRandom().primaryKey(),
-    user_id: uuid("user_id").notNull().references(() => users.id),
+    user_id: uuid("user_id").notNull().references(() => users.id).unique(),
     last_active_at: timestamp("last_active_at").notNull().defaultNow(),
     device_info: text("device_info"),
     started_at: timestamp("started_at").notNull().defaultNow(),
@@ -765,6 +776,29 @@ export const transferRequestItems = pgTable("transfer_request_items", {
     transferRequestIdx: index("transfer_items_request_idx").on(t.transfer_request_id),
 }));
 
+// --- 14. NOTIFICATIONS ---
+export const notifications = pgTable("notifications", {
+    id: serial("id").primaryKey(),
+    department: departmentEnum("department").notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    metadata: jsonb("metadata"),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+    expires_at: timestamp("expires_at").notNull(), // default set via SQL: now() + interval '7 days'
+}, (t) => ({
+    deptCreatedIdx: index("notifications_dept_created_idx").on(t.department, t.created_at),
+}));
+
+// --- 15. NOTIFICATION READS (per-user read tracking) ---
+export const notificationReads = pgTable("notification_reads", {
+    notification_id: integer("notification_id").references(() => notifications.id, { onDelete: 'cascade' }).notNull(),
+    user_id: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    read_at: timestamp("read_at").defaultNow().notNull(),
+}, (t) => ({
+    pk: primaryKey({ columns: [t.notification_id, t.user_id] }),
+}));
+
 // --- RELATIONS ---
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
@@ -839,6 +873,15 @@ export const transferRequestItemsRelations = relations(transferRequestItems, ({ 
     fabric: one(fabrics, { fields: [transferRequestItems.fabric_id], references: [fabrics.id] }),
     shelfItem: one(shelf, { fields: [transferRequestItems.shelf_id], references: [shelf.id] }),
     accessory: one(accessories, { fields: [transferRequestItems.accessory_id], references: [accessories.id] }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ many }) => ({
+    reads: many(notificationReads),
+}));
+
+export const notificationReadsRelations = relations(notificationReads, ({ one }) => ({
+    notification: one(notifications, { fields: [notificationReads.notification_id], references: [notifications.id] }),
+    user: one(users, { fields: [notificationReads.user_id], references: [users.id] }),
 }));
 
 // --- TYPE EXPORTS ---
@@ -923,3 +966,8 @@ export type NewTransferRequest = InferInsertModel<typeof transferRequests>;
 
 export type TransferRequestItem = InferSelectModel<typeof transferRequestItems>;
 export type NewTransferRequestItem = InferInsertModel<typeof transferRequestItems>;
+
+export type Notification = InferSelectModel<typeof notifications>;
+export type NewNotification = InferInsertModel<typeof notifications>;
+export type NotificationRead = InferSelectModel<typeof notificationReads>;
+export type NewNotificationRead = InferInsertModel<typeof notificationReads>;

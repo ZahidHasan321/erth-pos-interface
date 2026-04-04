@@ -1,21 +1,23 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Send, Plus, Minus } from "lucide-react";
+import { Loader2, Send, Plus, Minus, Truck, Search, Clock } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Input } from "@repo/ui/input";
 import { Textarea } from "@repo/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
+import { Badge } from "@repo/ui/badge";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@repo/ui/tooltip";
 
+import { PageHeader } from "@/components/shared/PageShell";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
-import { useCreateTransfer } from "@/hooks/useTransfers";
+import { useCreateTransfer, useTransferRequests } from "@/hooks/useTransfers";
 import { ACCESSORY_CATEGORY_LABELS, UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 
 export const Route = createFileRoute("/(main)/store/request-delivery")({
@@ -23,17 +25,37 @@ export const Route = createFileRoute("/(main)/store/request-delivery")({
   head: () => ({ meta: [{ title: "Request Delivery" }] }),
 });
 
+const LOW_STOCK_THRESHOLD_WORKSHOP = 5;
+
 function RequestDeliveryPage() {
-  const [direction, setDirection] = useState<string>("shop_to_workshop");
   const [activeTab, setActiveTab] = useState("fabric");
   const [notes, setNotes] = useState("");
+  const [search, setSearch] = useState("");
   const [fabricSelections, setFabricSelections] = useState<Map<number, number>>(new Map());
   const [shelfSelections, setShelfSelections] = useState<Map<number, number>>(new Map());
   const [accessorySelections, setAccessorySelections] = useState<Map<number, number>>(new Map());
 
-  const { data: fabrics = [] } = useQuery({ queryKey: ["fabrics"], queryFn: getFabrics });
-  const { data: shelfItems = [] } = useQuery({ queryKey: ["shelf"], queryFn: getShelf });
-  const { data: accessoriesData = [] } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories });
+  const { data: fabrics = [] } = useQuery({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: 60_000 });
+  const { data: shelfItems = [] } = useQuery({ queryKey: ["shelf"], queryFn: getShelf, staleTime: 60_000 });
+  const { data: accessoriesData = [] } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories, staleTime: 60_000 });
+
+  // Pending requests for awareness
+  const { data: pendingRequests = [] } = useTransferRequests({
+    status: ["requested", "approved"],
+    direction: "shop_to_workshop",
+  });
+
+  const pendingItemIds = useMemo(() => {
+    const ids = { fabric: new Set<number>(), shelf: new Set<number>(), accessory: new Set<number>() };
+    for (const req of pendingRequests) {
+      for (const item of req.items) {
+        if (item.fabric_id) ids.fabric.add(item.fabric_id);
+        if (item.shelf_id) ids.shelf.add(item.shelf_id);
+        if (item.accessory_id) ids.accessory.add(item.accessory_id);
+      }
+    }
+    return ids;
+  }, [pendingRequests]);
 
   const createTransfer = useCreateTransfer();
 
@@ -42,11 +64,36 @@ function RequestDeliveryPage() {
     setSelections: (m: Map<number, number>) => void,
     id: number,
     qty: number,
+    max?: number,
   ) => {
     const next = new Map(selections);
-    if (qty <= 0) next.delete(id); else next.set(id, qty);
+    let val = Math.max(0, qty);
+    if (max != null) val = Math.min(val, max);
+    if (val <= 0) next.delete(id); else next.set(id, val);
     setSelections(next);
   };
+
+  // Filter and sort: low workshop stock first
+  const filteredFabrics = useMemo(() => {
+    const q = search.toLowerCase();
+    return [...fabrics]
+      .filter((f) => !q || f.name?.toLowerCase().includes(q))
+      .sort((a, b) => Number(a.workshop_stock ?? 0) - Number(b.workshop_stock ?? 0));
+  }, [fabrics, search]);
+
+  const filteredShelf = useMemo(() => {
+    const q = search.toLowerCase();
+    return [...shelfItems]
+      .filter((s) => !q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q))
+      .sort((a, b) => Number(a.workshop_stock ?? 0) - Number(b.workshop_stock ?? 0));
+  }, [shelfItems, search]);
+
+  const filteredAccessories = useMemo(() => {
+    const q = search.toLowerCase();
+    return [...accessoriesData]
+      .filter((a) => !q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q))
+      .sort((a, b) => Number(a.workshop_stock ?? 0) - Number(b.workshop_stock ?? 0));
+  }, [accessoriesData, search]);
 
   const handleSubmit = async () => {
     const requests: { item_type: string; items: any[] }[] = [];
@@ -77,7 +124,12 @@ function RequestDeliveryPage() {
 
     try {
       for (const req of requests) {
-        await createTransfer.mutateAsync({ direction, item_type: req.item_type, notes: notes || undefined, items: req.items });
+        await createTransfer.mutateAsync({
+          direction: "shop_to_workshop",
+          item_type: req.item_type,
+          notes: notes || undefined,
+          items: req.items,
+        });
       }
       toast.success(`${requests.length} transfer request(s) created`);
       setFabricSelections(new Map());
@@ -92,29 +144,24 @@ function RequestDeliveryPage() {
   const totalSelected = fabricSelections.size + shelfSelections.size + accessorySelections.size;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Request Delivery</h1>
-        <p className="text-sm text-muted-foreground mt-1">Request items to be transferred between workshop and shop</p>
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
+      <PageHeader icon={Truck} title="Request Delivery" subtitle="Request items to be sent from the shop to the workshop" />
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search items by name, type, or category..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
       <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Direction</label>
-            <Select value={direction} onValueChange={setDirection}>
-              <SelectTrigger className="w-[260px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="shop_to_workshop">Shop &rarr; Workshop (request from shop)</SelectItem>
-                <SelectItem value="workshop_to_shop">Workshop &rarr; Shop (send to shop)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+        <CardContent className="pt-6 pb-6 space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
+            <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
               <TabsTrigger value="fabric">
                 Fabrics {fabricSelections.size > 0 && <span className="ml-1.5 text-xs bg-primary/10 text-primary rounded-full px-1.5">{fabricSelections.size}</span>}
               </TabsTrigger>
@@ -127,96 +174,176 @@ function RequestDeliveryPage() {
             </TabsList>
 
             <TabsContent value="fabric">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[160px]">Request Qty (m)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fabrics.map((f) => (
-                    <TableRow key={f.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {f.color_hex && <span className="w-4 h-4 rounded-full border" style={{ backgroundColor: f.color_hex }} />}
-                          {f.name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{f.shop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right tabular-nums">{f.workshop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right">
-                        <QtyInput value={fabricSelections.get(f.id) ?? 0} onChange={(v) => updateQty(fabricSelections, setFabricSelections, f.id, v)} step={0.5} />
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fabric</TableHead>
+                      <TableHead className="text-right">Shop Stock</TableHead>
+                      <TableHead className="text-right">Workshop Stock</TableHead>
+                      <TableHead className="text-right w-[180px]">Request Qty (m)</TableHead>
                     </TableRow>
-                  ))}
-                  {fabrics.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No fabrics found</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredFabrics.map((f) => {
+                      const shopStock = Number(f.shop_stock ?? 0);
+                      const workshopStock = Number(f.workshop_stock ?? 0);
+                      const isLow = workshopStock < LOW_STOCK_THRESHOLD_WORKSHOP;
+                      const outOfStock = shopStock <= 0;
+                      const hasPending = pendingItemIds.fabric.has(f.id);
+                      return (
+                        <TableRow key={f.id} className={isLow ? "bg-amber-50/60" : outOfStock ? "opacity-50" : ""}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} />}
+                              <span>{f.name}</span>
+                              {isLow && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Low</Badge>}
+                              {outOfStock && <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded">No stock</span>}
+                              {hasPending && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>Pending request exists</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{shopStock}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}>{workshopStock}</TableCell>
+                          <TableCell className="text-right">
+                            {outOfStock ? (
+                              <span className="text-xs text-muted-foreground">Unavailable</span>
+                            ) : (
+                              <QtyInput value={fabricSelections.get(f.id) ?? 0} onChange={(v) => updateQty(fabricSelections, setFabricSelections, f.id, v, shopStock)} step={0.5} max={shopStock} />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filteredFabrics.length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">{search ? "No fabrics match your search" : "No fabrics found"}</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </TabsContent>
 
             <TabsContent value="shelf">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Brand</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[160px]">Request Qty</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shelfItems.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.type}</TableCell>
-                      <TableCell>{s.brand}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.shop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.workshop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right">
-                        <QtyInput value={shelfSelections.get(s.id) ?? 0} onChange={(v) => updateQty(shelfSelections, setShelfSelections, s.id, v)} />
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Brand</TableHead>
+                      <TableHead className="text-right">Shop Stock</TableHead>
+                      <TableHead className="text-right">Workshop Stock</TableHead>
+                      <TableHead className="text-right w-[180px]">Request Qty</TableHead>
                     </TableRow>
-                  ))}
-                  {shelfItems.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No shelf items found</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredShelf.map((s) => {
+                      const shopStock = Number(s.shop_stock ?? 0);
+                      const workshopStock = Number(s.workshop_stock ?? 0);
+                      const isLow = workshopStock < 3;
+                      const outOfStock = shopStock <= 0;
+                      const hasPending = pendingItemIds.shelf.has(s.id);
+                      return (
+                        <TableRow key={s.id} className={isLow ? "bg-amber-50/60" : outOfStock ? "opacity-50" : ""}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{s.type}</span>
+                              {isLow && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Low</Badge>}
+                              {outOfStock && <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded">No stock</span>}
+                              {hasPending && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>Pending request exists</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{s.brand}</TableCell>
+                          <TableCell className="text-right tabular-nums">{shopStock}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}>{workshopStock}</TableCell>
+                          <TableCell className="text-right">
+                            {outOfStock ? (
+                              <span className="text-xs text-muted-foreground">Unavailable</span>
+                            ) : (
+                              <QtyInput value={shelfSelections.get(s.id) ?? 0} onChange={(v) => updateQty(shelfSelections, setShelfSelections, s.id, v, shopStock)} step={1} max={shopStock} />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filteredShelf.length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">{search ? "No shelf items match your search" : "No shelf items found"}</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </TabsContent>
 
             <TabsContent value="accessory">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[160px]">Request Qty</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {accessoriesData.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium">{a.name}</TableCell>
-                      <TableCell>{ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}</TableCell>
-                      <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.shop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.workshop_stock ?? 0}</TableCell>
-                      <TableCell className="text-right">
-                        <QtyInput
-                          value={accessorySelections.get(a.id) ?? 0}
-                          onChange={(v) => updateQty(accessorySelections, setAccessorySelections, a.id, v)}
-                          step={a.unit_of_measure === "meters" || a.unit_of_measure === "kg" ? 0.5 : 1}
-                        />
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead className="text-right">Shop Stock</TableHead>
+                      <TableHead className="text-right">Workshop Stock</TableHead>
+                      <TableHead className="text-right w-[180px]">Request Qty</TableHead>
                     </TableRow>
-                  ))}
-                  {accessoriesData.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No accessories found</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAccessories.map((a) => {
+                      const shopStock = Number(a.shop_stock ?? 0);
+                      const workshopStock = Number(a.workshop_stock ?? 0);
+                      const isLow = workshopStock < 10;
+                      const outOfStock = shopStock <= 0;
+                      const hasPending = pendingItemIds.accessory.has(a.id);
+                      const step = a.unit_of_measure === "meters" || a.unit_of_measure === "kg" ? 0.5 : 1;
+                      return (
+                        <TableRow key={a.id} className={isLow ? "bg-amber-50/60" : outOfStock ? "opacity-50" : ""}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{a.name}</span>
+                              {isLow && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Low</Badge>}
+                              {outOfStock && <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded">No stock</span>}
+                              {hasPending && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>Pending request exists</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}</TableCell>
+                          <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
+                          <TableCell className="text-right tabular-nums">{shopStock}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}>{workshopStock}</TableCell>
+                          <TableCell className="text-right">
+                            {outOfStock ? (
+                              <span className="text-xs text-muted-foreground">Unavailable</span>
+                            ) : (
+                              <QtyInput value={accessorySelections.get(a.id) ?? 0} onChange={(v) => updateQty(accessorySelections, setAccessorySelections, a.id, v, shopStock)} step={step} max={shopStock} />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filteredAccessories.length === 0 && (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">{search ? "No accessories match your search" : "No accessories found"}</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </TabsContent>
           </Tabs>
 
@@ -240,15 +367,19 @@ function RequestDeliveryPage() {
   );
 }
 
-function QtyInput({ value, onChange, step = 1 }: { value: number; onChange: (v: number) => void; step?: number }) {
+function QtyInput({ value, onChange, step = 1, max }: { value: number; onChange: (v: number) => void; step?: number; max?: number }) {
+  const clamp = (v: number) => {
+    const clamped = Math.max(0, v);
+    return max != null ? Math.min(clamped, max) : clamped;
+  };
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onChange(Math.max(0, value - step))} disabled={value <= 0}>
-        <Minus className="h-3 w-3" />
+    <div className="flex items-center justify-end gap-1.5">
+      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onChange(Math.max(0, value - step))} disabled={value <= 0}>
+        <Minus className="h-3.5 w-3.5" />
       </Button>
-      <Input type="number" min={0} step={step} value={value || ""} onChange={(e) => onChange(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-center text-sm tabular-nums" placeholder="0" />
-      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onChange(value + step)}>
-        <Plus className="h-3 w-3" />
+      <Input type="number" min={0} max={max} step={step} value={value || ""} onChange={(e) => onChange(clamp(Number(e.target.value)))} className="w-20 h-8 text-center text-sm tabular-nums" placeholder="0" />
+      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onChange(clamp(value + step))} disabled={max != null && value >= max}>
+        <Plus className="h-3.5 w-3.5" />
       </Button>
     </div>
   );

@@ -141,7 +141,7 @@ export function FabricSelectionForm({
         pageStyle: `
       @page {
         size: 5in 4in;
-        margin: 0;
+        margin: 16px 0 0 0;
       }
       @media print {
         html, body {
@@ -169,14 +169,12 @@ export function FabricSelectionForm({
         }
     }, [deliveryDate, isOrderClosed, isProceedDisabled, setDeliveryDate]);
 
-    const { data: fabricsResponse } = useQuery({
+    const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
         queryFn: getFabrics,
         staleTime: Infinity,
         gcTime: Infinity,
     });
-
-    const fabrics = fabricsResponse?.data || [];
 
     const { data: stylesResponse } = useQuery({
         queryKey: ["styles"],
@@ -235,7 +233,7 @@ export function FabricSelectionForm({
         for (const [fabricIdStr, totalUsed] of tempStockUsage) {
             const fabric = fabrics.find(f => f.id.toString() === fabricIdStr);
             if (fabric) {
-                const available = parseFloat(fabric.real_stock?.toString() || "0");
+                const available = parseFloat(fabric.shop_stock?.toString() || "0");
                 if (totalUsed > available) return true;
             }
         }
@@ -393,7 +391,7 @@ export function FabricSelectionForm({
         usage.forEach((totalUsed, fabricId) => {
             const fabric = fabrics.find(f => f.id === fabricId);
             if (fabric) {
-                const available = parseFloat(fabric.real_stock?.toString() || "0");
+                const available = parseFloat(fabric.shop_stock?.toString() || "0");
                 if (totalUsed > available) {
                     stockErrorFound = true;
                     toast.error(`Insufficient stock for ${fabric.name}. Total requested: ${totalUsed.toFixed(2)}m, Available: ${available.toFixed(2)}m`);
@@ -420,12 +418,8 @@ export function FabricSelectionForm({
 
     const { data: measurementQuery } = useQuery({
         queryKey: ["measurements", customerId],
-        queryFn: () => {
-            if (!customerId) {
-                return Promise.resolve(null);
-            }
-            return getMeasurementsByCustomerId(customerId);
-        },
+        queryFn: () => getMeasurementsByCustomerId(customerId!),
+        enabled: !!customerId,
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -807,6 +801,7 @@ export function FabricSelectionForm({
                                         express: currentRowData.express ?? false,
                                         soaking: currentRowData.soaking ?? false,
                                         deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
+                                        notes: currentRowData.notes || "",
                                     };
 
                                     return (

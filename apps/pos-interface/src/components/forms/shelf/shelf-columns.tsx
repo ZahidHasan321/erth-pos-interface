@@ -91,7 +91,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
                             const product = serverProducts?.find(
                                 (p: any) => p.brand === brand && p.type === selectedType
                             )
-                            const hasStock = (product?.stock && product.stock > 0) || isCurrentlySelectedInThisRow
+                            const hasStock = (product?.shop_stock && product.shop_stock > 0) || isCurrentlySelectedInThisRow
 
                             if (isAlreadySelectedElsewhere) return null;
 

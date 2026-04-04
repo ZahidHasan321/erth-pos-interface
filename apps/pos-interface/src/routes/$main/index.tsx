@@ -21,7 +21,7 @@ import { Badge } from "@repo/ui/badge";
 import { Skeleton } from "@repo/ui/skeleton";
 import { getDashboardOrders } from "@/api/orders";
 import { getCustomerCount } from "@/api/customers";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import { getShowroomStatus } from "@repo/database";
@@ -63,12 +63,12 @@ function DashboardPage() {
     completedOrders: orders.filter(o => o.order_phase === 'completed').length,
     upcomingDeliveries: orders.filter(o => {
       if (!o.delivery_date || o.order_phase === 'completed') return false;
-      const deliveryDate = new Date(o.delivery_date);
+      const deliveryDate = parseUtcTimestamp(o.delivery_date);
       return deliveryDate >= today && deliveryDate <= sevenDaysFromNow;
     }),
     todayDeliveries: orders.filter(o => {
       if (!o.delivery_date || o.order_phase === 'completed') return false;
-      const deliveryDate = new Date(o.delivery_date);
+      const deliveryDate = parseUtcTimestamp(o.delivery_date);
       return deliveryDate >= today && deliveryDate <= endOfDay(today);
     }),
     readyForPickup: orders.filter(o => {

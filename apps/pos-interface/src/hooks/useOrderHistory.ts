@@ -87,12 +87,11 @@ export function useOrderHistory({
       }
 
       if (dateFilter) {
+        // order_date stores UTC (from Supabase now()). Convert local day boundaries to UTC.
         const startOfDay = new Date(dateFilter);
         startOfDay.setHours(0, 0, 0, 0);
-        
         const endOfDay = new Date(dateFilter);
         endOfDay.setHours(23, 59, 59, 999);
-        
         query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
       }
 

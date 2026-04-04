@@ -4,7 +4,7 @@ import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useResources } from "@/hooks/useResources";
 import { PageHeader } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
-import { cn, getLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   Cell,
@@ -81,7 +81,7 @@ function DashboardPage() {
       if (
         g.location === "workshop" &&
         g.delivery_date_order &&
-        g.delivery_date_order < todayStr
+        getLocalDateStr(parseUtcTimestamp(g.delivery_date_order)) < todayStr
       ) {
         overdueOrderIds.add(g.order_id);
       }
@@ -222,7 +222,7 @@ function DashboardPage() {
     const now = Date.now();
     for (const [, date] of orderDeliveries) {
       if (!date) { buckets["No Date"]++; continue; }
-      const diff = Math.ceil((new Date(date).getTime() - now) / (1000 * 60 * 60 * 24));
+      const diff = Math.ceil((parseUtcTimestamp(date).getTime() - now) / (1000 * 60 * 60 * 24));
       if (diff < 0) buckets["Overdue"]++;
       else if (diff === 0) buckets["Due Today"]++;
       else if (diff <= 2) buckets["1-2 Days"]++;

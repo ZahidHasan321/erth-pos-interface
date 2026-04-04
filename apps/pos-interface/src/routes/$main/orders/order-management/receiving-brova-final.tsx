@@ -22,7 +22,7 @@ import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
 import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 
 import { updateGarment } from "@/api/garments";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
@@ -64,12 +64,26 @@ function ReceivingInterface() {
             if (error) throw new Error(error.message);
             return { count: garments.length, orderId };
         },
+        onMutate: async ({ orderId }) => {
+            await queryClient.cancelQueries({ queryKey: ["dispatched-orders"] });
+            const prev = queryClient.getQueryData<Order[]>(["dispatched-orders"]);
+            if (prev) {
+                queryClient.setQueryData<Order[]>(
+                    ["dispatched-orders"],
+                    prev.filter((o) => o.id !== orderId),
+                );
+            }
+            return { prev };
+        },
         onSuccess: (data) => {
             toast.success(`Received ${data.count} items for #${data.orderId}`);
             queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
         },
-        onError: (err: any) => {
+        onError: (err: any, _vars, context) => {
+            if (context?.prev) {
+                queryClient.setQueryData(["dispatched-orders"], context.prev);
+            }
             toast.error("Failed to mark as received", { description: err.message });
         },
     });
@@ -175,7 +189,7 @@ function OrderCard({
 
     const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
-    const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString() : "No Date";
+    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString() : "No Date";
 
     return (
         <Card className={cn(
@@ -220,7 +234,7 @@ function OrderCard({
                                 {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
                                 {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
                                 {order.delivery_date && (
-                                    <span className="text-[11px] text-muted-foreground font-medium">Due {format(new Date(order.delivery_date), "d MMM")}</span>
+                                    <span className="text-[11px] text-muted-foreground font-medium">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>
                                 )}
                             </div>
                         </div>
@@ -260,7 +274,7 @@ function OrderCard({
                                 <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{dispatchedGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
                                 {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
-                                {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(new Date(order.delivery_date), "d MMM")}</span>}
+                                {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>}
                             </div>
                             <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={(e) => { e.stopPropagation(); onReceive(dispatchedGarments); }} disabled={isSubmitting || dispatchedGarments.length === 0}>
                                 {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : "Receive"}

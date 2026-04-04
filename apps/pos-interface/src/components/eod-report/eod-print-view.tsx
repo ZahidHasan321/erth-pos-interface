@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
+import { parseUtcTimestamp } from "@/lib/utils";
 import type { EodReportSummary, EodTransaction } from "@/api/cashier";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
@@ -255,8 +256,8 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEod
                                 key={tx.id}
                                 widths={txWidths}
                                 cells={[
-                                    dateFmt.format(new Date(tx.created_at)),
-                                    timeFmt.format(new Date(tx.created_at)),
+                                    dateFmt.format(parseUtcTimestamp(tx.created_at)),
+                                    timeFmt.format(parseUtcTimestamp(tx.created_at)),
                                     `#${tx.order_id}`,
                                     isRefund ? "Refund" : "Payment",
                                     paymentLabel(tx.payment_type),

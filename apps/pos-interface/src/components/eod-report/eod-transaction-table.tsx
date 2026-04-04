@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from "@repo/ui/select";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
+import { parseUtcTimestamp } from "@/lib/utils";
 import { useEodTransactionsPaginated } from "@/hooks/useCashier";
 import type { EodTransaction, EodTransactionFilters } from "@/api/cashier";
 import { PaymentReceipt, type PaymentReceiptData } from "@/components/cashier/payment-receipt";
@@ -213,8 +214,8 @@ export function EodTransactionTable({ dateFrom, dateTo, showDate }: EodTransacti
                             {transactions.map(tx => {
                                 const isRefund = tx.transaction_type === "refund";
                                 const methodLabel = PAYMENT_TYPE_LABELS[tx.payment_type as keyof typeof PAYMENT_TYPE_LABELS] || tx.payment_type;
-                                const time = timeFmt.format(new Date(tx.created_at));
-                                const date = dateFmt.format(new Date(tx.created_at));
+                                const time = timeFmt.format(parseUtcTimestamp(tx.created_at));
+                                const date = dateFmt.format(parseUtcTimestamp(tx.created_at));
                                 const orderLabel = tx.invoice_number ? `#${tx.order_id} · INV ${tx.invoice_number}` : `#${tx.order_id}`;
                                 return (
                                     <TableRow key={tx.id}>

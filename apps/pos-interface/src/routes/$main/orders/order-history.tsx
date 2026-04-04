@@ -31,7 +31,7 @@ import {
 } from "@repo/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Input } from "@repo/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { format } from "date-fns";
 import { DatePicker } from "@repo/ui/date-picker";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
@@ -348,7 +348,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
     const isWorkOrder = order.order_type === "WORK";
     const route = isWorkOrder ? "/$main/orders/new-work-order" : "/$main/orders/new-sales-order";
     const itemCount = isWorkOrder ? order.fabric_count : order.shelf_item_count;
-    const orderDate = order.order_date ? format(new Date(order.order_date), "dd/MM/yy") : "N/A";
+    const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
 
     return (
         <Link to={route} search={{ orderId: order.id }} className="group block">
@@ -383,7 +383,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             </span>
                             {isWorkOrder && order.delivery_date && (
                                 <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                                    <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
                             {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
@@ -420,7 +420,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             </span>
                             {isWorkOrder && order.delivery_date && (
                                 <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                                    <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
                             {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
@@ -463,7 +463,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                         </div>
                         {isWorkOrder && order.delivery_date && (
                             <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
-                                <Clock className="w-3 h-3" />Due {format(new Date(order.delivery_date), "dd/MM/yy")}
+                                <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                             </div>
                         )}
                     </div>

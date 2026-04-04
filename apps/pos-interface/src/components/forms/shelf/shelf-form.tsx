@@ -84,11 +84,11 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
       }
 
       // Check if selected product has stock
-      const selectedProduct = serverProducts?.data?.find(
+      const selectedProduct = serverProducts?.find(
         (p: any) => p.brand === value && p.type === currentRow.product_type
       )
 
-      if (selectedProduct && (!selectedProduct.stock || selectedProduct.stock === 0)) {
+      if (selectedProduct && (!selectedProduct.shop_stock || selectedProduct.shop_stock === 0)) {
         toast.error('No stock available', {
           description: 'This product is currently out of stock.'
         })
@@ -100,7 +100,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
     // Logic for brand selection
     if (columnId === 'brand') {
-      const selectedProduct = serverProducts?.data?.find(
+      const selectedProduct = serverProducts?.find(
         (p: any) => p.brand === value && p.type === currentRow.product_type
       )
 
@@ -108,7 +108,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
         updatedRow = {
           ...updatedRow,
           id: selectedProduct.id.toString(),
-          stock: selectedProduct.stock || 0,
+          stock: selectedProduct.shop_stock || 0,
           unit_price: selectedProduct.price || 0,
           quantity: 1,
         }
@@ -117,7 +117,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
     // Logic for product_type selection
     if (columnId === 'product_type') {
-      const brandsForType = serverProducts?.data?.filter(
+      const brandsForType = serverProducts?.filter(
         (p: any) => p.type === value
       )
       const uniqueBrands = Array.from(new Set(brandsForType?.map((p: any) => p.brand).filter(Boolean)))
@@ -131,13 +131,13 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
           const combination = `${value}-${onlyBrand}`
 
           // Only auto-select if not already selected elsewhere and has stock
-          if (!selectedProducts.includes(combination) && selectedProduct.stock && selectedProduct.stock > 0) {
+          if (!selectedProducts.includes(combination) && selectedProduct.shop_stock && selectedProduct.shop_stock > 0) {
             updatedRow = {
               ...updatedRow,
               id: selectedProduct.id.toString(),
               product_type: value,
               brand: onlyBrand,
-              stock: selectedProduct.stock || 0,
+              stock: selectedProduct.shop_stock || 0,
               unit_price: selectedProduct.price || 0,
               quantity: 1,
             }
@@ -227,7 +227,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
         data={watchedProducts}
         updateData={updateData}
         removeRow={removeRow}
-        serverProducts={serverProducts?.data}
+        serverProducts={serverProducts}
         selectedProducts={getSelectedProducts()}
         isOrderDisabled={isOrderDisabled}
         errors={form.formState.errors.products as any}

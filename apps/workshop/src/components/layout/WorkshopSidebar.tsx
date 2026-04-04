@@ -27,6 +27,7 @@ import {
   Scissors,
   Truck,
   ClipboardCheck,
+  BarChart3,
   CircleCheckBig,
   Users,
   DollarSign,
@@ -37,10 +38,13 @@ import {
   TrendingUp,
   User,
   UserCog,
+  Package,
+  Send,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
+import { NotificationBell } from "../notification-bell";
 import { isAdmin, ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/rbac";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import {
@@ -94,9 +98,12 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
   ];
 
   const storeItems = [
+    { label: "Inventory",            icon: Package,          href: "/store/inventory" },
+    { label: "Send to Shop",         icon: Send,             href: "/store/send-to-shop" },
     { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
     { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries" },
     { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests" },
+    { label: "Stock Report",         icon: BarChart3,        href: "/store/stock-report" },
   ];
 
   const terminalItems = [
@@ -119,9 +126,12 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/90 to-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0 shadow-md">
             W
           </div>
-          <span className="font-bold text-sm uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+          <span className="font-bold text-sm uppercase tracking-wider group-data-[collapsible=icon]:hidden flex-1">
             Workshop
           </span>
+          <div className="group-data-[collapsible=icon]:hidden">
+            <NotificationBell />
+          </div>
         </div>
       </SidebarHeader>
 
