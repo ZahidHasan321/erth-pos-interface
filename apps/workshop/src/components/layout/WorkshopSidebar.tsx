@@ -16,6 +16,7 @@ import {
   useSidebar,
 } from "@repo/ui/sidebar";
 import { useSidebarCounts } from "@/hooks/useSidebarCounts";
+import { useTransferRequests } from "@/hooks/useTransfers";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -62,6 +63,8 @@ interface WorkshopSidebarProps {
 
 export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
   const { data: counts } = useSidebarCounts();
+  const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
+  const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser } = useAuth();
@@ -101,8 +104,8 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
     { label: "Inventory",            icon: Package,          href: "/store/inventory" },
     { label: "Send to Shop",         icon: Send,             href: "/store/send-to-shop" },
     { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
-    { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries" },
-    { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests" },
+    { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries", count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
+    { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests",     count: approveRequests.length,     badgeColor: "bg-amber-100 text-amber-700" },
     { label: "Stock Report",         icon: BarChart3,        href: "/store/stock-report" },
   ];
 
@@ -279,6 +282,11 @@ export function WorkshopSidebar({ onLogout }: WorkshopSidebarProps) {
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {!!item.count && (
+                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                      {item.count}
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

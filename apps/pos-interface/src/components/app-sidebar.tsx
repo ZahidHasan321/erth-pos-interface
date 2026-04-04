@@ -47,6 +47,7 @@ import { BRAND_NAMES } from "@/lib/constants";
 import { LogOut, Home } from "lucide-react";
 import { IconRulerMeasure } from "@tabler/icons-react";
 import { useAuth } from "@/context/auth";
+import { useTransferRequests } from "@/hooks/useTransfers";
 import { NotificationBell } from "./notification-bell";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import {
@@ -186,6 +187,8 @@ export function AppSidebar({
     icon?: React.ComponentType<{ className?: string }>;
     disabled?: boolean;
     exactMatch?: boolean;
+    count?: number;
+    badgeColor?: string;
   };
 
   const SidebarLink: React.FC<SidebarLinkProps> = ({
@@ -194,6 +197,8 @@ export function AppSidebar({
     icon: Icon,
     disabled = false,
     exactMatch = false,
+    count,
+    badgeColor = "bg-blue-100 text-blue-700",
   }) => {
     const matchRoute = useMatchRoute();
     const match = exactMatch
@@ -225,6 +230,11 @@ export function AppSidebar({
             <span>{title}</span>
           </Link>
         </SidebarMenuButton>
+        {!!count && (
+          <span className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[10px] font-bold tabular-nums ${badgeColor}`}>
+            {count}
+          </span>
+        )}
       </SidebarMenuItem>
     );
   };
@@ -322,6 +332,13 @@ export function AppSidebar({
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
   const { isMobile } = useSidebar();
   const { user } = useAuth();
+  const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "workshop_to_shop" });
+  const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "shop_to_workshop" });
+
+  const storeCounts: Record<string, { count: number; badgeColor: string }> = {
+    "store/receiving-deliveries": { count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
+    "store/approve-requests": { count: approveRequests.length, badgeColor: "bg-amber-100 text-amber-700" },
+  };
 
   const initials = user?.name
     ? user.name
@@ -426,6 +443,7 @@ export function AppSidebar({
                     );
                   }
 
+                  const countInfo = subItem.url ? storeCounts[subItem.url] : undefined;
                   return (
                     <SidebarLink
                       key={subItem.title}
@@ -433,6 +451,8 @@ export function AppSidebar({
                       title={subItem.title}
                       icon={subItem.icon}
                       disabled={false}
+                      count={countInfo?.count}
+                      badgeColor={countInfo?.badgeColor}
                     />
                   );
                 })}

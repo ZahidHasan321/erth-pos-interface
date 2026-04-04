@@ -1,3 +1,25 @@
+-- 0. Implicit casts for custom enums (allows PostgREST/Supabase to pass text values)
+DO $$
+DECLARE
+  enum_name TEXT;
+BEGIN
+  FOREACH enum_name IN ARRAY ARRAY[
+    'role', 'department', 'checkout_status', 'order_phase', 'piece_stage',
+    'location', 'fulfillment_type', 'payment_type', 'discount_type',
+    'order_type', 'brand', 'fabric_source', 'account_type', 'measurement_type',
+    'jabzour_type', 'garment_type', 'transaction_type', 'register_session_status',
+    'cash_movement_type', 'appointment_status', 'fabric_type', 'transfer_status',
+    'transfer_direction', 'transfer_item_type', 'notification_type',
+    'accessory_category', 'unit_of_measure'
+  ]
+  LOOP
+    BEGIN
+      EXECUTE format('CREATE CAST (text AS %I) WITH INOUT AS IMPLICIT', enum_name);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
 -- 0a. Enable pg_trgm for fuzzy/trigram search (idempotent, available on Supabase)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
