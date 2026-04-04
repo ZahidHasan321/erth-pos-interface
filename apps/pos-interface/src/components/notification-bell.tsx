@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck } from "lucide-react";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { Button } from "@repo/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
@@ -14,31 +15,70 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   transfer_status_changed: ArrowRightLeft,
 };
 
+type NotificationLink = { to: string; search?: Record<string, string> };
+
+function getNotificationLink(notification: NotificationItem, mainSegment: string): NotificationLink | null {
+  const meta = notification.metadata as Record<string, unknown> | null;
+  const orderId = meta?.order_id;
+
+  switch (notification.type) {
+    case "garment_dispatched_to_shop":
+      return { to: `/${mainSegment}/orders/order-management/receiving-brova-final` };
+    case "garment_ready_for_pickup":
+      return { to: `/${mainSegment}/orders/orders-at-showroom`, search: { stage: "ready_for_pickup" } };
+    case "garment_awaiting_trial":
+      return orderId
+        ? { to: `/${mainSegment}/orders/order-management/feedback/${orderId}` }
+        : { to: `/${mainSegment}/orders/orders-at-showroom`, search: { stage: "brova_trial" } };
+    case "transfer_requested":
+      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "pending" } };
+    case "transfer_status_changed":
+      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "approved" } };
+    default:
+      return null;
+  }
+}
+
 function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const date = new Date(dateStr);
+  const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString("en-GB", {
+    timeZone: "Asia/Kuwait",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function NotificationRow({
   notification,
   onRead,
+  onNavigate,
+  mainSegment,
 }: {
   notification: NotificationItem;
   onRead: (id: number) => void;
+  onNavigate: (link: NotificationLink) => void;
+  mainSegment: string;
 }) {
   const Icon = TYPE_ICONS[notification.type] ?? Bell;
+  const link = getNotificationLink(notification, mainSegment);
 
   return (
     <button
       type="button"
       onClick={() => {
         if (!notification.is_read) onRead(notification.id);
+        if (link) onNavigate(link);
       }}
       className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 border-b last:border-b-0 ${
         notification.is_read ? "opacity-60" : ""
@@ -73,6 +113,14 @@ export function NotificationBell() {
   const unreadCount = useUnreadCount();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
+  const navigate = useNavigate();
+  const { main } = useParams({ strict: false }) as { main?: string };
+  const mainSegment = main ?? "showroom";
+
+  const handleNavigate = (link: NotificationLink) => {
+    setOpen(false);
+    navigate({ to: link.to, search: link.search as any });
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -113,6 +161,8 @@ export function NotificationBell() {
                 key={n.id}
                 notification={n}
                 onRead={(id) => markRead.mutate(id)}
+                onNavigate={handleNavigate}
+                mainSegment={mainSegment}
               />
             ))
           )}

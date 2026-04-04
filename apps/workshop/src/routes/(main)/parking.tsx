@@ -990,7 +990,6 @@ function ParkingPage() {
       return;
     }
     await sendMut.mutateAsync(ids);
-    toast.success(`Order #${group.order_id} sent to Scheduler`);
   };
 
   const handleSendToScheduler = async () => {
@@ -1000,7 +999,6 @@ function ParkingPage() {
       return;
     }
     await sendMut.mutateAsync(ids);
-    toast.success(`${selectedOrderIds.size} order(s) sent to Scheduler`);
     setSelectedOrderIds(new Set());
   };
 
@@ -1080,14 +1078,12 @@ function ParkingPage() {
 
   const handleReleaseConfirm = async (plan: Record<string, string>, date: string) => {
     await releaseWithPlanMut.mutateAsync({ ids: releaseTargetIds, plan, date });
-    toast.success(`${releaseTargetIds.length} final(s) released with plan`);
     setSelectedWaitingIds(new Set());
     setReleaseTargetIds([]);
   };
 
   const handleSendReturnSingle = async (id: string) => {
     await sendReturnMut.mutateAsync({ id, stage: "waiting_cut" as PieceStage });
-    toast.success("Return sent to Scheduler");
   };
 
   const handleSendReturnBatch = async () => {
@@ -1096,7 +1092,6 @@ function ParkingPage() {
         sendReturnMut.mutateAsync({ id, stage: "waiting_cut" as PieceStage }),
       ),
     );
-    toast.success(`${selectedReturnIds.size} return(s) sent to Scheduler`);
     setSelectedReturnIds(new Set());
   };
 

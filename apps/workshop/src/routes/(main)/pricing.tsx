@@ -142,7 +142,7 @@ function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
                       updatePrice.mutate(
                         { key: price.key, brand, value: v },
                         {
-                          onSuccess: () => { toast.success(`${meta.label} updated`); setEditing(null); },
+                          onSuccess: () => { setEditing(null); },
                           onError: (e) => toast.error(e.message),
                         },
                       )
@@ -261,7 +261,7 @@ function StyleGroups({ styles }: { styles: Style[] }) {
                             updateStyle.mutate(
                               { id: style.id, rate_per_item: v },
                               {
-                                onSuccess: () => { toast.success(`${style.name} updated`); setEditing(null); },
+                                onSuccess: () => { setEditing(null); },
                                 onError: (e) => toast.error(e.message),
                               },
                             )

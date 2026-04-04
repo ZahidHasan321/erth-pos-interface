@@ -121,7 +121,6 @@ export default function RequestDeliveryPage() {
           items: req.items,
         });
       }
-      toast.success(`${requests.length} transfer request(s) created`);
       setFabricSelections(new Map());
       setShelfSelections(new Map());
       setAccessorySelections(new Map());

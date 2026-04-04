@@ -1,5 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey } from "drizzle-orm/pg-core";
-import { relations, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
+import { relations, sql, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 
 // --- CUSTOM TYPES ---
 
@@ -747,6 +747,8 @@ export const transferRequests = pgTable("transfer_requests", {
     item_type: transferItemTypeEnum("item_type").notNull(),
     status: transferStatusEnum("status").notNull().default("requested"),
     requested_by: uuid("requested_by").references(() => users.id).notNull(),
+    dispatched_by: uuid("dispatched_by").references(() => users.id),
+    received_by: uuid("received_by").references(() => users.id),
     notes: text("notes"),
     rejection_reason: text("rejection_reason"),
     parent_request_id: integer("parent_request_id"),
@@ -785,7 +787,7 @@ export const notifications = pgTable("notifications", {
     body: text("body"),
     metadata: jsonb("metadata"),
     created_at: timestamp("created_at").defaultNow().notNull(),
-    expires_at: timestamp("expires_at").notNull(), // default set via SQL: now() + interval '7 days'
+    expires_at: timestamp("expires_at").default(sql`now() + interval '7 days'`).notNull(),
 }, (t) => ({
     deptCreatedIdx: index("notifications_dept_created_idx").on(t.department, t.created_at),
 }));

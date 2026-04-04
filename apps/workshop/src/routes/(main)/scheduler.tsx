@@ -15,7 +15,6 @@ import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
-import { toast } from "sonner";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, CheckSquare, Home, User, AlertTriangle, Eye,
@@ -778,7 +777,6 @@ function SchedulerPage() {
     const soakingIds = selected.filter((g) => g.soaking).map((g) => g.id);
     const nonSoakingIds = selected.filter((g) => !g.soaking).map((g) => g.id);
     await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), soakingIds, nonSoakingIds, plan, date, reentryStage: reentryStage as any });
-    toast.success(`${selected.length} garment(s) scheduled`);
     setSelectedOrderIds(new Set());
     setSelectedBrovaReturnIds(new Set());
     setSelectedAltInIds(new Set());

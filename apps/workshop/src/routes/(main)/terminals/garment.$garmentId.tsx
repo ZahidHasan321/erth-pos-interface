@@ -219,7 +219,6 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
     setConfirmOpen(false);
     try {
       await completeMut.mutateAsync({ id: garment.id, worker, stage, nextStage });
-      toast.success(`${garment.garment_id ?? "Garment"} advanced to ${nextLabel}`);
       router.history.back();
     } catch (err: any) {
       toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`);
@@ -257,7 +256,6 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 className="h-12 px-5 text-base font-bold"
                 onClick={() => {
                   startMut.mutate(garment.id, {
-                    onSuccess: () => toast.success(`Started working on ${garment.garment_id ?? "garment"}`),
                     onError: (err) => toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`),
                   });
                 }}
@@ -343,7 +341,6 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
   const handlePass = async () => {
     if (!canPass) return;
     await passMut.mutateAsync({ id: garment.id, worker, ratings });
-    toast.success(`${garment.garment_id} passed QC — Ready for Dispatch`);
     router.history.back();
   };
 

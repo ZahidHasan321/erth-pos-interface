@@ -334,8 +334,6 @@ export function FabricSelectionForm({
                 return;
             }
 
-            toast.success(`Garments saved successfully!`);
-
             // Fetch the updated order details to get the new garment IDs
             if (orderId) {
                 const detailsRes = await getOrderDetails(orderId, true);
@@ -902,7 +900,6 @@ export function FabricSelectionForm({
                                                     <SignaturePad
                                                         onSave={(signature) => {
                                                             field.onChange(signature);
-                                                            toast.success("Signature saved");
                                                         }}
                                                     />
                                                 ) : (

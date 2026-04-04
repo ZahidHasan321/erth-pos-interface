@@ -186,8 +186,6 @@ export function CustomerDemographicsForm({
         createCustomer(customerToCreate),
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
-          toast.success("Customer created successfully!");
-          
           // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: ["customers"] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
@@ -218,8 +216,6 @@ export function CustomerDemographicsForm({
       }) => updateCustomer(customerToUpdate.id, customerToUpdate.data),
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
-          toast.success("Customer updated successfully!");
-          
           // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: ["customers"] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });

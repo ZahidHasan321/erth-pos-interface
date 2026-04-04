@@ -112,7 +112,6 @@ function UserDetailPage() {
         }
       }
 
-      toast.success(`${form.name} updated`);
       setEditing(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
@@ -124,10 +123,8 @@ function UserDetailPage() {
     try {
       if (user.is_active !== false) {
         await deactivateMut.mutateAsync(user.id);
-        toast.success(`${user.name} deactivated`);
       } else {
         await activateMut.mutateAsync(user.id);
-        toast.success(`${user.name} reactivated`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");

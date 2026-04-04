@@ -69,7 +69,6 @@ export function SimplifiedCustomerForm({
         mutationFn: (data: Partial<Customer>) => createCustomer(data),
         onSuccess: (response) => {
             if (response.status === "success" && response.data) {
-                toast.success("Customer created successfully!");
                 queryClient.invalidateQueries({ queryKey: ["customers"] });
                 onCustomerFound(response.data);
                 setIsFocused(false);

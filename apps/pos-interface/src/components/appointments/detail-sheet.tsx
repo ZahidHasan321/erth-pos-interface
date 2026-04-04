@@ -88,7 +88,6 @@ export function DetailSheet({
       updates: { status },
     });
     if (res.status === "success") {
-      toast.success(`Marked as ${APPOINTMENT_STATUS_LABELS[status]}`);
       onOpenChange(false);
     } else {
       toast.error(res.message ?? "Failed to update");

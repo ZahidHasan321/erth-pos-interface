@@ -12,7 +12,6 @@ import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
-import { toast } from "sonner";
 import { Truck, Package } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
@@ -238,13 +237,11 @@ function DispatchPage() {
 
   const handleDispatchSingle = async (id: string) => {
     await dispatchMut.mutateAsync([id]);
-    toast.success("Garment dispatched");
   };
 
   const handleBatchDispatch = async () => {
     const ids = [...selectedReady];
     await dispatchMut.mutateAsync(ids);
-    toast.success(`${ids.length} garment(s) dispatched`);
     setSelectedReady(new Set());
   };
 

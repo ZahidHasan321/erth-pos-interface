@@ -1930,6 +1930,8 @@ DECLARE
   v_transfer RECORD;
   v_item JSONB;
   v_transfer_item RECORD;
+  v_dispatched_qty DECIMAL;
+  v_current_stock DECIMAL;
 BEGIN
   -- 1. Lock and verify transfer
   SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
@@ -1943,46 +1945,72 @@ BEGIN
   -- 2. Process each item
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
+    v_dispatched_qty := (v_item->>'dispatched_qty')::decimal;
+
     -- Update dispatched_qty on the transfer item
     UPDATE transfer_request_items
-    SET dispatched_qty = (v_item->>'dispatched_qty')::decimal
+    SET dispatched_qty = v_dispatched_qty
     WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
 
     -- Get the transfer item to know which table to deduct from
     SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
 
-    -- Deduct from source location
+    -- Deduct from source location (with stock validation)
     IF v_transfer.direction = 'shop_to_workshop' THEN
       -- Source is shop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_transfer_item.fabric_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE fabrics SET shop_stock = shop_stock - v_dispatched_qty WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::int WHERE id = v_transfer_item.shelf_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_transfer_item.shelf_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE shelf SET shop_stock = shop_stock - v_dispatched_qty::int WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET shop_stock = shop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_transfer_item.accessory_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE accessories SET shop_stock = shop_stock - v_dispatched_qty WHERE id = v_transfer_item.accessory_id;
       END IF;
     ELSE
       -- Source is workshop (workshop_to_shop)
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_transfer_item.fabric_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE fabrics SET workshop_stock = workshop_stock - v_dispatched_qty WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::int WHERE id = v_transfer_item.shelf_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_transfer_item.shelf_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE shelf SET workshop_stock = workshop_stock - v_dispatched_qty::int WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET workshop_stock = workshop_stock - (v_item->>'dispatched_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id;
+        IF v_current_stock < v_dispatched_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_transfer_item.accessory_id, v_current_stock, v_dispatched_qty;
+        END IF;
+        UPDATE accessories SET workshop_stock = workshop_stock - v_dispatched_qty WHERE id = v_transfer_item.accessory_id;
       END IF;
     END IF;
   END LOOP;
 
-  -- 3. Update transfer status
+  -- 3. Update transfer status and record who dispatched
   UPDATE transfer_requests
-  SET status = 'dispatched', dispatched_at = NOW()
+  SET status = 'dispatched', dispatched_at = NOW(), dispatched_by = p_dispatched_by
   WHERE id = p_transfer_id;
 
   RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
 END;
 $$ LANGUAGE plpgsql;
 
--- Receive a transfer: add stock to destination location
+-- Receive a transfer: add stock to destination, return shortfall to source
 CREATE OR REPLACE FUNCTION receive_transfer(
   p_transfer_id INT,
   p_received_by UUID,
@@ -1994,6 +2022,8 @@ DECLARE
   v_item JSONB;
   v_transfer_item RECORD;
   v_has_discrepancy BOOLEAN := false;
+  v_received_qty DECIMAL;
+  v_shortfall DECIMAL;
 BEGIN
   -- 1. Lock and verify transfer
   SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
@@ -2007,46 +2037,63 @@ BEGIN
   -- 2. Process each item
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
+    v_received_qty := (v_item->>'received_qty')::decimal;
+
     -- Update received_qty and discrepancy_note on the transfer item
     UPDATE transfer_request_items
-    SET received_qty = (v_item->>'received_qty')::decimal,
+    SET received_qty = v_received_qty,
         discrepancy_note = v_item->>'discrepancy_note'
     WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
 
     -- Get the transfer item
     SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
 
-    -- Check for discrepancy
-    IF v_transfer_item.dispatched_qty IS NOT NULL AND (v_item->>'received_qty')::decimal != v_transfer_item.dispatched_qty THEN
+    -- Check for discrepancy and compute shortfall
+    v_shortfall := 0;
+    IF v_transfer_item.dispatched_qty IS NOT NULL AND v_received_qty != v_transfer_item.dispatched_qty THEN
       v_has_discrepancy := true;
+      v_shortfall := v_transfer_item.dispatched_qty - v_received_qty;
     END IF;
 
-    -- Add to destination location
+    -- Add received qty to destination, return shortfall to source
     IF v_transfer.direction = 'shop_to_workshop' THEN
-      -- Destination is workshop
+      -- Destination is workshop, source is shop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET workshop_stock = workshop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+        UPDATE fabrics SET workshop_stock = workshop_stock + v_received_qty,
+                           shop_stock = shop_stock + GREATEST(v_shortfall, 0)
+        WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET workshop_stock = workshop_stock + (v_item->>'received_qty')::int WHERE id = v_transfer_item.shelf_id;
+        UPDATE shelf SET workshop_stock = workshop_stock + v_received_qty::int,
+                         shop_stock = shop_stock + GREATEST(v_shortfall, 0)::int
+        WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET workshop_stock = workshop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+        UPDATE accessories SET workshop_stock = workshop_stock + v_received_qty,
+                               shop_stock = shop_stock + GREATEST(v_shortfall, 0)
+        WHERE id = v_transfer_item.accessory_id;
       END IF;
     ELSE
-      -- Destination is shop (workshop_to_shop)
+      -- Destination is shop, source is workshop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET shop_stock = shop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.fabric_id;
+        UPDATE fabrics SET shop_stock = shop_stock + v_received_qty,
+                           workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)
+        WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET shop_stock = shop_stock + (v_item->>'received_qty')::int WHERE id = v_transfer_item.shelf_id;
+        UPDATE shelf SET shop_stock = shop_stock + v_received_qty::int,
+                         workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)::int
+        WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET shop_stock = shop_stock + (v_item->>'received_qty')::decimal WHERE id = v_transfer_item.accessory_id;
+        UPDATE accessories SET shop_stock = shop_stock + v_received_qty,
+                               workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)
+        WHERE id = v_transfer_item.accessory_id;
       END IF;
     END IF;
   END LOOP;
 
-  -- 3. Update transfer status
+  -- 3. Update transfer status and record who received
   UPDATE transfer_requests
   SET status = CASE WHEN v_has_discrepancy THEN 'partially_received' ELSE 'received' END,
-      received_at = NOW()
+      received_at = NOW(),
+      received_by = p_received_by
   WHERE id = p_transfer_id;
 
   RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
@@ -2064,24 +2111,26 @@ CREATE OR REPLACE FUNCTION notify_garment_location_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.location = 'transit_to_workshop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_workshop') THEN
-    INSERT INTO notifications (department, type, title, body, metadata)
+    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
     VALUES (
       'workshop',
       'garment_dispatched_to_workshop',
       'Garments dispatched to workshop',
       format('Garment %s (Order #%s) dispatched to workshop', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id)
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id),
+      NOW() + INTERVAL '7 days'
     );
   END IF;
 
   IF NEW.location = 'transit_to_shop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_shop') THEN
-    INSERT INTO notifications (department, type, title, body, metadata)
+    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
     VALUES (
       'shop',
       'garment_dispatched_to_shop',
       'Garments dispatched to shop',
       format('Garment %s (Order #%s) dispatched to shop', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id)
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_display_id', NEW.garment_id),
+      NOW() + INTERVAL '7 days'
     );
   END IF;
 
@@ -2100,24 +2149,26 @@ CREATE OR REPLACE FUNCTION notify_garment_stage_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.piece_stage = 'ready_for_pickup' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'ready_for_pickup') THEN
-    INSERT INTO notifications (department, type, title, body, metadata)
+    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
     VALUES (
       'shop',
       'garment_ready_for_pickup',
       'Garment ready for pickup',
       format('Garment %s (Order #%s) is ready for customer pickup', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type)
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type),
+      NOW() + INTERVAL '7 days'
     );
   END IF;
 
   IF NEW.piece_stage = 'awaiting_trial' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'awaiting_trial') THEN
-    INSERT INTO notifications (department, type, title, body, metadata)
+    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
     VALUES (
       'shop',
       'garment_awaiting_trial',
       'Garment awaiting trial',
       format('Garment %s (Order #%s) is awaiting customer trial', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type)
+      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type),
+      NOW() + INTERVAL '7 days'
     );
   END IF;
 
@@ -2135,13 +2186,15 @@ CREATE TRIGGER garment_stage_notification
 CREATE OR REPLACE FUNCTION notify_transfer_created()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO notifications (department, type, title, body, metadata)
+  -- Notify the receiving end: shop_to_workshop requests notify workshop, workshop_to_shop notify shop
+  INSERT INTO notifications (department, type, title, body, metadata, expires_at)
   VALUES (
-    'workshop',
+    CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'workshop' ELSE 'shop' END,
     'transfer_requested',
     'New transfer request',
     format('New %s transfer request created', NEW.item_type),
-    jsonb_build_object('transfer_request_id', NEW.id, 'direction', NEW.direction, 'item_type', NEW.item_type)
+    jsonb_build_object('transfer_request_id', NEW.id, 'direction', NEW.direction, 'item_type', NEW.item_type),
+    NOW() + INTERVAL '7 days'
   );
   RETURN NEW;
 END;
@@ -2153,18 +2206,22 @@ CREATE TRIGGER transfer_created_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_transfer_created();
 
--- 4. Transfer request status change → notify shop
+-- 4. Transfer request status change → notify the requesting side
 CREATE OR REPLACE FUNCTION notify_transfer_status_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.status IN ('approved', 'dispatched', 'received', 'partially_received') AND NEW.status != OLD.status THEN
-    INSERT INTO notifications (department, type, title, body, metadata)
+    -- Notify the side that initiated the request (opposite of destination):
+    -- shop_to_workshop transfers were requested by shop → notify shop
+    -- workshop_to_shop transfers were requested by workshop → notify workshop
+    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
     VALUES (
-      'shop',
+      CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END,
       'transfer_status_changed',
       format('Transfer request %s', NEW.status),
       format('Transfer request #%s has been %s', NEW.id, NEW.status),
-      jsonb_build_object('transfer_request_id', NEW.id, 'status', NEW.status, 'direction', NEW.direction)
+      jsonb_build_object('transfer_request_id', NEW.id, 'status', NEW.status, 'direction', NEW.direction),
+      NOW() + INTERVAL '7 days'
     );
   END IF;
   RETURN NEW;
@@ -2179,8 +2236,8 @@ CREATE TRIGGER transfer_status_notification
 
 -- --- NOTIFICATION RPCs ---
 
--- Fetch notifications for the current user's department with read status
-CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50)
+-- Fetch notifications for a specific department with read status for the current user
+CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL)
 RETURNS JSONB AS $$
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
   FROM (
@@ -2198,19 +2255,19 @@ RETURNS JSONB AS $$
     LEFT JOIN notification_reads nr
       ON nr.notification_id = n.id
       AND nr.user_id = get_my_user_id()
-    WHERE n.department = get_my_department()::department
+    WHERE n.department = COALESCE(p_department, get_my_department())::department
       AND n.expires_at > now()
     ORDER BY n.created_at DESC
     LIMIT p_limit
   ) t;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Get unread notification count for the current user
-CREATE OR REPLACE FUNCTION get_unread_notification_count()
+-- Get unread notification count for a specific department
+CREATE OR REPLACE FUNCTION get_unread_notification_count(p_department TEXT DEFAULT NULL)
 RETURNS INTEGER AS $$
   SELECT count(*)::integer
   FROM notifications n
-  WHERE n.department = get_my_department()::department
+  WHERE n.department = COALESCE(p_department, get_my_department())::department
     AND n.expires_at > now()
     AND NOT EXISTS (
       SELECT 1 FROM notification_reads nr
@@ -2229,14 +2286,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Mark all notifications as read for the current user
-CREATE OR REPLACE FUNCTION mark_all_notifications_read()
+-- Mark all notifications as read for a specific department
+CREATE OR REPLACE FUNCTION mark_all_notifications_read(p_department TEXT DEFAULT NULL)
 RETURNS void AS $$
 BEGIN
   INSERT INTO notification_reads (notification_id, user_id)
   SELECT n.id, get_my_user_id()
   FROM notifications n
-  WHERE n.department = get_my_department()::department
+  WHERE n.department = COALESCE(p_department, get_my_department())::department
     AND n.expires_at > now()
     AND NOT EXISTS (
       SELECT 1 FROM notification_reads nr

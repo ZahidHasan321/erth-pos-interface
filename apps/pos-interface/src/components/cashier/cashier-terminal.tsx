@@ -396,7 +396,6 @@ function DeliveryAndAddress({ order, isHomeDelivery, isOrderCompleted, toggleDel
         } as any),
         onSuccess: (res) => {
             if (res.status === "error") { toast.error(`Failed: ${res.message}`); return; }
-            toast.success("Address updated");
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
         },
         onError: (err) => toast.error(`Error: ${err.message}`),

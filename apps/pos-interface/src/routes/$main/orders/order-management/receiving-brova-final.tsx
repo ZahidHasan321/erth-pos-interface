@@ -75,8 +75,7 @@ function ReceivingInterface() {
             }
             return { prev };
         },
-        onSuccess: (data) => {
-            toast.success(`Received ${data.count} items for #${data.orderId}`);
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
         },
@@ -109,7 +108,7 @@ function ReceivingInterface() {
                     </h1>
                     <p className="text-sm text-muted-foreground">
                         Mark workshop deliveries as received at showroom
-                        {" "}&bull;{" "}{filteredOrders.length} ORDER{filteredOrders.length !== 1 ? "S" : ""} IN TRANSIT
+                        {" "}&bull;{" "}{filteredOrders.length} ORDER{filteredOrders.length !== 1 ? "S" : ""}
                     </p>
                 </div>
                 <div className="relative w-full md:w-80 group">
@@ -183,10 +182,16 @@ function OrderCard({
     const [isExpanded, setIsExpanded] = useState(false);
 
     const dispatchedGarments = useMemo(
-        () => order.garments?.filter((g) => g.location === "transit_to_shop") || [],
+        () => order.garments?.filter((g) => g.location === "transit_to_shop" || g.location === "lost_in_transit") || [],
         [order.garments]
     );
 
+    const receivableGarments = useMemo(
+        () => dispatchedGarments.filter((g) => g.location === "transit_to_shop"),
+        [dispatchedGarments]
+    );
+
+    const lostCount = dispatchedGarments.filter((g) => g.location === "lost_in_transit").length;
     const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
     const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString() : "No Date";
@@ -233,13 +238,14 @@ function OrderCard({
                                 <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{dispatchedGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
                                 {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+                                {lostCount > 0 && <span className="text-[11px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
                                 {order.delivery_date && (
                                     <span className="text-[11px] text-muted-foreground font-medium">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>
                                 )}
                             </div>
                         </div>
                         <div className="w-[170px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
-                            <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={(e) => { e.stopPropagation(); onReceive(dispatchedGarments); }} disabled={isSubmitting || dispatchedGarments.length === 0}>
+                            <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={(e) => { e.stopPropagation(); onReceive(receivableGarments); }} disabled={isSubmitting || receivableGarments.length === 0}>
                                 {isSubmitting ? <RefreshCw className="size-3.5 animate-spin" /> : <><CheckCircle2 className="size-3.5 mr-1.5" />Receive</>}
                             </Button>
                             <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
@@ -274,9 +280,10 @@ function OrderCard({
                                 <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{dispatchedGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
                                 {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+                                {lostCount > 0 && <span className="text-[10px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
                                 {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>}
                             </div>
-                            <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={(e) => { e.stopPropagation(); onReceive(dispatchedGarments); }} disabled={isSubmitting || dispatchedGarments.length === 0}>
+                            <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={(e) => { e.stopPropagation(); onReceive(receivableGarments); }} disabled={isSubmitting || receivableGarments.length === 0}>
                                 {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : "Receive"}
                             </Button>
                         </div>
@@ -339,9 +346,15 @@ function OrderCard({
                                             })()}
                                         </td>
                                         <td className="py-2.5 px-5">
-                                            <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
-                                                In Transit to Shop
-                                            </span>
+                                            {g.location === "lost_in_transit" ? (
+                                                <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                                                    Lost in Transit
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
+                                                    In Transit to Shop
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

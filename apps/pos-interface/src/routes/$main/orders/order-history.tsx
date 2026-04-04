@@ -89,7 +89,7 @@ function OrderHistoryPage() {
             </div>
 
             {/* Filters Section */}
-            <div className="bg-white border border-border/60 rounded-xl shadow-sm p-2.5 sm:p-3 space-y-2.5">
+            <div className="bg-white border border-border/60 rounded-xl shadow-sm p-2.5 sm:p-3 space-y-2.5 overflow-hidden">
                 {/* Search + Count */}
                 <div className="flex items-center gap-2">
                     <div className="relative flex-1 min-w-0 group">
@@ -120,28 +120,28 @@ function OrderHistoryPage() {
                 {/* Filter Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
                     <Tabs value={typeFilter} onValueChange={setTypeFilter} className="w-auto gap-0">
-                        <TabsList className="h-8">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
-                            <TabsTrigger value="WORK" className="text-[11px] font-bold px-2.5">Work</TabsTrigger>
-                            <TabsTrigger value="SALES" className="text-[11px] font-bold px-2.5">Sales</TabsTrigger>
+                        <TabsList className="h-auto p-1">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="WORK" className="text-[11px] font-bold px-2.5 py-1">Work</TabsTrigger>
+                            <TabsTrigger value="SALES" className="text-[11px] font-bold px-2.5 py-1">Sales</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
                     <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto gap-0">
-                        <TabsList className="h-8">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
-                            <TabsTrigger value="confirmed" className="text-[11px] font-bold px-2.5">Confirmed</TabsTrigger>
-                            <TabsTrigger value="draft" className="text-[11px] font-bold px-2.5">Draft</TabsTrigger>
-                            <TabsTrigger value="cancelled" className="text-[11px] font-bold px-2.5">Cancelled</TabsTrigger>
+                        <TabsList className="h-auto p-1">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="confirmed" className="text-[11px] font-bold px-2.5 py-1">Confirmed</TabsTrigger>
+                            <TabsTrigger value="draft" className="text-[11px] font-bold px-2.5 py-1">Draft</TabsTrigger>
+                            <TabsTrigger value="cancelled" className="text-[11px] font-bold px-2.5 py-1">Cancelled</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
                     <Tabs value={phaseFilter} onValueChange={setPhaseFilter} className="w-auto gap-0">
-                        <TabsList className="h-8">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5">All</TabsTrigger>
-                            <TabsTrigger value="new" className="text-[11px] font-bold px-2.5">New</TabsTrigger>
-                            <TabsTrigger value="in_progress" className="text-[11px] font-bold px-2.5">In Prog</TabsTrigger>
-                            <TabsTrigger value="completed" className="text-[11px] font-bold px-2.5">Done</TabsTrigger>
+                        <TabsList className="h-auto p-1">
+                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="new" className="text-[11px] font-bold px-2.5 py-1">New</TabsTrigger>
+                            <TabsTrigger value="in_progress" className="text-[11px] font-bold px-2.5 py-1">In Prog</TabsTrigger>
+                            <TabsTrigger value="completed" className="text-[11px] font-bold px-2.5 py-1">Done</TabsTrigger>
                         </TabsList>
                     </Tabs>
 

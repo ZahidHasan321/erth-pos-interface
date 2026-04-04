@@ -10,7 +10,6 @@ import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } f
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
-import { toast } from "sonner";
 import {
   ArrowLeft,
   Check,
@@ -378,7 +377,6 @@ function SharedPlanSection({
         }),
       ),
     );
-    toast.success(`Updated plan for ${garments.length} garment${garments.length !== 1 ? "s" : ""}`);
   };
 
   return (
@@ -546,7 +544,6 @@ function GarmentPlanCard({
       updates.delivery_date = newDeliveryDate || null;
     }
     await updateMut.mutateAsync({ id: garment.id, updates });
-    toast.success(`${garment.garment_id ?? "Garment"} updated`);
   };
 
   return (

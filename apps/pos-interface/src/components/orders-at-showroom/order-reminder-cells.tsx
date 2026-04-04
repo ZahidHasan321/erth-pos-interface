@@ -61,9 +61,7 @@ function useOrderUpdate() {
        return updateOrder(updates, numericId);
     },
     onSuccess: async () => {
-      // Invalidate everything to be safe and ensure table refreshes
-      await queryClient.invalidateQueries(); 
-      toast.success("Order updated successfully");
+      await queryClient.invalidateQueries();
     },
     onError: (err) => {
       console.error(err);

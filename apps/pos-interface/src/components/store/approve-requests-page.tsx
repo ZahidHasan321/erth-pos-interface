@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Loader2, Check, X, Truck, ClipboardCheck, Search, Clock, History } from "lucide-react";
 
@@ -58,8 +58,12 @@ function AgeBadge({ dateStr }: { dateStr: string | Date | null | undefined }) {
   );
 }
 
-export default function ApproveRequestsPage() {
-  const [activeTab, setActiveTab] = useState("pending");
+export default function ApproveRequestsPage({ initialTab }: { initialTab?: string }) {
+  const [activeTab, setActiveTab] = useState(initialTab ?? "pending");
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [search, setSearch] = useState("");
 
   const { data: pendingRequests = [], isLoading: pendingLoading } = useTransferRequests({
@@ -170,7 +174,6 @@ function PendingRequestsList({ requests, isLoading, search }: { requests: Transf
     }));
     try {
       await approveTransfer.mutateAsync({ id: selectedRequest.id, items });
-      toast.success("Transfer request approved");
       setSelectedRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to approve");
@@ -184,7 +187,6 @@ function PendingRequestsList({ requests, isLoading, search }: { requests: Transf
     }
     try {
       await rejectTransfer.mutateAsync({ id: selectedRequest.id, reason: rejectionReason });
-      toast.success("Transfer request rejected");
       setSelectedRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to reject");
@@ -377,7 +379,6 @@ function ApprovedRequestsList({ requests, isLoading, search }: { requests: Trans
     }));
     try {
       await dispatchTransfer.mutateAsync({ transferId: dispatchingRequest.id, items });
-      toast.success("Transfer dispatched successfully");
       setDispatchingRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to dispatch");

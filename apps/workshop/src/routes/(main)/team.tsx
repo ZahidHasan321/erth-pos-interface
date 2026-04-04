@@ -478,13 +478,11 @@ function TeamPage() {
         if (link_user_id) {
           await linkMut.mutateAsync({ resourceId: created.id, userId: link_user_id });
         }
-        toast.success(`${form.resource_name} added`);
       } else if (editingId) {
         await updateMut.mutateAsync({ id: editingId, updates: resourceData });
         if (link_user_id) {
           await linkMut.mutateAsync({ resourceId: editingId, userId: link_user_id });
         }
-        toast.success(`${form.resource_name} updated`);
       }
       setDialogOpen(false);
       setForm({});
@@ -498,7 +496,6 @@ function TeamPage() {
     if (!deleteTarget) return;
     deleteMut.mutate(deleteTarget.id, {
       onSuccess: () => {
-        toast.success(`${deleteTarget.name} removed`);
         setDeleteTarget(null);
       },
       onError: () => {

@@ -391,7 +391,6 @@ function UnifiedFeedbackInterface() {
     updateGarmentState(selectedGarmentId, {
       evidence: { ...currentState.evidence, [optionId]: { type, url } },
     });
-    toast.success(`${type === 'photo' ? 'Photo' : 'Video'} captured`);
   };
 
   // Voice recording handlers
@@ -415,7 +414,6 @@ function UnifiedFeedbackInterface() {
         });
         stream.getTracks().forEach(t => t.stop());
         setRecordingOptionId(null);
-        toast.success("Voice note recorded");
       };
 
       mediaRecorder.start();
@@ -578,10 +576,6 @@ function UnifiedFeedbackInterface() {
           queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
           queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
         }
-
-        toast.success(state.existingFeedbackId ? `Feedback Updated` : `Feedback Logged`, {
-            description: `Garment ${activeGarment.garment_id || activeGarment.id} ${state.existingFeedbackId ? 'updated' : 'submitted'}`
-        });
 
         // Balance check for final collection
         const balance = (Number(activeOrder?.order_total) || 0) - (Number(activeOrder?.paid) || 0);
@@ -1473,7 +1467,6 @@ function UnifiedFeedbackInterface() {
                               <SignaturePad
                               onSave={(sig) => {
                                   updateGarmentState(selectedGarmentId, { customerSignature: sig });
-                                  toast.success("Signature saved");
                               }}
                               trigger={
                                   <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">

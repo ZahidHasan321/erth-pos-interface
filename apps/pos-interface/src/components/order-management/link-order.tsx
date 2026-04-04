@@ -236,7 +236,6 @@ export default function LinkOrder() {
         })
       );
 
-      toast.success(`Successfully linked ${selectedOrders.length} orders.`);
       handleClear();
       queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });

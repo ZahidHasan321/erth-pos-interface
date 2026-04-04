@@ -750,7 +750,6 @@ function UsersPage() {
           notes: form.notes || null,
         });
         userId = created.id;
-        toast.success(`${form.name} created`);
       } else if (editingId) {
         // Update non-auth fields directly
         await updateMut.mutateAsync({
@@ -771,7 +770,6 @@ function UsersPage() {
             notes: form.notes || null,
           },
         });
-        toast.success(`${form.name} updated`);
 
         // Update PIN via Edge Function if changed
         if (form.pin) {
@@ -803,10 +801,8 @@ function UsersPage() {
     try {
       if (deactivateTarget.is_active !== false) {
         await deactivateMut.mutateAsync(deactivateTarget.id);
-        toast.success(`${deactivateTarget.name} deactivated`);
       } else {
         await activateMut.mutateAsync(deactivateTarget.id);
-        toast.success(`${deactivateTarget.name} reactivated`);
       }
       setDeactivateDialogOpen(false);
       setDeactivateTarget(null);

@@ -186,8 +186,29 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
 };
 
 /**
- * Fetch orders that have garments dispatched from workshop.
+ * Fetch orders that have garments in transit to shop or lost in transit.
  */
+export const getInTransitToWorkshopOrders = async (): Promise<ApiResponse<Order[]>> => {
+    const { data, error, count } = await db
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id!inner(*),
+            customer:customers(*),
+            garments:garments!inner(*, fabric:fabrics(*))
+            `, { count: 'exact' })
+            .in('garments.location', ['transit_to_workshop', 'lost_in_transit'])
+            .eq('brand', getBrand())
+            .eq('checkout_status', 'confirmed')
+            .limit(500);
+
+    if (error) {
+        console.error('Error fetching in-transit to workshop orders:', error);
+        return { status: 'error', message: error.message, data: [], count: 0 };
+    }
+    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+};
+
 export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
     const { data, error, count } = await db
         .from(TABLE_NAME)
@@ -197,7 +218,7 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
             customer:customers(*),
             garments:garments!inner(*, fabric:fabrics(*))
             `, { count: 'exact' })
-            .eq('garments.location', 'transit_to_shop')
+            .in('garments.location', ['transit_to_shop', 'lost_in_transit'])
             .eq('brand', getBrand())
             .eq('checkout_status', 'confirmed')
             .limit(500);
@@ -210,11 +231,7 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
 };
 
 export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
-    // 1. Update work order phase
-    const res = await updateOrder({ order_phase: "in_progress" }, orderId);
-    if (res.status === 'error') return res;
-
-    // 2. Update selected garments (or all if no IDs provided)
+    // 1. Update selected garments (or all if no IDs provided)
     let query = db
         .from('garments')
         .update({ location: 'transit_to_workshop' })
@@ -230,7 +247,20 @@ export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Pro
         console.error('Error updating garments location:', error);
     }
 
-    return res;
+    // 2. Only set order_phase to "in_progress" once ALL garments have been dispatched
+    //    (no garments left at shop). This keeps partially-dispatched orders visible
+    //    on the dispatch page so remaining garments can be sent later.
+    const { data: remaining } = await db
+        .from('garments')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('location', 'shop');
+
+    if (!remaining || remaining.length === 0) {
+        return updateOrder({ order_phase: "in_progress" }, orderId);
+    }
+
+    return getOrderById(orderId);
 };
 
 export const createOrder = async (

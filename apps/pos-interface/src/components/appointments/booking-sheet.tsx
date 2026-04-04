@@ -298,7 +298,6 @@ export function BookingSheet({
         updates: payload,
       });
       if (res.status === "success") {
-        toast.success("Appointment updated");
         onOpenChange(false);
       } else {
         toast.error(res.message ?? "Failed to update");
@@ -306,9 +305,6 @@ export function BookingSheet({
     } else {
       const res = await createMutation.mutateAsync(payload);
       if (res.status === "success") {
-        toast.success(customerId && !values.customer_id
-          ? "Customer created & appointment booked"
-          : "Appointment booked");
         onOpenChange(false);
       } else {
         toast.error(res.message ?? "Failed to book");

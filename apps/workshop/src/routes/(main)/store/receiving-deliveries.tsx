@@ -137,7 +137,7 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
       if (result.has_discrepancy) {
         toast.warning("Transfer received with discrepancies noted");
       } else {
-        toast.success("Transfer received successfully");
+        // UI updates via query invalidation
       }
       setReceivingTransfer(null);
     } catch (e: any) {

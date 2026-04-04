@@ -199,7 +199,6 @@ export function PendingOrdersDialog({
         try {
             const res = await updateOrder({ checkout_status: 'cancelled' }, orderId);
             if (res.status === "success") {
-                toast.success("Order cancelled successfully");
                 onOrderCancelled?.();
             } else {
                 toast.error(res.message || "Failed to cancel order");

@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
 import { NOTIFICATIONS_KEY } from './useNotifications';
+import { showNotificationToast } from '@/components/notification-toast';
 
 /**
  * Subscribes to Supabase Realtime changes on key tables and invalidates
@@ -66,9 +66,10 @@ export function useRealtimeInvalidation() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
+          const row = payload.new as { department?: string; title?: string; body?: string | null; type?: string };
+          if (row.department !== 'workshop') return;
           qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-          const title = (payload.new as { title?: string })?.title;
-          if (title) toast.info(title);
+          if (row.title) showNotificationToast({ title: row.title, body: row.body, type: row.type });
         },
       )
       .subscribe();

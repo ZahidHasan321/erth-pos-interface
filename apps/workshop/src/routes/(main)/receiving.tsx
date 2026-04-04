@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useReceiveGarments, useReceiveAndStart, useMarkLostInTransit } from "@/hooks/useGarmentMutations";
@@ -24,6 +24,9 @@ import {
 
 export const Route = createFileRoute("/(main)/receiving")({
   component: ReceivingPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+  }),
   head: () => ({ meta: [{ title: "Receiving" }] }),
 });
 
@@ -540,11 +543,18 @@ function LostGarmentCard({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function ReceivingPage() {
+  const { tab: searchTab } = Route.useSearch();
+  const [activeTab, setActiveTab] = useState(searchTab ?? "incoming");
   const isMobile = useIsMobile();
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const receiveMut = useReceiveGarments();
   const receiveStartMut = useReceiveAndStart();
   const lostMut = useMarkLostInTransit();
+
+  // Sync tab when navigating via notification deep links
+  useEffect(() => {
+    if (searchTab) setActiveTab(searchTab);
+  }, [searchTab]);
 
   // Split by tab
   const inTransit = allGarments.filter((g) => g.location === "transit_to_workshop");
@@ -601,24 +611,20 @@ function ReceivingPage() {
   const handleReceiveParkOrder = async (group: OrderGroup) => {
     const ids = group.garments.map((g) => g.id);
     await receiveMut.mutateAsync(ids);
-    toast.success(`Order #${group.order_id} received`);
   };
 
   const handleReceiveScheduleOrder = async (group: OrderGroup) => {
     const ids = group.garments.map((g) => g.id);
     await receiveStartMut.mutateAsync(ids);
-    toast.success(`Order #${group.order_id} received & started`);
   };
 
   // Per-garment actions
   const handleReceiveSingle = async (id: string) => {
     await receiveMut.mutateAsync([id]);
-    toast.success("Garment received");
   };
 
   const handleReceiveAndStartSingle = async (id: string) => {
     await receiveStartMut.mutateAsync([id]);
-    toast.success("Garment received & started");
   };
 
   const handleLostSingle = async (id: string) => {
@@ -630,14 +636,12 @@ function ReceivingPage() {
   const handleReceiveOrders = async () => {
     const ids = getSelectedIncomingGarmentIds();
     await receiveMut.mutateAsync(ids);
-    toast.success(`${selectedOrderIds.size} order(s) received`);
     setSelectedOrderIds(new Set());
   };
 
   const handleReceiveAndStartOrders = async () => {
     const ids = getSelectedIncomingGarmentIds();
     await receiveStartMut.mutateAsync(ids);
-    toast.success(`${selectedOrderIds.size} order(s) received & started`);
     setSelectedOrderIds(new Set());
   };
 
@@ -646,7 +650,6 @@ function ReceivingPage() {
     clearFn: () => void,
   ) => {
     await receiveMut.mutateAsync([...ids]);
-    toast.success(`${ids.size} garment(s) received`);
     clearFn();
   };
 
@@ -660,7 +663,7 @@ function ReceivingPage() {
         subtitle={`${inTransit.length} garment${inTransit.length !== 1 ? "s" : ""} in transit from shop`}
       />
 
-      <Tabs defaultValue="incoming">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="incoming">
             Incoming{" "}
@@ -785,7 +788,6 @@ function ReceivingPage() {
                         size="sm"
                         onClick={async () => {
                           await receiveStartMut.mutateAsync([g.id]);
-                          toast.success(`Brova ${g.garment_id ?? g.id.slice(0, 8)} received & started`);
                         }}
                         disabled={receiveStartMut.isPending}
                         className="text-xs h-7"
@@ -804,9 +806,7 @@ function ReceivingPage() {
               onToggle={toggleGarment(setSelectedBrova)}
               onReceive={handleReceiveSingle}
               onReceiveAndStart={async (id) => {
-                const g = brovaReturns.find((g) => g.id === id);
                 await receiveStartMut.mutateAsync([id]);
-                toast.success(`Brova ${g?.garment_id ?? id.slice(0, 8)} received & started`);
               }}
               isReceiving={receiveMut.isPending}
               isReceiveStarting={receiveStartMut.isPending}
@@ -830,7 +830,6 @@ function ReceivingPage() {
               size="sm"
               onClick={async () => {
                 await receiveStartMut.mutateAsync([...selectedBrova]);
-                toast.success(`${selectedBrova.size} brova(s) received & started`);
                 setSelectedBrova(new Set());
               }}
               disabled={receiveStartMut.isPending}
@@ -871,7 +870,6 @@ function ReceivingPage() {
                         size="sm"
                         onClick={async () => {
                           await receiveStartMut.mutateAsync([g.id]);
-                          toast.success(`Garment ${g.garment_id ?? g.id.slice(0, 8)} received & started`);
                         }}
                         disabled={receiveStartMut.isPending}
                         className="text-xs h-7"
@@ -890,9 +888,7 @@ function ReceivingPage() {
               onToggle={toggleGarment(setSelectedAltIn)}
               onReceive={handleReceiveSingle}
               onReceiveAndStart={async (id) => {
-                const g = alterationIn.find((g) => g.id === id);
                 await receiveStartMut.mutateAsync([id]);
-                toast.success(`Garment ${g?.garment_id ?? id.slice(0, 8)} received & started`);
               }}
               isReceiving={receiveMut.isPending}
               isReceiveStarting={receiveStartMut.isPending}
@@ -917,7 +913,6 @@ function ReceivingPage() {
               size="sm"
               onClick={async () => {
                 await receiveStartMut.mutateAsync([...selectedAltIn]);
-                toast.success(`${selectedAltIn.size} garment(s) received & started`);
                 setSelectedAltIn(new Set());
               }}
               disabled={receiveStartMut.isPending}
@@ -946,7 +941,6 @@ function ReceivingPage() {
                   garment={g}
                   onReceive={async () => {
                     await receiveMut.mutateAsync([g.id]);
-                    toast.success(`Garment ${g.garment_id ?? g.id.slice(0, 8)} found and received`);
                   }}
                   isReceiving={receiveMut.isPending}
                 />

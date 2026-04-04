@@ -15,7 +15,6 @@ import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
-import { toast } from "sonner";
 import { ArrowLeft, Clock, Timer } from "lucide-react";
 import { toLocalDateStr } from "@/lib/utils";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
@@ -85,7 +84,6 @@ function AssignedGarmentDetailPage() {
       updates.piece_stage = reentryStage;
     }
     await updateMut.mutateAsync({ id: garment.id, updates });
-    toast.success(`${garment.garment_id ?? "Garment"} plan updated`);
   };
 
   return (
@@ -154,7 +152,6 @@ function EditableDates({
       id: garment.id,
       updates: { delivery_date: toLocalDateStr(d) },
     });
-    toast.success("Delivery date updated");
   };
 
   const handleAssignedChange = async (d: Date | null) => {
@@ -163,7 +160,6 @@ function EditableDates({
       id: garment.id,
       updates: { assigned_date: toLocalDateStr(d) },
     });
-    toast.success("Assigned date updated");
   };
 
   return (

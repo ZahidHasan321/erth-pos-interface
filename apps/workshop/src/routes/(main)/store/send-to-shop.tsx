@@ -136,7 +136,6 @@ function SendToShopPage() {
         await dispatchTransfer(transfer.id, user!.id, dispatchItems);
       }
 
-      toast.success(`${batches.length} transfer(s) dispatched to shop`);
       setFabricSelections(new Map());
       setShelfSelections(new Map());
       setAccessorySelections(new Map());

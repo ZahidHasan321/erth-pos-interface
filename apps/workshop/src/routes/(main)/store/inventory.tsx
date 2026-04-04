@@ -95,7 +95,6 @@ function FabricsTab() {
     mutationFn: createFabric,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fabrics"] });
-      toast.success("Fabric created");
       setDialogOpen(false);
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to create fabric"),
@@ -106,7 +105,6 @@ function FabricsTab() {
       updateFabric(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fabrics"] });
-      toast.success("Fabric updated");
       setDialogOpen(false);
       setEditing(null);
     },
@@ -361,7 +359,6 @@ function ShelfTab() {
     mutationFn: createShelfItem,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["shelf"] });
-      toast.success("Shelf item created");
       setDialogOpen(false);
     },
     onError: (e: any) =>
@@ -373,7 +370,6 @@ function ShelfTab() {
       updateShelfItem(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["shelf"] });
-      toast.success("Shelf item updated");
       setDialogOpen(false);
       setEditing(null);
     },
@@ -596,7 +592,6 @@ function AccessoriesTab() {
     mutationFn: createAccessory,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["accessories"] });
-      toast.success("Accessory created");
       setDialogOpen(false);
     },
     onError: (e: any) =>
@@ -608,7 +603,6 @@ function AccessoriesTab() {
       updateAccessory(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["accessories"] });
-      toast.success("Accessory updated");
       setDialogOpen(false);
       setEditing(null);
     },

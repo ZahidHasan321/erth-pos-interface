@@ -15,6 +15,8 @@ import {
   RotateCcw,
   MessageSquare,
   Loader2,
+  Truck,
+  AlertTriangle,
 } from "lucide-react";
 
 // UI Components
@@ -27,7 +29,7 @@ import { ErrorBoundary } from "@/components/global/error-boundary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 
 // API and Types
-import { getOrdersList, dispatchOrder } from "@/api/orders";
+import { getOrdersList, dispatchOrder, getInTransitToWorkshopOrders } from "@/api/orders";
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
@@ -339,7 +341,6 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
     setDispatchingIds(prev => new Set(prev).add(garment.id));
     try {
       await dispatchGarmentToWorkshop(garment.id, garment.trip_number || 1);
-      toast.success(`Garment ${garment.garment_id || garment.id} dispatched to workshop`);
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
     } catch {
       toast.error(`Failed to dispatch garment ${garment.garment_id || garment.id}`);
@@ -359,7 +360,6 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
       await Promise.all(
         garments.map(g => dispatchGarmentToWorkshop(g.id, g.trip_number || 1))
       );
-      toast.success(`All ${garments.length} garment(s) dispatched to workshop!`);
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
     } catch {
       toast.error("Bulk dispatch failed for some garments.");
@@ -526,6 +526,194 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
   );
 }
 
+// --- In Transit to Workshop Tab ---
+
+function InTransitToWorkshopTab() {
+  const queryClient = useQueryClient();
+
+  const {
+    data: transitResponse,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<ApiResponse<OrderWithDetails[]>>({
+    queryKey: ["inTransitToWorkshop"],
+    queryFn: async () => {
+      const response = await getInTransitToWorkshopOrders();
+      return response as ApiResponse<OrderWithDetails[]>;
+    },
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
+  });
+
+  const orders = transitResponse?.data || [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="border-destructive/30 bg-destructive/5">
+        <CardContent className="p-4 text-center">
+          <p className="font-bold text-destructive uppercase tracking-widest mb-3">
+            Error: {error instanceof Error ? error.message : "Fetch Failed"}
+          </p>
+          <Button variant="outline" className="font-bold" onClick={() => queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] })}>
+            Retry Connection
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="py-10 text-center">
+        <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
+          <Truck className="w-8 h-8 text-muted-foreground/40" />
+        </div>
+        <h2 className="text-base font-bold text-muted-foreground">No Garments In Transit</h2>
+        <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
+          Nothing is currently on its way to the workshop
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {orders.map((order) => {
+        const garments = order.garments || [];
+        const lostCount = garments.filter(g => g.location === "lost_in_transit").length;
+        const transitCount = garments.filter(g => g.location === "transit_to_workshop").length;
+        const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString() : "No Date";
+
+        return (
+          <Card key={order.id} className={cn(
+            "overflow-hidden border-l-4 py-0 gap-0",
+            lostCount > 0 ? "border-l-red-500" : "border-l-cyan-500"
+          )}>
+            <CardContent className="p-0">
+              {/* Order header */}
+              <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-muted/20 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <Hash className="w-3 h-3 text-muted-foreground" />
+                  <span className="font-bold text-sm">Order {order.id}</span>
+                  {(order as any).invoice_number && (
+                    <span className="text-xs font-bold text-primary/70">Inv {(order as any).invoice_number}</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">{orderDate}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <User className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-sm font-bold">{(order as any).customer?.name || "Unknown Customer"}</span>
+                  {(order as any).customer?.phone && (
+                    <>
+                      <Phone className="w-2.5 h-2.5 text-muted-foreground ml-2" />
+                      <span className="text-xs text-muted-foreground">{(order as any).customer.phone}</span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  {transitCount > 0 && (
+                    <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
+                      <Truck className="w-3 h-3 mr-1" />
+                      {transitCount} In Transit
+                    </Badge>
+                  )}
+                  {lostCount > 0 && (
+                    <Badge className="bg-red-100 text-red-700 font-black text-xs border-none">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      {lostCount} Lost
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Garment table */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                    <th className="text-left py-2.5 px-5">Garment</th>
+                    <th className="text-left py-2.5 px-5">Type</th>
+                    <th className="text-left py-2.5 px-5">Stage</th>
+                    <th className="text-left py-2.5 px-5">Fabric</th>
+                    <th className="text-left py-2.5 px-5">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {garments.map((g) => {
+                    const isLost = g.location === "lost_in_transit";
+                    const trip = g.trip_number || 1;
+
+                    return (
+                      <tr key={g.id} className={cn(
+                        "border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors",
+                        isLost && "bg-red-50/50"
+                      )}>
+                        <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
+                        <td className="py-2.5 px-5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                              "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
+                              g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                            )}>
+                              {g.garment_type}
+                            </span>
+                            {trip > 1 && (
+                              <span className="text-xs font-bold text-muted-foreground">
+                                Trip {trip}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-5 text-xs text-muted-foreground">
+                          {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
+                        </td>
+                        <td className="py-2.5 px-5">
+                          {g.fabric_source === "IN" ? (
+                            <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
+                              {(g as any).fabric?.name || "IN"}
+                            </span>
+                          ) : g.fabric_source === "OUT" ? (
+                            <span className="text-xs font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded">OUT</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-5">
+                          {isLost ? (
+                            <Badge className="bg-red-100 text-red-700 font-black text-xs border-none">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Lost in Transit
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
+                              <Truck className="w-3 h-3 mr-1" />
+                              In Transit
+                            </Badge>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 // --- Main Page ---
 
 export default function DispatchOrderPage() {
@@ -567,12 +755,26 @@ export default function DispatchOrderPage() {
   });
   const returnCount = redispatchResponse?.data?.length || 0;
 
+  // Count for in-transit tab badge
+  const { data: transitResponse } = useQuery<ApiResponse<OrderWithDetails[]>>({
+    queryKey: ["inTransitToWorkshop"],
+    queryFn: async () => {
+      const response = await getInTransitToWorkshopOrders();
+      return response as ApiResponse<OrderWithDetails[]>;
+    },
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
+  });
+  const transitOrders = transitResponse?.data || [];
+  const transitGarmentCount = transitOrders.reduce((sum, o) => sum + (o.garments?.length || 0), 0);
+  const lostGarmentCount = transitOrders.reduce((sum, o) => sum + (o.garments?.filter(g => g.location === "lost_in_transit").length || 0), 0);
+
   const handleDispatch = async (orderId: number, garmentIds?: string[]) => {
     setUpdatingOrderIds((prev) => new Set(prev).add(orderId));
     try {
       await dispatchOrder(orderId, garmentIds);
-      toast.success(`Order #${orderId} dispatched successfully!`);
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+      await queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
     } catch (error) {
       console.error("Failed to dispatch order:", error);
       toast.error(`Failed to dispatch Order #${orderId}`);
@@ -591,19 +793,10 @@ export default function DispatchOrderPage() {
     const orderIds = orders.map(o => o.id);
 
     try {
-      toast.promise(
-        Promise.all(orderIds.map(id => dispatchOrder(id))),
-        {
-          loading: `Dispatching ${orders.length} orders to workshop...`,
-          success: () => {
-             queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-             return `All ${orders.length} orders dispatched successfully!`;
-          },
-          error: "Bulk dispatch failed for some orders."
-        }
-      );
-    } catch (error) {
-      console.error("Bulk dispatch error:", error);
+      await Promise.all(orderIds.map(id => dispatchOrder(id)));
+      await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+    } catch {
+      toast.error("Bulk dispatch failed for some orders.");
     } finally {
       setIsBulkUpdating(false);
     }
@@ -629,6 +822,7 @@ export default function DispatchOrderPage() {
               onClick={() => {
                 queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
                 queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
+                queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
               }}
               disabled={isLoading}
             >
@@ -683,6 +877,20 @@ export default function DispatchOrderPage() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger
+              value="in-transit"
+              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+            >
+              In Transit
+              {transitGarmentCount > 0 && (
+                <Badge className={cn(
+                  "ml-2 font-bold text-xs h-5 px-1.5",
+                  lostGarmentCount > 0 ? "bg-red-500 text-white" : "bg-cyan-500 text-white"
+                )}>
+                  {transitGarmentCount}{lostGarmentCount > 0 ? ` (${lostGarmentCount} lost)` : ""}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="new-orders" className="mt-6">
@@ -727,6 +935,10 @@ export default function DispatchOrderPage() {
 
           <TabsContent value="return-workshop" className="mt-6">
             <ReturnToWorkshopTab bulkDispatchRef={bulkRedispatchRef} />
+          </TabsContent>
+
+          <TabsContent value="in-transit" className="mt-6">
+            <InTransitToWorkshopTab />
           </TabsContent>
         </Tabs>
       </div>

@@ -145,7 +145,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 queryClient.invalidateQueries({ queryKey: ["customers"], refetchType: "active" });
 
                 options.onOrderCreated?.(formattedOrder.id, formattedOrder);
-                toast.success("New order created successfully!");
             }
         },
         onError: () => {
@@ -165,14 +164,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 return;
             }
 
-            const action = variables.onSuccessAction;
-            if (action === "customer") {
-                toast.success("Customer updated ✅");
-            } else if (action === "cancelled") {
-                toast.success("Order cancelled");
-            }
-
             invalidateOrderQueries(queryClient, response.data?.customer_id);
+            const action = variables.onSuccessAction;
 
             options.onOrderUpdated?.(action);
         },
@@ -311,8 +304,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 toast.error(`Failed to complete work order: ${response.message || "Unknown error"}`);
                 return;
             }
-            toast.success("Work order completed successfully!");
-
             if (response.data?.invoice_number) {
                 showFatouraNotification(response.data.invoice_number);
             }
@@ -357,9 +348,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     toast.error(`Failed to complete sales order: ${response.message || "Unknown error"}`);
                     return;
                 }
-                toast.success("Sales order completed successfully! ✅");
-    
-                // Show notification if invoice number was just generated
                 if (response.data?.invoice_number) {
                     showFatouraNotification(response.data.invoice_number);
                 }
@@ -406,8 +394,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                     toast.error(`Failed to create sales order: ${response.message || "Unknown error"}`);
                     return;
                 }
-                toast.success("Sales order created and completed! ✅");
-    
                 if (response.data?.invoice_number) {
                     showFatouraNotification(response.data.invoice_number);
                 }

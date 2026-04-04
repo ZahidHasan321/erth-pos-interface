@@ -51,6 +51,9 @@ import type { OrderRow } from "@/components/orders-at-showroom/types";
 
 export const Route = createFileRoute("/$main/orders/orders-at-showroom")({
   component: RouteComponent,
+  validateSearch: (search: Record<string, unknown>) => ({
+    stage: (search.stage as string) || undefined,
+  }),
   head: () => ({
     meta: [{ title: "Showroom Inventory" }],
   }),
@@ -473,20 +476,28 @@ const XIcon = ({ className }: { className?: string }) => (
 );
 
 function RouteComponent() {
+  const { stage: searchStage } = Route.useSearch();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
-  
-  // Initial Filter State
+
+  // Initial Filter State — seed from URL search params if present
   const [filters, setFilters] = useState<FilterState>({
     searchId: "",
     customer: "",
-    stage: "all",
+    stage: searchStage ?? "all",
     reminderStatuses: [],
     deliveryDateStart: "",
     deliveryDateEnd: "",
-    sortBy: "created_desc", 
+    sortBy: "created_desc",
   });
-      
+
+  // Sync stage filter when navigating via notification deep links
+  useEffect(() => {
+    if (searchStage) {
+      setFilters((prev) => ({ ...prev, stage: searchStage }));
+    }
+  }, [searchStage]);
+
   const { data: orders = [], isLoading, isError, error } = useShowroomOrders();
 
   // Keep selectedOrder in sync with fresh query data

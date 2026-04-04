@@ -91,11 +91,6 @@ export function usePaymentMutation() {
                 toast.error(`Payment failed: ${response.message}`);
                 return;
             }
-            toast.success(
-                variables.transactionType === "refund"
-                    ? "Refund recorded successfully"
-                    : "Payment recorded successfully"
-            );
             invalidateCashierQueries(queryClient, variables.orderId);
         },
         onError: (error) => {
@@ -114,7 +109,6 @@ export function useUpdateDiscountMutation() {
                 toast.error(`Discount update failed: ${response.message}`);
                 return;
             }
-            toast.success("Discount updated successfully");
             invalidateCashierQueries(queryClient);
         },
         onError: (error) => {
@@ -133,7 +127,6 @@ export function useCollectGarmentsMutation() {
                 toast.error(`Collection failed: ${response.message}`);
                 return;
             }
-            toast.success("Garments collected successfully");
             invalidateCashierQueries(queryClient, variables.orderId);
         },
         onError: (error) => {
@@ -186,7 +179,6 @@ export function useOpenRegisterMutation() {
                 toast.error(`Failed to open register: ${response.message}`);
                 return;
             }
-            toast.success("Register opened");
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Error: ${error.message}`),
@@ -202,7 +194,6 @@ export function useReopenRegisterMutation() {
                 toast.error(`Failed to reopen register: ${response.message}`);
                 return;
             }
-            toast.success("Register reopened");
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Error: ${error.message}`),
@@ -218,7 +209,6 @@ export function useCloseRegisterMutation() {
                 toast.error(`Failed to close register: ${response.message}`);
                 return;
             }
-            toast.success("Register closed");
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
             queryClient.invalidateQueries({ queryKey: ["eod-report"], refetchType: "active" });
         },
@@ -235,7 +225,6 @@ export function useAddCashMovementMutation() {
                 toast.error(`Failed: ${response.message}`);
                 return;
             }
-            toast.success("Cash movement recorded");
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Error: ${error.message}`),

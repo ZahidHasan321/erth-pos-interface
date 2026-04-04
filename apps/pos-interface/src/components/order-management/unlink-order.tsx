@@ -37,6 +37,7 @@ import {
 import { Label } from "@repo/ui/label";
 import { toast } from "sonner";
 import { DatePicker } from "@repo/ui/date-picker";
+import { DialogSuccess } from "@repo/ui/dialog-success";
 import { cn, clickableProps } from "@/lib/utils";
 import { Input } from "@repo/ui/input";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
@@ -98,6 +99,7 @@ export default function UnlinkOrder() {
     const [orderToUnlink, setOrderToUnlink] = useState<Order | null>(null);
     const [reviseDate, setReviseDate] = useState<Date | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
 
     // Unlink Handler
     async function handleUnlinkConfirm() {
@@ -113,10 +115,8 @@ export default function UnlinkOrder() {
 
             await updateOrder(updateData, orderToUnlink.id);
 
-            toast.success(`Order #${orderToUnlink.id} unlinked successfully!`);
             queryClient.invalidateQueries({ queryKey: ["linked-orders"] });
-            setOrderToUnlink(null);
-            setReviseDate(null);
+            setShowSuccess(true);
         } catch (error) {
             console.error("Unlink failed", error);
             toast.error("Failed to unlink order.");
@@ -215,51 +215,60 @@ export default function UnlinkOrder() {
             </div>
 
             {/* --- Unlink Confirmation Modal --- */}
-            <Dialog open={!!orderToUnlink} onOpenChange={(open) => !open && setOrderToUnlink(null)}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-3 text-base font-black uppercase tracking-tight">
-                            <Unlink className="w-6 h-6 text-destructive" />
-                            Unlink Order
-                        </DialogTitle>
-                    </DialogHeader>
+            <Dialog open={!!orderToUnlink} onOpenChange={(open) => { if (!open) { setOrderToUnlink(null); setShowSuccess(false); setReviseDate(null); } }}>
+                <DialogContent className="max-w-md" showCloseButton={!showSuccess}>
+                    {showSuccess ? (
+                        <DialogSuccess
+                            message="Order Unlinked"
+                            onDone={() => { setOrderToUnlink(null); setShowSuccess(false); setReviseDate(null); }}
+                        />
+                    ) : (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-3 text-base font-black uppercase tracking-tight">
+                                    <Unlink className="w-6 h-6 text-destructive" />
+                                    Unlink Order
+                                </DialogTitle>
+                            </DialogHeader>
 
-                    <div className="py-4 space-y-3">
-                        <div className="bg-destructive/5 border border-destructive/10 rounded-2xl p-4">
-                            <p className="text-sm font-medium text-destructive leading-relaxed">
-                                You are about to disconnect <span className="font-bold">Order #{orderToUnlink?.id}</span> from its primary group.
-                                This will make it an independent order.
-                            </p>
-                        </div>
+                            <div className="py-4 space-y-3">
+                                <div className="bg-destructive/5 border border-destructive/10 rounded-2xl p-4">
+                                    <p className="text-sm font-medium text-destructive leading-relaxed">
+                                        You are about to disconnect <span className="font-bold">Order #{orderToUnlink?.id}</span> from its primary group.
+                                        This will make it an independent order.
+                                    </p>
+                                </div>
 
-                        <div className="space-y-2">
-                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Delivery Date</Label>
-                            <DatePicker
-                                value={reviseDate || undefined}
-                                onChange={(date) => setReviseDate(date || null)}
-                                className="w-full h-12 border-2 text-base font-bold"
-                                placeholder="Select Independent Delivery Date"
-                            />
-                            <p className="text-xs font-bold text-muted-foreground italic px-1">
-                                * Required to schedule the workshop separately
-                            </p>
-                        </div>
-                    </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Delivery Date</Label>
+                                    <DatePicker
+                                        value={reviseDate || undefined}
+                                        onChange={(date) => setReviseDate(date || null)}
+                                        className="w-full h-12 border-2 text-base font-bold"
+                                        placeholder="Select Independent Delivery Date"
+                                    />
+                                    <p className="text-xs font-bold text-muted-foreground italic px-1">
+                                        * Required to schedule the workshop separately
+                                    </p>
+                                </div>
+                            </div>
 
-                    <DialogFooter className="gap-3">
-                        <Button variant="ghost" className="font-bold uppercase tracking-widest text-xs" onClick={() => setOrderToUnlink(null)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            className="h-11 px-6 font-black uppercase tracking-widest shadow-lg shadow-destructive/20"
-                            disabled={!reviseDate || isSubmitting}
-                            onClick={handleUnlinkConfirm}
-                        >
-                            {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Unlink className="w-4 h-4 mr-2" />}
-                            Confirm Unlink
-                        </Button>
-                    </DialogFooter>
+                            <DialogFooter className="gap-3">
+                                <Button variant="ghost" className="font-bold uppercase tracking-widest text-xs" onClick={() => setOrderToUnlink(null)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    className="h-11 px-6 font-black uppercase tracking-widest shadow-lg shadow-destructive/20"
+                                    disabled={!reviseDate || isSubmitting}
+                                    onClick={handleUnlinkConfirm}
+                                >
+                                    {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Unlink className="w-4 h-4 mr-2" />}
+                                    Confirm Unlink
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </motion.section>

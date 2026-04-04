@@ -10,7 +10,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/(auth)/login")({
   beforeLoad: ({ context }) => {
     if (context.auth.isAuthenticated) {
-      throw redirect({ to: "/receiving" });
+      throw redirect({ to: "/receiving", search: { tab: undefined } });
     }
   },
   component: LoginPage,
@@ -27,7 +27,7 @@ function LoginPage() {
   useEffect(() => {
     if (auth.isAuthenticated) {
       router.invalidate().then(() => {
-        router.navigate({ to: "/receiving" });
+        router.navigate({ to: "/receiving", search: { tab: undefined } });
       });
     }
   }, [auth.isAuthenticated]);

@@ -235,7 +235,6 @@ export function CustomerMeasurementsForm({
           setIsCreatingNew(false);
           // Reset the processed data ref so the populate effect picks up new data
           lastProcessedDataRef.current = null;
-          toast.success("Measurement created successfully!");
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
           });
@@ -263,7 +262,6 @@ export function CustomerMeasurementsForm({
           setIsEditing(false);
           setIsCreatingNew(false);
           lastProcessedDataRef.current = null;
-          toast.success("Measurement updated successfully!");
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
           });

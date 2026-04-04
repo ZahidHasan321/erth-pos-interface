@@ -43,7 +43,7 @@ function TabsList({
     indicator.style.opacity = "1"
     indicator.style.width = `${activeRect.width}px`
     indicator.style.height = `${activeRect.height}px`
-    indicator.style.transform = `translateX(${activeRect.left - listRect.left - list.clientLeft}px)`
+    indicator.style.transform = `translate(${activeRect.left - listRect.left - list.clientLeft}px, ${activeRect.top - listRect.top - list.clientTop}px)`
   }, [])
 
   React.useEffect(() => {
@@ -61,9 +61,9 @@ function TabsList({
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(
-        "text-muted-foreground relative inline-flex h-11 w-fit items-center justify-center rounded-lg p-1.5",
+        "text-muted-foreground relative inline-flex h-11 w-fit items-center justify-center overflow-hidden rounded-lg p-1.5",
         variant === "pill" && "bg-muted",
-        variant === "card" && "bg-foreground/10 w-full gap-1 rounded-xl",
+        variant === "card" && "bg-foreground/10 w-full gap-1 rounded-xl [&>[data-slot=tabs-trigger]]:flex-1",
         className
       )}
       {...props}
@@ -71,7 +71,7 @@ function TabsList({
       <div
         ref={indicatorRef}
         className={cn(
-          "absolute top-1.5 left-0 shadow-sm transition-[transform,width,opacity] duration-250 ease-out pointer-events-none",
+          "absolute top-0 left-0 shadow-sm transition-[transform,width,opacity] duration-250 ease-out pointer-events-none",
           variant === "pill" && "rounded-md bg-background",
           variant === "card" && "rounded-lg bg-white border border-border"
         )}
@@ -90,7 +90,7 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 cursor-pointer select-none touch-manipulation active:scale-[0.97] text-muted-foreground",
+        "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 cursor-pointer select-none touch-manipulation active:scale-[0.97] text-muted-foreground",
         "data-[state=active]:text-foreground",
         "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring outline-none",
         "disabled:pointer-events-none disabled:opacity-50",

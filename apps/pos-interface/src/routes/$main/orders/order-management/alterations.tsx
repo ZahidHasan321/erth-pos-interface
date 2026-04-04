@@ -98,7 +98,6 @@ function AlterationsPage() {
     mutationFn: ({ id, trip }: { id: string; trip: number }) => sendToWorkshop(id, trip),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alteration-garments"] });
-      toast.success("Garment sent to workshop");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error"),
   });

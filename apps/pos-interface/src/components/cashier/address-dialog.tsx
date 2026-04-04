@@ -63,7 +63,6 @@ export function AddressDialog({ open, onOpenChange, customerId, currentAddress }
                 toast.error(`Failed: ${res.message}`);
                 return;
             }
-            toast.success("Address updated");
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
             onOpenChange(false);
         },

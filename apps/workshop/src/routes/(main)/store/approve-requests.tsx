@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Loader2, Check, X, Truck, ClipboardCheck, Search, Clock, History } from "lucide-react";
@@ -19,6 +19,9 @@ import type { TransferRequestWithItems } from "@/api/transfers";
 
 export const Route = createFileRoute("/(main)/store/approve-requests")({
   component: ApproveRequestsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+  }),
   head: () => ({ meta: [{ title: "Approve Requests" }] }),
 });
 
@@ -56,7 +59,12 @@ function filterRequests(requests: TransferRequestWithItems[], search: string) {
 }
 
 function ApproveRequestsPage() {
-  const [activeTab, setActiveTab] = useState("pending");
+  const { tab: searchTab } = Route.useSearch();
+  const [activeTab, setActiveTab] = useState(searchTab ?? "pending");
+
+  useEffect(() => {
+    if (searchTab) setActiveTab(searchTab);
+  }, [searchTab]);
   const [search, setSearch] = useState("");
 
   // Shop requests items from workshop (direction=workshop_to_shop) — workshop approves and dispatches
@@ -151,7 +159,6 @@ function PendingRequestsList({ requests, isLoading, search }: { requests: Transf
         id: selectedRequest.id,
         items: Array.from(approvalQtys.entries()).map(([id, qty]) => ({ id, approved_qty: qty })),
       });
-      toast.success("Transfer request approved");
       setSelectedRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to approve");
@@ -165,7 +172,6 @@ function PendingRequestsList({ requests, isLoading, search }: { requests: Transf
     }
     try {
       await rejectTransfer.mutateAsync({ id: selectedRequest.id, reason: rejectionReason });
-      toast.success("Transfer request rejected");
       setSelectedRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to reject");
@@ -312,7 +318,6 @@ function ApprovedRequestsList({ requests, isLoading, search }: { requests: Trans
         transferId: dispatchingRequest.id,
         items: Array.from(dispatchQtys.entries()).map(([id, qty]) => ({ id, dispatched_qty: qty })),
       });
-      toast.success("Transfer dispatched successfully");
       setDispatchingRequest(null);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to dispatch");
