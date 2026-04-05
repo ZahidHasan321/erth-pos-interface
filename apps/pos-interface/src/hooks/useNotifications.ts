@@ -12,7 +12,7 @@ export function useNotifications() {
   return useQuery({
     queryKey: NOTIFICATIONS_KEY,
     queryFn: () => getNotifications(),
-    staleTime: 1000 * 60 * 5, // 5 min — realtime handles new notifications via push
+    staleTime: 30_000, // realtime pushes keep this fresh; short stale as a safety net
   });
 }
 

@@ -52,6 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Initial session restore
     db.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled) return;
+      // Propagate the restored JWT to the Realtime client. supabase-js v2 only
+      // auto-sets realtime auth on SIGNED_IN / TOKEN_REFRESHED events — it does
+      // NOT react to INITIAL_SESSION, which is the only event fired when a
+      // cookie session is rehydrated on page reload. Without this line,
+      // postgres_changes channels would connect using the anon key and RLS
+      // policies that rely on auth.uid() (e.g. get_my_department()) silently
+      // filter out every event.
+      if (session?.access_token) {
+        db.realtime.setAuth(session.access_token);
+      }
       if (session?.user?.app_metadata?.user_id) {
         const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
         if (!cancelled) setUser(restored);

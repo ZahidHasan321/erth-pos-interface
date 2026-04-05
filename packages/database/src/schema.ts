@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey, check } from "drizzle-orm/pg-core";
 import { relations, sql, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 
 // --- CUSTOM TYPES ---
@@ -156,6 +156,12 @@ export const notificationTypeEnum = pgEnum("notification_type", [
     "transfer_status_changed",
 ]);
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
+
+export const notificationScopeEnum = pgEnum("notification_scope", [
+    "department",
+    "user",
+]);
+export type NotificationScope = (typeof notificationScopeEnum.enumValues)[number];
 
 export const accessoryCategoryEnum = pgEnum("accessory_category", [
     "buttons",
@@ -779,6 +785,9 @@ export const transferRequestItems = pgTable("transfer_request_items", {
 }));
 
 // --- 14. NOTIFICATIONS ---
+// Notifications can be scoped to a whole department (default: broadcast to all users
+// in shop/workshop) or to a single user (scope='user' + recipient_user_id). Department
+// is required in both cases for app/context filtering.
 export const notifications = pgTable("notifications", {
     id: serial("id").primaryKey(),
     department: departmentEnum("department").notNull(),
@@ -786,10 +795,17 @@ export const notifications = pgTable("notifications", {
     title: text("title").notNull(),
     body: text("body"),
     metadata: jsonb("metadata"),
+    scope: notificationScopeEnum("scope").default("department").notNull(),
+    recipient_user_id: uuid("recipient_user_id").references(() => users.id, { onDelete: 'cascade' }),
     created_at: timestamp("created_at").defaultNow().notNull(),
     expires_at: timestamp("expires_at").default(sql`now() + interval '7 days'`).notNull(),
 }, (t) => ({
     deptCreatedIdx: index("notifications_dept_created_idx").on(t.department, t.created_at),
+    recipientCreatedIdx: index("notifications_recipient_created_idx").on(t.recipient_user_id, t.created_at),
+    scopeRecipientCheck: check(
+        "notifications_scope_recipient_check",
+        sql`(scope = 'department' AND recipient_user_id IS NULL) OR (scope = 'user' AND recipient_user_id IS NOT NULL)`
+    ),
 }));
 
 // --- 15. NOTIFICATION READS (per-user read tracking) ---
