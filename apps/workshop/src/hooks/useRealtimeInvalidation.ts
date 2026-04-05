@@ -66,13 +66,19 @@ export function useRealtimeInvalidation() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
+          console.log('[realtime:workshop] notification event:', payload.new);
           const row = payload.new as { department?: string; title?: string; body?: string | null; type?: string };
-          if (row.department !== 'workshop') return;
+          if (row.department !== 'workshop') {
+            console.log('[realtime:workshop] skipping (dept=', row.department, ')');
+            return;
+          }
           qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
           if (row.title) showNotificationToast({ title: row.title, body: row.body, type: row.type });
         },
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('[realtime:workshop] channel status:', status, err ?? '');
+      });
 
     return () => {
       db.removeChannel(channel);

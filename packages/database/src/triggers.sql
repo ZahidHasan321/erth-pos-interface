@@ -1242,8 +1242,8 @@ RETURNS BOOLEAN AS $$
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND department = 'workshop')
     -- no brands set = unrestricted (backwards compat)
     OR NOT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND brands IS NOT NULL AND array_length(brands, 1) > 0)
-    -- brand is in the user's brands array
-    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND brand_value = ANY(brands));
+    -- brand is in the user's brands array (case-insensitive)
+    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND lower(brand_value) = ANY(brands));
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- ═══════════════════════════════════════════════════════════════════════
@@ -2204,14 +2204,16 @@ CREATE TRIGGER garment_stage_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_garment_stage_change();
 
--- 3. Transfer request created → notify workshop
+-- 3. Transfer request created → notify the approver (source of items)
 CREATE OR REPLACE FUNCTION notify_transfer_created()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Notify the receiving end: shop_to_workshop requests notify workshop, workshop_to_shop notify shop
+  -- `direction` = flow of items. The approver is the SOURCE (where items come from):
+  --   shop_to_workshop  → items flow shop→workshop → shop is the source/approver (workshop requested)
+  --   workshop_to_shop  → items flow workshop→shop → workshop is the source/approver (shop requested)
   INSERT INTO notifications (department, type, title, body, metadata, expires_at)
   VALUES (
-    CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'workshop' ELSE 'shop' END,
+    CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END,
     'transfer_requested',
     'New transfer request',
     format('New %s transfer request created', NEW.item_type),
@@ -2228,24 +2230,40 @@ CREATE TRIGGER transfer_created_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_transfer_created();
 
--- 4. Transfer request status change → notify the requesting side
+-- 4. Transfer request status change → notify the side that DIDN'T perform the action
 CREATE OR REPLACE FUNCTION notify_transfer_status_change()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_target_dept TEXT;
 BEGIN
-  IF NEW.status IN ('approved', 'dispatched', 'received', 'partially_received') AND NEW.status != OLD.status THEN
-    -- Notify the side that initiated the request (opposite of destination):
-    -- shop_to_workshop transfers were requested by shop → notify shop
-    -- workshop_to_shop transfers were requested by workshop → notify workshop
-    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
-    VALUES (
-      CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END,
-      'transfer_status_changed',
-      format('Transfer request %s', NEW.status),
-      format('Transfer request #%s has been %s', NEW.id, NEW.status),
-      jsonb_build_object('transfer_request_id', NEW.id, 'status', NEW.status, 'direction', NEW.direction),
-      NOW() + INTERVAL '7 days'
-    );
+  IF NEW.status = OLD.status THEN
+    RETURN NEW;
   END IF;
+
+  -- `direction` = flow of items.
+  --   shop_to_workshop  → source=shop,     destination=workshop (workshop requested)
+  --   workshop_to_shop  → source=workshop, destination=shop     (shop requested)
+  --
+  -- Who to notify depends on which side took the action:
+  --   approved / rejected / dispatched → action by SOURCE (approver) → notify DESTINATION (requester)
+  --   received / partially_received    → action by DESTINATION (receiver) → notify SOURCE (sender)
+  IF NEW.status IN ('approved', 'rejected', 'dispatched') THEN
+    v_target_dept := CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'workshop' ELSE 'shop' END;
+  ELSIF NEW.status IN ('received', 'partially_received') THEN
+    v_target_dept := CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END;
+  ELSE
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO notifications (department, type, title, body, metadata, expires_at)
+  VALUES (
+    v_target_dept::department,
+    'transfer_status_changed',
+    format('Transfer request %s', NEW.status),
+    format('Transfer request #%s has been %s', NEW.id, NEW.status),
+    jsonb_build_object('transfer_request_id', NEW.id, 'status', NEW.status, 'direction', NEW.direction),
+    NOW() + INTERVAL '7 days'
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

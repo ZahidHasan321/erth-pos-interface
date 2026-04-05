@@ -50,9 +50,20 @@ function TabsList({
     const list = ref.current
     if (!list) return
     updateIndicator()
-    const observer = new MutationObserver(updateIndicator)
-    observer.observe(list, { attributes: true, subtree: true, attributeFilter: ["data-state"] })
-    return () => observer.disconnect()
+
+    // Recompute on active-tab change
+    const mutation = new MutationObserver(updateIndicator)
+    mutation.observe(list, { attributes: true, subtree: true, attributeFilter: ["data-state"] })
+
+    // Recompute when triggers resize (e.g. badges/counts appearing after async data loads)
+    const resize = new ResizeObserver(updateIndicator)
+    resize.observe(list)
+    list.querySelectorAll('[data-slot="tabs-trigger"]').forEach((el) => resize.observe(el))
+
+    return () => {
+      mutation.disconnect()
+      resize.disconnect()
+    }
   }, [updateIndicator])
 
   return (
