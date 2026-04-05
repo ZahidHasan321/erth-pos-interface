@@ -3,15 +3,19 @@
 -- but some events need to target a single user (terminal assignment, KPI alerts, etc.).
 -- This migration adds the infrastructure without changing any existing behavior.
 
--- 1. Scope enum
-CREATE TYPE notification_scope AS ENUM ('department', 'user');
+-- 1. Scope enum (idempotent)
+DO $$ BEGIN
+    CREATE TYPE notification_scope AS ENUM ('department', 'user');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- 2. Add columns to notifications
+-- 2. Add columns to notifications (idempotent)
 ALTER TABLE notifications
-    ADD COLUMN scope notification_scope NOT NULL DEFAULT 'department',
-    ADD COLUMN recipient_user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+    ADD COLUMN IF NOT EXISTS scope notification_scope NOT NULL DEFAULT 'department',
+    ADD COLUMN IF NOT EXISTS recipient_user_id UUID REFERENCES users(id) ON DELETE CASCADE;
 
 -- 3. Integrity: user-scoped rows MUST name a recipient; department rows MUST NOT.
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_scope_recipient_check;
 ALTER TABLE notifications
     ADD CONSTRAINT notifications_scope_recipient_check
     CHECK (
@@ -20,7 +24,7 @@ ALTER TABLE notifications
     );
 
 -- 4. Index for per-user lookup
-CREATE INDEX notifications_recipient_created_idx
+CREATE INDEX IF NOT EXISTS notifications_recipient_created_idx
     ON notifications (recipient_user_id, created_at DESC)
     WHERE recipient_user_id IS NOT NULL;
 

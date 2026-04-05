@@ -1452,6 +1452,47 @@ CREATE POLICY "payments_insert" ON payment_transactions FOR INSERT WITH CHECK (
 DROP POLICY IF EXISTS "payments_update" ON payment_transactions;
 CREATE POLICY "payments_update" ON payment_transactions FOR UPDATE USING (is_admin());
 
+-- ── Transfer Requests ───────────────────────────────────────────────
+-- RLS is required here not for access control (policies are permissive) but
+-- because Supabase Realtime's postgres_changes channel refuses to broadcast
+-- events for tables without RLS + SELECT policies. Without this, realtime
+-- updates for transfers never reach the other department.
+ALTER TABLE transfer_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "transfer_requests_select" ON transfer_requests;
+CREATE POLICY "transfer_requests_select" ON transfer_requests
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_requests_insert" ON transfer_requests;
+CREATE POLICY "transfer_requests_insert" ON transfer_requests
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_requests_update" ON transfer_requests;
+CREATE POLICY "transfer_requests_update" ON transfer_requests
+    FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_requests_delete" ON transfer_requests;
+CREATE POLICY "transfer_requests_delete" ON transfer_requests
+    FOR DELETE USING (auth.uid() IS NOT NULL);
+
+ALTER TABLE transfer_request_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "transfer_request_items_select" ON transfer_request_items;
+CREATE POLICY "transfer_request_items_select" ON transfer_request_items
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_request_items_insert" ON transfer_request_items;
+CREATE POLICY "transfer_request_items_insert" ON transfer_request_items
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_request_items_update" ON transfer_request_items;
+CREATE POLICY "transfer_request_items_update" ON transfer_request_items
+    FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "transfer_request_items_delete" ON transfer_request_items;
+CREATE POLICY "transfer_request_items_delete" ON transfer_request_items
+    FOR DELETE USING (auth.uid() IS NOT NULL);
+
 -- ── Appointments ────────────────────────────────────────────────────
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 
