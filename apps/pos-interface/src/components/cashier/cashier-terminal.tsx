@@ -757,7 +757,17 @@ function CashierTerminalContent() {
                             <Card className="p-3">
                                 <h3 className="font-semibold flex items-center gap-2 mb-1.5 text-sm"><Receipt className="h-4 w-4" />Payment History ({transactions.length})</h3>
                                 <PaymentHistory transactions={transactions} orderId={order.id} invoiceNumber={order.invoice_number ?? undefined}
-                                    invoiceRevision={order.invoice_revision ?? 0} customerName={order.customer?.name ?? undefined} customerPhone={order.customer?.phone ?? undefined} orderTotal={orderTotal} totalPaid={totalPaid} />
+                                    invoiceRevision={order.invoice_revision ?? 0} orderType={order.order_type as "WORK" | "SALES"} homeDelivery={isHomeDelivery}
+                                    customerName={order.customer?.name ?? undefined} customerPhone={order.customer?.phone ?? undefined} orderTotal={orderTotal} totalPaid={totalPaid}
+                                    discountValue={discountValue}
+                                    garments={garments.map((g: any) => ({
+                                        garment_type: g.garment_type, style: g.style,
+                                        collar_type: g.collar_type, collar_button: g.collar_button, cuffs_type: g.cuffs_type,
+                                        jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness, fabric_length: Number(g.fabric_length) || 0,
+                                        fabric_name: g.fabric?.name, express: g.express,
+                                        fabric_price_snapshot: Number(g.fabric_price_snapshot) || 0, stitching_price_snapshot: Number(g.stitching_price_snapshot) || 0, style_price_snapshot: Number(g.style_price_snapshot) || 0,
+                                    }))}
+                                    shelfItems={shelfItems.map((i: any) => ({ name: i.shelf?.type || `Item #${i.shelf_id}`, brand: i.shelf?.brand, quantity: i.quantity, unit_price: i.unit_price }))} />
                             </Card>
                         </div>
 

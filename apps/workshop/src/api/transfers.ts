@@ -1,13 +1,17 @@
 import { db } from "@/lib/db";
 import type { TransferRequest, TransferRequestItem } from '@repo/database';
 
+type UserRef = { id: string; username: string; name: string } | null;
+
 export type TransferRequestWithItems = TransferRequest & {
   items: (TransferRequestItem & {
     fabric?: { id: number; name: string; shop_stock: number; workshop_stock: number } | null;
     shelf_item?: { id: number; type: string; brand: string; shop_stock: number; workshop_stock: number } | null;
     accessory?: { id: number; name: string; category: string; unit_of_measure: string; shop_stock: number; workshop_stock: number } | null;
   })[];
-  requested_by_user?: { id: string; username: string; name: string } | null;
+  requested_by_user?: UserRef;
+  dispatched_by_user?: UserRef;
+  received_by_user?: UserRef;
 };
 
 const TRANSFER_QUERY = `
@@ -18,13 +22,19 @@ const TRANSFER_QUERY = `
     shelf_item:shelf!shelf_id(id, type, brand, shop_stock, workshop_stock),
     accessory:accessories!accessory_id(id, name, category, unit_of_measure, shop_stock, workshop_stock)
   ),
-  requested_by_user:users!requested_by(id, username, name)
+  requested_by_user:users!requested_by(id, username, name),
+  dispatched_by_user:users!dispatched_by(id, username, name),
+  received_by_user:users!received_by(id, username, name)
 `;
 
 export interface TransferFilters {
   status?: string | string[];
-  direction?: string;
+  direction?: string | string[];
   item_type?: string;
+  /** ISO timestamp — inclusive lower bound on created_at */
+  startDate?: string;
+  /** ISO timestamp — inclusive upper bound on created_at */
+  endDate?: string;
 }
 
 export async function getTransferRequests(filters?: TransferFilters): Promise<TransferRequestWithItems[]> {
@@ -38,10 +48,20 @@ export async function getTransferRequests(filters?: TransferFilters): Promise<Tr
     }
   }
   if (filters?.direction) {
-    query = query.eq('direction', filters.direction);
+    if (Array.isArray(filters.direction)) {
+      query = query.in('direction', filters.direction);
+    } else {
+      query = query.eq('direction', filters.direction);
+    }
   }
   if (filters?.item_type) {
     query = query.eq('item_type', filters.item_type);
+  }
+  if (filters?.startDate) {
+    query = query.gte('created_at', filters.startDate);
+  }
+  if (filters?.endDate) {
+    query = query.lte('created_at', filters.endDate);
   }
 
   const { data, error } = await query;
@@ -164,6 +184,19 @@ export async function dispatchTransfer(
 
   if (error) throw error;
   return data as { success: boolean; transfer_id: number };
+}
+
+export async function deleteTransferRequest(id: number): Promise<void> {
+  // Hard-delete is only allowed while the request is still in 'requested' status.
+  // Guarding by status here prevents wiping an already-approved row if an approver
+  // races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
+  const { error } = await db
+    .from('transfer_requests')
+    .delete()
+    .eq('id', id)
+    .eq('status', 'requested');
+
+  if (error) throw error;
 }
 
 export async function receiveTransfer(

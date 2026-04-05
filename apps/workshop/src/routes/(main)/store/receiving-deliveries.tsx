@@ -1,17 +1,16 @@
 import { useState, useMemo } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Loader2, PackageOpen, Check, AlertTriangle, ArrowDownToLine, Search, History, Package } from "lucide-react";
+import { Loader2, PackageOpen, AlertTriangle, ArrowDownToLine, Search, ArrowRight, Check } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
 import { Textarea } from "@repo/ui/textarea";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 
-import { PageHeader, EmptyState as PageEmptyState, LoadingSkeleton, StatsCard } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState as PageEmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
 import { useTransferRequests, useReceiveTransfer } from "@/hooks/useTransfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import type { TransferRequestWithItems } from "@/api/transfers";
@@ -47,33 +46,33 @@ function filterRequests(requests: TransferRequestWithItems[], search: string) {
 }
 
 function ReceivingDeliveriesPage() {
-  const [activeTab, setActiveTab] = useState("pending");
   const [search, setSearch] = useState("");
 
-  const { data: transfers = [], isLoading } = useTransferRequests({
+  const filters = useMemo(() => ({
     status: "dispatched",
     direction: "shop_to_workshop",
-  });
-  const { data: historyTransfers = [], isLoading: historyLoading } = useTransferRequests({
-    status: ["received", "partially_received"],
-    direction: "shop_to_workshop",
-  });
+  }), []);
 
-  const totalItems = useMemo(() => {
-    return transfers.reduce((sum, t) => sum + t.items.length, 0);
-  }, [transfers]);
+  const { data: transfers = [], isLoading } = useTransferRequests(filters);
+
+  const awaitingLabel =
+    transfers.length > 0
+      ? `${transfers.length} delivery${transfers.length === 1 ? "" : "s"} awaiting receipt`
+      : "Receive items dispatched from the shop";
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
-      <PageHeader icon={ArrowDownToLine} title="Receiving Deliveries" subtitle="Receive items dispatched from the shop" />
+      <PageHeader icon={ArrowDownToLine} title="Receiving Deliveries" subtitle={awaitingLabel} />
 
-      {/* Summary cards */}
-      {!isLoading && transfers.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <StatsCard icon={Package} value={transfers.length} label="Pending" color="amber" />
-          <StatsCard icon={PackageOpen} value={totalItems} label="Total Items" color="blue" />
-        </div>
-      )}
+      <div className="flex justify-end mb-3 -mt-2">
+        <Link
+          to="/store/transfer-history"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+        >
+          View all past deliveries
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
 
       {/* Search */}
       <div className="relative mb-4">
@@ -86,26 +85,7 @@ function ReceivingDeliveriesPage() {
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="pending">
-            Awaiting Receipt {transfers.length > 0 && (
-              <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 rounded-full px-1.5 font-bold">{transfers.length}</span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            <History className="h-3.5 w-3.5 mr-1.5" />
-            Received History
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="pending">
-          <PendingDeliveries transfers={transfers} isLoading={isLoading} search={search} />
-        </TabsContent>
-        <TabsContent value="history">
-          <ReceivedHistory transfers={historyTransfers} isLoading={historyLoading} search={search} />
-        </TabsContent>
-      </Tabs>
+      <PendingDeliveries transfers={transfers} isLoading={isLoading && transfers.length === 0} search={search} />
     </div>
   );
 }
@@ -153,6 +133,18 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
     });
   }, [receivingTransfer, receivingQtys]);
 
+  const totalMissing = useMemo(() => {
+    if (!receivingTransfer) return 0;
+    let sum = 0;
+    for (const item of receivingTransfer.items) {
+      const entry = receivingQtys.get(item.id);
+      const dispatched = Number(item.dispatched_qty ?? 0);
+      const received = entry?.qty ?? 0;
+      if (received < dispatched) sum += dispatched - received;
+    }
+    return sum;
+  }, [receivingTransfer, receivingQtys]);
+
   if (isLoading) return <LoadingSkeleton count={3} />;
 
   if (transfers.length === 0) {
@@ -182,10 +174,16 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
                   </p>
                   {transfer.notes && <p className="text-xs text-muted-foreground italic">{transfer.notes}</p>}
                 </div>
-                <Button onClick={() => openReceiving(transfer)} size="sm" className="shrink-0 self-start sm:self-center">
-                  <PackageOpen className="h-4 w-4 mr-1.5" />
-                  Receive
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-center">
+                  <Button
+                    onClick={() => openReceiving(transfer)}
+                    size="sm"
+                    disabled={receiveTransfer.isPending}
+                  >
+                    <PackageOpen className="h-4 w-4 mr-1.5" />
+                    Receive
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -215,7 +213,11 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Receive Transfer #{receivingTransfer?.id}</DialogTitle>
-            <DialogDescription>Verify quantities received. Adjust if there are discrepancies.</DialogDescription>
+            <DialogDescription>
+              Quantities are pre-filled with what was dispatched. Reduce any
+              item that did not arrive — the shortfall will be flagged as a
+              discrepancy on this transfer.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {receivingTransfer?.items.map((item) => {
@@ -232,8 +234,19 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
                     <div className="flex items-center gap-2 shrink-0">
                       <label className="text-xs text-muted-foreground">Received:</label>
                       <Input
-                        type="number" min={0} step={step} value={entry.qty}
-                        onChange={(e) => { const next = new Map(receivingQtys); next.set(item.id, { ...entry, qty: Number(e.target.value) }); setReceivingQtys(next); }}
+                        type="number"
+                        min={0}
+                        max={Number(item.dispatched_qty ?? 0)}
+                        step={step}
+                        value={entry.qty}
+                        onChange={(e) => {
+                          const dispatched = Number(item.dispatched_qty ?? 0);
+                          const raw = Number(e.target.value);
+                          const clamped = Math.max(0, Math.min(raw, dispatched));
+                          const next = new Map(receivingQtys);
+                          next.set(item.id, { ...entry, qty: clamped });
+                          setReceivingQtys(next);
+                        }}
                         className="w-24 h-8 text-sm"
                       />
                       {hasDiscrepancy && <AlertTriangle className="h-4 w-4 text-amber-500" />}
@@ -252,7 +265,21 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
             })}
           </div>
 
-          {hasAnyDiscrepancy && (
+          {totalMissing > 0 && (
+            <div className="flex items-start gap-2 px-2 py-2 rounded-md border border-red-200 bg-red-50 text-red-800 text-xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-semibold">
+                  {totalMissing} unit(s) will be marked as lost in transit
+                </p>
+                <p className="text-red-700/90">
+                  These units were dispatched but not received. They are NOT
+                  returned to source stock — they are written off as missing.
+                </p>
+              </div>
+            </div>
+          )}
+          {hasAnyDiscrepancy && totalMissing === 0 && (
             <div className="flex items-center gap-2 px-1 text-amber-700 text-xs">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               <span>Discrepancies detected. Notes help track issues.</span>
@@ -272,74 +299,3 @@ function PendingDeliveries({ transfers, isLoading, search }: { transfers: Transf
   );
 }
 
-function ReceivedHistory({ transfers, isLoading, search }: { transfers: TransferRequestWithItems[]; isLoading: boolean; search: string }) {
-  const filtered = useMemo(() => filterRequests(transfers, search), [transfers, search]);
-
-  if (isLoading) return <LoadingSkeleton count={3} />;
-
-  if (transfers.length === 0) {
-    return <PageEmptyState icon={History} message="No received deliveries yet" />;
-  }
-
-  if (filtered.length === 0) {
-    return <PageEmptyState icon={Search} message="No deliveries match your search" />;
-  }
-
-  return (
-    <div className="space-y-3">
-      {filtered.slice(0, 30).map((transfer) => (
-        <Card key={transfer.id} className="rounded-xl opacity-90">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="space-y-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold">#{transfer.id}</span>
-                  <TransferStatusBadge status={transfer.status} />
-                  <ItemTypeBadge itemType={transfer.item_type} />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {transfer.items.length} item(s) &middot; Received{" "}
-                  {transfer.received_at ? new Date(transfer.received_at).toLocaleDateString() : "N/A"}
-                  {transfer.requested_by_user && <> &middot; Requested by {transfer.requested_by_user.name}</>}
-                </p>
-                {transfer.notes && <p className="text-xs text-muted-foreground italic">{transfer.notes}</p>}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <Table className="mt-3">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Dispatched</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transfer.items.map((item) => {
-                    const hasDiscrepancy = item.received_qty != null && item.dispatched_qty != null && item.received_qty !== item.dispatched_qty;
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>{getItemName(item)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{item.dispatched_qty ?? "\u2014"}</TableCell>
-                        <TableCell className={`text-right tabular-nums ${hasDiscrepancy ? "text-amber-600 font-medium" : ""}`}>
-                          {item.received_qty ?? "\u2014"}
-                          {hasDiscrepancy && " *"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-      {filtered.length > 30 && (
-        <p className="text-center text-sm text-muted-foreground py-2">
-          Showing 30 of {filtered.length} results
-        </p>
-      )}
-    </div>
-  );
-}

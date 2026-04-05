@@ -1370,7 +1370,7 @@ CREATE POLICY "orders_insert" ON orders FOR INSERT WITH CHECK (
 
 DROP POLICY IF EXISTS "orders_update" ON orders;
 CREATE POLICY "orders_update" ON orders FOR UPDATE USING (
-  (is_manager_or_above() OR order_taker_id = get_my_user_id()) AND can_access_brand(brand::text)
+  (is_manager_or_above() OR get_my_department() IN ('shop','workshop')) AND can_access_brand(brand::text)
 );
 
 -- ── Work Orders ─────────────────────────────────────────────────────
@@ -1381,11 +1381,21 @@ CREATE POLICY "work_orders_select" ON work_orders FOR SELECT USING (auth.uid() I
 
 DROP POLICY IF EXISTS "work_orders_insert" ON work_orders;
 CREATE POLICY "work_orders_insert" ON work_orders FOR INSERT WITH CHECK (
-  is_manager_or_above() OR get_my_department() = 'shop'
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = work_orders.order_id AND can_access_brand(o.brand::text)
+  )
 );
 
 DROP POLICY IF EXISTS "work_orders_update" ON work_orders;
-CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (is_manager_or_above());
+CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (
+  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = work_orders.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 -- ── Garments ────────────────────────────────────────────────────────
 ALTER TABLE garments ENABLE ROW LEVEL SECURITY;
@@ -1395,11 +1405,21 @@ CREATE POLICY "garments_select" ON garments FOR SELECT USING (auth.uid() IS NOT 
 
 DROP POLICY IF EXISTS "garments_insert" ON garments;
 CREATE POLICY "garments_insert" ON garments FOR INSERT WITH CHECK (
-  is_manager_or_above() OR get_my_department() = 'shop'
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = garments.order_id AND can_access_brand(o.brand::text)
+  )
 );
 
 DROP POLICY IF EXISTS "garments_update" ON garments;
-CREATE POLICY "garments_update" ON garments FOR UPDATE USING (is_manager_or_above());
+CREATE POLICY "garments_update" ON garments FOR UPDATE USING (
+  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = garments.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 -- ── Garment Feedback ────────────────────────────────────────────────
 ALTER TABLE garment_feedback ENABLE ROW LEVEL SECURITY;
@@ -1411,7 +1431,9 @@ DROP POLICY IF EXISTS "feedback_insert" ON garment_feedback;
 CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 DROP POLICY IF EXISTS "feedback_update" ON garment_feedback;
-CREATE POLICY "feedback_update" ON garment_feedback FOR UPDATE USING (is_manager_or_above());
+CREATE POLICY "feedback_update" ON garment_feedback FOR UPDATE USING (
+  is_manager_or_above() OR get_my_department() IN ('shop','workshop')
+);
 
 -- ── Resources (Workshop Workers) ────────────────────────────────────
 ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
@@ -1433,10 +1455,22 @@ DROP POLICY IF EXISTS "shelf_items_select" ON order_shelf_items;
 CREATE POLICY "shelf_items_select" ON order_shelf_items FOR SELECT USING (auth.uid() IS NOT NULL);
 
 DROP POLICY IF EXISTS "shelf_items_insert" ON order_shelf_items;
-CREATE POLICY "shelf_items_insert" ON order_shelf_items FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "shelf_items_insert" ON order_shelf_items FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = order_shelf_items.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 DROP POLICY IF EXISTS "shelf_items_update" ON order_shelf_items;
-CREATE POLICY "shelf_items_update" ON order_shelf_items FOR UPDATE USING (is_manager_or_above());
+CREATE POLICY "shelf_items_update" ON order_shelf_items FOR UPDATE USING (
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = order_shelf_items.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 -- ── Payment Transactions ────────────────────────────────────────────
 ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
@@ -1446,7 +1480,11 @@ CREATE POLICY "payments_select" ON payment_transactions FOR SELECT USING (auth.u
 
 DROP POLICY IF EXISTS "payments_insert" ON payment_transactions;
 CREATE POLICY "payments_insert" ON payment_transactions FOR INSERT WITH CHECK (
-  is_manager_or_above() OR get_my_department() = 'shop'
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = payment_transactions.order_id AND can_access_brand(o.brand::text)
+  )
 );
 
 DROP POLICY IF EXISTS "payments_update" ON payment_transactions;
@@ -2073,7 +2111,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Receive a transfer: add stock to destination, return shortfall to source
+-- Receive a transfer: add received qty to destination.
+-- Any shortfall (dispatched - received) is recorded on the item as missing_qty
+-- and is NOT refunded to source stock — those units are treated as lost in
+-- transit. Source stock was already debited at dispatch time, so doing nothing
+-- here is the correct accounting for missing units.
 CREATE OR REPLACE FUNCTION receive_transfer(
   p_transfer_id INT,
   p_received_by UUID,
@@ -2086,7 +2128,7 @@ DECLARE
   v_transfer_item RECORD;
   v_has_discrepancy BOOLEAN := false;
   v_received_qty DECIMAL;
-  v_shortfall DECIMAL;
+  v_missing_qty DECIMAL;
 BEGIN
   -- 1. Lock and verify transfer
   SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
@@ -2102,52 +2144,58 @@ BEGIN
   LOOP
     v_received_qty := (v_item->>'received_qty')::decimal;
 
-    -- Update received_qty and discrepancy_note on the transfer item
-    UPDATE transfer_request_items
-    SET received_qty = v_received_qty,
-        discrepancy_note = v_item->>'discrepancy_note'
-    WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
-
-    -- Get the transfer item
-    SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
-
-    -- Check for discrepancy and compute shortfall
-    v_shortfall := 0;
-    IF v_transfer_item.dispatched_qty IS NOT NULL AND v_received_qty != v_transfer_item.dispatched_qty THEN
-      v_has_discrepancy := true;
-      v_shortfall := v_transfer_item.dispatched_qty - v_received_qty;
+    -- Load the row before writing so we can compute missing_qty against dispatched_qty.
+    SELECT * INTO v_transfer_item FROM transfer_request_items
+      WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Transfer item % does not belong to transfer %', v_item->>'id', p_transfer_id;
     END IF;
 
-    -- Add received qty to destination, return shortfall to source
+    -- Guardrail: received cannot exceed dispatched. If it does, the caller is
+    -- reporting more than what left the source — reject instead of silently
+    -- inflating stock.
+    IF v_transfer_item.dispatched_qty IS NOT NULL AND v_received_qty > v_transfer_item.dispatched_qty THEN
+      RAISE EXCEPTION 'received_qty (%) cannot exceed dispatched_qty (%) for item %',
+        v_received_qty, v_transfer_item.dispatched_qty, v_transfer_item.id;
+    END IF;
+
+    -- Compute missing (lost in transit). Anything short of dispatched is lost.
+    v_missing_qty := 0;
+    IF v_transfer_item.dispatched_qty IS NOT NULL AND v_received_qty < v_transfer_item.dispatched_qty THEN
+      v_has_discrepancy := true;
+      v_missing_qty := v_transfer_item.dispatched_qty - v_received_qty;
+    END IF;
+
+    UPDATE transfer_request_items
+    SET received_qty = v_received_qty,
+        missing_qty = v_missing_qty,
+        discrepancy_note = v_item->>'discrepancy_note'
+    WHERE id = v_transfer_item.id;
+
+    -- Credit the destination with what actually arrived. The missing units are
+    -- NOT refunded to source — source was debited at dispatch and those units
+    -- are gone.
     IF v_transfer.direction = 'shop_to_workshop' THEN
-      -- Destination is workshop, source is shop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET workshop_stock = workshop_stock + v_received_qty,
-                           shop_stock = shop_stock + GREATEST(v_shortfall, 0)
-        WHERE id = v_transfer_item.fabric_id;
+        UPDATE fabrics SET workshop_stock = workshop_stock + v_received_qty
+          WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET workshop_stock = workshop_stock + v_received_qty::int,
-                         shop_stock = shop_stock + GREATEST(v_shortfall, 0)::int
-        WHERE id = v_transfer_item.shelf_id;
+        UPDATE shelf SET workshop_stock = workshop_stock + v_received_qty::int
+          WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET workshop_stock = workshop_stock + v_received_qty,
-                               shop_stock = shop_stock + GREATEST(v_shortfall, 0)
-        WHERE id = v_transfer_item.accessory_id;
+        UPDATE accessories SET workshop_stock = workshop_stock + v_received_qty
+          WHERE id = v_transfer_item.accessory_id;
       END IF;
     ELSE
-      -- Destination is shop, source is workshop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        UPDATE fabrics SET shop_stock = shop_stock + v_received_qty,
-                           workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)
-        WHERE id = v_transfer_item.fabric_id;
+        UPDATE fabrics SET shop_stock = shop_stock + v_received_qty
+          WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        UPDATE shelf SET shop_stock = shop_stock + v_received_qty::int,
-                         workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)::int
-        WHERE id = v_transfer_item.shelf_id;
+        UPDATE shelf SET shop_stock = shop_stock + v_received_qty::int
+          WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        UPDATE accessories SET shop_stock = shop_stock + v_received_qty,
-                               workshop_stock = workshop_stock + GREATEST(v_shortfall, 0)
-        WHERE id = v_transfer_item.accessory_id;
+        UPDATE accessories SET shop_stock = shop_stock + v_received_qty
+          WHERE id = v_transfer_item.accessory_id;
       END IF;
     END IF;
   END LOOP;
@@ -2207,45 +2255,17 @@ CREATE TRIGGER garment_location_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_garment_location_change();
 
--- 2. Garment stage change → notify shop for pickup/trial
-CREATE OR REPLACE FUNCTION notify_garment_stage_change()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.piece_stage = 'ready_for_pickup' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'ready_for_pickup') THEN
-    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
-    VALUES (
-      'shop',
-      'garment_ready_for_pickup',
-      'Garment ready for pickup',
-      format('Garment %s (Order #%s) is ready for customer pickup', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type),
-      NOW() + INTERVAL '7 days'
-    );
-  END IF;
-
-  IF NEW.piece_stage = 'awaiting_trial' AND (OLD.piece_stage IS NULL OR OLD.piece_stage != 'awaiting_trial') THEN
-    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
-    VALUES (
-      'shop',
-      'garment_awaiting_trial',
-      'Garment awaiting trial',
-      format('Garment %s (Order #%s) is awaiting customer trial', NEW.garment_id, NEW.order_id),
-      jsonb_build_object('order_id', NEW.order_id, 'garment_id', NEW.id, 'garment_type', NEW.garment_type),
-      NOW() + INTERVAL '7 days'
-    );
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
+-- (Removed) Garment stage change notifications:
+-- Previously fired a shop notification when piece_stage became 'ready_for_pickup' or
+-- 'awaiting_trial'. Both of those transitions happen on the receiving-brova-final page
+-- where the shop itself is the actor, so the notification was just telling the shop
+-- about its own click. The incoming-work signal for shop already comes from trigger #1
+-- (location → transit_to_shop) at dispatch time, which is the moment that actually
+-- requires their attention.
 DROP TRIGGER IF EXISTS garment_stage_notification ON garments;
-CREATE TRIGGER garment_stage_notification
-  AFTER UPDATE OF piece_stage ON garments
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_garment_stage_change();
+DROP FUNCTION IF EXISTS notify_garment_stage_change();
 
--- 3. Transfer request created → notify the approver (source of items)
+-- 2. Transfer request created → notify the approver (source of items)
 CREATE OR REPLACE FUNCTION notify_transfer_created()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -2271,7 +2291,7 @@ CREATE TRIGGER transfer_created_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_transfer_created();
 
--- 4. Transfer request status change → notify the side that DIDN'T perform the action
+-- 3. Transfer request status change → notify the side that DIDN'T perform the action
 CREATE OR REPLACE FUNCTION notify_transfer_status_change()
 RETURNS TRIGGER AS $$
 DECLARE

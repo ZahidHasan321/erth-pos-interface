@@ -46,10 +46,20 @@ function TabsList({
     indicator.style.transform = `translate(${activeRect.left - listRect.left - list.clientLeft}px, ${activeRect.top - listRect.top - list.clientTop}px)`
   }, [])
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const list = ref.current
-    if (!list) return
+    const indicator = indicatorRef.current
+    if (!list || !indicator) return
+
+    // Snap the pill into its initial position without animating from (0,0) → target.
+    // Without this, the CSS transition on transform/width visibly slides the pill
+    // from the top-left of the list through the middle tabs on mount.
+    const prevTransition = indicator.style.transition
+    indicator.style.transition = "none"
     updateIndicator()
+    // Force reflow so the non-transitioned styles commit before we restore transitions
+    void indicator.offsetWidth
+    indicator.style.transition = prevTransition
 
     // Recompute on active-tab change
     const mutation = new MutationObserver(updateIndicator)

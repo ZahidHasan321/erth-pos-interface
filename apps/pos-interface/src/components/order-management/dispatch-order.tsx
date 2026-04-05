@@ -744,7 +744,14 @@ export default function DispatchOrderPage() {
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 
-  const orders = ordersResponse?.data || [];
+  // Only show garments still at the shop (i.e., not yet dispatched). Orders with
+  // partially-dispatched garments remain visible here with just the pending ones.
+  const orders = (ordersResponse?.data || [])
+    .map((o) => ({
+      ...o,
+      garments: (o.garments || []).filter((g) => g.location === "shop"),
+    }))
+    .filter((o) => (o.garments?.length ?? 0) > 0);
 
   // Count for return tab badge
   const { data: redispatchResponse } = useQuery<ApiResponse<any[]>>({

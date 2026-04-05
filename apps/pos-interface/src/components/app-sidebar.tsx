@@ -145,6 +145,11 @@ const data = {
           icon: ClipboardCheck,
         },
         {
+          title: "Transfer History",
+          url: "store/transfer-history",
+          icon: History,
+        },
+        {
           title: "End of Day Report",
           url: "store/end-of-day-report",
           icon: FileText,

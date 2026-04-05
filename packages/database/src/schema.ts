@@ -779,6 +779,10 @@ export const transferRequestItems = pgTable("transfer_request_items", {
     approved_qty: numeric("approved_qty", { precision: 10, scale: 2 }),
     dispatched_qty: numeric("dispatched_qty", { precision: 10, scale: 2 }),
     received_qty: numeric("received_qty", { precision: 10, scale: 2 }),
+    // Quantity that was dispatched but never arrived at the destination.
+    // Computed at receive time as max(dispatched - received, 0). These units
+    // are treated as lost in transit — they are NOT returned to source stock.
+    missing_qty: numeric("missing_qty", { precision: 10, scale: 2 }).default(0),
     discrepancy_note: text("discrepancy_note"),
 }, (t) => ({
     transferRequestIdx: index("transfer_items_request_idx").on(t.transfer_request_id),

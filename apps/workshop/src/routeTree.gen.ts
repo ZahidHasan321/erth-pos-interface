@@ -34,6 +34,7 @@ import { Route as mainTerminalsPostCuttingRouteImport } from './routes/(main)/te
 import { Route as mainTerminalsIroningRouteImport } from './routes/(main)/terminals/ironing'
 import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/terminals/finishing'
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
+import { Route as mainStoreTransferHistoryRouteImport } from './routes/(main)/store/transfer-history'
 import { Route as mainStoreStockReportRouteImport } from './routes/(main)/store/stock-report'
 import { Route as mainStoreSendToShopRouteImport } from './routes/(main)/store/send-to-shop'
 import { Route as mainStoreRequestDeliveryRouteImport } from './routes/(main)/store/request-delivery'
@@ -171,6 +172,12 @@ const mainTerminalsCuttingRoute = mainTerminalsCuttingRouteImport.update({
   path: '/terminals/cutting',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainStoreTransferHistoryRoute =
+  mainStoreTransferHistoryRouteImport.update({
+    id: '/store/transfer-history',
+    path: '/store/transfer-history',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainStoreStockReportRoute = mainStoreStockReportRouteImport.update({
   id: '/store/stock-report',
   path: '/store/stock-report',
@@ -249,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/store/send-to-shop': typeof mainStoreSendToShopRoute
   '/store/stock-report': typeof mainStoreStockReportRoute
+  '/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -284,6 +292,7 @@ export interface FileRoutesByTo {
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/store/send-to-shop': typeof mainStoreSendToShopRoute
   '/store/stock-report': typeof mainStoreStockReportRoute
+  '/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -322,6 +331,7 @@ export interface FileRoutesById {
   '/(main)/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/(main)/store/send-to-shop': typeof mainStoreSendToShopRoute
   '/(main)/store/stock-report': typeof mainStoreStockReportRoute
+  '/(main)/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
   '/(main)/terminals/ironing': typeof mainTerminalsIroningRoute
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/store/request-delivery'
     | '/store/send-to-shop'
     | '/store/stock-report'
+    | '/store/transfer-history'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/store/request-delivery'
     | '/store/send-to-shop'
     | '/store/stock-report'
+    | '/store/transfer-history'
     | '/terminals/cutting'
     | '/terminals/finishing'
     | '/terminals/ironing'
@@ -432,6 +444,7 @@ export interface FileRouteTypes {
     | '/(main)/store/request-delivery'
     | '/(main)/store/send-to-shop'
     | '/(main)/store/stock-report'
+    | '/(main)/store/transfer-history'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
     | '/(main)/terminals/ironing'
@@ -631,6 +644,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTerminalsCuttingRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/store/transfer-history': {
+      id: '/(main)/store/transfer-history'
+      path: '/store/transfer-history'
+      fullPath: '/store/transfer-history'
+      preLoaderRoute: typeof mainStoreTransferHistoryRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/store/stock-report': {
       id: '/(main)/store/stock-report'
       path: '/store/stock-report'
@@ -737,6 +757,7 @@ interface mainRouteRouteChildren {
   mainStoreRequestDeliveryRoute: typeof mainStoreRequestDeliveryRoute
   mainStoreSendToShopRoute: typeof mainStoreSendToShopRoute
   mainStoreStockReportRoute: typeof mainStoreStockReportRoute
+  mainStoreTransferHistoryRoute: typeof mainStoreTransferHistoryRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
   mainTerminalsIroningRoute: typeof mainTerminalsIroningRoute
@@ -769,6 +790,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainStoreRequestDeliveryRoute: mainStoreRequestDeliveryRoute,
   mainStoreSendToShopRoute: mainStoreSendToShopRoute,
   mainStoreStockReportRoute: mainStoreStockReportRoute,
+  mainStoreTransferHistoryRoute: mainStoreTransferHistoryRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,
   mainTerminalsIroningRoute: mainTerminalsIroningRoute,

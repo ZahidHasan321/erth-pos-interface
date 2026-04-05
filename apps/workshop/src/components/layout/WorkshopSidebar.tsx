@@ -36,6 +36,7 @@ import {
   UserCog,
   Package,
   Send,
+  History,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -88,6 +89,7 @@ export function WorkshopSidebar() {
     { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
     { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries", count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
     { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests",     count: approveRequests.length,     badgeColor: "bg-amber-100 text-amber-700" },
+    { label: "Transfer History",     icon: History,          href: "/store/transfer-history" },
     { label: "Stock Report",         icon: BarChart3,        href: "/store/stock-report" },
   ];
 

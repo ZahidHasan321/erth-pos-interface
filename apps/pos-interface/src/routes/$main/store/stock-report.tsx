@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Loader2,
   AlertTriangle,
   Package,
   Scissors,
@@ -35,20 +34,12 @@ import {
   TableRow,
 } from "@repo/ui/table";
 
-import { parseUtcTimestamp } from "@/lib/utils";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
-import { getTransferRequests } from "@/api/transfers";
-import type { TransferRequestWithItems } from "@/api/transfers";
-import {
-  TransferStatusBadge,
-  ItemTypeBadge,
-} from "@/components/store/transfer-status-badge";
 import {
   ACCESSORY_CATEGORY_LABELS,
   UNIT_OF_MEASURE_LABELS,
-  TRANSFER_DIRECTION_LABELS,
 } from "@/components/store/transfer-constants";
 
 import type { Fabric, Shelf, Accessory } from "@repo/database";
@@ -72,8 +63,6 @@ function isLowStock(
 function StockReportPage() {
   const [activeTab, setActiveTab] = useState("fabric");
   const [search, setSearch] = useState("");
-  const [transferStatusFilter, setTransferStatusFilter] =
-    useState<string>("all");
 
   const { data: fabrics = [], isLoading: fabricsLoading } = useQuery({
     queryKey: ["fabrics"],
@@ -86,10 +75,6 @@ function StockReportPage() {
   const { data: accessories = [], isLoading: accessoriesLoading } = useQuery({
     queryKey: ["accessories"],
     queryFn: getAccessories,
-  });
-  const { data: allTransfers = [], isLoading: transfersLoading } = useQuery({
-    queryKey: ["transfer-requests", "recent"],
-    queryFn: () => getTransferRequests(),
   });
 
   const isLoading = fabricsLoading || shelfLoading || accessoriesLoading;
@@ -213,27 +198,6 @@ function StockReportPage() {
       );
   }, [accessories, search]);
 
-  const filteredTransfers = useMemo(() => {
-    let transfers = allTransfers.slice(0, 100);
-    if (transferStatusFilter !== "all") {
-      transfers = transfers.filter((t) => t.status === transferStatusFilter);
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      transfers = transfers.filter((t) => {
-        if (String(t.id).includes(q)) return true;
-        if (t.notes?.toLowerCase().includes(q)) return true;
-        return t.items.some((item) => {
-          if (item.fabric?.name?.toLowerCase().includes(q)) return true;
-          if (item.shelf_item?.type?.toLowerCase().includes(q)) return true;
-          if (item.accessory?.name?.toLowerCase().includes(q)) return true;
-          return false;
-        });
-      });
-    }
-    return transfers;
-  }, [allTransfers, transferStatusFilter, search]);
-
   return (
     <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -311,12 +275,6 @@ function StockReportPage() {
               <TabsTrigger value="fabric">Fabrics</TabsTrigger>
               <TabsTrigger value="shelf">Shelf Items</TabsTrigger>
               <TabsTrigger value="accessory">Accessories</TabsTrigger>
-              <TabsTrigger value="transfers">
-                Transfer Log
-                {transfersLoading && (
-                  <Loader2 className="ml-1.5 h-3 w-3 animate-spin" />
-                )}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="fabric" className="mt-4">
@@ -327,35 +285,6 @@ function StockReportPage() {
             </TabsContent>
             <TabsContent value="accessory" className="mt-4">
               <AccessoryTable items={sortedAccessories} search={search} />
-            </TabsContent>
-            <TabsContent value="transfers" className="mt-4 space-y-3">
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-2">
-                {[
-                  "all",
-                  "requested",
-                  "approved",
-                  "dispatched",
-                  "received",
-                  "rejected",
-                ].map((status) => (
-                  <Button
-                    key={status}
-                    variant={
-                      transferStatusFilter === status ? "default" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setTransferStatusFilter(status)}
-                    className="capitalize"
-                  >
-                    {status === "all" ? "All" : status}
-                  </Button>
-                ))}
-              </div>
-              <TransferLogTable
-                transfers={filteredTransfers}
-                isLoading={transfersLoading}
-                search={search}
-              />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -661,79 +590,6 @@ function AccessoryTable({
         })}
       </TableBody>
     </Table>
-  );
-}
-
-function TransferLogTable({
-  transfers,
-  isLoading,
-  search,
-}: {
-  transfers: TransferRequestWithItems[];
-  isLoading: boolean;
-  search: string;
-}) {
-  if (isLoading)
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  if (transfers.length === 0)
-    return (
-      <EmptyState
-        label={search ? "No transfers match your search" : "No transfers found"}
-      />
-    );
-
-  return (
-    <>
-      <Table className="min-w-[760px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead>ID</TableHead>
-            <TableHead>Direction</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Items</TableHead>
-            <TableHead>Requested</TableHead>
-            <TableHead>Notes</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {transfers.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="font-medium">#{t.id}</TableCell>
-              <TableCell className="text-sm">
-                {TRANSFER_DIRECTION_LABELS[t.direction] ?? t.direction}
-              </TableCell>
-              <TableCell>
-                <ItemTypeBadge itemType={t.item_type} />
-              </TableCell>
-              <TableCell>
-                <TransferStatusBadge status={t.status} />
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {t.items.length}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {t.created_at
-                  ? parseUtcTimestamp(t.created_at).toLocaleDateString()
-                  : "N/A"}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                {t.notes ?? "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {transfers.length >= 100 && (
-        <p className="text-center text-sm text-muted-foreground py-3">
-          Showing latest 100 transfers
-        </p>
-      )}
-    </>
   );
 }
 

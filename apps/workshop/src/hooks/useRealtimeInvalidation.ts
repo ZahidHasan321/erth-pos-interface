@@ -23,8 +23,7 @@ export function useRealtimeInvalidation() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'garments' },
-        (payload) => {
-          console.log('[realtime:workshop] garments', payload.eventType);
+        () => {
           qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
           qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
           qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
@@ -34,40 +33,35 @@ export function useRealtimeInvalidation() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transfer_requests' },
-        (payload) => {
-          console.log('[realtime:workshop] transfer_requests', payload.eventType, payload.new);
+        () => {
           qc.invalidateQueries({ queryKey: ['transfer-requests'] });
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transfer_request_items' },
-        (payload) => {
-          console.log('[realtime:workshop] transfer_request_items', payload.eventType);
+        () => {
           qc.invalidateQueries({ queryKey: ['transfer-requests'] });
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fabrics' },
-        (payload) => {
-          console.log('[realtime:workshop] fabrics', payload.eventType);
+        () => {
           qc.invalidateQueries({ queryKey: ['fabrics'] });
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'shelf' },
-        (payload) => {
-          console.log('[realtime:workshop] shelf', payload.eventType);
+        () => {
           qc.invalidateQueries({ queryKey: ['shelf'] });
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'accessories' },
-        (payload) => {
-          console.log('[realtime:workshop] accessories', payload.eventType);
+        () => {
           qc.invalidateQueries({ queryKey: ['accessories'] });
         },
       )
@@ -75,7 +69,6 @@ export function useRealtimeInvalidation() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
-          console.log('[realtime:workshop] notification event:', payload.new);
           const row = payload.new as {
             department?: string;
             scope?: 'department' | 'user';
@@ -88,17 +81,12 @@ export function useRealtimeInvalidation() {
             row.scope === 'user'
               ? !!currentUserId && row.recipient_user_id === currentUserId
               : row.department === 'workshop';
-          if (!isForMe) {
-            console.log('[realtime:workshop] skipping notification', { scope: row.scope, dept: row.department });
-            return;
-          }
+          if (!isForMe) return;
           qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
           if (row.title) showNotificationToast({ title: row.title, body: row.body, type: row.type });
         },
       )
-      .subscribe((status, err) => {
-        console.log('[realtime:workshop] channel status:', status, err ?? '');
-      });
+      .subscribe();
 
     return () => {
       db.removeChannel(channel);

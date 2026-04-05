@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link, useParams } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -76,6 +77,7 @@ export default function ApproveRequestsPage({
   initialTab?: string;
 }) {
   const [activeTab, setActiveTab] = useState(initialTab ?? "pending");
+  const { main } = useParams({ strict: false }) as { main?: string };
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -92,10 +94,17 @@ export default function ApproveRequestsPage({
       status: ["approved"],
       direction: "shop_to_workshop",
     });
+  // History tab is bounded to last 30 days; deeper lookups belong on the Transfer History page.
+  const historySince = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString();
+  }, []);
   const { data: historyRequests = [], isLoading: historyLoading } =
     useTransferRequests({
       status: ["rejected", "dispatched", "received", "partially_received"],
       direction: "shop_to_workshop",
+      startDate: historySince,
     });
 
   return (
@@ -159,6 +168,17 @@ export default function ApproveRequestsPage({
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">
+          <p className="text-xs text-muted-foreground mb-2">
+            Showing last 30 days. For older records see{" "}
+            <Link
+              to="/$main/store/transfer-history"
+              params={{ main: main ?? "showroom" }}
+              className="underline font-medium"
+            >
+              Transfer History
+            </Link>
+            .
+          </p>
           <HistoryList
             requests={historyRequests}
             isLoading={historyLoading}

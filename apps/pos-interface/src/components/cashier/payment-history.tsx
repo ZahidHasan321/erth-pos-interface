@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useRef, useState, useCallback, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Printer, ChevronDown, ChevronUp, AlertCircle, Package, Shirt } from "lucide-react";
 import { Button } from "@repo/ui/button";
@@ -13,17 +13,22 @@ import {
 } from "@repo/ui/table";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { parseUtcTimestamp } from "@/lib/utils";
-import { PaymentReceipt, type PaymentReceiptData } from "./payment-receipt";
+import { PaymentReceipt, type PaymentReceiptData, type ReceiptGarment, type ReceiptShelfItem } from "./payment-receipt";
 
 interface PaymentHistoryProps {
     transactions: any[];
     orderId: number;
     invoiceNumber?: number;
     invoiceRevision?: number;
+    orderType?: "WORK" | "SALES";
+    homeDelivery?: boolean;
     customerName?: string;
     customerPhone?: string;
     orderTotal: number;
     totalPaid: number;
+    discountValue?: number;
+    garments?: ReceiptGarment[];
+    shelfItems?: ReceiptShelfItem[];
 }
 
 export function PaymentHistory({
@@ -31,27 +36,46 @@ export function PaymentHistory({
     orderId,
     invoiceNumber,
     invoiceRevision,
+    orderType,
+    homeDelivery,
     customerName,
     customerPhone,
     orderTotal,
+    discountValue,
+    garments,
+    shelfItems,
 }: PaymentHistoryProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
-    const printReceiptRef = useRef<PaymentReceiptData | null>(null);
+    const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null);
     const [expandedTx, setExpandedTx] = useState<number | null>(null);
+    const [pendingPrint, setPendingPrint] = useState(false);
 
     const handlePrint = useReactToPrint({
         contentRef: receiptRef,
     });
 
-    const printTransaction = (tx: any) => {
+    // Print after the receipt data renders
+    useEffect(() => {
+        if (pendingPrint && receiptData) {
+            const timer = setTimeout(() => {
+                handlePrint();
+                setPendingPrint(false);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [pendingPrint, receiptData, handlePrint]);
+
+    const printTransaction = useCallback((tx: any) => {
         const paid = transactions
             .filter((t) => parseUtcTimestamp(t.created_at) <= parseUtcTimestamp(tx.created_at))
             .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
         const invoiceDisplay = invoiceNumber ? `${invoiceNumber}${invoiceRevision ? `-R${invoiceRevision}` : ""}` : undefined;
-        printReceiptRef.current = {
+        setReceiptData({
             orderId,
             invoiceDisplay,
+            orderType,
+            homeDelivery,
             customerName,
             customerPhone,
             transactionAmount: tx.amount,
@@ -61,12 +85,14 @@ export function PaymentHistory({
             orderTotal,
             totalPaid: paid,
             remainingBalance: orderTotal - paid,
+            discountValue,
             cashierName: tx.cashier?.name,
             timestamp: tx.created_at,
-        };
-
-        setTimeout(() => handlePrint(), 100);
-    };
+            garments,
+            shelfItems,
+        });
+        setPendingPrint(true);
+    }, [transactions, invoiceNumber, invoiceRevision, orderType, homeDelivery, orderId, customerName, customerPhone, orderTotal, discountValue, garments, shelfItems]);
 
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
@@ -214,8 +240,8 @@ export function PaymentHistory({
             {/* Hidden receipt for printing */}
             <div className="hidden">
                 <div ref={receiptRef}>
-                    {printReceiptRef.current && (
-                        <PaymentReceipt data={printReceiptRef.current} />
+                    {receiptData && (
+                        <PaymentReceipt data={receiptData} />
                     )}
                 </div>
             </div>

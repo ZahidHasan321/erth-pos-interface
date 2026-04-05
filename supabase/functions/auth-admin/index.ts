@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       .eq("auth_id", caller.id)
       .single();
 
-    if (!callerData || callerData.role !== "admin") {
+    if (!callerData || !["admin", "super_admin"].includes(callerData.role)) {
       return new Response(
         JSON.stringify({ error: "Admin access required" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }

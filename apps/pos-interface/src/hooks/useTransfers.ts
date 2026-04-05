@@ -7,6 +7,7 @@ import {
   reviseTransferRequest,
   dispatchTransfer,
   receiveTransfer,
+  deleteTransferRequest,
   type TransferFilters,
 } from "@/api/transfers";
 import { useAuth } from "@/context/auth";
@@ -95,6 +96,17 @@ export function useDispatchTransfer() {
       queryClient.invalidateQueries({ queryKey: ["fabrics"] });
       queryClient.invalidateQueries({ queryKey: ["shelf"] });
       queryClient.invalidateQueries({ queryKey: ["accessories"] });
+    },
+  });
+}
+
+export function useCancelTransfer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => deleteTransferRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
     },
   });
 }

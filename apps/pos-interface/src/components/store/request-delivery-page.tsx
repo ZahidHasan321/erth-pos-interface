@@ -1,7 +1,19 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Send, Plus, Minus, Search, Clock } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Loader2,
+  Send,
+  Plus,
+  Minus,
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Plane,
+} from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
@@ -17,16 +29,31 @@ import {
   TableRow,
 } from "@repo/ui/table";
 import { Badge } from "@repo/ui/badge";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@repo/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/ui/dialog";
 
+import { parseUtcTimestamp } from "@/lib/utils";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
-import { useCreateTransfer, useTransferRequests } from "@/hooks/useTransfers";
+import {
+  useCreateTransfer,
+  useTransferRequests,
+  useCancelTransfer,
+} from "@/hooks/useTransfers";
 import {
   ACCESSORY_CATEGORY_LABELS,
   UNIT_OF_MEASURE_LABELS,
 } from "./transfer-constants";
+import { TransferStatusBadge, ItemTypeBadge } from "./transfer-status-badge";
+import { TransferDetailDialog } from "./transfer-detail-dialog";
+import type { TransferRequestWithItems } from "@/api/transfers";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -57,27 +84,49 @@ export default function RequestDeliveryPage() {
     queryFn: getAccessories,
   });
 
-  // Pending requests for awareness
-  const { data: pendingRequests = [] } = useTransferRequests({
-    status: ["requested", "approved"],
+  // In-flight requests we've sent that haven't landed yet (still open somewhere in
+  // the pipeline). These power both the In-Flight panel at the top of the page and
+  // the per-row "already in transit" chips in each item table.
+  const { data: inFlightRequests = [] } = useTransferRequests({
+    status: ["requested", "approved", "dispatched"],
     direction: "workshop_to_shop",
   });
 
-  const pendingItemIds = useMemo(() => {
-    const ids = {
-      fabric: new Set<number>(),
-      shelf: new Set<number>(),
-      accessory: new Set<number>(),
+  const inFlightQtys = useMemo(() => {
+    const qtys = {
+      fabric: new Map<number, number>(),
+      shelf: new Map<number, number>(),
+      accessory: new Map<number, number>(),
     };
-    for (const req of pendingRequests) {
+    for (const req of inFlightRequests) {
       for (const item of req.items) {
-        if (item.fabric_id) ids.fabric.add(item.fabric_id);
-        if (item.shelf_id) ids.shelf.add(item.shelf_id);
-        if (item.accessory_id) ids.accessory.add(item.accessory_id);
+        // Once dispatched we know the real shipped quantity; before that the
+        // requested qty is the best guess of what's coming.
+        const qty = Number(
+          item.dispatched_qty ?? item.approved_qty ?? item.requested_qty ?? 0,
+        );
+        if (item.fabric_id) {
+          qtys.fabric.set(
+            item.fabric_id,
+            (qtys.fabric.get(item.fabric_id) ?? 0) + qty,
+          );
+        }
+        if (item.shelf_id) {
+          qtys.shelf.set(
+            item.shelf_id,
+            (qtys.shelf.get(item.shelf_id) ?? 0) + qty,
+          );
+        }
+        if (item.accessory_id) {
+          qtys.accessory.set(
+            item.accessory_id,
+            (qtys.accessory.get(item.accessory_id) ?? 0) + qty,
+          );
+        }
       }
     }
-    return ids;
-  }, [pendingRequests]);
+    return qtys;
+  }, [inFlightRequests]);
 
   const createTransfer = useCreateTransfer();
 
@@ -191,6 +240,8 @@ export default function RequestDeliveryPage() {
         </p>
       </div>
 
+      <InFlightPanel requests={inFlightRequests} />
+
       {/* Search bar */}
       <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -248,14 +299,14 @@ export default function RequestDeliveryPage() {
                   {filteredFabrics.map((f) => {
                     const shopStock = Number(f.shop_stock ?? 0);
                     const isLow = shopStock < LOW_STOCK_THRESHOLD;
-                    const hasPending = pendingItemIds.fabric.has(f.id);
+                    const inFlightQty = inFlightQtys.fabric.get(f.id) ?? 0;
                     return (
                       <TableRow
                         key={f.id}
                         className={isLow ? "bg-amber-50/60" : ""}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {f.color_hex && (
                               <span
                                 className="w-4 h-4 rounded-full border shrink-0"
@@ -271,16 +322,7 @@ export default function RequestDeliveryPage() {
                                 Low
                               </Badge>
                             )}
-                            {hasPending && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Pending request exists
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
+                            <InFlightChip qty={inFlightQty} suffix="m" />
                           </div>
                         </TableCell>
                         <TableCell
@@ -341,14 +383,14 @@ export default function RequestDeliveryPage() {
                   {filteredShelf.map((s) => {
                     const shopStock = Number(s.shop_stock ?? 0);
                     const isLow = shopStock < 3;
-                    const hasPending = pendingItemIds.shelf.has(s.id);
+                    const inFlightQty = inFlightQtys.shelf.get(s.id) ?? 0;
                     return (
                       <TableRow
                         key={s.id}
                         className={isLow ? "bg-amber-50/60" : ""}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span>{s.type}</span>
                             {isLow && (
                               <Badge
@@ -358,16 +400,7 @@ export default function RequestDeliveryPage() {
                                 Low
                               </Badge>
                             )}
-                            {hasPending && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Pending request exists
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
+                            <InFlightChip qty={inFlightQty} />
                           </div>
                         </TableCell>
                         <TableCell>{s.brand}</TableCell>
@@ -430,7 +463,7 @@ export default function RequestDeliveryPage() {
                   {filteredAccessories.map((a) => {
                     const shopStock = Number(a.shop_stock ?? 0);
                     const isLow = shopStock < 10;
-                    const hasPending = pendingItemIds.accessory.has(a.id);
+                    const inFlightQty = inFlightQtys.accessory.get(a.id) ?? 0;
                     const step =
                       a.unit_of_measure === "meters" ||
                       a.unit_of_measure === "kg"
@@ -442,7 +475,7 @@ export default function RequestDeliveryPage() {
                         className={isLow ? "bg-amber-50/60" : ""}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span>{a.name}</span>
                             {isLow && (
                               <Badge
@@ -452,16 +485,7 @@ export default function RequestDeliveryPage() {
                                 Low
                               </Badge>
                             )}
-                            {hasPending && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Pending request exists
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
+                            <InFlightChip qty={inFlightQty} />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -587,5 +611,237 @@ function QtyInput({
         <Plus className="h-3.5 w-3.5" />
       </Button>
     </div>
+  );
+}
+
+/**
+ * Small inline chip shown next to an item's name when there is already an
+ * outstanding request for the same item (requested / approved / dispatched but
+ * not yet received). Formats e.g. `5m in transit` or `12 in transit`.
+ */
+function InFlightChip({ qty, suffix }: { qty: number; suffix?: string }) {
+  if (qty <= 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 border border-sky-200">
+      {qty}
+      {suffix ?? ""} in transit
+    </span>
+  );
+}
+
+function summarizeItems(req: TransferRequestWithItems): string {
+  const parts: string[] = [];
+  const total = req.items.reduce(
+    (sum, it) => sum + Number(it.requested_qty ?? 0),
+    0,
+  );
+  parts.push(`${req.items.length} item${req.items.length === 1 ? "" : "s"}`);
+  if (total > 0) parts.push(`${total} total`);
+  return parts.join(" · ");
+}
+
+function daysSince(dateStr: string | Date | null | undefined) {
+  if (!dateStr) return 0;
+  const diff = Date.now() - parseUtcTimestamp(dateStr).getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Panel rendered above the item tables showing every open outbound request
+ * the shop has sent. Prevents re-requesting items that are already on their
+ * way back. For requests still in `requested` status the shop can cancel
+ * them directly (hard-delete); after that they're display-only with a
+ * "View details" link.
+ */
+function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirmCancel, setConfirmCancel] =
+    useState<TransferRequestWithItems | null>(null);
+  const [viewing, setViewing] = useState<TransferRequestWithItems | null>(null);
+  const cancelTransfer = useCancelTransfer();
+
+  if (requests.length === 0) return null;
+
+  const visible = expanded ? requests : requests.slice(0, 3);
+  const hidden = requests.length - visible.length;
+
+  const handleCancel = async () => {
+    if (!confirmCancel) return;
+    try {
+      await cancelTransfer.mutateAsync(confirmCancel.id);
+      toast.success(`Request #${confirmCancel.id} cancelled`);
+      setConfirmCancel(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to cancel request");
+    }
+  };
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="relative overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-sky-50/30 shadow-sm"
+      >
+        {/* decorative top stripe */}
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent" />
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <motion.div
+                animate={{ x: [0, 3, 0] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700 ring-1 ring-sky-200"
+              >
+                <Plane className="h-4 w-4 -rotate-12" />
+              </motion.div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-sky-950">
+                    In-flight requests
+                  </span>
+                  <span className="text-[11px] text-sky-800 bg-sky-100 rounded-full px-2 py-0.5 font-bold tabular-nums ring-1 ring-sky-200">
+                    {requests.length}
+                  </span>
+                </div>
+                <p className="text-[11px] text-sky-800/70 mt-0.5">
+                  Already on the way — check before requesting again.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <motion.div layout className="space-y-2">
+            <AnimatePresence initial={false}>
+              {visible.map((req, i) => {
+                const days = daysSince(req.created_at);
+                const canCancel = req.status === "requested";
+                return (
+                  <motion.div
+                    key={req.id}
+                    layout
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 12 }}
+                    transition={{
+                      duration: 0.22,
+                      delay: i * 0.04,
+                      ease: "easeOut",
+                    }}
+                    className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white/90 backdrop-blur border border-sky-100 hover:border-sky-300 hover:shadow-sm transition-all rounded-lg px-3 py-2.5"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-sky-700 font-semibold">
+                          #{req.id}
+                        </span>
+                        <TransferStatusBadge status={req.status} />
+                        <ItemTypeBadge itemType={req.item_type} />
+                        {days >= 2 && (
+                          <span
+                            className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${days >= 5 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                          >
+                            {days}d ago
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {summarizeItems(req)}
+                        {req.requested_by_user && (
+                          <> · By {req.requested_by_user.name}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => setViewing(req)}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" />
+                        Details
+                      </Button>
+                      {canCancel && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setConfirmCancel(req)}
+                        >
+                          <X className="h-3.5 w-3.5 mr-1" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+
+          {requests.length > 3 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-full text-xs text-sky-700 hover:bg-sky-100"
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                  Show {hidden} more
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </motion.div>
+
+      <TransferDetailDialog
+        transfer={viewing}
+        onClose={() => setViewing(null)}
+      />
+
+      <Dialog
+        open={!!confirmCancel}
+        onOpenChange={(open) => !open && setConfirmCancel(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancel request #{confirmCancel?.id}?</DialogTitle>
+            <DialogDescription>
+              This removes the request permanently. No approver will see it.
+              You can create a new request afterwards if you change your mind.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmCancel(null)}
+              disabled={cancelTransfer.isPending}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={cancelTransfer.isPending}
+            >
+              {cancelTransfer.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              )}
+              Cancel request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

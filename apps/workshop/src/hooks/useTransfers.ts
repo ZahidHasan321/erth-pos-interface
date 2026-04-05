@@ -7,6 +7,7 @@ import {
   reviseTransferRequest,
   dispatchTransfer,
   receiveTransfer,
+  deleteTransferRequest,
   type TransferFilters,
 } from "@/api/transfers";
 import { useAuth } from "@/context/auth";
@@ -89,6 +90,15 @@ export function useDispatchTransfer() {
       qc.invalidateQueries({ queryKey: ["shelf"] });
       qc.invalidateQueries({ queryKey: ["accessories"] });
     },
+  });
+}
+
+export function useCancelTransfer() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => deleteTransferRequest(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
   });
 }
 

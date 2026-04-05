@@ -141,7 +141,6 @@ function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
             <TableHead>Garment</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Order</TableHead>
-            <TableHead>Stage</TableHead>
             <TableHead className="w-24">Express</TableHead>
             <TableHead>Delivery</TableHead>
           </TableRow>
@@ -158,16 +157,13 @@ function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
                   <GarmentTypeBadge type={g.garment_type ?? "final"} />
                 </TableCell>
                 <TableCell className="font-mono font-bold text-sm">
-                  {g.garment_id}
-                </TableCell>
-                <TableCell className="text-sm">{g.customer_name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{g.order_id}</TableCell>
-                <TableCell>
                   <div className="flex items-center gap-1">
-                    <StageBadge stage={g.piece_stage} />
+                    <span>{g.garment_id}</span>
                     <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
                   </div>
                 </TableCell>
+                <TableCell className="text-sm">{g.customer_name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{g.order_id}</TableCell>
                 <TableCell>
                   {g.express && <ExpressBadge />}
                 </TableCell>
@@ -330,6 +326,7 @@ function DispatchPage() {
                   key={g.id}
                   garment={g}
                   showPipeline={false}
+                  hideStage
                 />
               ))}
             </div>

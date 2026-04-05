@@ -21,6 +21,7 @@ import { Route as MainNotificationsRouteImport } from './routes/$main/notificati
 import { Route as MainCashierRouteImport } from './routes/$main/cashier'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
+import { Route as MainStoreTransferHistoryRouteImport } from './routes/$main/store/transfer-history'
 import { Route as MainStoreStockReportRouteImport } from './routes/$main/store/stock-report'
 import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/store/request-delivery'
 import { Route as MainStoreReceivingDeliveriesRouteImport } from './routes/$main/store/receiving-deliveries'
@@ -104,6 +105,12 @@ const MainAppointmentsIndexRoute = MainAppointmentsIndexRouteImport.update({
   path: '/appointments/',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainStoreTransferHistoryRoute =
+  MainStoreTransferHistoryRouteImport.update({
+    id: '/store/transfer-history',
+    path: '/store/transfer-history',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
 const MainStoreStockReportRoute = MainStoreStockReportRouteImport.update({
   id: '/store/stock-report',
   path: '/store/stock-report',
@@ -254,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -289,6 +297,7 @@ export interface FileRoutesByTo {
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/customers': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -326,6 +335,7 @@ export interface FileRoutesById {
   '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
+  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -364,6 +374,7 @@ export interface FileRouteTypes {
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/store/transfer-history'
     | '/$main/appointments/'
     | '/$main/customers/'
     | '/$main/orders/order-management/alterations'
@@ -399,6 +410,7 @@ export interface FileRouteTypes {
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/store/transfer-history'
     | '/$main/appointments'
     | '/$main/customers'
     | '/$main/orders/order-management/alterations'
@@ -435,6 +447,7 @@ export interface FileRouteTypes {
     | '/$main/store/receiving-deliveries'
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
+    | '/$main/store/transfer-history'
     | '/$main/appointments/'
     | '/$main/customers/'
     | '/$main/orders/order-management/alterations'
@@ -542,6 +555,13 @@ declare module '@tanstack/react-router' {
       path: '/appointments'
       fullPath: '/$main/appointments/'
       preLoaderRoute: typeof MainAppointmentsIndexRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/store/transfer-history': {
+      id: '/$main/store/transfer-history'
+      path: '/store/transfer-history'
+      fullPath: '/$main/store/transfer-history'
+      preLoaderRoute: typeof MainStoreTransferHistoryRouteImport
       parentRoute: typeof MainRouteRoute
     }
     '/$main/store/stock-report': {
@@ -718,6 +738,7 @@ interface MainRouteRouteChildren {
   MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
   MainStoreRequestDeliveryRoute: typeof MainStoreRequestDeliveryRoute
   MainStoreStockReportRoute: typeof MainStoreStockReportRoute
+  MainStoreTransferHistoryRoute: typeof MainStoreTransferHistoryRoute
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
   MainOrdersOrderManagementAlterationsRoute: typeof MainOrdersOrderManagementAlterationsRoute
@@ -749,6 +770,7 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,
   MainStoreRequestDeliveryRoute: MainStoreRequestDeliveryRoute,
   MainStoreStockReportRoute: MainStoreStockReportRoute,
+  MainStoreTransferHistoryRoute: MainStoreTransferHistoryRoute,
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,
   MainOrdersOrderManagementAlterationsRoute:

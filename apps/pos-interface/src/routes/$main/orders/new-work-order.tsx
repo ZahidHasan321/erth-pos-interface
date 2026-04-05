@@ -62,7 +62,9 @@ import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { useAuth } from "@/context/auth";
 import { format } from "date-fns";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Printer } from "lucide-react";
+import { useReactToPrint } from "react-to-print";
+import { FabricLabel } from "@/components/forms/fabric-selection-and-options/fabric-selection/fabric-print-component";
 import { getAppointmentById, updateAppointment } from "@/api/appointments";
 import { getCustomerById } from "@/api/customers";
 import type { AppointmentWithRelations } from "@/api/appointments";
@@ -170,6 +172,31 @@ function NewWorkOrder() {
     // Appointment context (when started from appointment detail)
     const [linkedAppointment, setLinkedAppointment] = React.useState<AppointmentWithRelations | null>(null);
     const appointmentLoadedRef = React.useRef<string | null>(null);
+
+    // Print labels ref
+    const printLabelsRef = React.useRef<HTMLDivElement>(null);
+    const handlePrintLabels = useReactToPrint({
+        contentRef: printLabelsRef,
+        documentTitle: `Labels-Order-${orderId || "draft"}`,
+        pageStyle: `
+      @page {
+        size: 5in 4in;
+        margin: 16px 0 0 0;
+      }
+      @media print {
+        html, body {
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .page-break {
+          page-break-after: always;
+          break-after: page;
+        }
+      }
+    `,
+    });
 
     // ============================================================================
     // FORMS SETUP
@@ -990,19 +1017,64 @@ function NewWorkOrder() {
                             {orderId && <span className="text-muted-foreground tabular-nums">#{orderId}</span>}
                             {fatoura && <span className="text-muted-foreground tabular-nums">· INV {fatoura}</span>}
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                resetWorkOrder();
-                                resetLocalState();
-                                navigate({ to: "/$main/orders/new-work-order", params: { main: user?.userType || "erth" }, search: {} });
-                            }}
-                            className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
-                        >
-                            + New Order
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {checkoutStatus === "confirmed" && fabricSelections.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => handlePrintLabels()}
+                                    className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
+                                >
+                                    <Printer className="h-4 w-4" />
+                                    Print Labels
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    resetWorkOrder();
+                                    resetLocalState();
+                                    navigate({ to: "/$main/orders/new-work-order", params: { main: user?.userType || "erth" }, search: {} });
+                                }}
+                                className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
+                            >
+                                + New Order
+                            </button>
+                        </div>
                     </div>
                 )}
+
+                {/* Hidden print labels container */}
+                <div style={{ display: "none" }}>
+                    <div ref={printLabelsRef}>
+                        {fabricSelections.map((garment, index) => {
+                            const fabricData = {
+                                orderId: orderId || "N/A",
+                                customerId: customerDemographics.id || "N/A",
+                                customerName: customerDemographics.nick_name || customerDemographics.name || "N/A",
+                                customerMobile: customerDemographics.phone || "N/A",
+                                garmentId: garment.garment_id || "N/A",
+                                fabricSource: garment.fabric_source || "",
+                                fabricId: garment.fabric_id ?? "",
+                                fabricLength: garment.fabric_length ?? 0,
+                                measurementId: garment.measurement_id || "N/A",
+                                garment_type: garment.garment_type ?? "final" as const,
+                                express: garment.express ?? false,
+                                soaking: garment.soaking ?? false,
+                                deliveryDate: garment.delivery_date ? new Date(garment.delivery_date) : null,
+                                notes: garment.notes || "",
+                                invoiceNumber: fatoura ? String(fatoura) : undefined,
+                            };
+                            return (
+                                <div
+                                    key={garment.garment_id || index}
+                                    className={index < fabricSelections.length - 1 ? "page-break" : ""}
+                                >
+                                    <FabricLabel fabricData={fabricData} />
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
                 {!isOrderClosed && (
                     <div className="w-full mt-0">
                         <ErrorBoundary fallback={<div>Search Customer crashed</div>}>

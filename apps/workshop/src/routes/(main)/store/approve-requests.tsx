@@ -76,9 +76,16 @@ function ApproveRequestsPage() {
     status: ["approved"],
     direction: "workshop_to_shop",
   });
+  // History tab is bounded to last 30 days; deeper lookups belong on the Transfer History page.
+  const historySince = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString();
+  }, []);
   const { data: historyRequests = [], isLoading: historyLoading } = useTransferRequests({
     status: ["rejected", "dispatched", "received", "partially_received"],
     direction: "workshop_to_shop",
+    startDate: historySince,
   });
 
   return (
@@ -121,6 +128,10 @@ function ApproveRequestsPage() {
           <ApprovedRequestsList requests={approvedRequests} isLoading={approvedLoading} search={search} />
         </TabsContent>
         <TabsContent value="history">
+          <p className="text-xs text-muted-foreground mb-2">
+            Showing last 30 days. For older records see{" "}
+            <a href="/store/transfer-history" className="underline font-medium">Transfer History</a>.
+          </p>
           <HistoryList requests={historyRequests} isLoading={historyLoading} search={search} />
         </TabsContent>
       </Tabs>
