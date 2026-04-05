@@ -4,6 +4,15 @@ import { History, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-reac
 
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
+import { DatePicker } from "@repo/ui/date-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 
 import { PageHeader, EmptyState as PageEmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
@@ -38,6 +47,19 @@ function defaultFromDate(): string {
 
 function defaultToDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function toDateStr(d: Date | null): string | undefined {
+  if (!d) return undefined;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDateStr(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
 }
 
 export const Route = createFileRoute("/(main)/store/transfer-history")({
@@ -217,82 +239,82 @@ function TransferHistoryPage() {
           {/* Direction */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Direction</label>
-            <div className="inline-flex rounded-md border overflow-hidden text-xs">
-              <button
-                onClick={() => update({ dir: undefined })}
-                className={`px-2.5 h-8 ${!search.dir ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => update({ dir: "shop_to_workshop" })}
-                className={`px-2.5 h-8 border-l ${search.dir === "shop_to_workshop" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-              >
-                Shop → Workshop
-              </button>
-              <button
-                onClick={() => update({ dir: "workshop_to_shop" })}
-                className={`px-2.5 h-8 border-l ${search.dir === "workshop_to_shop" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-              >
-                Workshop → Shop
-              </button>
-            </div>
+            <SlidingPillSwitcher
+              size="sm"
+              value={search.dir ?? "all"}
+              onChange={(v) =>
+                update({ dir: v === "all" ? undefined : (v as HistorySearch["dir"]) })
+              }
+              options={[
+                { value: "all", label: "All" },
+                { value: "shop_to_workshop", label: "Shop → Workshop" },
+                { value: "workshop_to_shop", label: "Workshop → Shop" },
+              ]}
+            />
           </div>
 
           {/* Item type */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Type</label>
-            <select
-              value={search.type ?? ""}
-              onChange={(e) => update({ type: (e.target.value || undefined) as HistorySearch["type"] })}
-              className="h-8 text-xs rounded-md border bg-background px-2"
+            <Select
+              value={search.type ?? "all"}
+              onValueChange={(v) =>
+                update({ type: v === "all" ? undefined : (v as HistorySearch["type"]) })
+              }
             >
-              <option value="">All types</option>
-              <option value="fabric">Fabric</option>
-              <option value="shelf">Shelf</option>
-              <option value="accessory">Accessory</option>
-            </select>
+              <SelectTrigger className="w-[140px] bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="fabric">Fabric</SelectItem>
+                <SelectItem value="shelf">Shelf</SelectItem>
+                <SelectItem value="accessory">Accessory</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Date range */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">From</label>
-            <Input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => update({ from: e.target.value || undefined })}
-              className="h-8 text-xs w-[140px]"
+            <DatePicker
+              value={parseDateStr(from)}
+              onChange={(d) => update({ from: toDateStr(d) })}
+              placeholder="From"
+              displayFormat="dd MMM yyyy"
+              className="w-[170px]"
+              calendarProps={{ disabled: { after: parseDateStr(to) } }}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">To</label>
-            <Input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(e) => update({ to: e.target.value || undefined })}
-              className="h-8 text-xs w-[140px]"
+            <DatePicker
+              value={parseDateStr(to)}
+              onChange={(d) => update({ to: toDateStr(d) })}
+              placeholder="To"
+              displayFormat="dd MMM yyyy"
+              className="w-[170px]"
+              calendarProps={{ disabled: { before: parseDateStr(from) } }}
             />
           </div>
 
           {/* Search */}
-          <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Search</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search.q ?? ""}
                 onChange={(e) => update({ q: e.target.value || undefined })}
                 placeholder="ID, item, or user…"
-                className="h-8 text-xs pl-8"
+                className="pl-9"
               />
             </div>
           </div>
 
           {filtersActive && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
-              <X className="h-3.5 w-3.5 mr-1" /> Clear
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+              <X className="h-4 w-4 mr-1" /> Clear
             </Button>
           )}
         </div>

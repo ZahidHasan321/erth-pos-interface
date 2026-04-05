@@ -12,7 +12,7 @@ async function main() {
       brand: orders.brand,
     })
     .from(orders)
-    .where(eq(orders.id, 19));
+    .where(eq(orders.id, 44));
   console.log("=== ORDER ===");
   for (const o of orderRows) console.log(JSON.stringify(o, null, 2));
 
@@ -31,7 +31,7 @@ async function main() {
       assigned_date: garments.assigned_date,
     })
     .from(garments)
-    .where(eq(garments.order_id, 19));
+    .where(eq(garments.order_id, 44));
 
   for (const g of rows) {
     console.log(JSON.stringify(g, null, 2));

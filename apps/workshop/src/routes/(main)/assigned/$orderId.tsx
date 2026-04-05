@@ -13,6 +13,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { getGarmentEditability } from "@/lib/editability";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   ChevronDown,
   Clock,
@@ -618,6 +619,15 @@ function GarmentPlanCard({
               <Lock className="w-3 h-3" />
             </span>
           ) : null}
+          <Link
+            to="/assigned/garment/$garmentId"
+            params={{ garmentId: garment.id }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-xs font-semibold text-primary hover:bg-muted/50 transition-colors whitespace-nowrap"
+            title="Open garment details"
+          >
+            Details
+            <ArrowRight className="w-3 h-3" />
+          </Link>
         </div>
       </div>
 

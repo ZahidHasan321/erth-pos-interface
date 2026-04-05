@@ -12,7 +12,7 @@ import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
 
 // Convert decimal to mixed fraction parts
 function decimalToFractionParts(decimal: number): { whole: number; numerator: number; denominator: number; isNegative: boolean } | null {
-  if (decimal === 0 || isNaN(decimal)) return null;
+  if (isNaN(decimal)) return null;
 
   const isNegative = decimal < 0;
   const absDecimal = Math.abs(decimal);
@@ -21,7 +21,8 @@ function decimalToFractionParts(decimal: number): { whole: number; numerator: nu
   const fractionalPart = absDecimal - whole;
 
   if (fractionalPart < 0.001) {
-    return null; // whole number, no fraction to show
+    // Whole number — return with zero fraction so the caller can still render it
+    return { whole, numerator: 0, denominator: 1, isNegative };
   }
 
   const gcd = (a: number, b: number): number =>
@@ -44,15 +45,19 @@ function StackedFraction({ value }: { value: number }) {
   const parts = decimalToFractionParts(value);
   if (!parts) return null;
 
+  const hasFraction = parts.numerator > 0;
+
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-lg font-semibold text-muted-foreground tabular-nums">
       {parts.isNegative && <span>-</span>}
       {parts.whole > 0 && <span>{parts.whole}</span>}
-      <span className="inline-flex flex-col items-center leading-none">
-        <span className="text-[10px]">{parts.numerator}</span>
-        <span className="w-full h-px bg-muted-foreground/60" />
-        <span className="text-[10px]">{parts.denominator}</span>
-      </span>
+      {hasFraction && (
+        <span className="inline-flex flex-col items-center leading-none">
+          <span className="text-sm">{parts.numerator}</span>
+          <span className="w-full h-px bg-muted-foreground" />
+          <span className="text-sm">{parts.denominator}</span>
+        </span>
+      )}
     </span>
   );
 }
@@ -134,11 +139,11 @@ export const MeasurementInput = forwardRef<
                           onEnterPress?.();
                         }
                       }}
-                      className={`w-24 bg-white pr-7 focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${hasError ? "border-red-500 ring-1 ring-red-500" : "border-black"}`}
+                      className={`w-24 bg-white pr-7 text-foreground font-semibold focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${hasError ? "border-red-500 ring-1 ring-red-500" : "border-black"}`}
                       disabled={isDisabled}
                       placeholder="xx"
                     />
-                    <span className="absolute right-2 text-gray-500 pointer-events-none text-xs">
+                    <span className="absolute right-2 text-foreground/70 pointer-events-none text-xs">
                       {unit}
                     </span>
                   </div>

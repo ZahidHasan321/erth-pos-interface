@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAssignedViewGarments } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrandBadge, StageBadge } from "@/components/shared/StageBadge";
+import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import { PageHeader, GarmentTypeBadgeCompact } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
@@ -25,6 +26,9 @@ import {
   CheckCircle2,
   LayoutDashboard,
   List,
+  X,
+  Store,
+  Truck,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -58,7 +62,7 @@ function getOrderStatusLabel(
   group: OrderGroup,
   brovas: WorkshopGarment[],
   finals: WorkshopGarment[],
-) {
+): { text: string; color: PillColor } {
   const workshopSide = (g: WorkshopGarment) =>
     g.location === "workshop" || g.location === "transit_to_workshop";
   const atShop = (g: WorkshopGarment) => g.location === "shop";
@@ -79,26 +83,26 @@ function getOrderStatusLabel(
     workshopGarments.every((g) => g.piece_stage === "waiting_for_acceptance");
 
   if (allAtShop)
-    return { text: "At shop", cls: "text-green-700" };
+    return { text: "At shop", color: "green" };
   if (allWorkshopReady)
-    return { text: "Ready for dispatch", cls: "text-emerald-700" };
+    return { text: "Ready for dispatch", color: "emerald" };
   if (inTransitToShop.length > 0 && (workshopGarments.length === 0 || onlyParkedAtWorkshop))
-    return { text: "In transit to shop", cls: "text-sky-700" };
+    return { text: "In transit to shop", color: "sky" };
   if (inTransitToShopBrovas.length > 0 && finalsActiveAtWorkshop.length === 0)
-    return { text: "Brovas in transit", cls: "text-sky-700" };
+    return { text: "Brovas in transit", color: "sky" };
   if (brovasAllAtShop && finalsActiveAtWorkshop.length === 0) {
     const anyAccepted = brovas.some((g) => g.acceptance_status === true);
     if (finalsParked.length > 0 && anyAccepted)
-      return { text: "Awaiting finals release", cls: "text-violet-700" };
+      return { text: "Awaiting finals release", color: "violet" };
     if (finalsParked.length > 0)
-      return { text: "Awaiting brova trial", cls: "text-teal-700" };
-    return { text: "At shop", cls: "text-green-700" };
+      return { text: "Awaiting brova trial", color: "teal" };
+    return { text: "At shop", color: "green" };
   }
   if (finalsActiveAtWorkshop.length > 0)
-    return { text: "Finals in production", cls: "text-blue-700" };
+    return { text: "Finals in production", color: "blue" };
   if (brovasAtWorkshop.length > 0)
-    return { text: "Brovas in production", cls: "text-purple-700" };
-  return { text: "In production", cls: "text-zinc-600" };
+    return { text: "Brovas in production", color: "purple" };
+  return { text: "In production", color: "zinc" };
 }
 
 function getWorkerName(garment: WorkshopGarment): string | null {
@@ -168,6 +172,35 @@ function sortByUrgency(orders: OrderGroup[]) {
   });
 }
 
+// ── Garment Location Pill ───────────────────────────────────
+
+/**
+ * Resolves the garment's display location. Returns null when the garment is
+ * actively in a workshop production stage — in that case the StageBadge already
+ * communicates what's happening, so location would be redundant.
+ */
+function getGarmentLocationDisplay(garment: WorkshopGarment): {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: PillColor;
+} | null {
+  const loc = garment.location;
+  const stage = garment.piece_stage;
+  const activeWorkshopStages = new Set([
+    "soaking", "cutting", "post_cutting", "sewing",
+    "finishing", "ironing", "quality_check", "ready_for_dispatch",
+  ]);
+  if (loc === "workshop" && stage && activeWorkshopStages.has(stage)) return null;
+
+  const config: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: PillColor }> = {
+    shop: { label: "At shop", icon: Store, color: "green" },
+    transit_to_shop: { label: "In transit to shop", icon: Truck, color: "sky" },
+    transit_to_workshop: { label: "In transit to workshop", icon: Truck, color: "amber" },
+    workshop: { label: "At workshop", icon: Package, color: "zinc" },
+  };
+  return loc ? config[loc] ?? null : null;
+}
+
 // ── Garment Mini Cards ──────────────────────────────────────
 
 function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
@@ -177,6 +210,7 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
         const tripNum = g.trip_number ?? 1;
         const isReturn = tripNum > 1;
         const worker = getWorkerName(g);
+        const locationDisplay = getGarmentLocationDisplay(g);
 
         return (
           <div
@@ -188,23 +222,31 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
             )}
           >
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <GarmentTypeBadgeCompact type={g.garment_type ?? "final"} />
-                <span className="font-mono font-medium text-xs text-muted-foreground">
+                <span className="font-mono font-medium text-xs text-muted-foreground truncate">
                   {g.garment_id ?? g.id.slice(0, 8)}
                 </span>
-                {g.express && <Zap className="w-3 h-3 text-red-500 fill-red-500" />}
-                {g.soaking && <Droplets className="w-3 h-3 text-sky-500" />}
+                {g.express && <Zap className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />}
+                {g.soaking && <Droplets className="w-3 h-3 text-sky-500 shrink-0" />}
                 {isReturn && (
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1 rounded">
+                  <StatusPill color="amber" className="shrink-0">
                     Trip {tripNum}
-                  </span>
+                  </StatusPill>
                 )}
               </div>
-              <StageBadge stage={g.piece_stage} className="text-[10px] py-0" />
+              <StageBadge stage={g.piece_stage} className="text-[10px] py-0 shrink-0" />
             </div>
 
             <div className="space-y-1">
+              {locationDisplay && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold">Location</span>
+                  <StatusPill color={locationDisplay.color} icon={locationDisplay.icon}>
+                    {locationDisplay.label}
+                  </StatusPill>
+                </div>
+              )}
               {worker && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground text-[10px] uppercase font-bold">Worker</span>
@@ -295,9 +337,7 @@ function AssignedOrderCard({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className={cn("text-xs font-semibold uppercase whitespace-nowrap", statusLabel.cls)}>
-              {statusLabel.text}
-            </span>
+            <StatusPill color={statusLabel.color}>{statusLabel.text}</StatusPill>
             <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 transition-transform", expanded && "rotate-180")} />
           </div>
         </div>
@@ -331,11 +371,18 @@ function AssignedOrderCard({
         </div>
       </div>
 
-      {expanded && (
-        <div className="px-3 pb-3 pt-2 border-t">
-          <GarmentMiniCards garments={group.garments} />
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className={cn("px-3 pb-3 pt-2", expanded && "border-t")}>
+            <GarmentMiniCards garments={group.garments} />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -352,17 +399,17 @@ function OrdersTable({
   onToggle: (id: number) => void;
 }) {
   return (
-    <Table>
+    <Table className="min-w-[850px]">
       <TableHeader>
-        <TableRow>
-          <TableHead className="w-8" />
-          <TableHead>Order</TableHead>
-          <TableHead>Customer</TableHead>
-          <TableHead>Brand</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Garments</TableHead>
-          <TableHead>Delivery</TableHead>
-          <TableHead className="w-8" />
+        <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+          <TableHead className="w-8 h-8 px-2" />
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Order</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Customer</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Brand</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Status</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Garments</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Delivery</TableHead>
+          <TableHead className="w-8 h-8 px-2" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -378,17 +425,17 @@ function OrdersTable({
             <Fragment key={group.order_id}>
               <TableRow
                 onClick={() => onToggle(group.order_id)}
+                aria-expanded={isExpanded}
                 className={cn(
-                  "cursor-pointer",
+                  "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
                   group.express && "bg-orange-50/30",
-                  urgency.days !== null && urgency.days < 0 && "border-l-2 border-l-red-500",
-                  isExpanded && "bg-muted/20 border-b-0",
+                  urgency.days !== null && urgency.days < 0 && "border-l-4 border-l-red-500",
                 )}
               >
-                <TableCell className="px-2">
+                <TableCell className="py-2.5 px-2.5">
                   <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
                 </TableCell>
-                <TableCell className="text-xs">
+                <TableCell className="py-2.5 px-2.5 text-xs">
                   <div className="flex items-center">
                     <span className="font-mono font-bold">#{group.order_id}</span>
                     <OrderIndicators group={group} />
@@ -397,23 +444,21 @@ function OrdersTable({
                     <span className="text-[10px] text-muted-foreground">INV-{group.invoice_number}</span>
                   )}
                 </TableCell>
-                <TableCell className="text-xs max-w-[160px] truncate">
+                <TableCell className="py-2.5 px-2.5 text-xs max-w-[160px] truncate">
                   {group.customer_name ?? "—"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="py-2.5 px-2.5">
                   <div className="flex items-center gap-1">
                     {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
                   </div>
                 </TableCell>
-                <TableCell>
-                  <span className={cn("text-xs font-semibold uppercase px-1.5 py-0.5 rounded whitespace-nowrap", statusLabel.cls)}>
-                    {statusLabel.text}
-                  </span>
+                <TableCell className="py-2.5 px-2.5">
+                  <StatusPill color={statusLabel.color}>{statusLabel.text}</StatusPill>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                <TableCell className="py-2.5 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
                   {garmentSummary(group.garments)}
                 </TableCell>
-                <TableCell className="text-xs whitespace-nowrap">
+                <TableCell className="py-2.5 px-2.5 text-xs whitespace-nowrap">
                   {group.delivery_date ? (
                     <span className={cn("font-semibold flex items-center gap-1", urgency.cls)}>
                       <Clock className="w-3 h-3" />
@@ -424,7 +469,7 @@ function OrdersTable({
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell className="px-2">
+                <TableCell className="py-2.5 px-2.5">
                   <Link
                     to="/assigned/$orderId"
                     params={{ orderId: String(group.order_id) }}
@@ -436,15 +481,28 @@ function OrdersTable({
                   </Link>
                 </TableCell>
               </TableRow>
-              {isExpanded && (
-                <TableRow key={`${group.order_id}-detail`}>
-                  <TableCell colSpan={8} className="bg-muted/10 p-0 border-b">
-                    <div className="p-3 pl-10">
-                      <GarmentMiniCards garments={group.garments} />
+              <TableRow key={`${group.order_id}-detail`} className="border-0 hover:bg-transparent">
+                <TableCell
+                  colSpan={8}
+                  className={cn(
+                    "p-0 transition-colors",
+                    isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "grid transition-[grid-template-rows] duration-300 ease-out",
+                      isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="p-3 pl-10">
+                        <GarmentMiniCards garments={group.garments} />
+                      </div>
                     </div>
-                  </TableCell>
-                </TableRow>
-              )}
+                  </div>
+                </TableCell>
+              </TableRow>
             </Fragment>
           );
         })}
@@ -464,33 +522,62 @@ function OverviewDashboard({
   counts: { overdue: number; dueSoon: number; active: number; ready: number; returns: number; total: number };
   onNavigate: (tab: string) => void;
 }) {
-  const cards = [
-    { key: "attention", label: "Overdue", count: counts.overdue, icon: AlertTriangle, color: "bg-red-50 border-red-200 text-red-700", iconColor: "text-red-500", hoverBg: "hover:bg-red-100/60" },
-    { key: "attention", label: "Due Soon", count: counts.dueSoon, icon: Clock, color: "bg-orange-50 border-orange-200 text-orange-700", iconColor: "text-orange-500", hoverBg: "hover:bg-orange-100/60" },
-    { key: "production", label: "In Production", count: counts.active, icon: Activity, color: "bg-blue-50 border-blue-200 text-blue-700", iconColor: "text-blue-500", hoverBg: "hover:bg-blue-100/60" },
-    { key: "ready", label: "Ready to Dispatch", count: counts.ready, icon: CheckCircle2, color: "bg-emerald-50 border-emerald-200 text-emerald-700", iconColor: "text-emerald-500", hoverBg: "hover:bg-emerald-100/60" },
-    { key: "attention", label: "Returns", count: counts.returns, icon: RotateCcw, color: "bg-amber-50 border-amber-200 text-amber-700", iconColor: "text-amber-500", hoverBg: "hover:bg-amber-100/60" },
-    { key: "all", label: "Total Orders", count: counts.total, icon: List, color: "bg-zinc-50 border-zinc-200 text-zinc-700", iconColor: "text-zinc-500", hoverBg: "hover:bg-zinc-100/60" },
+  // Unified card treatment — one surface, varied by accent icon badge.
+  // Tone (urgent / warning / ok / neutral) drives only the icon badge color.
+  const cards: {
+    key: string;
+    label: string;
+    count: number;
+    icon: React.ComponentType<{ className?: string }>;
+    tone: "urgent" | "warning" | "info" | "success" | "accent" | "neutral";
+  }[] = [
+    { key: "attention", label: "Overdue",           count: counts.overdue, icon: AlertTriangle, tone: "urgent" },
+    { key: "attention", label: "Due Soon",          count: counts.dueSoon, icon: Clock,         tone: "warning" },
+    { key: "production",label: "In Production",     count: counts.active,  icon: Activity,      tone: "info" },
+    { key: "ready",     label: "Ready to Dispatch", count: counts.ready,   icon: CheckCircle2,  tone: "success" },
+    { key: "attention", label: "Returns",           count: counts.returns, icon: RotateCcw,     tone: "accent" },
+    { key: "all",       label: "Total Orders",      count: counts.total,   icon: List,          tone: "neutral" },
   ];
 
+  const toneStyles: Record<typeof cards[number]["tone"], { iconBg: string; iconColor: string; accentBar: string }> = {
+    urgent:  { iconBg: "bg-red-50",     iconColor: "text-red-600",     accentBar: "bg-red-500" },
+    warning: { iconBg: "bg-orange-50",  iconColor: "text-orange-600",  accentBar: "bg-orange-500" },
+    info:    { iconBg: "bg-blue-50",    iconColor: "text-blue-600",    accentBar: "bg-blue-500" },
+    success: { iconBg: "bg-emerald-50", iconColor: "text-emerald-600", accentBar: "bg-emerald-500" },
+    accent:  { iconBg: "bg-amber-50",   iconColor: "text-amber-600",   accentBar: "bg-amber-500" },
+    neutral: { iconBg: "bg-muted",      iconColor: "text-muted-foreground", accentBar: "bg-border" },
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
+          const s = toneStyles[card.tone];
+          const isZero = card.count === 0;
           return (
             <button
               key={card.label}
               onClick={() => onNavigate(card.key)}
               className={cn(
-                "flex flex-col items-center gap-2 p-4 rounded-xl border cursor-pointer transition-all pointer-coarse:active:scale-95",
-                card.color,
-                card.hoverBg,
+                "group relative flex flex-col items-start gap-3 p-4 rounded-xl border border-border bg-card text-left cursor-pointer transition-all",
+                "hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5",
+                "pointer-coarse:active:scale-[0.98] pointer-coarse:active:translate-y-0",
+                isZero && "opacity-60",
               )}
             >
-              <Icon className={cn("w-6 h-6", card.iconColor)} />
-              <span className="text-2xl font-black tabular-nums">{card.count}</span>
-              <span className="text-xs font-semibold uppercase tracking-wider">{card.label}</span>
+              <div className={cn("inline-flex items-center justify-center w-9 h-9 rounded-lg", s.iconBg)}>
+                <Icon className={cn("w-4.5 h-4.5", s.iconColor)} />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-3xl font-black tabular-nums leading-none text-foreground">
+                  {card.count}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {card.label}
+                </span>
+              </div>
+              <span className={cn("absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full transition-opacity opacity-0 group-hover:opacity-100", s.accentBar)} />
             </button>
           );
         })}
@@ -498,12 +585,28 @@ function OverviewDashboard({
 
       {/* Quick list of overdue orders if any */}
       {counts.overdue > 0 && (
-        <div className="bg-red-50/50 border border-red-200 rounded-xl p-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-red-700 flex items-center gap-1.5 mb-2">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            Overdue Orders
-          </h3>
-          <div className="space-y-1.5">
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/70">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-50">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Overdue Orders
+              </h3>
+              <StatusPill color="red" className="ml-0.5">{counts.overdue}</StatusPill>
+            </div>
+            {counts.overdue > 5 && (
+              <button
+                onClick={() => onNavigate("attention")}
+                className="text-xs font-semibold text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
+              >
+                View all
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <div className="divide-y divide-border/60">
             {orderGroups
               .filter(isOverdue)
               .slice(0, 5)
@@ -514,27 +617,19 @@ function OverviewDashboard({
                     key={og.order_id}
                     to="/assigned/$orderId"
                     params={{ orderId: String(og.order_id) }}
-                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-white rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <span className="font-mono font-bold text-sm">#{og.order_id}</span>
-                      <span className="text-sm truncate">{og.customer_name}</span>
-                      {og.express && <Zap className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />}
+                      {og.express && <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />}
+                      <span className="text-sm text-foreground truncate">{og.customer_name}</span>
                     </div>
-                    <span className={cn("text-xs font-bold shrink-0", urgency.cls)}>
+                    <span className={cn("text-xs font-bold shrink-0 tabular-nums", urgency.cls)}>
                       {getDaysLabel(urgency.days)}
                     </span>
                   </Link>
                 );
               })}
-            {counts.overdue > 5 && (
-              <button
-                onClick={() => onNavigate("attention")}
-                className="text-xs font-semibold text-red-600 hover:underline cursor-pointer pl-2"
-              >
-                View all {counts.overdue} overdue orders
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -548,14 +643,15 @@ function FilterChips({
   filters,
   active,
   onToggle,
+  onReset,
 }: {
   filters: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; count: number }[];
   active: Set<string>;
   onToggle: (key: string) => void;
+  onReset: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-xs text-muted-foreground font-medium mr-0.5">Filter:</span>
+    <div className="flex items-center gap-2 flex-wrap">
       {filters.map((f) => {
         const Icon = f.icon;
         const isActive = active.has(f.key);
@@ -564,20 +660,37 @@ function FilterChips({
             key={f.key}
             onClick={() => onToggle(f.key)}
             className={cn(
-              "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md border cursor-pointer transition-colors",
+              "group inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border cursor-pointer transition-all",
               isActive
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-muted-foreground border-border hover:bg-muted/50",
+                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-foreground",
             )}
           >
-            <Icon className="w-3 h-3" />
+            <Icon className="w-3.5 h-3.5" />
             {f.label}
-            <Badge variant="secondary" className={cn("ml-0.5 text-[10px] px-1 py-0", isActive && "bg-primary-foreground/20 text-primary-foreground")}>
+            <span
+              className={cn(
+                "ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums",
+                isActive
+                  ? "bg-primary-foreground/20 text-primary-foreground"
+                  : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
+              )}
+            >
               {f.count}
-            </Badge>
+            </span>
           </button>
         );
       })}
+      {active.size > 0 && (
+        <button
+          onClick={onReset}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          title="Clear filters"
+        >
+          <X className="w-3.5 h-3.5" />
+          Clear
+        </button>
+      )}
     </div>
   );
 }
@@ -600,9 +713,12 @@ function OrderList({
 
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
-        <ClipboardList className="w-8 h-8 text-muted-foreground/20 mb-3" />
-        <p className="font-semibold text-muted-foreground">{emptyText ?? "No orders match this filter"}</p>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-muted/60 mb-4">
+          <ClipboardList className="w-6 h-6 text-muted-foreground/60" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">{emptyText ?? "No orders match this filter"}</p>
+        <p className="text-xs text-muted-foreground mt-1">Try clearing filters or switching tabs</p>
       </div>
     );
   }
@@ -621,7 +737,7 @@ function OrderList({
           ))}
         </div>
       ) : (
-        <div className="border rounded-xl overflow-hidden">
+        <div className="rounded-xl border border-border shadow-sm overflow-x-auto bg-card py-0 gap-0">
           <OrdersTable
             orders={pagination.paged}
             expandedId={expandedOrderId}
@@ -677,9 +793,6 @@ function AssignedPage() {
   const activeOrders = orderGroups.filter(isActive);
   const readyOrders = orderGroups.filter(isReadyForDispatch);
   const returningOrders = orderGroups.filter(hasReturns);
-  const expressOrders = orderGroups.filter(isExpressOrder);
-  const homeDeliveryOrders = orderGroups.filter(isHomeDelivery);
-  const soakingOrders = orderGroups.filter(hasSoaking);
 
   const toggleChip = useCallback((key: string) => {
     const next = new Set(chipFilters);
@@ -689,11 +802,9 @@ function AssignedPage() {
     setTab(primaryTab, filterStr);
   }, [chipFilters, primaryTab, setTab]);
 
-  const chipOptions = [
-    { key: "express", label: "Express", icon: Zap, count: expressOrders.length },
-    { key: "delivery", label: "Delivery", icon: Home, count: homeDeliveryOrders.length },
-    { key: "soaking", label: "Soaking", icon: Droplets, count: soakingOrders.length },
-  ];
+  const resetChips = useCallback(() => {
+    setTab(primaryTab);
+  }, [primaryTab, setTab]);
 
   // Get base orders for current primary tab
   const baseOrders = (() => {
@@ -711,6 +822,13 @@ function AssignedPage() {
       default: return orderGroups;
     }
   })();
+
+  // Chip counts reflect the current tab's base orders, not all orders
+  const chipOptions = [
+    { key: "express", label: "Express", icon: Zap, count: baseOrders.filter(isExpressOrder).length },
+    { key: "delivery", label: "Delivery", icon: Home, count: baseOrders.filter(isHomeDelivery).length },
+    { key: "soaking", label: "Soaking", icon: Droplets, count: baseOrders.filter(hasSoaking).length },
+  ];
 
   // Apply chip filters
   const filteredOrders = chipFilters.size === 0
@@ -800,7 +918,7 @@ function AssignedPage() {
             {["production", "ready", "attention", "all"].map((tabKey) => (
               <TabsContent key={tabKey} value={tabKey}>
                 <div className="space-y-3">
-                  <FilterChips filters={chipOptions} active={chipFilters} onToggle={toggleChip} />
+                  <FilterChips filters={chipOptions} active={chipFilters} onToggle={toggleChip} onReset={resetChips} />
                   <OrderList
                     orders={filteredOrders}
                     isMobile={isMobile}

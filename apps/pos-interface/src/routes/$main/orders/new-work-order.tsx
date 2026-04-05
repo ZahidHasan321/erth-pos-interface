@@ -62,7 +62,7 @@ import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { useAuth } from "@/context/auth";
 import { format } from "date-fns";
-import { CalendarClock, Printer } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { FabricLabel } from "@/components/forms/fabric-selection-and-options/fabric-selection/fabric-print-component";
 import { getAppointmentById, updateAppointment } from "@/api/appointments";
@@ -1018,16 +1018,6 @@ function NewWorkOrder() {
                             {fatoura && <span className="text-muted-foreground tabular-nums">· INV {fatoura}</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                            {checkoutStatus === "confirmed" && fabricSelections.length > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={() => handlePrintLabels()}
-                                    className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
-                                >
-                                    <Printer className="h-4 w-4" />
-                                    Print Labels
-                                </button>
-                            )}
                             <button
                                 type="button"
                                 onClick={() => {
@@ -1247,6 +1237,7 @@ function NewWorkOrder() {
                             fabricSelections={fabricSelections}
                             deliveryDate={order.delivery_date}
                             orderType="WORK"
+                            onPrintLabels={() => handlePrintLabels()}
                             cashierHandlesPayment={cashierHandlesPayment}
                             onConfirm={(data) => {
                                 if (cashierHandlesPayment) {

@@ -5,7 +5,7 @@ import { PageHeader, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Input } from "@repo/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Tag, Pencil, Check, X, ChevronDown, Shirt, Truck, Zap } from "lucide-react";
+import { Tag, Pencil, Check, X, ChevronDown, Shirt, Truck, Zap, Droplets } from "lucide-react";
 import type { Brand, Price, Style } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/pricing")({
@@ -23,10 +23,11 @@ const PRICE_META: Record<string, {
   bg: string;           // tinted background
   border: string;
 }> = {
-  STITCHING_ADULT:   { label: "Adult Stitching",   unit: "per garment",        icon: Shirt, color: "text-blue-700",    bg: "bg-blue-500/10",    border: "border-blue-200" },
-  STITCHING_CHILD:   { label: "Child Stitching",   unit: "per garment",        icon: Shirt, color: "text-cyan-700",    bg: "bg-cyan-500/10",    border: "border-cyan-200" },
-  HOME_DELIVERY:     { label: "Home Delivery",      unit: "per order",          icon: Truck, color: "text-emerald-700", bg: "bg-emerald-500/10", border: "border-emerald-200" },
-  EXPRESS_SURCHARGE:  { label: "Express Surcharge", unit: "per express garment", icon: Zap,   color: "text-amber-700",  bg: "bg-amber-500/10",   border: "border-amber-200" },
+  STITCHING_ADULT:   { label: "Adult Stitching",   unit: "per garment",         icon: Shirt,    color: "text-blue-700",    bg: "bg-blue-500/10",    border: "border-blue-200" },
+  STITCHING_CHILD:   { label: "Child Stitching",   unit: "per garment",         icon: Shirt,    color: "text-cyan-700",    bg: "bg-cyan-500/10",    border: "border-cyan-200" },
+  HOME_DELIVERY:     { label: "Home Delivery",     unit: "per order",           icon: Truck,    color: "text-emerald-700", bg: "bg-emerald-500/10", border: "border-emerald-200" },
+  EXPRESS_SURCHARGE: { label: "Express Surcharge", unit: "per express garment", icon: Zap,      color: "text-amber-700",   bg: "bg-amber-500/10",   border: "border-amber-200" },
+  SOAKING_CHARGE:    { label: "Soaking Charge",    unit: "per soaking garment", icon: Droplets, color: "text-sky-700",     bg: "bg-sky-500/10",     border: "border-sky-200" },
 };
 
 const STYLE_TYPES = [
@@ -321,6 +322,11 @@ function PricingPage() {
     [styles],
   );
 
+  const knownPriceCount = useMemo(
+    () => (prices ?? []).filter((p) => PRICE_META[p.key]).length,
+    [prices],
+  );
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <PageHeader
@@ -329,7 +335,7 @@ function PricingPage() {
         subtitle={
           isLoading
             ? "Loading..."
-            : `${prices?.length ?? 0} system charges · ${pricedStyleCount} priced style options`
+            : `${knownPriceCount} system charges · ${pricedStyleCount} priced style options`
         }
       />
 

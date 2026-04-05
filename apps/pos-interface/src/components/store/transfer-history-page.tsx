@@ -6,13 +6,21 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
 } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
+import { DatePicker } from "@repo/ui/date-picker";
+import { Pagination, usePagination } from "@repo/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import {
   Table,
   TableBody,
@@ -63,6 +71,19 @@ function defaultFromDate(): string {
 
 function defaultToDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function toDateStr(d: Date | null): string | undefined {
+  if (!d) return undefined;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDateStr(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
 }
 
 function getItemName(item: TransferRequestWithItems["items"][0]): string {
@@ -176,13 +197,7 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
     return arr;
   }, [filtered, sort]);
 
-  // Pagination
-  const PAGE_SIZE = 25;
-  const [page, setPage] = useState(1);
-  const totalItems = sorted.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const paged = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const { page, setPage, totalPages, paged, totalItems, pageSize } = usePagination(sorted, 25);
 
   const [selected, setSelected] = useState<TransferRequestWithItems | null>(null);
 
@@ -230,9 +245,6 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
     return <ArrowUpDown className="inline h-3 w-3 ml-1 opacity-40" />;
   };
 
-  const start = (safePage - 1) * PAGE_SIZE + 1;
-  const end = Math.min(safePage * PAGE_SIZE, totalItems);
-
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto pb-10">
       {/* Header */}
@@ -255,104 +267,87 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               Direction
             </label>
-            <div className="inline-flex rounded-md border overflow-hidden text-xs">
-              <button
-                onClick={() => update({ dir: undefined })}
-                className={cn(
-                  "px-2.5 h-8",
-                  !search.dir
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted",
-                )}
-              >
-                All
-              </button>
-              <button
-                onClick={() => update({ dir: "workshop_to_shop" })}
-                className={cn(
-                  "px-2.5 h-8 border-l",
-                  search.dir === "workshop_to_shop"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted",
-                )}
-              >
-                Workshop → Shop
-              </button>
-              <button
-                onClick={() => update({ dir: "shop_to_workshop" })}
-                className={cn(
-                  "px-2.5 h-8 border-l",
-                  search.dir === "shop_to_workshop"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted",
-                )}
-              >
-                Shop → Workshop
-              </button>
-            </div>
+            <SlidingPillSwitcher
+              size="sm"
+              value={search.dir ?? "all"}
+              onChange={(v) =>
+                update({ dir: v === "all" ? undefined : (v as HistorySearch["dir"]) })
+              }
+              options={[
+                { value: "all", label: "All" },
+                { value: "workshop_to_shop", label: "Workshop → Shop" },
+                { value: "shop_to_workshop", label: "Shop → Workshop" },
+              ]}
+            />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               Type
             </label>
-            <select
-              value={search.type ?? ""}
-              onChange={(e) =>
-                update({ type: (e.target.value || undefined) as HistorySearch["type"] })
+            <Select
+              value={search.type ?? "all"}
+              onValueChange={(v) =>
+                update({ type: v === "all" ? undefined : (v as HistorySearch["type"]) })
               }
-              className="h-8 text-xs rounded-md border bg-background px-2"
             >
-              <option value="">All types</option>
-              <option value="fabric">Fabric</option>
-              <option value="shelf">Shelf</option>
-              <option value="accessory">Accessory</option>
-            </select>
+              <SelectTrigger className="w-[140px] bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="fabric">Fabric</SelectItem>
+                <SelectItem value="shelf">Shelf</SelectItem>
+                <SelectItem value="accessory">Accessory</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               From
             </label>
-            <Input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => update({ from: e.target.value || undefined })}
-              className="h-8 text-xs w-[140px]"
+            <DatePicker
+              value={parseDateStr(from)}
+              onChange={(d) => update({ from: toDateStr(d) })}
+              placeholder="From"
+              displayFormat="dd MMM yyyy"
+              className="w-[170px]"
+              calendarProps={{ disabled: { after: parseDateStr(to) } }}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               To
             </label>
-            <Input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(e) => update({ to: e.target.value || undefined })}
-              className="h-8 text-xs w-[140px]"
+            <DatePicker
+              value={parseDateStr(to)}
+              onChange={(d) => update({ to: toDateStr(d) })}
+              placeholder="To"
+              displayFormat="dd MMM yyyy"
+              className="w-[170px]"
+              calendarProps={{ disabled: { before: parseDateStr(from) } }}
             />
           </div>
 
-          <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               Search
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search.q ?? ""}
                 onChange={(e) => update({ q: e.target.value || undefined })}
                 placeholder="ID, item, or user…"
-                className="h-8 text-xs pl-8"
+                className="pl-9"
               />
             </div>
           </div>
 
           {filtersActive && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
-              <X className="h-3.5 w-3.5 mr-1" /> Clear
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+              <X className="h-4 w-4 mr-1" /> Clear
             </Button>
           )}
         </div>
@@ -478,37 +473,16 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
             </Table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
-              <p className="text-xs text-muted-foreground">
-                {start}–{end} of {totalItems}
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPage(safePage - 1)}
-                  disabled={safePage <= 1}
-                  className="h-8 w-8 p-0"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-xs px-2 tabular-nums">
-                  {safePage} / {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
-                  className="h-8 w-8 p-0"
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            totalItems={totalItems}
+            pageSize={pageSize}
+          />
+          {/* Fallback summary when only one page */}
+          {totalPages <= 1 && (
+            <p className="pt-4 text-xs text-muted-foreground">{totalItems} results</p>
           )}
         </>
       )}

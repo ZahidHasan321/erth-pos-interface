@@ -7,6 +7,7 @@ import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { BrandBadge } from "@/components/shared/StageBadge";
+import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import {
   PageHeader, EmptyState, LoadingSkeleton,
 } from "@/components/shared/PageShell";
@@ -35,15 +36,15 @@ function toIsoDate(year: number, month: number, day: number): string {
 
 // ── Garment card for brova returns / alterations ─────────────────────────────
 
-function feedbackInfo(g: WorkshopGarment) {
+function feedbackInfo(g: WorkshopGarment): { label: string; color: PillColor } | null {
   if (g.acceptance_status && g.feedback_status === "needs_repair")
-    return { label: "Fix Needed", cls: "text-amber-700 bg-amber-50 ring-amber-300/40" };
+    return { label: "Fix Needed", color: "amber" };
   if (g.feedback_status === "needs_repair")
-    return { label: "Repair", cls: "text-orange-700 bg-orange-50 ring-orange-300/40" };
+    return { label: "Repair", color: "orange" };
   if (g.feedback_status === "needs_redo")
-    return { label: "Redo", cls: "text-red-700 bg-red-50 ring-red-300/40" };
+    return { label: "Redo", color: "red" };
   if (g.feedback_status === "accepted" || g.acceptance_status)
-    return { label: "Accepted", cls: "text-emerald-700 bg-emerald-50 ring-emerald-300/40" };
+    return { label: "Accepted", color: "emerald" };
   return null;
 }
 
@@ -88,12 +89,9 @@ function SchedulerGarmentRow({
           onClick={(e) => e.stopPropagation()}
           className="w-4 h-4 accent-primary cursor-pointer shrink-0"
         />
-        <span className={cn(
-          "font-bold uppercase text-xs px-1.5 py-0.5 rounded shrink-0",
-          g.garment_type === "brova" ? "text-purple-700 bg-purple-100" : "text-blue-700 bg-blue-100",
-        )}>
+        <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
           {g.garment_type === "brova" ? "B" : "F"}
-        </span>
+        </StatusPill>
         <span className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
         <span className="text-sm text-muted-foreground truncate min-w-0">{g.customer_name ?? "—"}</span>
         <div className="ml-auto shrink-0">
@@ -104,25 +102,13 @@ function SchedulerGarmentRow({
       {/* Row 2 — Context: alteration # · feedback · fabric · delivery */}
       <div className="flex items-center gap-1.5 mt-1.5 ml-6 flex-wrap">
         {isAlt && altNum !== null && (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 ring-1 ring-orange-300/40">
-            Alt #{altNum}
-          </span>
+          <StatusPill color="orange">Alt #{altNum}</StatusPill>
         )}
         {!isAlt && (g.trip_number ?? 1) > 1 && (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 ring-1 ring-purple-300/40">
-            Return #{(g.trip_number ?? 1) - 1}
-          </span>
+          <StatusPill color="purple">Return #{(g.trip_number ?? 1) - 1}</StatusPill>
         )}
-        {fb && (
-          <span className={cn("text-xs font-bold px-1.5 py-0.5 rounded ring-1", fb.cls)}>
-            {fb.label}
-          </span>
-        )}
-        {g.soaking && (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 ring-1 ring-sky-300/40">
-            Soak
-          </span>
-        )}
+        {fb && <StatusPill color={fb.color}>{fb.label}</StatusPill>}
+        {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
         <span className="flex-1" />
         {g.fabric_name && (
           <span className="text-xs text-muted-foreground truncate max-w-[140px]">
@@ -130,14 +116,15 @@ function SchedulerGarmentRow({
           </span>
         )}
         {daysLabel ? (
-          <span className={cn(
-            "text-xs font-bold tabular-nums px-1.5 py-0.5 rounded",
-            isOverdue && "bg-red-100 text-red-700",
-            isUrgent && "bg-amber-100 text-amber-700",
-            !isUrgent && !isOverdue && "text-muted-foreground",
-          )}>
-            {daysLabel}
-          </span>
+          isOverdue || isUrgent ? (
+            <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums">
+              {daysLabel}
+            </StatusPill>
+          ) : (
+            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+              {daysLabel}
+            </span>
+          )
         ) : g.delivery_date_order ? (
           <span className="text-xs text-muted-foreground tabular-nums">
             {formatDate(g.delivery_date_order)}
@@ -208,14 +195,15 @@ function SchedulerOrderCard({
           {/* Right: delivery + actions */}
           <div className="flex items-center gap-1.5 shrink-0">
             {daysLabel && (
-              <span className={cn(
-                "text-xs font-bold tabular-nums px-1.5 py-0.5 rounded",
-                isOverdue && "bg-red-100 text-red-700",
-                isUrgent && "bg-amber-100 text-amber-700",
-                !isUrgent && !isOverdue && "text-muted-foreground",
-              )}>
-                {daysLabel}
-              </span>
+              isOverdue || isUrgent ? (
+                <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums">
+                  {daysLabel}
+                </StatusPill>
+              ) : (
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                  {daysLabel}
+                </span>
+              )
             )}
             <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground/40 hover:text-foreground cursor-pointer">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
@@ -257,12 +245,9 @@ function SchedulerOrderCard({
                 "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
                 isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
               )}>
-                <span className={cn(
-                  "font-bold uppercase text-xs px-1 py-0.5 rounded shrink-0",
-                  g.garment_type === "brova" ? "text-purple-700 bg-purple-50" : "text-blue-700 bg-blue-50",
-                )}>
+                <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
                   {g.garment_type === "brova" ? "B" : "F"}
-                </span>
+                </StatusPill>
                 <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
                 {g.fabric_name ? (
                   <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
@@ -270,8 +255,8 @@ function SchedulerOrderCard({
                   <span className="text-muted-foreground/50 truncate">Outside fabric</span>
                 )}
                 <div className="flex items-center gap-1 ml-auto shrink-0">
-                  {g.soaking && <span className="font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded text-xs">Soak</span>}
-                  {g.express && <span className="font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded text-xs">Express</span>}
+                  {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
+                  {g.express && <StatusPill color="red">Express</StatusPill>}
                   {isParked && <span className="text-muted-foreground/60 italic text-xs">parked</span>}
                 </div>
               </div>
@@ -859,27 +844,27 @@ function SchedulerPage() {
           <Tabs defaultValue="orders" value={activeTab} onValueChange={setActiveTab}>
             <div className="flex items-center justify-between mb-3 gap-2">
               <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden max-w-full">
-                <TabsTrigger value="orders" className="text-xs px-2.5">
-                  Orders{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] bg-blue-100 text-blue-700">
+                <TabsTrigger value="orders" className="gap-1.5">
+                  Orders
+                  <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
                     {orders.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="brova" className="text-xs px-2.5">
-                  Brova{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] bg-purple-100 text-purple-700">
+                <TabsTrigger value="brova" className="gap-1.5">
+                  Brova
+                  <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
                     {brovaReturns.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="alteration-in" className="text-xs px-2.5">
+                <TabsTrigger value="alteration-in" className="gap-1.5">
                   <span className="hidden min-[480px]:inline">Alteration</span>
                   <span className="min-[480px]:hidden">Alt</span>
-                  {" (In) "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] bg-orange-100 text-orange-700">
+                  {" (In)"}
+                  <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
                     {alterationIn.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="alteration-out" className="text-xs px-2.5" disabled>
+                <TabsTrigger value="alteration-out" className="gap-1.5" disabled>
                   <span className="hidden min-[480px]:inline">Alteration</span>
                   <span className="min-[480px]:hidden">Alt</span>
                   {" (Out)"}

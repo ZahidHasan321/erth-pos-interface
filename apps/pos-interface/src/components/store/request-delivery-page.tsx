@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   Loader2,
   Send,
@@ -662,8 +661,9 @@ function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
 
   if (requests.length === 0) return null;
 
-  const visible = expanded ? requests : requests.slice(0, 3);
-  const hidden = requests.length - visible.length;
+  const alwaysVisible = requests.slice(0, 3);
+  const collapsible = requests.slice(3);
+  const hidden = collapsible.length;
 
   const handleCancel = async () => {
     if (!confirmCancel) return;
@@ -678,24 +678,15 @@ function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="relative overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-sky-50/30 shadow-sm"
-      >
+      <div className="relative overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-sky-50/30 shadow-sm animate-in slide-in-from-top-2 fade-in duration-300">
         {/* decorative top stripe */}
         <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent" />
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <motion.div
-                animate={{ x: [0, 3, 0] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700 ring-1 ring-sky-200"
-              >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700 ring-1 ring-sky-200">
                 <Plane className="h-4 w-4 -rotate-12" />
-              </motion.div>
+              </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-sky-950">
@@ -712,74 +703,47 @@ function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
             </div>
           </div>
 
-          <motion.div layout className="space-y-2">
-            <AnimatePresence initial={false}>
-              {visible.map((req, i) => {
-                const days = daysSince(req.created_at);
-                const canCancel = req.status === "requested";
-                return (
-                  <motion.div
-                    key={req.id}
-                    layout
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: 12 }}
-                    transition={{
-                      duration: 0.22,
-                      delay: i * 0.04,
-                      ease: "easeOut",
-                    }}
-                    className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white/90 backdrop-blur border border-sky-100 hover:border-sky-300 hover:shadow-sm transition-all rounded-lg px-3 py-2.5"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs text-sky-700 font-semibold">
-                          #{req.id}
-                        </span>
-                        <TransferStatusBadge status={req.status} />
-                        <ItemTypeBadge itemType={req.item_type} />
-                        {days >= 2 && (
-                          <span
-                            className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${days >= 5 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
-                          >
-                            {days}d ago
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {summarizeItems(req)}
-                        {req.requested_by_user && (
-                          <> · By {req.requested_by_user.name}</>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 text-xs"
-                        onClick={() => setViewing(req)}
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Details
-                      </Button>
-                      {canCancel && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => setConfirmCancel(req)}
-                        >
-                          <X className="h-3.5 w-3.5 mr-1" />
-                          Cancel
-                        </Button>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </motion.div>
+          <div className="space-y-2">
+            {alwaysVisible.map((req) => {
+              const days = daysSince(req.created_at);
+              const canCancel = req.status === "requested";
+              return (
+                <RequestRow
+                  key={req.id}
+                  req={req}
+                  days={days}
+                  canCancel={canCancel}
+                  onView={setViewing}
+                  onCancel={setConfirmCancel}
+                />
+              );
+            })}
+          </div>
+
+          {collapsible.length > 0 && (
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+            >
+              <div className="overflow-hidden">
+                <div className="space-y-2 pt-2">
+                  {collapsible.map((req) => {
+                    const days = daysSince(req.created_at);
+                    const canCancel = req.status === "requested";
+                    return (
+                      <RequestRow
+                        key={req.id}
+                        req={req}
+                        days={days}
+                        canCancel={canCancel}
+                        onView={setViewing}
+                        onCancel={setConfirmCancel}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {requests.length > 3 && (
             <Button
@@ -802,7 +766,7 @@ function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
             </Button>
           )}
         </div>
-      </motion.div>
+      </div>
 
       <TransferDetailDialog
         transfer={viewing}
@@ -843,5 +807,66 @@ function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function RequestRow({
+  req,
+  days,
+  canCancel,
+  onView,
+  onCancel,
+}: {
+  req: TransferRequestWithItems;
+  days: number;
+  canCancel: boolean;
+  onView: (req: TransferRequestWithItems) => void;
+  onCancel: (req: TransferRequestWithItems) => void;
+}) {
+  return (
+    <div className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white/90 border border-sky-100 hover:border-sky-300 hover:shadow-sm transition-colors rounded-lg px-3 py-2.5">
+      <div className="min-w-0 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-xs text-sky-700 font-semibold">
+            #{req.id}
+          </span>
+          <TransferStatusBadge status={req.status} />
+          <ItemTypeBadge itemType={req.item_type} />
+          {days >= 2 && (
+            <span
+              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${days >= 5 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+            >
+              {days}d ago
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {summarizeItems(req)}
+          {req.requested_by_user && <> · By {req.requested_by_user.name}</>}
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 px-2 text-xs"
+          onClick={() => onView(req)}
+        >
+          <Eye className="h-3.5 w-3.5 mr-1" />
+          Details
+        </Button>
+        {canCancel && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+            onClick={() => onCancel(req)}
+          >
+            <X className="h-3.5 w-3.5 mr-1" />
+            Cancel
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

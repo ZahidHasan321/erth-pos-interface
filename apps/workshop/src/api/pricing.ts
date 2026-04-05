@@ -3,11 +3,11 @@ import type { Brand, Price, Style } from "@repo/database";
 
 // ── Prices (key-value system prices) ────────────────────────────────────────
 
-export const getPrices = async (brand: Brand): Promise<Price[]> => {
+export const getPrices = async (): Promise<Price[]> => {
   const { data, error } = await db
     .from("prices")
     .select("*")
-    .eq("brand", brand)
+    .order("brand")
     .order("key");
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -34,11 +34,11 @@ export const updatePrice = async (
 
 // ── Styles (style option pricing) ───────────────────────────────────────────
 
-export const getStyles = async (brand: Brand): Promise<Style[]> => {
+export const getStyles = async (): Promise<Style[]> => {
   const { data, error } = await db
     .from("styles")
     .select("*")
-    .eq("brand", brand)
+    .order("brand")
     .order("type")
     .order("name");
   if (error) throw new Error(error.message);

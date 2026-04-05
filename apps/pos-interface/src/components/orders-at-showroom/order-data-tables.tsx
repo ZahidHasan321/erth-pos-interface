@@ -299,11 +299,25 @@ export function OrderDataTable({
                     ))}
                   </TableRow>
 
-                  {/* Expanded Garments Rows */}
-                  {row.getIsExpanded() && (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="bg-muted/10 p-0 border-b border-border/40 shadow-inner">
-                        <div className="p-3 sm:pl-10">
+                  {/* Expanded Garments Rows — always rendered, height animated via grid-rows trick */}
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableCell
+                      colSpan={columns.length}
+                      className={cn(
+                        "p-0 transition-colors",
+                        row.getIsExpanded()
+                          ? "bg-muted/10 border-b border-border/40 shadow-inner"
+                          : "border-0",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "grid transition-[grid-template-rows] duration-300 ease-out",
+                          row.getIsExpanded() ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                        )}
+                      >
+                        <div className="overflow-hidden">
+                          <div className="p-3 sm:pl-10">
                           <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
                             Garments
                             <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{row.original.garmentsCount}</span>
@@ -380,10 +394,11 @@ export function OrderDataTable({
                                 );
                               })}
                           </div>
+                          </div>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 </React.Fragment>
               ))
             ) : (

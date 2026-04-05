@@ -91,8 +91,12 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                                 Soaking
                             </Badge>
                         )}
-                        {fabricData?.name && (
+                        {fabricData?.name ? (
                             <span className="text-xs text-muted-foreground truncate">{fabricData.name}</span>
+                        ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-slate-50 text-slate-600 border-slate-300">
+                                Fabric Out
+                            </Badge>
                         )}
                     </div>
                     {isCompleted && g.fulfillment_type ? (

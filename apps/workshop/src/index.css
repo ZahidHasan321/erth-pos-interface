@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Marcellus&family=Montserrat:wght@400;500;600;700&display=swap");
+/* Fonts loaded via index.html <link> for faster initial paint (no CSS @import chain) */
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -43,48 +43,53 @@
 :root {
   --radius: 0.75rem;
 
-  /* Surface — clean white */
-  --background: oklch(0.995 0 0);
-  --foreground: oklch(0.13 0.01 260);
+  /* ── Atelier palette (surface-safe) ──────────────────
+     Near-white surface so existing unstyled containers still work.
+     Vibe shift comes from brass primary + warm borders + brick destructive.
+     Single temperature family (hues 55–80) so nothing fights. */
 
-  /* Cards — pure white, defined by border not fill */
+  /* Surface — barely-warm white, kills the cold undertone without changing layout */
+  --background: oklch(0.99 0.004 80);
+  --foreground: oklch(0.2 0.018 55);
+
+  /* Cards — pure white */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 260);
+  --card-foreground: oklch(0.2 0.018 55);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.01 260);
+  --popover-foreground: oklch(0.2 0.018 55);
 
-  /* Primary — workshop green, clean and modern */
-  --primary: oklch(0.4 0.09 160);
-  --primary-foreground: oklch(0.97 0.005 160);
+  /* Primary — burnished brass. The CTA color. Workshop tool handles, tailor's pins. */
+  --primary: oklch(0.58 0.15 65);
+  --primary-foreground: oklch(0.99 0.01 85);
 
-  /* Secondary — cool slate for contrast moments */
-  --secondary: oklch(0.54 0.06 260);
-  --secondary-foreground: oklch(0.98 0 0);
+  /* Secondary — soft cream for tonal buttons and chips */
+  --secondary: oklch(0.95 0.012 75);
+  --secondary-foreground: oklch(0.24 0.02 55);
 
-  /* Muted — neutral gray, recessive */
-  --muted: oklch(0.94 0.003 260);
-  --muted-foreground: oklch(0.44 0.01 260);
+  /* Muted — recessive warm neutral */
+  --muted: oklch(0.96 0.008 75);
+  --muted-foreground: oklch(0.48 0.018 60);
 
-  /* Accent — subtle gray for active highlights */
-  --accent: oklch(0.92 0.003 260);
-  --accent-foreground: oklch(0.22 0.01 260);
+  /* Accent — soft sand. Used for subtle hover states (menu items, dropdowns, skeletons). */
+  --accent: oklch(0.92 0.02 78);
+  --accent-foreground: oklch(0.24 0.02 55);
 
-  /* Utility */
-  --destructive: oklch(0.55 0.22 27);
-  --border: oklch(0.91 0.01 250);
-  --input: oklch(0.97 0.003 260);
-  --ring: oklch(0.45 0.08 160);
+  /* Utility — brick red stays in the warm family */
+  --destructive: oklch(0.52 0.19 28);
+  --border: oklch(0.9 0.012 70);
+  --input: oklch(0.965 0.008 75);
+  --ring: oklch(0.58 0.15 65);
 
-  /* Sidebar — white, clean and minimal */
-  --sidebar: oklch(0.995 0 0);
-  --sidebar-foreground: oklch(0.15 0.01 260);
-  --sidebar-primary: oklch(0.37 0.09 160);
-  --sidebar-primary-foreground: oklch(0.97 0.005 160);
-  --sidebar-accent: oklch(0.94 0.003 260);
-  --sidebar-accent-foreground: oklch(0.2 0.01 260);
-  --sidebar-border: oklch(0.93 0.005 260);
-  --sidebar-ring: oklch(0.4 0.08 160);
+  /* Sidebar — near-white with a hint of warmth, same as main surface */
+  --sidebar: oklch(0.99 0.004 80);
+  --sidebar-foreground: oklch(0.2 0.018 55);
+  --sidebar-primary: oklch(0.58 0.15 65);
+  --sidebar-primary-foreground: oklch(0.99 0.01 85);
+  --sidebar-accent: oklch(0.92 0.02 78);
+  --sidebar-accent-foreground: oklch(0.24 0.02 55);
+  --sidebar-border: oklch(0.9 0.012 70);
+  --sidebar-ring: oklch(0.58 0.15 65);
 }
 
 @layer base {
@@ -112,10 +117,19 @@
     font-family: "Marcellus", "Cairo", serif;
   }
 
-  button {
+  button,
+  [role="button"],
+  a,
+  label[for],
+  select,
+  summary {
     font-family: "Montserrat", "Cairo", sans-serif;
-    font-weight: 600;
     touch-action: manipulation;
+  }
+
+  button {
+    font-weight: 600;
+    cursor: pointer;
   }
 
   label {

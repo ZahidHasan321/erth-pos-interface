@@ -19,6 +19,8 @@ interface GarmentData {
     refunded_style?: boolean;
     refunded_express?: boolean;
     refunded_soaking?: boolean;
+    fabric_id?: number | null;
+    fabric?: { id?: number; name?: string } | null;
 }
 
 interface ShelfItemData {
@@ -296,6 +298,13 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                     >
                                         {isBrova ? "Brova" : "Final"}
                                     </Badge>
+                                    {g.fabric?.name ? (
+                                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">{g.fabric.name}</span>
+                                    ) : (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-slate-50 text-slate-600 border-slate-300">
+                                            Fabric Out
+                                        </Badge>
+                                    )}
                                     <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
                                         {([
                                             ["fabric", "Fabric", getGarmentPrice(g, "fabric"), isComponentRefunded(g, "fabric")],

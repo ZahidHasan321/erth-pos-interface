@@ -104,6 +104,7 @@ interface OrderSummaryAndPaymentFormProps {
   deliveryDate?: string | null;
   /** When true, hides payment/discount controls and shows a confirmation-only summary (ERTH brand) */
   cashierHandlesPayment?: boolean;
+  onPrintLabels?: () => void;
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -121,6 +122,7 @@ export function OrderSummaryAndPaymentForm({
   orderType,
   deliveryDate,
   cashierHandlesPayment,
+  onPrintLabels,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice } = usePricing();
@@ -532,10 +534,21 @@ export function OrderSummaryAndPaymentForm({
               {isOrderClosed && _checkoutStatus === "confirmed" && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                   <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-semibold text-emerald-700">Order Confirmed</p>
                     <p className="text-xs text-emerald-600">Proceed to cashier for payment & invoicing</p>
                   </div>
+                  {onPrintLabels && fabricSelections.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onPrintLabels}
+                      className="h-9 shrink-0"
+                    >
+                      <Printer className="w-4 h-4 mr-2" />
+                      Print Labels
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -1187,6 +1200,18 @@ export function OrderSummaryAndPaymentForm({
                       {isLoadingFatoura ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
                       Print Invoice
                     </Button>
+
+                    {isOrderClosed && onPrintLabels && fabricSelections.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onPrintLabels}
+                        className="h-10"
+                      >
+                        <Printer className="w-4 h-4 mr-2" />
+                        Print Labels
+                      </Button>
+                    )}
 
                     {!isOrderClosed && (
                       <Button type="button" variant="destructive" onClick={onCancel} className="h-10">
