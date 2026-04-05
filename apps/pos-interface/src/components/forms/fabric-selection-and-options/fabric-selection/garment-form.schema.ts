@@ -52,7 +52,7 @@ export const garmentSchema = z.object({
   location: z.string().optional().default('shop'),
   acceptance_status: z.boolean().optional().nullable(),
   fulfillment_type: z.string().optional().nullable(),
-  trip_number: z.number().default(1),
+  trip_number: z.number().default(0),
   delivery_date: z.string().nullable().refine(val => val !== null && val !== "", {
     message: "Delivery date is required"
   }),
@@ -115,7 +115,7 @@ export const garmentDefaults: GarmentSchema = {
   location: 'shop',
   acceptance_status: null,
   fulfillment_type: null,
-  trip_number: 1,
+  trip_number: 0,
   delivery_date: new Date().toISOString(),
   notes: '',
 };

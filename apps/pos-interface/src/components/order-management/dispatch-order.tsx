@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import {
@@ -17,6 +17,8 @@ import {
   Loader2,
   Truck,
   AlertTriangle,
+  History,
+  Printer,
 } from "lucide-react";
 
 // UI Components
@@ -29,7 +31,7 @@ import { ErrorBoundary } from "@/components/global/error-boundary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 
 // API and Types
-import { getOrdersList, dispatchOrder, getInTransitToWorkshopOrders } from "@/api/orders";
+import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, type DispatchHistoryRow } from "@/api/orders";
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
@@ -714,6 +716,220 @@ function InTransitToWorkshopTab() {
   );
 }
 
+// --- Dispatch History Tab ---
+
+type HistoryPeriod = 'today' | 'week' | 'month';
+
+// Compute [from, to) bounds for a given period, in local time.
+// Week starts Sunday (matches Kuwait workweek — Fri/Sat weekend).
+function getPeriodRange(period: HistoryPeriod): { from: Date; to: Date; label: string } {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTomorrow = new Date(startOfDay); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+  if (period === 'today') {
+    return { from: startOfDay, to: startOfTomorrow, label: startOfDay.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) };
+  }
+
+  if (period === 'week') {
+    // Sunday = 0
+    const dayOfWeek = startOfDay.getDay();
+    const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+    const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(endOfWeek.getDate() + 7);
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    return { from: startOfWeek, to: endOfWeek, label: `${fmt(startOfWeek)} – ${fmt(new Date(endOfWeek.getTime() - 1))}` };
+  }
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { from: startOfMonth, to: startOfNextMonth, label: startOfMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' }) };
+}
+
+const HISTORY_PERIODS: readonly HistoryPeriod[] = ['today', 'week', 'month'] as const;
+const PERIOD_LABELS: Record<HistoryPeriod, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
+
+function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onChange: (p: HistoryPeriod) => void }) {
+  const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  // Measure the active button and position the indicator to match.
+  // Re-measure on period change and on window resize.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const idx = HISTORY_PERIODS.indexOf(period);
+      const btn = buttonsRef.current[idx];
+      if (btn) {
+        setIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [period]);
+
+  return (
+    <div className="relative inline-flex items-center border-2 rounded-lg p-0.5">
+      {/* Sliding indicator — hidden until first measurement to avoid a flash at 0,0 */}
+      {indicator && (
+        <div
+          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
+          style={{ left: indicator.left, width: indicator.width }}
+        />
+      )}
+      {HISTORY_PERIODS.map((p, i) => (
+        <button
+          key={p}
+          ref={(el) => { buttonsRef.current[i] = el; }}
+          onClick={() => onChange(p)}
+          className={cn(
+            'relative z-10 text-xs font-black uppercase tracking-wider px-4 py-1.5 rounded-md transition-colors duration-300 whitespace-nowrap',
+            period === p ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          {PERIOD_LABELS[p]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DispatchHistoryTab() {
+  const [period, setPeriod] = useState<HistoryPeriod>('today');
+  const { from: fromDate, to: toDate, label: periodLabel } = getPeriodRange(period);
+
+  // Shop-side history is always outbound: shop → workshop.
+  const { data: historyResp, isLoading, isError, error } = useQuery<ApiResponse<DispatchHistoryRow[]>>({
+    queryKey: ['dispatchHistory', fromDate.toISOString(), toDate.toISOString(), 'to_workshop'],
+    queryFn: () => getDispatchHistory(fromDate.toISOString(), toDate.toISOString(), 'to_workshop'),
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
+  });
+
+  const rows = historyResp?.data ?? [];
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <PeriodPillSwitcher period={period} onChange={setPeriod} />
+
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+          {periodLabel}
+        </span>
+
+        <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
+          {rows.length} dispatched → Workshop
+        </Badge>
+
+        <div className="ml-auto">
+          <Button
+            size="sm"
+            className="font-black uppercase tracking-widest text-xs h-9 bg-primary hover:bg-primary/90"
+            onClick={handlePrint}
+            disabled={rows.length === 0}
+          >
+            <Printer className="w-3 h-3 mr-1.5" />
+            Print
+          </Button>
+        </div>
+      </div>
+
+      {/* Print header (only visible when printing) */}
+      <div className="hidden print:block mb-4">
+        <h1 className="text-xl font-bold">Dispatch History — {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
+        <p className="text-sm text-muted-foreground">
+          Shop → Workshop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
+        </p>
+      </div>
+
+      {/* Body */}
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full rounded" />
+          ))}
+        </div>
+      ) : isError ? (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4 text-center">
+            <p className="font-bold text-destructive uppercase tracking-widest mb-3">
+              Error: {error instanceof Error ? error.message : 'Fetch Failed'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : rows.length === 0 ? (
+        <div className="py-10 text-center">
+          <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
+            <History className="w-8 h-8 text-muted-foreground/40" />
+          </div>
+          <h2 className="text-base font-bold text-muted-foreground">No Dispatches This Period</h2>
+          <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
+            Nothing was dispatched in {periodLabel}
+          </p>
+        </div>
+      ) : (
+        <Card className="overflow-hidden print:border-0 print:shadow-none">
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b-2 border-border bg-muted/20">
+                  <th className="text-left py-2.5 px-4">Date</th>
+                  <th className="text-left py-2.5 px-4">Order</th>
+                  <th className="text-left py-2.5 px-4">Invoice</th>
+                  <th className="text-left py-2.5 px-4">Customer</th>
+                  <th className="text-left py-2.5 px-4">Garment</th>
+                  <th className="text-left py-2.5 px-4">Type</th>
+                  <th className="text-left py-2.5 px-4">Trip</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const d = new Date(r.dispatched_at);
+                  const dateStr = d.toLocaleDateString();
+                  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <tr key={r.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
+                      <td className="py-2 px-4 whitespace-nowrap">
+                        <div className="font-bold text-xs">{dateStr}</div>
+                        <div className="text-[10px] text-muted-foreground">{timeStr}</div>
+                      </td>
+                      <td className="py-2 px-4 font-bold">#{r.order_id}</td>
+                      <td className="py-2 px-4 text-xs text-muted-foreground">
+                        {r.invoice_number ?? '—'}
+                      </td>
+                      <td className="py-2 px-4">
+                        <div className="font-bold text-xs">{r.customer_name ?? 'Unknown'}</div>
+                        {r.customer_phone && (
+                          <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
+                        )}
+                      </td>
+                      <td className="py-2 px-4 font-mono text-xs">{r.garment_code ?? r.garment_id.slice(0, 8)}</td>
+                      <td className="py-2 px-4">
+                        {r.garment_type && (
+                          <span className={cn(
+                            'inline-block text-[10px] font-black uppercase px-1.5 py-0.5 rounded',
+                            r.garment_type === 'brova'
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-emerald-50 text-emerald-700'
+                          )}>
+                            {r.garment_type}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4 text-xs font-bold">{r.trip_number ?? '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // --- Main Page ---
 
 export default function DispatchOrderPage() {
@@ -733,24 +949,17 @@ export default function DispatchOrderPage() {
   } = useQuery<ApiResponse<OrderWithDetails[]>>({
     queryKey: ["dispatchOrders"],
     queryFn: async () => {
-      const response = await getOrdersList({
-        order_phase: "new",
-        checkout_status: "confirmed",
-        order_type: "WORK"
-      });
+      const response = await getOrdersForDispatch();
       return response as ApiResponse<OrderWithDetails[]>;
     },
     staleTime: Infinity,
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 
-  // Only show garments still at the shop (i.e., not yet dispatched). Orders with
-  // partially-dispatched garments remain visible here with just the pending ones.
+  // The server-side !inner join on trip_number = 0 means the nested `garments`
+  // array already contains only undispatched garments. Still, filter here as a
+  // belt-and-braces check so a row with no garments never leaks through.
   const orders = (ordersResponse?.data || [])
-    .map((o) => ({
-      ...o,
-      garments: (o.garments || []).filter((g) => g.location === "shop"),
-    }))
     .filter((o) => (o.garments?.length ?? 0) > 0);
 
   // Count for return tab badge
@@ -822,20 +1031,6 @@ export default function DispatchOrderPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="font-black uppercase tracking-widest border-2 hover:bg-primary hover:text-white transition-colors h-10 px-6"
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-                queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
-                queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
-              }}
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5 mr-2", isLoading && "animate-spin")} />
-              Sync
-            </Button>
             {activeTab === "new-orders" && (
               <Button
                 size="sm"
@@ -898,6 +1093,13 @@ export default function DispatchOrderPage() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger
+              value="history"
+              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+            >
+              <History className="w-3 h-3 mr-1.5" />
+              History
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="new-orders" className="mt-6">
@@ -946,6 +1148,10 @@ export default function DispatchOrderPage() {
 
           <TabsContent value="in-transit" className="mt-6">
             <InTransitToWorkshopTab />
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-6">
+            <DispatchHistoryTab />
           </TabsContent>
         </Tabs>
       </div>

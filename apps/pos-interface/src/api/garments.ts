@@ -84,5 +84,20 @@ export const dispatchGarmentToWorkshop = async (
     console.error('Error dispatching garment to workshop:', error);
     return { status: 'error', message: error.message };
   }
+
+  // Append dispatch log entry (best-effort; don't block on failure).
+  try {
+    if (data) {
+      await db.from('dispatch_log').insert({
+        garment_id: (data as any).id,
+        order_id: (data as any).order_id,
+        direction: 'to_workshop',
+        trip_number: (data as any).trip_number ?? currentTripNumber + 1,
+      });
+    }
+  } catch (logErr) {
+    console.error('Failed to write dispatch_log (non-blocking):', logErr);
+  }
+
   return { status: 'success', data: data as any };
 };

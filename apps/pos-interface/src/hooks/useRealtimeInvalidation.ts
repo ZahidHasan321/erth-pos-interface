@@ -27,6 +27,10 @@ export function useRealtimeInvalidation() {
           qc.invalidateQueries({ queryKey: ['orders'] });
           qc.invalidateQueries({ queryKey: ['showroom-orders'] });
           qc.invalidateQueries({ queryKey: ['order-history'] });
+          // Dispatch page query keys
+          qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
+          qc.invalidateQueries({ queryKey: ['redispatchGarments'] });
+          qc.invalidateQueries({ queryKey: ['inTransitToWorkshop'] });
         },
       )
       .on(
@@ -37,6 +41,14 @@ export function useRealtimeInvalidation() {
           qc.invalidateQueries({ queryKey: ['showroom-orders'] });
           qc.invalidateQueries({ queryKey: ['order-history'] });
           qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
+          qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
         },
       )
       .on(

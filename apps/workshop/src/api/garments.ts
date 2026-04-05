@@ -539,6 +539,96 @@ export const dispatchGarments = async (ids: string[]): Promise<void> => {
     .update({ location: 'transit_to_shop', in_production: false, feedback_status: null })
     .in('id', ids);
   if (error) throw new Error(error.message);
+
+  // Append dispatch log entries (best-effort; don't block on failure).
+  try {
+    const { data: rows } = await db
+      .from('garments')
+      .select('id, order_id, trip_number')
+      .in('id', ids);
+    if (rows && rows.length > 0) {
+      await db.from('dispatch_log').insert(
+        rows.map((g: any) => ({
+          garment_id: g.id,
+          order_id: g.order_id,
+          direction: 'to_shop',
+          trip_number: g.trip_number ?? null,
+        }))
+      );
+    }
+  } catch (logErr) {
+    console.error('Failed to write dispatch_log (non-blocking):', logErr);
+  }
+};
+
+// ── Dispatch History ──────────────────────────────────────────────────────
+// Rows from dispatch_log joined with order/customer/garment context for the
+// workshop's "Dispatch History" tab. Workshop view is always outbound:
+// workshop → shop (direction = 'to_shop'). Not brand-scoped — workshop sees
+// all brands.
+export interface DispatchHistoryRow {
+  id: number;
+  dispatched_at: string;
+  trip_number: number | null;
+  garment_id: string;
+  order_id: number;
+  garment_code: string | null;
+  garment_type: string | null;
+  invoice_number: number | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  brand: string | null;
+}
+
+export const getDispatchHistory = async (
+  fromIso: string,
+  toIso: string,
+): Promise<DispatchHistoryRow[]> => {
+  const { data, error } = await db
+    .from('dispatch_log')
+    .select(`
+      id,
+      dispatched_at,
+      trip_number,
+      garment_id,
+      order_id,
+      garments!inner(garment_id, garment_type),
+      orders!inner(
+        brand,
+        work_orders(invoice_number),
+        customers(name, phone)
+      )
+    `)
+    .eq('direction', 'to_shop')
+    .gte('dispatched_at', fromIso)
+    .lt('dispatched_at', toIso)
+    .order('dispatched_at', { ascending: false })
+    .limit(2000);
+
+  if (error) {
+    console.error('Error fetching dispatch history:', error);
+    return [];
+  }
+
+  return (data ?? []).map((r: any) => {
+    const g = Array.isArray(r.garments) ? r.garments[0] : r.garments;
+    const o = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+    const wo = o ? (Array.isArray(o.work_orders) ? o.work_orders[0] : o.work_orders) : null;
+    const cust = o ? (Array.isArray(o.customers) ? o.customers[0] : o.customers) : null;
+    return {
+      id: r.id,
+      dispatched_at: r.dispatched_at,
+      trip_number: r.trip_number,
+      garment_id: r.garment_id,
+      order_id: r.order_id,
+      garment_code: g?.garment_id ?? null,
+      garment_type: g?.garment_type ?? null,
+      invoice_number: wo?.invoice_number ?? null,
+      customer_name: cust?.name ?? null,
+      customer_phone: cust?.phone ?? null,
+      brand: o?.brand ?? null,
+    };
+  });
 };
 
 /** Release finals from waiting_for_acceptance → waiting_cut so they can enter production */

@@ -32,6 +32,13 @@ export function useRealtimeInvalidation() {
       )
       .on(
         'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
+        },
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'transfer_requests' },
         () => {
           qc.invalidateQueries({ queryKey: ['transfer-requests'] });

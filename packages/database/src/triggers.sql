@@ -426,7 +426,7 @@ BEGIN
       COALESCE((v_garment->>'home_delivery')::BOOLEAN, false),
       v_garment->>'color',
       COALESCE((v_garment->>'location')::location, 'shop'),
-      COALESCE((v_garment->>'trip_number')::INT, 1),
+      COALESCE((v_garment->>'trip_number')::INT, 0),
       (v_garment->>'acceptance_status')::BOOLEAN,
       v_garment->>'feedback_status',
       (v_garment->>'fulfillment_type')::fulfillment_type
@@ -2426,3 +2426,53 @@ BEGIN
   DELETE FROM notifications WHERE expires_at < now();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ========================================================================
+-- DISPATCH LOG RLS
+-- Append-only audit of shop↔workshop dispatches. Any authed user can read
+-- and insert; no updates/deletes expected from app code (cleanup via a
+-- manual SQL call below).
+-- ========================================================================
+ALTER TABLE dispatch_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "dispatch_log_select" ON dispatch_log;
+CREATE POLICY "dispatch_log_select" ON dispatch_log
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "dispatch_log_insert" ON dispatch_log;
+CREATE POLICY "dispatch_log_insert" ON dispatch_log
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+-- Periodic cleanup helper — run manually or via cron.
+-- Drops rows older than the given interval (default 6 months).
+CREATE OR REPLACE FUNCTION purge_old_dispatch_log(p_keep_interval INTERVAL DEFAULT INTERVAL '6 months')
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  DELETE FROM dispatch_log WHERE dispatched_at < now() - p_keep_interval;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- MIGRATION: trip_number default shifted from 1 → 0
+-- ────────────────────────────────────────────────────────────────────────────
+-- Before this change, newly created garments started at trip_number = 1, which
+-- collided with "first trip at workshop". Now 0 = never dispatched, 1 = first
+-- trip at workshop, and the POS dispatch page filters on trip_number = 0.
+--
+-- Backfill existing rows that were created pre-migration and are still sitting
+-- at the shop awaiting their first dispatch. The predicate is deliberately
+-- narrow: location = 'shop' AND pre-dispatch piece_stage AND trip_number = 1
+-- — this cannot touch any garment that has been dispatched (those are either
+-- at workshop/in transit, or have trip ≥ 2 from a return cycle).
+--
+-- Idempotent: running multiple times is safe; subsequent runs find nothing to
+-- update because matching rows have already been set to 0.
+UPDATE garments
+SET trip_number = 0
+WHERE location = 'shop'
+  AND piece_stage IN ('waiting_cut', 'waiting_for_acceptance')
+  AND trip_number = 1;

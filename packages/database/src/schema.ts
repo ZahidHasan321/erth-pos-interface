@@ -537,7 +537,10 @@ export const garments = pgTable("garments", {
     acceptance_status: boolean("acceptance_status"),
     feedback_status: text("feedback_status"), // "accepted" | "needs_repair" | "needs_redo" | null
     fulfillment_type: fulfillmentTypeEnum("fulfillment_type"),
-    trip_number: integer("trip_number").default(1),
+    // 0 = created, never dispatched from shop. Bumped to 1 on first dispatchOrder
+    // (shop → workshop). Subsequent returns/alterations increment from there, so
+    // workshop logic (alteration thresholds, receiving tabs) still sees trip ≥ 1.
+    trip_number: integer("trip_number").default(0),
 
     // --- Workshop Production Fields ---
     in_production: boolean("in_production").default(false).notNull(),
@@ -559,6 +562,21 @@ export const garments = pgTable("garments", {
     refunded_soaking: boolean("refunded_soaking").default(false),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
+}));
+
+// --- 6.25 DISPATCH LOG (append-only audit of shop↔workshop dispatches) ---
+// Lightweight log so we can show a "Dispatch History" view (e.g. this month) and
+// print the list. Rows can be purged periodically — nothing else depends on them.
+export const dispatchLog = pgTable("dispatch_log", {
+    id: serial("id").primaryKey(),
+    garment_id: uuid("garment_id").references(() => garments.id, { onDelete: 'cascade' }).notNull(),
+    order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+    direction: text("direction").notNull(), // 'to_workshop' | 'to_shop'
+    trip_number: integer("trip_number"),    // snapshot at dispatch time
+    dispatched_at: timestamp("dispatched_at").defaultNow().notNull(),
+}, (t) => ({
+    dispatchedAtIdx: index("dispatch_log_dispatched_at_idx").on(t.dispatched_at),
+    orderIdx: index("dispatch_log_order_idx").on(t.order_id),
 }));
 
 // --- 6.5 GARMENT FEEDBACK ---

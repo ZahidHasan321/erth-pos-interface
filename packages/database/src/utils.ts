@@ -245,7 +245,15 @@ export type ShowroomLabel =
     | null;
 
 export function getShowroomStatus(garments: GarmentInfo[]) {
-    const shopItems = garments.filter(g => g.location === 'shop' && g.piece_stage !== 'completed');
+    // Shop items that matter to the customer flow: dispatched at least once
+    // (trip_number > 0). A trip-0 garment is physically at shop but still
+    // awaiting its first dispatch — it has no customer-facing status yet.
+    // Excluding it prevents partially-dispatched orders from wrongly appearing
+    // as "partial_ready" when their shop-side garments are pre-dispatch.
+    const shopItems = garments.filter(g =>
+        g.location === 'shop'
+        && g.piece_stage !== 'completed'
+        && (g.trip_number ?? 0) > 0);
     const allNonCompleted = garments.filter(g => g.piece_stage !== 'completed');
 
     // Check if finals are in transit to shop (shop needs to know even if no items at shop yet)

@@ -53,7 +53,10 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         location: g.location || 'shop',
         acceptance_status: g.acceptance_status,
         fulfillment_type: g.fulfillment_type,
-        trip_number: g.trip_number || 1,
+        // Use ?? not || — a legitimate trip_number of 0 (never dispatched) must
+        // survive an edit round-trip, otherwise re-saving a pre-dispatch garment
+        // would silently mark it as dispatched.
+        trip_number: g.trip_number ?? 0,
         delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
         lines: g.lines ?? 1,
         color: g.color || "",

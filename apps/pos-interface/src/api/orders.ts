@@ -231,10 +231,13 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
 };
 
 export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
-    // 1. Update selected garments (or all if no IDs provided)
+    // 1. Update selected garments (or all if no IDs provided).
+    //    Bumping trip_number from 0 → 1 is how we mark "first dispatch from shop"
+    //    — the dispatch page filters by trip_number = 0, and workshop receiving
+    //    already expects trip 1 for incoming-first-time garments.
     let query = db
         .from('garments')
-        .update({ location: 'transit_to_workshop' })
+        .update({ location: 'transit_to_workshop', trip_number: 1 })
         .eq('order_id', orderId);
 
     if (garmentIds) {
@@ -247,20 +250,112 @@ export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Pro
         console.error('Error updating garments location:', error);
     }
 
-    // 2. Only set order_phase to "in_progress" once ALL garments have been dispatched
-    //    (no garments left at shop). This keeps partially-dispatched orders visible
-    //    on the dispatch page so remaining garments can be sent later.
-    const { data: remaining } = await db
-        .from('garments')
-        .select('id')
-        .eq('order_id', orderId)
-        .eq('location', 'shop');
+    // 1b. Append dispatch log entries (append-only audit for Dispatch History view).
+    // Best-effort: log failures shouldn't block the user's dispatch action.
+    try {
+        let logQuery = db
+            .from('garments')
+            .select('id, trip_number')
+            .eq('order_id', orderId)
+            .eq('location', 'transit_to_workshop');
+        if (garmentIds) logQuery = logQuery.in('id', garmentIds);
+        const { data: rows } = await logQuery;
 
-    if (!remaining || remaining.length === 0) {
-        return updateOrder({ order_phase: "in_progress" }, orderId);
+        if (rows && rows.length > 0) {
+            await db.from('dispatch_log').insert(
+                rows.map((g: any) => ({
+                    garment_id: g.id,
+                    order_id: orderId,
+                    direction: 'to_workshop',
+                    trip_number: g.trip_number ?? null,
+                }))
+            );
+        }
+    } catch (logErr) {
+        console.error('Failed to write dispatch_log (non-blocking):', logErr);
     }
 
-    return getOrderById(orderId);
+    // 2. Flip order_phase to "in_progress" on the first dispatch. Partial-dispatched
+    //    orders remain on the dispatch page via the trip_number=0 filter on their
+    //    remaining garments — we no longer keep the order artificially in "new".
+    return updateOrder({ order_phase: "in_progress" }, orderId);
+};
+
+// ── Dispatch History ──────────────────────────────────────────────────────
+// Rows from dispatch_log joined with order/customer/garment context for the
+// "Dispatch History" tab on the dispatch page. Filtered to current brand and
+// to a date range (defaults to the current month from the caller).
+export interface DispatchHistoryRow {
+    id: number;
+    dispatched_at: string;
+    direction: 'to_workshop' | 'to_shop';
+    trip_number: number | null;
+    garment_id: string;
+    order_id: number;
+    garment_code: string | null;
+    garment_type: string | null;
+    invoice_number: number | null;
+    customer_name: string | null;
+    customer_phone: string | null;
+}
+
+export const getDispatchHistory = async (
+    fromIso: string,
+    toIso: string,
+    direction?: 'to_workshop' | 'to_shop'
+): Promise<ApiResponse<DispatchHistoryRow[]>> => {
+    let query = db
+        .from('dispatch_log')
+        .select(`
+            id,
+            dispatched_at,
+            direction,
+            trip_number,
+            garment_id,
+            order_id,
+            garments!inner(garment_id, garment_type),
+            orders!inner(
+                brand,
+                work_orders(invoice_number),
+                customers(name, phone)
+            )
+        `)
+        .gte('dispatched_at', fromIso)
+        .lt('dispatched_at', toIso)
+        .eq('orders.brand', getBrand())
+        .order('dispatched_at', { ascending: false })
+        .limit(2000);
+
+    if (direction) query = query.eq('direction', direction);
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Error fetching dispatch history:', error);
+        return { status: 'error', message: error.message, data: [], count: 0 };
+    }
+
+    const rows: DispatchHistoryRow[] = (data ?? []).map((r: any) => {
+        const g = Array.isArray(r.garments) ? r.garments[0] : r.garments;
+        const o = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+        const wo = o ? (Array.isArray(o.work_orders) ? o.work_orders[0] : o.work_orders) : null;
+        const cust = o ? (Array.isArray(o.customers) ? o.customers[0] : o.customers) : null;
+        return {
+            id: r.id,
+            dispatched_at: r.dispatched_at,
+            direction: r.direction,
+            trip_number: r.trip_number,
+            garment_id: r.garment_id,
+            order_id: r.order_id,
+            garment_code: g?.garment_id ?? null,
+            garment_type: g?.garment_type ?? null,
+            invoice_number: wo?.invoice_number ?? null,
+            customer_name: cust?.name ?? null,
+            customer_phone: cust?.phone ?? null,
+        };
+    });
+
+    return { status: 'success', data: rows, count: rows.length };
 };
 
 export const createOrder = async (
@@ -451,6 +546,41 @@ export const getOrdersList = async (filters: Record<string, any>): Promise<ApiRe
 
     const { data, error } = await builder.limit(2000);
     if (error) return { status: 'error', message: error.message, data: [] };
+    return { status: 'success', data: flattenOrder(data) };
+};
+
+/**
+ * Orders to show on the POS dispatch page. Returns confirmed WORK orders that
+ * have at least one garment still awaiting its first dispatch (trip_number = 0).
+ *
+ * The server-side `!inner` join on garments with `garments.trip_number = 0`
+ * filters out orders whose garments have all been dispatched already. Orders
+ * flip to `order_phase: in_progress` on the first garment dispatch, so we no
+ * longer use phase as a scope — the trip number is the "never sent" signal.
+ *
+ * The nested garments array returned by PostgREST contains ONLY the trip-0
+ * rows (that's how PostgREST materializes `!inner` filters), which is exactly
+ * what the dispatch page wants to render.
+ */
+export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
+    const { data, error } = await db
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            workOrder:work_orders!order_id!inner(*),
+            customer:customers(*),
+            garments:garments!inner(*, fabric:fabrics(name))
+        `)
+        .eq('brand', getBrand())
+        .eq('checkout_status', 'confirmed')
+        .eq('order_type', 'WORK')
+        .eq('garments.trip_number', 0)
+        .limit(2000);
+
+    if (error) {
+        console.error('Error fetching orders for dispatch:', error);
+        return { status: 'error', message: error.message, data: [] };
+    }
     return { status: 'success', data: flattenOrder(data) };
 };
 

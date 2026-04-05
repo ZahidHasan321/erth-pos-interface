@@ -89,15 +89,20 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
     const showroomStatus = getShowroomStatus(garments);
 
     // Calculate max trip number for items at shop to determine alteration cycle
-    // Prioritize unaccepted items to reflect the ACTIVE alteration status
-    const shopItems = garments.filter((g: any) => g.location === 'shop' && g.piece_stage !== 'completed');
+    // Prioritize unaccepted items to reflect the ACTIVE alteration status.
+    // Exclude trip-0 garments — those are pre-dispatch, not part of the
+    // customer-facing alteration cycle, and would skew the max downward.
+    const shopItems = garments.filter((g: any) =>
+        g.location === 'shop'
+        && g.piece_stage !== 'completed'
+        && (g.trip_number ?? 0) > 0);
     const activeItems = shopItems.filter((g: any) => g.acceptance_status !== true);
-    
+
     // If there are unaccepted items, use their trip numbers. Otherwise (e.g. all ready), use all shop items.
     const sourceItems = activeItems.length > 0 ? activeItems : shopItems;
 
-    const maxTripNumber = sourceItems.length > 0 
-        ? Math.max(...sourceItems.map((g: any) => g.trip_number || 1)) 
+    const maxTripNumber = sourceItems.length > 0
+        ? Math.max(...sourceItems.map((g: any) => g.trip_number ?? 1))
         : 1;
 
     const orderRow: OrderRow = {
