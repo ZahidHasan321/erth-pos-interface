@@ -635,13 +635,6 @@ export const completeWorkOrder = async (
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]
 ): Promise<ApiResponse<Order>> => {
-    // We check for brand but complete_work_order RPC doesn't take brand yet, 
-    // it updates existing order. We should ensure we only update OUR brand order.
-    const check = await getOrderById(orderId);
-    if (check.status !== 'success' || !check.data) {
-        return { status: 'error', message: "Order not found or access denied" };
-    }
-
     const { data, error } = await db.rpc('complete_work_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
@@ -674,11 +667,6 @@ export const completeSalesOrder = async (
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
-    const check = await getOrderById(orderId);
-    if (check.status !== 'success' || !check.data) {
-        return { status: 'error', message: "Order not found or access denied" };
-    }
-
     const { data, error } = await db.rpc('complete_sales_order', {
         p_order_id: orderId,
         p_checkout_details: checkoutDetails,
@@ -738,11 +726,6 @@ export const saveWorkOrderGarments = async (
         home_delivery?: boolean;
     }
 ): Promise<ApiResponse<any>> => {
-    const check = await getOrderById(orderId);
-    if (check.status !== 'success' || !check.data) {
-        return { status: 'error', message: "Order not found or access denied" };
-    }
-
     const { data, error } = await db.rpc('save_work_order_garments', {
         p_order_id: orderId,
         p_garments: garments,
