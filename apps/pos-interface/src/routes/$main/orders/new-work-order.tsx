@@ -758,7 +758,7 @@ function NewWorkOrder() {
                 paid: cashierHandlesPayment ? 0 : (data.paid ?? 0),
                 paymentRefNo: cashierHandlesPayment ? undefined : (data.payment_ref_no ?? undefined),
                 paymentNote: cashierHandlesPayment ? undefined : (data.payment_note ?? undefined),
-                orderTaker: data.order_taker_id ?? undefined,
+                orderTaker: data.order_taker_id || undefined,
                 discountType: cashierHandlesPayment ? undefined : (data.discount_type ?? undefined),
                 discountValue: cashierHandlesPayment ? undefined : (data.discount_value ?? undefined),
                 discountPercentage: cashierHandlesPayment ? undefined : (data.discount_percentage ?? undefined),

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect, useMemo } from "react";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import {
@@ -748,6 +748,49 @@ function getPeriodRange(period: HistoryPeriod): { from: Date; to: Date; label: s
 const HISTORY_PERIODS: readonly HistoryPeriod[] = ['today', 'week', 'month'] as const;
 const PERIOD_LABELS: Record<HistoryPeriod, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
 
+const VIEW_MODES: readonly HistoryViewMode[] = ['garment', 'order'] as const;
+const VIEW_MODE_LABELS: Record<HistoryViewMode, string> = { garment: 'Garments', order: 'Orders' };
+
+function ViewModeSwitcher({ mode, onChange }: { mode: HistoryViewMode; onChange: (m: HistoryViewMode) => void }) {
+  const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const idx = VIEW_MODES.indexOf(mode);
+      const btn = buttonsRef.current[idx];
+      if (btn) setIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [mode]);
+
+  return (
+    <div className="relative inline-flex items-center border-2 rounded-lg p-0.5">
+      {indicator && (
+        <div
+          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
+          style={{ left: indicator.left, width: indicator.width }}
+        />
+      )}
+      {VIEW_MODES.map((m, i) => (
+        <button
+          key={m}
+          ref={el => { buttonsRef.current[i] = el; }}
+          onClick={() => onChange(m)}
+          className={cn(
+            'relative z-10 text-xs font-black uppercase tracking-wider px-4 py-1.5 rounded-md transition-colors duration-300 whitespace-nowrap',
+            mode === m ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          {VIEW_MODE_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onChange: (p: HistoryPeriod) => void }) {
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
@@ -793,8 +836,119 @@ function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onCha
   );
 }
 
+type HistoryViewMode = 'garment' | 'order';
+
+interface HistoryOrderGroup {
+  orderId: number;
+  invoiceNumber: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  rows: DispatchHistoryRow[];
+}
+
+function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const brovaCount = group.rows.filter(r => r.garment_type === 'brova').length;
+  const finalCount = group.rows.filter(r => r.garment_type === 'final').length;
+  const lastDispatch = new Date(group.rows[0].dispatched_at);
+
+  return (
+    <>
+      {/* Order summary row */}
+      <tr
+        className={cn(
+          "border-b border-border/30 cursor-pointer transition-colors",
+          isExpanded ? "bg-primary/5" : "hover:bg-muted/20"
+        )}
+        onClick={() => setIsExpanded(v => !v)}
+      >
+        <td className="py-2.5 px-4">
+          <div className="flex items-center gap-1.5">
+            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-300 shrink-0", isExpanded && "rotate-180")} />
+            <span className="font-bold text-sm">#{group.orderId}</span>
+          </div>
+        </td>
+        <td className="py-2.5 px-4 text-xs text-muted-foreground">{group.invoiceNumber ?? '—'}</td>
+        <td className="py-2.5 px-4">
+          <div className="font-bold text-xs">{group.customerName ?? 'Unknown'}</div>
+          {group.customerPhone && <div className="text-[10px] text-muted-foreground">{group.customerPhone}</div>}
+        </td>
+        <td className="py-2.5 px-4">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{group.rows.length} Pcs</Badge>
+            {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
+            {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+          </div>
+        </td>
+        <td className="py-2.5 px-4 whitespace-nowrap">
+          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString()}</div>
+          <div className="text-[10px] text-muted-foreground">{lastDispatch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+        </td>
+      </tr>
+
+      {/* Animated expansion row */}
+      <tr className="border-0 hover:bg-transparent">
+        <td
+          colSpan={5}
+          className={cn(
+            "p-0 transition-colors",
+            isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0"
+          )}
+        >
+          <div className={cn(
+            "grid transition-[grid-template-rows] duration-300 ease-out",
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          )}>
+            <div className="overflow-hidden">
+              <div className="p-3 sm:pl-10">
+                <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
+                  Garments
+                  <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{group.rows.length}</span>
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                  {group.rows.map(r => {
+                    const d = new Date(r.dispatched_at);
+                    return (
+                      <div key={r.id} className="p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="font-mono font-medium text-xs text-muted-foreground">{r.garment_code ?? r.garment_id.slice(0, 8)}</span>
+                          {r.garment_type && (
+                            <span className={cn(
+                              'inline-flex items-center rounded border px-1 py-0 text-xs font-bold',
+                              r.garment_type === 'brova'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            )}>
+                              {r.garment_type === 'brova' ? 'Brova' : 'Final'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground text-xs uppercase font-bold">Trip</span>
+                            <span className="font-bold text-xs bg-muted px-1.5 py-0.5 rounded">{r.trip_number ?? '—'}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground text-xs uppercase font-bold">Time</span>
+                            <span className="font-bold text-xs">{d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
+  );
+}
+
 function DispatchHistoryTab() {
   const [period, setPeriod] = useState<HistoryPeriod>('today');
+  const [viewMode, setViewMode] = useState<HistoryViewMode>('garment');
   const { from: fromDate, to: toDate, label: periodLabel } = getPeriodRange(period);
 
   // Shop-side history is always outbound: shop → workshop.
@@ -806,6 +960,20 @@ function DispatchHistoryTab() {
   });
 
   const rows = historyResp?.data ?? [];
+
+  const orderGroups = useMemo<HistoryOrderGroup[]>(() => {
+    const map = new Map<number, HistoryOrderGroup>();
+    for (const r of rows) {
+      let g = map.get(r.order_id);
+      if (!g) {
+        g = { orderId: r.order_id, invoiceNumber: r.invoice_number, customerName: r.customer_name, customerPhone: r.customer_phone, rows: [] };
+        map.set(r.order_id, g);
+      }
+      g.rows.push(r);
+    }
+    return [...map.values()];
+  }, [rows]);
+
   const handlePrint = () => window.print();
 
   return (
@@ -822,7 +990,9 @@ function DispatchHistoryTab() {
           {rows.length} dispatched → Workshop
         </Badge>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <ViewModeSwitcher mode={viewMode} onChange={setViewMode} />
+
           <Button
             size="sm"
             className="font-black uppercase tracking-widest text-xs h-9 bg-primary hover:bg-primary/90"
@@ -868,6 +1038,25 @@ function DispatchHistoryTab() {
             Nothing was dispatched in {periodLabel}
           </p>
         </div>
+      ) : viewMode === 'order' ? (
+        <Card className="overflow-hidden print:border-0 print:shadow-none">
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b-2 border-border bg-muted/20">
+                  <th className="text-left py-2.5 px-4">Order</th>
+                  <th className="text-left py-2.5 px-4">Invoice</th>
+                  <th className="text-left py-2.5 px-4">Customer</th>
+                  <th className="text-left py-2.5 px-4">Pieces</th>
+                  <th className="text-left py-2.5 px-4">Last Dispatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderGroups.map(g => <HistoryOrderGroupRows key={g.orderId} group={g} />)}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       ) : (
         <Card className="overflow-hidden print:border-0 print:shadow-none">
           <CardContent className="p-0">
@@ -991,6 +1180,7 @@ export default function DispatchOrderPage() {
       await dispatchOrder(orderId, garmentIds);
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
       await queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
+      await queryClient.invalidateQueries({ queryKey: ["dispatchHistory"] });
     } catch (error) {
       console.error("Failed to dispatch order:", error);
       toast.error(`Failed to dispatch Order #${orderId}`);

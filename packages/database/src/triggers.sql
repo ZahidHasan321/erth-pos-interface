@@ -564,11 +564,11 @@ BEGIN
   END IF;
 
   -- Block payments/refunds when register is closed
-  -- Use p_local_date (client's local date) instead of CURRENT_DATE (server UTC)
-  -- to avoid timezone mismatch (e.g. Kuwait UTC+3 vs Supabase UTC)
+  -- Check for any open session for the brand — not date-scoped — so sessions that
+  -- started before midnight and haven't been closed yet remain valid past midnight.
   IF NOT EXISTS (
     SELECT 1 FROM register_sessions
-    WHERE brand = v_order.brand AND date = p_local_date AND status = 'open'
+    WHERE brand = v_order.brand AND status = 'open'
   ) THEN
     RAISE EXCEPTION 'Register is not open. Open the register before recording transactions.';
   END IF;
@@ -1679,7 +1679,9 @@ $$ LANGUAGE plpgsql;
 -- REGISTER SESSION MANAGEMENT
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Get today's register session (or null)
+-- Get the register session for a given date, or fall back to the most recent open
+-- session if none exists for that date. This handles shops that stay open past
+-- midnight without closing the register first.
 CREATE OR REPLACE FUNCTION get_register_session(p_brand TEXT, p_date DATE DEFAULT CURRENT_DATE)
 RETURNS JSONB AS $$
 DECLARE
@@ -1714,7 +1716,15 @@ BEGIN
   FROM register_sessions rs
   LEFT JOIN users ou ON ou.id = rs.opened_by
   LEFT JOIN users cu ON cu.id = rs.closed_by
-  WHERE rs.brand = p_brand::brand AND rs.date = p_date;
+  WHERE rs.brand = p_brand::brand
+    AND (
+      rs.date = p_date
+      OR (rs.status = 'open' AND rs.date < p_date)
+    )
+  ORDER BY
+    (rs.date = p_date) DESC,  -- prefer today's session
+    rs.date DESC               -- then most recent open session
+  LIMIT 1;
 
   RETURN COALESCE(v_session, 'null'::jsonb);
 END;
@@ -1728,6 +1738,10 @@ DECLARE
 BEGIN
   IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND date = p_date) THEN
     RAISE EXCEPTION 'Register already opened for % on %', p_brand, p_date;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND status = 'open' AND date < p_date) THEN
+    RAISE EXCEPTION 'A previous register session is still open. Close it before opening a new one.';
   END IF;
 
   INSERT INTO register_sessions (brand, date, opened_by, opening_float, status)
