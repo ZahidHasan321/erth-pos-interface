@@ -209,25 +209,25 @@ async function step1() {
        'IN', 'C01', 3.5, 'brova', true, true, ${expressDeliveryDate},
        'kuwaiti', 'stand', 'yes', 'round', 'single', 'standard', 'single',
        false, false, false, 'BUTTON', 1,
-       'waiting_cut', 'shop', 1, 12.250, 9, 0),
+       'waiting_cut', 'shop', 0, 12.250, 9, 0),
       -- Brova 2: Navy, soaking, normal, 14-day delivery
       (${state.orderId}, ${state.orderId + '-2'}, ${state.fabricIds![1]}, ${state.styleId}, ${state.measurementId},
        'IN', 'C15', 3.5, 'brova', true, false, ${deliveryDate},
        'kuwaiti', 'band', 'no', 'square', 'double', 'curved', 'single',
        true, true, false, 'ZIPPER', 2,
-       'waiting_cut', 'shop', 1, 14.000, 9, 0),
+       'waiting_cut', 'shop', 0, 14.000, 9, 0),
       -- Final 1: White, EXPRESS, waiting_for_acceptance
       (${state.orderId}, ${state.orderId + '-3'}, ${state.fabricIds![0]}, ${state.styleId}, ${state.measurementId},
        'IN', 'C01', 3.5, 'final', false, true, ${expressDeliveryDate},
        'kuwaiti', 'stand', 'yes', 'round', 'single', 'standard', 'single',
        false, false, false, 'BUTTON', 1,
-       'waiting_for_acceptance', 'shop', 1, 12.250, 9, 0),
+       'waiting_for_acceptance', 'shop', 0, 12.250, 9, 0),
       -- Final 2: Navy, normal, waiting_for_acceptance
       (${state.orderId}, ${state.orderId + '-4'}, ${state.fabricIds![1]}, ${state.styleId}, ${state.measurementId},
        'IN', 'C15', 3.5, 'final', false, false, ${deliveryDate},
        'kuwaiti', 'band', 'no', 'square', 'double', 'curved', 'single',
        true, true, false, 'ZIPPER', 2,
-       'waiting_for_acceptance', 'shop', 1, 14.000, 9, 0)
+       'waiting_for_acceptance', 'shop', 0, 14.000, 9, 0)
     RETURNING id, garment_id, garment_type, piece_stage, express, soaking, delivery_date
   `;
 

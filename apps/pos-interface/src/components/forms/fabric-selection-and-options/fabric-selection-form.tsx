@@ -298,7 +298,7 @@ export function FabricSelectionForm({
 
                 if (!garment.id) {
                     location = "shop";
-                    tripNumber = 1;
+                    tripNumber = 0;
                     if (garment.garment_type === "brova") {
                         pieceStage = "waiting_cut";
                     } else {
