@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import ErthLogo from "@/assets/erth-light.svg";
-import SakkbaLogo from "@/assets/Sakkba.png";
+import ErthLogo from "../assets/erth-light.svg";
+import SakkbaLogo from "../assets/Sakkba.png";
 import { BRAND_NAMES } from "@/lib/constants";
 import { useAuth } from "@/context/auth";
 
@@ -10,133 +10,148 @@ export const Route = createFileRoute("/home")({
   head: () => ({ meta: [{ title: "Select Workspace" }] }),
 });
 
-// Brand-specific tokens (no CSS var dependency — page is brand-neutral)
-const ERTH = {
-  primary:  "oklch(0.25 0.12 155)",
-  bg:       "oklch(0.95 0.02 150)",
-  border:   "oklch(0.86 0.03 150)",
-  ring:     "oklch(0.35 0.10 155 / 0.15)",
-  label:    "erth",
-};
-const SAKKBA = {
-  primary:  "oklch(0.25 0.06 250)",
-  bg:       "oklch(0.95 0.008 245)",
-  border:   "oklch(0.88 0.015 245)",
-  ring:     "oklch(0.35 0.06 250 / 0.15)",
-  label:    "sakkba",
+const BRANDS = {
+  erth: {
+    primary:     "#1c3828",
+    primaryRgb:  "28,56,40",
+    bgTint:      "rgba(28,56,40,0.06)",
+    borderTint:  "rgba(28,56,40,0.18)",
+    hoverShadow: "0 8px 32px rgba(28,56,40,0.12), 0 2px 8px rgba(0,0,0,0.06)",
+    hoverBorder: "rgba(28,56,40,0.28)",
+    divider:     "rgba(28,56,40,0.15)",
+    textAccent:  "#1c3828",
+  },
+  sakkba: {
+    primary:     "#1a2547",
+    primaryRgb:  "26,37,71",
+    bgTint:      "rgba(26,37,71,0.06)",
+    borderTint:  "rgba(26,37,71,0.18)",
+    hoverShadow: "0 8px 32px rgba(26,37,71,0.12), 0 2px 8px rgba(0,0,0,0.06)",
+    hoverBorder: "rgba(26,37,71,0.28)",
+    divider:     "rgba(26,37,71,0.15)",
+    textAccent:  "#1a2547",
+  },
 };
 
 function BrandCard({
   to,
+  params,
   logo,
   logoFilter,
   name,
   subtitle,
   description,
-  tokens,
+  brand,
   disabled,
 }: {
   to: string;
+  params?: Record<string, string>;
   logo: string;
   logoFilter?: string;
   name: string;
   subtitle: string;
   description: string;
-  tokens: typeof ERTH;
+  brand: keyof typeof BRANDS;
   disabled: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const t = BRANDS[brand];
 
   return (
     <Link
       to={to as any}
-      style={{ pointerEvents: disabled ? "none" : "auto", display: "block" }}
+      params={params as any}
+      style={{ pointerEvents: disabled ? "none" : "auto", display: "block", textDecoration: "none" }}
       tabIndex={disabled ? -1 : 0}
     >
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          background: "oklch(1 0 0)",
-          border: `1px solid ${hovered && !disabled ? tokens.border : "oklch(0.88 0 0)"}`,
-          borderRadius: "calc(0.75rem + 4px)",
-          boxShadow: hovered && !disabled
-            ? `0 8px 28px oklch(0 0 0 / 0.08), 0 0 0 4px ${tokens.ring}`
-            : "0 2px 8px oklch(0 0 0 / 0.05)",
+          position: "relative",
+          background: "#ffffff",
+          border: `1px solid ${hovered ? t.hoverBorder : "oklch(0.88 0 0)"}`,
+          borderRadius: "1.25rem",
+          boxShadow: hovered ? t.hoverShadow : "0 2px 8px rgba(0,0,0,0.05)",
           overflow: "hidden",
-          opacity: disabled ? 0.38 : 1,
-          transition: "box-shadow 0.2s, border-color 0.2s, transform 0.2s",
-          transform: hovered && !disabled ? "translateY(-3px)" : "none",
+          opacity: disabled ? 0.35 : 1,
+          transform: hovered && !disabled ? "translateY(-4px)" : "translateY(0)",
+          transition: "box-shadow 0.25s, border-color 0.25s, transform 0.25s",
         }}
       >
-        {/* Colored top accent band */}
+        {/* Subtle fabric texture on hover */}
         <div style={{
-          height: 3,
-          background: tokens.primary,
-          opacity: disabled ? 0.4 : 1,
+          position: "absolute", inset: 0, pointerEvents: "none",
+          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.008) 3px, rgba(0,0,0,0.008) 4px)",
+          opacity: hovered ? 1 : 0,
+          transition: "opacity 0.3s",
         }} />
 
-        <div style={{ padding: "28px 28px 24px" }}>
-          {/* Logo + name row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-            <div style={{
-              width: 44, height: 44,
-              background: tokens.bg,
-              border: `1px solid ${tokens.border}`,
-              borderRadius: "0.75rem",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <img
-                src={logo}
-                alt={name}
-                style={{
-                  height: 24, width: "auto",
-                  filter: logoFilter,
-                  opacity: 0.85,
-                }}
-              />
-            </div>
-            <div>
-              <p style={{
-                fontFamily: "'Montserrat', sans-serif",
-                fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
-                textTransform: "uppercase", color: tokens.primary,
-                margin: "0 0 2px",
-              }}>{subtitle}</p>
-              <h2 style={{
-                fontFamily: "'Marcellus', serif",
-                fontSize: 26, lineHeight: 1,
-                color: "oklch(0.15 0.03 100)", margin: 0,
-              }}>{name}</h2>
-            </div>
+        <div style={{ position: "relative", zIndex: 1, padding: "32px 28px 28px" }}>
+
+          {/* Icon circle */}
+          <div style={{
+            width: 72, height: 72,
+            borderRadius: "50%",
+            background: t.bgTint,
+            border: `1px solid ${t.borderTint}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 20,
+            transform: hovered ? "scale(1.04)" : "scale(1)",
+            transition: "transform 0.3s",
+            boxShadow: hovered ? `0 4px 16px rgba(${t.primaryRgb},0.15)` : "none",
+          }}>
+            <img
+              src={logo}
+              alt={name}
+              style={{
+                height: 32, width: "auto",
+                filter: logoFilter,
+                opacity: 0.9,
+              }}
+            />
           </div>
 
+          {/* Name + subtitle */}
+          <p style={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.24em",
+            textTransform: "uppercase", color: t.textAccent,
+            margin: "0 0 4px", opacity: 0.7,
+          }}>{subtitle}</p>
+          <h2 style={{
+            fontFamily: "'Marcellus', serif",
+            fontSize: 30, lineHeight: 1,
+            color: "oklch(0.15 0.03 100)", margin: "0 0 16px",
+          }}>{name}</h2>
+
           {/* Divider */}
-          <div style={{ height: 1, background: "oklch(0.92 0 0)", marginBottom: 16 }} />
+          <div style={{ height: 1, background: t.divider, marginBottom: 14 }} />
 
           {/* Description */}
           <p style={{
             fontFamily: "'Montserrat', sans-serif",
-            fontSize: 13, lineHeight: 1.65, fontWeight: 400,
-            color: "oklch(0.40 0 0)", margin: "0 0 24px",
+            fontSize: 13, lineHeight: 1.7, fontWeight: 400,
+            color: "oklch(0.42 0 0)", margin: "0 0 24px",
           }}>{description}</p>
 
-          {/* CTA */}
+          {/* CTA button */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "0 16px", height: 36,
-            background: hovered && !disabled ? tokens.primary : "transparent",
-            color: hovered && !disabled ? "oklch(0.98 0.01 155)" : tokens.primary,
-            border: `1px solid ${tokens.primary}`,
+            padding: "0 18px", height: 38,
+            background: hovered ? t.primary : t.bgTint,
+            color: hovered ? "#fff" : t.textAccent,
+            border: `1px solid ${hovered ? t.primary : t.borderTint}`,
             borderRadius: "0.75rem",
             fontFamily: "'Montserrat', sans-serif",
-            fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+            fontSize: 11, fontWeight: 700,
+            letterSpacing: hovered ? "0.18em" : "0.12em",
             textTransform: "uppercase",
-            transition: "background 0.15s, color 0.15s",
+            transition: "all 0.2s",
           }}>
             Enter →
           </div>
+
         </div>
       </div>
     </Link>
@@ -172,7 +187,6 @@ function SelectionPage() {
           padding: 40px 20px;
           gap: 32px;
         }
-
         .hp-header {
           text-align: center;
           opacity: 0;
@@ -180,23 +194,18 @@ function SelectionPage() {
           transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1), transform 0.5s cubic-bezier(0.22,1,0.36,1);
         }
         .hp-header.ready { opacity: 1; transform: none; }
-
         .hp-cards {
           display: grid;
           grid-template-columns: 1fr;
           gap: 16px;
           width: 100%;
-          max-width: 680px;
+          max-width: 720px;
           opacity: 0;
           transform: translateY(12px);
           transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1) 80ms, transform 0.5s cubic-bezier(0.22,1,0.36,1) 80ms;
         }
         .hp-cards.ready { opacity: 1; transform: none; }
-
-        @media (min-width: 560px) {
-          .hp-cards { grid-template-columns: 1fr 1fr; }
-        }
-
+        @media (min-width: 580px) { .hp-cards { grid-template-columns: 1fr 1fr; } }
         @media (prefers-reduced-motion: reduce) {
           .hp-header, .hp-cards { transition: none !important; opacity: 1 !important; transform: none !important; }
         }
@@ -204,57 +213,52 @@ function SelectionPage() {
 
       <div className="hp">
 
-        {/* Header */}
         <div className={`hp-header${ready ? " ready" : ""}`}>
           <p style={{
             fontFamily: "'Montserrat', sans-serif",
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.3em",
-            textTransform: "uppercase", color: "oklch(0.40 0 0)",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.35em",
+            textTransform: "uppercase", color: "oklch(0.40 0 0 / 0.55)",
             marginBottom: 10,
           }}>Autolinium</p>
           <h1 style={{
             fontFamily: "'Marcellus', serif",
-            fontSize: "clamp(32px, 5vw, 46px)",
+            fontSize: "clamp(28px, 5vw, 42px)",
             lineHeight: 1, color: "oklch(0.15 0.03 100)",
-            margin: "0 0 12px",
+            margin: "0 0 14px",
           }}>Select Workspace</h1>
-          <div style={{
-            width: 36, height: 2,
-            background: "oklch(0.38 0.12 165 / 0.4)",
-            margin: "0 auto",
-          }} />
+          <div style={{ width: 36, height: 2, background: "oklch(0.38 0.12 165 / 0.35)", margin: "0 auto" }} />
         </div>
 
-        {/* Brand cards */}
         <div className={`hp-cards${ready ? " ready" : ""}`}>
           <BrandCard
-            to={`/${BRAND_NAMES.showroom}`}
+            to="/$main"
+            params={{ main: BRAND_NAMES.showroom }}
             logo={ErthLogo}
             name="Erth"
             subtitle="Showroom"
             description="Order management, fittings & alterations for the showroom."
-            tokens={ERTH}
+            brand="erth"
             disabled={!canAccess(BRAND_NAMES.showroom)}
           />
           <BrandCard
-            to={`/${BRAND_NAMES.fromHome}`}
+            to="/$main"
+            params={{ main: BRAND_NAMES.fromHome }}
             logo={SakkbaLogo}
-            logoFilter="grayscale(1) brightness(0.3)"
+            logoFilter="grayscale(1) brightness(0.25)"
             name="Sakkba"
             subtitle="Home Orders"
             description="Home-based order management, deliveries & fittings."
-            tokens={SAKKBA}
+            brand="sakkba"
             disabled={!canAccess(BRAND_NAMES.fromHome)}
           />
         </div>
 
-        {/* Back link */}
         <Link
           to="/"
           style={{
             fontFamily: "'Montserrat', sans-serif",
             fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
-            textTransform: "uppercase", color: "oklch(0.40 0 0 / 0.45)",
+            textTransform: "uppercase", color: "oklch(0.40 0 0 / 0.38)",
             textDecoration: "none",
           }}
         >
