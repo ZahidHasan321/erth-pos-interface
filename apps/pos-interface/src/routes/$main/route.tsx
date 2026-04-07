@@ -212,7 +212,8 @@ function RouteComponent() {
                 <img
                   src={brandLogo}
                   alt="Logo"
-                  className="h-6 w-6 object-contain"
+                  className={main === BRAND_NAMES.showroom ? "h-6 w-6 object-contain" : ""}
+                  style={main !== BRAND_NAMES.showroom ? { height: 10, width: "auto", maxWidth: 24 } : undefined}
                 />
                 <span className="text-base brand-font capitalize tracking-wide">
                   {brandName}

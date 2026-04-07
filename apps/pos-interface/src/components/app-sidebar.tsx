@@ -343,7 +343,8 @@ export function AppSidebar({
                   <img
                     src={brandLogo}
                     alt="Logo"
-                    className="size-7 object-contain group-data-[collapsible=icon]:size-5"
+                    className={isErth ? "size-7 object-contain group-data-[collapsible=icon]:size-5" : ""}
+                    style={!isErth ? { height: 12, width: "auto", maxWidth: 28 } : undefined}
                   />
                 </div>
                 <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">

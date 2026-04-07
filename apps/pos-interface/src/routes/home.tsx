@@ -14,21 +14,21 @@ const BRANDS = {
   erth: {
     primary:     "#1c3828",
     primaryRgb:  "28,56,40",
-    bgTint:      "rgba(28,56,40,0.06)",
-    borderTint:  "rgba(28,56,40,0.18)",
-    hoverShadow: "0 8px 32px rgba(28,56,40,0.12), 0 2px 8px rgba(0,0,0,0.06)",
-    hoverBorder: "rgba(28,56,40,0.28)",
-    divider:     "rgba(28,56,40,0.15)",
+    bgTint:      "rgba(28,56,40,0.10)",
+    borderTint:  "rgba(28,56,40,0.22)",
+    hoverShadow: "0 8px 32px rgba(28,56,40,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    hoverBorder: "rgba(28,56,40,0.35)",
+    divider:     "rgba(28,56,40,0.12)",
     textAccent:  "#1c3828",
   },
   sakkba: {
     primary:     "#1a2547",
     primaryRgb:  "26,37,71",
-    bgTint:      "rgba(26,37,71,0.06)",
-    borderTint:  "rgba(26,37,71,0.18)",
-    hoverShadow: "0 8px 32px rgba(26,37,71,0.12), 0 2px 8px rgba(0,0,0,0.06)",
-    hoverBorder: "rgba(26,37,71,0.28)",
-    divider:     "rgba(26,37,71,0.15)",
+    bgTint:      "rgba(26,37,71,0.10)",
+    borderTint:  "rgba(26,37,71,0.22)",
+    hoverShadow: "0 8px 32px rgba(26,37,71,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+    hoverBorder: "rgba(26,37,71,0.35)",
+    divider:     "rgba(26,37,71,0.12)",
     textAccent:  "#1a2547",
   },
 };
@@ -38,6 +38,7 @@ function BrandCard({
   params,
   logo,
   logoFilter,
+  logoSize = 32,
   name,
   subtitle,
   description,
@@ -48,6 +49,7 @@ function BrandCard({
   params?: Record<string, string>;
   logo: string;
   logoFilter?: string;
+  logoSize?: number;
   name: string;
   subtitle: string;
   description: string;
@@ -69,8 +71,8 @@ function BrandCard({
         onMouseLeave={() => setHovered(false)}
         style={{
           position: "relative",
-          background: "#ffffff",
-          border: `1px solid ${hovered ? t.hoverBorder : "oklch(0.88 0 0)"}`,
+          background: `linear-gradient(160deg, rgba(${t.primaryRgb},0.05) 0%, #ffffff 45%)`,
+          border: `1px solid ${hovered ? t.hoverBorder : t.borderTint}`,
           borderRadius: "1.25rem",
           boxShadow: hovered ? t.hoverShadow : "0 2px 8px rgba(0,0,0,0.05)",
           overflow: "hidden",
@@ -79,15 +81,7 @@ function BrandCard({
           transition: "box-shadow 0.25s, border-color 0.25s, transform 0.25s",
         }}
       >
-        {/* Subtle fabric texture on hover */}
-        <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none",
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.008) 3px, rgba(0,0,0,0.008) 4px)",
-          opacity: hovered ? 1 : 0,
-          transition: "opacity 0.3s",
-        }} />
-
-        <div style={{ position: "relative", zIndex: 1, padding: "32px 28px 28px" }}>
+        <div style={{ position: "relative", zIndex: 1, padding: "28px 28px 28px" }}>
 
           {/* Icon circle */}
           <div style={{
@@ -97,15 +91,16 @@ function BrandCard({
             border: `1px solid ${t.borderTint}`,
             display: "flex", alignItems: "center", justifyContent: "center",
             marginBottom: 20,
-            transform: hovered ? "scale(1.04)" : "scale(1)",
-            transition: "transform 0.3s",
-            boxShadow: hovered ? `0 4px 16px rgba(${t.primaryRgb},0.15)` : "none",
+            transform: hovered ? "scale(1.05)" : "scale(1)",
+            transition: "transform 0.3s, box-shadow 0.3s",
+            boxShadow: hovered ? `0 6px 20px rgba(${t.primaryRgb},0.18)` : `0 2px 8px rgba(${t.primaryRgb},0.10)`,
           }}>
             <img
               src={logo}
               alt={name}
               style={{
-                height: 32, width: "auto",
+                height: logoSize,
+                width: "auto",
                 filter: logoFilter,
                 opacity: 0.9,
               }}
@@ -245,6 +240,7 @@ function SelectionPage() {
             params={{ main: BRAND_NAMES.fromHome }}
             logo={SakkbaLogo}
             logoFilter="grayscale(1) brightness(0.25)"
+            logoSize={12}
             name="Sakkba"
             subtitle="Home Orders"
             description="Home-based order management, deliveries & fittings."
