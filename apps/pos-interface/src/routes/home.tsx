@@ -1,251 +1,267 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-
-import ErthLogo from "../assets/erth-dark.svg";
-import SakkbaLogo from "../assets/Sakkba.png";
+import { useState, useEffect } from "react";
+import ErthLogo from "@/assets/erth-light.svg";
+import SakkbaLogo from "@/assets/Sakkba.png";
 import { BRAND_NAMES } from "@/lib/constants";
 import { useAuth } from "@/context/auth";
 
 export const Route = createFileRoute("/home")({
   component: SelectionPage,
-  head: () => ({
-    meta: [{ title: "Select Workspace" }],
-  }),
+  head: () => ({ meta: [{ title: "Select Workspace" }] }),
 });
+
+// Brand-specific tokens (no CSS var dependency — page is brand-neutral)
+const ERTH = {
+  primary:  "oklch(0.25 0.12 155)",
+  bg:       "oklch(0.95 0.02 150)",
+  border:   "oklch(0.86 0.03 150)",
+  ring:     "oklch(0.35 0.10 155 / 0.15)",
+  label:    "erth",
+};
+const SAKKBA = {
+  primary:  "oklch(0.25 0.06 250)",
+  bg:       "oklch(0.95 0.008 245)",
+  border:   "oklch(0.88 0.015 245)",
+  ring:     "oklch(0.35 0.06 250 / 0.15)",
+  label:    "sakkba",
+};
+
+function BrandCard({
+  to,
+  logo,
+  logoFilter,
+  name,
+  subtitle,
+  description,
+  tokens,
+  disabled,
+}: {
+  to: string;
+  logo: string;
+  logoFilter?: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  tokens: typeof ERTH;
+  disabled: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Link
+      to={to as any}
+      style={{ pointerEvents: disabled ? "none" : "auto", display: "block" }}
+      tabIndex={disabled ? -1 : 0}
+    >
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: "oklch(1 0 0)",
+          border: `1px solid ${hovered && !disabled ? tokens.border : "oklch(0.88 0 0)"}`,
+          borderRadius: "calc(0.75rem + 4px)",
+          boxShadow: hovered && !disabled
+            ? `0 8px 28px oklch(0 0 0 / 0.08), 0 0 0 4px ${tokens.ring}`
+            : "0 2px 8px oklch(0 0 0 / 0.05)",
+          overflow: "hidden",
+          opacity: disabled ? 0.38 : 1,
+          transition: "box-shadow 0.2s, border-color 0.2s, transform 0.2s",
+          transform: hovered && !disabled ? "translateY(-3px)" : "none",
+        }}
+      >
+        {/* Colored top accent band */}
+        <div style={{
+          height: 3,
+          background: tokens.primary,
+          opacity: disabled ? 0.4 : 1,
+        }} />
+
+        <div style={{ padding: "28px 28px 24px" }}>
+          {/* Logo + name row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <div style={{
+              width: 44, height: 44,
+              background: tokens.bg,
+              border: `1px solid ${tokens.border}`,
+              borderRadius: "0.75rem",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <img
+                src={logo}
+                alt={name}
+                style={{
+                  height: 24, width: "auto",
+                  filter: logoFilter,
+                  opacity: 0.85,
+                }}
+              />
+            </div>
+            <div>
+              <p style={{
+                fontFamily: "'Montserrat', sans-serif",
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
+                textTransform: "uppercase", color: tokens.primary,
+                margin: "0 0 2px",
+              }}>{subtitle}</p>
+              <h2 style={{
+                fontFamily: "'Marcellus', serif",
+                fontSize: 26, lineHeight: 1,
+                color: "oklch(0.15 0.03 100)", margin: 0,
+              }}>{name}</h2>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: "oklch(0.92 0 0)", marginBottom: 16 }} />
+
+          {/* Description */}
+          <p style={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 13, lineHeight: 1.65, fontWeight: 400,
+            color: "oklch(0.40 0 0)", margin: "0 0 24px",
+          }}>{description}</p>
+
+          {/* CTA */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "0 16px", height: 36,
+            background: hovered && !disabled ? tokens.primary : "transparent",
+            color: hovered && !disabled ? "oklch(0.98 0.01 155)" : tokens.primary,
+            border: `1px solid ${tokens.primary}`,
+            borderRadius: "0.75rem",
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            transition: "background 0.15s, color 0.15s",
+          }}>
+            Enter →
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 function SelectionPage() {
   const { user } = useAuth();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 50);
+    return () => clearTimeout(t);
+  }, []);
+
   const brands = user?.brands ?? [];
-  // Empty brands array = no restriction (admin/superadmin)
-  const canAccess = (brand: string) =>
-    brands.length === 0 || brands.includes(brand);
+  const canAccess = (brand: string) => brands.length === 0 || brands.includes(brand);
 
   return (
-    <div
-      className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden px-6 py-12"
-      style={{ background: "linear-gradient(160deg, #0c0b09 0%, #141210 40%, #100f0c 70%, #0a0908 100%)" }}
-    >
-      {/* Geometric pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `
-            linear-gradient(30deg, #d4cdaa 1px, transparent 1px),
-            linear-gradient(150deg, #d4cdaa 1px, transparent 1px),
-            linear-gradient(90deg, #d4cdaa 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 70px, 40px 70px, 70px 40px",
-        }}
-      />
+    <>
+      <style>{`
+        .hp {
+          min-height: 100dvh;
+          background-color: oklch(0.965 0.005 100);
+          background-image:
+            linear-gradient(45deg, oklch(0.38 0.12 165 / 0.03) 1px, transparent 1px),
+            linear-gradient(-45deg, oklch(0.38 0.12 165 / 0.03) 1px, transparent 1px);
+          background-size: 28px 28px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+          gap: 32px;
+        }
 
-      {/* Corner accents */}
-      <div className="absolute top-8 left-8 w-8 h-8 border-l border-t opacity-10" style={{ borderColor: "#d4cdaa" }} />
-      <div className="absolute top-8 right-8 w-8 h-8 border-r border-t opacity-10" style={{ borderColor: "#d4cdaa" }} />
-      <div className="absolute bottom-8 left-8 w-8 h-8 border-l border-b opacity-10" style={{ borderColor: "#d4cdaa" }} />
-      <div className="absolute bottom-8 right-8 w-8 h-8 border-r border-b opacity-10" style={{ borderColor: "#d4cdaa" }} />
+        .hp-header {
+          text-align: center;
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1), transform 0.5s cubic-bezier(0.22,1,0.36,1);
+        }
+        .hp-header.ready { opacity: 1; transform: none; }
 
-      {/* Header */}
-      <div
-        className="relative z-10 text-center mb-12 css-fade-in-up"
-        style={{ animationDelay: "0s" }}
-      >
-        <p
-          className="text-xs tracking-[0.4em] uppercase mb-4"
-          style={{ color: "#d4cdaa70", fontFamily: "'Montserrat', sans-serif" }}
-        >
-          Select Workspace
-        </p>
-        <div
-          className="mx-auto h-px w-16"
-          style={{ background: "linear-gradient(90deg, transparent, #d4cdaa30, transparent)" }}
-        />
-      </div>
+        .hp-cards {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 16px;
+          width: 100%;
+          max-width: 680px;
+          opacity: 0;
+          transform: translateY(12px);
+          transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1) 80ms, transform 0.5s cubic-bezier(0.22,1,0.36,1) 80ms;
+        }
+        .hp-cards.ready { opacity: 1; transform: none; }
 
-      {/* Brand cards */}
-      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 max-w-3xl w-full">
-        {/* Erth Card */}
-        <div className="css-fade-in-up" style={{ animationDelay: "0.15s" }}>
-          <Link
-            to="/$main"
-            params={{ main: BRAND_NAMES.showroom }}
-            className={`group block ${!canAccess(BRAND_NAMES.showroom) ? "opacity-40 pointer-events-none" : ""}`}
-          >
-            <div
-              className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"
-              style={{
-                background: "linear-gradient(175deg, #0f1a0f 0%, #162216 50%, #0f170f 100%)",
-                border: "1px solid rgba(34, 60, 34, 0.5)",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(212,205,170,0.05)",
-              }}
-            >
-              {/* Hover glow */}
-              <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
-                style={{
-                  background: "radial-gradient(ellipse at 50% 30%, rgba(34,80,34,0.15) 0%, transparent 70%)",
-                }}
-              />
+        @media (min-width: 560px) {
+          .hp-cards { grid-template-columns: 1fr 1fr; }
+        }
 
-              {/* Fabric texture overlay */}
-              <div
-                className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity duration-500"
-                style={{
-                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212,205,170,0.3) 2px, rgba(212,205,170,0.3) 3px)",
-                }}
-              />
+        @media (prefers-reduced-motion: reduce) {
+          .hp-header, .hp-cards { transition: none !important; opacity: 1 !important; transform: none !important; }
+        }
+      `}</style>
 
-              <div className="relative z-10 flex flex-col items-center px-8 py-10">
-                {/* Logo container */}
-                <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(34,60,34,0.6), rgba(20,45,20,0.8))",
-                    border: "1px solid rgba(60,100,60,0.5)",
-                    boxShadow: "0 0 30px rgba(34,60,34,0.3), inset 0 0 20px rgba(212,205,170,0.05)",
-                  }}
-                >
-                  <img src={ErthLogo} alt="Erth" className="w-12 h-12 object-contain drop-shadow-[0_0_8px_rgba(212,205,170,0.3)]" />
-                </div>
+      <div className="hp">
 
-                {/* Brand name */}
-                <h2
-                  className="brand-font text-2xl mb-2 capitalize"
-                  style={{ color: "#d4cdaa" }}
-                >
-                  {BRAND_NAMES.showroom}
-                </h2>
-
-                {/* Divider */}
-                <div
-                  className="h-px w-12 my-4"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(34,80,34,0.5), transparent)" }}
-                />
-
-                {/* Description */}
-                <p
-                  className="text-sm text-center leading-relaxed mb-8"
-                  style={{ color: "rgba(212,205,170,0.75)", fontFamily: "'Montserrat', sans-serif" }}
-                >
-                  Showroom management
-                  <br />& comprehensive tools
-                </p>
-
-                {/* CTA */}
-                <div
-                  className="w-full py-3 rounded-xl text-center text-sm tracking-[0.15em] uppercase transition-all duration-400 group-hover:tracking-[0.2em]"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(34,60,34,0.5), rgba(20,40,20,0.7))",
-                    border: "1px solid rgba(34,80,34,0.3)",
-                    color: "rgba(212,205,170,0.9)",
-                    fontFamily: "'Montserrat', sans-serif",
-                    fontWeight: 500,
-                  }}
-                >
-                  Enter
-                </div>
-              </div>
-            </div>
-          </Link>
+        {/* Header */}
+        <div className={`hp-header${ready ? " ready" : ""}`}>
+          <p style={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.3em",
+            textTransform: "uppercase", color: "oklch(0.40 0 0)",
+            marginBottom: 10,
+          }}>Autolinium</p>
+          <h1 style={{
+            fontFamily: "'Marcellus', serif",
+            fontSize: "clamp(32px, 5vw, 46px)",
+            lineHeight: 1, color: "oklch(0.15 0.03 100)",
+            margin: "0 0 12px",
+          }}>Select Workspace</h1>
+          <div style={{
+            width: 36, height: 2,
+            background: "oklch(0.38 0.12 165 / 0.4)",
+            margin: "0 auto",
+          }} />
         </div>
 
-        {/* Sakkba Card */}
-        <div className="css-fade-in-up" style={{ animationDelay: "0.3s" }}>
-          <Link
-            to="/$main"
-            params={{ main: BRAND_NAMES.fromHome }}
-            className={`group block ${!canAccess(BRAND_NAMES.fromHome) ? "opacity-40 pointer-events-none" : ""}`}
-          >
-            <div
-              className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"
-              style={{
-                background: "linear-gradient(175deg, #0f1220 0%, #141a2e 50%, #0f1320 100%)",
-                border: "1px solid rgba(40, 50, 80, 0.5)",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(212,205,170,0.05)",
-              }}
-            >
-              {/* Hover glow */}
-              <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
-                style={{
-                  background: "radial-gradient(ellipse at 50% 30%, rgba(40,50,100,0.15) 0%, transparent 70%)",
-                }}
-              />
-
-              {/* Fabric texture overlay */}
-              <div
-                className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity duration-500"
-                style={{
-                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212,205,170,0.3) 2px, rgba(212,205,170,0.3) 3px)",
-                }}
-              />
-
-              <div className="relative z-10 flex flex-col items-center px-8 py-10">
-                {/* Logo container */}
-                <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(40,50,80,0.6), rgba(25,35,65,0.8))",
-                    border: "1px solid rgba(60,75,120,0.5)",
-                    boxShadow: "0 0 30px rgba(40,50,80,0.3), inset 0 0 20px rgba(212,205,170,0.05)",
-                  }}
-                >
-                  <img src={SakkbaLogo} alt="Sakkba" className="w-11 h-11 object-contain drop-shadow-[0_0_8px_rgba(212,205,170,0.3)] invert" />
-                </div>
-
-                {/* Brand name */}
-                <h2
-                  className="brand-font text-2xl mb-2 capitalize"
-                  style={{ color: "#d4cdaa" }}
-                >
-                  {BRAND_NAMES.fromHome}
-                </h2>
-
-                {/* Divider */}
-                <div
-                  className="h-px w-12 my-4"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(40,50,100,0.5), transparent)" }}
-                />
-
-                {/* Description */}
-                <p
-                  className="text-sm text-center leading-relaxed mb-8"
-                  style={{ color: "rgba(212,205,170,0.75)", fontFamily: "'Montserrat', sans-serif" }}
-                >
-                  Home-based order
-                  <br />management system
-                </p>
-
-                {/* CTA */}
-                <div
-                  className="w-full py-3 rounded-xl text-center text-sm tracking-[0.15em] uppercase transition-all duration-400 group-hover:tracking-[0.2em]"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(40,50,80,0.5), rgba(25,30,55,0.7))",
-                    border: "1px solid rgba(40,60,100,0.3)",
-                    color: "rgba(212,205,170,0.9)",
-                    fontFamily: "'Montserrat', sans-serif",
-                    fontWeight: 500,
-                  }}
-                >
-                  Enter
-                </div>
-              </div>
-            </div>
-          </Link>
+        {/* Brand cards */}
+        <div className={`hp-cards${ready ? " ready" : ""}`}>
+          <BrandCard
+            to={`/${BRAND_NAMES.showroom}`}
+            logo={ErthLogo}
+            name="Erth"
+            subtitle="Showroom"
+            description="Order management, fittings & alterations for the showroom."
+            tokens={ERTH}
+            disabled={!canAccess(BRAND_NAMES.showroom)}
+          />
+          <BrandCard
+            to={`/${BRAND_NAMES.fromHome}`}
+            logo={SakkbaLogo}
+            logoFilter="grayscale(1) brightness(0.3)"
+            name="Sakkba"
+            subtitle="Home Orders"
+            description="Home-based order management, deliveries & fittings."
+            tokens={SAKKBA}
+            disabled={!canAccess(BRAND_NAMES.fromHome)}
+          />
         </div>
-      </div>
 
-      {/* Back link */}
-      <div
-        className="relative z-10 mt-12 css-fade-in"
-        style={{ animationDelay: "0.6s" }}
-      >
+        {/* Back link */}
         <Link
           to="/"
-          className="text-xs tracking-[0.2em] uppercase transition-colors duration-300 hover:opacity-80"
-          style={{ color: "#d4cdaa30", fontFamily: "'Montserrat', sans-serif" }}
+          style={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: "oklch(0.40 0 0 / 0.45)",
+            textDecoration: "none",
+          }}
         >
-          Back
+          ← Back
         </Link>
+
       </div>
-    </div>
+    </>
   );
 }
