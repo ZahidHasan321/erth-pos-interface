@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import ErthLogo from "../assets/erth-dark.svg";
 import SakkbaLogo from "../assets/Sakkba.png";
 import { BRAND_NAMES } from "@/lib/constants";
+import { useAuth } from "@/context/auth";
 
 export const Route = createFileRoute("/home")({
   component: SelectionPage,
@@ -12,6 +13,12 @@ export const Route = createFileRoute("/home")({
 });
 
 function SelectionPage() {
+  const { user } = useAuth();
+  const brands = user?.brands ?? [];
+  // Empty brands array = no restriction (admin/superadmin)
+  const canAccess = (brand: string) =>
+    brands.length === 0 || brands.includes(brand);
+
   return (
     <div
       className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden px-6 py-12"
@@ -60,7 +67,7 @@ function SelectionPage() {
           <Link
             to="/$main"
             params={{ main: BRAND_NAMES.showroom }}
-            className="group block"
+            className={`group block ${!canAccess(BRAND_NAMES.showroom) ? "opacity-40 pointer-events-none" : ""}`}
           >
             <div
               className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"
@@ -145,7 +152,7 @@ function SelectionPage() {
           <Link
             to="/$main"
             params={{ main: BRAND_NAMES.fromHome }}
-            className="group block"
+            className={`group block ${!canAccess(BRAND_NAMES.fromHome) ? "opacity-40 pointer-events-none" : ""}`}
           >
             <div
               className="relative rounded-2xl overflow-hidden transition-all duration-500 group-hover:-translate-y-1"

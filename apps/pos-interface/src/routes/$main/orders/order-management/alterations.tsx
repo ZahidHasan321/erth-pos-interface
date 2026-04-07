@@ -89,7 +89,7 @@ function AlterationsPage() {
 
   const qc = useQueryClient();
   const { data: garments = [], isLoading } = useQuery({
-    queryKey: ["alteration-garments"],
+    queryKey: ["alteration-garments", getBrand()],
     queryFn: getAlterationGarments,
     staleTime: 30_000,
   });

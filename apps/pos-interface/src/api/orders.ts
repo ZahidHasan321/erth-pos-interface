@@ -5,11 +5,17 @@ import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
 
-export const getBrand = (): "ERTH" | "SAKKBA" | "QASS" => {
-    const brand = localStorage.getItem('pos.selected_brand');
-    if (brand === 'qass') return "QASS";
-    return brand === BRAND_NAMES.fromHome ? "SAKKBA" : "ERTH";
+// Brand is set by the $main route loader before any queries fire.
+// This avoids localStorage and keeps brand derived from the URL.
+let _currentBrand: "ERTH" | "SAKKBA" | "QASS" = "ERTH";
+
+export const setCurrentBrand = (brand: string): void => {
+    if (brand === 'qass') { _currentBrand = "QASS"; return; }
+    if (brand === BRAND_NAMES.fromHome) { _currentBrand = "SAKKBA"; return; }
+    _currentBrand = "ERTH";
 };
+
+export const getBrand = (): "ERTH" | "SAKKBA" | "QASS" => _currentBrand;
 
 /**
  * Helper to flatten joined work_orders into the main order object

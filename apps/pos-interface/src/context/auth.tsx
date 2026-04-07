@@ -1,15 +1,11 @@
-import type { BRAND_NAMES } from '@/lib/constants'
 import { db } from '@/lib/db'
 import * as React from 'react'
-
-type BrandName = typeof BRAND_NAMES[keyof typeof BRAND_NAMES]
 
 export interface AuthUser {
   id: string
   username: string
   name: string
   brands: string[]
-  userType: BrandName
   role: string | null
   department: string | null
   email: string | null
@@ -20,7 +16,7 @@ export interface AuthUser {
 export interface AuthContext {
   isAuthenticated: boolean
   isLoading: boolean
-  login: (credentials: { username: string; pin: string; userType: BrandName }) => Promise<void>
+  login: (credentials: { username: string; pin: string }) => Promise<void>
   logout: () => Promise<void>
   user: AuthUser | null
 }
@@ -28,7 +24,6 @@ export interface AuthContext {
 const AuthContext = React.createContext<AuthContext | null>(null)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const BRAND_KEY = 'pos.selected_brand'
 
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data } = await db
@@ -39,13 +34,11 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
 
   if (!data) return null
 
-  const savedBrand = localStorage.getItem(BRAND_KEY) as BrandName | null
   return {
     id: data.id,
     username: data.username,
     name: data.name,
     brands: data.brands ?? [],
-    userType: savedBrand || 'erth',
     role: data.role,
     department: data.department,
     email: data.email,
@@ -119,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const login = async (credentials: { username: string; pin: string; userType: BrandName }) => {
+  const login = async (credentials: { username: string; pin: string }) => {
     loginInProgress.current = true
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
@@ -142,28 +135,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       }
 
-      // Verify brand access
-      const userBrands: string[] = result.user.brands ?? []
-      if (userBrands.length > 0 && !userBrands.includes(credentials.userType)) {
-        await db.auth.signOut()
-        throw new Error(`You don't have access to this brand. Your brands: ${userBrands.join(', ')}`)
-      }
-
-      // Persist brand choice
-      localStorage.setItem(BRAND_KEY, credentials.userType)
-
-      setUser({
-        id: result.user.id,
-        username: result.user.username,
-        name: result.user.name,
-        brands: userBrands,
-        userType: credentials.userType,
-        role: result.user.role ?? null,
-        department: result.user.department ?? null,
-        email: result.user.email ?? null,
-        phone: result.user.phone ?? null,
-        employee_id: result.user.employee_id ?? null,
-      })
+      const fullUser = await fetchUserFromSession(result.user.id)
+      if (!fullUser) throw new Error('Failed to load user profile')
+      setUser(fullUser)
     } finally {
       loginInProgress.current = false
     }
@@ -171,7 +145,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await db.auth.signOut()
-    localStorage.removeItem(BRAND_KEY)
     setUser(null)
   }
 

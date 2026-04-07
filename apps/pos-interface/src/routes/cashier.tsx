@@ -3,6 +3,7 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { useAuth } from "@/context/auth";
+import { getBrand } from "@/api/orders";
 import { router } from "@/router";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { CashierBody } from "@/components/cashier/cashier-terminal";
@@ -29,7 +30,7 @@ function CashierTerminal() {
     const auth = useAuth();
     const navigate = useNavigate();
 
-    const brandKey = auth.user?.userType || "erth";
+    const brandKey = getBrand().toLowerCase();
     useEffect(() => {
         const root = document.documentElement;
         root.classList.remove("erth", "sakkba");

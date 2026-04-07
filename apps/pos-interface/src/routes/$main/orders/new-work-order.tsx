@@ -54,7 +54,7 @@ import { createWorkOrderStore } from "@/store/current-work-order";
 import type { Customer, Order } from "@repo/database";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import * as React from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
@@ -119,7 +119,8 @@ function NewWorkOrder() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const cashierHandlesPayment = user?.userType === "erth";
+    const { main } = useParams({ strict: false });
+    const cashierHandlesPayment = main === "erth";
     const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
     const { styles, stitchingAdult, stitchingChild } = usePricing();
 
@@ -1023,7 +1024,7 @@ function NewWorkOrder() {
                                 onClick={() => {
                                     resetWorkOrder();
                                     resetLocalState();
-                                    navigate({ to: "/$main/orders/new-work-order", params: { main: user?.userType || "erth" }, search: {} });
+                                    navigate({ to: "/$main/orders/new-work-order", params: { main: main || "erth" }, search: {} });
                                 }}
                                 className="text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
                             >

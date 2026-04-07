@@ -9,6 +9,7 @@ import {
 } from "@repo/ui/sidebar";
 import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
+import { setCurrentBrand } from "@/api/orders";
 import { router } from "@/router";
 import {
   createFileRoute,
@@ -51,10 +52,16 @@ export const Route = createFileRoute("/$main")<{
       throw notFound({ routeId: rootRouteId });
     }
 
-    // Return whether there's a brand mismatch
+    // Set module-level brand so all API calls use the correct brand
+    // without needing localStorage. Must happen before any queries fire.
+    setCurrentBrand(params.main);
+
+    const brands = auth?.user?.brands ?? [];
+    const hasBrandMismatch =
+      brands.length > 0 && !brands.includes(params.main);
+
     return {
-      hasBrandMismatch: auth?.user?.userType !== params.main,
-      userBrand: auth?.user?.userType,
+      hasBrandMismatch,
       attemptedBrand: params.main,
     };
   },
@@ -140,10 +147,8 @@ function RouteComponent() {
 
   const attemptedBrandName =
     loaderData.attemptedBrand === BRAND_NAMES.showroom ? "Erth" : "Sakkba";
-  const userBrandName =
-    loaderData.userBrand === BRAND_NAMES.showroom ? "Erth" : "Sakkba";
 
-  // Show error page if user tried to access wrong brand
+  // Show error page if user tried to access a brand they don't have access to
   const errorPage = (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-destructive/5 to-background p-4">
       <div className="max-w-2xl w-full bg-card border-2 border-destructive/20 rounded-2xl shadow-2xl p-6 text-center space-y-3">
@@ -163,16 +168,11 @@ function RouteComponent() {
           .
         </p>
 
-        <p className="text-base text-muted-foreground">
-          You are currently logged in as a{" "}
-          <span className="font-semibold text-foreground">{userBrandName}</span>{" "}
-          user.
-        </p>
-
         <div className="pt-3 flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to={`/${loaderData.userBrand}`}>
+          <Link to="/home">
             <Button size="lg" className="w-full sm:w-auto">
-              Go to {userBrandName}
+              <Home className="w-4 h-4 mr-2" />
+              Go to Home
             </Button>
           </Link>
           <Button

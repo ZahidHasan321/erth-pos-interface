@@ -10,14 +10,17 @@ import {
   deleteTransferRequest,
   type TransferFilters,
 } from "@/api/transfers";
+import { getBrand } from "@/api/orders";
 import { useAuth } from "@/context/auth";
 
 const TRANSFER_KEY = "transfer-requests";
 
 export function useTransferRequests(filters?: TransferFilters) {
+  const brand = getBrand();
+  const filtersWithBrand = { ...filters, brand };
   return useQuery({
-    queryKey: [TRANSFER_KEY, filters],
-    queryFn: () => getTransferRequests(filters),
+    queryKey: [TRANSFER_KEY, filtersWithBrand],
+    queryFn: () => getTransferRequests(filtersWithBrand),
   });
 }
 
@@ -31,7 +34,7 @@ export function useCreateTransfer() {
       item_type: string;
       notes?: string;
       items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
-    }) => createTransferRequest({ ...data, requested_by: user!.id }),
+    }) => createTransferRequest({ ...data, requested_by: user!.id, brand: getBrand() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
     },
@@ -76,7 +79,7 @@ export function useReviseTransfer() {
       items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
     }) => {
       const { originalId, ...rest } = data;
-      return reviseTransferRequest(originalId, { ...rest, requested_by: user!.id });
+      return reviseTransferRequest(originalId, { ...rest, requested_by: user!.id, brand: getBrand() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });

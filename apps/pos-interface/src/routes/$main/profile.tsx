@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/auth";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import { Badge } from "@repo/ui/badge";
 import { Separator } from "@repo/ui/separator";
@@ -25,6 +25,7 @@ const DEPARTMENT_LABELS: Record<string, string> = {
 
 function ProfilePage() {
   const { user } = useAuth();
+  const { main } = useParams({ strict: false });
 
   if (!user) return null;
 
@@ -132,7 +133,7 @@ function ProfilePage() {
               <p className="mt-3 text-xs text-muted-foreground">
                 Currently viewing:{" "}
                 <span className="font-semibold capitalize text-foreground">
-                  {user.userType}
+                  {main}
                 </span>
               </p>
             </div>
