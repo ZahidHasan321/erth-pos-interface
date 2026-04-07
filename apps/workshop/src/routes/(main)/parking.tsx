@@ -28,13 +28,13 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 import { BrandBadge, ExpressBadge, StageBadge, AlterationBadge } from "@/components/shared/StageBadge";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { useResources } from "@/hooks/useResources";
 import { toast } from "sonner";
 import {
-  ParkingSquare, Clock, RotateCcw, Unlock, ChevronDown, ChevronUp,
+  ParkingSquare, Clock, RotateCcw, Unlock, ChevronDown,
   Package, Home, AlertTriangle, Eye,
   CalendarDays, Pencil, Scissors, Shirt, Sparkles, Flame, ShieldCheck, Droplets,
 } from "lucide-react";
@@ -115,7 +115,7 @@ function ParkingOrderCard({
     <>
     <div
       className={cn(
-        "bg-card border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-all shadow-sm border-l-4 cursor-pointer",
         group.express
           ? "border-l-orange-400 ring-1 ring-orange-200"
           : allParked
@@ -123,6 +123,7 @@ function ParkingOrderCard({
             : "border-l-border",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
+      onClick={() => setExpanded((v) => !v)}
     >
       <div
         className="px-3 py-2.5 transition-colors rounded-t-xl"
@@ -154,14 +155,7 @@ function ParkingOrderCard({
             <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
               <Eye className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
-            <button
-              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/50 hover:text-foreground")}
-              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse garments" : "Expand garments"}
-            >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
-            </button>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
           </div>
         </div>
 
@@ -201,16 +195,15 @@ function ParkingOrderCard({
         </div>
       </div>
 
-      {expanded && (
-        <div className="border-t bg-muted/20 px-3 py-2 space-y-1.5">
-          {group.garments.map((g) => (
-            <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2">
-              <GarmentTypeBadge type={g.garment_type ?? "final"} />
-              <span className="font-mono text-xs font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+      <div className={cn("grid transition-[grid-template-rows] duration-300 ease-out", expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+        <div className="overflow-hidden">
+          <div className="border-t bg-muted/20 px-3 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {group.garments.map((g, i) => <GarmentCard key={g.id} garment={g} showPipeline={false} index={i} />)}
             </div>
-          ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
     <OrderPeekSheet orderId={peekOpen ? group.order_id : null} open={peekOpen} onOpenChange={setPeekOpen} />
     </>
@@ -257,17 +250,17 @@ function WaitingFinalsCard({
   return (
     <div
       className={cn(
-        "bg-card border rounded-xl transition-all shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-all shadow-sm border-l-4 cursor-pointer",
         group.express
           ? "border-l-orange-400 ring-1 ring-orange-200"
           : "border-l-amber-400",
         isReady ? "border-green-300 bg-green-50/40" : "border-amber-200 bg-amber-50/30",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
+      onClick={() => setExpanded((v) => !v)}
     >
       <div
-        className="px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors rounded-t-xl"
-        onClick={() => setExpanded((v) => !v)}
+        className="px-3 py-2.5 transition-colors rounded-t-xl"
       >
         <div className="flex items-start gap-2">
           <Checkbox
@@ -341,12 +334,7 @@ function WaitingFinalsCard({
               )}
               Release Finals
             </Button>
-            <div className={cn(
-              "p-1.5 rounded-md transition-colors",
-              expanded ? "bg-muted" : "text-muted-foreground",
-            )}>
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
           </div>
         </div>
             {/* Row 2: Metadata */}
@@ -376,19 +364,15 @@ function WaitingFinalsCard({
         </div>
       </div>
 
-      {expanded && (
-        <div className="border-t bg-muted/20 px-3 py-2 space-y-1.5">
-          {group.garments.map((g) => (
-            <div key={g.id} className="bg-card rounded-lg border p-2 flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs text-muted-foreground w-20 shrink-0">
-                {g.garment_id ?? g.id.slice(0, 8)}
-              </span>
-              <GarmentTypeBadge type={g.garment_type ?? "final"} />
-              <StageBadge stage={g.piece_stage} />
+      <div className={cn("grid transition-[grid-template-rows] duration-300 ease-out", expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+        <div className="overflow-hidden">
+          <div className="border-t bg-muted/20 px-3 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {group.garments.map((g, i) => <GarmentCard key={g.id} garment={g} showPipeline={false} index={i} />)}
             </div>
-          ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -817,7 +801,13 @@ function ParkingPage() {
   }
 
   // Separate: orders with waiting finals (for Release Finals tab)
-  const waitingFinalsGroups = orderGroups.filter((og) => hasReleasableFinals(og.garments));
+  // Only include orders that have brovas — finals-only orders never need the brova acceptance gate,
+  // so they stay in the Orders tab and go straight to the scheduler.
+  const waitingFinalsGroups = orderGroups.filter((og) => {
+    const allOrderGarments = allGarmentsByOrder.get(og.order_id) ?? og.garments;
+    const hasBrovas = allOrderGarments.some((g) => g.garment_type === "brova");
+    return hasBrovas && hasReleasableFinals(og.garments);
+  });
 
   // Fetch brova acceptance status and production plans for orders with waiting finals
   const waitingOrderIds = waitingFinalsGroups.map((og) => og.order_id);
@@ -962,6 +952,15 @@ function ParkingPage() {
 
   // Peek sheet state for desktop tables
   const [peekOrderId, setPeekOrderId] = useState<number | null>(null);
+
+  // Expanded rows for desktop tables
+  const [expandedOrderRows, setExpandedOrderRows] = useState<Set<number>>(new Set());
+  const [expandedFinalsRows, setExpandedFinalsRows] = useState<Set<number>>(new Set());
+
+  const toggleOrderRow = (id: number) =>
+    setExpandedOrderRows((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleFinalsRow = (id: number) =>
+    setExpandedFinalsRows((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const toggleReturn = (id: string, checked: boolean) =>
     setSelectedReturnIds((prev) => {
@@ -1166,19 +1165,18 @@ function ParkingPage() {
               ))}
             </div>
           ) : (
-            <div className="border rounded-xl overflow-hidden">
+            <TableContainer>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-10" />
-                    <TableHead>Order</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Brand</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Garments</TableHead>
-                    <TableHead>Express</TableHead>
-                    <TableHead>Delivery</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[90px]">Order</TableHead>
+                    <TableHead className="w-[180px]">Customer</TableHead>
+                    <TableHead className="w-[80px]">Brand</TableHead>
+                    <TableHead className="w-[180px]">Status</TableHead>
+                    <TableHead className="w-[150px]">Flags</TableHead>
+                    <TableHead className="w-[150px] text-center">Delivery</TableHead>
+                    <TableHead className="text-right w-[130px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1191,81 +1189,124 @@ function ParkingPage() {
                       : null;
                     const isOverdue = daysLeft !== null && daysLeft < 0;
                     const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+                    const isExpanded = expandedOrderRows.has(group.order_id);
                     return (
-                      <TableRow key={group.order_id} className={cn(selectedOrderIds.has(group.order_id) && "bg-primary/5")}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedOrderIds.has(group.order_id)}
-                            onCheckedChange={(checked) => toggleOrder(group.order_id, !!checked)}
-                            disabled={allParked}
-                            className="size-4"
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono font-bold">
-                          #{group.order_id}
-                          {group.invoice_number && (
-                            <span className="text-xs text-muted-foreground/50 ml-1">· #{group.invoice_number}</span>
+                      <>
+                        <TableRow
+                          key={group.order_id}
+                          onClick={() => toggleOrderRow(group.order_id)}
+                          aria-expanded={isExpanded}
+                          className={cn(
+                            "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
+                            selectedOrderIds.has(group.order_id) && "bg-primary/5",
                           )}
-                        </TableCell>
-                        <TableCell className="text-sm">{group.customer_name ?? "—"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {allParked && brovaBlock === "in_production" && (
-                            <Badge variant="outline" className="border-0 bg-purple-500 text-white text-xs font-semibold uppercase">
-                              Brova in production
-                            </Badge>
-                          )}
-                          {allParked && brovaBlock === "awaiting_trial" && (
-                            <Badge variant="outline" className="border-0 bg-amber-500 text-white text-xs font-semibold uppercase">
-                              Waiting for brova trial
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{garmentSummary(group.garments)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {group.express && <ExpressBadge />}
-                            {group.home_delivery && (
-                              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
-                                <Home className="w-3 h-3" />
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedOrderIds.has(group.order_id)}
+                              onCheckedChange={(checked) => toggleOrder(group.order_id, !!checked)}
+                              disabled={allParked}
+                              className="size-4"
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <span>#{group.order_id}</span>
+                              {group.invoice_number && (
+                                <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">{group.customer_name ?? "—"}</span>
+                              {group.customer_mobile && (
+                                <span className="text-xs font-mono text-muted-foreground">{group.customer_mobile}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {allParked && brovaBlock === "in_production" && (
+                              <Badge variant="outline" className="border-0 bg-purple-500 text-white text-xs font-semibold uppercase">
+                                Brova in production
+                              </Badge>
+                            )}
+                            {allParked && brovaBlock === "awaiting_trial" && (
+                              <Badge variant="outline" className="border-0 bg-amber-500 text-white text-xs font-semibold uppercase">
+                                Waiting for brova trial
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {group.express && <ExpressBadge />}
+                              {group.home_delivery && (
+                                <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                                  <Home className="w-3 h-3" /> Home
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-middle text-center">
+                            <div className="flex flex-col gap-1 items-center">
+                              <span className={cn(
+                                "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
+                                isOverdue && "text-red-700",
+                                isUrgent && "text-amber-700",
+                                !isUrgent && !isOverdue && "text-muted-foreground",
+                              )}>
+                                {deliveryDate ? formatDate(deliveryDate) : "—"}
                               </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {deliveryDate && (
-                            <span className={cn(
-                              "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                              isOverdue && "bg-red-100 text-red-800",
-                              isUrgent && "bg-amber-100 text-amber-800",
-                              !isUrgent && !isOverdue && "text-muted-foreground",
-                            )}>
-                              {formatDate(deliveryDate)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {!allParked && (
-                              <Button size="sm" onClick={() => handleSendSingleOrder(group)} disabled={sendMut.isPending} className="text-xs h-7">
-                                → Scheduler
-                              </Button>
-                            )}
-                            <button onClick={() => setPeekOrderId(group.order_id)} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
-                              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                              <div className="flex items-center gap-1">
+                                {(() => {
+                                  const b = group.garments.filter((g) => g.garment_type === "brova").length;
+                                  const f = group.garments.filter((g) => g.garment_type === "final").length;
+                                  return (
+                                    <>
+                                      {b > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{b}B</span>}
+                                      {f > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{f}F</span>}
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!allParked && (
+                                <Button size="sm" onClick={() => handleSendSingleOrder(group)} disabled={sendMut.isPending} className="text-xs h-7">
+                                  → Scheduler
+                                </Button>
+                              )}
+                              <button onClick={() => setPeekOrderId(group.order_id)} aria-label="View order details" className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground/50 hover:text-foreground cursor-pointer">
+                                <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                              <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className={cn("p-0 transition-colors", isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0")}>
+                          <TableCell colSpan={8} className="p-0">
+                            <div className={cn("grid transition-[grid-template-rows] duration-300 ease-out", isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+                              <div className="overflow-hidden">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 py-3">
+                                  {group.garments.map((g, i) => <GarmentCard key={g.id} garment={g} showPipeline={false} index={i} />)}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </>
                     );
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </TableContainer>
           )}
           <BatchActionBar
             count={selectedOrderIds.size}
@@ -1310,18 +1351,17 @@ function ParkingPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Orders with finals awaiting release. Green = brovas trialed &amp; accepted, ready to release.
               </p>
-              <div className="border rounded-xl overflow-hidden">
+              <TableContainer>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-10" />
-                      <TableHead>Order</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Brand</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Garments</TableHead>
-                      <TableHead>Delivery</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-[90px]">Order</TableHead>
+                      <TableHead className="w-[180px]">Customer</TableHead>
+                      <TableHead className="w-[80px]">Brand</TableHead>
+                      <TableHead className="w-[220px]">Status</TableHead>
+                      <TableHead className="w-[150px] text-center">Delivery</TableHead>
+                      <TableHead className="text-right w-[130px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1334,83 +1374,135 @@ function ParkingPage() {
                         (g) => g.garment_type === "final" && g.piece_stage === "waiting_cut" && !g.in_production,
                       );
                       const deliveryDate = group.garments[0]?.delivery_date_order;
+                      const isExpanded = expandedFinalsRows.has(group.order_id);
                       return (
-                        <TableRow key={group.order_id} className={cn(selectedWaitingIds.has(group.order_id) && "bg-primary/5")}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedWaitingIds.has(group.order_id)}
-                              onCheckedChange={(checked) => toggleWaiting(group.order_id, !!checked)}
-                              className="size-4"
-                            />
-                          </TableCell>
-                          <TableCell className="font-mono font-bold">#{group.order_id}</TableCell>
-                          <TableCell className="text-sm">{group.customer_name ?? "—"}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center flex-wrap gap-1">
-                              {allRejected ? (
-                                <Badge variant="outline" className="border-0 bg-red-100 text-red-800 text-xs font-semibold uppercase">
-                                  All brovas rejected
-                                </Badge>
-                              ) : isReady ? (
-                                <Badge variant="outline" className="border-0 bg-green-600 text-white text-xs font-semibold uppercase">
-                                  {noBrovas ? "No brovas — ready" : "Ready for finals"}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
-                                  Awaiting trial ({bs!.trialed}/{bs!.total} trialed)
-                                </Badge>
-                              )}
-                              {isReady && !noBrovas && bs!.trialed < bs!.total && (
-                                <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
-                                  {bs!.trialed}/{bs!.total} trialed
-                                </Badge>
-                              )}
-                              {posReleased && (
-                                <Badge variant="outline" className="border-0 bg-blue-100 text-blue-800 text-xs font-semibold uppercase">
-                                  Shop approved
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{garmentSummary(group.garments)}</TableCell>
-                          <TableCell>
-                            {deliveryDate && (
-                              <span className="text-sm font-bold text-amber-700">{formatDate(deliveryDate)}</span>
+                        <>
+                          <TableRow
+                            key={group.order_id}
+                            onClick={() => toggleFinalsRow(group.order_id)}
+                            aria-expanded={isExpanded}
+                            className={cn(
+                              "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
+                              selectedWaitingIds.has(group.order_id) && "bg-primary/5",
                             )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              onClick={() => handleReleaseFinals(group)}
-                              disabled={releaseWithPlanMut.isPending}
-                              className={cn(
-                                "text-xs h-7",
-                                isReady
-                                  ? "bg-green-600 hover:bg-green-700"
-                                  : allRejected
-                                    ? "bg-red-600 hover:bg-red-700"
-                                    : "bg-amber-600 hover:bg-amber-700",
-                              )}
-                            >
-                              {isReady ? (
-                                <Unlock className="w-3 h-3 mr-1" />
-                              ) : (
-                                <AlertTriangle className="w-3 h-3 mr-1" />
-                              )}
-                              Release Finals
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                          >
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedWaitingIds.has(group.order_id)}
+                                onCheckedChange={(checked) => toggleWaiting(group.order_id, !!checked)}
+                                className="size-4"
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono font-bold text-sm">
+                              <div className="flex flex-col gap-0.5">
+                                <span>#{group.order_id}</span>
+                                {group.invoice_number && (
+                                  <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold">{group.customer_name ?? "—"}</span>
+                                {group.customer_mobile && (
+                                  <span className="text-xs font-mono text-muted-foreground">{group.customer_mobile}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center flex-wrap gap-1">
+                                {allRejected ? (
+                                  <Badge variant="outline" className="border-0 bg-red-100 text-red-800 text-xs font-semibold uppercase">
+                                    All brovas rejected
+                                  </Badge>
+                                ) : isReady ? (
+                                  <Badge variant="outline" className="border-0 bg-green-600 text-white text-xs font-semibold uppercase">
+                                    {noBrovas ? "No brovas — ready" : "Ready for finals"}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                                    Awaiting trial ({bs!.trialed}/{bs!.total} trialed)
+                                  </Badge>
+                                )}
+                                {isReady && !noBrovas && bs!.trialed < bs!.total && (
+                                  <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800 text-xs font-semibold uppercase">
+                                    {bs!.trialed}/{bs!.total} trialed
+                                  </Badge>
+                                )}
+                                {posReleased && (
+                                  <Badge variant="outline" className="border-0 bg-blue-100 text-blue-800 text-xs font-semibold uppercase">
+                                    Shop approved
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-middle text-center">
+                              <div className="flex flex-col gap-1 items-center">
+                                <span className="text-xs font-bold text-muted-foreground">
+                                  {deliveryDate ? formatDate(deliveryDate) : "—"}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {(() => {
+                                    const b = group.garments.filter((g) => g.garment_type === "brova").length;
+                                    const f = group.garments.filter((g) => g.garment_type === "final").length;
+                                    return (
+                                      <>
+                                        {b > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{b}B</span>}
+                                        {f > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{f}F</span>}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleReleaseFinals(group)}
+                                  disabled={releaseWithPlanMut.isPending}
+                                  className={cn(
+                                    "text-xs h-7",
+                                    isReady
+                                      ? "bg-green-600 hover:bg-green-700"
+                                      : allRejected
+                                        ? "bg-red-600 hover:bg-red-700"
+                                        : "bg-amber-600 hover:bg-amber-700",
+                                  )}
+                                >
+                                  {isReady ? (
+                                    <Unlock className="w-3 h-3 mr-1" />
+                                  ) : (
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                  )}
+                                  Release Finals
+                                </Button>
+                                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className={cn("p-0 transition-colors", isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0")}>
+                            <TableCell colSpan={7} className="p-0">
+                              <div className={cn("grid transition-[grid-template-rows] duration-300 ease-out", isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+                                <div className="overflow-hidden">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 py-3">
+                                    {group.garments.map((g, i) => <GarmentCard key={g.id} garment={g} showPipeline={false} index={i} />)}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </>
                       );
                     })}
                   </TableBody>
                 </Table>
-              </div>
+              </TableContainer>
             </>
           )}
           <BatchActionBar
@@ -1453,7 +1545,7 @@ function ParkingPage() {
               ))}
             </div>
           ) : (
-            <div className="border rounded-xl overflow-hidden">
+            <TableContainer>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
@@ -1470,7 +1562,13 @@ function ParkingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReturns.map((g) => (
+                  {filteredReturns.map((g) => {
+                    const daysLeft = g.delivery_date_order
+                      ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
+                      : null;
+                    const isOverdue = daysLeft !== null && daysLeft < 0;
+                    const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+                    return (
                     <TableRow key={g.id} className={cn(selectedReturnIds.has(g.id) && "bg-primary/5")}>
                       <TableCell>
                         <Checkbox
@@ -1489,14 +1587,23 @@ function ParkingPage() {
                         <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
                       </TableCell>
                       <TableCell>
-                        <StageBadge stage={g.piece_stage} />
+                        <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
                       </TableCell>
                       <TableCell>
                         {g.express && <ExpressBadge />}
                       </TableCell>
-                      <TableCell>
-                        {g.delivery_date_order && (
-                          <span className="text-sm text-muted-foreground">{formatDate(g.delivery_date_order)}</span>
+                      <TableCell className="align-middle text-center">
+                        {g.delivery_date_order ? (
+                          <span className={cn(
+                            "text-xs font-bold tabular-nums",
+                            isOverdue && "text-red-700",
+                            isUrgent && "text-amber-700",
+                            !isUrgent && !isOverdue && "text-muted-foreground",
+                          )}>
+                            {formatDate(g.delivery_date_order)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -1505,10 +1612,11 @@ function ParkingPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
-            </div>
+            </TableContainer>
           )}
           <BatchActionBar
             count={selectedReturnIds.size}

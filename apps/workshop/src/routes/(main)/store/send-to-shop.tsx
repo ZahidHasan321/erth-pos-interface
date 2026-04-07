@@ -102,6 +102,7 @@ function SendToShopPage() {
         const transfer = await createTransferRequest({
           direction: "workshop_to_shop",
           item_type: batch.item_type,
+          brand: "ERTH",
           requested_by: user!.id,
           notes: notes || undefined,
           items: batch.items,
