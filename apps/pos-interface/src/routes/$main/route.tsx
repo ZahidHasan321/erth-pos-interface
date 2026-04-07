@@ -42,7 +42,7 @@ export const Route = createFileRoute("/$main")<{
   params: { main: MainParam };
 }>({
   component: RouteComponent,
-  loader: async ({ params, context }) => {
+  loader: async ({ params, context, cause }) => {
     const { auth } = context;
 
     if (
@@ -54,7 +54,12 @@ export const Route = createFileRoute("/$main")<{
 
     // Set module-level brand so all API calls use the correct brand
     // without needing localStorage. Must happen before any queries fire.
-    setCurrentBrand(params.main);
+    // Skip during preloads: `defaultPreload: 'intent'` runs this loader on
+    // link hover, which would corrupt _currentBrand for the wrong brand
+    // if the user ends up navigating elsewhere.
+    if (cause !== 'preload') {
+      setCurrentBrand(params.main);
+    }
 
     const brands = auth?.user?.brands ?? [];
     const hasBrandMismatch =
@@ -65,13 +70,11 @@ export const Route = createFileRoute("/$main")<{
       attemptedBrand: params.main,
     };
   },
-  beforeLoad: ({ context, location }) => {
+  beforeLoad: ({ context, location, params }) => {
     if (!context.auth.isAuthenticated) {
       throw redirect({
-        to: "/login",
-        search: {
-          redirect: location.href,
-        },
+        to: `/${params.main}/login` as any,
+        search: { redirect: location.href } as any,
       });
     }
   },
@@ -122,11 +125,11 @@ function RouteComponent() {
   const confirmLogout = useCallback(() => {
     auth.logout().then(() => {
       router.invalidate().finally(() => {
-        navigate({ to: "/" });
+        navigate({ to: `/${main}/login` as any });
       });
     });
     setShowLogoutDialog(false);
-  }, [auth, navigate]);
+  }, [auth, navigate, main]);
 
   const brandLogo = main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo;
   const brandName = main === BRAND_NAMES.showroom ? BRAND_NAMES.showroom : BRAND_NAMES.fromHome;

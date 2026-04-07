@@ -22,6 +22,8 @@ import { Route as MainCashierRouteImport } from './routes/$main/cashier'
 import { Route as MainStoreRouteRouteImport } from './routes/$main/store/route'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
+import { Route as authSakkbaLoginRouteImport } from './routes/(auth)/sakkba/login'
+import { Route as authErthLoginRouteImport } from './routes/(auth)/erth/login'
 import { Route as MainStoreTransferHistoryRouteImport } from './routes/$main/store/transfer-history'
 import { Route as MainStoreStockReportRouteImport } from './routes/$main/store/stock-report'
 import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/store/request-delivery'
@@ -110,6 +112,16 @@ const MainAppointmentsIndexRoute = MainAppointmentsIndexRouteImport.update({
   id: '/appointments/',
   path: '/appointments/',
   getParentRoute: () => MainRouteRoute,
+} as any)
+const authSakkbaLoginRoute = authSakkbaLoginRouteImport.update({
+  id: '/(auth)/sakkba/login',
+  path: '/sakkba/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authErthLoginRoute = authErthLoginRouteImport.update({
+  id: '/(auth)/erth/login',
+  path: '/erth/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const MainStoreTransferHistoryRoute =
   MainStoreTransferHistoryRouteImport.update({
@@ -269,6 +281,8 @@ export interface FileRoutesByFullPath {
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
   '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/erth/login': typeof authErthLoginRoute
+  '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -306,6 +320,8 @@ export interface FileRoutesByTo {
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
   '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/erth/login': typeof authErthLoginRoute
+  '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/customers': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -345,6 +361,8 @@ export interface FileRoutesById {
   '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
   '/$main/store/stock-report': typeof MainStoreStockReportRoute
   '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/(auth)/erth/login': typeof authErthLoginRoute
+  '/(auth)/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
   '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
@@ -385,6 +403,8 @@ export interface FileRouteTypes {
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
     | '/$main/store/transfer-history'
+    | '/erth/login'
+    | '/sakkba/login'
     | '/$main/appointments/'
     | '/$main/customers/'
     | '/$main/orders/order-management/alterations'
@@ -422,6 +442,8 @@ export interface FileRouteTypes {
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
     | '/$main/store/transfer-history'
+    | '/erth/login'
+    | '/sakkba/login'
     | '/$main/appointments'
     | '/$main/customers'
     | '/$main/orders/order-management/alterations'
@@ -460,6 +482,8 @@ export interface FileRouteTypes {
     | '/$main/store/request-delivery'
     | '/$main/store/stock-report'
     | '/$main/store/transfer-history'
+    | '/(auth)/erth/login'
+    | '/(auth)/sakkba/login'
     | '/$main/appointments/'
     | '/$main/customers/'
     | '/$main/orders/order-management/alterations'
@@ -481,6 +505,8 @@ export interface RootRouteChildren {
   CashierRoute: typeof CashierRoute
   HomeRoute: typeof HomeRoute
   authLoginRoute: typeof authLoginRoute
+  authErthLoginRoute: typeof authErthLoginRoute
+  authSakkbaLoginRoute: typeof authSakkbaLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -575,6 +601,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$main/appointments/'
       preLoaderRoute: typeof MainAppointmentsIndexRouteImport
       parentRoute: typeof MainRouteRoute
+    }
+    '/(auth)/sakkba/login': {
+      id: '/(auth)/sakkba/login'
+      path: '/sakkba/login'
+      fullPath: '/sakkba/login'
+      preLoaderRoute: typeof authSakkbaLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/erth/login': {
+      id: '/(auth)/erth/login'
+      path: '/erth/login'
+      fullPath: '/erth/login'
+      preLoaderRoute: typeof authErthLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/$main/store/transfer-history': {
       id: '/$main/store/transfer-history'
@@ -835,6 +875,8 @@ const rootRouteChildren: RootRouteChildren = {
   CashierRoute: CashierRoute,
   HomeRoute: HomeRoute,
   authLoginRoute: authLoginRoute,
+  authErthLoginRoute: authErthLoginRoute,
+  authSakkbaLoginRoute: authSakkbaLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
