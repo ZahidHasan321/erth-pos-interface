@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
@@ -11,7 +11,8 @@ import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Truck, Package, History, Printer, ChevronDown, ChevronRight, Hash, User } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
@@ -216,7 +217,6 @@ function ReadyOrderCard({
                 <TableRow
                   key={g.id}
                   className={cn(
-                    g.express && "bg-orange-50/60",
                     isSelected && "bg-primary/5",
                   )}
                 >
@@ -236,7 +236,7 @@ function ReadyOrderCard({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <StageBadge stage={g.piece_stage} />
+                    <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
                   </TableCell>
                   <TableCell>{g.express && <ExpressBadge />}</TableCell>
                 </TableRow>
@@ -251,15 +251,13 @@ function ReadyOrderCard({
 
 function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <TableContainer>
       <Table>
         <TableHeader>
-          <TableRow className="bg-muted/40">
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
             <TableHead className="w-20">Type</TableHead>
             <TableHead>Garment</TableHead>
             <TableHead>Customer</TableHead>
-            <TableHead>Order</TableHead>
-            <TableHead className="w-24">Express</TableHead>
             <TableHead>Delivery</TableHead>
           </TableRow>
         </TableHeader>
@@ -269,7 +267,6 @@ function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
             return (
               <TableRow
                 key={g.id}
-                className={cn(g.express && "bg-orange-50/60")}
               >
                 <TableCell>
                   <GarmentTypeBadge type={g.garment_type ?? "final"} />
@@ -280,27 +277,31 @@ function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
                     <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
                   </div>
                 </TableCell>
-                <TableCell className="text-sm">{g.customer_name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{g.order_id}</TableCell>
-                <TableCell>
-                  {g.express && <ExpressBadge />}
+                <TableCell className="text-sm">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{g.customer_name}</span>
+                    <span className="text-xs font-mono text-muted-foreground">#{g.order_id}</span>
+                  </div>
                 </TableCell>
                 <TableCell>
-                  {g.delivery_date_order ? (
-                    <span className={cn("text-xs font-medium rounded", urgency.className)}>
-                      {formatDate(g.delivery_date_order)}
-                      {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">--</span>
-                  )}
+                  <div className="flex flex-col gap-1">
+                    {g.delivery_date_order ? (
+                      <span className={cn("text-xs font-medium", urgency.className)}>
+                        {formatDate(g.delivery_date_order)}
+                        {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    {g.express && <ExpressBadge />}
+                  </div>
                 </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
-    </div>
+    </TableContainer>
   );
 }
 
@@ -332,50 +333,11 @@ function getPeriodRange(period: HistoryPeriod): { from: Date; to: Date; label: s
   return { from: startOfMonth, to: startOfNextMonth, label: startOfMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' }) };
 }
 
-const HISTORY_PERIODS: readonly HistoryPeriod[] = ['today', 'week', 'month'] as const;
-const PERIOD_LABELS: Record<HistoryPeriod, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
-
-function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onChange: (p: HistoryPeriod) => void }) {
-  const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
-  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const measure = () => {
-      const idx = HISTORY_PERIODS.indexOf(period);
-      const btn = buttonsRef.current[idx];
-      if (btn) {
-        setIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
-      }
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [period]);
-
-  return (
-    <div className="relative inline-flex items-center border-2 rounded-lg p-0.5">
-      {indicator && (
-        <div
-          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
-          style={{ left: indicator.left, width: indicator.width }}
-        />
-      )}
-      {HISTORY_PERIODS.map((p, i) => (
-        <button
-          key={p}
-          ref={(el) => { buttonsRef.current[i] = el; }}
-          onClick={() => onChange(p)}
-          className={cn(
-            'relative z-10 text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-md transition-colors duration-300 whitespace-nowrap',
-            period === p ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          {PERIOD_LABELS[p]}
-        </button>
-      ))}
-    </div>
-  );
-}
+const PERIOD_OPTIONS = [
+  { value: 'today' as const, label: 'Today' },
+  { value: 'week' as const, label: 'This Week' },
+  { value: 'month' as const, label: 'This Month' },
+] satisfies ReadonlyArray<{ value: HistoryPeriod; label: string }>;
 
 function DispatchHistoryTab() {
   const [period, setPeriod] = useState<HistoryPeriod>('today');
@@ -395,7 +357,7 @@ function DispatchHistoryTab() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <PeriodPillSwitcher period={period} onChange={setPeriod} />
+        <SlidingPillSwitcher value={period} options={PERIOD_OPTIONS} onChange={setPeriod} />
 
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           {periodLabel}
@@ -438,10 +400,10 @@ function DispatchHistoryTab() {
       ) : rows.length === 0 ? (
         <EmptyState icon={History} message={`No dispatches in ${periodLabel}`} />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden print:border-0 print:shadow-none">
+        <TableContainer className="print:border-0 print:shadow-none">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40">
+              <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
                 <TableHead className="w-32">Date</TableHead>
                 <TableHead>Order</TableHead>
                 <TableHead>Invoice</TableHead>
@@ -490,7 +452,7 @@ function DispatchHistoryTab() {
               })}
             </TableBody>
           </Table>
-        </div>
+        </TableContainer>
       )}
     </div>
   );

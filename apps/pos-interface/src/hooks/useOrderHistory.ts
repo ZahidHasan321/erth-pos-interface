@@ -53,7 +53,7 @@ export function useOrderHistory({
   dateFilter?: Date | null;
 } = {}) {
   return useQuery({
-    queryKey: ["order-history", page, pageSize, searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter],
+    queryKey: ["order-history", getBrand(), page, pageSize, searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter],
     queryFn: async () => {
       const from = page * pageSize;
       const to = from + pageSize - 1;

@@ -1,6 +1,7 @@
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -15,7 +16,7 @@ import {
 } from "@repo/ui/sidebar";
 import { useSidebarCounts, useAttentionCount } from "@/hooks/useSidebarCounts";
 import { useTransferRequests } from "@/hooks/useTransfers";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
@@ -50,6 +51,7 @@ export function WorkshopSidebar() {
   const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
+  const matchRoute = useMatchRoute();
   const { user: authUser } = useAuth();
 
   // Auto-close sidebar on navigation on mobile/tablet
@@ -142,7 +144,7 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {operationItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
@@ -218,7 +220,7 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {peopleItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
@@ -237,7 +239,7 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {postProductionItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
@@ -262,7 +264,7 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {storeItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
@@ -279,6 +281,12 @@ export function WorkshopSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="border-t px-3 py-2 group-data-[collapsible=icon]:hidden">
+        <p className="text-[10px] text-muted-foreground/50 text-center">
+          &copy; {new Date().getFullYear()} Alpaca. All rights reserved.
+        </p>
+      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>

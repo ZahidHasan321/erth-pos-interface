@@ -98,7 +98,7 @@ export function GarmentHeader({
         <span className="font-mono font-black text-xl">
           {garment.garment_id ?? garment.id.slice(0, 8)}
         </span>
-        <StageBadge stage={garment.piece_stage} />
+        <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
         {garment.express && <ExpressBadge />}
         <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
       </div>

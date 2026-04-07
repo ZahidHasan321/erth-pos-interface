@@ -97,31 +97,18 @@ export const GarmentTypeCell = ({
     };
     const isFormDisabled = meta?.isFormDisabled || false;
     return (
-        <div className="w-full flex flex-col items-center">
+        <div className="w-full flex justify-center items-center">
             <Controller
                 name={`garments.${row.index}.garment_type`}
                 control={control}
-                render={({ field, fieldState: { error } }) => (
-                    <div className="flex flex-col gap-1 items-center">
-                        <Select
-                            onValueChange={field.onChange}
-                            value={field.value || "final"}
-                            disabled={isFormDisabled}
-                        >
-                            <SelectTrigger
-                                className={cn(
-                                    "w-full bg-background border-border/60",
-                                    error && "border-destructive",
-                                )}
-                            >
-                                <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="final">Final</SelectItem>
-                                <SelectItem value="brova">Brova</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                render={({ field }) => (
+                    <Checkbox
+                        checked={field.value === "brova"}
+                        onCheckedChange={(checked) => {
+                            field.onChange(checked ? "brova" : "final");
+                        }}
+                        disabled={isFormDisabled}
+                    />
                 )}
             />
         </div>

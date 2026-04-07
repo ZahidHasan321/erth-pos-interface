@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useSchedulerGarments, useBrovaPlans, useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
@@ -6,20 +6,23 @@ import { useResources } from "@/hooks/useResources";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
-import { BrandBadge } from "@/components/shared/StageBadge";
+import { BrandBadge, AlterationBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import {
-  PageHeader, EmptyState, LoadingSkeleton,
+  PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge,
 } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
+import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, getKuwaitMidnight, type OrderGroup } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, CheckSquare, Home, User, AlertTriangle, Eye,
-  Calendar, BarChart3,
+  Calendar, BarChart3, Droplets,
 } from "lucide-react";
 import { OrderPeekSheet } from "@/components/shared/PeekSheets";
 import { getAlterationNumber, isAlteration } from "@repo/database";
@@ -267,6 +270,317 @@ function SchedulerOrderCard({
     </div>
     <OrderPeekSheet orderId={peekOpen ? group.order_id : null} open={peekOpen} onOpenChange={setPeekOpen} />
     </>
+  );
+}
+
+// ── Order Table (desktop, Orders tab) ───────────────────────────────────────
+
+function SchedulerOrderTable({
+  orders,
+  selectedOrderIds,
+  onToggleOrder,
+}: {
+  orders: OrderGroup[];
+  selectedOrderIds: Set<number>;
+  onToggleOrder: (orderId: number, checked: boolean) => void;
+}) {
+  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (orderId: number) =>
+    setExpandedOrders((prev) => {
+      const n = new Set(prev);
+      n.has(orderId) ? n.delete(orderId) : n.add(orderId);
+      return n;
+    });
+
+  return (
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-10 px-3">
+              <Checkbox
+                checked={orders.length > 0 && orders.every((o) => selectedOrderIds.has(o.order_id))}
+                onCheckedChange={(checked) => {
+                  for (const o of orders) onToggleOrder(o.order_id, !!checked);
+                }}
+                aria-label="Select all orders"
+                className="size-4"
+              />
+            </TableHead>
+            <TableHead className="w-[90px]">Order</TableHead>
+            <TableHead className="w-[180px]">Customer</TableHead>
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[150px]">Flags</TableHead>
+            <TableHead className="w-[150px] text-center">Delivery</TableHead>
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((group) => {
+            const selected = selectedOrderIds.has(group.order_id);
+            const expanded = expandedOrders.has(group.order_id);
+            const deliveryDate = group.garments[0]?.delivery_date_order;
+            const daysLeft = deliveryDate
+              ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
+              : null;
+            const isOverdue = daysLeft !== null && daysLeft < 0;
+            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+            const daysLabel = daysLeft !== null
+              ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`
+              : null;
+
+            return (
+              <React.Fragment key={group.order_id}>
+                <TableRow
+                  className={cn("cursor-pointer hover:bg-muted/30 transition-colors", selected && "bg-primary/5")}
+                  onClick={() => toggleExpand(group.order_id)}
+                >
+                  <TableCell className="px-3 py-3">
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={(checked) => onToggleOrder(group.order_id, !!checked)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select order #${group.order_id}`}
+                      className="size-4"
+                    />
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-mono font-bold">#{group.order_id}</span>
+                      {group.invoice_number && (
+                        <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3 text-sm">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold">{group.customer_name ?? "—"}</span>
+                      <span className="text-xs text-muted-foreground">{garmentSummary(group.garments)}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {group.express && <ExpressBadge />}
+                      {group.soaking && (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                          <Droplets className="w-3 h-3" /> Soak
+                        </span>
+                      )}
+                      {group.home_delivery && (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                          <Home className="w-3 h-3" /> Home
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3 align-middle text-center">
+                    <div className="flex flex-col gap-1 items-center">
+                      {deliveryDate ? (
+                        <span className={cn(
+                          "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
+                          isOverdue && "text-red-700",
+                          isUrgent && "text-amber-700",
+                          !isUrgent && !isOverdue && "text-muted-foreground",
+                        )}>
+                          <Clock className="w-3 h-3" />
+                          {formatDate(deliveryDate)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                      {daysLabel && (
+                        isOverdue || isUrgent ? (
+                          <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums text-[10px]">
+                            {daysLabel}
+                          </StatusPill>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{daysLabel}</span>
+                        )
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200", expanded && "rotate-180")} />
+                  </TableCell>
+                </TableRow>
+                {/* Garment expansion row */}
+                <TableRow className="border-0 hover:bg-transparent">
+                  <TableCell colSpan={7} className="p-0">
+                    <div className={cn(
+                      "grid transition-[grid-template-rows] duration-200 ease-out",
+                      expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                    )}>
+                      <div className="overflow-hidden">
+                        <div className="bg-muted/20 px-4 py-2.5 space-y-1.5 border-b">
+                          {group.garments.map((g) => {
+                            const isParked = g.piece_stage === "waiting_for_acceptance";
+                            return (
+                              <div key={g.id} className={cn(
+                                "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
+                                isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
+                              )}>
+                                <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
+                                  {g.garment_type === "brova" ? "B" : "F"}
+                                </StatusPill>
+                                <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                                {g.fabric_name ? (
+                                  <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
+                                ) : (
+                                  <span className="text-muted-foreground/50 truncate">Outside fabric</span>
+                                )}
+                                <div className="flex items-center gap-1 ml-auto shrink-0">
+                                  {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
+                                  {g.express && <StatusPill color="red">Express</StatusPill>}
+                                  {isParked && <span className="text-muted-foreground/60 italic">parked</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </React.Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
+// ── Garment Table (desktop, Brova / Alteration tabs) ─────────────────────────
+
+function SchedulerGarmentTable({
+  garments,
+  selectedIds,
+  onToggle,
+  showAlteration,
+}: {
+  garments: WorkshopGarment[];
+  selectedIds: Set<string>;
+  onToggle: (id: string, checked: boolean) => void;
+  showAlteration?: boolean;
+}) {
+  return (
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-10 px-3">
+              <Checkbox
+                checked={garments.length > 0 && garments.every((g) => selectedIds.has(g.id))}
+                onCheckedChange={(checked) => {
+                  for (const g of garments) onToggle(g.id, !!checked);
+                }}
+                aria-label="Select all garments"
+                className="size-4"
+              />
+            </TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Garment</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Trip</TableHead>
+            {showAlteration && <TableHead>Alt #</TableHead>}
+            <TableHead>Feedback</TableHead>
+            <TableHead>Flags</TableHead>
+            <TableHead className="w-[120px] text-center">Delivery</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {garments.map((g) => {
+            const selected = selectedIds.has(g.id);
+            const daysLeft = g.delivery_date_order
+              ? Math.ceil((parseUtcTimestamp(g.delivery_date_order).getTime() - Date.now()) / 86400000)
+              : null;
+            const isOverdue = daysLeft !== null && daysLeft < 0;
+            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+            const fb = feedbackInfo(g);
+            return (
+              <TableRow
+                key={g.id}
+                className={cn("cursor-pointer hover:bg-muted/30 transition-colors", selected && "bg-primary/5")}
+                onClick={() => onToggle(g.id, !selected)}
+              >
+                <TableCell className="px-3 py-3">
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={(checked) => onToggle(g.id, !!checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select garment ${g.garment_id ?? g.id.slice(0, 8)}`}
+                    className="size-4"
+                  />
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                    {g.fabric_name && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+                        {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="px-3 py-3 text-sm text-muted-foreground">
+                  {g.customer_name ?? "—"}
+                </TableCell>
+                <TableCell className="px-3 py-3 text-sm text-muted-foreground font-mono">
+                  {g.invoice_number ? `#${g.invoice_number}` : "—"}
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <Badge variant="secondary" className="text-xs font-bold">
+                    {g.trip_number ?? 1}
+                  </Badge>
+                </TableCell>
+                {showAlteration && (
+                  <TableCell className="px-3 py-3">
+                    <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
+                  </TableCell>
+                )}
+                <TableCell className="px-3 py-3">
+                  {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <div className="flex items-center gap-1">
+                    {g.express && <ExpressBadge />}
+                    {g.soaking && (
+                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                        <Droplets className="w-3 h-3" /> Soak
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="px-3 py-3 align-middle text-center">
+                  {g.delivery_date_order ? (
+                    <span className={cn(
+                      "text-xs font-bold tabular-nums",
+                      isOverdue && "text-red-700",
+                      isUrgent && "text-amber-700",
+                      !isUrgent && !isOverdue && "text-muted-foreground",
+                    )}>
+                      {formatDate(g.delivery_date_order)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -522,6 +836,7 @@ function WorkloadSummary({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function SchedulerPage() {
+  const isMobile = useIsMobile();
   const { data: schedulable = [], isLoading } = useSchedulerGarments();
   const { data: allGarments = [] } = useWorkshopGarments();
   const scheduleMut = useScheduleGarments();
@@ -890,7 +1205,7 @@ function SchedulerPage() {
                 <LoadingSkeleton />
               ) : orders.length === 0 ? (
                 <EmptyState icon={CalendarDays} message="No orders to schedule" />
-              ) : (
+              ) : isMobile ? (
                 <div className="space-y-2">
                   {orders.map((group) => (
                     <SchedulerOrderCard
@@ -903,6 +1218,14 @@ function SchedulerPage() {
                     />
                   ))}
                 </div>
+              ) : (
+                <SchedulerOrderTable
+                  orders={orders}
+                  selectedOrderIds={selectedOrderIds}
+                  onToggleOrder={(orderId, checked) =>
+                    toggleOrderInSet(setSelectedOrderIds, orderId, checked)
+                  }
+                />
               )}
             </TabsContent>
 
@@ -911,7 +1234,7 @@ function SchedulerPage() {
                 <LoadingSkeleton />
               ) : brovaReturns.length === 0 ? (
                 <EmptyState icon={Package} message="No brova returns to schedule" />
-              ) : (
+              ) : isMobile ? (
                 <div className="space-y-1.5">
                   {brovaReturns.map((g) => (
                     <SchedulerGarmentRow
@@ -922,6 +1245,12 @@ function SchedulerPage() {
                     />
                   ))}
                 </div>
+              ) : (
+                <SchedulerGarmentTable
+                  garments={brovaReturns}
+                  selectedIds={selectedBrovaReturnIds}
+                  onToggle={(id, checked) => toggleGarmentInSet(setSelectedBrovaReturnIds, id, checked)}
+                />
               )}
             </TabsContent>
 
@@ -930,7 +1259,7 @@ function SchedulerPage() {
                 <LoadingSkeleton />
               ) : alterationIn.length === 0 ? (
                 <EmptyState icon={AlertTriangle} message="No alterations to schedule" />
-              ) : (
+              ) : isMobile ? (
                 <div className="space-y-1.5">
                   {alterationIn.map((g) => (
                     <SchedulerGarmentRow
@@ -941,6 +1270,13 @@ function SchedulerPage() {
                     />
                   ))}
                 </div>
+              ) : (
+                <SchedulerGarmentTable
+                  garments={alterationIn}
+                  selectedIds={selectedAltInIds}
+                  onToggle={(id, checked) => toggleGarmentInSet(setSelectedAltInIds, id, checked)}
+                  showAlteration
+                />
               )}
             </TabsContent>
 

@@ -2,6 +2,20 @@ import * as React from "react"
 
 import { cn } from "./lib/utils"
 
+/** Outer card-like wrapper for a table: rounded corners, border, shadow, bg-card elevation. */
+function TableContainer({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="table-container-outer"
+      className={cn(
+        "rounded-xl border border-border shadow-sm bg-card overflow-hidden",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
@@ -68,7 +82,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium text-xs [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "text-foreground h-9 px-3 text-left align-middle font-semibold text-xs uppercase tracking-wider [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -103,6 +117,7 @@ function TableCaption({
 }
 
 export {
+  TableContainer,
   Table,
   TableHeader,
   TableBody,

@@ -31,6 +31,7 @@ export interface TransferFilters {
   status?: string | string[];
   direction?: string | string[];
   item_type?: string;
+  brand?: string;
   /** ISO timestamp — inclusive lower bound on created_at */
   startDate?: string;
   /** ISO timestamp — inclusive upper bound on created_at */
@@ -59,6 +60,9 @@ export const getTransferRequests = async (
   if (filters?.item_type) {
     query = query.eq('item_type', filters.item_type);
   }
+  if (filters?.brand) {
+    query = query.eq('brand', filters.brand);
+  }
   if (filters?.startDate) {
     query = query.gte('created_at', filters.startDate);
   }
@@ -74,6 +78,7 @@ export const getTransferRequests = async (
 export const createTransferRequest = async (request: {
   direction: string;
   item_type: string;
+  brand: string;
   requested_by: string;
   notes?: string;
   items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
@@ -145,6 +150,7 @@ export const reviseTransferRequest = async (
   request: {
     direction: string;
     item_type: string;
+    brand: string;
     requested_by: string;
     notes?: string;
     revision_number: number;

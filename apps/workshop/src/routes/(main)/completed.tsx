@@ -3,7 +3,7 @@ import { useCompletedOrders } from "@/hooks/useWorkshopGarments";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PageHeader, MetadataChip, LoadingSkeleton } from "@/components/shared/PageShell";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import {
@@ -83,22 +83,21 @@ function CompletedOrderTable({
   onOrderClick: (orderId: number) => void;
 }) {
   return (
-    <div className="border rounded-xl overflow-hidden">
+    <TableContainer>
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40">
             <TableHead className="w-[90px]">Order</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead className="w-[100px]">Brand</TableHead>
-            <TableHead>Garments</TableHead>
-            <TableHead className="w-[120px]">Delivery</TableHead>
-            <TableHead className="w-[120px]">Invoice</TableHead>
-            <TableHead className="w-[110px]">Express</TableHead>
-            <TableHead className="w-[110px]">Status</TableHead>
+            <TableHead className="w-[180px]">Customer</TableHead>
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[140px] text-center">Delivery</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
+            const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
+            return (
             <TableRow
               key={group.order_id}
               onClick={() => onOrderClick(group.order_id)}
@@ -106,45 +105,51 @@ function CompletedOrderTable({
               className="cursor-pointer hover:bg-muted/50 border-l-4 border-l-green-400"
             >
               <TableCell className="font-mono font-bold text-sm">
-                #{group.order_id}
-              </TableCell>
-              <TableCell className="text-sm">
-                {group.customer_name ?? "—"}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {group.brands.map((b) => (
-                    <BrandBadge key={b} brand={b} />
-                  ))}
+                <div className="flex flex-col gap-0.5">
+                  <span>#{group.order_id}</span>
+                  {group.invoice_number && (
+                    <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
+                  )}
                 </div>
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {garmentSummary(group.garments)}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {group.delivery_date ? formatDate(group.delivery_date) : "—"}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {group.invoice_number ? `INV-${group.invoice_number}` : "—"}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {group.express && <ExpressBadge />}
-                  {group.home_delivery && (
-                    <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
+              <TableCell className="text-sm">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-semibold">{group.customer_name ?? "—"}</span>
+                  {group.customer_mobile && (
+                    <span className="text-xs font-mono text-muted-foreground">{group.customer_mobile}</span>
                   )}
                 </div>
               </TableCell>
               <TableCell>
-                <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
-                  Completed
-                </span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+                </div>
+              </TableCell>
+              <TableCell className="align-middle text-center">
+                <div className="flex flex-col gap-1 items-center">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                    <span className="text-xs text-muted-foreground">
+                      {group.delivery_date ? formatDate(group.delivery_date) : "—"}
+                    </span>
+                    {group.express && <ExpressBadge />}
+                    {group.home_delivery && <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {brovaCount > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovaCount}B</span>
+                    )}
+                    {finalCount > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finalCount}F</span>
+                    )}
+                  </div>
+                </div>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
-    </div>
+    </TableContainer>
   );
 }
 

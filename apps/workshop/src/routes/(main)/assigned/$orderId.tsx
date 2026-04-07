@@ -559,7 +559,7 @@ function GarmentPlanCard({
               Brova Return
             </span>
           )}
-          <StageBadge stage={garment.piece_stage} />
+          <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
           <span className={cn(
             "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
             garment.location === "shop" ? "bg-green-100 text-green-800"

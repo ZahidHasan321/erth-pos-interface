@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent } from "@repo/ui/card";
+import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { cn, clickableProps, formatDate, parseUtcTimestamp } from "@/lib/utils";
 import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
@@ -36,8 +37,9 @@ export function GarmentCard({
   const [peekOpen, setPeekOpen] = useState(false);
   const hasSoaking = !!garment.soaking;
 
-  const daysLeft = garment.delivery_date_order
-    ? Math.ceil((parseUtcTimestamp(garment.delivery_date_order).getTime() - Date.now()) / 86400000)
+  const effectiveDeliveryDate = (garment.delivery_date as unknown as string | null) ?? garment.delivery_date_order ?? null;
+  const daysLeft = effectiveDeliveryDate
+    ? Math.ceil((parseUtcTimestamp(effectiveDeliveryDate).getTime() - Date.now()) / 86400000)
     : null;
   const isOverdue = daysLeft !== null && daysLeft < 0;
   const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
@@ -56,14 +58,14 @@ export function GarmentCard({
         onClick={onClick}
       >
         <CardContent className="p-3 flex flex-col h-full min-h-[100px]">
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-2">
+          <div className="flex items-start justify-between gap-1 flex-wrap">
+            <div className="flex items-center gap-1.5">
               <GarmentTypeBadgeCompact type={garment.garment_type ?? "final"} />
-              <span className="font-mono font-black text-xl leading-tight">
+              <span className="font-mono font-black text-lg leading-tight">
                 {garment.garment_id ?? garment.id.slice(0, 8)}
               </span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap justify-end">
               <BrandBadge brand={garment.order_brand} />
               {garment.express && <ExpressBadge />}
               {garment.start_time && (
@@ -173,7 +175,10 @@ export function GarmentCard({
               <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                 {hasStatusBadges && (
                   <>
-                    {!hideStage && <StageBadge stage={garment.piece_stage} />}
+                    {!hideStage && <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />}
+                    {garment.acceptance_status && garment.feedback_status && garment.feedback_status !== "accepted" && (
+                      <Badge variant="outline" className="border-0 font-semibold text-xs uppercase tracking-wide bg-emerald-200 text-emerald-900">Accepted</Badge>
+                    )}
                     <FeedbackStatusBadge status={garment.feedback_status} />
                     <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
                     {garment.express && <ExpressBadge />}
@@ -188,7 +193,7 @@ export function GarmentCard({
                     <Home className="w-3.5 h-3.5" aria-hidden="true" /> Delivery
                   </span>
                 )}
-                {garment.delivery_date_order && (
+                {effectiveDeliveryDate && (
                   <span className={cn(
                     "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
                     isOverdue && "bg-red-100 text-red-800",
@@ -196,7 +201,7 @@ export function GarmentCard({
                     !isUrgent && !isOverdue && "text-muted-foreground",
                   )}>
                     <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
-                    {formatDate(garment.delivery_date_order)}
+                    {formatDate(effectiveDeliveryDate)}
                   </span>
                 )}
               </div>

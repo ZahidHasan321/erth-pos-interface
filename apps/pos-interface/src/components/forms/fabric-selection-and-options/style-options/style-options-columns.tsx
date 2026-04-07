@@ -51,7 +51,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "wallet_pocket",
     header: "Accessories",
-    size: 110,
+    size: 155,
     cell: StyleCells.AccessoriesCell,
   },
   {

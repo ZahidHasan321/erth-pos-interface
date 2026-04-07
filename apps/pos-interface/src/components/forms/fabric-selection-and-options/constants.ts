@@ -2,6 +2,7 @@
 import japaneseCollar from "@/assets/collar-assets/collar-types/Japanese.png";
 import qalabiCollar from "@/assets/collar-assets/collar-types/Qallabi.png";
 import roundCollar from "@/assets/collar-assets/collar-types/Down Collar.png";
+import straitCollar from "@/assets/collar-assets/collar-types/Strait Collar.png";
 
 import araviZarrar from "@/assets/collar-assets/collar-buttons/Aravi Zarrar.png";
 import zarrarTabbagi from "@/assets/collar-assets/collar-buttons/Zarrar + Tabbagi.png";
@@ -68,6 +69,7 @@ export const collarTypes: BaseOption[] = [
   { value: "COL_QALLABI", alt: "Qallabi Collar", displayText: "Qallabi", image: qalabiCollar },
   { value: "COL_DOWN_COLLAR", alt: "Round Collar", displayText: "Round", image: roundCollar },
   { value: "COL_JAPANESE", alt: "Japanese Collar", displayText: "Japanese", image: japaneseCollar },
+  { value: "COL_STRAIT_COLLAR", alt: "Strait Collar", displayText: "Strait", image: straitCollar },
 ];
 
 /** Collar buttons */

@@ -5,12 +5,13 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "@/api/notifications";
+import { getBrand } from "@/api/orders";
 
 export const NOTIFICATIONS_KEY = ["notifications"] as const;
 
 export function useNotifications() {
   return useQuery({
-    queryKey: NOTIFICATIONS_KEY,
+    queryKey: [...NOTIFICATIONS_KEY, getBrand()],
     queryFn: () => getNotifications(),
     staleTime: 30_000, // realtime pushes keep this fresh; short stale as a safety net
   });
@@ -36,7 +37,7 @@ const PAGE_SIZE = 20;
 
 export function useNotificationsPaginated(page: number) {
   return useQuery({
-    queryKey: [...NOTIFICATIONS_KEY, "page", page],
+    queryKey: [...NOTIFICATIONS_KEY, getBrand(), "page", page],
     queryFn: () => getNotificationsPaginated(PAGE_SIZE, page * PAGE_SIZE),
     placeholderData: keepPreviousData,
   });

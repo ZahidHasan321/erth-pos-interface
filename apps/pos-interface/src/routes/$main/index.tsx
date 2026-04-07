@@ -37,7 +37,7 @@ function DashboardPage() {
   const { main } = Route.useParams();
 
   const { data: ordersRes, isLoading: isLoadingOrders } = useQuery({
-    queryKey: ["dashboard-orders"],
+    queryKey: ["dashboard-orders", main],
     queryFn: () => getDashboardOrders(),
     staleTime: 1000 * 60 * 5, // 5 min — dashboard should refresh reasonably
     gcTime: 1000 * 60 * 60,

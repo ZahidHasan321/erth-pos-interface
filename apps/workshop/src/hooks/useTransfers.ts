@@ -32,7 +32,7 @@ export function useCreateTransfer() {
       item_type: string;
       notes?: string;
       items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
-    }) => createTransferRequest({ ...data, requested_by: user!.id }),
+    }) => createTransferRequest({ ...data, requested_by: user!.id, brand: 'ERTH' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
   });
 }
@@ -71,7 +71,7 @@ export function useReviseTransfer() {
       items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
     }) => {
       const { originalId, ...rest } = data;
-      return reviseTransferRequest(originalId, { ...rest, requested_by: user!.id });
+      return reviseTransferRequest(originalId, { ...rest, requested_by: user!.id, brand: 'ERTH' });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
   });

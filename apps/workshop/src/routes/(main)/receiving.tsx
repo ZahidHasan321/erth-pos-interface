@@ -12,13 +12,14 @@ import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkshopGarment } from "@repo/database";
 import { toast } from "sonner";
 import {
-  Inbox, ChevronDown, ChevronUp, Clock, Package, Home,
+  Inbox, ChevronDown, Clock, Package, Home,
   Droplets, AlertTriangle, CircleX,
 } from "lucide-react";
 
@@ -54,7 +55,7 @@ function GarmentRow({
           <span className="font-mono text-sm font-bold">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
           {garment.express && <ExpressBadge />}
           {garment.soaking && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
               <Droplets className="w-3 h-3" /> Soak
             </span>
           )}
@@ -126,10 +127,11 @@ function OrderCard({
   return (
     <div
       className={cn(
-        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
+        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4 cursor-pointer",
         group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
       )}
+      onClick={() => setExpanded((v) => !v)}
     >
       <div className="px-3 py-2.5 transition-colors rounded-t-xl">
         {/* Row 1: Identity + actions */}
@@ -157,14 +159,7 @@ function OrderCard({
             <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }} disabled={isReceiving} className="text-xs h-7">
               Receive & Start All
             </Button>
-            <button
-              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/50 hover:text-foreground")}
-              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse garments" : "Expand garments"}
-            >
-              {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
-            </button>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
           </div>
         </div>
 
@@ -251,11 +246,11 @@ function IncomingTable({
     });
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <table className="w-full">
-        <thead>
-          <tr className="bg-muted/40 border-b">
-            <th className="w-10 p-3 text-left">
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-10 px-3">
               <Checkbox
                 checked={orders.length > 0 && orders.every((o) => selectedOrderIds.has(o.order_id))}
                 onCheckedChange={(checked) => {
@@ -264,17 +259,16 @@ function IncomingTable({
                 aria-label="Select all orders"
                 className="size-4"
               />
-            </th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Order</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Customer</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Brand</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Garments</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Express</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Delivery</th>
-            <th className="p-3 text-right text-sm font-medium text-muted-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead className="w-[90px]">Order</TableHead>
+            <TableHead className="w-[180px]">Customer</TableHead>
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[150px]">Flags</TableHead>
+            <TableHead className="w-[150px] text-center">Delivery</TableHead>
+            <TableHead className="text-right w-[220px]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {orders.map((group) => {
             const selected = selectedOrderIds.has(group.order_id);
             const expanded = expandedOrders.has(group.order_id);
@@ -284,16 +278,16 @@ function IncomingTable({
               : null;
             const isOverdue = daysLeft !== null && daysLeft < 0;
             const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
-            const rowBg = cn(selected && "bg-primary/5", group.express && "bg-orange-50/30");
+            const rowBg = cn(selected && "bg-primary/5");
 
             return (
               <React.Fragment key={group.order_id}>
                 {/* Order row */}
-                <tr
+                <TableRow
                   className={cn("cursor-pointer hover:bg-muted/30 transition-colors", rowBg)}
                   onClick={() => toggleExpand(group.order_id)}
                 >
-                  <td className="p-3 border-b">
+                  <TableCell className="px-3 py-3">
                     <Checkbox
                       checked={selected}
                       onCheckedChange={(checked) => onToggleOrder(group.order_id, !!checked)}
@@ -301,42 +295,69 @@ function IncomingTable({
                       aria-label={`Select order #${group.order_id}`}
                       className="size-4"
                     />
-                  </td>
-                  <td className="p-3 border-b">
-                    <div className="flex items-center gap-1.5">
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex flex-col gap-0.5">
                       <span className="font-mono font-bold">#{group.order_id}</span>
                       {group.invoice_number && (
-                        <span className="text-xs text-muted-foreground/50 font-mono">#{group.invoice_number}</span>
+                        <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
                       )}
                     </div>
-                  </td>
-                  <td className="p-3 border-b text-sm text-muted-foreground">
-                    {group.customer_name ?? "—"}
-                  </td>
-                  <td className="p-3 border-b">
-                    <div className="flex items-center gap-1">
+                  </TableCell>
+                  <TableCell className="px-3 py-3 text-sm">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold">{group.customer_name ?? "—"}</span>
+                      {group.customer_mobile && (
+                        <span className="text-xs font-mono text-muted-foreground">{group.customer_mobile}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
                       {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
                     </div>
-                  </td>
-                  <td className="p-3 border-b text-sm text-muted-foreground/60">
-                    {garmentSummary(group.garments)}
-                  </td>
-                  <td className="p-3 border-b">
-                    {group.express && <ExpressBadge />}
-                  </td>
-                  <td className="p-3 border-b">
-                    {deliveryDate && (
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {group.express && <ExpressBadge />}
+                      {group.soaking && (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                          <Droplets className="w-3 h-3" /> Soak
+                        </span>
+                      )}
+                      {group.home_delivery && (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                          <Home className="w-3 h-3" /> Home
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3 align-middle text-center">
+                    <div className="flex flex-col gap-1 items-center">
                       <span className={cn(
-                        "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                        isOverdue && "bg-red-100 text-red-800",
-                        isUrgent && "bg-amber-100 text-amber-800",
+                        "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
+                        isOverdue && "text-red-700",
+                        isUrgent && "text-amber-700",
                         !isUrgent && !isOverdue && "text-muted-foreground",
                       )}>
-                        <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
+                        <Clock className="w-3 h-3" />
+                        {deliveryDate ? formatDate(deliveryDate) : "—"}
                       </span>
-                    )}
-                  </td>
-                  <td className="p-3 border-b">
+                      <div className="flex items-center gap-1">
+                        {(() => {
+                          const b = group.garments.filter((g) => g.garment_type === "brova").length;
+                          const f = group.garments.filter((g) => g.garment_type === "final").length;
+                          return (
+                            <>
+                              {b > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{b}B</span>}
+                              {f > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{f}F</span>}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onReceivePark(group); }} disabled={isReceiving} className="text-xs h-7">
                         Receive All
@@ -346,11 +367,11 @@ function IncomingTable({
                       </Button>
                       <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", expanded && "rotate-180")} />
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
                 {/* Garment expansion row — animated */}
-                <tr>
-                  <td colSpan={8} className="p-0">
+                <TableRow className="border-0 hover:bg-transparent">
+                  <TableCell colSpan={8} className="p-0">
                     <div className={cn(
                       "grid transition-[grid-template-rows] duration-200 ease-out",
                       expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
@@ -370,14 +391,14 @@ function IncomingTable({
                         </div>
                       </div>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               </React.Fragment>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -403,11 +424,11 @@ function GarmentTable({
   showAlteration?: boolean;
 }) {
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <table className="w-full">
-        <thead>
-          <tr className="bg-muted/40 border-b">
-            <th className="w-10 p-3 text-left">
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-10 px-3">
               <Checkbox
                 checked={garments.length > 0 && garments.every((g) => selectedIds.has(g.id))}
                 onCheckedChange={(checked) => {
@@ -416,63 +437,88 @@ function GarmentTable({
                 aria-label="Select all garments"
                 className="size-4"
               />
-            </th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Type</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Garment</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Customer</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Invoice</th>
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Trip</th>
-            {showAlteration && <th className="p-3 text-left text-sm font-medium text-muted-foreground">Alt #</th>}
-            <th className="p-3 text-left text-sm font-medium text-muted-foreground">Express</th>
-            <th className="p-3 text-right text-sm font-medium text-muted-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Garment</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Trip</TableHead>
+            {showAlteration && <TableHead>Alt #</TableHead>}
+            <TableHead>Flags</TableHead>
+            <TableHead className="w-[120px] text-center">Delivery</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {garments.map((g) => {
             const selected = selectedIds.has(g.id);
+            const daysLeft = g.delivery_date_order
+              ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
+              : null;
+            const isOverdue = daysLeft !== null && daysLeft < 0;
+            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
             return (
-              <tr
+              <TableRow
                 key={g.id}
                 className={cn(
-                  "border-b last:border-b-0",
-                  g.express && "bg-orange-50/30",
                   selected && "bg-primary/5",
                 )}
               >
-                <td className="p-3">
+                <TableCell className="px-3 py-3">
                   <Checkbox
                     checked={selected}
                     onCheckedChange={(checked) => onToggle(g.id, !!checked)}
                     aria-label={`Select garment ${g.garment_id ?? g.id.slice(0, 8)}`}
                     className="size-4"
                   />
-                </td>
-                <td className="p-3">
+                </TableCell>
+                <TableCell className="px-3 py-3">
                   <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                </td>
-                <td className="p-3">
+                </TableCell>
+                <TableCell className="px-3 py-3">
                   <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                </td>
-                <td className="p-3 text-sm text-muted-foreground">
+                </TableCell>
+                <TableCell className="px-3 py-3 text-sm text-muted-foreground">
                   {g.customer_name ?? "—"}
-                </td>
-                <td className="p-3 text-sm text-muted-foreground font-mono">
+                </TableCell>
+                <TableCell className="px-3 py-3 text-sm text-muted-foreground font-mono">
                   {g.invoice_number ? `#${g.invoice_number}` : "—"}
-                </td>
-                <td className="p-3">
+                </TableCell>
+                <TableCell className="px-3 py-3">
                   <Badge variant="secondary" className="text-xs font-bold">
                     {g.trip_number ?? 1}
                   </Badge>
-                </td>
+                </TableCell>
                 {showAlteration && (
-                  <td className="p-3">
+                  <TableCell className="px-3 py-3">
                     <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
-                  </td>
+                  </TableCell>
                 )}
-                <td className="p-3">
-                  {g.express && <ExpressBadge />}
-                </td>
-                <td className="p-3">
+                <TableCell className="px-3 py-3">
+                  <div className="flex items-center gap-1">
+                    {g.express && <ExpressBadge />}
+                    {g.soaking && (
+                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                        <Droplets className="w-3 h-3" /> Soak
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="px-3 py-3 align-middle text-center">
+                  {g.delivery_date_order ? (
+                    <span className={cn(
+                      "text-xs font-bold tabular-nums",
+                      isOverdue && "text-red-700",
+                      isUrgent && "text-amber-700",
+                      !isUrgent && !isOverdue && "text-muted-foreground",
+                    )}>
+                      {formatDate(g.delivery_date_order)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="px-3 py-3">
                   <div className="flex items-center justify-end gap-1.5">
                     <Button
                       size="sm"
@@ -492,13 +538,13 @@ function GarmentTable({
                       Receive & Start
                     </Button>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 

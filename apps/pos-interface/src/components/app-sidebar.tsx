@@ -25,6 +25,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -85,6 +86,7 @@ const data = {
           title: "Cashier",
           url: "cashier",
           icon: Banknote,
+          erthOnly: true,
         },
         {
           title: "Alterations",
@@ -321,8 +323,9 @@ export function AppSidebar({
 
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
-  const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "workshop_to_shop" });
-  const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "shop_to_workshop" });
+  const isErth = main === BRAND_NAMES.showroom;
+  const { data: receivingDeliveries = [] } = useTransferRequests(isErth ? { status: "dispatched", direction: "workshop_to_shop" } : undefined);
+  const { data: approveRequests = [] } = useTransferRequests(isErth ? { status: ["requested"], direction: "shop_to_workshop" } : undefined);
 
   const storeCounts: Record<string, { count: number; badgeColor: string }> = {
     "store/receiving-deliveries": { count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
@@ -394,14 +397,14 @@ export function AppSidebar({
         )}
 
         {/* Nav groups */}
-        {data.navMain.map((item) => (
+        {data.navMain.filter(item => isErth || item.title !== "Store Management").map((item) => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
               {item.title}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.map((subItem: any) => {
+                {item.items.filter((subItem: any) => !subItem.erthOnly || isErth).map((subItem: any) => {
                   if (subItem.isCollapsible && subItem.items) {
                     return (
                       <CollapsibleMenuItem
@@ -432,6 +435,12 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      <SidebarFooter className="border-t px-3 py-2 group-data-[collapsible=icon]:hidden">
+        <p className="text-[10px] text-muted-foreground/50 text-center">
+          &copy; {new Date().getFullYear()} Alpaca. All rights reserved.
+        </p>
+      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>

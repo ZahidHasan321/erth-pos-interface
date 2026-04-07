@@ -90,7 +90,7 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl md:max-w-5xl lg:max-w-6xl mx-auto">
       <PageHeader
         icon={Icon}
         title={stageLabel}

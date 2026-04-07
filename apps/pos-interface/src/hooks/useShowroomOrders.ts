@@ -145,7 +145,7 @@ export function transformToOrderRows(ordersData: any[]): OrderRow[] {
 
 export function useShowroomOrders() {
   return useQuery({
-    queryKey: ["showroom-orders"],
+    queryKey: ["showroom-orders", getBrand()],
     queryFn: async () => {
       const { data, error } = await db
         .from('orders')

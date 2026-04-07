@@ -56,6 +56,7 @@ export const styleOptionsSchema = z.object({
       phone: z.boolean().optional(),
       wallet: z.boolean().optional(),
       pen_holder: z.boolean().optional(),
+      mobile: z.boolean().optional(),
     })
     .optional(),
   cuffs: z

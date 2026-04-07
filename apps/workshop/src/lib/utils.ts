@@ -67,6 +67,7 @@ export interface OrderGroup {
   customer_mobile?: string;
   brands: string[];
   express: boolean;
+  soaking: boolean;
   home_delivery?: boolean;
   delivery_date?: string;
   garments: WorkshopGarment[];
@@ -83,6 +84,7 @@ export function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
         customer_mobile: g.customer_mobile,
         brands: [],
         express: false,
+        soaking: false,
         home_delivery: g.home_delivery_order,
         delivery_date: g.delivery_date_order,
         garments: [],
@@ -91,6 +93,7 @@ export function groupByOrder(garments: WorkshopGarment[]): OrderGroup[] {
     const entry = map.get(g.order_id)!;
     entry.garments.push(g);
     if (g.express) entry.express = true;
+    if (g.soaking) entry.soaking = true;
     if (g.order_brand && !entry.brands.includes(g.order_brand)) entry.brands.push(g.order_brand);
   }
   return Array.from(map.values());

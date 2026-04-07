@@ -520,6 +520,7 @@ export const garments = pgTable("garments", {
     front_pocket_thickness: text("front_pocket_thickness"),
     wallet_pocket: boolean("wallet_pocket").default(false),
     pen_holder: boolean("pen_holder").default(false),
+    mobile_pocket: boolean("mobile_pocket").default(false),
     small_tabaggi: boolean("small_tabaggi").default(false),
     jabzour_1: jabzourTypeEnum("jabzour_1"),
     jabzour_2: text("jabzour_2"),
@@ -767,6 +768,7 @@ export const registerCashMovements = pgTable("register_cash_movements", {
 // --- 12. TRANSFER REQUESTS ---
 export const transferRequests = pgTable("transfer_requests", {
     id: serial("id").primaryKey(),
+    brand: brandEnum("brand").notNull().default("ERTH"),
     direction: transferDirectionEnum("direction").notNull(),
     item_type: transferItemTypeEnum("item_type").notNull(),
     status: transferStatusEnum("status").notNull().default("requested"),

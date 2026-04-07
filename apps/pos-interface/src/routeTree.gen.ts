@@ -19,6 +19,7 @@ import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as MainProfileRouteImport } from './routes/$main/profile'
 import { Route as MainNotificationsRouteImport } from './routes/$main/notifications'
 import { Route as MainCashierRouteImport } from './routes/$main/cashier'
+import { Route as MainStoreRouteRouteImport } from './routes/$main/store/route'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
 import { Route as MainStoreTransferHistoryRouteImport } from './routes/$main/store/transfer-history'
@@ -95,6 +96,11 @@ const MainCashierRoute = MainCashierRouteImport.update({
   path: '/cashier',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainStoreRouteRoute = MainStoreRouteRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => MainRouteRoute,
+} as any)
 const MainCustomersIndexRoute = MainCustomersIndexRouteImport.update({
   id: '/customers/',
   path: '/customers/',
@@ -107,37 +113,37 @@ const MainAppointmentsIndexRoute = MainAppointmentsIndexRouteImport.update({
 } as any)
 const MainStoreTransferHistoryRoute =
   MainStoreTransferHistoryRouteImport.update({
-    id: '/store/transfer-history',
-    path: '/store/transfer-history',
-    getParentRoute: () => MainRouteRoute,
+    id: '/transfer-history',
+    path: '/transfer-history',
+    getParentRoute: () => MainStoreRouteRoute,
   } as any)
 const MainStoreStockReportRoute = MainStoreStockReportRouteImport.update({
-  id: '/store/stock-report',
-  path: '/store/stock-report',
-  getParentRoute: () => MainRouteRoute,
+  id: '/stock-report',
+  path: '/stock-report',
+  getParentRoute: () => MainStoreRouteRoute,
 } as any)
 const MainStoreRequestDeliveryRoute =
   MainStoreRequestDeliveryRouteImport.update({
-    id: '/store/request-delivery',
-    path: '/store/request-delivery',
-    getParentRoute: () => MainRouteRoute,
+    id: '/request-delivery',
+    path: '/request-delivery',
+    getParentRoute: () => MainStoreRouteRoute,
   } as any)
 const MainStoreReceivingDeliveriesRoute =
   MainStoreReceivingDeliveriesRouteImport.update({
-    id: '/store/receiving-deliveries',
-    path: '/store/receiving-deliveries',
-    getParentRoute: () => MainRouteRoute,
+    id: '/receiving-deliveries',
+    path: '/receiving-deliveries',
+    getParentRoute: () => MainStoreRouteRoute,
   } as any)
 const MainStoreEndOfDayReportRoute = MainStoreEndOfDayReportRouteImport.update({
-  id: '/store/end-of-day-report',
-  path: '/store/end-of-day-report',
-  getParentRoute: () => MainRouteRoute,
+  id: '/end-of-day-report',
+  path: '/end-of-day-report',
+  getParentRoute: () => MainStoreRouteRoute,
 } as any)
 const MainStoreApproveRequestsRoute =
   MainStoreApproveRequestsRouteImport.update({
-    id: '/store/approve-requests',
-    path: '/store/approve-requests',
-    getParentRoute: () => MainRouteRoute,
+    id: '/approve-requests',
+    path: '/approve-requests',
+    getParentRoute: () => MainStoreRouteRoute,
   } as any)
 const MainOrdersOrdersAtShowroomRoute =
   MainOrdersOrdersAtShowroomRouteImport.update({
@@ -244,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/store': typeof MainStoreRouteRouteWithChildren
   '/$main/cashier': typeof MainCashierRoute
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
@@ -280,6 +287,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/store': typeof MainStoreRouteRouteWithChildren
   '/$main/cashier': typeof MainCashierRoute
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
@@ -318,6 +326,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/cashier': typeof CashierRoute
   '/home': typeof HomeRoute
+  '/$main/store': typeof MainStoreRouteRouteWithChildren
   '/$main/cashier': typeof MainCashierRoute
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
@@ -357,6 +366,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/store'
     | '/$main/cashier'
     | '/$main/notifications'
     | '/$main/profile'
@@ -393,6 +403,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/store'
     | '/$main/cashier'
     | '/$main/notifications'
     | '/$main/profile'
@@ -430,6 +441,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cashier'
     | '/home'
+    | '/$main/store'
     | '/$main/cashier'
     | '/$main/notifications'
     | '/$main/profile'
@@ -543,6 +555,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainCashierRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/store': {
+      id: '/$main/store'
+      path: '/store'
+      fullPath: '/$main/store'
+      preLoaderRoute: typeof MainStoreRouteRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
     '/$main/customers/': {
       id: '/$main/customers/'
       path: '/customers'
@@ -559,45 +578,45 @@ declare module '@tanstack/react-router' {
     }
     '/$main/store/transfer-history': {
       id: '/$main/store/transfer-history'
-      path: '/store/transfer-history'
+      path: '/transfer-history'
       fullPath: '/$main/store/transfer-history'
       preLoaderRoute: typeof MainStoreTransferHistoryRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/stock-report': {
       id: '/$main/store/stock-report'
-      path: '/store/stock-report'
+      path: '/stock-report'
       fullPath: '/$main/store/stock-report'
       preLoaderRoute: typeof MainStoreStockReportRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/request-delivery': {
       id: '/$main/store/request-delivery'
-      path: '/store/request-delivery'
+      path: '/request-delivery'
       fullPath: '/$main/store/request-delivery'
       preLoaderRoute: typeof MainStoreRequestDeliveryRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/receiving-deliveries': {
       id: '/$main/store/receiving-deliveries'
-      path: '/store/receiving-deliveries'
+      path: '/receiving-deliveries'
       fullPath: '/$main/store/receiving-deliveries'
       preLoaderRoute: typeof MainStoreReceivingDeliveriesRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/end-of-day-report': {
       id: '/$main/store/end-of-day-report'
-      path: '/store/end-of-day-report'
+      path: '/end-of-day-report'
       fullPath: '/$main/store/end-of-day-report'
       preLoaderRoute: typeof MainStoreEndOfDayReportRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/approve-requests': {
       id: '/$main/store/approve-requests'
-      path: '/store/approve-requests'
+      path: '/approve-requests'
       fullPath: '/$main/store/approve-requests'
       preLoaderRoute: typeof MainStoreApproveRequestsRouteImport
-      parentRoute: typeof MainRouteRoute
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/orders/orders-at-showroom': {
       id: '/$main/orders/orders-at-showroom'
@@ -721,7 +740,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface MainStoreRouteRouteChildren {
+  MainStoreApproveRequestsRoute: typeof MainStoreApproveRequestsRoute
+  MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
+  MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
+  MainStoreRequestDeliveryRoute: typeof MainStoreRequestDeliveryRoute
+  MainStoreStockReportRoute: typeof MainStoreStockReportRoute
+  MainStoreTransferHistoryRoute: typeof MainStoreTransferHistoryRoute
+}
+
+const MainStoreRouteRouteChildren: MainStoreRouteRouteChildren = {
+  MainStoreApproveRequestsRoute: MainStoreApproveRequestsRoute,
+  MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
+  MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,
+  MainStoreRequestDeliveryRoute: MainStoreRequestDeliveryRoute,
+  MainStoreStockReportRoute: MainStoreStockReportRoute,
+  MainStoreTransferHistoryRoute: MainStoreTransferHistoryRoute,
+}
+
+const MainStoreRouteRouteWithChildren = MainStoreRouteRoute._addFileChildren(
+  MainStoreRouteRouteChildren,
+)
+
 interface MainRouteRouteChildren {
+  MainStoreRouteRoute: typeof MainStoreRouteRouteWithChildren
   MainCashierRoute: typeof MainCashierRoute
   MainNotificationsRoute: typeof MainNotificationsRoute
   MainProfileRoute: typeof MainProfileRoute
@@ -733,12 +775,6 @@ interface MainRouteRouteChildren {
   MainOrdersNewWorkOrderRoute: typeof MainOrdersNewWorkOrderRoute
   MainOrdersOrderHistoryRoute: typeof MainOrdersOrderHistoryRoute
   MainOrdersOrdersAtShowroomRoute: typeof MainOrdersOrdersAtShowroomRoute
-  MainStoreApproveRequestsRoute: typeof MainStoreApproveRequestsRoute
-  MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
-  MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
-  MainStoreRequestDeliveryRoute: typeof MainStoreRequestDeliveryRoute
-  MainStoreStockReportRoute: typeof MainStoreStockReportRoute
-  MainStoreTransferHistoryRoute: typeof MainStoreTransferHistoryRoute
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
   MainOrdersOrderManagementAlterationsRoute: typeof MainOrdersOrderManagementAlterationsRoute
@@ -754,6 +790,7 @@ interface MainRouteRouteChildren {
 }
 
 const MainRouteRouteChildren: MainRouteRouteChildren = {
+  MainStoreRouteRoute: MainStoreRouteRouteWithChildren,
   MainCashierRoute: MainCashierRoute,
   MainNotificationsRoute: MainNotificationsRoute,
   MainProfileRoute: MainProfileRoute,
@@ -765,12 +802,6 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainOrdersNewWorkOrderRoute: MainOrdersNewWorkOrderRoute,
   MainOrdersOrderHistoryRoute: MainOrdersOrderHistoryRoute,
   MainOrdersOrdersAtShowroomRoute: MainOrdersOrdersAtShowroomRoute,
-  MainStoreApproveRequestsRoute: MainStoreApproveRequestsRoute,
-  MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
-  MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,
-  MainStoreRequestDeliveryRoute: MainStoreRequestDeliveryRoute,
-  MainStoreStockReportRoute: MainStoreStockReportRoute,
-  MainStoreTransferHistoryRoute: MainStoreTransferHistoryRoute,
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,
   MainOrdersOrderManagementAlterationsRoute:

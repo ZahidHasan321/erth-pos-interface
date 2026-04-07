@@ -18,6 +18,7 @@ import {
   cuffTypes,
   jabzourTypes,
   penIcon,
+  phoneIcon,
   walletIcon,
   smallTabaggiImage,
   thicknessOptions as ThicknessOptions,
@@ -623,6 +624,33 @@ export const AccessoriesCell = ({
               <img
                 src={penIcon}
                 alt="Pen Holder"
+                className="min-w-10 h-10 object-contain"
+              />
+            </label>
+          </div>
+        )}
+      />
+      <Controller
+        name={`garments.${row.index}.mobile_pocket`}
+        control={control}
+        render={({ field }) => (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={`mobile_pocket-${row.index}`}
+              checked={field.value || false}
+              onCheckedChange={(value) => {
+                if (row.index === 0) {
+                  handleAccessoryChange("mobile_pocket", value as boolean);
+                } else {
+                  field.onChange(value);
+                }
+              }}
+              disabled={isFormDisabled}
+            />
+            <label htmlFor={`mobile_pocket-${row.index}`}>
+              <img
+                src={phoneIcon}
+                alt="Mobile Pocket"
                 className="min-w-10 h-10 object-contain"
               />
             </label>

@@ -64,7 +64,7 @@ export function MonthView({
   const today = startOfDay(new Date());
 
   return (
-    <div className="flex flex-col h-full border rounded-lg bg-muted overflow-hidden relative">
+    <div className="flex flex-col h-full border rounded-lg bg-muted overflow-hidden relative shadow-md">
       {isLoading && (
         <div className="absolute top-0 left-0 right-0 z-50 h-0.5 bg-muted overflow-hidden">
           <div className="h-full bg-primary animate-[loading_1.5s_ease-in-out_infinite] w-1/3" />
@@ -103,9 +103,9 @@ export function MonthView({
                   type="button"
                   onClick={() => onDayClick(day, dayAppts)}
                   className={cn(
-                    "flex flex-col p-1 lg:p-1.5 border-r last:border-r-0 transition-colors cursor-pointer bg-background overflow-hidden min-h-0",
-                    "hover:bg-accent/50 active:bg-accent",
-                    !inMonth && "bg-muted/40",
+                    "flex flex-col p-1 lg:p-1.5 border-r last:border-r-0 transition-colors cursor-pointer bg-white overflow-hidden min-h-0",
+                    "hover:bg-primary/5 active:bg-primary/10",
+                    !inMonth && "bg-muted/50 hover:bg-muted/60",
                     isPast && inMonth && "opacity-60",
                     todayFlag && "ring-1 ring-inset ring-primary bg-primary/[0.03]",
                   )}
@@ -113,7 +113,7 @@ export function MonthView({
                   {/* Date number */}
                   <span
                     className={cn(
-                      "text-xs sm:text-sm font-semibold leading-none shrink-0",
+                      "self-start text-xs sm:text-sm font-semibold leading-none shrink-0",
                       !inMonth && "text-muted-foreground/50",
                       todayFlag && "text-primary font-bold",
                     )}

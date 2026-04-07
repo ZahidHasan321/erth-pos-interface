@@ -16,11 +16,11 @@ export function PageHeader({ icon: Icon, title, subtitle, children }: PageHeader
   return (
     <div className="mb-4 flex items-end justify-between gap-4">
       <div>
-        <h1 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-          <Icon className="w-5 h-5" aria-hidden="true" /> {title}
+        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+          <Icon className="w-5 h-5 text-primary shrink-0" aria-hidden="true" /> {title}
         </h1>
         {subtitle && (
-          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 mt-0.5">{subtitle}</p>
         )}
       </div>
       {children}

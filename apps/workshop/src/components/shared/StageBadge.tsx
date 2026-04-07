@@ -22,11 +22,49 @@ const STAGE_COLOR: Record<string, string> = {
 
 interface StageBadgeProps {
   stage: PieceStage | string | null | undefined;
+  garmentType?: string | null;
+  inProduction?: boolean;
+  location?: string | null;
   className?: string;
 }
 
-export function StageBadge({ stage, className }: StageBadgeProps) {
+export function StageBadge({ stage, garmentType, inProduction, location, className }: StageBadgeProps) {
   if (!stage) return null;
+
+  // Location overrides — the physical movement is more meaningful than the last stage
+  if (location === "transit_to_workshop") {
+    return (
+      <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-sky-100 text-sky-800", className)}>
+        In Transit
+      </Badge>
+    );
+  }
+  if (location === "transit_to_shop") {
+    return (
+      <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-teal-100 text-teal-800", className)}>
+        Dispatched
+      </Badge>
+    );
+  }
+
+  // Finals have context-specific labels that don't map to raw stage names
+  if (garmentType === "final") {
+    if (stage === "waiting_for_acceptance") {
+      return (
+        <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-amber-100 text-amber-800", className)}>
+          Waiting Approval
+        </Badge>
+      );
+    }
+    if (stage === "waiting_cut" && !inProduction) {
+      return (
+        <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-green-100 text-green-800", className)}>
+          Shop Approved
+        </Badge>
+      );
+    }
+  }
+
   const color = STAGE_COLOR[stage] ?? "bg-zinc-200 text-zinc-800";
   const label = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
   return (

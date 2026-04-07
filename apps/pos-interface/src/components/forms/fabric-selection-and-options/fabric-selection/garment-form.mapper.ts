@@ -41,6 +41,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         front_pocket_thickness: g.front_pocket_thickness,
         wallet_pocket: g.wallet_pocket === true,
         pen_holder: g.pen_holder === true,
+        mobile_pocket: g.mobile_pocket === true,
         small_tabaggi: g.small_tabaggi,
         jabzour_1: frontendJabzour1,
         jabzour_2: frontendJabzour2 ?? null,

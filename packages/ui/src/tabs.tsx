@@ -93,7 +93,7 @@ function TabsList({
         ref={indicatorRef}
         className={cn(
           "absolute top-0 left-0 shadow-sm transition-[transform,width,opacity] duration-250 ease-out pointer-events-none",
-          variant === "pill" && "rounded-md bg-background",
+          variant === "pill" && "rounded-md bg-primary",
           variant === "card" && "rounded-lg bg-white border border-border"
         )}
         style={{ opacity: 0 }}
@@ -112,7 +112,7 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 cursor-pointer select-none touch-manipulation pointer-coarse:active:scale-[0.97] text-muted-foreground",
-        "data-[state=active]:text-foreground",
+        "data-[state=active]:text-primary-foreground",
         "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

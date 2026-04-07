@@ -70,8 +70,8 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   // Order Details
   {
     accessorKey: "garment_type",
-    header: "Type",
-    size: 80,
+    header: "Brova",
+    size: 55,
     cell: FabricCells.GarmentTypeCell,
   },
   {

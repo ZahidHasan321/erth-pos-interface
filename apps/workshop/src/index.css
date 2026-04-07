@@ -43,53 +43,53 @@
 :root {
   --radius: 0.75rem;
 
-  /* ── Atelier palette (surface-safe) ──────────────────
-     Near-white surface so existing unstyled containers still work.
-     Vibe shift comes from brass primary + warm borders + brick destructive.
-     Single temperature family (hues 55–80) so nothing fights. */
+  /* ── Atelier palette ─────────────────────────────────
+     Warm off-white background, pure-white elevated surfaces (cards, sidebar,
+     header). Same pattern as POS: background has the tint, surfaces pop above it. */
 
-  /* Surface — barely-warm white, kills the cold undertone without changing layout */
-  --background: oklch(0.99 0.004 80);
+  /* Page background — neutral light gray, clearly distinct from white card surfaces */
+  --background: oklch(0.97 0 0);
   --foreground: oklch(0.2 0.018 55);
 
-  /* Cards — pure white */
+  /* Cards / popovers — pure white, visibly elevated above the background */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.2 0.018 55);
 
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.018 55);
 
-  /* Primary — burnished brass. The CTA color. Workshop tool handles, tailor's pins. */
-  --primary: oklch(0.58 0.15 65);
-  --primary-foreground: oklch(0.99 0.01 85);
+  /* Primary — deep bronze. Dark enough to feel premium, used only for CTAs & active states. */
+  --primary: oklch(0.42 0.12 58);
+  --primary-foreground: oklch(0.99 0 0);
 
-  /* Secondary — soft cream for tonal buttons and chips */
-  --secondary: oklch(0.95 0.012 75);
-  --secondary-foreground: oklch(0.24 0.02 55);
+  /* Secondary — neutral gray. */
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.24 0 0);
 
-  /* Muted — recessive warm neutral */
-  --muted: oklch(0.96 0.008 75);
-  --muted-foreground: oklch(0.48 0.018 60);
+  /* Muted — neutral gray, zero chroma. */
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.48 0 0);
 
-  /* Accent — soft sand. Used for subtle hover states (menu items, dropdowns, skeletons). */
-  --accent: oklch(0.92 0.02 78);
-  --accent-foreground: oklch(0.24 0.02 55);
+  /* Accent — very subtle bronze for intentional hover on white surfaces only. */
+  --accent: oklch(0.94 0.03 58);
+  --accent-foreground: oklch(0.28 0.08 55);
 
-  /* Utility — brick red stays in the warm family */
+  /* Utility */
   --destructive: oklch(0.52 0.19 28);
-  --border: oklch(0.9 0.012 70);
-  --input: oklch(0.965 0.008 75);
-  --ring: oklch(0.58 0.15 65);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.97 0 0);
+  --ring: oklch(0.42 0.12 58);
 
-  /* Sidebar — near-white with a hint of warmth, same as main surface */
-  --sidebar: oklch(0.99 0.004 80);
+  /* Sidebar — pure white (elevated surface, same as cards) */
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.2 0.018 55);
-  --sidebar-primary: oklch(0.58 0.15 65);
-  --sidebar-primary-foreground: oklch(0.99 0.01 85);
-  --sidebar-accent: oklch(0.92 0.02 78);
-  --sidebar-accent-foreground: oklch(0.24 0.02 55);
-  --sidebar-border: oklch(0.9 0.012 70);
-  --sidebar-ring: oklch(0.58 0.15 65);
+  --sidebar-primary: oklch(0.42 0.12 58);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  /* Accent: clear bronze tint for active/hover — legible on white sidebar */
+  --sidebar-accent: oklch(0.92 0.05 58);
+  --sidebar-accent-foreground: oklch(0.28 0.10 55);
+  --sidebar-border: oklch(0.90 0 0);
+  --sidebar-ring: oklch(0.42 0.12 58);
 }
 
 @layer base {
@@ -443,78 +443,95 @@ input[type="number"] {
     margin: 0 !important;
   }
 
+  /* ── Sheet container ── */
   body.terminal-printing .terminal-qc-print-sheet {
     width: 194mm;
     min-height: 276mm;
     margin: 0 auto;
     padding: 4mm;
-    border: 0.6mm solid #111827;
-    border-radius: 2.5mm;
+    border: 0.7mm solid #000;
+    border-radius: 0;
     box-sizing: border-box;
     background: #fff;
-    font-family: "Montserrat", "Cairo", sans-serif;
-    color: #111827;
+    font-family: "Montserrat", "Cairo", "Arial", sans-serif;
+    color: #000;
   }
 
+  /* ── Header ── */
   body.terminal-printing .terminal-qc-print-header {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 3mm;
+    align-items: stretch;
+    gap: 0;
     margin-bottom: 3mm;
+    border: 0.5mm solid #000;
+    border-radius: 1mm;
+    overflow: hidden;
   }
 
   body.terminal-printing .terminal-qc-print-id-block {
     display: flex;
     flex-direction: column;
-    gap: 0.7mm;
-    border: 0.4mm solid #111827;
-    border-radius: 2mm;
-    padding: 1.2mm 1.6mm;
+    justify-content: center;
+    gap: 0.5mm;
+    border-right: 0.5mm solid #000;
+    padding: 1.5mm 2mm;
     min-width: 32mm;
+    background: #fff;
   }
 
   body.terminal-printing .terminal-qc-print-id-label {
-    font-size: 2.4mm;
-    font-weight: 700;
-    letter-spacing: 0.2mm;
+    font-size: 2mm;
+    font-weight: 900;
+    letter-spacing: 0.35mm;
     text-transform: uppercase;
-    color: #4b5563;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-print-id-value {
-    font-size: 4.8mm;
-    font-weight: 800;
-    letter-spacing: 0.25mm;
+    font-size: 5.5mm;
+    font-weight: 900;
+    letter-spacing: 0.1mm;
     line-height: 1;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-print-customer {
-    border: 0.3mm solid #94a3b8;
-    border-radius: 2mm;
-    padding: 1.4mm 1.8mm;
-    font-size: 2.9mm;
-    line-height: 1.35;
+    padding: 1.5mm 2mm;
+    font-size: 3mm;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   body.terminal-printing .terminal-qc-print-customer p {
     margin: 0;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-print-customer span {
-    font-weight: 700;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 2mm;
+    letter-spacing: 0.2mm;
+    margin-right: 0.8mm;
   }
 
   body.terminal-printing .terminal-qc-print-brand {
-    border: 0.4mm solid #111827;
-    border-radius: 999px;
-    padding: 1mm 2.4mm;
-    font-size: 3.1mm;
-    font-weight: 800;
+    border-left: 0.5mm solid #000;
+    padding: 1.5mm 3mm;
+    font-size: 3.2mm;
+    font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 0.25mm;
+    letter-spacing: 0.4mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
   }
 
+  /* ── Body: template + style panel ── */
   body.terminal-printing .terminal-qc-print-main {
     display: flex;
     align-items: flex-start;
@@ -523,10 +540,10 @@ input[type="number"] {
 
   body.terminal-printing .terminal-qc-template-frame {
     position: relative;
-    width: 112mm;
+    width: 114mm;
     aspect-ratio: 793.76001 / 1122.5601;
-    border: 0.35mm solid #94a3b8;
-    border-radius: 1.5mm;
+    border: 0.5mm solid #000;
+    border-radius: 0;
     overflow: hidden;
     background: #fff;
     flex-shrink: 0;
@@ -538,6 +555,7 @@ input[type="number"] {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(1) contrast(1.1);
   }
 
   body.terminal-printing .terminal-qc-measure-cell {
@@ -545,13 +563,14 @@ input[type="number"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 0.26mm solid #95a981;
-    border-radius: 0.7mm;
-    background: rgba(255, 255, 255, 0.96);
-    font-size: 2.25mm;
-    font-weight: 800;
+    border: 0.35mm solid #000;
+    border-radius: 0;
+    background: #fff;
+    font-size: 2.7mm;
+    font-weight: 900;
     line-height: 1;
     text-align: center;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-measure-cell-vertical {
@@ -560,71 +579,84 @@ input[type="number"] {
     letter-spacing: 0.04mm;
   }
 
+  /* ── Style panel ── */
   body.terminal-printing .terminal-qc-style-panel {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 1.6mm;
+    gap: 1.5mm;
     min-width: 0;
   }
 
   body.terminal-printing .terminal-qc-style-meta {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.2mm;
+    gap: 0;
+    border: 0.5mm solid #000;
+    border-radius: 0;
+    overflow: hidden;
   }
 
   body.terminal-printing .terminal-qc-style-meta span {
-    border: 0.35mm solid #111827;
-    border-radius: 1.2mm;
     text-align: center;
-    font-size: 2.4mm;
-    font-weight: 800;
-    padding: 1mm 0.8mm;
+    font-size: 2.6mm;
+    font-weight: 900;
+    padding: 1.2mm 0.8mm;
     text-transform: uppercase;
-    letter-spacing: 0.1mm;
+    letter-spacing: 0.15mm;
+    color: #000;
+    border-right: 0.5mm solid #000;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta span:last-child {
+    border-right: none;
   }
 
   body.terminal-printing .terminal-qc-style-block {
-    border: 0.3mm solid #cbd5e1;
-    border-radius: 1.6mm;
-    padding: 1.2mm;
+    border: 0.4mm solid #000;
+    border-radius: 0;
+    padding: 1mm 1.2mm;
   }
 
   body.terminal-printing .terminal-qc-style-block h4 {
-    margin: 0 0 0.8mm;
-    font-size: 2.4mm;
-    font-weight: 800;
+    margin: 0 0 0.6mm;
+    font-size: 2mm;
+    font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 0.12mm;
-    color: #334155;
+    letter-spacing: 0.3mm;
+    color: #000;
+    border-bottom: 0.3mm solid #000;
+    padding-bottom: 0.5mm;
   }
 
   body.terminal-printing .terminal-qc-style-row {
     display: grid;
-    grid-template-columns: 22mm minmax(0, 1fr);
-    gap: 1.3mm;
+    grid-template-columns: 20mm minmax(0, 1fr);
+    gap: 1.5mm;
     align-items: center;
+    padding-top: 0.5mm;
   }
 
   body.terminal-printing .terminal-qc-style-image,
   body.terminal-printing .terminal-qc-style-placeholder {
     width: 100%;
-    height: 15mm;
-    border: 0.25mm solid #cbd5e1;
-    border-radius: 1mm;
+    height: 14mm;
+    border: 0.3mm solid #555;
+    border-radius: 0;
     object-fit: contain;
-    background: #f8fafc;
+    background: #fff;
+    filter: grayscale(1) contrast(1.1);
   }
 
   body.terminal-printing .terminal-qc-style-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.2mm;
+    font-size: 2mm;
     font-weight: 700;
-    color: #64748b;
+    color: #555;
     letter-spacing: 0.1mm;
+    filter: none;
   }
 
   body.terminal-printing .terminal-qc-jabzour-stack {
@@ -636,34 +668,37 @@ input[type="number"] {
   body.terminal-printing .terminal-qc-style-values {
     display: flex;
     flex-direction: column;
-    gap: 0.55mm;
-    font-size: 2.2mm;
+    gap: 0.6mm;
+    font-size: 2.5mm;
     font-weight: 700;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-accessories-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 1.2mm;
-    margin-top: 0.85mm;
+    gap: 1mm;
+    margin-top: 0.8mm;
   }
 
   body.terminal-printing .terminal-qc-accessories-row span {
     display: inline-flex;
     align-items: center;
     gap: 0.8mm;
-    font-size: 2.05mm;
+    font-size: 2mm;
     font-weight: 700;
-    border: 0.24mm solid #cbd5e1;
+    border: 0.3mm solid #000;
     border-radius: 999px;
-    padding: 0.45mm 1.2mm;
-    background: #f8fafc;
+    padding: 0.4mm 1.2mm;
+    background: #fff;
+    color: #000;
   }
 
   body.terminal-printing .terminal-qc-accessories-row img {
     width: 3.4mm;
     height: 3.4mm;
     object-fit: contain;
+    filter: grayscale(1) contrast(1.2);
   }
 
   body.terminal-printing .terminal-qc-collar-row img {
@@ -671,12 +706,15 @@ input[type="number"] {
     height: 4.2mm;
   }
 
+  /* ── Notes ── */
   body.terminal-printing .terminal-qc-print-notes {
-    margin-top: 2.4mm;
-    border-top: 0.28mm dashed #94a3b8;
-    padding-top: 1.6mm;
-    font-size: 2.6mm;
-    line-height: 1.35;
+    margin-top: 3mm;
+    border-top: 0.4mm solid #000;
+    padding-top: 1.5mm;
+    font-size: 2.8mm;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #000;
   }
 }
 

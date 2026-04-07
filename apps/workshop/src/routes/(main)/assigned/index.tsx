@@ -235,7 +235,7 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
                   </StatusPill>
                 )}
               </div>
-              <StageBadge stage={g.piece_stage} className="text-[10px] py-0 shrink-0" />
+              <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} className="text-[10px] py-0 shrink-0" />
             </div>
 
             <div className="space-y-1">
@@ -399,17 +399,16 @@ function OrdersTable({
   onToggle: (id: number) => void;
 }) {
   return (
-    <Table className="min-w-[850px]">
+    <Table className="min-w-[750px]">
       <TableHeader>
         <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
           <TableHead className="w-8 h-8 px-2" />
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Order</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Customer</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Brand</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Status</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Garments</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2">Delivery</TableHead>
-          <TableHead className="w-8 h-8 px-2" />
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[90px]">Order</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[180px]">Customer</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[80px]">Brand</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[190px]">Status</TableHead>
+          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[150px] text-center">Delivery</TableHead>
+          <TableHead className="w-[90px] h-8 px-2" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -428,7 +427,6 @@ function OrdersTable({
                 aria-expanded={isExpanded}
                 className={cn(
                   "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
-                  group.express && "bg-orange-50/30",
                   urgency.days !== null && urgency.days < 0 && "border-l-4 border-l-red-500",
                 )}
               >
@@ -444,8 +442,13 @@ function OrdersTable({
                     <span className="text-[10px] text-muted-foreground">INV-{group.invoice_number}</span>
                   )}
                 </TableCell>
-                <TableCell className="py-2.5 px-2.5 text-xs max-w-[160px] truncate">
-                  {group.customer_name ?? "—"}
+                <TableCell className="py-2.5 px-2.5 text-xs">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold max-w-[160px] truncate">{group.customer_name ?? "—"}</span>
+                    {group.customer_mobile && (
+                      <span className="font-mono text-muted-foreground">{group.customer_mobile}</span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="py-2.5 px-2.5">
                   <div className="flex items-center gap-1">
@@ -455,19 +458,24 @@ function OrdersTable({
                 <TableCell className="py-2.5 px-2.5">
                   <StatusPill color={statusLabel.color}>{statusLabel.text}</StatusPill>
                 </TableCell>
-                <TableCell className="py-2.5 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                  {garmentSummary(group.garments)}
-                </TableCell>
-                <TableCell className="py-2.5 px-2.5 text-xs whitespace-nowrap">
-                  {group.delivery_date ? (
-                    <span className={cn("font-semibold flex items-center gap-1", urgency.cls)}>
-                      <Clock className="w-3 h-3" />
-                      {formatDate(group.delivery_date)}
-                      {daysLabel && <span className="font-bold">({daysLabel})</span>}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+                <TableCell className="py-2.5 px-2.5 text-xs align-middle text-center">
+                  <div className="flex flex-col gap-1 items-center">
+                    {group.delivery_date ? (
+                      <span className={cn("font-semibold flex items-center gap-1 whitespace-nowrap", urgency.cls)}>
+                        <Clock className="w-3 h-3" />
+                        {formatDate(group.delivery_date)}
+                        {daysLabel && <span className="font-bold">({daysLabel})</span>}
+                      </span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                    <div className="flex items-center gap-1">
+                      {brovas.length > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovas.length}B</span>
+                      )}
+                      {finals.length > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finals.length}F</span>
+                      )}
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell className="py-2.5 px-2.5">
                   <Link
@@ -483,7 +491,7 @@ function OrdersTable({
               </TableRow>
               <TableRow key={`${group.order_id}-detail`} className="border-0 hover:bg-transparent">
                 <TableCell
-                  colSpan={8}
+                  colSpan={7}
                   className={cn(
                     "p-0 transition-colors",
                     isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0",

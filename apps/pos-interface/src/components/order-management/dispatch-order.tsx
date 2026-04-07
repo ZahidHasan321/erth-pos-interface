@@ -31,7 +31,7 @@ import { ErrorBoundary } from "@/components/global/error-boundary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 
 // API and Types
-import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, type DispatchHistoryRow } from "@/api/orders";
+import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, getBrand, type DispatchHistoryRow } from "@/api/orders";
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
@@ -313,7 +313,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
     isError,
     error,
   } = useQuery<ApiResponse<RedispatchGarment[]>>({
-    queryKey: ["redispatchGarments"],
+    queryKey: ["redispatchGarments", getBrand()],
     queryFn: () => getGarmentsForRedispatch() as Promise<ApiResponse<RedispatchGarment[]>>,
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 5,
@@ -539,7 +539,7 @@ function InTransitToWorkshopTab() {
     isError,
     error,
   } = useQuery<ApiResponse<OrderWithDetails[]>>({
-    queryKey: ["inTransitToWorkshop"],
+    queryKey: ["inTransitToWorkshop", getBrand()],
     queryFn: async () => {
       const response = await getInTransitToWorkshopOrders();
       return response as ApiResponse<OrderWithDetails[]>;
@@ -953,7 +953,7 @@ function DispatchHistoryTab() {
 
   // Shop-side history is always outbound: shop → workshop.
   const { data: historyResp, isLoading, isError, error } = useQuery<ApiResponse<DispatchHistoryRow[]>>({
-    queryKey: ['dispatchHistory', fromDate.toISOString(), toDate.toISOString(), 'to_workshop'],
+    queryKey: ['dispatchHistory', getBrand(), fromDate.toISOString(), toDate.toISOString(), 'to_workshop'],
     queryFn: () => getDispatchHistory(fromDate.toISOString(), toDate.toISOString(), 'to_workshop'),
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 5,
@@ -1136,7 +1136,7 @@ export default function DispatchOrderPage() {
     isError,
     error,
   } = useQuery<ApiResponse<OrderWithDetails[]>>({
-    queryKey: ["dispatchOrders"],
+    queryKey: ["dispatchOrders", getBrand()],
     queryFn: async () => {
       const response = await getOrdersForDispatch();
       return response as ApiResponse<OrderWithDetails[]>;
@@ -1153,7 +1153,7 @@ export default function DispatchOrderPage() {
 
   // Count for return tab badge
   const { data: redispatchResponse } = useQuery<ApiResponse<any[]>>({
-    queryKey: ["redispatchGarments"],
+    queryKey: ["redispatchGarments", getBrand()],
     queryFn: () => getGarmentsForRedispatch(),
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 5,
@@ -1162,7 +1162,7 @@ export default function DispatchOrderPage() {
 
   // Count for in-transit tab badge
   const { data: transitResponse } = useQuery<ApiResponse<OrderWithDetails[]>>({
-    queryKey: ["inTransitToWorkshop"],
+    queryKey: ["inTransitToWorkshop", getBrand()],
     queryFn: async () => {
       const response = await getInTransitToWorkshopOrders();
       return response as ApiResponse<OrderWithDetails[]>;

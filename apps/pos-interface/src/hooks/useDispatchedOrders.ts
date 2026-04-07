@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { getDispatchedOrders } from "@/api/orders";
+import { getDispatchedOrders, getBrand } from "@/api/orders";
 
 /**
  * Hook to fetch and manage orders with garments dispatched to shop.
  */
 export function useDispatchedOrders() {
     return useQuery({
-        queryKey: ["dispatched-orders"],
+        queryKey: ["dispatched-orders", getBrand()],
         queryFn: async () => {
             const res = await getDispatchedOrders();
             if (res.status === "error") {
