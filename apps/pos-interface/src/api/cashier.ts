@@ -347,7 +347,7 @@ export const recordPaymentTransaction = async (params: {
         p_transaction_type: params.transactionType,
         p_refund_reason: params.refundReason || null,
         p_collect_garment_ids: params.collectGarmentIds || null,
-        p_refund_items: params.refundItems ? JSON.stringify(params.refundItems) : null,
+        p_refund_items: params.refundItems || null,
         p_local_date: getLocalDateStr(),
     });
 

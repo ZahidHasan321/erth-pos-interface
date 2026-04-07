@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { toast } from "sonner";
+import { db } from "@/lib/db";
 
 export const Route = createFileRoute("/(auth)/login")({
   beforeLoad: ({ context }) => {
@@ -19,6 +20,14 @@ const STAGES = [
 
 const TICKER = (STAGES.join("  ·  ") + "  ·  ").repeat(5);
 
+type WorkshopUser = {
+  id: string;
+  username: string;
+  name: string;
+  role: string | null;
+  department: string | null;
+};
+
 function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
@@ -26,10 +35,22 @@ function LoginPage() {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [workshopUsers, setWorkshopUsers] = useState<WorkshopUser[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 40);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    db.rpc("get_login_users").then(({ data }) => {
+      if (data) {
+        const eligible = (data as WorkshopUser[]).filter(
+          (u) => u.department === "workshop" || u.role === "super_admin"
+        );
+        setWorkshopUsers(eligible);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -51,12 +72,6 @@ function LoginPage() {
     }
   };
 
-  const testAccounts = [
-    { user: "zahid",  role: "Super Admin" },
-    { user: "fahad",  role: "Manager"     },
-    { user: "ahmed",  role: "Staff"        },
-    { user: "khalid", role: "Staff"        },
-  ];
 
   return (
     <>
@@ -420,22 +435,22 @@ function LoginPage() {
                   <div style={{ flex: 1, height: 1, background: "rgba(240,235,225,0.12)" }} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-                  {testAccounts.map((a) => (
+                  {workshopUsers.map((u) => (
                     <button
-                      key={a.user}
+                      key={u.id}
                       type="button"
                       className="wl-pill"
-                      onClick={() => { setUsername(a.user); setPin("1234"); }}
+                      onClick={() => { setUsername(u.username); setPin("1234"); }}
                     >
                       <span style={{
                         fontFamily: "'Montserrat', sans-serif",
                         fontSize: 11, fontWeight: 600,
                         color: "rgba(240,235,225,0.85)",
-                      }}>{a.user}</span>
+                      }}>{u.username}</span>
                       <span style={{
                         fontFamily: "'Montserrat', sans-serif",
                         fontSize: 8, color: "rgba(240,235,225,0.45)",
-                      }}>{a.role}</span>
+                      }}>{u.role === "super_admin" ? "Super Admin" : u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : ""}</span>
                     </button>
                   ))}
                 </div>

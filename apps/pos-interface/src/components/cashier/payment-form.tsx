@@ -18,6 +18,7 @@ import { usePaymentMutation } from "@/hooks/useCashier";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { useAuth } from "@/context/auth";
 import type { RefundItem } from "@/api/cashier";
 
 const paymentSchema = z.object({
@@ -50,6 +51,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
     const [internalRefund, setInternalRefund] = useState(refundOnly ?? false);
     const isRefund = controlledRefund ?? internalRefund;
     const paymentMutation = usePaymentMutation();
+    const { user: currentUser } = useAuth();
 
     const { data: employeesRaw } = useQuery({
         queryKey: ["employees"],
@@ -70,10 +72,17 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
             payment_type: "knet",
             payment_ref_no: "",
             payment_note: "",
-            cashier_id: "",
+            cashier_id: currentUser?.id ?? "",
             refund_reason: "",
         },
     });
+
+    // Auto-set cashier to current user once auth loads
+    useEffect(() => {
+        if (currentUser?.id && !form.getValues("cashier_id")) {
+            form.setValue("cashier_id", currentUser.id);
+        }
+    }, [currentUser?.id]);
 
     // Auto-fill refund amount when refund items change
     useEffect(() => {
@@ -103,7 +112,7 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
             }
         }
 
-        if (values.payment_type !== "cash" && !values.payment_ref_no?.trim()) {
+        if (!isRefund && values.payment_type !== "cash" && !values.payment_ref_no?.trim()) {
             form.setError("payment_ref_no", { message: "Reference number is required" });
             return;
         }
@@ -231,11 +240,18 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
                             <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
-                            {employees?.map((emp: any) => (
-                                <SelectItem key={emp.id} value={emp.id}>
-                                    {emp.name}
-                                </SelectItem>
-                            ))}
+                            {employees.length > 0
+                                ? employees.map((emp: any) => (
+                                    <SelectItem key={emp.id} value={emp.id}>
+                                        {emp.name}
+                                    </SelectItem>
+                                ))
+                                : currentUser && (
+                                    <SelectItem value={currentUser.id}>
+                                        {currentUser.name}
+                                    </SelectItem>
+                                )
+                            }
                         </SelectContent>
                     </Select>
                 </div>
