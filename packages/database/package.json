@@ -9,6 +9,7 @@
     "db:triggers": "tsx scripts/apply-triggers.ts",
     "db:test": "tsx scripts/test-queries.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
+    "db:migrate-styles-pricing": "tsx scripts/migrate-styles-pricing.ts",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },

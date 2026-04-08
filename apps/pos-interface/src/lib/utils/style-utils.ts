@@ -3,16 +3,23 @@ import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and
 import { type GarmentSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 
 /**
- * Build a lookup map from styles: image_url (code) -> rate_per_item
+ * Build a lookup map from styles: code -> rate_per_item
+ * Falls back to image_url for rows not yet migrated.
  */
 function buildStylePriceMap(styles: Style[]): Map<string, number> {
     const map = new Map<string, number>();
     styles.forEach((s) => {
-        if (s.image_url) {
-            map.set(s.image_url, Number(s.rate_per_item) || 0);
+        const key = s.code ?? s.image_url;
+        if (key) {
+            map.set(key, Number(s.rate_per_item) || 0);
         }
     });
     return map;
+}
+
+/** Normalizes thickness values to safe code suffixes: "NO HASHWA" → "NO_HASHWA" */
+function thicknessCode(thickness: string): string {
+    return thickness.replace(/\s+/g, "_");
 }
 
 /**
@@ -50,19 +57,28 @@ export function calculateGarmentStylePrice(
         total += priceMap.get(garment.collar_button) || 0;
     }
 
-    // Jabzour 1
+    // Jabzour type + thickness
     if (garment.jabzour_1) {
         total += priceMap.get(garment.jabzour_1) || 0;
     }
+    if (garment.jabzour_thickness) {
+        total += priceMap.get(`JAB_THICKNESS_${thicknessCode(garment.jabzour_thickness)}`) || 0;
+    }
 
-    // Front Pocket Type
+    // Front pocket type + thickness
     if (garment.front_pocket_type) {
         total += priceMap.get(garment.front_pocket_type) || 0;
     }
+    if (garment.front_pocket_thickness) {
+        total += priceMap.get(`FRO_THICKNESS_${thicknessCode(garment.front_pocket_thickness)}`) || 0;
+    }
 
-    // Cuffs Type
+    // Cuffs type + thickness
     if (garment.cuffs_type) {
         total += priceMap.get(garment.cuffs_type) || 0;
+    }
+    if (garment.cuffs_thickness) {
+        total += priceMap.get(`CUF_THICKNESS_${thicknessCode(garment.cuffs_thickness)}`) || 0;
     }
 
     return total;
@@ -184,19 +200,28 @@ export function calculateStylePrice(
         total += priceMap.get("COL_SMALL_TABBAGI") || 0;
     }
 
-    // Jabzour 1
+    // Jabzour type + thickness
     if (styleOptions.jabzour?.jabzour_1) {
         total += priceMap.get(styleOptions.jabzour.jabzour_1) || 0;
     }
+    if (styleOptions.jabzour?.jabzour_thickness) {
+        total += priceMap.get(`JAB_THICKNESS_${thicknessCode(styleOptions.jabzour.jabzour_thickness)}`) || 0;
+    }
 
-    // Front Pocket Type
+    // Front pocket type + thickness
     if (styleOptions.front_pocket?.front_pocket_type) {
         total += priceMap.get(styleOptions.front_pocket.front_pocket_type) || 0;
     }
+    if (styleOptions.front_pocket?.front_pocket_thickness) {
+        total += priceMap.get(`FRO_THICKNESS_${thicknessCode(styleOptions.front_pocket.front_pocket_thickness)}`) || 0;
+    }
 
-    // Cuffs Type
+    // Cuffs type + thickness
     if (styleOptions.cuffs?.cuffs_type) {
         total += priceMap.get(styleOptions.cuffs.cuffs_type) || 0;
+    }
+    if (styleOptions.cuffs?.cuffs_thickness) {
+        total += priceMap.get(`CUF_THICKNESS_${thicknessCode(styleOptions.cuffs.cuffs_thickness)}`) || 0;
     }
 
     return total;

@@ -282,9 +282,12 @@ export const styles = pgTable("styles", {
     type: text("type"),
     rate_per_item: numeric("rate_per_item", { precision: 10, scale: 3 }),
     image_url: text("image_url"),
+    code: text("code"),        // price lookup key (was image_url repurposed — now explicit)
+    component: text("component"), // groups entries: collar_type, jabzour_type, jabzour_thickness, etc.
     brand: brandEnum("brand").notNull().default("ERTH"),
 }, (t) => ({
     nameTypeBrandIdx: uniqueIndex("styles_name_type_brand_idx").on(t.name, t.type, t.brand),
+    codeBrandIdx: uniqueIndex("styles_code_brand_idx").on(t.code, t.brand),
 }));
 
 export const fabrics = pgTable("fabrics", {

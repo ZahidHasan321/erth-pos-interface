@@ -20,8 +20,8 @@ async function main() {
 
   // Styles: existing rows now have brand='ERTH' (default). Duplicate for other brands.
   const styleResult = await client.unsafe(`
-    INSERT INTO styles (name, type, rate_per_item, image_url, brand)
-    SELECT name, type, rate_per_item, image_url, b.brand
+    INSERT INTO styles (name, type, rate_per_item, image_url, code, component, brand)
+    SELECT name, type, rate_per_item, image_url, code, component, b.brand
     FROM styles, (VALUES ('SAKKBA'), ('QASS')) AS b(brand)
     WHERE styles.brand = 'ERTH'
     ON CONFLICT (name, type, brand) DO NOTHING

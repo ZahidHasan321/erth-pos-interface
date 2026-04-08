@@ -75,9 +75,14 @@ function FractionCell({
   if (typeof value !== "number" || value === 0) {
     return <div className="h-5" />;
   }
+  const isInteger = Number.isInteger(value);
   return (
     <div className="flex justify-center h-5">
-      <StackedFraction value={value} />
+      {isInteger ? (
+        <span className="text-xs text-muted-foreground tabular-nums">{value}</span>
+      ) : (
+        <StackedFraction value={value} />
+      )}
     </div>
   );
 }

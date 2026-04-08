@@ -659,11 +659,11 @@ export function CustomerMeasurementsForm({
               { name: "jabzour_length", label: "11. Jabzour Len" },
               { name: "length_front", label: "12. Front Len" },
               { name: "bottom", label: "13. Bottom" },
-              { name: "collar_width", label: "14. Collar W" },
-              { name: "collar_height", label: "15. Collar H" },
-              { name: "chest_back", label: "16. Back Chest" },
-              { name: "waist_back", label: "17. Back Waist" },
-              { name: "length_back", label: "18. Back Len" },
+              { name: "chest_back", label: "14. Back Chest" },
+              { name: "waist_back", label: "15. Back Waist" },
+              { name: "length_back", label: "16. Back Len" },
+              { name: "collar_width", label: "17. Collar Len" },
+              { name: "collar_height", label: "18. Collar H" },
             ]}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
