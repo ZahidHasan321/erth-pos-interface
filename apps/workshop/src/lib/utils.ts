@@ -25,7 +25,8 @@ export function getKuwaitMidnight(date?: Date): Date {
  * Supabase returns `timestamp without tz` as "2025-04-04T21:00:00" (no Z),
  * so JS would parse it as local time. The value is actually UTC — append Z.
  */
-export function parseUtcTimestamp(value: string): Date {
+export function parseUtcTimestamp(value: string | Date): Date {
+  if (value instanceof Date) return value;
   if (value.endsWith("Z") || value.includes("+")) return new Date(value);
   return new Date(value + "Z");
 }

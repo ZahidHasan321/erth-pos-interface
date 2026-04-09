@@ -27,7 +27,6 @@ import {
   Scissors,
   Truck,
   ClipboardCheck,
-  BarChart3,
   CircleCheckBig,
   Users,
   DollarSign,
@@ -85,14 +84,16 @@ export function WorkshopSidebar() {
     { label: "Pricing",         icon: DollarSign,       href: "/pricing" },
   ];
 
+  const { data: activeDeliveries = [] } = useTransferRequests({ status: ["requested", "approved", "dispatched"], direction: "shop_to_workshop" });
+
   const storeItems = [
     { label: "Inventory",            icon: Package,          href: "/store/inventory" },
     { label: "Send to Shop",         icon: Send,             href: "/store/send-to-shop" },
     { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
+    { label: "Active Deliveries",    icon: Activity,         href: "/store/active-deliveries",    count: activeDeliveries.length,    badgeColor: "bg-sky-100 text-sky-700" },
     { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries", count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
     { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests",     count: approveRequests.length,     badgeColor: "bg-amber-100 text-amber-700" },
     { label: "Transfer History",     icon: History,          href: "/store/transfer-history" },
-    { label: "Stock Report",         icon: BarChart3,        href: "/store/stock-report" },
   ];
 
   const terminalItems = [

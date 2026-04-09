@@ -492,12 +492,12 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl border bg-card px-4 py-3", className)}>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className={cn("rounded-xl border bg-card p-5 shadow-sm", className)}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
       </div>
-      <p className="text-2xl font-bold leading-none tabular-nums">{value}</p>
+      <p className="text-2xl font-black leading-none tabular-nums tracking-tight">{value}</p>
     </div>
   );
 }

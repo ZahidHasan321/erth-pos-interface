@@ -6,11 +6,14 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Loader2,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
+import { Skeleton } from "@repo/ui/skeleton";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Pagination, usePagination } from "@repo/ui/pagination";
@@ -63,14 +66,61 @@ export interface HistorySearch {
   sort?: SortKey;
 }
 
+/** Kuwait is UTC+3, no DST. All date logic is pinned to this offset. */
+const KW_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** Current date in Kuwait as YYYY-MM-DD */
+function kwToday(): string {
+  const kwNow = new Date(Date.now() + KW_OFFSET_MS);
+  return kwNow.toISOString().slice(0, 10);
+}
+
+/** Sunday of the current week in Kuwait (Sun–Sat week) */
+function kwWeekStart(): string {
+  const kwNow = new Date(Date.now() + KW_OFFSET_MS);
+  kwNow.setUTCDate(kwNow.getUTCDate() - kwNow.getUTCDay());
+  return kwNow.toISOString().slice(0, 10);
+}
+
+/** First of the current month in Kuwait */
+function kwMonthStart(): string {
+  const kwNow = new Date(Date.now() + KW_OFFSET_MS);
+  return `${kwNow.getUTCFullYear()}-${String(kwNow.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** Start of day in UTC for a Kuwait date: dateStr midnight KW = (dateStr - 1) 21:00 UTC */
+function kwStartIso(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCHours(d.getUTCHours() - 3);
+  return d.toISOString();
+}
+
+/** End of day in UTC for a Kuwait date: dateStr 23:59:59.999 KW = dateStr 20:59:59.999 UTC */
+function kwEndIso(dateStr: string): string {
+  const d = new Date(`${dateStr}T23:59:59.999Z`);
+  d.setUTCHours(d.getUTCHours() - 3);
+  return d.toISOString();
+}
+
 function defaultFromDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
+  const d = new Date(Date.now() + KW_OFFSET_MS);
+  d.setUTCDate(d.getUTCDate() - 30);
   return d.toISOString().slice(0, 10);
 }
 
 function defaultToDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return kwToday();
+}
+
+type DatePreset = "today" | "week" | "month" | null;
+
+function detectPreset(from: string, to: string): DatePreset {
+  const t = kwToday();
+  if (to !== t) return null;
+  if (from === t) return "today";
+  if (from === kwWeekStart()) return "week";
+  if (from === kwMonthStart()) return "month";
+  return null;
 }
 
 function toDateStr(d: Date | null): string | undefined {
@@ -102,6 +152,11 @@ function itemsSummary(t: TransferRequestWithItems): string {
 
 function totalQty(t: TransferRequestWithItems): number {
   return t.items.reduce((sum, i) => sum + Number(i.requested_qty || 0), 0);
+}
+
+function totalApprovedQty(t: TransferRequestWithItems): number | null {
+  if (!t.items.some((i) => i.approved_qty != null)) return null;
+  return t.items.reduce((sum, i) => sum + Number(i.approved_qty ?? 0), 0);
 }
 
 function lastUpdatedAt(t: TransferRequestWithItems): Date | null {
@@ -149,18 +204,10 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
   }, [search.status]);
   const isAllStatuses = selectedStatuses.size === 0;
 
-  const startIso = useMemo(
-    () => new Date(`${from}T00:00:00.000Z`).toISOString(),
-    [from],
-  );
-  const endIso = useMemo(() => {
-    const d = new Date(`${to}T00:00:00.000Z`);
-    d.setUTCDate(d.getUTCDate() + 1);
-    d.setUTCMilliseconds(d.getUTCMilliseconds() - 1);
-    return d.toISOString();
-  }, [to]);
+  const startIso = useMemo(() => kwStartIso(from), [from]);
+  const endIso = useMemo(() => kwEndIso(to), [to]);
 
-  const { data: allRequests = [], isLoading } = useTransferRequests({
+  const { data: allRequests = [], isLoading, isError, refetch } = useTransferRequests({
     direction: search.dir,
     item_type: search.type,
     startDate: startIso,
@@ -253,7 +300,7 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
           <History className="h-5 w-5 text-muted-foreground" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">Transfer History</h1>
+          <h1 className="text-xl font-bold tracking-tight">Transfer History</h1>
           <p className="text-sm text-muted-foreground">
             All past and in-flight store transfers with full audit trail
           </p>
@@ -261,12 +308,94 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
       </div>
 
       {/* Filter bar */}
-      <div className="border rounded-md bg-card mb-4">
+      <div className="border rounded-md bg-card mb-4 divide-y">
+        {/* Row 1: Date presets + custom range + search */}
         <div className="p-3 flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-              Direction
+              Date Range
             </label>
+            <div className="flex items-center gap-1">
+              {([
+                ["today", "Today"],
+                ["week", "This Week"],
+                ["month", "This Month"],
+              ] as [DatePreset, string][]).map(([key, label]) => {
+                const active = detectPreset(from, to) === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      const t = kwToday();
+                      const f = key === "today" ? t : key === "week" ? kwWeekStart() : kwMonthStart();
+                      update({ from: f, to: t });
+                    }}
+                    className={cn(
+                      "text-[11px] px-2.5 py-1.5 rounded-md border transition-colors font-medium",
+                      active
+                        ? "bg-foreground text-background border-foreground"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                From
+              </label>
+              <DatePicker
+                value={parseDateStr(from)}
+                onChange={(d) => update({ from: toDateStr(d) })}
+                placeholder="From"
+                displayFormat="dd MMM yyyy"
+                className="w-[150px]"
+                calendarProps={{ disabled: { after: parseDateStr(to) } }}
+              />
+            </div>
+            <span className="text-muted-foreground text-xs pb-2">–</span>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                To
+              </label>
+              <DatePicker
+                value={parseDateStr(to)}
+                onChange={(d) => update({ to: toDateStr(d) })}
+                placeholder="To"
+                displayFormat="dd MMM yyyy"
+                className="w-[150px]"
+                calendarProps={{ disabled: { before: parseDateStr(from) } }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+              Search
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search.q ?? ""}
+                onChange={(e) => update({ q: e.target.value || undefined })}
+                placeholder="ID, item, or user…"
+                className="pl-9"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Direction, Type, Status + Clear */}
+        <div className="p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+              Direction
+            </span>
             <SlidingPillSwitcher
               size="sm"
               value={search.dir ?? "all"}
@@ -281,17 +410,19 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+          <span className="h-5 w-px bg-border hidden sm:block" aria-hidden />
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
               Type
-            </label>
+            </span>
             <Select
               value={search.type ?? "all"}
               onValueChange={(v) =>
                 update({ type: v === "all" ? undefined : (v as HistorySearch["type"]) })
               }
             >
-              <SelectTrigger className="w-[140px] bg-white">
+              <SelectTrigger className="w-[130px] h-8 bg-white text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -303,95 +434,97 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-              From
-            </label>
-            <DatePicker
-              value={parseDateStr(from)}
-              onChange={(d) => update({ from: toDateStr(d) })}
-              placeholder="From"
-              displayFormat="dd MMM yyyy"
-              className="w-[170px]"
-              calendarProps={{ disabled: { after: parseDateStr(to) } }}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-              To
-            </label>
-            <DatePicker
-              value={parseDateStr(to)}
-              onChange={(d) => update({ to: toDateStr(d) })}
-              placeholder="To"
-              displayFormat="dd MMM yyyy"
-              className="w-[170px]"
-              calendarProps={{ disabled: { before: parseDateStr(from) } }}
-            />
-          </div>
+          <span className="h-5 w-px bg-border hidden sm:block" aria-hidden />
 
-          <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-              Search
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search.q ?? ""}
-                onChange={(e) => update({ q: e.target.value || undefined })}
-                placeholder="ID, item, or user…"
-                className="pl-9"
-              />
-            </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mr-0.5">
+              Status
+            </span>
+            <button
+              onClick={selectAllStatuses}
+              className={cn(
+                "text-[11px] px-2.5 py-0.5 rounded border transition-colors font-medium",
+                isAllStatuses
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-muted-foreground border-border hover:bg-muted",
+              )}
+            >
+              All
+            </button>
+            {ALL_STATUSES.map((s) => {
+              const active = !isAllStatuses && selectedStatuses.has(s);
+              return (
+                <button
+                  key={s}
+                  onClick={() => toggleStatus(s)}
+                  className={cn(
+                    "text-[11px] px-2 py-0.5 rounded border transition-colors",
+                    active
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-background text-muted-foreground border-border hover:bg-muted",
+                  )}
+                >
+                  {TRANSFER_STATUS_LABELS[s] ?? s}
+                </button>
+              );
+            })}
           </div>
 
           {filtersActive && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
-              <X className="h-4 w-4 mr-1" /> Clear
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 ml-auto">
+              <X className="h-3.5 w-3.5 mr-1" /> Clear
             </Button>
           )}
-        </div>
-
-        <div className="px-3 pb-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mr-1">
-            Status:
-          </span>
-          <button
-            onClick={selectAllStatuses}
-            className={cn(
-              "text-[11px] px-2.5 py-0.5 rounded border transition-colors font-medium",
-              isAllStatuses
-                ? "bg-foreground text-background border-foreground"
-                : "bg-background text-muted-foreground border-border hover:bg-muted",
-            )}
-          >
-            All
-          </button>
-          <span className="h-4 w-px bg-border mx-0.5" aria-hidden />
-          {ALL_STATUSES.map((s) => {
-            const active = !isAllStatuses && selectedStatuses.has(s);
-            return (
-              <button
-                key={s}
-                onClick={() => toggleStatus(s)}
-                className={cn(
-                  "text-[11px] px-2 py-0.5 rounded border transition-colors",
-                  active
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-background text-muted-foreground border-border hover:bg-muted",
-                )}
-              >
-                {TRANSFER_STATUS_LABELS[s] ?? s}
-              </button>
-            );
-          })}
         </div>
       </div>
 
       {/* Results */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading transfers…
+      {isError ? (
+        <Card className="shadow-none rounded-xl border border-destructive/20">
+          <CardContent className="py-10 text-center">
+            <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+            <p className="font-medium text-sm">Failed to load transfer history</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Something went wrong. Please try again.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-4">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <div className="border rounded-md overflow-hidden bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="h-9 w-[70px]">ID</TableHead>
+                <TableHead className="h-9 w-[110px]">Date</TableHead>
+                <TableHead className="h-9 w-[150px]">Direction</TableHead>
+                <TableHead className="h-9 w-[90px]">Type</TableHead>
+                <TableHead className="h-9">Items</TableHead>
+                <TableHead className="h-9 text-right w-[70px]">Qty</TableHead>
+                <TableHead className="h-9 w-[140px]">Status</TableHead>
+                <TableHead className="h-9 w-[130px]">Requested by</TableHead>
+                <TableHead className="h-9 w-[100px]">Updated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-10" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-28" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell className="py-2.5"><Skeleton className="h-4 w-16" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       ) : sorted.length === 0 ? (
         <div className="border rounded-md bg-card py-16 text-center">
@@ -453,7 +586,16 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
                       {itemsSummary(r)}
                     </TableCell>
                     <TableCell className="py-2 text-right text-xs tabular-nums">
-                      {totalQty(r)}
+                      {(() => {
+                        const req = totalQty(r);
+                        const appr = totalApprovedQty(r);
+                        if (appr == null || appr === req) return req;
+                        return (
+                          <span className="text-amber-600" title={`${appr} of ${req} approved`}>
+                            {appr}/{req}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="py-2">
                       <TransferStatusBadge status={r.status} />

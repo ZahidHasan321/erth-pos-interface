@@ -3,6 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  AlertCircle,
+  RefreshCw,
   Package,
   Scissors,
   Shirt,
@@ -10,21 +12,11 @@ import {
   Search,
   ArrowRight,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 
+import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Input } from "@repo/ui/input";
-import { Button } from "@repo/ui/button";
 import {
   Table,
   TableBody,
@@ -33,7 +25,10 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/table";
+import { Skeleton } from "@repo/ui/skeleton";
 
+import { cn } from "@/lib/utils";
+import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
@@ -64,93 +59,38 @@ function StockReportPage() {
   const [activeTab, setActiveTab] = useState("fabric");
   const [search, setSearch] = useState("");
 
-  const { data: fabrics = [], isLoading: fabricsLoading } = useQuery({
+  const { data: fabrics = [], isLoading: fabricsLoading, isError: fabricsError, refetch: fabricsRefetch } = useQuery({
     queryKey: ["fabrics"],
     queryFn: getFabrics,
   });
-  const { data: shelfItems = [], isLoading: shelfLoading } = useQuery({
+  const { data: shelfItems = [], isLoading: shelfLoading, isError: shelfError, refetch: shelfRefetch } = useQuery({
     queryKey: ["shelf"],
     queryFn: getShelf,
   });
-  const { data: accessories = [], isLoading: accessoriesLoading } = useQuery({
+  const { data: accessories = [], isLoading: accessoriesLoading, isError: accessoriesError, refetch: accessoriesRefetch } = useQuery({
     queryKey: ["accessories"],
     queryFn: getAccessories,
   });
 
   const isLoading = fabricsLoading || shelfLoading || accessoriesLoading;
+  const isError = fabricsError || shelfError || accessoriesError;
+  const refetchAll = () => { fabricsRefetch(); shelfRefetch(); accessoriesRefetch(); };
 
-  const lowStockCount = useMemo(() => {
-    let count = 0;
+  const lowStockItems = useMemo(() => {
+    const items: string[] = [];
     for (const f of fabrics)
-      if (
-        isLowStock(
-          Number(f.shop_stock ?? 0),
-          Number(f.workshop_stock ?? 0),
-          "fabric",
-        )
-      )
-        count++;
+      if (isLowStock(Number(f.shop_stock ?? 0), Number(f.workshop_stock ?? 0), "fabric"))
+        items.push(f.name ?? "Unknown fabric");
     for (const s of shelfItems)
-      if (
-        isLowStock(
-          Number(s.shop_stock ?? 0),
-          Number(s.workshop_stock ?? 0),
-          "shelf",
-        )
-      )
-        count++;
+      if (isLowStock(Number(s.shop_stock ?? 0), Number(s.workshop_stock ?? 0), "shelf"))
+        items.push(s.type ?? "Unknown shelf item");
     for (const a of accessories)
-      if (
-        isLowStock(
-          Number(a.shop_stock ?? 0),
-          Number(a.workshop_stock ?? 0),
-          "accessory",
-        )
-      )
-        count++;
-    return count;
+      if (isLowStock(Number(a.shop_stock ?? 0), Number(a.workshop_stock ?? 0), "accessory"))
+        items.push(a.name ?? "Unknown accessory");
+    return items;
   }, [fabrics, shelfItems, accessories]);
 
-  const distributionData = useMemo(
-    () => [
-      {
-        name: "Fabrics",
-        shop: fabrics.reduce((s, f) => s + Number(f.shop_stock ?? 0), 0),
-        workshop: fabrics.reduce(
-          (s, f) => s + Number(f.workshop_stock ?? 0),
-          0,
-        ),
-      },
-      {
-        name: "Shelf",
-        shop: shelfItems.reduce((s, i) => s + Number(i.shop_stock ?? 0), 0),
-        workshop: shelfItems.reduce(
-          (s, i) => s + Number(i.workshop_stock ?? 0),
-          0,
-        ),
-      },
-      {
-        name: "Accessories",
-        shop: accessories.reduce((s, a) => s + Number(a.shop_stock ?? 0), 0),
-        workshop: accessories.reduce(
-          (s, a) => s + Number(a.workshop_stock ?? 0),
-          0,
-        ),
-      },
-    ],
-    [fabrics, shelfItems, accessories],
-  );
-
-  const categoryData = useMemo(() => {
-    const map: Record<string, { shop: number; workshop: number }> = {};
-    for (const a of accessories) {
-      const cat = ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category;
-      if (!map[cat]) map[cat] = { shop: 0, workshop: 0 };
-      map[cat].shop += Number(a.shop_stock ?? 0);
-      map[cat].workshop += Number(a.workshop_stock ?? 0);
-    }
-    return Object.entries(map).map(([name, v]) => ({ name, ...v }));
-  }, [accessories]);
+  const lowStockCount = lowStockItems.length;
 
   const sortedFabrics = useMemo(() => {
     const q = search.toLowerCase();
@@ -199,58 +139,100 @@ function StockReportPage() {
   }, [accessories, search]);
 
   return (
-    <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Stock Report</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Stock levels across shop and workshop locations
-          </p>
-        </div>
-        {lowStockCount > 0 && (
-          <Button variant="outline" size="sm" asChild>
-            <Link
-              to="/$main/store/request-delivery"
-              params={(prev: Record<string, string>) => prev}
-            >
-              Request Delivery <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Link>
-          </Button>
-        )}
+    <div
+      className={cn(
+        "p-4 md:p-5 max-w-[1600px] mx-auto space-y-5",
+        ANIMATION_CLASSES.fadeInUp,
+      )}
+    >
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Stock Report</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Inventory levels across shop and workshop
+        </p>
       </div>
 
-      {/* KPI Cards */}
+      {/* Low stock alert */}
+      {!isLoading && lowStockCount > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-sm font-medium text-amber-900">
+              <span className="font-bold tabular-nums">{lowStockCount}</span>{" "}
+              item{lowStockCount !== 1 ? "s" : ""} running low on stock
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-200 text-amber-800 hover:bg-amber-100 hover:border-amber-300 shrink-0"
+            asChild
+          >
+            <Link
+              to="/$main/store/request-delivery"
+              params={(p: Record<string, string>) => p}
+            >
+              Request Delivery
+              <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {/* Error state */}
+      {isError && !isLoading && (
+        <Card className="shadow-none rounded-xl border border-destructive/20">
+          <CardContent className="py-10 text-center">
+            <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+            <p className="font-medium text-sm">Failed to load stock data</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Something went wrong. Please try again.
+            </p>
+            <Button variant="outline" size="sm" onClick={refetchAll} className="mt-4">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stat strip */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
+            <Skeleton key={i} className="h-20 rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          <KpiCard
-            icon={<Scissors className="h-5 w-5 text-purple-600" />}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard
+            icon={<Scissors className="h-4 w-4 text-purple-600" />}
+            bg="bg-purple-50"
             label="Fabric Types"
             value={fabrics.length}
-            bg="bg-purple-50"
+            index={0}
           />
-          <KpiCard
-            icon={<Shirt className="h-5 w-5 text-sky-600" />}
+          <StatCard
+            icon={<Shirt className="h-4 w-4 text-sky-600" />}
+            bg="bg-sky-50"
             label="Shelf Items"
             value={shelfItems.length}
-            bg="bg-sky-50"
+            index={1}
           />
-          <KpiCard
-            icon={<Package className="h-5 w-5 text-pink-600" />}
+          <StatCard
+            icon={<Package className="h-4 w-4 text-pink-600" />}
+            bg="bg-pink-50"
             label="Accessories"
             value={accessories.length}
-            bg="bg-pink-50"
+            index={2}
           />
-          <KpiCard
-            icon={<AlertTriangle className="h-5 w-5 text-red-600" />}
-            label="Low Stock Alerts"
+          <StatCard
+            icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}
+            bg={lowStockCount > 0 ? "bg-amber-50" : "bg-muted/40"}
+            label="Low Stock"
             value={lowStockCount}
-            bg="bg-red-50"
+            index={3}
             highlight={lowStockCount > 0}
           />
         </div>
@@ -267,129 +249,73 @@ function StockReportPage() {
         />
       </div>
 
-      {/* Tabs */}
-      <Card>
-        <CardContent className="py-5">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full justify-start overflow-x-auto sm:w-fit [&>[data-slot=tabs-trigger]]:shrink-0">
-              <TabsTrigger value="fabric">Fabrics</TabsTrigger>
-              <TabsTrigger value="shelf">Shelf Items</TabsTrigger>
-              <TabsTrigger value="accessory">Accessories</TabsTrigger>
+      {/* Inventory table */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Card className="shadow-none rounded-xl overflow-hidden border">
+          <div className="px-4 py-3 border-b bg-muted/30">
+            <TabsList className="h-8 w-fit">
+              <TabsTrigger value="fabric" className="text-xs px-3 h-7">
+                Fabrics
+              </TabsTrigger>
+              <TabsTrigger value="shelf" className="text-xs px-3 h-7">
+                Shelf Items
+              </TabsTrigger>
+              <TabsTrigger value="accessory" className="text-xs px-3 h-7">
+                Accessories
+              </TabsTrigger>
             </TabsList>
+          </div>
 
-            <TabsContent value="fabric" className="mt-4">
+          <div className="overflow-x-auto">
+            <TabsContent value="fabric" className="mt-0">
               <FabricTable fabrics={sortedFabrics} search={search} />
             </TabsContent>
-            <TabsContent value="shelf" className="mt-4">
+            <TabsContent value="shelf" className="mt-0">
               <ShelfTable items={sortedShelf} search={search} />
             </TabsContent>
-            <TabsContent value="accessory" className="mt-4">
+            <TabsContent value="accessory" className="mt-0">
               <AccessoryTable items={sortedAccessories} search={search} />
             </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Charts */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="py-5">
-              <h3 className="text-sm font-semibold mb-4">
-                Stock Distribution by Location
-              </h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={distributionData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-muted"
-                  />
-                  <XAxis dataKey="name" className="text-xs" />
-                  <YAxis className="text-xs" />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend />
-                  <Bar
-                    dataKey="shop"
-                    name="Shop"
-                    fill="#0ea5e9"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="workshop"
-                    name="Workshop"
-                    fill="#8b5cf6"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {categoryData.length > 0 && (
-            <Card>
-              <CardContent className="py-5">
-                <h3 className="text-sm font-semibold mb-4">
-                  Accessories by Category
-                </h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={categoryData} layout="vertical">
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      className="stroke-muted"
-                    />
-                    <XAxis type="number" className="text-xs" />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      className="text-xs"
-                      width={90}
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend />
-                    <Bar
-                      dataKey="shop"
-                      name="Shop"
-                      fill="#0ea5e9"
-                      radius={[0, 4, 4, 0]}
-                    />
-                    <Bar
-                      dataKey="workshop"
-                      name="Workshop"
-                      fill="#8b5cf6"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+          </div>
+        </Card>
+      </Tabs>
     </div>
   );
 }
 
-function KpiCard({
+function StatCard({
   icon,
+  bg,
   label,
   value,
-  bg,
+  index,
   highlight,
 }: {
   icon: React.ReactNode;
+  bg: string;
   label: string;
   value: number;
-  bg: string;
+  index: number;
   highlight?: boolean;
 }) {
   return (
-    <Card className={highlight ? "border-red-200" : ""}>
-      <CardContent className="py-4 flex items-center gap-3">
-        <div className={`p-2.5 rounded-lg ${bg}`}>{icon}</div>
-        <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
+    <Card
+      className={cn(
+        "shadow-none rounded-xl border",
+        ANIMATION_CLASSES.fadeInUp,
+        highlight ? "border-amber-200" : "",
+      )}
+      style={ANIMATION_CLASSES.staggerDelay(index)}
+    >
+      <CardContent className="py-3.5 px-4 flex items-center gap-3">
+        <div className={cn("p-2 rounded-lg shrink-0", bg)}>{icon}</div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
           <p
-            className={`text-2xl font-bold tabular-nums ${highlight ? "text-red-600" : ""}`}
+            className={cn(
+              "text-2xl font-bold tabular-nums leading-tight",
+              highlight ? "text-amber-600" : "",
+            )}
           >
             {value}
           </p>
@@ -401,7 +327,7 @@ function KpiCard({
 
 function LowStockBadge() {
   return (
-    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-700">
+    <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
       Low
     </span>
   );
@@ -421,14 +347,14 @@ function FabricTable({
       />
     );
   return (
-    <Table className="min-w-[640px]">
+    <Table className="min-w-[600px]">
       <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead className="text-right">Shop Stock</TableHead>
-          <TableHead className="text-right">Workshop Stock</TableHead>
+        <TableRow className="bg-muted/20 hover:bg-muted/20">
+          <TableHead className="pl-4">Name</TableHead>
+          <TableHead className="text-right">Shop</TableHead>
+          <TableHead className="text-right">Workshop</TableHead>
           <TableHead className="text-right">Total</TableHead>
-          <TableHead className="text-center">Status</TableHead>
+          <TableHead className="text-center pr-4">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -437,12 +363,12 @@ function FabricTable({
           const workshop = Number(f.workshop_stock ?? 0);
           const low = isLowStock(shop, workshop, "fabric");
           return (
-            <TableRow key={f.id} className={low ? "bg-red-50/50" : ""}>
-              <TableCell className="font-medium">
+            <TableRow key={f.id} className={low ? "bg-red-50/40" : ""}>
+              <TableCell className="pl-4 font-medium">
                 <div className="flex items-center gap-2">
                   {f.color_hex && (
                     <span
-                      className="w-4 h-4 rounded-full border shrink-0"
+                      className="w-3.5 h-3.5 rounded-full border shrink-0"
                       style={{ backgroundColor: f.color_hex }}
                     />
                   )}
@@ -450,19 +376,29 @@ function FabricTable({
                 </div>
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums ${shop < LOW_STOCK_THRESHOLDS.fabric ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  shop < LOW_STOCK_THRESHOLDS.fabric
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {shop}
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums ${workshop < LOW_STOCK_THRESHOLDS.fabric ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  workshop < LOW_STOCK_THRESHOLDS.fabric
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {workshop}
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium">
                 {shop + workshop}
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell className="text-center pr-4">
                 {low && <LowStockBadge />}
               </TableCell>
             </TableRow>
@@ -483,15 +419,15 @@ function ShelfTable({ items, search }: { items: Shelf[]; search: string }) {
       />
     );
   return (
-    <Table className="min-w-[700px]">
+    <Table className="min-w-[660px]">
       <TableHeader>
-        <TableRow>
-          <TableHead>Type</TableHead>
+        <TableRow className="bg-muted/20 hover:bg-muted/20">
+          <TableHead className="pl-4">Type</TableHead>
           <TableHead>Brand</TableHead>
-          <TableHead className="text-right">Shop Stock</TableHead>
-          <TableHead className="text-right">Workshop Stock</TableHead>
+          <TableHead className="text-right">Shop</TableHead>
+          <TableHead className="text-right">Workshop</TableHead>
           <TableHead className="text-right">Total</TableHead>
-          <TableHead className="text-center">Status</TableHead>
+          <TableHead className="text-center pr-4">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -500,23 +436,33 @@ function ShelfTable({ items, search }: { items: Shelf[]; search: string }) {
           const workshop = Number(s.workshop_stock ?? 0);
           const low = isLowStock(shop, workshop, "shelf");
           return (
-            <TableRow key={s.id} className={low ? "bg-red-50/50" : ""}>
-              <TableCell className="font-medium">{s.type}</TableCell>
+            <TableRow key={s.id} className={low ? "bg-red-50/40" : ""}>
+              <TableCell className="pl-4 font-medium">{s.type}</TableCell>
               <TableCell>{s.brand}</TableCell>
               <TableCell
-                className={`text-right tabular-nums ${shop < LOW_STOCK_THRESHOLDS.shelf ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  shop < LOW_STOCK_THRESHOLDS.shelf
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {shop}
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums ${workshop < LOW_STOCK_THRESHOLDS.shelf ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  workshop < LOW_STOCK_THRESHOLDS.shelf
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {workshop}
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium">
                 {shop + workshop}
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell className="text-center pr-4">
                 {low && <LowStockBadge />}
               </TableCell>
             </TableRow>
@@ -543,16 +489,16 @@ function AccessoryTable({
       />
     );
   return (
-    <Table className="min-w-[760px]">
+    <Table className="min-w-[720px]">
       <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
+        <TableRow className="bg-muted/20 hover:bg-muted/20">
+          <TableHead className="pl-4">Name</TableHead>
           <TableHead>Category</TableHead>
           <TableHead>Unit</TableHead>
-          <TableHead className="text-right">Shop Stock</TableHead>
-          <TableHead className="text-right">Workshop Stock</TableHead>
+          <TableHead className="text-right">Shop</TableHead>
+          <TableHead className="text-right">Workshop</TableHead>
           <TableHead className="text-right">Total</TableHead>
-          <TableHead className="text-center">Status</TableHead>
+          <TableHead className="text-center pr-4">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -561,8 +507,8 @@ function AccessoryTable({
           const workshop = Number(a.workshop_stock ?? 0);
           const low = isLowStock(shop, workshop, "accessory");
           return (
-            <TableRow key={a.id} className={low ? "bg-red-50/50" : ""}>
-              <TableCell className="font-medium">{a.name}</TableCell>
+            <TableRow key={a.id} className={low ? "bg-red-50/40" : ""}>
+              <TableCell className="pl-4 font-medium">{a.name}</TableCell>
               <TableCell>
                 {ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}
               </TableCell>
@@ -570,19 +516,29 @@ function AccessoryTable({
                 {UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums ${shop < LOW_STOCK_THRESHOLDS.accessory ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  shop < LOW_STOCK_THRESHOLDS.accessory
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {shop}
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums ${workshop < LOW_STOCK_THRESHOLDS.accessory ? "text-red-600 font-semibold" : ""}`}
+                className={cn(
+                  "text-right tabular-nums",
+                  workshop < LOW_STOCK_THRESHOLDS.accessory
+                    ? "text-red-600 font-semibold"
+                    : "",
+                )}
               >
                 {workshop}
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium">
                 {shop + workshop}
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell className="text-center pr-4">
                 {low && <LowStockBadge />}
               </TableCell>
             </TableRow>
@@ -596,27 +552,8 @@ function AccessoryTable({
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-      <BarChart3 className="h-10 w-10 mb-3 opacity-40" />
+      <BarChart3 className="h-10 w-10 mb-3 opacity-30" />
       <p>{label}</p>
-    </div>
-  );
-}
-
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-sm">
-      <p className="font-medium mb-1">{label}</p>
-      {payload.map((entry: any) => (
-        <div key={entry.dataKey} className="flex items-center gap-2">
-          <span
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: entry.color }}
-          />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-medium tabular-nums">{entry.value}</span>
-        </div>
-      ))}
     </div>
   );
 }

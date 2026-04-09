@@ -44,7 +44,7 @@ export function calculateGarmentStylePrice(
     if (garment.lines === 1) {
         total += priceMap.get("STY_LINE") || 0;
     } else if (garment.lines === 2) {
-        total += (priceMap.get("STY_LINE") || 0) * 2;
+        total += (priceMap.get("STY_LINE") || 0) + (priceMap.get("STY_LINE_2") || 0);
     }
 
     // Collar Type
@@ -182,7 +182,7 @@ export function calculateStylePrice(
         total += priceMap.get("STY_LINE") || 0;
     }
     if (styleOptions.lines?.line2) {
-        total += priceMap.get("STY_LINE") || 0;
+        total += priceMap.get("STY_LINE_2") || 0;
     }
 
     // Collar Type

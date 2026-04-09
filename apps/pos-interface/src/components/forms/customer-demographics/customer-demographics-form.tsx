@@ -288,8 +288,6 @@ export function CustomerDemographicsForm({
     form.setValue("street", primaryAccount.street || "");
     form.setValue("house_no", primaryAccount.house_no || "");
     form.setValue("address_note", primaryAccount.address_note || "");
-    
-    toast.success("Address copied from Primary Account");
   };
 
   return (

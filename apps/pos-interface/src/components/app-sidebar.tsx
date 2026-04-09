@@ -20,6 +20,7 @@ import {
   History,
   Banknote,
   CalendarDays,
+  ListChecks,
 } from "lucide-react";
 
 import {
@@ -42,7 +43,7 @@ import {
 } from "@repo/ui/sidebar";
 import { BRAND_NAMES } from "@/lib/constants";
 import { IconRulerMeasure } from "@tabler/icons-react";
-import { useTransferRequests } from "@/hooks/useTransfers";
+import { useTransferBadgeCounts } from "@/hooks/useTransfers";
 
 const data = {
   navTop: [
@@ -127,19 +128,14 @@ const data = {
       url: "",
       items: [
         {
-          title: "Stock Report",
-          url: "store/stock-report",
-          icon: BarChart,
-        },
-        {
-          title: "Receiving Deliveries",
-          url: "store/receiving-deliveries",
-          icon: PackageOpen,
-        },
-        {
           title: "Request Delivery",
           url: "store/request-delivery",
           icon: Truck,
+        },
+        {
+          title: "Active Requests",
+          url: "store/active-requests",
+          icon: ListChecks,
         },
         {
           title: "Approve Requests",
@@ -147,9 +143,19 @@ const data = {
           icon: ClipboardCheck,
         },
         {
+          title: "Receiving Deliveries",
+          url: "store/receiving-deliveries",
+          icon: PackageOpen,
+        },
+        {
           title: "Transfer History",
           url: "store/transfer-history",
           icon: History,
+        },
+        {
+          title: "Stock Report",
+          url: "store/stock-report",
+          icon: BarChart,
         },
         {
           title: "End of Day Report",
@@ -324,12 +330,12 @@ export function AppSidebar({
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
   const isErth = main === BRAND_NAMES.showroom;
-  const { data: receivingDeliveries = [] } = useTransferRequests(isErth ? { status: "dispatched", direction: "workshop_to_shop" } : undefined);
-  const { data: approveRequests = [] } = useTransferRequests(isErth ? { status: ["requested"], direction: "shop_to_workshop" } : undefined);
+  const { data: badgeCounts } = useTransferBadgeCounts(isErth);
 
   const storeCounts: Record<string, { count: number; badgeColor: string }> = {
-    "store/receiving-deliveries": { count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
-    "store/approve-requests": { count: approveRequests.length, badgeColor: "bg-amber-100 text-amber-700" },
+    "store/active-requests": { count: badgeCounts?.activeRequests ?? 0, badgeColor: "bg-blue-100 text-blue-700" },
+    "store/receiving-deliveries": { count: badgeCounts?.receivingDeliveries ?? 0, badgeColor: "bg-blue-100 text-blue-700" },
+    "store/approve-requests": { count: badgeCounts?.approveRequests ?? 0, badgeColor: "bg-amber-100 text-amber-700" },
   };
 
   return (

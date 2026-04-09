@@ -12,6 +12,7 @@ interface SlidingPillSwitcherProps<T extends string> {
   onChange: (value: T) => void;
   className?: string;
   size?: "sm" | "md";
+  indicatorClassName?: string;
 }
 
 /**
@@ -24,6 +25,7 @@ export function SlidingPillSwitcher<T extends string>({
   onChange,
   className,
   size = "md",
+  indicatorClassName,
 }: SlidingPillSwitcherProps<T>) {
   const buttonsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
   const [indicator, setIndicator] = React.useState<{ left: number; width: number } | null>(null);
@@ -53,7 +55,7 @@ export function SlidingPillSwitcher<T extends string>({
     >
       {indicator && (
         <div
-          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
+          className={cn("absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out", indicatorClassName)}
           style={{ left: indicator.left, width: indicator.width }}
         />
       )}

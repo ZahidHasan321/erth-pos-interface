@@ -128,7 +128,7 @@ function AppointmentsPage() {
       <div className="flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary hidden sm:block" />
-          <h1 className="text-lg sm:text-xl font-semibold">Appointments</h1>
+          <h1 className="text-xl font-bold tracking-tight">Appointments</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={triggerPrint}>

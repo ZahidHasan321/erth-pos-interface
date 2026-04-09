@@ -818,6 +818,7 @@ export const transferRequestItems = pgTable("transfer_request_items", {
 export const notifications = pgTable("notifications", {
     id: serial("id").primaryKey(),
     department: departmentEnum("department").notNull(),
+    brand: brandEnum("brand").notNull().default("ERTH"),
     type: notificationTypeEnum("type").notNull(),
     title: text("title").notNull(),
     body: text("body"),
@@ -827,7 +828,7 @@ export const notifications = pgTable("notifications", {
     created_at: timestamp("created_at").defaultNow().notNull(),
     expires_at: timestamp("expires_at").default(sql`now() + interval '7 days'`).notNull(),
 }, (t) => ({
-    deptCreatedIdx: index("notifications_dept_created_idx").on(t.department, t.created_at),
+    deptBrandCreatedIdx: index("notifications_dept_brand_created_idx").on(t.department, t.brand, t.created_at),
     recipientCreatedIdx: index("notifications_recipient_created_idx").on(t.recipient_user_id, t.created_at),
     scopeRecipientCheck: check(
         "notifications_scope_recipient_check",

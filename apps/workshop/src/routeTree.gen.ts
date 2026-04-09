@@ -20,11 +20,12 @@ import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainNotificationsRouteImport } from './routes/(main)/notifications'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
-import { Route as mainCompletedRouteImport } from './routes/(main)/completed'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
+import { Route as mainCompletedRouteRouteImport } from './routes/(main)/completed/route'
 import { Route as mainAssignedRouteRouteImport } from './routes/(main)/assigned/route'
 import { Route as mainUsersIndexRouteImport } from './routes/(main)/users/index'
 import { Route as mainPerformanceIndexRouteImport } from './routes/(main)/performance/index'
+import { Route as mainCompletedIndexRouteImport } from './routes/(main)/completed/index'
 import { Route as mainAssignedIndexRouteImport } from './routes/(main)/assigned/index'
 import { Route as mainUsersUserIdRouteImport } from './routes/(main)/users/$userId'
 import { Route as mainTerminalsSoakingRouteImport } from './routes/(main)/terminals/soaking'
@@ -35,12 +36,13 @@ import { Route as mainTerminalsIroningRouteImport } from './routes/(main)/termin
 import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/terminals/finishing'
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
 import { Route as mainStoreTransferHistoryRouteImport } from './routes/(main)/store/transfer-history'
-import { Route as mainStoreStockReportRouteImport } from './routes/(main)/store/stock-report'
 import { Route as mainStoreSendToShopRouteImport } from './routes/(main)/store/send-to-shop'
 import { Route as mainStoreRequestDeliveryRouteImport } from './routes/(main)/store/request-delivery'
 import { Route as mainStoreReceivingDeliveriesRouteImport } from './routes/(main)/store/receiving-deliveries'
 import { Route as mainStoreInventoryRouteImport } from './routes/(main)/store/inventory'
 import { Route as mainStoreApproveRequestsRouteImport } from './routes/(main)/store/approve-requests'
+import { Route as mainStoreActiveDeliveriesRouteImport } from './routes/(main)/store/active-deliveries'
+import { Route as mainCompletedOrderIdRouteImport } from './routes/(main)/completed/$orderId'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
@@ -100,15 +102,15 @@ const mainDashboardRoute = mainDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => mainRouteRoute,
 } as any)
-const mainCompletedRoute = mainCompletedRouteImport.update({
-  id: '/completed',
-  path: '/completed',
-  getParentRoute: () => mainRouteRoute,
-} as any)
 const authLoginRoute = authLoginRouteImport.update({
   id: '/(auth)/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const mainCompletedRouteRoute = mainCompletedRouteRouteImport.update({
+  id: '/completed',
+  path: '/completed',
+  getParentRoute: () => mainRouteRoute,
 } as any)
 const mainAssignedRouteRoute = mainAssignedRouteRouteImport.update({
   id: '/assigned',
@@ -124,6 +126,11 @@ const mainPerformanceIndexRoute = mainPerformanceIndexRouteImport.update({
   id: '/performance/',
   path: '/performance/',
   getParentRoute: () => mainRouteRoute,
+} as any)
+const mainCompletedIndexRoute = mainCompletedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => mainCompletedRouteRoute,
 } as any)
 const mainAssignedIndexRoute = mainAssignedIndexRouteImport.update({
   id: '/',
@@ -178,11 +185,6 @@ const mainStoreTransferHistoryRoute =
     path: '/store/transfer-history',
     getParentRoute: () => mainRouteRoute,
   } as any)
-const mainStoreStockReportRoute = mainStoreStockReportRouteImport.update({
-  id: '/store/stock-report',
-  path: '/store/stock-report',
-  getParentRoute: () => mainRouteRoute,
-} as any)
 const mainStoreSendToShopRoute = mainStoreSendToShopRouteImport.update({
   id: '/store/send-to-shop',
   path: '/store/send-to-shop',
@@ -211,6 +213,17 @@ const mainStoreApproveRequestsRoute =
     path: '/store/approve-requests',
     getParentRoute: () => mainRouteRoute,
   } as any)
+const mainStoreActiveDeliveriesRoute =
+  mainStoreActiveDeliveriesRouteImport.update({
+    id: '/store/active-deliveries',
+    path: '/store/active-deliveries',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
+const mainCompletedOrderIdRoute = mainCompletedOrderIdRouteImport.update({
+  id: '/$orderId',
+  path: '/$orderId',
+  getParentRoute: () => mainCompletedRouteRoute,
+} as any)
 const mainAssignedOrderIdRoute = mainAssignedOrderIdRouteImport.update({
   id: '/$orderId',
   path: '/$orderId',
@@ -238,8 +251,8 @@ const mainAssignedGarmentGarmentIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/assigned': typeof mainAssignedRouteRouteWithChildren
+  '/completed': typeof mainCompletedRouteRouteWithChildren
   '/login': typeof authLoginRoute
-  '/completed': typeof mainCompletedRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/notifications': typeof mainNotificationsRoute
@@ -250,12 +263,13 @@ export interface FileRoutesByFullPath {
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/store/send-to-shop': typeof mainStoreSendToShopRoute
-  '/store/stock-report': typeof mainStoreStockReportRoute
   '/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -266,6 +280,7 @@ export interface FileRoutesByFullPath {
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
   '/users/$userId': typeof mainUsersUserIdRoute
   '/assigned/': typeof mainAssignedIndexRoute
+  '/completed/': typeof mainCompletedIndexRoute
   '/performance/': typeof mainPerformanceIndexRoute
   '/users/': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
@@ -275,7 +290,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof authLoginRoute
-  '/completed': typeof mainCompletedRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/notifications': typeof mainNotificationsRoute
@@ -286,12 +300,13 @@ export interface FileRoutesByTo {
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/store/send-to-shop': typeof mainStoreSendToShopRoute
-  '/store/stock-report': typeof mainStoreStockReportRoute
   '/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -302,6 +317,7 @@ export interface FileRoutesByTo {
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
   '/users/$userId': typeof mainUsersUserIdRoute
   '/assigned': typeof mainAssignedIndexRoute
+  '/completed': typeof mainCompletedIndexRoute
   '/performance': typeof mainPerformanceIndexRoute
   '/users': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
@@ -313,8 +329,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/(main)': typeof mainRouteRouteWithChildren
   '/(main)/assigned': typeof mainAssignedRouteRouteWithChildren
+  '/(main)/completed': typeof mainCompletedRouteRouteWithChildren
   '/(auth)/login': typeof authLoginRoute
-  '/(main)/completed': typeof mainCompletedRoute
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/notifications': typeof mainNotificationsRoute
@@ -325,12 +341,13 @@ export interface FileRoutesById {
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
+  '/(main)/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/(main)/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/(main)/store/approve-requests': typeof mainStoreApproveRequestsRoute
   '/(main)/store/inventory': typeof mainStoreInventoryRoute
   '/(main)/store/receiving-deliveries': typeof mainStoreReceivingDeliveriesRoute
   '/(main)/store/request-delivery': typeof mainStoreRequestDeliveryRoute
   '/(main)/store/send-to-shop': typeof mainStoreSendToShopRoute
-  '/(main)/store/stock-report': typeof mainStoreStockReportRoute
   '/(main)/store/transfer-history': typeof mainStoreTransferHistoryRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
   '/(main)/terminals/finishing': typeof mainTerminalsFinishingRoute
@@ -341,6 +358,7 @@ export interface FileRoutesById {
   '/(main)/terminals/soaking': typeof mainTerminalsSoakingRoute
   '/(main)/users/$userId': typeof mainUsersUserIdRoute
   '/(main)/assigned/': typeof mainAssignedIndexRoute
+  '/(main)/completed/': typeof mainCompletedIndexRoute
   '/(main)/performance/': typeof mainPerformanceIndexRoute
   '/(main)/users/': typeof mainUsersIndexRoute
   '/(main)/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
@@ -352,8 +370,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/assigned'
-    | '/login'
     | '/completed'
+    | '/login'
     | '/dashboard'
     | '/dispatch'
     | '/notifications'
@@ -364,12 +382,13 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/team'
     | '/assigned/$orderId'
+    | '/completed/$orderId'
+    | '/store/active-deliveries'
     | '/store/approve-requests'
     | '/store/inventory'
     | '/store/receiving-deliveries'
     | '/store/request-delivery'
     | '/store/send-to-shop'
-    | '/store/stock-report'
     | '/store/transfer-history'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -380,6 +399,7 @@ export interface FileRouteTypes {
     | '/terminals/soaking'
     | '/users/$userId'
     | '/assigned/'
+    | '/completed/'
     | '/performance/'
     | '/users/'
     | '/assigned/garment/$garmentId'
@@ -389,7 +409,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/completed'
     | '/dashboard'
     | '/dispatch'
     | '/notifications'
@@ -400,12 +419,13 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/team'
     | '/assigned/$orderId'
+    | '/completed/$orderId'
+    | '/store/active-deliveries'
     | '/store/approve-requests'
     | '/store/inventory'
     | '/store/receiving-deliveries'
     | '/store/request-delivery'
     | '/store/send-to-shop'
-    | '/store/stock-report'
     | '/store/transfer-history'
     | '/terminals/cutting'
     | '/terminals/finishing'
@@ -416,6 +436,7 @@ export interface FileRouteTypes {
     | '/terminals/soaking'
     | '/users/$userId'
     | '/assigned'
+    | '/completed'
     | '/performance'
     | '/users'
     | '/assigned/garment/$garmentId'
@@ -426,8 +447,8 @@ export interface FileRouteTypes {
     | '/'
     | '/(main)'
     | '/(main)/assigned'
-    | '/(auth)/login'
     | '/(main)/completed'
+    | '/(auth)/login'
     | '/(main)/dashboard'
     | '/(main)/dispatch'
     | '/(main)/notifications'
@@ -438,12 +459,13 @@ export interface FileRouteTypes {
     | '/(main)/scheduler'
     | '/(main)/team'
     | '/(main)/assigned/$orderId'
+    | '/(main)/completed/$orderId'
+    | '/(main)/store/active-deliveries'
     | '/(main)/store/approve-requests'
     | '/(main)/store/inventory'
     | '/(main)/store/receiving-deliveries'
     | '/(main)/store/request-delivery'
     | '/(main)/store/send-to-shop'
-    | '/(main)/store/stock-report'
     | '/(main)/store/transfer-history'
     | '/(main)/terminals/cutting'
     | '/(main)/terminals/finishing'
@@ -454,6 +476,7 @@ export interface FileRouteTypes {
     | '/(main)/terminals/soaking'
     | '/(main)/users/$userId'
     | '/(main)/assigned/'
+    | '/(main)/completed/'
     | '/(main)/performance/'
     | '/(main)/users/'
     | '/(main)/assigned/garment/$garmentId'
@@ -546,19 +569,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainDashboardRouteImport
       parentRoute: typeof mainRouteRoute
     }
-    '/(main)/completed': {
-      id: '/(main)/completed'
-      path: '/completed'
-      fullPath: '/completed'
-      preLoaderRoute: typeof mainCompletedRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
     '/(auth)/login': {
       id: '/(auth)/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof authLoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/(main)/completed': {
+      id: '/(main)/completed'
+      path: '/completed'
+      fullPath: '/completed'
+      preLoaderRoute: typeof mainCompletedRouteRouteImport
+      parentRoute: typeof mainRouteRoute
     }
     '/(main)/assigned': {
       id: '/(main)/assigned'
@@ -580,6 +603,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/'
       preLoaderRoute: typeof mainPerformanceIndexRouteImport
       parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/completed/': {
+      id: '/(main)/completed/'
+      path: '/'
+      fullPath: '/completed/'
+      preLoaderRoute: typeof mainCompletedIndexRouteImport
+      parentRoute: typeof mainCompletedRouteRoute
     }
     '/(main)/assigned/': {
       id: '/(main)/assigned/'
@@ -651,13 +681,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainStoreTransferHistoryRouteImport
       parentRoute: typeof mainRouteRoute
     }
-    '/(main)/store/stock-report': {
-      id: '/(main)/store/stock-report'
-      path: '/store/stock-report'
-      fullPath: '/store/stock-report'
-      preLoaderRoute: typeof mainStoreStockReportRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
     '/(main)/store/send-to-shop': {
       id: '/(main)/store/send-to-shop'
       path: '/store/send-to-shop'
@@ -692,6 +715,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/store/approve-requests'
       preLoaderRoute: typeof mainStoreApproveRequestsRouteImport
       parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/store/active-deliveries': {
+      id: '/(main)/store/active-deliveries'
+      path: '/store/active-deliveries'
+      fullPath: '/store/active-deliveries'
+      preLoaderRoute: typeof mainStoreActiveDeliveriesRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/completed/$orderId': {
+      id: '/(main)/completed/$orderId'
+      path: '/$orderId'
+      fullPath: '/completed/$orderId'
+      preLoaderRoute: typeof mainCompletedOrderIdRouteImport
+      parentRoute: typeof mainCompletedRouteRoute
     }
     '/(main)/assigned/$orderId': {
       id: '/(main)/assigned/$orderId'
@@ -739,9 +776,22 @@ const mainAssignedRouteRouteChildren: mainAssignedRouteRouteChildren = {
 const mainAssignedRouteRouteWithChildren =
   mainAssignedRouteRoute._addFileChildren(mainAssignedRouteRouteChildren)
 
+interface mainCompletedRouteRouteChildren {
+  mainCompletedOrderIdRoute: typeof mainCompletedOrderIdRoute
+  mainCompletedIndexRoute: typeof mainCompletedIndexRoute
+}
+
+const mainCompletedRouteRouteChildren: mainCompletedRouteRouteChildren = {
+  mainCompletedOrderIdRoute: mainCompletedOrderIdRoute,
+  mainCompletedIndexRoute: mainCompletedIndexRoute,
+}
+
+const mainCompletedRouteRouteWithChildren =
+  mainCompletedRouteRoute._addFileChildren(mainCompletedRouteRouteChildren)
+
 interface mainRouteRouteChildren {
   mainAssignedRouteRoute: typeof mainAssignedRouteRouteWithChildren
-  mainCompletedRoute: typeof mainCompletedRoute
+  mainCompletedRouteRoute: typeof mainCompletedRouteRouteWithChildren
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
   mainNotificationsRoute: typeof mainNotificationsRoute
@@ -751,12 +801,12 @@ interface mainRouteRouteChildren {
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
+  mainStoreActiveDeliveriesRoute: typeof mainStoreActiveDeliveriesRoute
   mainStoreApproveRequestsRoute: typeof mainStoreApproveRequestsRoute
   mainStoreInventoryRoute: typeof mainStoreInventoryRoute
   mainStoreReceivingDeliveriesRoute: typeof mainStoreReceivingDeliveriesRoute
   mainStoreRequestDeliveryRoute: typeof mainStoreRequestDeliveryRoute
   mainStoreSendToShopRoute: typeof mainStoreSendToShopRoute
-  mainStoreStockReportRoute: typeof mainStoreStockReportRoute
   mainStoreTransferHistoryRoute: typeof mainStoreTransferHistoryRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
   mainTerminalsFinishingRoute: typeof mainTerminalsFinishingRoute
@@ -774,7 +824,7 @@ interface mainRouteRouteChildren {
 
 const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainAssignedRouteRoute: mainAssignedRouteRouteWithChildren,
-  mainCompletedRoute: mainCompletedRoute,
+  mainCompletedRouteRoute: mainCompletedRouteRouteWithChildren,
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
   mainNotificationsRoute: mainNotificationsRoute,
@@ -784,12 +834,12 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,
+  mainStoreActiveDeliveriesRoute: mainStoreActiveDeliveriesRoute,
   mainStoreApproveRequestsRoute: mainStoreApproveRequestsRoute,
   mainStoreInventoryRoute: mainStoreInventoryRoute,
   mainStoreReceivingDeliveriesRoute: mainStoreReceivingDeliveriesRoute,
   mainStoreRequestDeliveryRoute: mainStoreRequestDeliveryRoute,
   mainStoreSendToShopRoute: mainStoreSendToShopRoute,
-  mainStoreStockReportRoute: mainStoreStockReportRoute,
   mainStoreTransferHistoryRoute: mainStoreTransferHistoryRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
   mainTerminalsFinishingRoute: mainTerminalsFinishingRoute,

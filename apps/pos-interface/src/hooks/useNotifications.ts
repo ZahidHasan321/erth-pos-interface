@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import {
   getNotifications,
   getNotificationsPaginated,
+  getUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
 } from "@/api/notifications";
@@ -13,14 +14,19 @@ export function useNotifications() {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, getBrand()],
     queryFn: () => getNotifications(),
-    staleTime: 30_000, // realtime pushes keep this fresh; short stale as a safety net
+    staleTime: 30_000,
+    refetchInterval: 30_000, // poll every 30s; realtime should also push but isn't reliable yet
   });
 }
 
-/** Derive unread count from the shared notifications cache — no extra API call */
 export function useUnreadCount() {
-  const { data } = useNotifications();
-  return data?.filter((n) => !n.is_read).length ?? 0;
+  const { data } = useQuery({
+    queryKey: [...NOTIFICATIONS_KEY, "unread-count", getBrand()],
+    queryFn: () => getUnreadCount(),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  return data ?? 0;
 }
 
 export function useMarkRead() {

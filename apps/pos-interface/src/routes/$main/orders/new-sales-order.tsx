@@ -153,8 +153,6 @@ function NewSalesOrder() {
                 OrderForm.reset(mappedOrder);
                 setOrderId(orderData.id);
                 setOrder(mappedOrder);
-
-                toast.success("Order loaded successfully");
             } else {
                 toast.error("Order not found");
             }
@@ -228,7 +226,6 @@ function NewSalesOrder() {
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
         OrderForm.setValue("customer_id", customer.id);
-        toast.success(`Customer loaded: ${customer.name}`);
     };
 
     const handleClearCustomer = () => {

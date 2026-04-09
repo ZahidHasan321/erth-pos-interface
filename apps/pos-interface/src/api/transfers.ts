@@ -75,6 +75,47 @@ export const getTransferRequests = async (
   return data as unknown as TransferRequestWithItems[];
 };
 
+export interface TransferBadgeCounts {
+  activeRequests: number;
+  receivingDeliveries: number;
+  approveRequests: number;
+}
+
+/**
+ * Fetch sidebar badge counts in a single lightweight query (no joins).
+ * Returns counts for: active outgoing requests, dispatched incoming, and pending approval.
+ */
+export const getTransferBadgeCounts = async (
+  brand: string,
+): Promise<TransferBadgeCounts> => {
+  const [active, receiving, approve] = await Promise.all([
+    db
+      .from('transfer_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand', brand)
+      .eq('direction', 'workshop_to_shop')
+      .in('status', ['requested', 'approved', 'dispatched']),
+    db
+      .from('transfer_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand', brand)
+      .eq('direction', 'workshop_to_shop')
+      .eq('status', 'dispatched'),
+    db
+      .from('transfer_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand', brand)
+      .eq('direction', 'shop_to_workshop')
+      .eq('status', 'requested'),
+  ]);
+
+  return {
+    activeRequests: active.count ?? 0,
+    receivingDeliveries: receiving.count ?? 0,
+    approveRequests: approve.count ?? 0,
+  };
+};
+
 export const createTransferRequest = async (request: {
   direction: string;
   item_type: string;

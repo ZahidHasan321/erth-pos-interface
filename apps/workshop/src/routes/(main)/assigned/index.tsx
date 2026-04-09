@@ -519,19 +519,157 @@ function OrdersTable({
   );
 }
 
+// ── Stage Pipeline Chart ─────────────────────────────────────
+
+const PIPELINE_STAGES = [
+  { key: "soaking", label: "Soaking", color: "bg-sky-500/80" },
+  { key: "cutting", label: "Cutting", color: "bg-amber-500/80" },
+  { key: "post_cutting", label: "Post-Cut", color: "bg-orange-500/80" },
+  { key: "sewing", label: "Sewing", color: "bg-violet-500/80" },
+  { key: "finishing", label: "Finishing", color: "bg-emerald-500/80" },
+  { key: "ironing", label: "Ironing", color: "bg-red-500/80" },
+  { key: "quality_check", label: "QC", color: "bg-indigo-500/80" },
+  { key: "ready_for_dispatch", label: "Dispatch", color: "bg-green-500/80" },
+] as const;
+
+function StagePipelineChart({ garments }: { garments: WorkshopGarment[] }) {
+  const workshopGarments = garments.filter(
+    (g) => g.location === "workshop" && g.piece_stage && g.piece_stage in STAGE_ORDER,
+  );
+  const stageCounts = new Map<string, number>();
+  for (const g of workshopGarments) {
+    const s = g.piece_stage ?? "";
+    stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
+  }
+  const max = Math.max(...PIPELINE_STAGES.map((s) => stageCounts.get(s.key) ?? 0), 1);
+  const total = workshopGarments.length;
+  if (total === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+          Workshop Pipeline
+        </h3>
+        <span className="text-xs text-muted-foreground font-medium">
+          {total} garment{total !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <div className="space-y-1.5">
+        {PIPELINE_STAGES.map((stage) => {
+          const count = stageCounts.get(stage.key) ?? 0;
+          const pct = (count / max) * 100;
+          return (
+            <div key={stage.key} className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-muted-foreground w-16 text-right shrink-0 tabular-nums">
+                {stage.label}
+              </span>
+              <div className="flex-1 h-5 bg-muted/30 rounded overflow-hidden">
+                {count > 0 && (
+                  <div
+                    className={cn("h-full rounded transition-all", stage.color)}
+                    style={{ width: `${pct}%`, minWidth: "4px" }}
+                  />
+                )}
+              </div>
+              <span className={cn(
+                "text-xs font-bold tabular-nums w-6 text-right shrink-0",
+                count > 0 ? "text-foreground" : "text-muted-foreground/40",
+              )}>
+                {count}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Quick Order List (compact, for overview sections) ───────
+
+function QuickOrderList({
+  title,
+  icon: Icon,
+  iconBg,
+  iconColor,
+  orders,
+  limit,
+  onViewAll,
+  renderRight,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  iconColor: string;
+  orders: OrderGroup[];
+  limit: number;
+  onViewAll?: () => void;
+  renderRight: (og: OrderGroup) => React.ReactNode;
+}) {
+  if (orders.length === 0) return null;
+  const shown = orders.slice(0, limit);
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/70">
+        <div className="flex items-center gap-2">
+          <div className={cn("inline-flex items-center justify-center w-7 h-7 rounded-lg", iconBg)}>
+            <Icon className={cn("w-3.5 h-3.5", iconColor)} />
+          </div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+            {title}
+          </h3>
+          <StatusPill color="zinc" className="ml-0.5">{orders.length}</StatusPill>
+        </div>
+        {orders.length > limit && onViewAll && (
+          <button
+            onClick={onViewAll}
+            className="text-xs font-semibold text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
+          >
+            View all
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      <div className="divide-y divide-border/60">
+        {shown.map((og) => (
+          <Link
+            key={og.order_id}
+            to="/assigned/$orderId"
+            params={{ orderId: String(og.order_id) }}
+            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="font-mono font-bold text-sm">#{og.order_id}</span>
+              {og.express && <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />}
+              <span className="text-sm text-foreground truncate">{og.customer_name}</span>
+              <span className="text-xs text-muted-foreground shrink-0">
+                {garmentSummary(og.garments)}
+              </span>
+            </div>
+            {renderRight(og)}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Overview Dashboard ───────────────────────────────────────
 
 function OverviewDashboard({
   orderGroups,
+  allGarments,
   counts,
   onNavigate,
 }: {
   orderGroups: OrderGroup[];
-  counts: { overdue: number; dueSoon: number; active: number; ready: number; returns: number; total: number };
+  allGarments: WorkshopGarment[];
+  counts: { overdue: number; dueSoon: number; active: number; ready: number; returns: number; total: number; atShop: number; inTransit: number };
   onNavigate: (tab: string) => void;
 }) {
-  // Unified card treatment — one surface, varied by accent icon badge.
-  // Tone (urgent / warning / ok / neutral) drives only the icon badge color.
   const cards: {
     key: string;
     label: string;
@@ -556,8 +694,14 @@ function OverviewDashboard({
     neutral: { iconBg: "bg-muted",      iconColor: "text-muted-foreground", accentBar: "bg-border" },
   };
 
+  const overdueOrders = orderGroups.filter(isOverdue);
+  const dueSoonOrders = orderGroups.filter(isDueSoon);
+  const readyOrders = orderGroups.filter(isReadyForDispatch);
+  const returningOrders = orderGroups.filter(hasReturns);
+
   return (
     <div className="space-y-5">
+      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
@@ -591,56 +735,101 @@ function OverviewDashboard({
         })}
       </div>
 
-      {/* Quick list of overdue orders if any */}
-      {counts.overdue > 0 && (
-        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/70">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-50">
-                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
-              </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Overdue Orders
-              </h3>
-              <StatusPill color="red" className="ml-0.5">{counts.overdue}</StatusPill>
-            </div>
-            {counts.overdue > 5 && (
-              <button
-                onClick={() => onNavigate("attention")}
-                className="text-xs font-semibold text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
-              >
-                View all
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-          <div className="divide-y divide-border/60">
-            {orderGroups
-              .filter(isOverdue)
-              .slice(0, 5)
-              .map((og) => {
-                const urgency = getDeliveryUrgency(og.delivery_date);
-                return (
-                  <Link
-                    key={og.order_id}
-                    to="/assigned/$orderId"
-                    params={{ orderId: String(og.order_id) }}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="font-mono font-bold text-sm">#{og.order_id}</span>
-                      {og.express && <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />}
-                      <span className="text-sm text-foreground truncate">{og.customer_name}</span>
-                    </div>
-                    <span className={cn("text-xs font-bold shrink-0 tabular-nums", urgency.cls)}>
-                      {getDaysLabel(urgency.days)}
-                    </span>
-                  </Link>
-                );
-              })}
-          </div>
+      {/* Stage pipeline visualization */}
+      <StagePipelineChart garments={allGarments} />
+
+      {/* Location summary — compact inline strip */}
+      {(counts.atShop > 0 || counts.inTransit > 0) && (
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <span className="font-bold uppercase tracking-wider text-muted-foreground">Location:</span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold">
+            <Package className="w-3 h-3" />
+            {allGarments.filter((g) => g.location === "workshop").length} at workshop
+          </span>
+          {counts.atShop > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 font-semibold">
+              <Store className="w-3 h-3" />
+              {counts.atShop} at shop
+            </span>
+          )}
+          {counts.inTransit > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 font-semibold">
+              <Truck className="w-3 h-3" />
+              {counts.inTransit} in transit
+            </span>
+          )}
         </div>
       )}
+
+      {/* Urgent orders — overdue + due soon side by side on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <QuickOrderList
+          title="Overdue"
+          icon={AlertTriangle}
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+          orders={overdueOrders}
+          limit={5}
+          onViewAll={() => onNavigate("attention")}
+          renderRight={(og) => {
+            const u = getDeliveryUrgency(og.delivery_date);
+            return <span className={cn("text-xs font-bold shrink-0 tabular-nums", u.cls)}>{getDaysLabel(u.days)}</span>;
+          }}
+        />
+        <QuickOrderList
+          title="Due Soon"
+          icon={Clock}
+          iconBg="bg-orange-50"
+          iconColor="text-orange-600"
+          orders={dueSoonOrders}
+          limit={5}
+          onViewAll={() => onNavigate("attention")}
+          renderRight={(og) => {
+            const u = getDeliveryUrgency(og.delivery_date);
+            return <span className={cn("text-xs font-bold shrink-0 tabular-nums", u.cls)}>{getDaysLabel(u.days)}</span>;
+          }}
+        />
+      </div>
+
+      {/* Ready for dispatch + Returns side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <QuickOrderList
+          title="Ready for Dispatch"
+          icon={CheckCircle2}
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-600"
+          orders={readyOrders}
+          limit={5}
+          onViewAll={() => onNavigate("ready")}
+          renderRight={(og) => {
+            const brovas = og.garments.filter((g) => g.garment_type === "brova");
+            const finals = og.garments.filter((g) => g.garment_type === "final");
+            return (
+              <div className="flex items-center gap-1 shrink-0">
+                {brovas.length > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovas.length}B</span>}
+                {finals.length > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finals.length}F</span>}
+              </div>
+            );
+          }}
+        />
+        <QuickOrderList
+          title="Returns"
+          icon={RotateCcw}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-600"
+          orders={returningOrders}
+          limit={5}
+          onViewAll={() => onNavigate("attention")}
+          renderRight={(og) => {
+            const maxTrip = Math.max(...og.garments.map((g) => g.trip_number ?? 1));
+            return (
+              <StatusPill color="amber">
+                Trip {maxTrip}
+              </StatusPill>
+            );
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -910,6 +1099,7 @@ function AssignedPage() {
             <TabsContent value="overview">
               <OverviewDashboard
                 orderGroups={orderGroups}
+                allGarments={all}
                 counts={{
                   overdue: overdueOrders.length,
                   dueSoon: dueSoonOrders.length,
@@ -917,6 +1107,8 @@ function AssignedPage() {
                   ready: readyOrders.length,
                   returns: returningOrders.length,
                   total: orderGroups.length,
+                  atShop: all.filter((g) => g.location === "shop").length,
+                  inTransit: all.filter((g) => g.location === "transit_to_shop" || g.location === "transit_to_workshop").length,
                 }}
                 onNavigate={setPrimaryTab}
               />

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link, useParams } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -8,14 +9,14 @@ import {
   Minus,
   Search,
   X,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  Plane,
+  ArrowRight,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
+import { Card } from "@repo/ui/card";
+import { Skeleton } from "@repo/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Input } from "@repo/ui/input";
 import { Textarea } from "@repo/ui/textarea";
@@ -28,35 +29,23 @@ import {
   TableRow,
 } from "@repo/ui/table";
 import { Badge } from "@repo/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@repo/ui/dialog";
-
-import { parseUtcTimestamp } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
 import {
   useCreateTransfer,
   useTransferRequests,
-  useCancelTransfer,
 } from "@/hooks/useTransfers";
 import {
   ACCESSORY_CATEGORY_LABELS,
   UNIT_OF_MEASURE_LABELS,
 } from "./transfer-constants";
-import { TransferStatusBadge, ItemTypeBadge } from "./transfer-status-badge";
-import { TransferDetailDialog } from "./transfer-detail-dialog";
-import type { TransferRequestWithItems } from "@/api/transfers";
-
 const LOW_STOCK_THRESHOLD = 5;
 
 export default function RequestDeliveryPage() {
+  const { main } = useParams({ strict: false }) as { main?: string };
   const [activeTab, setActiveTab] = useState("fabric");
   const [notes, setNotes] = useState("");
   const [search, setSearch] = useState("");
@@ -70,22 +59,23 @@ export default function RequestDeliveryPage() {
     Map<number, number>
   >(new Map());
 
-  const { data: fabrics = [] } = useQuery({
+  const { data: fabrics = [], isLoading: fabricsLoading, isError: fabricsError, refetch: fabricsRefetch } = useQuery({
     queryKey: ["fabrics"],
     queryFn: getFabrics,
   });
-  const { data: shelfItems = [] } = useQuery({
+  const { data: shelfItems = [], isLoading: shelfLoading, isError: shelfError, refetch: shelfRefetch } = useQuery({
     queryKey: ["shelf"],
     queryFn: getShelf,
   });
-  const { data: accessoriesData = [] } = useQuery({
+  const { data: accessoriesData = [], isLoading: accessoriesLoading, isError: accessoriesError, refetch: accessoriesRefetch } = useQuery({
     queryKey: ["accessories"],
     queryFn: getAccessories,
   });
 
-  // In-flight requests we've sent that haven't landed yet (still open somewhere in
-  // the pipeline). These power both the In-Flight panel at the top of the page and
-  // the per-row "already in transit" chips in each item table.
+  const catalogLoading = fabricsLoading || shelfLoading || accessoriesLoading;
+  const catalogError = fabricsError || shelfError || accessoriesError;
+  const refetchCatalog = () => { fabricsRefetch(); shelfRefetch(); accessoriesRefetch(); };
+
   const { data: inFlightRequests = [] } = useTransferRequests({
     status: ["requested", "approved", "dispatched"],
     direction: "workshop_to_shop",
@@ -99,8 +89,6 @@ export default function RequestDeliveryPage() {
     };
     for (const req of inFlightRequests) {
       for (const item of req.items) {
-        // Once dispatched we know the real shipped quantity; before that the
-        // requested qty is the best guess of what's coming.
         const qty = Number(
           item.dispatched_qty ?? item.approved_qty ?? item.requested_qty ?? 0,
         );
@@ -141,7 +129,6 @@ export default function RequestDeliveryPage() {
     setSelections(next);
   };
 
-  // Filter and sort: low shop stock first, then alphabetical
   const filteredFabrics = useMemo(() => {
     const q = search.toLowerCase();
     return [...fabrics]
@@ -227,88 +214,138 @@ export default function RequestDeliveryPage() {
     }
   };
 
-  const totalSelected =
-    fabricSelections.size + shelfSelections.size + accessorySelections.size;
+  // Build cart items for display
+  const cartItems = useMemo(() => {
+    const items: { key: string; name: string; qty: number; unit?: string; type: "fabric" | "shelf" | "accessory"; id: number }[] = [];
+    fabricSelections.forEach((qty, id) => {
+      const f = fabrics.find((x) => x.id === id);
+      if (f) items.push({ key: `f-${id}`, name: f.name ?? "Fabric", qty, unit: "m", type: "fabric", id });
+    });
+    shelfSelections.forEach((qty, id) => {
+      const s = shelfItems.find((x) => x.id === id);
+      if (s) items.push({ key: `s-${id}`, name: s.type ?? "Shelf item", qty, type: "shelf", id });
+    });
+    accessorySelections.forEach((qty, id) => {
+      const a = accessoriesData.find((x) => x.id === id);
+      if (a) items.push({ key: `a-${id}`, name: a.name ?? "Accessory", qty, unit: UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure, type: "accessory", id });
+    });
+    return items;
+  }, [fabricSelections, shelfSelections, accessorySelections, fabrics, shelfItems, accessoriesData]);
 
   return (
-    <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Request Delivery</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Request items to be sent from the workshop to the shop
-        </p>
+    <div
+      className={cn(
+        "p-4 md:p-5 max-w-[1600px] mx-auto space-y-5",
+        ANIMATION_CLASSES.fadeInUp,
+      )}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Request Delivery</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Request items to be sent from the workshop to the shop
+          </p>
+        </div>
+        {inFlightRequests.length > 0 && (
+          <Button variant="outline" size="sm" asChild>
+            <Link
+              to="/$main/store/active-requests"
+              params={{ main: main ?? "showroom" }}
+            >
+              <span className="tabular-nums">{inFlightRequests.length}</span>&nbsp;active request{inFlightRequests.length !== 1 ? "s" : ""}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        )}
       </div>
 
-      <InFlightPanel requests={inFlightRequests} />
-
-      {/* Search bar */}
-      <div className="relative max-w-xl">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search items by name, type, or category..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      <Card>
-        <CardContent className="py-5 space-y-5">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full justify-start overflow-x-auto sm:w-fit [&>[data-slot=tabs-trigger]]:shrink-0">
-              <TabsTrigger value="fabric">
-                Fabrics{" "}
-                {fabricSelections.size > 0 && (
-                  <span className="ml-1.5 text-xs bg-primary/10 text-primary rounded-full px-1.5">
-                    {fabricSelections.size}
-                  </span>
-                )}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
+        {/* Left: catalog */}
+        <div className="min-w-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Card className="shadow-none rounded-xl overflow-hidden border">
+          {/* Header: tab switcher + search */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b bg-muted/30">
+            <TabsList className="h-8 w-fit">
+              <TabsTrigger value="fabric" className="text-xs px-3 h-7">
+                Fabrics
               </TabsTrigger>
-              <TabsTrigger value="shelf">
-                Shelf Items{" "}
-                {shelfSelections.size > 0 && (
-                  <span className="ml-1.5 text-xs bg-primary/10 text-primary rounded-full px-1.5">
-                    {shelfSelections.size}
-                  </span>
-                )}
+              <TabsTrigger value="shelf" className="text-xs px-3 h-7">
+                Shelf
               </TabsTrigger>
-              <TabsTrigger value="accessory">
-                Accessories{" "}
-                {accessorySelections.size > 0 && (
-                  <span className="ml-1.5 text-xs bg-primary/10 text-primary rounded-full px-1.5">
-                    {accessorySelections.size}
-                  </span>
-                )}
+              <TabsTrigger value="accessory" className="text-xs px-3 h-7">
+                Accessories
               </TabsTrigger>
             </TabsList>
+            <div className="relative sm:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search items..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8 text-sm"
+              />
+            </div>
+          </div>
 
-            <TabsContent value="fabric" className="mt-4">
-              <Table className="min-w-[760px]">
+          {/* Table content */}
+          {catalogError ? (
+            <div className="py-10 text-center">
+              <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+              <p className="font-medium text-sm">Failed to load inventory</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Something went wrong. Please try again.
+              </p>
+              <Button variant="outline" size="sm" onClick={refetchCatalog} className="mt-4">
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Retry
+              </Button>
+            </div>
+          ) : catalogLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-12 ml-auto" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-7 w-28" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+            <TabsContent value="fabric" className="mt-0">
+              <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[180px]">
-                      Request Qty (m)
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="pl-4">Name</TableHead>
+                    <TableHead className="text-right pr-1.5">Shop</TableHead>
+                    <TableHead className="text-right pl-1.5">Workshop</TableHead>
+                    <TableHead className="text-right w-[140px] pr-4 pl-6">
+                      Request (m)
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredFabrics.map((f) => {
                     const shopStock = Number(f.shop_stock ?? 0);
-                    const isLow = shopStock < LOW_STOCK_THRESHOLD;
+                    const workshopStock = Number(f.workshop_stock ?? 0);
+                    const isLow = shopStock > 0 && shopStock < LOW_STOCK_THRESHOLD;
                     const inFlightQty = inFlightQtys.fabric.get(f.id) ?? 0;
+                    const selected = (fabricSelections.get(f.id) ?? 0) > 0;
                     return (
                       <TableRow
                         key={f.id}
-                        className={isLow ? "bg-amber-50/60" : ""}
+                        className={cn(
+                          selected && "bg-primary/[0.04]",
+                          isLow && !selected && "bg-amber-50/40",
+                        )}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="pl-4 font-medium">
                           <div className="flex items-center gap-2 flex-wrap">
                             {f.color_hex && (
                               <span
-                                className="w-4 h-4 rounded-full border shrink-0"
+                                className="w-3.5 h-3.5 rounded-full border shrink-0"
                                 style={{ backgroundColor: f.color_hex }}
                               />
                             )}
@@ -316,34 +353,32 @@ export default function RequestDeliveryPage() {
                             {isLow && (
                               <Badge
                                 variant="destructive"
-                                className="text-[10px] px-1.5 py-0"
+                                className="text-[10px] px-1.5 py-0 h-4"
                               >
                                 Low
                               </Badge>
                             )}
-                            <InFlightChip qty={inFlightQty} suffix="m" />
+                            {inFlightQty > 0 && (
+                              <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 tabular-nums">
+                                {inFlightQty}m incoming
+                              </span>
+                            )}
                           </div>
                         </TableCell>
-                        <TableCell
-                          className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}
-                        >
-                          {shopStock}
+                        <TableCell className="text-right pr-1.5">
+                          <StockValue value={shopStock} danger={isLow} />
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {Number(f.workshop_stock ?? 0)}
+                        <TableCell className="text-right pl-1.5">
+                          <StockValue value={workshopStock} />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-4 pl-6">
                           <QtyInput
                             value={fabricSelections.get(f.id) ?? 0}
                             onChange={(v) =>
-                              updateQty(
-                                fabricSelections,
-                                setFabricSelections,
-                                f.id,
-                                v,
-                              )
+                              updateQty(fabricSelections, setFabricSelections, f.id, v)
                             }
                             step={0.5}
+                            max={workshopStock}
                           />
                         </TableCell>
                       </TableRow>
@@ -353,7 +388,7 @@ export default function RequestDeliveryPage() {
                     <TableRow>
                       <TableCell
                         colSpan={4}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center text-muted-foreground py-10"
                       >
                         {search
                           ? "No fabrics match your search"
@@ -365,15 +400,15 @@ export default function RequestDeliveryPage() {
               </Table>
             </TabsContent>
 
-            <TabsContent value="shelf" className="mt-4">
-              <Table className="min-w-[820px]">
+            <TabsContent value="shelf" className="mt-0">
+              <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="pl-4">Type</TableHead>
                     <TableHead>Brand</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[180px]">
+                    <TableHead className="text-right pr-1.5">Shop</TableHead>
+                    <TableHead className="text-right pl-1.5">Workshop</TableHead>
+                    <TableHead className="text-right w-[140px] pr-4 pl-6">
                       Request Qty
                     </TableHead>
                   </TableRow>
@@ -381,48 +416,51 @@ export default function RequestDeliveryPage() {
                 <TableBody>
                   {filteredShelf.map((s) => {
                     const shopStock = Number(s.shop_stock ?? 0);
-                    const isLow = shopStock < 3;
+                    const workshopStock = Number(s.workshop_stock ?? 0);
+                    const isLow = shopStock > 0 && shopStock < 3;
                     const inFlightQty = inFlightQtys.shelf.get(s.id) ?? 0;
+                    const selected = (shelfSelections.get(s.id) ?? 0) > 0;
                     return (
                       <TableRow
                         key={s.id}
-                        className={isLow ? "bg-amber-50/60" : ""}
+                        className={cn(
+                          selected && "bg-primary/[0.04]",
+                          isLow && !selected && "bg-amber-50/40",
+                        )}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="pl-4 font-medium">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{s.type}</span>
                             {isLow && (
                               <Badge
                                 variant="destructive"
-                                className="text-[10px] px-1.5 py-0"
+                                className="text-[10px] px-1.5 py-0 h-4"
                               >
                                 Low
                               </Badge>
                             )}
-                            <InFlightChip qty={inFlightQty} />
+                            {inFlightQty > 0 && (
+                              <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 tabular-nums">
+                                {inFlightQty} incoming
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>{s.brand}</TableCell>
-                        <TableCell
-                          className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}
-                        >
-                          {shopStock}
+                        <TableCell className="text-right pr-1.5">
+                          <StockValue value={shopStock} danger={isLow} />
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {Number(s.workshop_stock ?? 0)}
+                        <TableCell className="text-right pl-1.5">
+                          <StockValue value={workshopStock} />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-4 pl-6">
                           <QtyInput
                             value={shelfSelections.get(s.id) ?? 0}
                             onChange={(v) =>
-                              updateQty(
-                                shelfSelections,
-                                setShelfSelections,
-                                s.id,
-                                v,
-                              )
+                              updateQty(shelfSelections, setShelfSelections, s.id, v)
                             }
                             step={1}
+                            max={workshopStock}
                           />
                         </TableCell>
                       </TableRow>
@@ -432,7 +470,7 @@ export default function RequestDeliveryPage() {
                     <TableRow>
                       <TableCell
                         colSpan={5}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center text-muted-foreground py-10"
                       >
                         {search
                           ? "No shelf items match your search"
@@ -444,16 +482,16 @@ export default function RequestDeliveryPage() {
               </Table>
             </TabsContent>
 
-            <TabsContent value="accessory" className="mt-4">
-              <Table className="min-w-[920px]">
+            <TabsContent value="accessory" className="mt-0">
+              <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="pl-4">Name</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Shop Stock</TableHead>
-                    <TableHead className="text-right">Workshop Stock</TableHead>
-                    <TableHead className="text-right w-[180px]">
+                    <TableHead className="text-right pr-1.5">Shop</TableHead>
+                    <TableHead className="text-right pl-1.5">Workshop</TableHead>
+                    <TableHead className="text-right w-[140px] pr-4 pl-6">
                       Request Qty
                     </TableHead>
                   </TableRow>
@@ -461,8 +499,10 @@ export default function RequestDeliveryPage() {
                 <TableBody>
                   {filteredAccessories.map((a) => {
                     const shopStock = Number(a.shop_stock ?? 0);
-                    const isLow = shopStock < 10;
+                    const workshopStock = Number(a.workshop_stock ?? 0);
+                    const isLow = shopStock > 0 && shopStock < 10;
                     const inFlightQty = inFlightQtys.accessory.get(a.id) ?? 0;
+                    const selected = (accessorySelections.get(a.id) ?? 0) > 0;
                     const step =
                       a.unit_of_measure === "meters" ||
                       a.unit_of_measure === "kg"
@@ -471,20 +511,27 @@ export default function RequestDeliveryPage() {
                     return (
                       <TableRow
                         key={a.id}
-                        className={isLow ? "bg-amber-50/60" : ""}
+                        className={cn(
+                          selected && "bg-primary/[0.04]",
+                          isLow && !selected && "bg-amber-50/40",
+                        )}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="pl-4 font-medium">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{a.name}</span>
                             {isLow && (
                               <Badge
                                 variant="destructive"
-                                className="text-[10px] px-1.5 py-0"
+                                className="text-[10px] px-1.5 py-0 h-4"
                               >
                                 Low
                               </Badge>
                             )}
-                            <InFlightChip qty={inFlightQty} />
+                            {inFlightQty > 0 && (
+                              <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 tabular-nums">
+                                {inFlightQty} incoming
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -494,15 +541,13 @@ export default function RequestDeliveryPage() {
                           {UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ??
                             a.unit_of_measure}
                         </TableCell>
-                        <TableCell
-                          className={`text-right tabular-nums ${isLow ? "text-red-600 font-semibold" : ""}`}
-                        >
-                          {shopStock}
+                        <TableCell className="text-right pr-1.5">
+                          <StockValue value={shopStock} danger={isLow} />
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {Number(a.workshop_stock ?? 0)}
+                        <TableCell className="text-right pl-1.5">
+                          <StockValue value={workshopStock} />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-4 pl-6">
                           <QtyInput
                             value={accessorySelections.get(a.id) ?? 0}
                             onChange={(v) =>
@@ -514,6 +559,7 @@ export default function RequestDeliveryPage() {
                               )
                             }
                             step={step}
+                            max={workshopStock}
                           />
                         </TableCell>
                       </TableRow>
@@ -523,7 +569,7 @@ export default function RequestDeliveryPage() {
                     <TableRow>
                       <TableCell
                         colSpan={6}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center text-muted-foreground py-10"
                       >
                         {search
                           ? "No accessories match your search"
@@ -534,339 +580,190 @@ export default function RequestDeliveryPage() {
                 </TableBody>
               </Table>
             </TabsContent>
-          </Tabs>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Notes (optional)</label>
-            <Textarea
-              placeholder="Any additional notes for this request..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
           </div>
+          )}
+        </Card>
+      </Tabs>
 
-          <div className="flex flex-col gap-3 pt-4 border-t sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">
-                {totalSelected}
-              </span>{" "}
-              item(s) selected
-            </p>
-            <Button
-              className="sm:min-w-36"
-              onClick={handleSubmit}
-              disabled={totalSelected === 0 || createTransfer.isPending}
-            >
-              {createTransfer.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Send className="h-4 w-4 mr-2" />
-              )}
-              Submit Request
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>{/* end left col */}
+
+        {/* Right: cart */}
+        <div className="lg:sticky lg:top-4">
+          <RequestCart
+            items={cartItems}
+            notes={notes}
+            onNotesChange={setNotes}
+            onRemove={(type, id) => {
+              if (type === "fabric") updateQty(fabricSelections, setFabricSelections, id, 0);
+              else if (type === "shelf") updateQty(shelfSelections, setShelfSelections, id, 0);
+              else updateQty(accessorySelections, setAccessorySelections, id, 0);
+            }}
+            onSubmit={handleSubmit}
+            isPending={createTransfer.isPending}
+          />
+        </div>
+      </div>{/* end grid */}
     </div>
   );
 }
+
+function StockValue({ value, danger }: { value: number; danger?: boolean }) {
+  if (value === 0) {
+    return <span className="text-muted-foreground/40 italic">0</span>;
+  }
+  return (
+    <span className={cn(danger && "text-red-600 font-semibold")}>{value}</span>
+  );
+}
+
 
 function QtyInput({
   value,
   onChange,
   step = 1,
+  max,
 }: {
   value: number;
   onChange: (v: number) => void;
   step?: number;
+  max?: number;
 }) {
+  const clamp = (v: number) => {
+    v = Math.max(0, v);
+    if (max != null) v = Math.min(v, max);
+    return v;
+  };
   return (
-    <div className="flex items-center justify-end gap-1.5">
+    <div className="group/qty flex items-center justify-end gap-1">
       <Button
         variant="outline"
         size="icon"
-        className="h-9 w-9"
-        onClick={() => onChange(Math.max(0, value - step))}
+        className={cn(
+          "h-7 w-7 rounded-full transition-all",
+          value > 0 ? "opacity-100" : "opacity-0 group-hover/qty:opacity-100",
+        )}
+        onClick={() => onChange(clamp(value - step))}
         disabled={value <= 0}
       >
-        <Minus className="h-3.5 w-3.5" />
+        <Minus className="h-3 w-3" />
       </Button>
-      <Input
-        type="number"
-        min={0}
-        step={step}
-        value={value || ""}
-        onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
-        className="w-20 h-9 text-center text-sm tabular-nums"
-        placeholder="0"
-      />
+      <div className={cn(
+        "w-12 h-7 flex items-center justify-center rounded-md text-sm font-semibold tabular-nums transition-all",
+        value > 0
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground/40",
+      )}>
+        {value > 0 ? value : "\u2014"}
+      </div>
       <Button
         variant="outline"
         size="icon"
-        className="h-9 w-9"
-        onClick={() => onChange(value + step)}
+        className={cn(
+          "h-7 w-7 rounded-full transition-all",
+          value === 0 ? "opacity-0 group-hover/qty:opacity-100" : "opacity-100",
+        )}
+        onClick={() => onChange(clamp(value + step))}
+        disabled={max != null && value >= max}
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-3 w-3" />
       </Button>
     </div>
   );
 }
 
-/**
- * Small inline chip shown next to an item's name when there is already an
- * outstanding request for the same item (requested / approved / dispatched but
- * not yet received). Formats e.g. `5m in transit` or `12 in transit`.
- */
-function InFlightChip({ qty, suffix }: { qty: number; suffix?: string }) {
-  if (qty <= 0) return null;
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 border border-sky-200">
-      {qty}
-      {suffix ?? ""} in transit
-    </span>
-  );
-}
+type CartItem = {
+  key: string;
+  name: string;
+  qty: number;
+  unit?: string;
+  type: "fabric" | "shelf" | "accessory";
+  id: number;
+};
 
-function summarizeItems(req: TransferRequestWithItems): string {
-  const parts: string[] = [];
-  const total = req.items.reduce(
-    (sum, it) => sum + Number(it.requested_qty ?? 0),
-    0,
-  );
-  parts.push(`${req.items.length} item${req.items.length === 1 ? "" : "s"}`);
-  if (total > 0) parts.push(`${total} total`);
-  return parts.join(" · ");
-}
-
-function daysSince(dateStr: string | Date | null | undefined) {
-  if (!dateStr) return 0;
-  const diff = Date.now() - parseUtcTimestamp(dateStr).getTime();
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Panel rendered above the item tables showing every open outbound request
- * the shop has sent. Prevents re-requesting items that are already on their
- * way back. For requests still in `requested` status the shop can cancel
- * them directly (hard-delete); after that they're display-only with a
- * "View details" link.
- */
-function InFlightPanel({ requests }: { requests: TransferRequestWithItems[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const [confirmCancel, setConfirmCancel] =
-    useState<TransferRequestWithItems | null>(null);
-  const [viewing, setViewing] = useState<TransferRequestWithItems | null>(null);
-  const cancelTransfer = useCancelTransfer();
-
-  if (requests.length === 0) return null;
-
-  const alwaysVisible = requests.slice(0, 3);
-  const collapsible = requests.slice(3);
-  const hidden = collapsible.length;
-
-  const handleCancel = async () => {
-    if (!confirmCancel) return;
-    try {
-      await cancelTransfer.mutateAsync(confirmCancel.id);
-      toast.success(`Request #${confirmCancel.id} cancelled`);
-      setConfirmCancel(null);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to cancel request");
-    }
+function RequestCart({
+  items,
+  notes,
+  onNotesChange,
+  onRemove,
+  onSubmit,
+  isPending,
+}: {
+  items: CartItem[];
+  notes: string;
+  onNotesChange: (v: string) => void;
+  onRemove: (type: CartItem["type"], id: number) => void;
+  onSubmit: () => void;
+  isPending: boolean;
+}) {
+  const TYPE_LABEL: Record<CartItem["type"], string> = {
+    fabric: "Fabric",
+    shelf: "Shelf",
+    accessory: "Accessory",
   };
 
   return (
-    <>
-      <div className="relative overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-sky-50/30 shadow-sm animate-in slide-in-from-top-2 fade-in duration-300">
-        {/* decorative top stripe */}
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent" />
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700 ring-1 ring-sky-200">
-                <Plane className="h-4 w-4 -rotate-12" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-sky-950">
-                    In-flight requests
-                  </span>
-                  <span className="text-[11px] text-sky-800 bg-sky-100 rounded-full px-2 py-0.5 font-bold tabular-nums ring-1 ring-sky-200">
-                    {requests.length}
-                  </span>
-                </div>
-                <p className="text-[11px] text-sky-800/70 mt-0.5">
-                  Already on the way — check before requesting again.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {alwaysVisible.map((req) => {
-              const days = daysSince(req.created_at);
-              const canCancel = req.status === "requested";
-              return (
-                <RequestRow
-                  key={req.id}
-                  req={req}
-                  days={days}
-                  canCancel={canCancel}
-                  onView={setViewing}
-                  onCancel={setConfirmCancel}
-                />
-              );
-            })}
-          </div>
-
-          {collapsible.length > 0 && (
-            <div
-              className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
-            >
-              <div className="overflow-hidden">
-                <div className="space-y-2 pt-2">
-                  {collapsible.map((req) => {
-                    const days = daysSince(req.created_at);
-                    const canCancel = req.status === "requested";
-                    return (
-                      <RequestRow
-                        key={req.id}
-                        req={req}
-                        days={days}
-                        canCancel={canCancel}
-                        onView={setViewing}
-                        onCancel={setConfirmCancel}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {requests.length > 3 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-full text-xs text-sky-700 hover:bg-sky-100"
-              onClick={() => setExpanded((e) => !e)}
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-3.5 w-3.5 mr-1" />
-                  Show less
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3.5 w-3.5 mr-1" />
-                  Show {hidden} more
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <TransferDetailDialog
-        transfer={viewing}
-        onClose={() => setViewing(null)}
-      />
-
-      <Dialog
-        open={!!confirmCancel}
-        onOpenChange={(open) => !open && setConfirmCancel(null)}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Cancel request #{confirmCancel?.id}?</DialogTitle>
-            <DialogDescription>
-              This removes the request permanently. No approver will see it.
-              You can create a new request afterwards if you change your mind.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmCancel(null)}
-              disabled={cancelTransfer.isPending}
-            >
-              Keep request
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancel}
-              disabled={cancelTransfer.isPending}
-            >
-              {cancelTransfer.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              )}
-              Cancel request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function RequestRow({
-  req,
-  days,
-  canCancel,
-  onView,
-  onCancel,
-}: {
-  req: TransferRequestWithItems;
-  days: number;
-  canCancel: boolean;
-  onView: (req: TransferRequestWithItems) => void;
-  onCancel: (req: TransferRequestWithItems) => void;
-}) {
-  return (
-    <div className="group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white/90 border border-sky-100 hover:border-sky-300 hover:shadow-sm transition-colors rounded-lg px-3 py-2.5">
-      <div className="min-w-0 space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-mono text-xs text-sky-700 font-semibold">
-            #{req.id}
+    <Card className="shadow-none rounded-xl overflow-hidden border">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Request Cart
+        </span>
+        {items.length > 0 && (
+          <span className="text-[11px] font-bold bg-primary/10 text-primary rounded-full px-2 py-0.5 tabular-nums">
+            {items.length}
           </span>
-          <TransferStatusBadge status={req.status} />
-          <ItemTypeBadge itemType={req.item_type} />
-          {days >= 2 && (
-            <span
-              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${days >= 5 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
-            >
-              {days}d ago
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {summarizeItems(req)}
-          {req.requested_by_user && <> · By {req.requested_by_user.name}</>}
-        </p>
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 px-2 text-xs"
-          onClick={() => onView(req)}
-        >
-          <Eye className="h-3.5 w-3.5 mr-1" />
-          Details
-        </Button>
-        {canCancel && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={() => onCancel(req)}
-          >
-            <X className="h-3.5 w-3.5 mr-1" />
-            Cancel
-          </Button>
         )}
       </div>
-    </div>
+
+      {items.length === 0 ? (
+        <div className="py-10 px-4 text-center text-muted-foreground">
+          <Send className="h-7 w-7 mx-auto mb-2.5 opacity-20" />
+          <p className="text-sm font-medium">Cart is empty</p>
+          <p className="text-xs mt-0.5 opacity-70">Select quantities from the table</p>
+        </div>
+      ) : (
+        <div className="divide-y max-h-[50vh] overflow-y-auto">
+          {items.map((item) => (
+            <div key={item.key} className="flex items-center gap-2 px-4 py-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" title={item.name}>{item.name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {TYPE_LABEL[item.type]} · <span className="tabular-nums font-semibold text-foreground/80">{item.qty}{item.unit ? ` ${item.unit}` : ""}</span>
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => onRemove(item.type, item.id)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 py-3 border-t space-y-3">
+        <Textarea
+          placeholder="Notes for the workshop (optional)..."
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          rows={2}
+          className="resize-none text-sm"
+        />
+        <Button
+          className="w-full"
+          onClick={onSubmit}
+          disabled={items.length === 0 || isPending}
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <Send className="h-4 w-4 mr-2" />
+          )}
+          Submit Request
+        </Button>
+      </div>
+    </Card>
   );
 }

@@ -164,52 +164,27 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
 };
 
 /**
- * Fetch garments from orders where ALL garments are completed (back at shop or piece_stage=completed).
+ * Fetch garments from orders with order_phase = 'completed'.
  */
 export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> => {
-  // Step 1: find order_ids with at least one garment that has a production_plan
-  const { data: planned, error: e1 } = await db
-    .from('garments')
-    .select('order_id')
-    .not('production_plan', 'is', null);
-
-  if (e1 || !planned?.length) return [];
-
-  const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
-
-  // Step 2: fetch ALL garments from those orders
   const { data, error } = await db
     .from('garments')
     .select(WORKSHOP_QUERY)
-    .in('order_id', orderIds)
-    .eq('order.checkout_status', 'confirmed');
+    .eq('order.checkout_status', 'confirmed')
+    .not('production_plan', 'is', null);
 
   if (error) {
     console.error('getCompletedOrderGarments error:', error);
     return [];
   }
 
-  const all = (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
-
-  // Step 3: group by order and keep only orders where ALL garments are completed/at shop
-  const byOrder = new Map<number, WorkshopGarment[]>();
-  for (const g of all) {
-    if (!byOrder.has(g.order_id)) byOrder.set(g.order_id, []);
-    byOrder.get(g.order_id)!.push(g);
-  }
-
-  // A garment is "done" from the workshop's perspective if it's completed,
-  // or it's back at shop in a post-production stage (not awaiting_trial or needing action)
-  const SHOP_DONE_STAGES = new Set(['completed', 'ready_for_pickup', 'brova_trialed']);
-  const isGarmentDone = (g: WorkshopGarment) =>
-    g.piece_stage === 'completed' ||
-    (g.location === 'shop' && SHOP_DONE_STAGES.has(g.piece_stage ?? ''));
-
-  const result: WorkshopGarment[] = [];
-  for (const garments of byOrder.values()) {
-    if (garments.every(isGarmentDone)) result.push(...garments);
-  }
-  return result;
+  return (data ?? [])
+    .filter((g: any) => {
+      if (!g.order) return false;
+      const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
+      return wo?.order_phase === 'completed';
+    })
+    .map(flattenGarment);
 };
 
 export const receiveGarments = async (ids: string[]): Promise<void> => {

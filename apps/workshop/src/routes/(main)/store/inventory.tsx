@@ -1,15 +1,18 @@
-import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { useState, useMemo } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Package } from "lucide-react";
+import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, ArrowRight } from "lucide-react";
+import { IconStack2 } from "@tabler/icons-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { Skeleton } from "@repo/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import {
+  TableContainer,
   Table,
   TableBody,
   TableCell,
@@ -32,6 +35,7 @@ import {
   SelectValue,
 } from "@repo/ui/select";
 
+import { cn } from "@/lib/utils";
 import { getFabrics, createFabric, updateFabric } from "@/api/fabrics";
 import { getShelf, createShelfItem, updateShelfItem } from "@/api/shelf";
 import {
@@ -39,7 +43,7 @@ import {
   createAccessory,
   updateAccessory,
 } from "@/api/accessories";
-import { PageHeader, LoadingSkeleton } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState } from "@/components/shared/PageShell";
 import {
   ACCESSORY_CATEGORY_LABELS,
   UNIT_OF_MEASURE_LABELS,
@@ -51,12 +55,109 @@ export const Route = createFileRoute("/(main)/store/inventory")({
   head: () => ({ meta: [{ title: "Inventory Management" }] }),
 });
 
+const LOW_STOCK = { fabric: 5, shelf: 3, accessory: 10 };
+
+function isLowStock(type: "fabric" | "shelf" | "accessory", workshopStock: number) {
+  return workshopStock > 0 && workshopStock < LOW_STOCK[type];
+}
+
 function InventoryPage() {
   const [activeTab, setActiveTab] = useState("fabric");
+  const [search, setSearch] = useState("");
+
+  const { data: fabrics = [], isLoading: fl, isError: fe, refetch: fr } = useQuery({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: 60_000 });
+  const { data: shelfItems = [], isLoading: sl, isError: se, refetch: sr } = useQuery({ queryKey: ["shelf"], queryFn: getShelf, staleTime: 60_000 });
+  const { data: accessories = [], isLoading: al, isError: ae, refetch: ar } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories, staleTime: 60_000 });
+
+  const isLoading = fl || sl || al;
+  const isError = fe || se || ae;
+  const refetchAll = () => { fr(); sr(); ar(); };
+
+  const lowStockCount = useMemo(() => {
+    let count = 0;
+    for (const f of fabrics) if (isLowStock("fabric", Number(f.workshop_stock ?? 0))) count++;
+    for (const s of shelfItems) if (isLowStock("shelf", Number(s.workshop_stock ?? 0))) count++;
+    for (const a of accessories) if (isLowStock("accessory", Number(a.workshop_stock ?? 0))) count++;
+    return count;
+  }, [fabrics, shelfItems, accessories]);
+
+  const stats = [
+    { label: "Fabric Types", value: fabrics.length, icon: Scissors, bg: "bg-purple-50 text-purple-600" },
+    { label: "Shelf Items", value: shelfItems.length, icon: IconStack2, bg: "bg-sky-50 text-sky-600" },
+    { label: "Accessories", value: accessories.length, icon: Package, bg: "bg-pink-50 text-pink-600" },
+    { label: "Low Stock", value: lowStockCount, icon: AlertTriangle, bg: lowStockCount > 0 ? "bg-amber-50 text-amber-600" : "bg-muted text-muted-foreground", highlight: lowStockCount > 0 },
+  ];
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
       <PageHeader icon={Package} title="Inventory Management" subtitle="Create and manage fabrics, shelf items, and accessories" />
+
+      {/* Stat Cards */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          {stats.map((s) => (
+            <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className={cn("p-2 rounded-lg shrink-0", s.bg)}>
+                  <s.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                  <p className={cn("text-lg font-bold tabular-nums", s.highlight && "text-amber-700")}>{s.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Low Stock Alert */}
+      {!isLoading && lowStockCount > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-sm font-medium text-amber-900">
+              <span className="font-bold tabular-nums">{lowStockCount}</span> item{lowStockCount !== 1 ? "s" : ""} running low on stock
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 hover:border-amber-300 shrink-0" asChild>
+            <Link to="/store/request-delivery">
+              Request Delivery
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {/* Error State */}
+      {isError && !isLoading && (
+        <Card className="shadow-none rounded-xl border border-destructive/20 mb-5">
+          <CardContent className="py-10 text-center">
+            <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+            <p className="font-medium text-sm">Failed to load stock data</p>
+            <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
+            <Button variant="outline" size="sm" onClick={refetchAll} className="mt-4">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search */}
+      <div className="relative max-w-xl mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search items by name, type, or category..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
@@ -66,24 +167,84 @@ function InventoryPage() {
         </TabsList>
 
         <TabsContent value="fabric">
-          <FabricsTab />
+          <FabricsTab search={search} />
         </TabsContent>
         <TabsContent value="shelf">
-          <ShelfTab />
+          <ShelfTab search={search} />
         </TabsContent>
         <TabsContent value="accessory">
-          <AccessoriesTab />
+          <AccessoriesTab search={search} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
+// ─── Shared Components ───────────────────────────────────────────────
+
+function LowStockBadge() {
+  return (
+    <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
+      Low
+    </span>
+  );
+}
+
+function TableSkeleton({ cols }: { cols: number }) {
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        <div className="flex items-center justify-between mb-4">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <TableContainer>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                {Array.from({ length: cols }).map((_, i) => (
+                  <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: cols }).map((_, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueryErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card className="shadow-none rounded-xl border border-destructive/20">
+      <CardContent className="py-10 text-center">
+        <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+        <p className="font-medium text-sm">Failed to load data</p>
+        <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
+        <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Fabrics ───────────────────────────────────────────────────────────
 
-function FabricsTab() {
+function FabricsTab({ search }: { search: string }) {
   const qc = useQueryClient();
-  const { data: fabrics = [], isLoading } = useQuery({
+  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["fabrics"],
     queryFn: getFabrics,
     staleTime: 60_000,
@@ -91,34 +252,25 @@ function FabricsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fabric | null>(null);
 
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return fabrics.filter((f) => !q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q));
+  }, [fabrics, search]);
+
   const createMut = useMutation({
     mutationFn: createFabric,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["fabrics"] });
-      setDialogOpen(false);
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); },
     onError: (e: any) => toast.error(e.message ?? "Failed to create fabric"),
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Fabric>) =>
-      updateFabric(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["fabrics"] });
-      setDialogOpen(false);
-      setEditing(null);
-    },
+    mutationFn: ({ id, ...data }: { id: number } & Partial<Fabric>) => updateFabric(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); setEditing(null); },
     onError: (e: any) => toast.error(e.message ?? "Failed to update fabric"),
   });
 
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-  const openEdit = (f: Fabric) => {
-    setEditing(f);
-    setDialogOpen(true);
-  };
+  const openCreate = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (f: Fabric) => { setEditing(f); setDialogOpen(true); };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -126,41 +278,22 @@ function FabricsTab() {
     const name = (fd.get("name") as string).trim();
     const color = (fd.get("color") as string).trim() || undefined;
     const color_hex = (fd.get("color_hex") as string).trim() || undefined;
-    const price_per_meter = fd.get("price_per_meter")
-      ? Number(fd.get("price_per_meter"))
-      : undefined;
-    const workshop_stock = fd.get("workshop_stock")
-      ? Number(fd.get("workshop_stock"))
-      : undefined;
+    const price_per_meter = fd.get("price_per_meter") ? Number(fd.get("price_per_meter")) : undefined;
+    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
 
-    if (!name) {
-      toast.error("Name is required");
-      return;
-    }
+    if (!name) { toast.error("Name is required"); return; }
 
     if (editing) {
-      updateMut.mutate({
-        id: editing.id,
-        name,
-        color: color ?? null,
-        color_hex: color_hex ?? null,
-        price_per_meter: price_per_meter ?? null,
-        workshop_stock: workshop_stock ?? 0,
-      });
+      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, workshop_stock: workshop_stock ?? 0 });
     } else {
-      createMut.mutate({
-        name,
-        color,
-        color_hex,
-        price_per_meter,
-        workshop_stock,
-      });
+      createMut.mutate({ name, color, color_hex, price_per_meter, workshop_stock });
     }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
 
-  if (isLoading) return <LoadingSkeleton count={3} />;
+  if (isLoading) return <TableSkeleton cols={6} />;
+  if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
@@ -168,171 +301,94 @@ function FabricsTab() {
         <CardContent className="pt-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
-              {fabrics.length} fabric(s)
+              {filtered.length} fabric(s){search && fabrics.length !== filtered.length && ` of ${fabrics.length}`}
             </p>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Add Fabric
             </Button>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Color Code</TableHead>
-                <TableHead className="text-right">Price/m</TableHead>
-                <TableHead className="text-right">Workshop Stock</TableHead>
-                <TableHead className="text-right">Shop Stock</TableHead>
-                <TableHead className="w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fabrics.map((f) => (
-                <TableRow key={f.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {f.color_hex && (
-                        <span
-                          className="w-4 h-4 rounded-full border"
-                          style={{ backgroundColor: f.color_hex }}
-                        />
-                      )}
-                      {f.name}
-                    </div>
-                  </TableCell>
-                  <TableCell>{f.color ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {f.price_per_meter ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {f.workshop_stock ?? 0}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {f.shop_stock ?? 0}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => openEdit(f)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Color Code</TableHead>
+                  <TableHead className="text-right">Price/m</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
+                  <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="w-[60px]" />
                 </TableRow>
-              ))}
-              {fabrics.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No fabrics yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((f) => {
+                  const ws = Number(f.workshop_stock ?? 0);
+                  const low = isLowStock("fabric", ws);
+                  return (
+                    <TableRow key={f.id} className={low ? "bg-red-50/40" : ""}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} />}
+                          {f.name}
+                          {low && <LowStockBadge />}
+                        </div>
+                      </TableCell>
+                      <TableCell>{f.color ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
+                      <TableCell className="text-right tabular-nums">{f.shop_stock ?? 0}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(f)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No fabrics match your search" : "No fabrics yet"} /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </CardContent>
       </Card>
 
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDialogOpen(false);
-            setEditing(null);
-          }
-        }}
-      >
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit Fabric" : "Add Fabric"}
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Edit Fabric" : "Add Fabric"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="fab-name">Name *</Label>
-              <Input
-                id="fab-name"
-                name="name"
-                defaultValue={editing?.name ?? ""}
-                required
-              />
+              <Input id="fab-name" name="name" defaultValue={editing?.name ?? ""} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="fab-color">Color Code</Label>
-                <Input
-                  id="fab-color"
-                  name="color"
-                  placeholder="e.g. C04"
-                  defaultValue={editing?.color ?? ""}
-                />
+                <Input id="fab-color" name="color" placeholder="e.g. C04" defaultValue={editing?.color ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fab-hex">Color Hex</Label>
                 <div className="flex gap-2">
-                  <Input
-                    id="fab-hex"
-                    name="color_hex"
-                    placeholder="#FFFFFF"
-                    defaultValue={editing?.color_hex ?? ""}
-                    className="flex-1"
-                  />
-                  <input
-                    type="color"
-                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
-                    defaultValue={editing?.color_hex || "#ffffff"}
-                    onChange={(e) => {
-                      const hexInput = document.getElementById("fab-hex") as HTMLInputElement;
-                      if (hexInput) hexInput.value = e.target.value;
-                    }}
-                  />
+                  <Input id="fab-hex" name="color_hex" placeholder="#FFFFFF" defaultValue={editing?.color_hex ?? ""} className="flex-1" />
+                  <input type="color" className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5" defaultValue={editing?.color_hex || "#ffffff"} onChange={(e) => { const el = document.getElementById("fab-hex") as HTMLInputElement; if (el) el.value = e.target.value; }} />
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="fab-price">Price per Meter</Label>
-                <Input
-                  id="fab-price"
-                  name="price_per_meter"
-                  type="number"
-                  step="0.001"
-                  min={0}
-                  defaultValue={editing?.price_per_meter ?? ""}
-                />
+                <Input id="fab-price" name="price_per_meter" type="number" step="0.001" min={0} defaultValue={editing?.price_per_meter ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fab-stock">Workshop Stock (m)</Label>
-                <Input
-                  id="fab-stock"
-                  name="workshop_stock"
-                  type="number"
-                  step="0.5"
-                  min={0}
-                  defaultValue={editing?.workshop_stock ?? 0}
-                />
+                <Input id="fab-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} />
               </div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setDialogOpen(false);
-                  setEditing(null);
-                }}
-              >
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
               <Button type="submit" disabled={isPending}>
-                {isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                )}
+                {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
                 {editing ? "Save" : "Create"}
               </Button>
             </DialogFooter>
@@ -345,46 +401,22 @@ function FabricsTab() {
 
 // ─── Shelf Items ──────────────────────────────────────────────────────
 
-function ShelfTab() {
+function ShelfTab({ search }: { search: string }) {
   const qc = useQueryClient();
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ["shelf"],
-    queryFn: getShelf,
-    staleTime: 60_000,
-  });
+  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["shelf"], queryFn: getShelf, staleTime: 60_000 });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Shelf | null>(null);
 
-  const createMut = useMutation({
-    mutationFn: createShelfItem,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["shelf"] });
-      setDialogOpen(false);
-    },
-    onError: (e: any) =>
-      toast.error(e.message ?? "Failed to create shelf item"),
-  });
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return items.filter((s) => !q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q));
+  }, [items, search]);
 
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) =>
-      updateShelfItem(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["shelf"] });
-      setDialogOpen(false);
-      setEditing(null);
-    },
-    onError: (e: any) =>
-      toast.error(e.message ?? "Failed to update shelf item"),
-  });
+  const createMut = useMutation({ mutationFn: createShelfItem, onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); }, onError: (e: any) => toast.error(e.message ?? "Failed to create shelf item") });
+  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelfItem(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); }, onError: (e: any) => toast.error(e.message ?? "Failed to update shelf item") });
 
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-  const openEdit = (s: Shelf) => {
-    setEditing(s);
-    setDialogOpen(true);
-  };
+  const openCreate = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (s: Shelf) => { setEditing(s); setDialogOpen(true); };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -392,170 +424,74 @@ function ShelfTab() {
     const type = (fd.get("type") as string).trim();
     const brand = (fd.get("brand") as string).trim() || undefined;
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock")
-      ? Number(fd.get("workshop_stock"))
-      : undefined;
-
-    if (!type) {
-      toast.error("Type is required");
-      return;
-    }
-
-    if (editing) {
-      updateMut.mutate({
-        id: editing.id,
-        type,
-        brand: brand ?? null,
-        price: price ?? null,
-        workshop_stock: workshop_stock ?? 0,
-      });
-    } else {
-      createMut.mutate({ type, brand, price, workshop_stock });
-    }
+    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
+    if (!type) { toast.error("Type is required"); return; }
+    if (editing) { updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
+    else { createMut.mutate({ type, brand, price, workshop_stock }); }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-
-  if (isLoading) return <LoadingSkeleton count={3} />;
+  if (isLoading) return <TableSkeleton cols={6} />;
+  if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
       <Card>
         <CardContent className="pt-4">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {items.length} shelf item(s)
-            </p>
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1" /> Add Shelf Item
-            </Button>
+            <p className="text-sm text-muted-foreground">{filtered.length} shelf item(s){search && items.length !== filtered.length && ` of ${items.length}`}</p>
+            <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Add Shelf Item</Button>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Workshop Stock</TableHead>
-                <TableHead className="text-right">Shop Stock</TableHead>
-                <TableHead className="w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.type}</TableCell>
-                  <TableCell>{s.brand ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {s.price ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {s.workshop_stock ?? 0}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {s.shop_stock ?? 0}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => openEdit(s)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Type</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
+                  <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="w-[60px]" />
                 </TableRow>
-              ))}
-              {items.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No shelf items yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((s) => {
+                  const ws = Number(s.workshop_stock ?? 0);
+                  const low = isLowStock("shelf", ws);
+                  return (
+                    <TableRow key={s.id} className={low ? "bg-red-50/40" : ""}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">{s.type}{low && <LowStockBadge />}</div>
+                      </TableCell>
+                      <TableCell>{s.brand ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.shop_stock ?? 0}</TableCell>
+                      <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button></TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No shelf items match your search" : "No shelf items yet"} /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </CardContent>
       </Card>
-
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDialogOpen(false);
-            setEditing(null);
-          }
-        }}
-      >
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit Shelf Item" : "Add Shelf Item"}
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Edit Shelf Item" : "Add Shelf Item"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="shelf-type">Type *</Label>
-              <Input
-                id="shelf-type"
-                name="type"
-                defaultValue={editing?.type ?? ""}
-                required
-              />
-            </div>
+            <div className="space-y-2"><Label htmlFor="shelf-type">Type *</Label><Input id="shelf-type" name="type" defaultValue={editing?.type ?? ""} required /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="shelf-brand">Brand</Label>
-                <Input
-                  id="shelf-brand"
-                  name="brand"
-                  defaultValue={editing?.brand ?? ""}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shelf-price">Price</Label>
-                <Input
-                  id="shelf-price"
-                  name="price"
-                  type="number"
-                  step="0.001"
-                  min={0}
-                  defaultValue={editing?.price ?? ""}
-                />
-              </div>
+              <div className="space-y-2"><Label htmlFor="shelf-brand">Brand</Label><Input id="shelf-brand" name="brand" defaultValue={editing?.brand ?? ""} /></div>
+              <div className="space-y-2"><Label htmlFor="shelf-price">Price</Label><Input id="shelf-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="shelf-stock">Workshop Stock</Label>
-              <Input
-                id="shelf-stock"
-                name="workshop_stock"
-                type="number"
-                min={0}
-                defaultValue={editing?.workshop_stock ?? 0}
-              />
-            </div>
+            <div className="space-y-2"><Label htmlFor="shelf-stock">Workshop Stock</Label><Input id="shelf-stock" name="workshop_stock" type="number" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setDialogOpen(false);
-                  setEditing(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                )}
-                {editing ? "Save" : "Create"}
-              </Button>
+              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>{isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}{editing ? "Save" : "Create"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -566,58 +502,25 @@ function ShelfTab() {
 
 // ─── Accessories ──────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  "buttons",
-  "zippers",
-  "thread",
-  "lining",
-  "elastic",
-  "interlining",
-  "other",
-] as const;
-
+const CATEGORIES = ["buttons", "zippers", "thread", "lining", "elastic", "interlining", "other"] as const;
 const UNITS = ["pieces", "meters", "rolls", "kg"] as const;
 
-function AccessoriesTab() {
+function AccessoriesTab({ search }: { search: string }) {
   const qc = useQueryClient();
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ["accessories"],
-    queryFn: getAccessories,
-    staleTime: 60_000,
-  });
+  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories, staleTime: 60_000 });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Accessory | null>(null);
 
-  const createMut = useMutation({
-    mutationFn: createAccessory,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["accessories"] });
-      setDialogOpen(false);
-    },
-    onError: (e: any) =>
-      toast.error(e.message ?? "Failed to create accessory"),
-  });
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return items.filter((a) => !q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q));
+  }, [items, search]);
 
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) =>
-      updateAccessory(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["accessories"] });
-      setDialogOpen(false);
-      setEditing(null);
-    },
-    onError: (e: any) =>
-      toast.error(e.message ?? "Failed to update accessory"),
-  });
+  const createMut = useMutation({ mutationFn: createAccessory, onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); }, onError: (e: any) => toast.error(e.message ?? "Failed to create accessory") });
+  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); }, onError: (e: any) => toast.error(e.message ?? "Failed to update accessory") });
 
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-  const openEdit = (a: Accessory) => {
-    setEditing(a);
-    setDialogOpen(true);
-  };
+  const openCreate = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (a: Accessory) => { setEditing(a); setDialogOpen(true); };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -626,215 +529,91 @@ function AccessoriesTab() {
     const category = fd.get("category") as string;
     const unit_of_measure = fd.get("unit_of_measure") as string;
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock")
-      ? Number(fd.get("workshop_stock"))
-      : undefined;
-
-    if (!name || !category) {
-      toast.error("Name and category are required");
-      return;
-    }
-
-    if (editing) {
-      updateMut.mutate({
-        id: editing.id,
-        name,
-        category: category as Accessory["category"],
-        unit_of_measure: unit_of_measure as Accessory["unit_of_measure"],
-        price: price ?? null,
-        workshop_stock: workshop_stock ?? 0,
-      });
-    } else {
-      createMut.mutate({
-        name,
-        category: category as Accessory["category"],
-        unit_of_measure: (unit_of_measure || "pieces") as Accessory["unit_of_measure"],
-        price,
-        workshop_stock,
-      } as any);
-    }
+    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
+    if (!name || !category) { toast.error("Name and category are required"); return; }
+    if (editing) { updateMut.mutate({ id: editing.id, name, category: category as Accessory["category"], unit_of_measure: unit_of_measure as Accessory["unit_of_measure"], price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
+    else { createMut.mutate({ name, category: category as Accessory["category"], unit_of_measure: (unit_of_measure || "pieces") as Accessory["unit_of_measure"], price, workshop_stock } as any); }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-
-  if (isLoading) return <LoadingSkeleton count={3} />;
+  if (isLoading) return <TableSkeleton cols={7} />;
+  if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
       <Card>
         <CardContent className="pt-4">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {items.length} accessory(ies)
-            </p>
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1" /> Add Accessory
-            </Button>
+            <p className="text-sm text-muted-foreground">{filtered.length} accessory(ies){search && items.length !== filtered.length && ` of ${items.length}`}</p>
+            <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Add Accessory</Button>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Workshop Stock</TableHead>
-                <TableHead className="text-right">Shop Stock</TableHead>
-                <TableHead className="w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell className="font-medium">{a.name}</TableCell>
-                  <TableCell>
-                    {ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}
-                  </TableCell>
-                  <TableCell>
-                    {UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ??
-                      a.unit_of_measure}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {a.price ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {a.workshop_stock ?? 0}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {a.shop_stock ?? 0}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => openEdit(a)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
+                  <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="w-[60px]" />
                 </TableRow>
-              ))}
-              {items.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No accessories yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((a) => {
+                  const ws = Number(a.workshop_stock ?? 0);
+                  const low = isLowStock("accessory", ws);
+                  return (
+                    <TableRow key={a.id} className={low ? "bg-red-50/40" : ""}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">{a.name}{low && <LowStockBadge />}</div>
+                      </TableCell>
+                      <TableCell>{ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}</TableCell>
+                      <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
+                      <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
+                      <TableCell className="text-right tabular-nums">{a.shop_stock ?? 0}</TableCell>
+                      <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button></TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <TableRow><TableCell colSpan={7} className="py-8"><EmptyState icon={Package} message={search ? "No accessories match your search" : "No accessories yet"} /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </CardContent>
       </Card>
-
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDialogOpen(false);
-            setEditing(null);
-          }
-        }}
-      >
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit Accessory" : "Add Accessory"}
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Edit Accessory" : "Add Accessory"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="acc-name">Name *</Label>
-              <Input
-                id="acc-name"
-                name="name"
-                defaultValue={editing?.name ?? ""}
-                required
-              />
-            </div>
+            <div className="space-y-2"><Label htmlFor="acc-name">Name *</Label><Input id="acc-name" name="name" defaultValue={editing?.name ?? ""} required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="acc-category">Category *</Label>
-                <Select
-                  name="category"
-                  defaultValue={editing?.category ?? "other"}
-                >
-                  <SelectTrigger id="acc-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {ACCESSORY_CATEGORY_LABELS[c] ?? c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select name="category" defaultValue={editing?.category ?? "other"}>
+                  <SelectTrigger id="acc-category"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{ACCESSORY_CATEGORY_LABELS[c] ?? c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="acc-unit">Unit of Measure</Label>
-                <Select
-                  name="unit_of_measure"
-                  defaultValue={editing?.unit_of_measure ?? "pieces"}
-                >
-                  <SelectTrigger id="acc-unit">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UNITS.map((u) => (
-                      <SelectItem key={u} value={u}>
-                        {UNIT_OF_MEASURE_LABELS[u] ?? u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select name="unit_of_measure" defaultValue={editing?.unit_of_measure ?? "pieces"}>
+                  <SelectTrigger id="acc-unit"><SelectValue /></SelectTrigger>
+                  <SelectContent>{UNITS.map((u) => <SelectItem key={u} value={u}>{UNIT_OF_MEASURE_LABELS[u] ?? u}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="acc-price">Price</Label>
-                <Input
-                  id="acc-price"
-                  name="price"
-                  type="number"
-                  step="0.001"
-                  min={0}
-                  defaultValue={editing?.price ?? ""}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="acc-stock">Workshop Stock</Label>
-                <Input
-                  id="acc-stock"
-                  name="workshop_stock"
-                  type="number"
-                  step="0.5"
-                  min={0}
-                  defaultValue={editing?.workshop_stock ?? 0}
-                />
-              </div>
+              <div className="space-y-2"><Label htmlFor="acc-price">Price</Label><Input id="acc-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
+              <div className="space-y-2"><Label htmlFor="acc-stock">Workshop Stock</Label><Input id="acc-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setDialogOpen(false);
-                  setEditing(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                )}
-                {editing ? "Save" : "Create"}
-              </Button>
+              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>{isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}{editing ? "Save" : "Create"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

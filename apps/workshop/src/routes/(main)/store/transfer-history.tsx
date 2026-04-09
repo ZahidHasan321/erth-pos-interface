@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { History, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { History, Search, X, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, RefreshCw } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
+import { Skeleton } from "@repo/ui/skeleton";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { DatePicker } from "@repo/ui/date-picker";
 import {
@@ -15,7 +17,7 @@ import {
 } from "@repo/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 
-import { PageHeader, EmptyState as PageEmptyState, LoadingSkeleton } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState as PageEmptyState } from "@/components/shared/PageShell";
 import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { useTransferRequests } from "@/hooks/useTransfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
@@ -39,6 +41,22 @@ interface HistorySearch {
   sort?: SortKey;
 }
 
+function getToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getWeekStart(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay()); // Sunday
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 function defaultFromDate(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
@@ -46,7 +64,16 @@ function defaultFromDate(): string {
 }
 
 function defaultToDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getToday();
+}
+
+function detectPreset(from: string, to: string): "today" | "week" | "month" | null {
+  const today = getToday();
+  if (to !== today) return null;
+  if (from === today) return "today";
+  if (from === getWeekStart()) return "week";
+  if (from === getMonthStart()) return "month";
+  return null;
 }
 
 function toDateStr(d: Date | null): string | undefined {
@@ -122,6 +149,7 @@ function TransferHistoryPage() {
   const from = search.from ?? defaultFromDate();
   const to = search.to ?? defaultToDate();
   const sort: SortKey = search.sort ?? "date_desc";
+  const preset = detectPreset(from, to);
 
   // `status` in the URL is opt-in: absent = All (no filter). A non-empty set
   // means the user has explicitly narrowed to those statuses.
@@ -144,7 +172,7 @@ function TransferHistoryPage() {
     return d.toISOString();
   }, [to]);
 
-  const { data: allRequests = [], isLoading } = useTransferRequests({
+  const { data: allRequests = [], isLoading, isError, refetch } = useTransferRequests({
     direction: search.dir,
     item_type: search.type,
     startDate: startIso,
@@ -274,6 +302,28 @@ function TransferHistoryPage() {
             </Select>
           </div>
 
+          {/* Date presets */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Quick</label>
+            <div className="flex gap-1">
+              {([["today", "Today", getToday()], ["week", "This Week", getWeekStart()], ["month", "This Month", getMonthStart()]] as const).map(([key, label, fromDate]) => (
+                <button
+                  key={key}
+                  onClick={() => update({ from: fromDate, to: getToday() })}
+                  className={`text-[11px] px-2.5 py-1 rounded border transition-colors font-medium ${
+                    preset === key
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-background text-muted-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <span className="h-5 w-px bg-border hidden sm:block self-end mb-1" aria-hidden />
+
           {/* Date range */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">From</label>
@@ -354,7 +404,19 @@ function TransferHistoryPage() {
 
       {/* Results */}
       {isLoading ? (
-        <LoadingSkeleton count={5} />
+        <HistoryTableSkeleton />
+      ) : isError ? (
+        <Card className="shadow-none rounded-xl border border-destructive/20">
+          <CardContent className="py-10 text-center">
+            <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+            <p className="font-medium text-sm">Failed to load transfer history</p>
+            <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-4">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       ) : sorted.length === 0 ? (
         <PageEmptyState icon={History} message={filtersActive ? "No transfers match your filters" : "No transfers in the selected period"} />
       ) : (
@@ -423,6 +485,43 @@ function TransferHistoryPage() {
       )}
 
       <TransferDetailDialog transfer={selected} onClose={() => setSelected(null)} />
+    </div>
+  );
+}
+
+function HistoryTableSkeleton() {
+  return (
+    <div className="border rounded-md overflow-hidden bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className="h-9 w-[70px]">ID</TableHead>
+            <TableHead className="h-9 w-[110px]">Date</TableHead>
+            <TableHead className="h-9 w-[150px]">Direction</TableHead>
+            <TableHead className="h-9 w-[90px]">Type</TableHead>
+            <TableHead className="h-9">Items</TableHead>
+            <TableHead className="h-9 text-right w-[70px]">Qty</TableHead>
+            <TableHead className="h-9 w-[140px]">Status</TableHead>
+            <TableHead className="h-9 w-[130px]">Requested by</TableHead>
+            <TableHead className="h-9 w-[100px]">Updated</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-10" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-16" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-24" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-32" /></TableCell>
+              <TableCell className="py-2.5 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-20" /></TableCell>
+              <TableCell className="py-2.5"><Skeleton className="h-4 w-16" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

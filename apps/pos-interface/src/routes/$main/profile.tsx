@@ -46,7 +46,7 @@ function ProfilePage() {
 
   return (
     <div className="p-6 sm:p-8 lg:p-10">
-      <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+      <h1 className="text-xl font-bold tracking-tight">Profile</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Your account information
       </p>

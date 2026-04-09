@@ -366,7 +366,6 @@ function OrderManagementConsole({
                 orderId: order.id,
                 fields
             });
-            toast.success(`Order updated`);
         } catch (err) {
             toast.error(`Failed to update order`);
         }

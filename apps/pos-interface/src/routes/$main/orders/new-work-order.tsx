@@ -340,11 +340,7 @@ function NewWorkOrder() {
 
             // Link appointment to this order if started from an appointment
             if (id && linkedAppointment) {
-                updateAppointment(linkedAppointment.id, { order_id: id } as any).then((res) => {
-                    if (res.status === "success") {
-                        toast.success("Appointment linked to this order");
-                    }
-                });
+                updateAppointment(linkedAppointment.id, { order_id: id } as any);
             }
 
             // Move to next step (Measurements)
@@ -381,7 +377,6 @@ function NewWorkOrder() {
             try {
                 const response = await updateOrder({ customer_id: customer.id }, orderId);
                 if (response.status === "success") {
-                    toast.success("Order customer updated successfully");
                     handleProceed(0); // Auto-proceed to next step if order is active
                 } else {
                     toast.error("Failed to update order customer: " + response.message);
@@ -391,7 +386,6 @@ function NewWorkOrder() {
                 toast.error("An error occurred while updating order customer");
             }
         } else {
-            toast.success(`Customer loaded: ${customer.name}`);
             setCurrentStep(0);
         }
     }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep]);
@@ -506,7 +500,6 @@ function NewWorkOrder() {
                 // Navigate to review step if confirmed, otherwise to measurements
                 setCurrentStep(isConfirmed ? 4 : 1);
 
-                toast.success(`Order loaded successfully`);
             } else {
                 toast.error("Failed to load order details");
             }
@@ -524,7 +517,6 @@ function NewWorkOrder() {
         const formValues = mapCustomerToFormValues(customer);
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
-        toast.success(`Customer loaded: ${customer.name}`);
         setCurrentStep(0);
     }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep]);
 

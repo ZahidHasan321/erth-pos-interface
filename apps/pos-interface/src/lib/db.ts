@@ -7,10 +7,15 @@
  * of the app stays untouched.
  *
  * Current backend: Supabase (PostgREST + RPC via @supabase/supabase-js)
- * Session stored in cookies (Secure, SameSite=Strict) instead of localStorage.
+ *
+ * Uses createClient with default localStorage storage. The @supabase/ssr
+ * createBrowserClient was removed because it breaks Realtime postgres_changes
+ * subscriptions. Since both apps are pure SPAs (no server), cookie-based
+ * auth via document.cookie provides no XSS advantage over localStorage —
+ * truly secure HttpOnly cookies require server middleware.
  */
 
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -19,10 +24,4 @@ if (!url || !anonKey) {
   throw new Error('Missing database environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)');
 }
 
-export const db = createBrowserClient(url, anonKey, {
-  cookieOptions: {
-    secure: true,
-    sameSite: 'strict',
-    path: '/',
-  },
-});
+export const db = createClient(url, anonKey);

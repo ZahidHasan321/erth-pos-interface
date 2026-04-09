@@ -14,7 +14,7 @@ import {
   Home,
 } from "lucide-react";
 
-export const Route = createFileRoute("/(main)/completed")({
+export const Route = createFileRoute("/(main)/completed/")({
   component: CompletedOrdersPage,
   head: () => ({ meta: [{ title: "Completed Orders" }] }),
 });
@@ -84,13 +84,15 @@ function CompletedOrderTable({
 }) {
   return (
     <TableContainer>
-      <Table>
+      <Table className="w-full">
         <TableHeader>
           <TableRow className="bg-muted/40">
-            <TableHead className="w-[90px]">Order</TableHead>
-            <TableHead className="w-[180px]">Customer</TableHead>
-            <TableHead className="w-[80px]">Brand</TableHead>
-            <TableHead className="w-[140px] text-center">Delivery</TableHead>
+            <TableHead>Order</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Brand</TableHead>
+            <TableHead>Garments</TableHead>
+            <TableHead>Delivery</TableHead>
+            <TableHead className="text-right">Tags</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -125,23 +127,25 @@ function CompletedOrderTable({
                   {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
                 </div>
               </TableCell>
-              <TableCell className="align-middle text-center">
-                <div className="flex flex-col gap-1 items-center">
-                  <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                    <span className="text-xs text-muted-foreground">
-                      {group.delivery_date ? formatDate(group.delivery_date) : "—"}
-                    </span>
-                    {group.express && <ExpressBadge />}
-                    {group.home_delivery && <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {brovaCount > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovaCount}B</span>
-                    )}
-                    {finalCount > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finalCount}F</span>
-                    )}
-                  </div>
+              <TableCell>
+                <div className="flex items-center gap-1.5">
+                  {brovaCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovaCount}B</span>
+                  )}
+                  {finalCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finalCount}F</span>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm text-muted-foreground">
+                  {group.delivery_date ? formatDate(group.delivery_date) : "—"}
+                </span>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center gap-1.5 justify-end">
+                  {group.express && <ExpressBadge />}
+                  {group.home_delivery && <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>}
                 </div>
               </TableCell>
             </TableRow>
@@ -169,7 +173,7 @@ function CompletedOrdersPage() {
   const pagination = usePagination(orderGroups, 20);
 
   const handleOrderClick = (orderId: number) => {
-    navigate({ to: "/assigned/$orderId", params: { orderId: String(orderId) } });
+    navigate({ to: "/completed/$orderId", params: { orderId: String(orderId) } });
   };
 
   return (

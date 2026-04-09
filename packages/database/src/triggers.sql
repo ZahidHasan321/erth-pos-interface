@@ -2141,6 +2141,7 @@ DECLARE
   v_item JSONB;
   v_transfer_item RECORD;
   v_has_discrepancy BOOLEAN := false;
+  v_all_received BOOLEAN;
   v_received_qty DECIMAL;
   v_missing_qty DECIMAL;
 BEGIN
@@ -2149,8 +2150,9 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
   END IF;
-  IF v_transfer.status != 'dispatched' THEN
-    RAISE EXCEPTION 'Transfer % is not in dispatched status (current: %)', p_transfer_id, v_transfer.status;
+  -- Allow receiving from dispatched (first receive) or partially_received (subsequent item-wise receives)
+  IF v_transfer.status NOT IN ('dispatched', 'partially_received') THEN
+    RAISE EXCEPTION 'Transfer % is not receivable (current: %)', p_transfer_id, v_transfer.status;
   END IF;
 
   -- 2. Process each item
@@ -2163,6 +2165,11 @@ BEGIN
       WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Transfer item % does not belong to transfer %', v_item->>'id', p_transfer_id;
+    END IF;
+
+    -- Skip items that have already been received (prevent double-crediting stock)
+    IF v_transfer_item.received_qty IS NOT NULL THEN
+      CONTINUE;
     END IF;
 
     -- Guardrail: received cannot exceed dispatched. If it does, the caller is
@@ -2214,11 +2221,27 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 3. Update transfer status and record who received
+  -- 3. Determine final status: all items received → received, otherwise partially_received
+  SELECT NOT EXISTS (
+    SELECT 1 FROM transfer_request_items
+    WHERE transfer_request_id = p_transfer_id AND received_qty IS NULL
+  ) INTO v_all_received;
+
+  -- Check for discrepancies across ALL items (including previously received ones)
+  IF v_all_received THEN
+    SELECT EXISTS (
+      SELECT 1 FROM transfer_request_items
+      WHERE transfer_request_id = p_transfer_id AND missing_qty > 0
+    ) INTO v_has_discrepancy;
+  END IF;
+
   UPDATE transfer_requests
-  SET status = CASE WHEN v_has_discrepancy THEN 'partially_received' ELSE 'received' END,
-      received_at = NOW(),
-      received_by = p_received_by
+  SET status = CASE
+        WHEN v_all_received AND NOT v_has_discrepancy THEN 'received'
+        ELSE 'partially_received'
+      END,
+      received_at = COALESCE(v_transfer.received_at, NOW()),
+      received_by = COALESCE(v_transfer.received_by, p_received_by)
   WHERE id = p_transfer_id;
 
   RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
@@ -2286,9 +2309,10 @@ BEGIN
   -- `direction` = flow of items. The approver is the SOURCE (where items come from):
   --   shop_to_workshop  → items flow shop→workshop → shop is the source/approver (workshop requested)
   --   workshop_to_shop  → items flow workshop→shop → workshop is the source/approver (shop requested)
-  INSERT INTO notifications (department, type, title, body, metadata, expires_at)
+  INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
   VALUES (
     CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END,
+    NEW.brand,
     'transfer_requested',
     'New transfer request',
     format('New %s transfer request created', NEW.item_type),
@@ -2330,9 +2354,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  INSERT INTO notifications (department, type, title, body, metadata, expires_at)
+  INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
   VALUES (
     v_target_dept::department,
+    NEW.brand,
     'transfer_status_changed',
     format('Transfer request %s', NEW.status),
     format('Transfer request #%s has been %s', NEW.id, NEW.status),
@@ -2353,9 +2378,11 @@ CREATE TRIGGER transfer_status_notification
 
 -- Fetch notifications visible to the current user:
 -- department-scoped rows for their department + user-scoped rows addressed to them.
+DROP FUNCTION IF EXISTS get_my_notifications(INTEGER);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER);
-CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL, p_offset INTEGER DEFAULT 0)
+DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER, TEXT);
+CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL, p_offset INTEGER DEFAULT 0, p_brand TEXT DEFAULT NULL)
 RETURNS JSONB AS $$
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
   FROM (
@@ -2376,6 +2403,7 @@ RETURNS JSONB AS $$
       ON nr.notification_id = n.id
       AND nr.user_id = get_my_user_id()
     WHERE n.expires_at > now()
+      AND (p_brand IS NULL OR n.brand = p_brand::brand)
       AND (
         (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
         OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -2387,11 +2415,15 @@ RETURNS JSONB AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Get unread notification count (department + user-scoped combined)
-CREATE OR REPLACE FUNCTION get_unread_notification_count(p_department TEXT DEFAULT NULL)
+DROP FUNCTION IF EXISTS get_unread_notification_count();
+DROP FUNCTION IF EXISTS get_unread_notification_count(TEXT);
+DROP FUNCTION IF EXISTS get_unread_notification_count(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION get_unread_notification_count(p_department TEXT DEFAULT NULL, p_brand TEXT DEFAULT NULL)
 RETURNS INTEGER AS $$
   SELECT count(*)::integer
   FROM notifications n
   WHERE n.expires_at > now()
+    AND (p_brand IS NULL OR n.brand = p_brand::brand)
     AND (
       (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
       OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -2414,13 +2446,17 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Mark all visible notifications as read (department + user-scoped combined)
-CREATE OR REPLACE FUNCTION mark_all_notifications_read(p_department TEXT DEFAULT NULL)
+DROP FUNCTION IF EXISTS mark_all_notifications_read();
+DROP FUNCTION IF EXISTS mark_all_notifications_read(TEXT);
+DROP FUNCTION IF EXISTS mark_all_notifications_read(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION mark_all_notifications_read(p_department TEXT DEFAULT NULL, p_brand TEXT DEFAULT NULL)
 RETURNS void AS $$
 BEGIN
   INSERT INTO notification_reads (notification_id, user_id)
   SELECT n.id, get_my_user_id()
   FROM notifications n
   WHERE n.expires_at > now()
+    AND (p_brand IS NULL OR n.brand = p_brand::brand)
     AND (
       (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
       OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -2490,3 +2526,69 @@ SET trip_number = 0
 WHERE location = 'shop'
   AND piece_stage IN ('waiting_cut', 'waiting_for_acceptance')
   AND trip_number = 1;
+
+-- ========================================================================
+-- REALTIME: Add tables to supabase_realtime publication
+-- ========================================================================
+-- Supabase Realtime's postgres_changes channel only fires for tables that
+-- are members of the `supabase_realtime` publication. Without this, the
+-- frontend websocket receives zero events.
+--
+-- Using IF NOT EXISTS isn't supported for publication members, so we drop
+-- and re-add. This is idempotent and safe to run repeatedly.
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'garments', 'orders', 'work_orders', 'dispatch_log',
+    'order_shelf_items', 'transfer_requests', 'transfer_request_items',
+    'fabrics', 'shelf', 'accessories', 'notifications'
+  ]
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I', t);
+    EXCEPTION WHEN duplicate_object THEN
+      -- already a member, nothing to do
+      NULL;
+    END;
+  END LOOP;
+END $$;
+
+-- ── Notifications RLS ──────────────────────────────────────────────────
+-- Realtime requires RLS + SELECT policy to broadcast events. Without this
+-- notifications INSERT events are silently filtered out.
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "notifications_select" ON notifications;
+CREATE POLICY "notifications_select" ON notifications
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "notifications_insert" ON notifications;
+CREATE POLICY "notifications_insert" ON notifications
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+ALTER TABLE notification_reads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "notification_reads_select" ON notification_reads;
+CREATE POLICY "notification_reads_select" ON notification_reads
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "notification_reads_insert" ON notification_reads;
+CREATE POLICY "notification_reads_insert" ON notification_reads
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+-- ── Accessories RLS ────────────────────────────────────────────────────
+ALTER TABLE accessories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "accessories_select" ON accessories;
+CREATE POLICY "accessories_select" ON accessories
+    FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "accessories_insert" ON accessories;
+CREATE POLICY "accessories_insert" ON accessories
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "accessories_update" ON accessories;
+CREATE POLICY "accessories_update" ON accessories
+    FOR UPDATE USING (auth.uid() IS NOT NULL);

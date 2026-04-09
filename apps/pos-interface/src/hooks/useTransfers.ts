@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getTransferRequests,
+  getTransferBadgeCounts,
   createTransferRequest,
   approveTransferRequest,
   rejectTransferRequest,
@@ -14,6 +15,20 @@ import { getBrand } from "@/api/orders";
 import { useAuth } from "@/context/auth";
 
 const TRANSFER_KEY = "transfer-requests";
+export const TRANSFER_BADGE_KEY = "transfer-badge-counts";
+
+/**
+ * Lightweight count-only query for sidebar badges.
+ * Single request, no joins — just 3 parallel HEAD counts.
+ */
+export function useTransferBadgeCounts(enabled = true) {
+  const brand = getBrand();
+  return useQuery({
+    queryKey: [TRANSFER_BADGE_KEY, brand],
+    queryFn: () => getTransferBadgeCounts(brand),
+    enabled,
+  });
+}
 
 export function useTransferRequests(filters?: TransferFilters) {
   const brand = getBrand();

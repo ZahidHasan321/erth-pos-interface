@@ -1,6 +1,9 @@
+import { useState } from "react";
+import { ChevronDown, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { parseUtcTimestamp } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { TransferStatusBadge, ItemTypeBadge } from "./transfer-status-badge";
 import { TRANSFER_DIRECTION_LABELS } from "./transfer-constants";
 import type { TransferRequestWithItems } from "@/api/transfers";
@@ -94,6 +97,8 @@ const TONE_DOT: Record<TimelineEntry["tone"], string> = {
 };
 
 export function TransferDetailDialog({ transfer, onClose }: Props) {
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+
   if (!transfer) {
     return (
       <Dialog open={false} onOpenChange={(o) => !o && onClose()}>
@@ -103,16 +108,24 @@ export function TransferDetailDialog({ transfer, onClose }: Props) {
   }
 
   const timeline = buildTimeline(transfer);
-  const hasDiscrepancy = transfer.items.some((i) => i.discrepancy_note);
   const totalMissing = transfer.items.reduce(
     (sum, i) => sum + Number(i.missing_qty ?? 0),
     0,
   );
 
+  const toggleItem = (id: number) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <Dialog open={!!transfer} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 flex-wrap text-base">
             <span className="font-mono">#{transfer.id}</span>
             <span className="text-muted-foreground text-sm font-normal">
@@ -129,7 +142,7 @@ export function TransferDetailDialog({ transfer, onClose }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 pr-1">
           {/* Timeline */}
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Timeline</h3>
@@ -147,7 +160,7 @@ export function TransferDetailDialog({ transfer, onClose }: Props) {
                     </div>
                     {entry.user && <p className="text-xs text-muted-foreground">by {entry.user}</p>}
                     {entry.detail && (
-                      <p className={`text-xs mt-0.5 italic ${entry.tone === "danger" ? "text-red-600" : "text-muted-foreground"}`}>
+                      <p className={`text-xs mt-0.5 italic break-words ${entry.tone === "danger" ? "text-red-600" : "text-muted-foreground"}`}>
                         {entry.detail}
                       </p>
                     )}
@@ -161,59 +174,97 @@ export function TransferDetailDialog({ transfer, onClose }: Props) {
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Items ({transfer.items.length})
+              {totalMissing > 0 && (
+                <span className="ml-2 text-red-600 normal-case tracking-normal font-medium">
+                  — {totalMissing} missing
+                </span>
+              )}
             </h3>
-            <div className="border rounded-md overflow-x-auto">
+            <div className="border rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="h-8">Item</TableHead>
-                    <TableHead className="h-8 text-right w-20">Req</TableHead>
-                    <TableHead className="h-8 text-right w-20">Appr</TableHead>
-                    <TableHead className="h-8 text-right w-20">Disp</TableHead>
-                    <TableHead className="h-8 text-right w-20">Recv</TableHead>
-                    <TableHead className="h-8 text-right w-20">Missing</TableHead>
+                    <TableHead className="h-8 text-right w-16">Req</TableHead>
+                    <TableHead className="h-8 text-right w-16">Appr</TableHead>
+                    <TableHead className="h-8 text-right w-16">Disp</TableHead>
+                    <TableHead className="h-8 text-right w-16">Recv</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transfer.items.map((item) => {
-                    const req = Number(item.requested_qty);
                     const missing = Number(item.missing_qty ?? 0);
                     const hasMissing = missing > 0;
+                    const hasNote = !!item.discrepancy_note;
+                    const hasDetail = hasMissing || hasNote;
+                    const isExpanded = expandedItems.has(item.id);
+
                     return (
-                      <TableRow key={item.id}>
-                        <TableCell className="py-2">
-                          <div className="text-sm">{getItemName(item)}</div>
-                          {item.discrepancy_note && (
-                            <div className="text-xs text-orange-700 italic mt-0.5">⚠ {item.discrepancy_note}</div>
+                      <>
+                        <TableRow
+                          key={item.id}
+                          className={cn(
+                            hasDetail && "cursor-pointer hover:bg-muted/40",
+                            isExpanded && "border-b-0",
                           )}
-                        </TableCell>
-                        <TableCell className="py-2 text-right tabular-nums text-sm">{req}</TableCell>
-                        <TableCell className="py-2 text-right tabular-nums text-sm">
-                          {item.approved_qty ?? "—"}
-                        </TableCell>
-                        <TableCell className="py-2 text-right tabular-nums text-sm">
-                          {item.dispatched_qty ?? "—"}
-                        </TableCell>
-                        <TableCell className={`py-2 text-right tabular-nums text-sm ${hasMissing ? "text-orange-700 font-medium" : ""}`}>
-                          {item.received_qty ?? "—"}
-                        </TableCell>
-                        <TableCell className={`py-2 text-right tabular-nums text-sm ${hasMissing ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
-                          {hasMissing ? missing : "—"}
-                        </TableCell>
-                      </TableRow>
+                          onClick={hasDetail ? () => toggleItem(item.id) : undefined}
+                        >
+                          <TableCell className="py-2">
+                            <div className="flex items-center gap-1.5">
+                              {hasDetail && (
+                                <ChevronDown className={cn(
+                                  "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                                  isExpanded && "rotate-180",
+                                )} />
+                              )}
+                              <span className="text-sm truncate max-w-[180px]" title={getItemName(item)}>
+                                {getItemName(item)}
+                              </span>
+                              {hasMissing && !isExpanded && (
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2 text-right tabular-nums text-sm">
+                            {Number(item.requested_qty)}
+                          </TableCell>
+                          <TableCell className="py-2 text-right tabular-nums text-sm">
+                            {item.approved_qty ?? "—"}
+                          </TableCell>
+                          <TableCell className="py-2 text-right tabular-nums text-sm">
+                            {item.dispatched_qty ?? "—"}
+                          </TableCell>
+                          <TableCell className={cn(
+                            "py-2 text-right tabular-nums text-sm",
+                            hasMissing && "text-orange-700 font-medium",
+                          )}>
+                            {item.received_qty ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                        {hasDetail && isExpanded && (
+                          <TableRow key={`${item.id}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell colSpan={5} className="py-2 px-4 pl-9">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                {hasMissing && (
+                                  <span className="text-red-600 font-semibold">
+                                    {missing} unit(s) missing
+                                  </span>
+                                )}
+                                {hasNote && (
+                                  <span className="text-orange-700 italic">
+                                    {item.discrepancy_note}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     );
                   })}
                 </TableBody>
               </Table>
             </div>
-            {totalMissing > 0 && (
-              <p className="text-xs text-red-700 mt-2 font-medium">
-                {totalMissing} unit(s) lost in transit — not returned to source stock.
-              </p>
-            )}
-            {hasDiscrepancy && totalMissing === 0 && (
-              <p className="text-xs text-orange-700 mt-2">Discrepancies recorded on one or more items.</p>
-            )}
           </section>
         </div>
       </DialogContent>

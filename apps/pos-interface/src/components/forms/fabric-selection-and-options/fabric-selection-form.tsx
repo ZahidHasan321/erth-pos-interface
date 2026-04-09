@@ -535,7 +535,6 @@ export function FabricSelectionForm({
                 );
             }
         }
-        toast.success("Copied first row's fabric selections to all rows");
     };
 
     const copyGarmentToAll = () => {
@@ -563,7 +562,6 @@ export function FabricSelectionForm({
                 );
             }
         }
-        toast.success("Copied first row's style options to all rows");
     };
 
     return (

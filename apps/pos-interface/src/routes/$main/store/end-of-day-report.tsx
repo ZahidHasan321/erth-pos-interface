@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
-import { Printer, FileText, Loader2 } from "lucide-react";
+import { Printer, FileText, Loader2, AlertCircle, RefreshCw, ReceiptText } from "lucide-react";
 import { useEodReport } from "@/hooks/useCashier";
 import { getEodTransactions } from "@/api/cashier";
 import { EodDateFilter, type DatePreset } from "@/components/eod-report/eod-date-filter";
@@ -65,7 +67,7 @@ function EndOfDayReport() {
     const dateToStr = toDateStr(dateTo);
     const isMultiDay = dateFromStr !== dateToStr;
 
-    const { data: reportRes, isLoading: reportLoading } = useEodReport(dateFromStr, dateToStr);
+    const { data: reportRes, isLoading: reportLoading, isError: reportError, refetch: reportRefetch } = useEodReport(dateFromStr, dateToStr);
     const summary = reportRes?.data;
 
     function handlePresetChange(p: DatePreset) {
@@ -96,6 +98,8 @@ function EndOfDayReport() {
             const params = { summary, transactions: txRes.data, dateFrom: dateFromStr, dateTo: dateToStr };
             if (action === "view") await viewEodReport(params);
             else await printEodReport(params);
+        } catch (e: any) {
+            toast.error(e.message ?? `Failed to ${action} report`);
         } finally {
             setPrintLoading(false);
         }
@@ -106,7 +110,7 @@ function EndOfDayReport() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold font-[Marcellus]">End of Day Report</h1>
+                    <h1 className="text-xl font-bold tracking-tight">End of Day Report</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Financial summary and transaction history
                     </p>
@@ -142,7 +146,21 @@ function EndOfDayReport() {
             />
 
             {/* Content */}
-            {reportLoading ? (
+            {reportError ? (
+                <Card className="shadow-none rounded-xl border border-destructive/20">
+                    <CardContent className="py-10 text-center">
+                        <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
+                        <p className="font-medium text-sm">Failed to load report</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Something went wrong. Please try again.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => reportRefetch()} className="mt-4">
+                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                            Retry
+                        </Button>
+                    </CardContent>
+                </Card>
+            ) : reportLoading ? (
                 <div className="space-y-6">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {[...Array(4)].map((_, i) => (
@@ -156,6 +174,16 @@ function EndOfDayReport() {
                     <Skeleton className="h-72 rounded-lg" />
                     <Skeleton className="h-64 rounded-lg" />
                 </div>
+            ) : summary && summary.transaction_count === 0 && summary.order_count === 0 ? (
+                <Card className="shadow-none rounded-xl border">
+                    <CardContent className="py-14 text-center text-muted-foreground">
+                        <ReceiptText className="h-10 w-10 mx-auto mb-3 opacity-25" />
+                        <p className="font-medium">No transactions found</p>
+                        <p className="text-xs mt-1 opacity-70">
+                            There are no transactions for the selected date range
+                        </p>
+                    </CardContent>
+                </Card>
             ) : summary ? (
                 <div className="space-y-6">
                     {/* KPI Cards */}
