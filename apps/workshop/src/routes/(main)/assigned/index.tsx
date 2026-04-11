@@ -1,6 +1,6 @@
-import { Fragment, useState, useCallback } from "react";
+import { Fragment, useState, useCallback, useEffect } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useAssignedViewGarments } from "@/hooks/useWorkshopGarments";
+import { useAssignedOverview, useAssignedOrdersPage } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrandBadge, StageBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
@@ -9,8 +9,15 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { Badge } from "@repo/ui/badge";
-import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, parseUtcTimestamp, type OrderGroup } from "@/lib/utils";
+import { Pagination } from "@/components/shared/Pagination";
+import { cn, clickableProps, formatDate, parseUtcTimestamp } from "@/lib/utils";
+import type {
+  AssignedOrderRow,
+  AssignedPageGarment,
+  AssignedPipelineGarment,
+  AssignedQuickOrder,
+  AssignedChip,
+} from "@/api/garments";
 import {
   ClipboardList,
   ChevronDown,
@@ -30,7 +37,6 @@ import {
   Store,
   Truck,
 } from "lucide-react";
-import type { WorkshopGarment } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/")({
   component: AssignedPage,
@@ -43,77 +49,48 @@ export const Route = createFileRoute("/(main)/assigned/")({
 
 // ── Helpers ───────────────────────────────────────────────────
 
-const STAGE_ORDER: Record<string, number> = {
-  waiting_cut: 0, soaking: 1, cutting: 2, post_cutting: 3,
-  sewing: 4, finishing: 5, ironing: 6, quality_check: 7,
-  ready_for_dispatch: 8,
+function getDeliveryUrgency(daysToDelivery: number | null | undefined) {
+  if (daysToDelivery == null) return { cls: null, border: "", days: null };
+  if (daysToDelivery < 0) return { cls: "text-red-600 font-bold", border: "border-l-red-500", days: daysToDelivery };
+  if (daysToDelivery <= 2) return { cls: "text-orange-600 font-bold", border: "border-l-orange-400", days: daysToDelivery };
+  if (daysToDelivery <= 5) return { cls: "text-yellow-700", border: "border-l-yellow-400", days: daysToDelivery };
+  return { cls: "text-green-700", border: "border-l-green-400", days: daysToDelivery };
+}
+
+/** Client-side derivation of days-to-delivery from a delivery_date ISO string.
+ *  Mirrors the SQL CEIL((delivery_date - NOW())/86400) used by the RPC. */
+function daysUntil(date: string | null | undefined): number | null {
+  if (!date) return null;
+  return Math.ceil((parseUtcTimestamp(date).getTime() - Date.now()) / 86400000);
+}
+
+// Map the server-provided status label string to a pill color. Keep in sync
+// with assigned_order_status_label() in triggers.sql.
+const STATUS_LABEL_COLOR: Record<string, PillColor> = {
+  "At shop": "green",
+  "Ready for dispatch": "emerald",
+  "In transit to shop": "sky",
+  "Brovas in transit": "sky",
+  "Awaiting finals release": "violet",
+  "Awaiting brova trial": "teal",
+  "Finals in production": "blue",
+  "Brovas in production": "purple",
+  "In production": "zinc",
 };
 
-function getDeliveryUrgency(date?: string) {
-  if (!date) return { cls: null, border: "", days: null };
-  const diff = Math.ceil((parseUtcTimestamp(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (diff < 0) return { cls: "text-red-600 font-bold", border: "border-l-red-500", days: diff };
-  if (diff <= 2) return { cls: "text-orange-600 font-bold", border: "border-l-orange-400", days: diff };
-  if (diff <= 5) return { cls: "text-yellow-700", border: "border-l-yellow-400", days: diff };
-  return { cls: "text-green-700", border: "border-l-green-400", days: diff };
+function statusLabelColor(label: string): PillColor {
+  return STATUS_LABEL_COLOR[label] ?? "zinc";
 }
 
-function getOrderStatusLabel(
-  group: OrderGroup,
-  brovas: WorkshopGarment[],
-  finals: WorkshopGarment[],
-): { text: string; color: PillColor } {
-  const workshopSide = (g: WorkshopGarment) =>
-    g.location === "workshop" || g.location === "transit_to_workshop";
-  const atShop = (g: WorkshopGarment) => g.location === "shop";
+const WORKER_STAGE_KEY: Record<string, string> = {
+  soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
+  sewing: "sewer", finishing: "finisher", ironing: "ironer", quality_check: "quality_checker",
+};
 
-  const allAtShop = group.garments.every(atShop);
-  const workshopGarments = group.garments.filter((g) => g.location === "workshop");
-  const allWorkshopReady =
-    workshopGarments.length > 0 &&
-    workshopGarments.every((g) => g.piece_stage === "ready_for_dispatch");
-  const inTransitToShop = group.garments.filter((g) => g.location === "transit_to_shop");
-  const finalsActiveAtWorkshop = finals.filter((g) => workshopSide(g) && g.piece_stage !== "waiting_for_acceptance");
-  const finalsParked = finals.filter((g) => g.piece_stage === "waiting_for_acceptance");
-  const brovasAtWorkshop = brovas.filter(workshopSide);
-  const brovasAllAtShop = brovas.length > 0 && brovas.every(atShop);
-
-  const inTransitToShopBrovas = brovas.filter((g) => g.location === "transit_to_shop");
-  const onlyParkedAtWorkshop = workshopGarments.length > 0 &&
-    workshopGarments.every((g) => g.piece_stage === "waiting_for_acceptance");
-
-  if (allAtShop)
-    return { text: "At shop", color: "green" };
-  if (allWorkshopReady)
-    return { text: "Ready for dispatch", color: "emerald" };
-  if (inTransitToShop.length > 0 && (workshopGarments.length === 0 || onlyParkedAtWorkshop))
-    return { text: "In transit to shop", color: "sky" };
-  if (inTransitToShopBrovas.length > 0 && finalsActiveAtWorkshop.length === 0)
-    return { text: "Brovas in transit", color: "sky" };
-  if (brovasAllAtShop && finalsActiveAtWorkshop.length === 0) {
-    const anyAccepted = brovas.some((g) => g.acceptance_status === true);
-    if (finalsParked.length > 0 && anyAccepted)
-      return { text: "Awaiting finals release", color: "violet" };
-    if (finalsParked.length > 0)
-      return { text: "Awaiting brova trial", color: "teal" };
-    return { text: "At shop", color: "green" };
-  }
-  if (finalsActiveAtWorkshop.length > 0)
-    return { text: "Finals in production", color: "blue" };
-  if (brovasAtWorkshop.length > 0)
-    return { text: "Brovas in production", color: "purple" };
-  return { text: "In production", color: "zinc" };
-}
-
-function getWorkerName(garment: WorkshopGarment): string | null {
-  const plan = garment.production_plan as Record<string, string> | null;
-  if (!plan) return null;
-  const stage = garment.piece_stage;
-  const stageToKey: Record<string, string> = {
-    soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
-    sewing: "sewer", finishing: "finisher", ironing: "ironer", quality_check: "quality_checker",
-  };
-  return plan[stageToKey[stage ?? ""] ?? ""] || null;
+function getWorkerName(garment: { piece_stage: string | null; production_plan: Record<string, string> | null }): string | null {
+  if (!garment.production_plan) return null;
+  const key = WORKER_STAGE_KEY[garment.piece_stage ?? ""] ?? "";
+  return garment.production_plan[key] || null;
 }
 
 function getDaysLabel(days: number | null) {
@@ -123,53 +100,12 @@ function getDaysLabel(days: number | null) {
   return `${days}d left`;
 }
 
-// ── Order group classification helpers ───────────────────────
-
-function isActive(og: OrderGroup) {
-  return og.garments.some((g) => {
-    const so = STAGE_ORDER[g.piece_stage ?? ""] ?? 0;
-    return (so === 1 && g.start_time) || (so >= 2 && so <= 7);
-  });
-}
-
-function isReadyForDispatch(og: OrderGroup) {
-  const workshopGarments = og.garments.filter((g) => g.location === "workshop");
-  return workshopGarments.length > 0 && workshopGarments.every((g) => g.piece_stage === "ready_for_dispatch");
-}
-
-function isOverdue(og: OrderGroup) {
-  if (!og.delivery_date) return false;
-  return parseUtcTimestamp(og.delivery_date).getTime() < Date.now();
-}
-
-function isDueSoon(og: OrderGroup) {
-  if (!og.delivery_date) return false;
-  const diff = Math.ceil((parseUtcTimestamp(og.delivery_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  return diff >= 0 && diff <= 2;
-}
-
-function hasReturns(og: OrderGroup) {
-  return og.garments.some((g) => (g.trip_number ?? 1) > 1);
-}
-
-function isExpressOrder(og: OrderGroup) { return og.express; }
-function isHomeDelivery(og: OrderGroup) { return og.home_delivery; }
-function hasSoaking(og: OrderGroup) { return og.garments.some((g) => g.soaking); }
-
-// ── Sort: overdue first, then express, then delivery date asc ─
-
-function sortByUrgency(orders: OrderGroup[]) {
-  return [...orders].sort((a, b) => {
-    const now = Date.now();
-    const daysA = a.delivery_date ? Math.ceil((parseUtcTimestamp(a.delivery_date).getTime() - now) / 86400000) : 999;
-    const daysB = b.delivery_date ? Math.ceil((parseUtcTimestamp(b.delivery_date).getTime() - now) / 86400000) : 999;
-    const overdueA = daysA < 0 ? 1 : 0;
-    const overdueB = daysB < 0 ? 1 : 0;
-    if (overdueA !== overdueB) return overdueB - overdueA;
-    if (a.express && !b.express) return -1;
-    if (!a.express && b.express) return 1;
-    return daysA - daysB;
-  });
+/** Summary string used by mini order listings — type counts from slim row data. */
+function summarizeCounts(brovaCount: number, finalCount: number, total: number): string {
+  const parts: string[] = [];
+  if (brovaCount) parts.push(`${brovaCount} Brova`);
+  if (finalCount) parts.push(`${finalCount} Final${finalCount > 1 ? "s" : ""}`);
+  return parts.join(" + ") || `${total} garment${total !== 1 ? "s" : ""}`;
 }
 
 // ── Garment Location Pill ───────────────────────────────────
@@ -179,7 +115,7 @@ function sortByUrgency(orders: OrderGroup[]) {
  * actively in a workshop production stage — in that case the StageBadge already
  * communicates what's happening, so location would be redundant.
  */
-function getGarmentLocationDisplay(garment: WorkshopGarment): {
+function getGarmentLocationDisplay(garment: { location: string | null; piece_stage: string | null }): {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: PillColor;
@@ -203,7 +139,7 @@ function getGarmentLocationDisplay(garment: WorkshopGarment): {
 
 // ── Garment Mini Cards ──────────────────────────────────────
 
-function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
+function GarmentMiniCards({ garments }: { garments: AssignedPageGarment[] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
       {garments.map((g) => {
@@ -235,7 +171,7 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
                   </StatusPill>
                 )}
               </div>
-              <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} className="text-[10px] py-0 shrink-0" />
+              <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production ?? undefined} location={g.location} className="text-[10px] py-0 shrink-0" />
             </div>
 
             <div className="space-y-1">
@@ -268,10 +204,7 @@ function GarmentMiniCards({ garments }: { garments: WorkshopGarment[] }) {
 
 // ── Order Indicators ────────────────────────────────────────
 
-function OrderIndicators({ group }: { group: OrderGroup }) {
-  const hasReturns = group.garments.some((g) => (g.trip_number ?? 1) > 1);
-  const hasSoaking = group.garments.some((g) => g.soaking);
-
+function OrderIndicators({ group }: { group: AssignedOrderRow }) {
   return (
     <span className="inline-flex items-center gap-1 ml-1.5">
       {group.express && (
@@ -284,12 +217,12 @@ function OrderIndicators({ group }: { group: OrderGroup }) {
           <Home className="w-3.5 h-3.5" />
         </span>
       )}
-      {hasSoaking && (
+      {group.soaking && (
         <span className="text-sky-500" title="Soaking required">
           <Droplets className="w-3.5 h-3.5" />
         </span>
       )}
-      {hasReturns && (
+      {group.has_returns && (
         <span className="text-amber-500" title="Has returns">
           <RotateCcw className="w-3.5 h-3.5" />
         </span>
@@ -305,14 +238,13 @@ function AssignedOrderCard({
   expanded,
   onToggle,
 }: {
-  group: OrderGroup;
+  group: AssignedOrderRow;
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const urgency = getDeliveryUrgency(group.delivery_date);
-  const brovas = group.garments.filter((g) => g.garment_type === "brova");
-  const finals = group.garments.filter((g) => g.garment_type === "final");
-  const statusLabel = getOrderStatusLabel(group, brovas, finals);
+  const urgency = getDeliveryUrgency(daysUntil(group.delivery_date));
+  const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
+  const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
   const daysLabel = getDaysLabel(urgency.days);
 
   return (
@@ -337,7 +269,7 @@ function AssignedOrderCard({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <StatusPill color={statusLabel.color}>{statusLabel.text}</StatusPill>
+            <StatusPill color={statusLabelColor(group.status_label)}>{group.status_label}</StatusPill>
             <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 transition-transform", expanded && "rotate-180")} />
           </div>
         </div>
@@ -346,7 +278,7 @@ function AssignedOrderCard({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {group.invoice_number && <span>INV-{group.invoice_number}</span>}
             <span className="flex items-center gap-0.5">
-              <Package className="w-3 h-3" /> {garmentSummary(group.garments)}
+              <Package className="w-3 h-3" /> {summarizeCounts(brovaCount, finalCount, group.garments.length)}
             </span>
           </div>
 
@@ -394,7 +326,7 @@ function OrdersTable({
   expandedId,
   onToggle,
 }: {
-  orders: OrderGroup[];
+  orders: AssignedOrderRow[];
   expandedId: number | null;
   onToggle: (id: number) => void;
 }) {
@@ -413,10 +345,9 @@ function OrdersTable({
       </TableHeader>
       <TableBody>
         {orders.map((group) => {
-          const urgency = getDeliveryUrgency(group.delivery_date);
-          const brovas = group.garments.filter((g) => g.garment_type === "brova");
-          const finals = group.garments.filter((g) => g.garment_type === "final");
-          const statusLabel = getOrderStatusLabel(group, brovas, finals);
+          const urgency = getDeliveryUrgency(daysUntil(group.delivery_date));
+          const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
+          const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
           const isExpanded = expandedId === group.order_id;
           const daysLabel = getDaysLabel(urgency.days);
 
@@ -456,7 +387,7 @@ function OrdersTable({
                   </div>
                 </TableCell>
                 <TableCell className="py-2.5 px-2.5">
-                  <StatusPill color={statusLabel.color}>{statusLabel.text}</StatusPill>
+                  <StatusPill color={statusLabelColor(group.status_label)}>{group.status_label}</StatusPill>
                 </TableCell>
                 <TableCell className="py-2.5 px-2.5 text-xs align-middle text-center">
                   <div className="flex flex-col gap-1 items-center">
@@ -468,11 +399,11 @@ function OrdersTable({
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
                     <div className="flex items-center gap-1">
-                      {brovas.length > 0 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovas.length}B</span>
+                      {brovaCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovaCount}B</span>
                       )}
-                      {finals.length > 0 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finals.length}F</span>
+                      {finalCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finalCount}F</span>
                       )}
                     </div>
                   </div>
@@ -532,17 +463,20 @@ const PIPELINE_STAGES = [
   { key: "ready_for_dispatch", label: "Dispatch", color: "bg-green-500/80" },
 ] as const;
 
-function StagePipelineChart({ garments }: { garments: WorkshopGarment[] }) {
-  const workshopGarments = garments.filter(
-    (g) => g.location === "workshop" && g.piece_stage && g.piece_stage in STAGE_ORDER,
-  );
-  const stageCounts = new Map<string, number>();
-  for (const g of workshopGarments) {
+function StagePipelineChart({ garments }: { garments: AssignedPipelineGarment[] }) {
+  const [expandedStage, setExpandedStage] = useState<string | null>(null);
+
+  // Server already filters to location='workshop' + valid pipeline stages,
+  // but guard again in case the RPC shape changes.
+  const stageGarments = new Map<string, AssignedPipelineGarment[]>();
+  for (const g of garments) {
     const s = g.piece_stage ?? "";
-    stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
+    if (!s) continue;
+    if (!stageGarments.has(s)) stageGarments.set(s, []);
+    stageGarments.get(s)!.push(g);
   }
-  const max = Math.max(...PIPELINE_STAGES.map((s) => stageCounts.get(s.key) ?? 0), 1);
-  const total = workshopGarments.length;
+  const max = Math.max(...PIPELINE_STAGES.map((s) => (stageGarments.get(s.key)?.length ?? 0)), 1);
+  const total = garments.length;
   if (total === 0) return null;
 
   return (
@@ -558,27 +492,104 @@ function StagePipelineChart({ garments }: { garments: WorkshopGarment[] }) {
 
       <div className="space-y-1.5">
         {PIPELINE_STAGES.map((stage) => {
-          const count = stageCounts.get(stage.key) ?? 0;
+          const gs = stageGarments.get(stage.key) ?? [];
+          const count = gs.length;
           const pct = (count / max) * 100;
+          const isExpanded = expandedStage === stage.key;
+
           return (
-            <div key={stage.key} className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-muted-foreground w-16 text-right shrink-0 tabular-nums">
-                {stage.label}
-              </span>
-              <div className="flex-1 h-5 bg-muted/30 rounded overflow-hidden">
-                {count > 0 && (
-                  <div
-                    className={cn("h-full rounded transition-all", stage.color)}
-                    style={{ width: `${pct}%`, minWidth: "4px" }}
-                  />
+            <div key={stage.key}>
+              <div
+                className={cn(
+                  "flex items-center gap-2 rounded",
+                  count > 0 && "cursor-pointer hover:bg-muted/20 -mx-1 px-1 py-0.5 transition-colors",
                 )}
+                onClick={() => count > 0 && setExpandedStage(isExpanded ? null : stage.key)}
+              >
+                <span className="text-[11px] font-medium text-muted-foreground w-16 text-right shrink-0 tabular-nums">
+                  {stage.label}
+                </span>
+                <div className="flex-1 h-5 bg-muted/30 rounded overflow-hidden">
+                  {count > 0 && (
+                    <div
+                      className={cn("h-full rounded transition-all", stage.color)}
+                      style={{ width: `${pct}%`, minWidth: "4px" }}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0 w-8 justify-end">
+                  <span className={cn(
+                    "text-xs font-bold tabular-nums",
+                    count > 0 ? "text-foreground" : "text-muted-foreground/40",
+                  )}>
+                    {count}
+                  </span>
+                  {count > 0 && (
+                    <ChevronDown className={cn("w-3 h-3 text-muted-foreground/60 transition-transform", isExpanded && "rotate-180")} />
+                  )}
+                </div>
               </div>
-              <span className={cn(
-                "text-xs font-bold tabular-nums w-6 text-right shrink-0",
-                count > 0 ? "text-foreground" : "text-muted-foreground/40",
-              )}>
-                {count}
-              </span>
+
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows] duration-200 ease-out",
+                  isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                )}
+              >
+                <div className="overflow-hidden">
+                  <div className="pt-2 pb-1 pl-[74px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                      {gs.map((g) => {
+                        const tripNum = g.trip_number ?? 1;
+                        const worker = getWorkerName(g);
+                        return (
+                          <Link
+                            key={g.id}
+                            to="/assigned/garment/$garmentId"
+                            params={{ garmentId: g.id }}
+                            className={cn(
+                              "p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm hover:border-primary/40 hover:shadow-md transition-all",
+                              tripNum > 1 && "border-l-2 border-l-amber-400",
+                              g.express && "ring-1 ring-red-200",
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <GarmentTypeBadgeCompact type={g.garment_type ?? "final"} />
+                                <span className="font-mono font-bold text-xs text-muted-foreground">#{g.order_id}</span>
+                                {g.garment_id && (
+                                  <span className="font-mono text-[10px] text-muted-foreground/60 truncate">{g.garment_id}</span>
+                                )}
+                                {g.express && <Zap className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />}
+                                {tripNum > 1 && (
+                                  <StatusPill color="amber" className="shrink-0">Trip {tripNum}</StatusPill>
+                                )}
+                              </div>
+                              <ArrowRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+                            </div>
+                            <div className="space-y-1">
+                              {g.customer_name && (
+                                <div className="text-xs font-semibold text-foreground truncate">{g.customer_name}</div>
+                              )}
+                              {worker && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground text-[10px] uppercase font-bold">Worker</span>
+                                  <span className="text-xs font-medium truncate max-w-[100px]">{worker}</span>
+                                </div>
+                              )}
+                              {g.style_name && (
+                                <div className="pt-1 border-t border-border/40">
+                                  <span className="text-xs font-medium text-primary leading-tight">{g.style_name}</span>
+                                </div>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           );
         })}
@@ -595,6 +606,7 @@ function QuickOrderList({
   iconBg,
   iconColor,
   orders,
+  totalCount,
   limit,
   onViewAll,
   renderRight,
@@ -603,10 +615,11 @@ function QuickOrderList({
   icon: React.ComponentType<{ className?: string }>;
   iconBg: string;
   iconColor: string;
-  orders: OrderGroup[];
+  orders: AssignedQuickOrder[];
+  totalCount: number;
   limit: number;
   onViewAll?: () => void;
-  renderRight: (og: OrderGroup) => React.ReactNode;
+  renderRight: (og: AssignedQuickOrder) => React.ReactNode;
 }) {
   if (orders.length === 0) return null;
   const shown = orders.slice(0, limit);
@@ -621,9 +634,9 @@ function QuickOrderList({
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
             {title}
           </h3>
-          <StatusPill color="zinc" className="ml-0.5">{orders.length}</StatusPill>
+          <StatusPill color="zinc" className="ml-0.5">{totalCount}</StatusPill>
         </div>
-        {orders.length > limit && onViewAll && (
+        {totalCount > limit && onViewAll && (
           <button
             onClick={onViewAll}
             className="text-xs font-semibold text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
@@ -646,7 +659,7 @@ function QuickOrderList({
               {og.express && <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />}
               <span className="text-sm text-foreground truncate">{og.customer_name}</span>
               <span className="text-xs text-muted-foreground shrink-0">
-                {garmentSummary(og.garments)}
+                {summarizeCounts(og.brova_count, og.final_count, og.garments_count)}
               </span>
             </div>
             {renderRight(og)}
@@ -660,14 +673,14 @@ function QuickOrderList({
 // ── Overview Dashboard ───────────────────────────────────────
 
 function OverviewDashboard({
-  orderGroups,
-  allGarments,
-  counts,
+  stats,
+  quickLists,
+  pipelineGarments,
   onNavigate,
 }: {
-  orderGroups: OrderGroup[];
-  allGarments: WorkshopGarment[];
-  counts: { overdue: number; dueSoon: number; active: number; ready: number; returns: number; total: number; atShop: number; inTransit: number };
+  stats: { overdue: number; due_soon: number; active: number; ready: number; returns: number; total: number; at_shop: number; in_transit: number };
+  quickLists: { overdue: AssignedQuickOrder[]; due_soon: AssignedQuickOrder[]; ready: AssignedQuickOrder[]; returns: AssignedQuickOrder[] };
+  pipelineGarments: AssignedPipelineGarment[];
   onNavigate: (tab: string) => void;
 }) {
   const cards: {
@@ -677,12 +690,12 @@ function OverviewDashboard({
     icon: React.ComponentType<{ className?: string }>;
     tone: "urgent" | "warning" | "info" | "success" | "accent" | "neutral";
   }[] = [
-    { key: "attention", label: "Overdue",           count: counts.overdue, icon: AlertTriangle, tone: "urgent" },
-    { key: "attention", label: "Due Soon",          count: counts.dueSoon, icon: Clock,         tone: "warning" },
-    { key: "production",label: "In Production",     count: counts.active,  icon: Activity,      tone: "info" },
-    { key: "ready",     label: "Ready to Dispatch", count: counts.ready,   icon: CheckCircle2,  tone: "success" },
-    { key: "attention", label: "Returns",           count: counts.returns, icon: RotateCcw,     tone: "accent" },
-    { key: "all",       label: "Total Orders",      count: counts.total,   icon: List,          tone: "neutral" },
+    { key: "attention", label: "Overdue",           count: stats.overdue,   icon: AlertTriangle, tone: "urgent" },
+    { key: "attention", label: "Due Soon",          count: stats.due_soon,  icon: Clock,         tone: "warning" },
+    { key: "production",label: "In Production",     count: stats.active,    icon: Activity,      tone: "info" },
+    { key: "ready",     label: "Ready to Dispatch", count: stats.ready,     icon: CheckCircle2,  tone: "success" },
+    { key: "attention", label: "Returns",           count: stats.returns,   icon: RotateCcw,     tone: "accent" },
+    { key: "all",       label: "Total Orders",      count: stats.total,     icon: List,          tone: "neutral" },
   ];
 
   const toneStyles: Record<typeof cards[number]["tone"], { iconBg: string; iconColor: string; accentBar: string }> = {
@@ -693,11 +706,6 @@ function OverviewDashboard({
     accent:  { iconBg: "bg-amber-50",   iconColor: "text-amber-600",   accentBar: "bg-amber-500" },
     neutral: { iconBg: "bg-muted",      iconColor: "text-muted-foreground", accentBar: "bg-border" },
   };
-
-  const overdueOrders = orderGroups.filter(isOverdue);
-  const dueSoonOrders = orderGroups.filter(isDueSoon);
-  const readyOrders = orderGroups.filter(isReadyForDispatch);
-  const returningOrders = orderGroups.filter(hasReturns);
 
   return (
     <div className="space-y-5">
@@ -736,26 +744,26 @@ function OverviewDashboard({
       </div>
 
       {/* Stage pipeline visualization */}
-      <StagePipelineChart garments={allGarments} />
+      <StagePipelineChart garments={pipelineGarments} />
 
       {/* Location summary — compact inline strip */}
-      {(counts.atShop > 0 || counts.inTransit > 0) && (
+      {(stats.at_shop > 0 || stats.in_transit > 0) && (
         <div className="flex items-center gap-3 flex-wrap text-xs">
           <span className="font-bold uppercase tracking-wider text-muted-foreground">Location:</span>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold">
             <Package className="w-3 h-3" />
-            {allGarments.filter((g) => g.location === "workshop").length} at workshop
+            {pipelineGarments.length} at workshop
           </span>
-          {counts.atShop > 0 && (
+          {stats.at_shop > 0 && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 font-semibold">
               <Store className="w-3 h-3" />
-              {counts.atShop} at shop
+              {stats.at_shop} at shop
             </span>
           )}
-          {counts.inTransit > 0 && (
+          {stats.in_transit > 0 && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 font-semibold">
               <Truck className="w-3 h-3" />
-              {counts.inTransit} in transit
+              {stats.in_transit} in transit
             </span>
           )}
         </div>
@@ -768,11 +776,12 @@ function OverviewDashboard({
           icon={AlertTriangle}
           iconBg="bg-red-50"
           iconColor="text-red-600"
-          orders={overdueOrders}
+          orders={quickLists.overdue}
+          totalCount={stats.overdue}
           limit={5}
           onViewAll={() => onNavigate("attention")}
           renderRight={(og) => {
-            const u = getDeliveryUrgency(og.delivery_date);
+            const u = getDeliveryUrgency(og.days_to_delivery);
             return <span className={cn("text-xs font-bold shrink-0 tabular-nums", u.cls)}>{getDaysLabel(u.days)}</span>;
           }}
         />
@@ -781,11 +790,12 @@ function OverviewDashboard({
           icon={Clock}
           iconBg="bg-orange-50"
           iconColor="text-orange-600"
-          orders={dueSoonOrders}
+          orders={quickLists.due_soon}
+          totalCount={stats.due_soon}
           limit={5}
           onViewAll={() => onNavigate("attention")}
           renderRight={(og) => {
-            const u = getDeliveryUrgency(og.delivery_date);
+            const u = getDeliveryUrgency(og.days_to_delivery);
             return <span className={cn("text-xs font-bold shrink-0 tabular-nums", u.cls)}>{getDaysLabel(u.days)}</span>;
           }}
         />
@@ -798,36 +808,31 @@ function OverviewDashboard({
           icon={CheckCircle2}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
-          orders={readyOrders}
+          orders={quickLists.ready}
+          totalCount={stats.ready}
           limit={5}
           onViewAll={() => onNavigate("ready")}
-          renderRight={(og) => {
-            const brovas = og.garments.filter((g) => g.garment_type === "brova");
-            const finals = og.garments.filter((g) => g.garment_type === "final");
-            return (
-              <div className="flex items-center gap-1 shrink-0">
-                {brovas.length > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{brovas.length}B</span>}
-                {finals.length > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{finals.length}F</span>}
-              </div>
-            );
-          }}
+          renderRight={(og) => (
+            <div className="flex items-center gap-1 shrink-0">
+              {og.brova_count > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{og.brova_count}B</span>}
+              {og.final_count > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{og.final_count}F</span>}
+            </div>
+          )}
         />
         <QuickOrderList
           title="Returns"
           icon={RotateCcw}
           iconBg="bg-amber-50"
           iconColor="text-amber-600"
-          orders={returningOrders}
+          orders={quickLists.returns}
+          totalCount={stats.returns}
           limit={5}
           onViewAll={() => onNavigate("attention")}
-          renderRight={(og) => {
-            const maxTrip = Math.max(...og.garments.map((g) => g.trip_number ?? 1));
-            return (
-              <StatusPill color="amber">
-                Trip {maxTrip}
-              </StatusPill>
-            );
-          }}
+          renderRight={(og) => (
+            <StatusPill color="amber">
+              Trip {og.max_trip ?? 1}
+            </StatusPill>
+          )}
         />
       </div>
     </div>
@@ -896,19 +901,27 @@ function FilterChips({
 
 function OrderList({
   orders,
+  totalCount,
+  page,
+  pageSize,
+  onPageChange,
   isMobile,
   emptyText,
 }: {
-  orders: OrderGroup[];
+  orders: AssignedOrderRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
   isMobile: boolean;
   emptyText?: string;
 }) {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const toggleExpanded = (id: number) =>
     setExpandedOrderId((prev) => (prev === id ? null : id));
-  const pagination = usePagination(orders, 20);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  if (orders.length === 0) {
+  if (totalCount === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-muted/60 mb-4">
@@ -924,7 +937,7 @@ function OrderList({
     <>
       {isMobile ? (
         <div className="space-y-2">
-          {pagination.paged.map((group) => (
+          {orders.map((group) => (
             <AssignedOrderCard
               key={group.order_id}
               group={group}
@@ -936,18 +949,18 @@ function OrderList({
       ) : (
         <div className="rounded-xl border border-border shadow-sm overflow-x-auto bg-card py-0 gap-0">
           <OrdersTable
-            orders={pagination.paged}
+            orders={orders}
             expandedId={expandedOrderId}
             onToggle={toggleExpanded}
           />
         </div>
       )}
       <Pagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        onPageChange={pagination.setPage}
-        totalItems={pagination.totalItems}
-        pageSize={pagination.pageSize}
+        page={page}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        totalItems={totalCount}
+        pageSize={pageSize}
       />
     </>
   );
@@ -955,20 +968,41 @@ function OrderList({
 
 // ── Page ─────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["overview", "production", "ready", "attention", "all"]);
-const VALID_FILTERS = new Set(["express", "delivery", "soaking"]);
+const LIST_TABS = ["production", "ready", "attention", "all"] as const;
+type ListTab = typeof LIST_TABS[number];
+const ALL_TABS = ["overview", ...LIST_TABS] as const;
+const VALID_TABS = new Set<string>(ALL_TABS);
+const VALID_FILTERS = new Set<AssignedChip>(["express", "delivery", "soaking"]);
+const PAGE_SIZE = 20;
 
 function AssignedPage() {
-  const { data: all = [], isLoading } = useAssignedViewGarments();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { tab: searchTab, filter: searchFilter } = Route.useSearch();
 
   // Derive state from URL
-  const primaryTab = VALID_TABS.has(searchTab ?? "") ? searchTab! : "overview";
-  const chipFilters = new Set(
-    (searchFilter ?? "").split(",").filter((f) => VALID_FILTERS.has(f)),
-  );
+  const primaryTab = (VALID_TABS.has(searchTab ?? "") ? searchTab! : "overview") as typeof ALL_TABS[number];
+  const chipFilters: AssignedChip[] = (searchFilter ?? "")
+    .split(",")
+    .filter((f): f is AssignedChip => VALID_FILTERS.has(f as AssignedChip));
+  const chipSet = new Set<AssignedChip>(chipFilters);
+  const isListTab = primaryTab !== "overview";
+  const activeListTab: ListTab = isListTab ? (primaryTab as ListTab) : "all";
+
+  const [page, setPage] = useState(1);
+  // Reset page whenever the tab or chip selection changes so the user doesn't
+  // land on an empty page after narrowing the filter.
+  useEffect(() => {
+    setPage(1);
+  }, [primaryTab, searchFilter]);
+
+  const overviewQuery = useAssignedOverview();
+  const pageQuery = useAssignedOrdersPage({
+    tab: activeListTab,
+    chips: chipFilters,
+    page,
+    pageSize: PAGE_SIZE,
+  });
 
   const setTab = useCallback((tab: string, filter?: string) => {
     navigate({
@@ -982,75 +1016,54 @@ function AssignedPage() {
     setTab(tab);
   }, [setTab]);
 
-  const orderGroups = sortByUrgency(groupByOrder(all));
-
-  // Classify order groups
-  const overdueOrders = orderGroups.filter(isOverdue);
-  const dueSoonOrders = orderGroups.filter(isDueSoon);
-  const activeOrders = orderGroups.filter(isActive);
-  const readyOrders = orderGroups.filter(isReadyForDispatch);
-  const returningOrders = orderGroups.filter(hasReturns);
-
   const toggleChip = useCallback((key: string) => {
-    const next = new Set(chipFilters);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
+    const next = new Set(chipSet);
+    const chip = key as AssignedChip;
+    if (next.has(chip)) next.delete(chip);
+    else next.add(chip);
     const filterStr = Array.from(next).join(",");
     setTab(primaryTab, filterStr);
-  }, [chipFilters, primaryTab, setTab]);
+  }, [chipSet, primaryTab, setTab]);
 
   const resetChips = useCallback(() => {
     setTab(primaryTab);
   }, [primaryTab, setTab]);
 
-  // Get base orders for current primary tab
-  const baseOrders = (() => {
-    switch (primaryTab) {
-      case "production": return activeOrders;
-      case "ready": return readyOrders;
-      case "attention": return sortByUrgency([
-        ...new Map([
-          ...overdueOrders,
-          ...dueSoonOrders,
-          ...returningOrders,
-        ].map((o) => [o.order_id, o])).values(),
-      ]);
-      case "all": return orderGroups;
-      default: return orderGroups;
-    }
-  })();
+  const stats = overviewQuery.data?.stats;
+  const quickLists = overviewQuery.data?.quick_lists;
+  const pipelineGarments = overviewQuery.data?.pipeline_garments ?? [];
+  const pageRows = pageQuery.data?.rows ?? [];
+  const pageTotalCount = pageQuery.data?.totalCount ?? 0;
+  const chipCounts = pageQuery.data?.chipCounts ?? { express: 0, delivery: 0, soaking: 0 };
 
-  // Chip counts reflect the current tab's base orders, not all orders
   const chipOptions = [
-    { key: "express", label: "Express", icon: Zap, count: baseOrders.filter(isExpressOrder).length },
-    { key: "delivery", label: "Delivery", icon: Home, count: baseOrders.filter(isHomeDelivery).length },
-    { key: "soaking", label: "Soaking", icon: Droplets, count: baseOrders.filter(hasSoaking).length },
+    { key: "express",  label: "Express",  icon: Zap,      count: chipCounts.express  },
+    { key: "delivery", label: "Delivery", icon: Home,     count: chipCounts.delivery },
+    { key: "soaking",  label: "Soaking",  icon: Droplets, count: chipCounts.soaking  },
   ];
-
-  // Apply chip filters
-  const filteredOrders = chipFilters.size === 0
-    ? baseOrders
-    : baseOrders.filter((og) => {
-      if (chipFilters.has("express") && !og.express) return false;
-      if (chipFilters.has("delivery") && !og.home_delivery) return false;
-      if (chipFilters.has("soaking") && !og.garments.some((g) => g.soaking)) return false;
-      return true;
-    });
 
   const primaryTabs = [
     { key: "overview", label: "Overview", icon: LayoutDashboard },
-    { key: "production", label: "In Production", icon: Activity, count: activeOrders.length, badgeCls: "bg-blue-100 text-blue-700" },
-    { key: "ready", label: "Ready", icon: CheckCircle2, count: readyOrders.length, badgeCls: "bg-emerald-100 text-emerald-700" },
-    { key: "attention", label: "Attention", icon: AlertTriangle, count: overdueOrders.length + dueSoonOrders.length, badgeCls: overdueOrders.length > 0 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700" },
-    { key: "all", label: "All Orders", icon: List, count: orderGroups.length },
+    { key: "production", label: "In Production", icon: Activity,      count: stats?.active,                badgeCls: "bg-blue-100 text-blue-700" },
+    { key: "ready",      label: "Ready",         icon: CheckCircle2,  count: stats?.ready,                 badgeCls: "bg-emerald-100 text-emerald-700" },
+    { key: "attention",  label: "Attention",     icon: AlertTriangle, count: (stats?.overdue ?? 0) + (stats?.due_soon ?? 0), badgeCls: (stats?.overdue ?? 0) > 0 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700" },
+    { key: "all",        label: "All Orders",    icon: List,          count: stats?.total },
   ];
+
+  const isInitialLoading =
+    (primaryTab === "overview" && overviewQuery.isLoading) ||
+    (isListTab && pageQuery.isLoading && pageRows.length === 0);
+
+  const subtitle = stats
+    ? `${stats.total} order${stats.total !== 1 ? "s" : ""} in production${stats.returns > 0 ? ` · ${stats.returns} with returns` : ""}`
+    : "Loading…";
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
       <PageHeader
         icon={ClipboardList}
         title="Production Tracker"
-        subtitle={`${all.length} garment${all.length !== 1 ? "s" : ""} across ${orderGroups.length} order${orderGroups.length !== 1 ? "s" : ""}${returningOrders.length > 0 ? ` · ${returningOrders.length} with returns` : ""}`}
+        subtitle={subtitle}
       />
 
       <Tabs value={primaryTab} onValueChange={(v) => setTab(v)}>
@@ -1071,7 +1084,7 @@ function AssignedPage() {
           })}
         </TabsList>
 
-        {isLoading ? (
+        {isInitialLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="bg-card border rounded-xl border-l-4 border-l-border p-3 space-y-2.5">
@@ -1097,30 +1110,27 @@ function AssignedPage() {
           <>
             {/* Overview tab */}
             <TabsContent value="overview">
-              <OverviewDashboard
-                orderGroups={orderGroups}
-                allGarments={all}
-                counts={{
-                  overdue: overdueOrders.length,
-                  dueSoon: dueSoonOrders.length,
-                  active: activeOrders.length,
-                  ready: readyOrders.length,
-                  returns: returningOrders.length,
-                  total: orderGroups.length,
-                  atShop: all.filter((g) => g.location === "shop").length,
-                  inTransit: all.filter((g) => g.location === "transit_to_shop" || g.location === "transit_to_workshop").length,
-                }}
-                onNavigate={setPrimaryTab}
-              />
+              {stats && quickLists && (
+                <OverviewDashboard
+                  stats={stats}
+                  quickLists={quickLists}
+                  pipelineGarments={pipelineGarments}
+                  onNavigate={setPrimaryTab}
+                />
+              )}
             </TabsContent>
 
             {/* List tabs */}
-            {["production", "ready", "attention", "all"].map((tabKey) => (
+            {LIST_TABS.map((tabKey) => (
               <TabsContent key={tabKey} value={tabKey}>
                 <div className="space-y-3">
-                  <FilterChips filters={chipOptions} active={chipFilters} onToggle={toggleChip} onReset={resetChips} />
+                  <FilterChips filters={chipOptions} active={chipSet} onToggle={toggleChip} onReset={resetChips} />
                   <OrderList
-                    orders={filteredOrders}
+                    orders={pageRows}
+                    totalCount={pageTotalCount}
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setPage}
                     isMobile={isMobile}
                     emptyText={
                       tabKey === "production" ? "No orders in production"

@@ -139,8 +139,8 @@ function RequestDeliveryPage() {
       setShelfSelections(new Map());
       setAccessorySelections(new Map());
       setNotes("");
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to create request");
+    } catch (err: any) {
+      toast.error(`Could not create delivery request: ${err?.message ?? String(err)}`);
     }
   };
 

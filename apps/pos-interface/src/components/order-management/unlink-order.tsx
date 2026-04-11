@@ -117,9 +117,9 @@ export default function UnlinkOrder() {
 
             queryClient.invalidateQueries({ queryKey: ["linked-orders"] });
             setShowSuccess(true);
-        } catch (error) {
-            console.error("Unlink failed", error);
-            toast.error("Failed to unlink order.");
+        } catch (err) {
+            console.error("Unlink failed", err);
+            toast.error(`Could not unlink order: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setIsSubmitting(false);
         }

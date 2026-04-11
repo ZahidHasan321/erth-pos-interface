@@ -91,7 +91,8 @@ function AlterationsPage() {
   const { data: garments = [], isLoading } = useQuery({
     queryKey: ["alteration-garments", getBrand()],
     queryFn: getAlterationGarments,
-    staleTime: 30_000,
+    // Realtime invalidates on garment changes (see useRealtimeInvalidation).
+    staleTime: 1000 * 60 * 5,
   });
 
   const sendMut = useMutation({
@@ -99,7 +100,7 @@ function AlterationsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alteration-garments"] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Error"),
+    onError: (err) => toast.error(`Could not send garment to workshop: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   // Group by order

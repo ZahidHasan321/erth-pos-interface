@@ -67,7 +67,7 @@ function LoginPage() {
     try {
       await auth.login({ username, pin });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Login failed");
+      toast.error(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
       setLoading(false);
     }
   };

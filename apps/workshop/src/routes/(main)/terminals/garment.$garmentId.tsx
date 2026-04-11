@@ -9,8 +9,6 @@ import {
 } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import {
-  GarmentHeader,
-  WorkerHistorySection,
   NotesSection,
   HISTORY_KEY_MAP,
 } from "@/components/shared/GarmentDetailSections";
@@ -39,7 +37,6 @@ import {
   STAGE_NEXT,
   PRODUCTION_STAGES,
 } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   ArrowRight,
@@ -148,7 +145,6 @@ function TerminalGarmentPage() {
     PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
   const isQC = stage === "quality_check";
   const isProductionStage = PRODUCTION_STAGES.includes(stage as any);
-  const showFloatingBar = isProductionStage && !isQC;
 
   const handlePrint = () => {
     const className = "terminal-printing";
@@ -166,12 +162,7 @@ function TerminalGarmentPage() {
   };
 
   return (
-    <div
-      className={cn(
-        "p-3 sm:p-4 max-w-7xl mx-auto",
-        showFloatingBar ? "pb-24" : "pb-8",
-      )}
-    >
+    <div className="p-3 sm:p-4 max-w-7xl mx-auto pb-8">
       <div className="terminal-screen-content">
         <div className="mb-3 flex items-center justify-between gap-2">
           <button
@@ -188,33 +179,24 @@ function TerminalGarmentPage() {
           </Button>
         </div>
 
-        <GarmentHeader garment={garment} />
+        <DishdashaOverlay
+          garment={garment}
+          measurement={garment.measurement}
+        />
 
-        {/* Main content: overlay + production team + QC */}
-        <div className="mt-3 flex flex-col lg:flex-row gap-3 items-start">
-          {/* Dishdasha spec sheet */}
-          <div className="lg:w-[55%] shrink-0">
-            <DishdashaOverlay
-              garment={garment}
-              measurement={garment.measurement}
-            />
+        {garment.notes && (
+          <div className="mt-3">
+            <NotesSection notes={garment.notes} />
           </div>
+        )}
 
-          {/* Production team + notes */}
-          <div className="flex-1 min-w-0 space-y-3">
-            <WorkerHistorySection garment={garment} />
-            {garment.notes && <NotesSection notes={garment.notes} />}
-          </div>
-
-          {/* QC panel (only on quality_check stage) */}
-          {isQC && (
-            <div className="lg:w-[320px] shrink-0 lg:sticky lg:top-4 lg:self-start">
-              <QCActions garment={garment} />
-            </div>
-          )}
+        <div className="mt-4">
+          {isQC ? (
+            <QCActions garment={garment} />
+          ) : isProductionStage ? (
+            <TerminalActions garment={garment} />
+          ) : null}
         </div>
-
-        {showFloatingBar && <TerminalActions garment={garment} />}
       </div>
 
       <div className="terminal-print-only hidden" aria-hidden="true">
@@ -284,14 +266,14 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
       });
       router.history.back();
     } catch (err: any) {
-      toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`);
+      toast.error(`Could not advance garment to next stage: ${err?.message ?? (String(err) || "no error message")}`);
     }
   };
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-3">
+      <div className="bg-card border rounded-xl shadow-sm p-4">
+        <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
             {worker && !workerOverride ? (
               <button

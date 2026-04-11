@@ -239,9 +239,9 @@ export function CustomerMeasurementsForm({
           toast.error(response.message || "Failed to create measurement.");
         }
       },
-      onError: (e: Error) => {
-        console.error("API Error:", e);
-        toast.error("Error creating measurement.");
+      onError: (err: Error) => {
+        console.error("API Error:", err);
+        toast.error(`Could not create measurement: ${err instanceof Error ? err.message : String(err)}`);
       },
     });
 
@@ -266,9 +266,9 @@ export function CustomerMeasurementsForm({
           toast.error(response.message || "Failed to update measurement.");
         }
       },
-      onError: (e: Error) => {
-        console.error("API Error:", e);
-        toast.error("Error updating measurement.");
+      onError: (err: Error) => {
+        console.error("API Error:", err);
+        toast.error(`Could not update measurement: ${err instanceof Error ? err.message : String(err)}`);
       },
     });
 

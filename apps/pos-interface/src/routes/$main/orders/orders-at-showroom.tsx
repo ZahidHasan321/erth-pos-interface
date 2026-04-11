@@ -479,6 +479,11 @@ function RouteComponent() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
 
+  // Pagination is server-driven — lifted out of the table so the hook can
+  // pass page/pageSize into the RPC.
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+
   // Initial Filter State — seed from URL search params if present
   const [filters, setFilters] = useState<FilterState>({
     searchId: "",
@@ -497,68 +502,58 @@ function RouteComponent() {
     }
   }, [searchStage]);
 
-  const { data: orders = [], isLoading, isError, error } = useShowroomOrders();
+  // Any filter change resets pagination to the first page.
+  useEffect(() => {
+    setPageIndex(0);
+  }, [
+    filters.searchId,
+    filters.customer,
+    filters.stage,
+    filters.reminderStatuses,
+    filters.deliveryDateStart,
+    filters.deliveryDateEnd,
+    filters.sortBy,
+  ]);
 
-  // Keep selectedOrder in sync with fresh query data
+  const { data, isLoading, isError, error, isFetching } = useShowroomOrders({
+    page: pageIndex + 1,
+    pageSize,
+    searchId: filters.searchId,
+    customer: filters.customer,
+    stage: filters.stage,
+    reminderStatuses: filters.reminderStatuses,
+    deliveryDateStart: filters.deliveryDateStart,
+    deliveryDateEnd: filters.deliveryDateEnd,
+    sortBy: filters.sortBy,
+  });
+
+  const orders = data?.rows ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const rpcStats = data?.stats;
+
+  // Keep selectedOrder in sync with fresh query data — but only when the
+  // selected order is on the current page. If it fell off, keep the existing
+  // snapshot so the console doesn't clear on pagination.
   useEffect(() => {
     if (selectedOrder && orders.length > 0) {
-      const fresh = orders.find(o => o.orderId === selectedOrder.orderId);
-      if (fresh) {
-        setSelectedOrder(fresh);
-      } else {
-        setSelectedOrder(null);
-      }
+      const fresh = orders.find((o) => o.orderId === selectedOrder.orderId);
+      if (fresh) setSelectedOrder(fresh);
     }
   }, [orders]);
 
-  const { stats } = useMemo(() => {
-    const filtered = orders.filter((row) => {
-      if (filters.searchId) {
-        const searchLower = filters.searchId.toLowerCase();
-        if (!(row.orderId || "").toLowerCase().includes(searchLower) && !String(row.fatoura || "").includes(searchLower)) return false;
-      }
-      if (filters.customer) {
-        const searchLower = filters.customer.toLowerCase();
-        if (!(row.customerName || "").toLowerCase().includes(searchLower) && !(row.customerNickName || "").toLowerCase().includes(searchLower) && !(row.mobileNumber || "").includes(searchLower)) return false;
-      }
-      if (filters.stage !== "all" && row.showroomStatus.label !== filters.stage) return false;
-      if (filters.deliveryDateStart || filters.deliveryDateEnd) {
-        if (!row.deliveryDate) return false;
-        const time = new Date(row.deliveryDate).getTime();
-        if (filters.deliveryDateStart && time < new Date(filters.deliveryDateStart).getTime()) return false;
-        if (filters.deliveryDateEnd && time > new Date(filters.deliveryDateEnd).getTime() + 86400000) return false;
-      }
-      if (filters.reminderStatuses?.length > 0) {
-        for (const status of filters.reminderStatuses) {
-          const o = row.order;
-          let match = false;
-          switch (status) {
-            case "r1_done": if (o.r1_date) match = true; break;
-            case "r1_pending": if (!o.r1_date) match = true; break;
-            case "r2_done": if (o.r2_date) match = true; break;
-            case "r2_pending": if (!o.r2_date) match = true; break;
-            case "r3_done": if (o.r3_date) match = true; break;
-            case "r3_pending": if (!o.r3_date) match = true; break;
-            case "call_done": if (o.call_status || o.call_reminder_date) match = true; break;
-            case "escalated": if (o.escalation_date) match = true; break;
-          }
-          if (!match) return false;
-        }
-      }
-      return true;
-    });
-
-    return {
-      stats: {
-        total: filtered.length,
-        ready: filtered.filter(o => o.showroomStatus.label === "ready_for_pickup").length,
-        brovaTrial: filtered.filter(o => o.showroomStatus.label === "brova_trial").length,
-        needsAction: filtered.filter(o => o.showroomStatus.label === "needs_action").length,
-        partialReady: filtered.filter(o => o.showroomStatus.label === "partial_ready").length,
-        alterationIn: filtered.filter(o => o.showroomStatus.label === "alteration_in").length,
-      }
-    };
-  }, [orders, filters]);
+  // Stats come from the RPC (computed BEFORE the stage filter so buttons keep
+  // showing counts for every stage). Adapt snake_case → camelCase for the UI.
+  const stats = useMemo(
+    () => ({
+      total: rpcStats?.total ?? 0,
+      ready: rpcStats?.ready ?? 0,
+      brovaTrial: rpcStats?.brova_trial ?? 0,
+      needsAction: rpcStats?.needs_action ?? 0,
+      partialReady: rpcStats?.partial_ready ?? 0,
+      alterationIn: rpcStats?.alteration_in ?? 0,
+    }),
+    [rpcStats],
+  );
           
   return (
     <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-3 animate-in fade-in zoom-in-95 duration-300">
@@ -616,8 +611,13 @@ function RouteComponent() {
               data={orders}
               rowSelection={rowSelection}
               onRowSelectionChange={setRowSelection}
-              filters={filters}
               selectedOrderId={selectedOrder?.order?.id}
+              pageIndex={pageIndex}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              onPageIndexChange={setPageIndex}
+              onPageSizeChange={setPageSize}
+              isFetching={isFetching}
             />
           </GarmentTableErrorBoundary>
         )}

@@ -18,7 +18,7 @@ export const updateGarment = async (
     .single();
 
   if (error) {
-    console.error('Error updating garment:', error);
+    console.error('updateGarment: failed to update garment:', error);
     throw error;
   }
   return { status: 'success', data: data as any };
@@ -46,7 +46,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> =>
     .eq('garment_feedback.distribution', 'workshop');
 
   if (error) {
-    console.error('Error fetching garments for redispatch:', error);
+    console.error('getGarmentsForRedispatch: failed to fetch garments for redispatch:', error);
     return { status: 'error', message: error.message, data: [], count: 0 };
   }
 
@@ -81,7 +81,7 @@ export const dispatchGarmentToWorkshop = async (
     .single();
 
   if (error) {
-    console.error('Error dispatching garment to workshop:', error);
+    console.error('dispatchGarmentToWorkshop: failed to dispatch garment to workshop:', error);
     return { status: 'error', message: error.message };
   }
 

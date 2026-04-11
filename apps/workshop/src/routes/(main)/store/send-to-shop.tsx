@@ -178,8 +178,8 @@ function SendToShopPage() {
       qc.invalidateQueries({ queryKey: ["shelf"] });
       qc.invalidateQueries({ queryKey: ["accessories"] });
       qc.invalidateQueries({ queryKey: ["transfer-requests"] });
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to send items");
+    } catch (err: any) {
+      toast.error(`Could not send items to shop: ${err?.message ?? String(err)}`);
     } finally {
       setSubmitting(false);
     }

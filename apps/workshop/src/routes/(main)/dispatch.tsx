@@ -3,8 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useDispatchGarments } from "@/hooks/useGarmentMutations";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { GarmentCard } from "@/components/shared/GarmentCard";
 import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge } from "@/components/shared/PageShell";
 import { StageBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { Button } from "@repo/ui/button";
@@ -13,7 +11,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
-import { Truck, Package, History, Printer, ChevronDown, ChevronRight, Hash, User } from "lucide-react";
+import { Truck, Package, History, Printer, ChevronDown, Hash, User } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
 import type { WorkshopGarment } from "@repo/database";
@@ -92,8 +90,6 @@ function ReadyOrderCard({
   isPending: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
-  // Per-card local selection, pre-selected to all garments in this order.
-  // Matches the POS dispatch pattern — staff can uncheck to partially dispatch.
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(group.garments.map((g) => g.id)),
   );
@@ -101,8 +97,7 @@ function ReadyOrderCard({
   const toggleOne = (id: string, checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
+      if (checked) next.add(id); else next.delete(id);
       return next;
     });
   };
@@ -110,12 +105,12 @@ function ReadyOrderCard({
   const groupIds = group.garments.map((g) => g.id);
   const allSelected = selected.size === groupIds.length;
   const someSelected = selected.size > 0 && !allSelected;
-
   const toggleAll = (checked: boolean) => {
     setSelected(checked ? new Set(groupIds) : new Set());
   };
 
-  const handleDispatch = () => {
+  const handleDispatch = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (selected.size === 0) return;
     onDispatchGroup([...selected]);
   };
@@ -126,182 +121,358 @@ function ReadyOrderCard({
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card overflow-hidden border-l-4",
-        hasExpress ? "border-l-orange-500" : "border-l-primary/40",
-      )}
-    >
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/20 border-b">
-        <Checkbox
-          checked={allSelected ? true : someSelected ? "indeterminate" : false}
-          onCheckedChange={(checked) => toggleAll(!!checked)}
-          aria-label={`Select all garments in order ${group.orderId}`}
-        />
-        <button
-          type="button"
-          className="flex-1 flex items-center gap-3 text-left min-w-0"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? (
-            <ChevronDown className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-          )}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Hash className="w-3 h-3 text-muted-foreground" />
-            <span className="font-bold text-sm">{group.orderId}</span>
-            {group.invoiceNumber != null && (
-              <span className="text-xs font-bold text-primary/70 ml-1">
-                Inv {group.invoiceNumber}
-              </span>
-            )}
+    <div className={cn(
+      "rounded-xl border bg-card overflow-hidden transition-all duration-300 border-l-4",
+      expanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30",
+      hasExpress && "border-l-orange-500",
+    )}>
+      <div className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        {/* Desktop (lg+): single row */}
+        <div className="hidden lg:flex items-center min-h-[64px]">
+          {/* Order ID + Invoice */}
+          <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[200px]">
+            <div className="flex items-center gap-2.5 mb-0.5">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={(checked) => toggleAll(!!checked)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="p-1 rounded-md bg-primary/10 text-primary">
+                <Hash className="w-3 h-3" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold">Order {group.orderId}</h3>
+                {group.invoiceNumber != null && (
+                  <span className="text-[11px] text-primary/80 font-medium">Inv {group.invoiceNumber}</span>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm font-bold truncate">
-              {group.customerName ?? "Unknown"}
-            </span>
+
+          {/* Customer */}
+          <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
+            <div className="flex items-center gap-2">
+              <User className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
+              {group.customerMobile && (
+                <span className="text-xs text-muted-foreground font-medium shrink-0">{group.customerMobile}</span>
+              )}
+            </div>
           </div>
-        </button>
-        <div className="flex items-center gap-2 flex-wrap">
-          {brovaCount > 0 && (
-            <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-700 font-black">
-              {brovaCount} brova
-            </Badge>
-          )}
-          {finalCount > 0 && (
-            <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 font-black">
-              {finalCount} final
-            </Badge>
-          )}
-          {hasExpress && <ExpressBadge />}
-          {group.deliveryDate && (
-            <span className={cn("text-xs font-medium rounded px-1", urgency.className)}>
-              {formatDate(group.deliveryDate)}
-              {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
-            </span>
-          )}
-          <Button
-            size="sm"
-            onClick={handleDispatch}
-            disabled={isPending || selected.size === 0}
-            className="text-xs h-8"
-          >
-            <Truck className="w-3 h-3 mr-1" />
-            Dispatch
-            {selected.size > 0 && selected.size < groupIds.length
-              ? ` (${selected.size})`
-              : ""}
-          </Button>
+
+          {/* Counts + delivery */}
+          <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{groupIds.length} Pcs</Badge>
+              {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
+              {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
+              {group.deliveryDate && (
+                <span className={cn("text-[11px] font-medium rounded px-1.5 py-0.5", urgency.className)}>
+                  {formatDate(group.deliveryDate)}
+                  {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="w-[210px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+            <Button
+              className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm"
+              onClick={handleDispatch}
+              disabled={isPending || selected.size === 0}
+            >
+              <Truck className="w-3.5 h-3.5 mr-1" />
+              Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
+            </Button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+              className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+            >
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile/tablet (<lg): compact 2-row */}
+        <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={(checked) => toggleAll(!!checked)}
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0"
+              />
+              <span className="text-sm font-bold shrink-0">#{group.orderId}</span>
+              {group.invoiceNumber != null && (
+                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {group.invoiceNumber}</span>
+              )}
+              <div className="w-px h-3.5 bg-border/40 shrink-0" />
+              <User className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+              className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+            >
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {group.customerMobile && <span className="text-[11px] text-muted-foreground">{group.customerMobile}</span>}
+              <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{groupIds.length} Pcs</Badge>
+              {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
+              {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+              {hasExpress && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
+              {group.deliveryDate && (
+                <span className={cn("text-[10px] font-medium rounded px-1", urgency.className)}>
+                  {formatDate(group.deliveryDate)}{urgency.label && ` ${urgency.label}`}
+                </span>
+              )}
+            </div>
+            <Button
+              className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0"
+              onClick={handleDispatch}
+              disabled={isPending || selected.size === 0}
+            >
+              Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Garments */}
-      {expanded && (
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/10">
-              <TableHead className="w-10" />
-              <TableHead className="w-20">Type</TableHead>
-              <TableHead>Garment</TableHead>
-              <TableHead>Stage</TableHead>
-              <TableHead className="w-24">Express</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {group.garments.map((g) => {
-              const isSelected = selected.has(g.id);
-              return (
-                <TableRow
-                  key={g.id}
-                  className={cn(
-                    isSelected && "bg-primary/5",
-                  )}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={(checked) => toggleOne(g.id, !!checked)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                  </TableCell>
-                  <TableCell className="font-mono font-bold text-sm">
-                    <div className="flex items-center gap-1">
-                      <span>{g.garment_id}</span>
-                      <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
-                  </TableCell>
-                  <TableCell>{g.express && <ExpressBadge />}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+      {/* Expanded garment list with slide animation */}
+      <div className={cn(
+        "grid transition-[grid-template-rows] duration-300 ease-in-out",
+        expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+      )}>
+        <div className={cn("overflow-hidden", expanded && "border-t-2 border-border/40 bg-muted/5")}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                <th className="py-2.5 px-3 w-10">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    onCheckedChange={(checked) => toggleAll(!!checked)}
+                  />
+                </th>
+                <th className="text-left py-2.5 px-4">Garment</th>
+                <th className="text-left py-2.5 px-4">Type</th>
+                <th className="text-left py-2.5 px-4">Stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.garments.map((g) => {
+                const isSelected = selected.has(g.id);
+                return (
+                  <tr
+                    key={g.id}
+                    className={cn(
+                      "border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer",
+                      !isSelected && "opacity-50",
+                    )}
+                    onClick={() => toggleOne(g.id, !isSelected)}
+                  >
+                    <td className="py-2.5 px-3">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => toggleOne(g.id, !!checked)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="py-2.5 px-4 font-mono font-bold">
+                      <div className="flex items-center gap-1.5">
+                        {g.garment_id}
+                        <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
+                        {g.express && <ExpressBadge />}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className={cn(
+                        "text-xs font-black uppercase px-1.5 py-0.5 rounded",
+                        g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
+                      )}>
+                        {g.garment_type}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
 
-function InTransitTable({ garments }: { garments: WorkshopGarment[] }) {
+interface InTransitOrderGroup {
+  orderId: number;
+  invoiceNumber: number | undefined;
+  customerName: string | undefined;
+  customerMobile: string | undefined;
+  deliveryDate: string | undefined;
+  garments: WorkshopGarment[];
+}
+
+function groupInTransitByOrder(garments: WorkshopGarment[]): InTransitOrderGroup[] {
+  const map = new Map<number, InTransitOrderGroup>();
+  for (const g of garments) {
+    let group = map.get(g.order_id);
+    if (!group) {
+      group = {
+        orderId: g.order_id,
+        invoiceNumber: g.invoice_number,
+        customerName: g.customer_name,
+        customerMobile: g.customer_mobile,
+        deliveryDate: g.delivery_date_order,
+        garments: [],
+      };
+      map.set(g.order_id, group);
+    }
+    group.garments.push(g);
+  }
+  return [...map.values()];
+}
+
+function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
+  const [expanded, setExpanded] = useState(true);
+  const hasExpress = group.garments.some((g) => g.express);
+  const urgency = deliveryUrgency(group.deliveryDate);
+  const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
+  const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
+
   return (
-    <TableContainer>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-            <TableHead className="w-20">Type</TableHead>
-            <TableHead>Garment</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Delivery</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {garments.map((g) => {
-            const urgency = deliveryUrgency(g.delivery_date_order);
-            return (
-              <TableRow
-                key={g.id}
-              >
-                <TableCell>
-                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                </TableCell>
-                <TableCell className="font-mono font-bold text-sm">
-                  <div className="flex items-center gap-1">
-                    <span>{g.garment_id}</span>
-                    <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-semibold">{g.customer_name}</span>
-                    <span className="text-xs font-mono text-muted-foreground">#{g.order_id}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1">
-                    {g.delivery_date_order ? (
-                      <span className={cn("text-xs font-medium", urgency.className)}>
-                        {formatDate(g.delivery_date_order)}
-                        {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                    {g.express && <ExpressBadge />}
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <div className={cn(
+      "rounded-xl border bg-card overflow-hidden transition-all duration-300 border-l-4",
+      expanded ? "border-l-blue-400 shadow-md" : "border-l-transparent hover:border-l-blue-300 hover:bg-muted/30",
+      hasExpress && "border-l-orange-500",
+    )}>
+      <div className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        {/* Desktop (lg+): single row */}
+        <div className="hidden lg:flex items-center min-h-[64px]">
+          <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[180px]">
+            <div className="flex items-center gap-2.5 mb-0.5">
+              <div className="p-1 rounded-md bg-blue-100 text-blue-600">
+                <Hash className="w-3 h-3" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold">Order {group.orderId}</h3>
+                {group.invoiceNumber != null && (
+                  <span className="text-[11px] text-primary/80 font-medium">Inv {group.invoiceNumber}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
+            <div className="flex items-center gap-2">
+              <User className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
+              {group.customerMobile && (
+                <span className="text-xs text-muted-foreground font-medium shrink-0">{group.customerMobile}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{group.garments.length} Pcs</Badge>
+              {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
+              {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
+              {group.deliveryDate && (
+                <span className={cn("text-[11px] font-medium rounded px-1.5 py-0.5", urgency.className)}>
+                  {formatDate(group.deliveryDate)}
+                  {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="w-[60px] px-4 py-2.5 flex items-center justify-center bg-muted/5">
+            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors">
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile/tablet (<lg): compact 2-row */}
+        <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-bold shrink-0">#{group.orderId}</span>
+              {group.invoiceNumber != null && (
+                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {group.invoiceNumber}</span>
+              )}
+              <div className="w-px h-3.5 bg-border/40 shrink-0" />
+              <User className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {group.customerMobile && <span className="text-[11px] text-muted-foreground">{group.customerMobile}</span>}
+            <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{group.garments.length} Pcs</Badge>
+            {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
+            {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+            {hasExpress && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
+            {group.deliveryDate && (
+              <span className={cn("text-[10px] font-medium rounded px-1", urgency.className)}>
+                {formatDate(group.deliveryDate)}{urgency.label && ` ${urgency.label}`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded garment list with slide animation */}
+      <div className={cn(
+        "grid transition-[grid-template-rows] duration-300 ease-in-out",
+        expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+      )}>
+        <div className={cn("overflow-hidden", expanded && "border-t-2 border-border/40 bg-muted/5")}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
+                <th className="text-left py-2.5 px-4">Garment</th>
+                <th className="text-left py-2.5 px-4">Type</th>
+                <th className="text-left py-2.5 px-4">Stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.garments.map((g) => (
+                <tr key={g.id} className="border-b border-border/20 last:border-b-0">
+                  <td className="py-2.5 px-4 font-mono font-bold">
+                    <div className="flex items-center gap-1.5">
+                      {g.garment_id}
+                      <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
+                      {g.express && <ExpressBadge />}
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <span className={cn(
+                      "text-xs font-black uppercase px-1.5 py-0.5 rounded",
+                      g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
+                    )}>
+                      {g.garment_type}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -463,8 +634,6 @@ function DispatchHistoryTab() {
 function DispatchPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const dispatchMut = useDispatchGarments();
-  const isMobile = useIsMobile();
-
   // Ready garments at workshop — ready_for_dispatch (passed QC) or brova_trialed (accepted, returning with order)
   const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed"]);
   const readyGarments = useMemo(
@@ -482,6 +651,7 @@ function DispatchPage() {
     () => allGarments.filter((g) => g.location === "transit_to_shop"),
     [allGarments],
   );
+  const inTransitGroups = useMemo(() => groupInTransitByOrder(inTransitGarments), [inTransitGarments]);
 
   const handleDispatchGroup = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -541,23 +711,16 @@ function DispatchPage() {
           <DispatchHistoryTab />
         </TabsContent>
 
-        {/* ── IN TRANSIT — garment level, read-only ── */}
+        {/* ── IN TRANSIT — grouped by order, read-only ── */}
         <TabsContent value="transit">
           {inTransitGarments.length === 0 ? (
             <EmptyState icon={Truck} message="Nothing in transit" />
-          ) : isMobile ? (
-            <div className="space-y-2">
-              {inTransitGarments.map((g) => (
-                <GarmentCard
-                  key={g.id}
-                  garment={g}
-                  showPipeline={false}
-                  hideStage
-                />
+          ) : (
+            <div className="space-y-3">
+              {inTransitGroups.map((group) => (
+                <InTransitOrderCard key={group.orderId} group={group} />
               ))}
             </div>
-          ) : (
-            <InTransitTable garments={inTransitGarments} />
           )}
         </TabsContent>
       </Tabs>

@@ -98,8 +98,8 @@ function EndOfDayReport() {
             const params = { summary, transactions: txRes.data, dateFrom: dateFromStr, dateTo: dateToStr };
             if (action === "view") await viewEodReport(params);
             else await printEodReport(params);
-        } catch (e: any) {
-            toast.error(e.message ?? `Failed to ${action} report`);
+        } catch (err) {
+            toast.error(`Could not ${action} end-of-day report: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setPrintLoading(false);
         }

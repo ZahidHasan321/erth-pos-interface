@@ -2506,6 +2506,960 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ═══════════════════════════════════════════════════════════════════════
+-- SHOWROOM ORDERS: paginated, server-filtered RPC
+-- ═══════════════════════════════════════════════════════════════════════
+-- Replaces a client-side "fetch everything then filter in JS" pattern that
+-- pulled up to 1000 in_progress work orders per refetch. The RPC ports
+-- getShowroomStatus (packages/database/src/utils.ts) to SQL, applies every
+-- filter the UI exposes server-side, and returns a page + total + stats in
+-- a single round trip. See useShowroomOrders.ts for the caller.
+--
+-- Contract:
+--   data         — page of orders (already merged orders + work_orders +
+--                  customer + garments + showroom_label)
+--   total_count  — rows matching all filters (for pagination)
+--   stats        — counts by label, computed BEFORE the stage filter so
+--                  stage buttons keep showing counts for every stage
+CREATE INDEX IF NOT EXISTS orders_showroom_idx
+    ON orders(brand, checkout_status, order_type);
+CREATE INDEX IF NOT EXISTS work_orders_phase_idx
+    ON work_orders(order_phase);
+CREATE INDEX IF NOT EXISTS garments_order_location_idx
+    ON garments(order_id, location) WHERE piece_stage IS DISTINCT FROM 'completed';
+
+CREATE OR REPLACE FUNCTION get_showroom_orders_page(
+    p_brand TEXT,
+    p_page INT DEFAULT 1,
+    p_page_size INT DEFAULT 20,
+    p_search_id TEXT DEFAULT NULL,
+    p_customer TEXT DEFAULT NULL,
+    p_stage TEXT DEFAULT NULL,
+    p_reminder_statuses TEXT[] DEFAULT NULL,
+    p_delivery_date_start TEXT DEFAULT NULL,
+    p_delivery_date_end TEXT DEFAULT NULL,
+    p_sort_by TEXT DEFAULT 'created_desc'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_result JSONB;
+    v_page_size INT := GREATEST(COALESCE(p_page_size, 20), 1);
+    v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * v_page_size;
+    v_search TEXT := LOWER(TRIM(COALESCE(p_search_id, '')));
+    v_customer TEXT := LOWER(TRIM(COALESCE(p_customer, '')));
+    v_date_start TIMESTAMP := CASE WHEN NULLIF(p_delivery_date_start, '') IS NULL THEN NULL ELSE p_delivery_date_start::TIMESTAMP END;
+    v_date_end TIMESTAMP := CASE WHEN NULLIF(p_delivery_date_end, '') IS NULL THEN NULL ELSE p_delivery_date_end::TIMESTAMP + INTERVAL '1 day' END;
+    v_reminders TEXT[] := COALESCE(p_reminder_statuses, ARRAY[]::TEXT[]);
+BEGIN
+    WITH base AS (
+        SELECT
+            o.id,
+            o.customer_id,
+            o.order_date,
+            o.brand::text AS brand,
+            o.checkout_status::text AS checkout_status,
+            o.order_type::text AS order_type,
+            o.payment_type::text AS payment_type,
+            o.order_total,
+            o.paid,
+            o.discount_value,
+            o.delivery_charge,
+            o.express_charge,
+            o.soaking_charge,
+            o.shelf_charge,
+            wo.invoice_number,
+            wo.delivery_date,
+            wo.home_delivery,
+            wo.advance,
+            wo.fabric_charge,
+            wo.stitching_charge,
+            wo.style_charge,
+            wo.order_phase::text AS order_phase,
+            wo.linked_order_id,
+            wo.r1_date, wo.r1_notes,
+            wo.r2_date, wo.r2_notes,
+            wo.r3_date, wo.r3_notes,
+            wo.call_reminder_date, wo.call_status, wo.call_notes,
+            wo.escalation_date, wo.escalation_notes,
+            c.name AS c_name,
+            c.nick_name AS c_nick_name,
+            c.phone AS c_phone,
+            c.country_code AS c_country_code,
+            jsonb_build_object(
+                'id', c.id,
+                'name', c.name,
+                'nick_name', c.nick_name,
+                'phone', c.phone,
+                'country_code', c.country_code
+            ) AS customer_json,
+            agg.showroom_label
+        FROM orders o
+        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN customers c ON c.id = o.customer_id
+        CROSS JOIN LATERAL (
+            SELECT
+                CASE
+                    WHEN NOT g.has_shop_items AND g.finals_in_transit THEN 'awaiting_finals'
+                    WHEN NOT g.has_shop_items THEN NULL
+                    WHEN g.has_alteration_needing_work THEN 'alteration_in'
+                    WHEN g.has_brova_awaiting_trial THEN 'brova_trial'
+                    WHEN g.has_garment_needing_action THEN 'needs_action'
+                    WHEN g.has_shop_brova AND g.finals_still_out THEN 'awaiting_finals'
+                    WHEN g.all_shop_items_done AND NOT g.garments_still_out THEN 'ready_for_pickup'
+                    WHEN g.garments_still_out THEN 'partial_ready'
+                    ELSE NULL
+                END AS showroom_label,
+                g.has_shop_items,
+                g.finals_in_transit
+            FROM (
+                SELECT
+                    COALESCE(bool_or(shop_active), false) AS has_shop_items,
+                    COALESCE(bool_or(
+                        shop_active
+                        AND acceptance_status IS DISTINCT FROM TRUE
+                        AND is_alteration
+                        AND (piece_stage = 'awaiting_trial' OR feedback_status IN ('needs_repair', 'needs_redo'))
+                    ), false) AS has_alteration_needing_work,
+                    COALESCE(bool_or(
+                        shop_active
+                        AND garment_type = 'brova'
+                        AND piece_stage = 'awaiting_trial'
+                    ), false) AS has_brova_awaiting_trial,
+                    COALESCE(bool_or(
+                        shop_active
+                        AND feedback_status IN ('needs_repair', 'needs_redo')
+                    ), false) AS has_garment_needing_action,
+                    COALESCE(bool_or(
+                        not_completed AND garment_type = 'final' AND location <> 'shop'
+                    ), false) AS finals_still_out,
+                    COALESCE(bool_or(
+                        not_completed AND garment_type = 'final' AND location = 'transit_to_shop'
+                    ), false) AS finals_in_transit,
+                    COALESCE(bool_or(not_completed AND location <> 'shop'), false) AS garments_still_out,
+                    COALESCE(bool_or(shop_active AND garment_type = 'brova'), false) AS has_shop_brova,
+                    COALESCE(bool_and(NOT shop_active OR shop_item_done), true) AS all_shop_items_done
+                FROM (
+                    SELECT
+                        g2.piece_stage::text <> 'completed' AS not_completed,
+                        g2.location::text = 'shop'
+                            AND g2.piece_stage::text <> 'completed'
+                            AND COALESCE(g2.trip_number, 0) > 0 AS shop_active,
+                        g2.garment_type::text AS garment_type,
+                        g2.piece_stage::text AS piece_stage,
+                        g2.location::text AS location,
+                        g2.acceptance_status,
+                        g2.feedback_status,
+                        (g2.garment_type::text = 'final' AND COALESCE(g2.trip_number, 1) >= 2)
+                            OR (g2.garment_type::text = 'brova' AND COALESCE(g2.trip_number, 1) >= 4) AS is_alteration,
+                        (
+                            g2.acceptance_status = TRUE
+                            OR (
+                                g2.garment_type::text = 'final'
+                                AND g2.piece_stage::text = 'ready_for_pickup'
+                                AND g2.feedback_status IS DISTINCT FROM 'needs_repair'
+                                AND g2.feedback_status IS DISTINCT FROM 'needs_redo'
+                            )
+                        ) AS shop_item_done
+                    FROM garments g2
+                    WHERE g2.order_id = o.id
+                ) gx
+            ) g
+        ) agg
+        WHERE o.brand::text = p_brand
+          AND o.checkout_status::text = 'confirmed'
+          AND o.order_type::text = 'WORK'
+          AND wo.order_phase::text = 'in_progress'
+          AND (agg.has_shop_items OR agg.finals_in_transit)
+    ),
+    pre_stage AS (
+        SELECT * FROM base
+        WHERE showroom_label IS NOT NULL
+          AND (
+            v_search = ''
+            OR LOWER(id::text) LIKE '%' || v_search || '%'
+            OR COALESCE(invoice_number::text, '') LIKE '%' || v_search || '%'
+          )
+          AND (
+            v_customer = ''
+            OR LOWER(COALESCE(c_name, '')) LIKE '%' || v_customer || '%'
+            OR LOWER(COALESCE(c_nick_name, '')) LIKE '%' || v_customer || '%'
+            OR COALESCE(c_phone, '') LIKE '%' || v_customer || '%'
+            OR LOWER(COALESCE(c_country_code, '') || ' ' || COALESCE(c_phone, '')) LIKE '%' || v_customer || '%'
+          )
+          AND (v_date_start IS NULL OR delivery_date >= v_date_start)
+          AND (v_date_end IS NULL OR delivery_date < v_date_end)
+          AND (NOT ('r1_done'     = ANY(v_reminders)) OR r1_date IS NOT NULL)
+          AND (NOT ('r1_pending'  = ANY(v_reminders)) OR r1_date IS NULL)
+          AND (NOT ('r2_done'     = ANY(v_reminders)) OR r2_date IS NOT NULL)
+          AND (NOT ('r2_pending'  = ANY(v_reminders)) OR r2_date IS NULL)
+          AND (NOT ('r3_done'     = ANY(v_reminders)) OR r3_date IS NOT NULL)
+          AND (NOT ('r3_pending'  = ANY(v_reminders)) OR r3_date IS NULL)
+          AND (NOT ('call_done'   = ANY(v_reminders)) OR (call_status IS NOT NULL OR call_reminder_date IS NOT NULL))
+          AND (NOT ('escalated'   = ANY(v_reminders)) OR escalation_date IS NOT NULL)
+    ),
+    stage_filtered AS (
+        SELECT * FROM pre_stage
+        WHERE NULLIF(p_stage, '') IS NULL
+           OR p_stage = 'all'
+           OR showroom_label = p_stage
+    ),
+    ranked AS (
+        SELECT
+            sf.*,
+            row_number() OVER (
+                ORDER BY
+                    CASE WHEN p_sort_by = 'deliveryDate_asc'  THEN delivery_date END ASC  NULLS LAST,
+                    CASE WHEN p_sort_by = 'deliveryDate_desc' THEN delivery_date END DESC NULLS LAST,
+                    CASE WHEN p_sort_by = 'balance_desc'      THEN (COALESCE(order_total, 0) - COALESCE(paid, 0)) END DESC NULLS LAST,
+                    id DESC
+            ) AS rn
+        FROM stage_filtered sf
+    ),
+    page AS (
+        SELECT * FROM ranked
+        ORDER BY rn
+        LIMIT v_page_size
+        OFFSET v_offset
+    ),
+    page_rows AS (
+        SELECT
+            p.rn,
+            jsonb_build_object(
+                'id', p.id,
+                'customer_id', p.customer_id,
+                'order_date', p.order_date,
+                'brand', p.brand,
+                'checkout_status', p.checkout_status,
+                'order_type', p.order_type,
+                'payment_type', p.payment_type,
+                'order_total', p.order_total,
+                'paid', p.paid,
+                'discount_value', p.discount_value,
+                'delivery_charge', p.delivery_charge,
+                'express_charge', p.express_charge,
+                'soaking_charge', p.soaking_charge,
+                'shelf_charge', p.shelf_charge,
+                'invoice_number', p.invoice_number,
+                'delivery_date', p.delivery_date,
+                'home_delivery', p.home_delivery,
+                'advance', p.advance,
+                'fabric_charge', p.fabric_charge,
+                'stitching_charge', p.stitching_charge,
+                'style_charge', p.style_charge,
+                'order_phase', p.order_phase,
+                'linked_order_id', p.linked_order_id,
+                'r1_date', p.r1_date, 'r1_notes', p.r1_notes,
+                'r2_date', p.r2_date, 'r2_notes', p.r2_notes,
+                'r3_date', p.r3_date, 'r3_notes', p.r3_notes,
+                'call_reminder_date', p.call_reminder_date,
+                'call_status', p.call_status,
+                'call_notes', p.call_notes,
+                'escalation_date', p.escalation_date,
+                'escalation_notes', p.escalation_notes,
+                'customer', p.customer_json,
+                'showroom_label', p.showroom_label,
+                'garments', COALESCE((
+                    SELECT jsonb_agg(jsonb_build_object(
+                        'id', g.id,
+                        'garment_id', g.garment_id,
+                        'piece_stage', g.piece_stage,
+                        'garment_type', g.garment_type,
+                        'location', g.location,
+                        'acceptance_status', g.acceptance_status,
+                        'feedback_status', g.feedback_status,
+                        'trip_number', g.trip_number,
+                        'color', g.color,
+                        'style', g.style,
+                        'delivery_date', g.delivery_date,
+                        'fabric_source', g.fabric_source,
+                        'fabric', CASE WHEN f.id IS NULL THEN NULL ELSE jsonb_build_object('name', f.name) END
+                    ) ORDER BY g.garment_id NULLS LAST)
+                    FROM garments g
+                    LEFT JOIN fabrics f ON f.id = g.fabric_id
+                    WHERE g.order_id = p.id
+                ), '[]'::jsonb)
+            ) AS row_json
+        FROM page p
+    )
+    SELECT jsonb_build_object(
+        'data',        COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
+        'total_count', (SELECT COUNT(*) FROM stage_filtered),
+        'stats', (
+            SELECT jsonb_build_object(
+                'total',           COUNT(*),
+                'ready',           COUNT(*) FILTER (WHERE showroom_label = 'ready_for_pickup'),
+                'brova_trial',     COUNT(*) FILTER (WHERE showroom_label = 'brova_trial'),
+                'needs_action',    COUNT(*) FILTER (WHERE showroom_label = 'needs_action'),
+                'partial_ready',   COUNT(*) FILTER (WHERE showroom_label = 'partial_ready'),
+                'alteration_in',   COUNT(*) FILTER (WHERE showroom_label = 'alteration_in'),
+                'awaiting_finals', COUNT(*) FILTER (WHERE showroom_label = 'awaiting_finals')
+            )
+            FROM pre_stage
+        )
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- WORKSHOP COMPLETED ORDERS: paginated RPC
+-- ═══════════════════════════════════════════════════════════════════════
+-- Replaces getCompletedOrderGarments — the workshop's "Completed Orders"
+-- page previously fetched every completed order's garments with the full
+-- WORKSHOP_QUERY (measurement, style_ref, fabric_ref, worker_history, etc.)
+-- and paginated 20 rows at a time client-side. Each new month of production
+-- made the fetch bigger. This RPC returns order groups already aggregated,
+-- with only the garment fields the page actually renders.
+--
+-- Contract:
+--   data          — page of OrderGroup rows (shape matches lib/utils.ts
+--                   groupByOrder output; garments are slimmed)
+--   total_count   — completed orders matching filters
+CREATE INDEX IF NOT EXISTS work_orders_completed_delivery_idx
+    ON work_orders(order_phase, delivery_date DESC)
+    WHERE order_phase = 'completed';
+
+CREATE OR REPLACE FUNCTION get_completed_orders_page(
+    p_page INT DEFAULT 1,
+    p_page_size INT DEFAULT 20,
+    p_days_back INT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_result JSONB;
+    v_page_size INT := GREATEST(COALESCE(p_page_size, 20), 1);
+    v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * v_page_size;
+    v_cutoff TIMESTAMPTZ := CASE
+        WHEN p_days_back IS NULL THEN NULL
+        ELSE NOW() - (p_days_back || ' days')::INTERVAL
+    END;
+BEGIN
+    WITH base AS (
+        SELECT
+            o.id                       AS order_id,
+            o.brand::text              AS brand,
+            wo.invoice_number,
+            wo.delivery_date,
+            wo.home_delivery,
+            c.name                     AS customer_name,
+            c.phone                    AS customer_phone,
+            c.country_code             AS customer_country_code
+        FROM orders o
+        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN customers c ON c.id = o.customer_id
+        WHERE o.checkout_status::text = 'confirmed'
+          AND wo.order_phase::text = 'completed'
+          AND (v_cutoff IS NULL OR wo.delivery_date >= v_cutoff)
+    ),
+    ranked AS (
+        SELECT
+            b.*,
+            row_number() OVER (
+                ORDER BY b.delivery_date DESC NULLS LAST, b.order_id DESC
+            ) AS rn
+        FROM base b
+    ),
+    page AS (
+        SELECT * FROM ranked
+        ORDER BY rn
+        LIMIT v_page_size
+        OFFSET v_offset
+    ),
+    page_rows AS (
+        SELECT
+            p.rn,
+            jsonb_build_object(
+                'order_id',        p.order_id,
+                'invoice_number',  p.invoice_number,
+                'customer_name',   p.customer_name,
+                'customer_mobile', NULLIF(TRIM(BOTH FROM COALESCE(p.customer_country_code, '') || ' ' || COALESCE(p.customer_phone, '')), ''),
+                'brands',          CASE WHEN p.brand IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(p.brand) END,
+                'home_delivery',   p.home_delivery,
+                'delivery_date',   p.delivery_date,
+                'express',         COALESCE((SELECT bool_or(g.express) FROM garments g WHERE g.order_id = p.order_id), false),
+                'soaking',         COALESCE((SELECT bool_or(g.soaking) FROM garments g WHERE g.order_id = p.order_id), false),
+                'garments', COALESCE((
+                    SELECT jsonb_agg(jsonb_build_object(
+                        'id',           g.id,
+                        'garment_id',   g.garment_id,
+                        'garment_type', g.garment_type,
+                        'piece_stage',  g.piece_stage,
+                        'location',     g.location
+                    ) ORDER BY g.garment_id NULLS LAST)
+                    FROM garments g
+                    WHERE g.order_id = p.order_id
+                ), '[]'::jsonb)
+            ) AS row_json
+        FROM page p
+    )
+    SELECT jsonb_build_object(
+        'data',        COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
+        'total_count', (SELECT COUNT(*) FROM base)
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- ASSIGNED VIEW: overview + paginated list RPCs
+-- ═══════════════════════════════════════════════════════════════════════
+-- Ports the workshop "Production Tracker" page off getAssignedViewGarments
+-- which fetched every in_progress order's full garment WORKSHOP_QUERY and
+-- then paginated + filtered + sorted + labeled client-side. Two RPCs:
+--
+--   get_assigned_overview()                 — stats + workshop pipeline
+--                                             garments + top-5-per-category
+--                                             previews for the overview tab
+--   get_assigned_orders_page(...)           — paginated list for the
+--                                             production/ready/attention/all
+--                                             tabs, with chip counts
+--
+-- Row classification (isActive / isReadyForDispatch / isOverdue / isDueSoon
+-- / hasReturns) and getOrderStatusLabel are ported from
+-- apps/workshop/src/routes/(main)/assigned/index.tsx. Keep these in sync if
+-- the TS logic changes — the page still uses the same helper types but the
+-- server now owns the derivations.
+--
+-- "Active" definition matches isActive(): stage = soaking AND start_time
+-- set, OR stage IN (cutting, post_cutting, sewing, finishing, ironing,
+-- quality_check). "Due soon" is 0-2 days out. Overdue is delivery_date <
+-- now. These thresholds are hardcoded on both sides.
+CREATE INDEX IF NOT EXISTS work_orders_in_progress_delivery_idx
+    ON work_orders(order_phase, delivery_date)
+    WHERE order_phase = 'in_progress';
+
+-- Aggregate per-order garment-derived attributes. Shared helper so both
+-- RPCs compute classifications the same way without duplicating the
+-- subquery body. Returns one row per order_id present in the input.
+CREATE OR REPLACE VIEW assigned_order_agg AS
+SELECT
+    g.order_id,
+    COUNT(*)                                                 AS garments_count,
+    bool_or(g.garment_type::text = 'brova')                  AS has_brova,
+    bool_or(g.garment_type::text = 'final')                  AS has_final,
+    bool_or(g.express)                                       AS any_express,
+    bool_or(g.soaking)                                       AS any_soaking,
+    bool_or(COALESCE(g.trip_number, 1) > 1)                  AS any_returns,
+    MAX(COALESCE(g.trip_number, 1))                          AS max_trip,
+    -- isActive: any garment in soaking-with-start, or in 2..7 stage index
+    bool_or(
+        (g.piece_stage::text = 'soaking' AND g.start_time IS NOT NULL)
+        OR g.piece_stage::text IN ('cutting','post_cutting','sewing','finishing','ironing','quality_check')
+    ) AS is_active,
+    -- Workshop-only flags for ready check
+    bool_or(g.location::text = 'workshop')                   AS has_workshop_garment,
+    bool_and(
+        g.location::text <> 'workshop'
+        OR g.piece_stage::text = 'ready_for_dispatch'
+    ) AS all_workshop_ready,
+    -- Status-label ingredients (ported from getOrderStatusLabel)
+    bool_and(g.location::text = 'shop')                      AS all_at_shop,
+    bool_or(g.location::text = 'transit_to_shop')            AS has_transit_to_shop,
+    bool_or(
+        g.garment_type::text = 'final'
+        AND g.location::text IN ('workshop','transit_to_workshop')
+        AND g.piece_stage::text <> 'waiting_for_acceptance'
+    ) AS finals_active_workshop,
+    bool_or(
+        g.garment_type::text = 'final'
+        AND g.piece_stage::text = 'waiting_for_acceptance'
+    ) AS finals_parked,
+    bool_or(
+        g.garment_type::text = 'brova'
+        AND g.location::text IN ('workshop','transit_to_workshop')
+    ) AS brovas_at_workshop,
+    bool_and(
+        g.garment_type::text <> 'brova'
+        OR g.location::text = 'shop'
+    ) AS brovas_all_at_shop_or_absent,
+    bool_or(g.garment_type::text = 'brova')                  AS has_any_brova,
+    bool_or(
+        g.garment_type::text = 'brova'
+        AND g.location::text = 'transit_to_shop'
+    ) AS brovas_in_transit_to_shop,
+    bool_or(
+        g.garment_type::text = 'brova'
+        AND g.acceptance_status = TRUE
+    ) AS any_brova_accepted,
+    bool_and(
+        g.location::text <> 'workshop'
+        OR g.piece_stage::text = 'waiting_for_acceptance'
+    ) AS only_parked_at_workshop,
+    -- Location garment counts for overview summary
+    COUNT(*) FILTER (WHERE g.location::text = 'shop')              AS shop_count,
+    COUNT(*) FILTER (WHERE g.location::text IN ('transit_to_shop','transit_to_workshop')) AS transit_count
+FROM garments g
+GROUP BY g.order_id;
+
+-- Status-label CASE matching getOrderStatusLabel(). Returns the label text.
+CREATE OR REPLACE FUNCTION assigned_order_status_label(
+    p_all_at_shop BOOLEAN,
+    p_has_workshop_garment BOOLEAN,
+    p_all_workshop_ready BOOLEAN,
+    p_has_transit_to_shop BOOLEAN,
+    p_only_parked_at_workshop BOOLEAN,
+    p_brovas_in_transit_to_shop BOOLEAN,
+    p_finals_active_workshop BOOLEAN,
+    p_brovas_all_at_shop BOOLEAN,
+    p_has_any_brova BOOLEAN,
+    p_any_brova_accepted BOOLEAN,
+    p_finals_parked BOOLEAN,
+    p_brovas_at_workshop BOOLEAN
+) RETURNS TEXT
+LANGUAGE SQL
+IMMUTABLE
+AS $$
+    SELECT CASE
+        WHEN p_all_at_shop
+            THEN 'At shop'
+        WHEN p_has_workshop_garment AND p_all_workshop_ready
+            THEN 'Ready for dispatch'
+        WHEN p_has_transit_to_shop AND (NOT p_has_workshop_garment OR p_only_parked_at_workshop)
+            THEN 'In transit to shop'
+        WHEN p_brovas_in_transit_to_shop AND NOT p_finals_active_workshop
+            THEN 'Brovas in transit'
+        WHEN p_has_any_brova AND p_brovas_all_at_shop AND NOT p_finals_active_workshop AND p_finals_parked AND p_any_brova_accepted
+            THEN 'Awaiting finals release'
+        WHEN p_has_any_brova AND p_brovas_all_at_shop AND NOT p_finals_active_workshop AND p_finals_parked
+            THEN 'Awaiting brova trial'
+        WHEN p_has_any_brova AND p_brovas_all_at_shop AND NOT p_finals_active_workshop
+            THEN 'At shop'
+        WHEN p_finals_active_workshop
+            THEN 'Finals in production'
+        WHEN p_brovas_at_workshop
+            THEN 'Brovas in production'
+        ELSE 'In production'
+    END;
+$$;
+
+-- ─── Overview RPC ──────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION get_assigned_overview()
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_result JSONB;
+BEGIN
+    WITH base AS (
+        SELECT
+            o.id                           AS order_id,
+            o.brand::text                  AS brand,
+            wo.invoice_number,
+            wo.delivery_date,
+            wo.home_delivery,
+            c.name                         AS customer_name,
+            c.phone                        AS customer_phone,
+            c.country_code                 AS customer_country_code,
+            agg.garments_count,
+            COALESCE(agg.any_express, false) AS any_express,
+            agg.any_returns,
+            agg.max_trip,
+            agg.is_active,
+            agg.has_workshop_garment,
+            agg.all_workshop_ready,
+            agg.shop_count,
+            agg.transit_count,
+            -- Days to delivery (integer). NULL when no delivery_date.
+            CASE WHEN wo.delivery_date IS NULL THEN NULL
+                 ELSE CEIL(EXTRACT(EPOCH FROM (wo.delivery_date - NOW())) / 86400.0)::INT
+            END AS days_to_delivery
+        FROM orders o
+        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN customers c ON c.id = o.customer_id
+        LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
+        WHERE o.checkout_status::text = 'confirmed'
+          AND wo.order_phase::text = 'in_progress'
+    ),
+    classified AS (
+        SELECT
+            b.*,
+            (b.days_to_delivery IS NOT NULL AND b.days_to_delivery < 0)                AS is_overdue,
+            (b.days_to_delivery IS NOT NULL AND b.days_to_delivery BETWEEN 0 AND 2)    AS is_due_soon,
+            (b.has_workshop_garment AND b.all_workshop_ready)                          AS is_ready
+        FROM base b
+    ),
+    stats AS (
+        SELECT
+            COUNT(*) FILTER (WHERE is_overdue)                         AS overdue_count,
+            COUNT(*) FILTER (WHERE is_due_soon)                        AS due_soon_count,
+            COUNT(*) FILTER (WHERE is_active)                          AS active_count,
+            COUNT(*) FILTER (WHERE is_ready)                           AS ready_count,
+            COUNT(*) FILTER (WHERE any_returns)                        AS returns_count,
+            COUNT(*)                                                   AS total_count,
+            COALESCE(SUM(shop_count), 0)::INT                          AS at_shop_count,
+            COALESCE(SUM(transit_count), 0)::INT                       AS in_transit_count
+        FROM classified
+    ),
+    -- Sort orders by urgency: overdue first, then express, then delivery_date asc.
+    sorted AS (
+        SELECT c.*,
+            row_number() OVER (
+                ORDER BY
+                    (is_overdue)::int DESC,
+                    (any_express)::int DESC,
+                    COALESCE(days_to_delivery, 999) ASC,
+                    order_id ASC
+            ) AS urgency_rn
+        FROM classified c
+    ),
+    -- Order JSON builder used by all quick lists. Matches the preview shape
+    -- the frontend QuickOrderList renders.
+    quick_list_overdue AS (
+        SELECT s.urgency_rn, jsonb_build_object(
+            'order_id',       s.order_id,
+            'customer_name',  s.customer_name,
+            'brand',          s.brand,
+            'express',        s.any_express,
+            'delivery_date',  s.delivery_date,
+            'days_to_delivery', s.days_to_delivery,
+            'garments_count', s.garments_count,
+            'max_trip',       s.max_trip,
+            'brova_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'brova'), 0),
+            'final_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'final'), 0)
+        ) AS row_json
+        FROM sorted s
+        WHERE s.is_overdue
+        ORDER BY s.urgency_rn
+        LIMIT 5
+    ),
+    quick_list_due_soon AS (
+        SELECT s.urgency_rn, jsonb_build_object(
+            'order_id',       s.order_id,
+            'customer_name',  s.customer_name,
+            'brand',          s.brand,
+            'express',        s.any_express,
+            'delivery_date',  s.delivery_date,
+            'days_to_delivery', s.days_to_delivery,
+            'garments_count', s.garments_count,
+            'max_trip',       s.max_trip,
+            'brova_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'brova'), 0),
+            'final_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'final'), 0)
+        ) AS row_json
+        FROM sorted s
+        WHERE s.is_due_soon
+        ORDER BY s.urgency_rn
+        LIMIT 5
+    ),
+    quick_list_ready AS (
+        SELECT s.urgency_rn, jsonb_build_object(
+            'order_id',       s.order_id,
+            'customer_name',  s.customer_name,
+            'brand',          s.brand,
+            'express',        s.any_express,
+            'delivery_date',  s.delivery_date,
+            'days_to_delivery', s.days_to_delivery,
+            'garments_count', s.garments_count,
+            'max_trip',       s.max_trip,
+            'brova_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'brova'), 0),
+            'final_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'final'), 0)
+        ) AS row_json
+        FROM sorted s
+        WHERE s.is_ready
+        ORDER BY s.urgency_rn
+        LIMIT 5
+    ),
+    quick_list_returns AS (
+        SELECT s.urgency_rn, jsonb_build_object(
+            'order_id',       s.order_id,
+            'customer_name',  s.customer_name,
+            'brand',          s.brand,
+            'express',        s.any_express,
+            'delivery_date',  s.delivery_date,
+            'days_to_delivery', s.days_to_delivery,
+            'garments_count', s.garments_count,
+            'max_trip',       s.max_trip,
+            'brova_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'brova'), 0),
+            'final_count',    COALESCE((SELECT COUNT(*) FROM garments gg WHERE gg.order_id = s.order_id AND gg.garment_type::text = 'final'), 0)
+        ) AS row_json
+        FROM sorted s
+        WHERE s.any_returns
+        ORDER BY s.urgency_rn
+        LIMIT 5
+    ),
+    -- Workshop pipeline garments: only garments currently at workshop in an
+    -- active production stage. Slimmed to what StagePipelineChart renders.
+    pipeline_garments AS (
+        SELECT jsonb_agg(row_json ORDER BY rn) AS garments
+        FROM (
+            SELECT
+                row_number() OVER (ORDER BY g.order_id, g.garment_id) AS rn,
+                jsonb_build_object(
+                    'id',              g.id,
+                    'order_id',        g.order_id,
+                    'garment_id',      g.garment_id,
+                    'garment_type',    g.garment_type,
+                    'piece_stage',     g.piece_stage,
+                    'location',        g.location,
+                    'trip_number',     g.trip_number,
+                    'express',         g.express,
+                    'customer_name',   cc.name,
+                    'style_name',      COALESCE(st.name, g.style),
+                    'production_plan', g.production_plan,
+                    'worker_history',  g.worker_history
+                ) AS row_json
+            FROM garments g
+            INNER JOIN orders o2 ON o2.id = g.order_id AND o2.checkout_status::text = 'confirmed'
+            INNER JOIN work_orders wo2 ON wo2.order_id = o2.id AND wo2.order_phase::text = 'in_progress'
+            LEFT JOIN customers cc ON cc.id = o2.customer_id
+            LEFT JOIN styles st ON st.id = g.style_id
+            WHERE g.location::text = 'workshop'
+              AND g.piece_stage::text IN ('soaking','cutting','post_cutting','sewing','finishing','ironing','quality_check','ready_for_dispatch','waiting_cut')
+        ) s
+    )
+    SELECT jsonb_build_object(
+        'stats', jsonb_build_object(
+            'overdue',    (SELECT overdue_count    FROM stats),
+            'due_soon',   (SELECT due_soon_count   FROM stats),
+            'active',     (SELECT active_count     FROM stats),
+            'ready',      (SELECT ready_count      FROM stats),
+            'returns',    (SELECT returns_count    FROM stats),
+            'total',      (SELECT total_count      FROM stats),
+            'at_shop',    (SELECT at_shop_count    FROM stats),
+            'in_transit', (SELECT in_transit_count FROM stats)
+        ),
+        'quick_lists', jsonb_build_object(
+            'overdue',  COALESCE((SELECT jsonb_agg(row_json ORDER BY urgency_rn) FROM quick_list_overdue),  '[]'::jsonb),
+            'due_soon', COALESCE((SELECT jsonb_agg(row_json ORDER BY urgency_rn) FROM quick_list_due_soon), '[]'::jsonb),
+            'ready',    COALESCE((SELECT jsonb_agg(row_json ORDER BY urgency_rn) FROM quick_list_ready),    '[]'::jsonb),
+            'returns',  COALESCE((SELECT jsonb_agg(row_json ORDER BY urgency_rn) FROM quick_list_returns),  '[]'::jsonb)
+        ),
+        'pipeline_garments', COALESCE((SELECT garments FROM pipeline_garments), '[]'::jsonb)
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+-- ─── Paginated list RPC ────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION get_assigned_orders_page(
+    p_tab TEXT DEFAULT 'all',
+    p_chips TEXT[] DEFAULT NULL,
+    p_page INT DEFAULT 1,
+    p_page_size INT DEFAULT 20
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_result JSONB;
+    v_page_size INT := GREATEST(COALESCE(p_page_size, 20), 1);
+    v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * v_page_size;
+    v_chips TEXT[] := COALESCE(p_chips, ARRAY[]::TEXT[]);
+    v_chip_express BOOLEAN := 'express'  = ANY(v_chips);
+    v_chip_delivery BOOLEAN := 'delivery' = ANY(v_chips);
+    v_chip_soaking BOOLEAN  := 'soaking'  = ANY(v_chips);
+BEGIN
+    WITH base AS (
+        SELECT
+            o.id                             AS order_id,
+            o.brand::text                    AS brand,
+            wo.invoice_number,
+            wo.delivery_date,
+            wo.home_delivery,
+            c.name                           AS customer_name,
+            c.phone                          AS customer_phone,
+            c.country_code                   AS customer_country_code,
+            agg.garments_count,
+            COALESCE(agg.any_express, false) AS any_express,
+            COALESCE(agg.any_soaking, false) AS any_soaking,
+            agg.any_returns,
+            agg.max_trip,
+            agg.is_active,
+            agg.has_workshop_garment,
+            agg.all_workshop_ready,
+            agg.all_at_shop,
+            agg.has_transit_to_shop,
+            agg.only_parked_at_workshop,
+            agg.brovas_in_transit_to_shop,
+            agg.finals_active_workshop,
+            agg.brovas_all_at_shop_or_absent,
+            agg.has_any_brova,
+            agg.any_brova_accepted,
+            agg.finals_parked,
+            agg.brovas_at_workshop,
+            CASE WHEN wo.delivery_date IS NULL THEN NULL
+                 ELSE CEIL(EXTRACT(EPOCH FROM (wo.delivery_date - NOW())) / 86400.0)::INT
+            END AS days_to_delivery
+        FROM orders o
+        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN customers c ON c.id = o.customer_id
+        LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
+        WHERE o.checkout_status::text = 'confirmed'
+          AND wo.order_phase::text = 'in_progress'
+    ),
+    classified AS (
+        SELECT
+            b.*,
+            (b.days_to_delivery IS NOT NULL AND b.days_to_delivery < 0)              AS is_overdue,
+            (b.days_to_delivery IS NOT NULL AND b.days_to_delivery BETWEEN 0 AND 2)  AS is_due_soon,
+            (b.has_workshop_garment AND b.all_workshop_ready)                        AS is_ready
+        FROM base b
+    ),
+    -- Tab filter. 'attention' is overdue OR due_soon OR returns.
+    tab_filtered AS (
+        SELECT * FROM classified
+        WHERE CASE
+            WHEN p_tab = 'production' THEN is_active
+            WHEN p_tab = 'ready'      THEN is_ready
+            WHEN p_tab = 'attention'  THEN (is_overdue OR is_due_soon OR any_returns)
+            WHEN p_tab = 'all'        THEN TRUE
+            ELSE TRUE
+        END
+    ),
+    -- Chip counts reflect post-tab, pre-chip filter set.
+    chip_counts AS (
+        SELECT
+            COUNT(*) FILTER (WHERE any_express)     AS express_count,
+            COUNT(*) FILTER (WHERE home_delivery)   AS delivery_count,
+            COUNT(*) FILTER (WHERE any_soaking)     AS soaking_count
+        FROM tab_filtered
+    ),
+    chip_filtered AS (
+        SELECT * FROM tab_filtered
+        WHERE (NOT v_chip_express  OR any_express)
+          AND (NOT v_chip_delivery OR home_delivery)
+          AND (NOT v_chip_soaking  OR any_soaking)
+    ),
+    ranked AS (
+        SELECT cf.*,
+            row_number() OVER (
+                ORDER BY
+                    (is_overdue)::int DESC,
+                    (any_express)::int DESC,
+                    COALESCE(days_to_delivery, 999) ASC,
+                    order_id ASC
+            ) AS rn
+        FROM chip_filtered cf
+    ),
+    page AS (
+        SELECT * FROM ranked
+        ORDER BY rn
+        LIMIT v_page_size
+        OFFSET v_offset
+    ),
+    page_rows AS (
+        SELECT
+            p.rn,
+            jsonb_build_object(
+                'order_id',        p.order_id,
+                'invoice_number',  p.invoice_number,
+                'customer_name',   p.customer_name,
+                'customer_mobile', NULLIF(TRIM(BOTH FROM COALESCE(p.customer_country_code, '') || ' ' || COALESCE(p.customer_phone, '')), ''),
+                'brands',          CASE WHEN p.brand IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(p.brand) END,
+                'express',         p.any_express,
+                'soaking',         p.any_soaking,
+                'has_returns',     COALESCE(p.any_returns, false),
+                'home_delivery',   p.home_delivery,
+                'delivery_date',   p.delivery_date,
+                'max_trip',        p.max_trip,
+                'status_label',    assigned_order_status_label(
+                    COALESCE(p.all_at_shop, false),
+                    COALESCE(p.has_workshop_garment, false),
+                    COALESCE(p.all_workshop_ready, false),
+                    COALESCE(p.has_transit_to_shop, false),
+                    COALESCE(p.only_parked_at_workshop, false),
+                    COALESCE(p.brovas_in_transit_to_shop, false),
+                    COALESCE(p.finals_active_workshop, false),
+                    COALESCE(p.has_any_brova AND p.brovas_all_at_shop_or_absent, false),
+                    COALESCE(p.has_any_brova, false),
+                    COALESCE(p.any_brova_accepted, false),
+                    COALESCE(p.finals_parked, false),
+                    COALESCE(p.brovas_at_workshop, false)
+                ),
+                'garments', COALESCE((
+                    SELECT jsonb_agg(jsonb_build_object(
+                        'id',              g.id,
+                        'order_id',        g.order_id,
+                        'garment_id',      g.garment_id,
+                        'garment_type',    g.garment_type,
+                        'piece_stage',     g.piece_stage,
+                        'location',        g.location,
+                        'trip_number',     g.trip_number,
+                        'express',         g.express,
+                        'soaking',         g.soaking,
+                        'acceptance_status', g.acceptance_status,
+                        'feedback_status', g.feedback_status,
+                        'start_time',      g.start_time,
+                        'in_production',   g.in_production,
+                        'production_plan', g.production_plan,
+                        'worker_history',  g.worker_history,
+                        'style_name',      COALESCE(st.name, g.style),
+                        'style_image_url', st.image_url
+                    ) ORDER BY g.garment_id NULLS LAST)
+                    FROM garments g
+                    LEFT JOIN styles st ON st.id = g.style_id
+                    WHERE g.order_id = p.order_id
+                ), '[]'::jsonb)
+            ) AS row_json
+        FROM page p
+    )
+    SELECT jsonb_build_object(
+        'data',        COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
+        'total_count', (SELECT COUNT(*) FROM chip_filtered),
+        'chip_counts', jsonb_build_object(
+            'express',  (SELECT express_count  FROM chip_counts),
+            'delivery', (SELECT delivery_count FROM chip_counts),
+            'soaking',  (SELECT soaking_count  FROM chip_counts)
+        )
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- WORKSHOP SIDEBAR COUNTS: single-aggregate RPC
+-- ═══════════════════════════════════════════════════════════════════════
+-- The workshop sidebar shows 11 badge counts (receiving, parking,
+-- scheduler, soaking..dispatch). Previously computed client-side from the
+-- full workshop garment cache, which meant every mutation forced a
+-- ~300 KB refetch. Now one RPC returns just 11 integers.
+--
+-- Scope matches the original client filters:
+--   - Only garments from orders with checkout_status = 'confirmed'
+--   - Scheduler count requires in_production=true, no production_plan yet,
+--     piece_stage = 'waiting_cut', location = 'workshop'
+--   - Terminal stage counts require location = 'workshop'
+CREATE OR REPLACE FUNCTION get_workshop_sidebar_counts()
+RETURNS JSONB
+LANGUAGE SQL
+STABLE
+AS $$
+    WITH scoped AS (
+        SELECT g.*
+        FROM garments g
+        INNER JOIN orders o ON o.id = g.order_id AND o.checkout_status::text = 'confirmed'
+    )
+    SELECT jsonb_build_object(
+        'receiving',     COUNT(*) FILTER (WHERE location::text IN ('transit_to_workshop','lost_in_transit')),
+        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production),
+        'scheduler',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND in_production AND production_plan IS NULL AND piece_stage::text = 'waiting_cut'),
+        'soaking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'soaking'),
+        'cutting',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'cutting'),
+        'post_cutting',  COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'post_cutting'),
+        'sewing',        COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'sewing'),
+        'finishing',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'finishing'),
+        'ironing',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ironing'),
+        'quality_check', COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'quality_check'),
+        'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text IN ('ready_for_dispatch','brova_trialed'))
+    )
+    FROM scoped;
+$$;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- MIGRATION: trip_number default shifted from 1 → 0
 -- ────────────────────────────────────────────────────────────────────────────

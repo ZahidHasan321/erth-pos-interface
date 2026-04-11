@@ -381,9 +381,9 @@ function NewWorkOrder() {
                 } else {
                     toast.error("Failed to update order customer: " + response.message);
                 }
-            } catch (error) {
-                console.error("Error updating order customer:", error);
-                toast.error("An error occurred while updating order customer");
+            } catch (err) {
+                console.error("Error updating order customer:", err);
+                toast.error(`Could not update order customer: ${err instanceof Error ? err.message : String(err)}`);
             }
         } else {
             setCurrentStep(0);
@@ -503,9 +503,9 @@ function NewWorkOrder() {
             } else {
                 toast.error("Failed to load order details");
             }
-        } catch (error) {
-            console.error("Error loading pending order:", error);
-            toast.error("Failed to load order. Please try again.");
+        } catch (err) {
+            console.error("Error loading pending order:", err);
+            toast.error(`Could not load order: ${err instanceof Error ? err.message : String(err)}. Please try again.`);
         } finally {
             setIsLoadingOrderData(false);
         }

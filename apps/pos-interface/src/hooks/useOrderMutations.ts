@@ -147,8 +147,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 options.onOrderCreated?.(formattedOrder.id, formattedOrder);
             }
         },
-        onError: () => {
-            toast.error("Failed to create new order.");
+        onError: (err) => {
+            toast.error(`Could not create new order: ${err instanceof Error ? err.message : String(err)}`);
             options.onOrderError?.();
         },
     });
@@ -169,7 +169,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
             options.onOrderUpdated?.(action);
         },
-        onError: () => toast.error("Failed to update order"),
+        onError: (err) => toast.error(`Could not update order: ${err instanceof Error ? err.message : String(err)}`),
     });
 
     const updateShelfMutation = useMutation({
@@ -185,8 +185,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["products"] });
         },
-        onError: () => {
-            toast.error("Unable to update the shelf stock");
+        onError: (err) => {
+            toast.error(`Could not update the shelf stock: ${err instanceof Error ? err.message : String(err)}`);
         },
     });
 
@@ -247,7 +247,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         },
         onError: (error) => {
             console.error("Failed to update fabric stock:", error);
-            toast.error("Failed to update fabric stock");
+            toast.error(`Could not update fabric stock: ${error instanceof Error ? error.message : String(error)}`);
         },
     });
 
@@ -258,8 +258,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["orders"] });
         },
-        onError: () => {
-            toast.error("Failed to delete order");
+        onError: (err) => {
+            toast.error(`Could not delete order: ${err instanceof Error ? err.message : String(err)}`);
         },
     });
 
@@ -313,8 +313,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
             options.onOrderUpdated?.("updated", response.data);
         },
-        onError: () => {
-            toast.error("An error occurred while completing the work order");
+        onError: (err) => {
+            toast.error(`Could not complete work order: ${err instanceof Error ? err.message : String(err)}`);
         }
     });
 
@@ -356,8 +356,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
                 options.onOrderUpdated?.("updated", response.data);
             },
-            onError: () => {
-                toast.error("An error occurred while completing the sales order");
+            onError: (err) => {
+                toast.error(`Could not complete sales order: ${err instanceof Error ? err.message : String(err)}`);
             }
         });
 
@@ -402,8 +402,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 queryClient.invalidateQueries({ queryKey: ["products"], refetchType: "active" });
                 options.onOrderUpdated?.("updated", response.data);
             },
-            onError: () => {
-                toast.error("An error occurred while creating the sales order");
+            onError: (err) => {
+                toast.error(`Could not create sales order: ${err instanceof Error ? err.message : String(err)}`);
             }
         });
 

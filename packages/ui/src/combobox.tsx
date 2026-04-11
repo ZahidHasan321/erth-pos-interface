@@ -69,11 +69,11 @@ export function Combobox({
             className
           )}
         >
-          <span className="truncate">
+          <div className="flex-1 min-w-0 overflow-hidden">
             {selectedOption
               ? (selectedOption.selectedNode || selectedOption.node || selectedOption.label)
-              : placeholder}
-          </span>
+              : <span className="truncate text-muted-foreground">{placeholder}</span>}
+          </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -93,7 +93,6 @@ export function Combobox({
               ) : (
                 options.map((option) => (
                   <CommandItem
-                    className="pl-0"
                     key={option.value}
                     value={option.label} // Search against the label
                     onSelect={(selectedLabel) => {
@@ -106,13 +105,10 @@ export function Combobox({
                       setOpen(false);
                     }}
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
                     {option.node || option.label}
+                    {value === option.value && (
+                      <Check className="ml-auto h-4 w-4 shrink-0" />
+                    )}
                   </CommandItem>
                 ))
               )}

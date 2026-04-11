@@ -32,7 +32,7 @@ export const GarmentIdCell = ({
                 name={`garments.${row.index}.garment_id`}
                 control={control}
                 defaultValue={row.original.garment_id}
-                render={({ field }) => <span>{field.value}</span>}
+                render={({ field }) => <span className="whitespace-nowrap">{field.value}</span>}
             />
         </div>
     );
@@ -290,7 +290,13 @@ export const IfInsideCell = ({
             ? fuse.search(searchQuery).map((r) => r.item)
             : fabrics;
 
-        return results.map((fabric) => {
+        // Hide fabrics with no base stock, unless they're already selected for
+        // this row (e.g. editing an order that consumed the last unit).
+        const visible = results.filter(
+            (f) => (f.shop_stock ?? 0) > 0 || f.id.toString() === fabricId?.toString(),
+        );
+
+        return visible.map((fabric) => {
             const baseStock = fabric.shop_stock ?? 0;
             const used = tempStockUsage?.get(fabric.id.toString()) ?? 0;
             const availableStock = baseStock - used;

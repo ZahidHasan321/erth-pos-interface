@@ -23,6 +23,6 @@ export const getCompletedGarmentsInRange = async (
     .gte("completion_time", from)
     .lte("completion_time", to)
     .order("completion_time", { ascending: false });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getCompletedGarmentsInRange: failed to fetch completed garments between ${from} and ${to}: ${error.message}`);
   return (data ?? []) as GarmentPerformanceRow[];
 };

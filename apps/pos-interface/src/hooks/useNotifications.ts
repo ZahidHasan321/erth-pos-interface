@@ -10,12 +10,23 @@ import { getBrand } from "@/api/orders";
 
 export const NOTIFICATIONS_KEY = ["notifications"] as const;
 
-export function useNotifications() {
+// Realtime subscription in useRealtimeInvalidation invalidates this cache on
+// every notifications INSERT, and mark-read mutations invalidate on success,
+// so polling is redundant. staleTime keeps navigations from refetching the
+// list on every page mount.
+const NOTIFICATIONS_STALE_TIME = 5 * 60 * 1000;
+
+/**
+ * Fetches the notification list. Pass `enabled: false` when the caller
+ * doesn't need the full list (e.g. the bell badge that only shows a count),
+ * so we don't pay for a 50-row RPC on every page mount.
+ */
+export function useNotifications(enabled = true) {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, getBrand()],
     queryFn: () => getNotifications(),
-    staleTime: 30_000,
-    refetchInterval: 30_000, // poll every 30s; realtime should also push but isn't reliable yet
+    enabled,
+    staleTime: NOTIFICATIONS_STALE_TIME,
   });
 }
 
@@ -23,8 +34,7 @@ export function useUnreadCount() {
   const { data } = useQuery({
     queryKey: [...NOTIFICATIONS_KEY, "unread-count", getBrand()],
     queryFn: () => getUnreadCount(),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: NOTIFICATIONS_STALE_TIME,
   });
   return data ?? 0;
 }
@@ -45,6 +55,7 @@ export function useNotificationsPaginated(page: number) {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, getBrand(), "page", page],
     queryFn: () => getNotificationsPaginated(PAGE_SIZE, page * PAGE_SIZE),
+    staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
 }

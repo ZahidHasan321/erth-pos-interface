@@ -260,13 +260,13 @@ function FabricsTab({ search }: { search: string }) {
   const createMut = useMutation({
     mutationFn: createFabric,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); },
-    onError: (e: any) => toast.error(e.message ?? "Failed to create fabric"),
+    onError: (err: any) => toast.error(`Could not create fabric: ${err?.message ?? String(err)}`),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }: { id: number } & Partial<Fabric>) => updateFabric(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); setEditing(null); },
-    onError: (e: any) => toast.error(e.message ?? "Failed to update fabric"),
+    onError: (err: any) => toast.error(`Could not update fabric: ${err?.message ?? String(err)}`),
   });
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
@@ -412,8 +412,8 @@ function ShelfTab({ search }: { search: string }) {
     return items.filter((s) => !q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q));
   }, [items, search]);
 
-  const createMut = useMutation({ mutationFn: createShelfItem, onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); }, onError: (e: any) => toast.error(e.message ?? "Failed to create shelf item") });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelfItem(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); }, onError: (e: any) => toast.error(e.message ?? "Failed to update shelf item") });
+  const createMut = useMutation({ mutationFn: createShelfItem, onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`) });
+  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelfItem(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`) });
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (s: Shelf) => { setEditing(s); setDialogOpen(true); };
@@ -516,8 +516,8 @@ function AccessoriesTab({ search }: { search: string }) {
     return items.filter((a) => !q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q));
   }, [items, search]);
 
-  const createMut = useMutation({ mutationFn: createAccessory, onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); }, onError: (e: any) => toast.error(e.message ?? "Failed to create accessory") });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); }, onError: (e: any) => toast.error(e.message ?? "Failed to update accessory") });
+  const createMut = useMutation({ mutationFn: createAccessory, onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`) });
+  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`) });
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (a: Accessory) => { setEditing(a); setDialogOpen(true); };

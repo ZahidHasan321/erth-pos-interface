@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useResourcesWithUsers, useCreateResource, useUpdateResource, useDeleteResource, useLinkResourceToUser } from "@/hooks/useResources";
 import { useUsers } from "@/hooks/useUsers";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -383,7 +383,7 @@ function StageTabs({
 function TeamPage() {
   const { data: resources = [], isLoading } = useResourcesWithUsers();
   const { data: users = [] } = useUsers();
-  const { data: garments = [] } = useWorkshopGarments();
+  const { data: garments = [] } = useWorkshopWorkload();
   const createMut = useCreateResource();
   const updateMut = useUpdateResource();
   const deleteMut = useDeleteResource();
@@ -488,7 +488,7 @@ function TeamPage() {
       setForm({});
       setEditingId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
+      toast.error(`Could not save worker: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -498,8 +498,8 @@ function TeamPage() {
       onSuccess: () => {
         setDeleteTarget(null);
       },
-      onError: () => {
-        toast.error("Failed to remove worker");
+      onError: (err) => {
+        toast.error(`Could not remove worker: ${err instanceof Error ? err.message : String(err)}`);
         setDeleteTarget(null);
       },
     });

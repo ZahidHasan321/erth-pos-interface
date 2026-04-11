@@ -117,9 +117,9 @@ export function SearchCustomer({
         setShowPendingOrders(false);
         onCustomerFound(customer);
       }
-    } catch (error) {
-      console.error("Error fetching pending orders:", error);
-      toast.error("Failed to check for pending orders");
+    } catch (err) {
+      console.error("Error fetching pending orders:", err);
+      toast.error(`Could not check for pending orders: ${err instanceof Error ? err.message : String(err)}`);
       setShowPendingOrders(false);
       onCustomerFound(customer);
     } finally {
@@ -168,9 +168,9 @@ export function SearchCustomer({
             localStorage.setItem(RECENT_CUSTOMERS_KEY, JSON.stringify(updated));
             handleClear();
           }
-        } catch (error) {
-          console.error("Error selecting customer:", error);
-          toast.error("Failed to load customer profile");
+        } catch (err) {
+          console.error("Error selecting customer:", err);
+          toast.error(`Could not load customer profile: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
           setIsLoadingPendingOrders(false);
         }

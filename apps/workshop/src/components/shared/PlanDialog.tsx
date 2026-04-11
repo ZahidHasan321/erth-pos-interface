@@ -6,7 +6,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { useResources } from "@/hooks/useResources";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Droplets, Scissors, Check } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
@@ -183,7 +183,7 @@ function WorkerSelect({
 
 export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate }: PlanDialogProps) {
   const { data: resources = [] } = useResources();
-  const { data: allGarments = [] } = useWorkshopGarments();
+  const { data: allGarments = [] } = useWorkshopWorkload();
 
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});

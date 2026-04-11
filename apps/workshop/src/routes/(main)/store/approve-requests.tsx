@@ -337,7 +337,7 @@ function PendingRow({
     try {
       await approveTransfer.mutateAsync({ id: request.id, items });
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to approve");
+      toast.error(`Could not approve request: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -477,8 +477,8 @@ function PendingRequestsList({
       await rejectTransfer.mutateAsync({ id: rejectingRequest.id, reason: rejectionReason });
       setRejectingRequest(null);
       setRejectionReason("");
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to reject");
+    } catch (err: any) {
+      toast.error(`Could not reject request: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -594,8 +594,8 @@ function ApprovedRequestsList({
     try {
       await dispatchTransfer.mutateAsync({ transferId: dispatchingRequest.id, items });
       setDispatchingRequest(null);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to dispatch");
+    } catch (err: any) {
+      toast.error(`Could not dispatch request: ${err?.message ?? String(err)}`);
     }
   };
 

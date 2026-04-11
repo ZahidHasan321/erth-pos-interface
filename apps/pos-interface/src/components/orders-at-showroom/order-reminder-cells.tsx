@@ -61,11 +61,11 @@ function useOrderUpdate() {
        return updateOrder(updates, numericId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: ['showroom-orders'] });
     },
     onError: (err) => {
       console.error(err);
-      toast.error("Failed to update order");
+      toast.error(`Could not update reminder: ${err instanceof Error ? err.message : String(err)}`);
     },
   });
 }

@@ -9,7 +9,7 @@ export const getPrices = async (): Promise<Price[]> => {
     .select("*")
     .order("brand")
     .order("key");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getPrices: failed to fetch prices: ${error.message}`);
   return data ?? [];
 };
 
@@ -28,7 +28,7 @@ export const updatePrice = async (
     .eq("brand", brand)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updatePrice: failed to update price for key=${key} brand=${brand}: ${error.message}`);
   return data;
 };
 
@@ -41,7 +41,7 @@ export const getStyles = async (): Promise<Style[]> => {
     .order("brand")
     .order("type")
     .order("name");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getStyles: failed to fetch styles: ${error.message}`);
   return data ?? [];
 };
 
@@ -55,6 +55,6 @@ export const updateStylePrice = async (
     .eq("id", id)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updateStylePrice: failed to update style price for id=${id}: ${error.message}`);
   return data;
 };

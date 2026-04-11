@@ -15,7 +15,7 @@ async function callAuthAdmin(body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
   const result = await res.json();
-  if (!res.ok) throw new Error(result.error || "Request failed");
+  if (!res.ok) throw new Error(`callAuthAdmin (action=${body.action}): ${result.error || "request failed with no message"}`);
   return result;
 }
 
@@ -24,7 +24,7 @@ export const getUsers = async (): Promise<User[]> => {
     .from("users")
     .select("*")
     .order("name");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getUsers: failed to fetch users: ${error.message}`);
   return data ?? [];
 };
 
@@ -46,7 +46,7 @@ export const updateUser = async (
     .eq("id", id)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updateUser: failed to update user ${id}: ${error.message}`);
   return data;
 };
 

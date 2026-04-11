@@ -21,7 +21,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "garment_id",
     header: "ID",
-    size: 40,
+    size: 1,
     cell: FabricCells.GarmentIdCell,
   },
   {
@@ -40,7 +40,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "fabric_id",
     header: "Fabric",
-    size: 220,
+    size: 265,
     cell: FabricCells.IfInsideCell,
   },
   {

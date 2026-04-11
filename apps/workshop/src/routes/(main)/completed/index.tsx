@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCompletedOrders } from "@/hooks/useWorkshopGarments";
-import { Pagination, usePagination } from "@/components/shared/Pagination";
+import { Pagination } from "@/components/shared/Pagination";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PageHeader, MetadataChip, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { cn, clickableProps, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, clickableProps, formatDate } from "@/lib/utils";
+import type { CompletedOrderGroup } from "@/api/garments";
 import {
   CheckCircle2,
   ChevronDown,
@@ -19,11 +21,22 @@ export const Route = createFileRoute("/(main)/completed/")({
   head: () => ({ meta: [{ title: "Completed Orders" }] }),
 });
 
-// helpers imported from @/lib/utils: groupByOrder, garmentSummary, OrderGroup
+const PAGE_SIZE = 20;
+
+/** Page-local garment summary — the RPC returns only garment_type, so we
+ *  don't share lib/utils garmentSummary which expects full WorkshopGarment. */
+function summarizeGarments(garments: CompletedOrderGroup["garments"]): string {
+  const b = garments.filter((g) => g.garment_type === "brova").length;
+  const f = garments.filter((g) => g.garment_type === "final").length;
+  const parts: string[] = [];
+  if (b) parts.push(`${b} Brova`);
+  if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
+  return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
+}
 
 // ── Order Card ─────────────────────────────────────────────────
 
-function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: () => void }) {
+function CompletedOrderCard({ group, onClick }: { group: CompletedOrderGroup; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -57,7 +70,7 @@ function CompletedOrderCard({ group, onClick }: { group: OrderGroup; onClick: ()
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {group.invoice_number && <span>INV-{group.invoice_number}</span>}
             <span className="flex items-center gap-0.5">
-              <Package className="w-3 h-3" /> {garmentSummary(group.garments)}
+              <Package className="w-3 h-3" /> {summarizeGarments(group.garments)}
             </span>
           </div>
 
@@ -79,7 +92,7 @@ function CompletedOrderTable({
   groups,
   onOrderClick,
 }: {
-  groups: OrderGroup[];
+  groups: CompletedOrderGroup[];
   onOrderClick: (orderId: number) => void;
 }) {
   return (
@@ -160,17 +173,14 @@ function CompletedOrderTable({
 // ── Page ───────────────────────────────────────────────────────
 
 function CompletedOrdersPage() {
-  const { data: all = [], isLoading } = useCompletedOrders();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useCompletedOrders(page, PAGE_SIZE);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const orderGroups = groupByOrder(all).sort((a, b) => {
-    // Most recent delivery date first
-    const dateA = a.delivery_date ?? "";
-    const dateB = b.delivery_date ?? "";
-    return dateB.localeCompare(dateA);
-  });
-  const pagination = usePagination(orderGroups, 20);
+  const rows = data?.rows ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const handleOrderClick = (orderId: number) => {
     navigate({ to: "/completed/$orderId", params: { orderId: String(orderId) } });
@@ -181,12 +191,12 @@ function CompletedOrdersPage() {
       <PageHeader
         icon={CheckCircle2}
         title="Completed Orders"
-        subtitle={`${orderGroups.length} order${orderGroups.length !== 1 ? "s" : ""} fully completed`}
+        subtitle={`${totalCount} order${totalCount !== 1 ? "s" : ""} fully completed`}
       />
 
-      {isLoading ? (
+      {isLoading && rows.length === 0 ? (
         <LoadingSkeleton />
-      ) : orderGroups.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5">
           <CheckCircle2 className="w-8 h-8 text-muted-foreground/20 mb-3" />
           <p className="font-semibold text-muted-foreground">No completed orders yet</p>
@@ -195,7 +205,7 @@ function CompletedOrdersPage() {
         <>
           {isMobile ? (
             <div className="space-y-2">
-              {pagination.paged.map((group) => (
+              {rows.map((group) => (
                 <CompletedOrderCard
                   key={group.order_id}
                   group={group}
@@ -205,16 +215,16 @@ function CompletedOrdersPage() {
             </div>
           ) : (
             <CompletedOrderTable
-              groups={pagination.paged}
+              groups={rows}
               onOrderClick={handleOrderClick}
             />
           )}
           <Pagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            onPageChange={pagination.setPage}
-            totalItems={pagination.totalItems}
-            pageSize={pagination.pageSize}
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            totalItems={totalCount}
+            pageSize={PAGE_SIZE}
           />
         </>
       )}

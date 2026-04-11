@@ -20,7 +20,7 @@ export function useAppointments(
     queryKey: [APPOINTMENTS_KEY, startDate, endDate, assignedTo],
     queryFn: () => getAppointmentsByDateRange(startDate, endDate, assignedTo),
     select: (res) => res.data ?? [],
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -32,7 +32,7 @@ export function useTodayAppointments() {
     queryKey: [APPOINTMENTS_KEY, "today", todayStr],
     queryFn: () => getAppointmentsByDateRange(todayStr, todayStr),
     select: (res) => res.data ?? [],
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 }
 

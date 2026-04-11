@@ -387,8 +387,8 @@ function PendingDeliveries({
         items: [item],
       });
       toast.success("Item received");
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to receive item");
+    } catch (err: any) {
+      toast.error(`Could not receive item: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -410,8 +410,8 @@ function PendingDeliveries({
         toast.warning("Transfer received with discrepancies noted");
       }
       setReceivingTransfer(null);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to receive transfer");
+    } catch (err: any) {
+      toast.error(`Could not receive transfer: ${err?.message ?? String(err)}`);
     }
   };
 

@@ -114,7 +114,7 @@ function UserDetailPage() {
 
       setEditing(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(`Could not save user: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -127,7 +127,8 @@ function UserDetailPage() {
         await activateMut.mutateAsync(user.id);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
+      const action = user.is_active !== false ? "deactivate" : "activate";
+      toast.error(`Could not ${action} user: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

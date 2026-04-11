@@ -17,16 +17,33 @@ import {
   updateOrderDeliveryDate,
   updateOrderAssignedDate,
 } from '@/api/garments';
-import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
+import {
+  WORKSHOP_GARMENTS_KEY,
+  SCHEDULER_KEY,
+  TERMINAL_KEY,
+  WORKLOAD_KEY,
+  COMPLETED_TODAY_KEY,
+  ASSIGNED_OVERVIEW_KEY,
+  ASSIGNED_PAGE_KEY,
+  COMPLETED_VIEW_KEY,
+} from './useWorkshopGarments';
+import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
 import type { WorkshopGarment } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
 /** Invalidate all garment-related queries (background refetch, no flash) */
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
-  qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
+  qc.invalidateQueries({ queryKey: SCHEDULER_KEY });
+  qc.invalidateQueries({ queryKey: TERMINAL_KEY });
+  qc.invalidateQueries({ queryKey: WORKLOAD_KEY });
+  qc.invalidateQueries({ queryKey: COMPLETED_TODAY_KEY });
+  qc.invalidateQueries({ queryKey: SIDEBAR_COUNTS_KEY });
+  qc.invalidateQueries({ queryKey: ASSIGNED_OVERVIEW_KEY });
+  qc.invalidateQueries({ queryKey: ASSIGNED_PAGE_KEY });
+  qc.invalidateQueries({ queryKey: COMPLETED_VIEW_KEY });
   qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
-  qc.invalidateQueries({ queryKey: ['completed-today-garments'] });
+  qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'order-garments' });
 }
 
 /**

@@ -10,10 +10,12 @@ export function useDispatchedOrders() {
         queryFn: async () => {
             const res = await getDispatchedOrders();
             if (res.status === "error") {
-                throw new Error(res.message || "Failed to fetch dispatched orders");
+                throw new Error(`Could not fetch dispatched orders: ${res.message || "unknown error"}`);
             }
             return res.data || [];
         },
-        staleTime: 1000 * 60 * 2, // 2 minutes
+        // Realtime invalidates on garment/order changes, so navigations don't
+        // need to refetch within staleTime.
+        staleTime: 1000 * 60 * 5,
     });
 }

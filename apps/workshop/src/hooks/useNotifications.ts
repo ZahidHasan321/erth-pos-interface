@@ -38,6 +38,7 @@ export function useNotificationsPaginated(page: number) {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, "page", page],
     queryFn: () => getNotificationsPaginated(PAGE_SIZE, page * PAGE_SIZE),
+    staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
 }

@@ -66,7 +66,7 @@ export function AddressDialog({ open, onOpenChange, customerId, currentAddress }
             queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
             onOpenChange(false);
         },
-        onError: (err) => toast.error(`Error: ${err.message}`),
+        onError: (err) => toast.error(`Could not save address: ${err.message}`),
     });
 
     return (

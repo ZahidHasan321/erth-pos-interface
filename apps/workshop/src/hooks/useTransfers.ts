@@ -86,9 +86,9 @@ export function useDispatchTransfer() {
       dispatchTransfer(transferId, user!.id, items),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TRANSFER_KEY });
-      qc.invalidateQueries({ queryKey: ["fabrics"] });
-      qc.invalidateQueries({ queryKey: ["shelf"] });
-      qc.invalidateQueries({ queryKey: ["accessories"] });
+      qc.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
     },
   });
 }
@@ -111,9 +111,9 @@ export function useReceiveTransfer() {
       receiveTransfer(transferId, user!.id, items),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TRANSFER_KEY });
-      qc.invalidateQueries({ queryKey: ["fabrics"] });
-      qc.invalidateQueries({ queryKey: ["shelf"] });
-      qc.invalidateQueries({ queryKey: ["accessories"] });
+      qc.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
     },
   });
 }

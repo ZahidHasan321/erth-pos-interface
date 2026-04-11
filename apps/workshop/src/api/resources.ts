@@ -7,7 +7,7 @@ export const getResources = async (): Promise<Resource[]> => {
     .select('*')
     .order('responsibility')
     .order('resource_name');
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getResources: failed to fetch resources: ${error.message}`);
   return data ?? [];
 };
 
@@ -17,7 +17,7 @@ export const createResource = async (resource: Omit<NewResource, 'id' | 'created
     .insert(resource)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`createResource: failed to insert resource: ${error.message}`);
   return data;
 };
 
@@ -28,13 +28,13 @@ export const updateResource = async (id: string, updates: Partial<NewResource>):
     .eq('id', id)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updateResource: failed to update resource ${id}: ${error.message}`);
   return data;
 };
 
 export const deleteResource = async (id: string): Promise<void> => {
   const { error } = await db.from('resources').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`deleteResource: failed to delete resource ${id}: ${error.message}`);
 };
 
 export interface ResourceWithUser extends Resource {
@@ -47,7 +47,7 @@ export const getResourcesWithUsers = async (): Promise<ResourceWithUser[]> => {
     .select('*, user:users!user_id(id, name, email, role, department, is_active)')
     .order('responsibility')
     .order('resource_name');
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`getResourcesWithUsers: failed to fetch resources with users: ${error.message}`);
   return (data ?? []) as ResourceWithUser[];
 };
 
@@ -56,7 +56,7 @@ export const linkResourceToUser = async (resourceId: string, userId: string): Pr
     .from('resources')
     .update({ user_id: userId })
     .eq('id', resourceId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`linkResourceToUser: failed to link resource ${resourceId} to user ${userId}: ${error.message}`);
 };
 
 export const unlinkResourceFromUser = async (resourceId: string): Promise<void> => {
@@ -64,5 +64,5 @@ export const unlinkResourceFromUser = async (resourceId: string): Promise<void> 
     .from('resources')
     .update({ user_id: null })
     .eq('id', resourceId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`unlinkResourceFromUser: failed to unlink resource ${resourceId} from user: ${error.message}`);
 };

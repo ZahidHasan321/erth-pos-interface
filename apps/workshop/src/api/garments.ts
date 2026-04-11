@@ -36,6 +36,25 @@ const WORKSHOP_QUERY = `
   fabric_ref:fabrics!fabric_id(name, color)
 `;
 
+// Same shape as WORKSHOP_QUERY but without the measurements join. Most
+// list views never read measurement fields, so pulling 30+ dimension
+// columns per row is pure waste. Keep WORKSHOP_QUERY for anywhere that
+// still needs full measurement records (garment detail pages).
+const WORKSHOP_QUERY_LIGHT = `
+  *,
+  order:orders!order_id(
+    id,
+    brand,
+    checkout_status,
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery)
+  ),
+  customer:orders!order_id(
+    customer:customers!customer_id(name, phone, country_code)
+  ),
+  style_ref:styles!style_id(name, image_url),
+  fabric_ref:fabrics!fabric_id(name, color)
+`;
+
 function flattenGarment(raw: any): WorkshopGarment {
   const { order, customer, measurement, style_ref, fabric_ref, ...garment } = raw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
@@ -61,6 +80,41 @@ function flattenGarment(raw: any): WorkshopGarment {
   };
 }
 
+/** Flatten helper for WORKSHOP_QUERY_LIGHT rows. Same as flattenGarment but
+ *  with no measurement field (the RPC shape never includes it). */
+function flattenLightGarment(raw: any): WorkshopGarment {
+  const { order, customer, style_ref, fabric_ref, ...garment } = raw;
+  const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
+  const cust = Array.isArray(customer?.customer) ? customer.customer[0] : customer?.customer;
+
+  return {
+    ...garment,
+    order_brand: order?.brand,
+    invoice_number: wo?.invoice_number ?? undefined,
+    delivery_date_order: wo?.delivery_date ?? undefined,
+    home_delivery_order: wo?.home_delivery ?? false,
+    order_phase: wo?.order_phase ?? undefined,
+    customer_name: cust?.name ?? undefined,
+    customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
+    measurement: null,
+    production_plan: garment.production_plan ?? null,
+    worker_history: garment.worker_history ?? null,
+    quality_check_ratings: garment.quality_check_ratings ?? null,
+    style_name: style_ref?.name ?? garment.style ?? undefined,
+    style_image_url: style_ref?.image_url ?? undefined,
+    fabric_name: fabric_ref?.name ?? undefined,
+    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
+  };
+}
+
+/**
+ * Legacy kitchen-sink fetch: every workshop-side garment with the full
+ * WORKSHOP_QUERY (joins + measurements). Still used by parking, receiving,
+ * dispatch, dashboard, quality-check, ReturnPlanDialog — pages that haven't
+ * been scope-converted yet. Newer code should prefer the narrower fetchers
+ * below (getSchedulerGarments / getTerminalStageGarments /
+ * getWorkshopWorkload) which hit smaller server-filtered payloads.
+ */
 export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
   const { data, error } = await db
     .from('garments')
@@ -69,63 +123,297 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {
-    console.error('getWorkshopGarments error:', error);
-    return [];
+    throw new Error(`getWorkshopGarments: failed to fetch workshop garments: ${error.message}`);
   }
-  // Filter out any rows where the order join returned nothing (mismatched RLS etc.)
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+};
+
+/**
+ * Scheduler-specific fetch: only garments that can be scheduled.
+ * Narrowed at the server to location=workshop, in_production, no plan,
+ * piece_stage=waiting_cut — which is exactly the Scheduler's set. Uses the
+ * light query (no measurements) because Scheduler cards don't render any
+ * measurement fields.
+ */
+export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('location', 'workshop')
+    .eq('in_production', true)
+    .eq('piece_stage', 'waiting_cut')
+    .is('production_plan', null)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    throw new Error(`getSchedulerGarments: failed to fetch schedulable garments: ${error.message}`);
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+};
+
+/**
+ * Terminal stage fetch: only garments at workshop in the given stage.
+ * Replaces the pattern of fetching every workshop garment and filtering
+ * client-side. GarmentCard uses rich fields (fabric, style, order) so the
+ * joins stay, but measurement is dropped.
+ */
+export const getTerminalStageGarments = async (stage: string): Promise<WorkshopGarment[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('location', 'workshop')
+    .eq('piece_stage', stage)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (error) {
+    throw new Error(`getTerminalStageGarments: failed to fetch stage '${stage}': ${error.message}`);
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+};
+
+/** Shape returned by getWorkshopWorkload. Only the fields PlanDialog (for
+ *  worker workload) and team.tsx (for daily completion counts) read. */
+export interface WorkshopWorkloadRow {
+  id: string;
+  production_plan: Record<string, string> | null;
+  worker_history: Record<string, string> | null;
+  in_production: boolean;
+  completion_time: string | null;
+}
+
+/**
+ * Super-lean workload fetch for PlanDialog + team dashboard. Returns just
+ * five columns — no joins, no jsonb aggregation. Replaces the pattern of
+ * pulling the entire workshop garment list (measurement + style + fabric +
+ * order + customer) just to count worker assignments.
+ */
+export const getWorkshopWorkload = async (): Promise<WorkshopWorkloadRow[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select('id, production_plan, worker_history, in_production, completion_time');
+
+  if (error) {
+    throw new Error(`getWorkshopWorkload: failed to fetch workload rows: ${error.message}`);
+  }
+  return (data ?? []) as WorkshopWorkloadRow[];
+};
+
+/** Counts returned by get_workshop_sidebar_counts — one key per badge. */
+export interface WorkshopSidebarCounts {
+  receiving: number;
+  parking: number;
+  scheduler: number;
+  soaking: number;
+  cutting: number;
+  post_cutting: number;
+  sewing: number;
+  finishing: number;
+  ironing: number;
+  quality_check: number;
+  dispatch: number;
+}
+
+/**
+ * Sidebar badge counts. Replaces the old pattern of fetching every workshop
+ * garment just to call .filter().length 11 times. Now the server returns
+ * the 11 integers in one small jsonb object.
+ */
+export const getWorkshopSidebarCounts = async (): Promise<WorkshopSidebarCounts> => {
+  const { data, error } = await db.rpc('get_workshop_sidebar_counts');
+  if (error) {
+    throw new Error(`getWorkshopSidebarCounts: failed to fetch counts: ${error.message}`);
+  }
+  return (data ?? {
+    receiving: 0, parking: 0, scheduler: 0, soaking: 0, cutting: 0,
+    post_cutting: 0, sewing: 0, finishing: 0, ironing: 0,
+    quality_check: 0, dispatch: 0,
+  }) as WorkshopSidebarCounts;
 };
 
 /** Fetch garments completed today (any location) for terminal "Done" counts */
 export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> => {
   const { data, error } = await db
     .from('garments')
-    .select(WORKSHOP_QUERY)
+    .select(WORKSHOP_QUERY_LIGHT)
     .gte('completion_time', getLocalMidnightUtc())
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {
-    console.error('getCompletedTodayGarments error:', error);
-    return [];
+    throw new Error(`getCompletedTodayGarments: failed to fetch completed today: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
 };
 
+// ── Assigned view RPCs ────────────────────────────────────────────────
+// See get_assigned_overview + get_assigned_orders_page in triggers.sql.
+// The old getAssignedViewGarments fetched every in_progress garment with
+// the full WORKSHOP_QUERY and did all filter/sort/label/pagination on the
+// client. Now the server owns those and returns only what the current tab
+// renders.
+
+export type AssignedTab = 'all' | 'production' | 'ready' | 'attention';
+export type AssignedChip = 'express' | 'delivery' | 'soaking';
+
+export interface AssignedOverviewStats {
+  overdue: number;
+  due_soon: number;
+  active: number;
+  ready: number;
+  returns: number;
+  total: number;
+  at_shop: number;
+  in_transit: number;
+}
+
+/** Slim order preview shown in OverviewDashboard's QuickOrderList sections. */
+export interface AssignedQuickOrder {
+  order_id: number;
+  customer_name: string | null;
+  brand: string | null;
+  express: boolean;
+  delivery_date: string | null;
+  days_to_delivery: number | null;
+  garments_count: number;
+  max_trip: number | null;
+  brova_count: number;
+  final_count: number;
+}
+
+/** Slim garment shape used by the StagePipelineChart expandable cards. */
+export interface AssignedPipelineGarment {
+  id: string;
+  order_id: number;
+  garment_id: string | null;
+  garment_type: string | null;
+  piece_stage: string | null;
+  location: string | null;
+  trip_number: number | null;
+  express: boolean | null;
+  customer_name: string | null;
+  style_name: string | null;
+  production_plan: Record<string, string> | null;
+  worker_history: Record<string, string> | null;
+}
+
+export interface AssignedOverview {
+  stats: AssignedOverviewStats;
+  quick_lists: {
+    overdue: AssignedQuickOrder[];
+    due_soon: AssignedQuickOrder[];
+    ready: AssignedQuickOrder[];
+    returns: AssignedQuickOrder[];
+  };
+  pipeline_garments: AssignedPipelineGarment[];
+}
+
 /**
- * Fetch ALL garments from orders that have any production activity.
- * Used by Assigned Orders — the "holy grail" view that shows every garment
- * regardless of location (shop, workshop, transit) or stage.
+ * Slimmed garment shape returned by get_assigned_orders_page. Only fields
+ * the GarmentMiniCards / StageBadge / worker-name helper read.
  */
-export const getAssignedViewGarments = async (): Promise<WorkshopGarment[]> => {
-  // Step 1: find order_ids with at least one garment that has a production_plan
-  const { data: planned, error: e1 } = await db
-    .from('garments')
-    .select('order_id')
-    .not('production_plan', 'is', null);
+export interface AssignedPageGarment {
+  id: string;
+  order_id: number;
+  garment_id: string | null;
+  garment_type: string | null;
+  piece_stage: string | null;
+  location: string | null;
+  trip_number: number | null;
+  express: boolean | null;
+  soaking: boolean | null;
+  acceptance_status: boolean | null;
+  feedback_status: string | null;
+  start_time: string | null;
+  in_production: boolean | null;
+  production_plan: Record<string, string> | null;
+  worker_history: Record<string, string> | null;
+  style_name: string | null;
+  style_image_url: string | null;
+}
 
-  if (e1 || !planned?.length) return [];
+/**
+ * Row returned by get_assigned_orders_page. Status label is pre-computed
+ * server-side (see assigned_order_status_label in triggers.sql).
+ */
+export interface AssignedOrderRow {
+  order_id: number;
+  invoice_number: number | null;
+  customer_name: string | null;
+  customer_mobile: string | null;
+  brands: string[];
+  express: boolean;
+  soaking: boolean;
+  has_returns: boolean;
+  home_delivery: boolean | null;
+  delivery_date: string | null;
+  max_trip: number | null;
+  status_label: string;
+  garments: AssignedPageGarment[];
+}
 
-  const orderIds = [...new Set(planned.map((g: any) => g.order_id))];
+export interface AssignedPage {
+  rows: AssignedOrderRow[];
+  totalCount: number;
+  chipCounts: {
+    express: number;
+    delivery: number;
+    soaking: number;
+  };
+}
 
-  // Step 2: fetch ALL garments from those orders (no location filter)
-  const { data, error } = await db
-    .from('garments')
-    .select(WORKSHOP_QUERY)
-    .in('order_id', orderIds)
-    .eq('order.checkout_status', 'confirmed');
+/** Fetch the overview tab data — stats + quick lists + pipeline garments. */
+export const getAssignedOverview = async (): Promise<AssignedOverview> => {
+  const { data, error } = await db.rpc('get_assigned_overview');
 
   if (error) {
-    console.error('getAssignedViewGarments error:', error);
-    return [];
+    throw new Error(`getAssignedOverview: failed to fetch overview: ${error.message}`);
   }
-  return (data ?? [])
-    .filter((g: any) => g.order !== null)
-    .filter((g: any) => {
-      // Exclude completed orders — they belong in the completed view
-      const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
-      return wo?.order_phase !== 'completed';
-    })
-    .map(flattenGarment);
+
+  const payload = (data ?? {}) as Partial<AssignedOverview>;
+  return {
+    stats: payload.stats ?? {
+      overdue: 0, due_soon: 0, active: 0, ready: 0,
+      returns: 0, total: 0, at_shop: 0, in_transit: 0,
+    },
+    quick_lists: payload.quick_lists ?? {
+      overdue: [], due_soon: [], ready: [], returns: [],
+    },
+    pipeline_garments: payload.pipeline_garments ?? [],
+  };
+};
+
+/** Fetch a paginated + filtered order page for one of the list tabs. */
+export const getAssignedOrdersPage = async (args: {
+  tab: AssignedTab;
+  chips: AssignedChip[];
+  page: number;
+  pageSize: number;
+}): Promise<AssignedPage> => {
+  const { data, error } = await db.rpc('get_assigned_orders_page', {
+    p_tab: args.tab,
+    p_chips: args.chips.length > 0 ? args.chips : null,
+    p_page: args.page,
+    p_page_size: args.pageSize,
+  });
+
+  if (error) {
+    throw new Error(`getAssignedOrdersPage: failed to fetch page: ${error.message}`);
+  }
+
+  const payload = (data ?? {}) as {
+    data?: AssignedOrderRow[];
+    total_count?: number;
+    chip_counts?: { express?: number; delivery?: number; soaking?: number };
+  };
+
+  return {
+    rows: payload.data ?? [],
+    totalCount: payload.total_count ?? 0,
+    chipCounts: {
+      express: payload.chip_counts?.express ?? 0,
+      delivery: payload.chip_counts?.delivery ?? 0,
+      soaking: payload.chip_counts?.soaking ?? 0,
+    },
+  };
 };
 
 /**
@@ -164,27 +452,70 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
 };
 
 /**
- * Fetch garments from orders with order_phase = 'completed'.
+ * Slim garment shape returned by get_completed_orders_page. The completed
+ * orders page only renders type counts and basic summary — no production
+ * metadata — so the RPC trims every heavy field (measurement/style/fabric
+ * joins, worker_history, plan, etc.) to keep the payload tiny.
  */
-export const getCompletedOrderGarments = async (): Promise<WorkshopGarment[]> => {
-  const { data, error } = await db
-    .from('garments')
-    .select(WORKSHOP_QUERY)
-    .eq('order.checkout_status', 'confirmed')
-    .not('production_plan', 'is', null);
+export interface CompletedGarmentLite {
+  id: string;
+  garment_id: string | null;
+  garment_type: string | null;
+  piece_stage: string | null;
+  location: string | null;
+}
+
+/**
+ * Order-group shape returned by get_completed_orders_page. Mirrors
+ * lib/utils.ts OrderGroup but with CompletedGarmentLite instead of
+ * WorkshopGarment so the page doesn't ship unused data.
+ */
+export interface CompletedOrderGroup {
+  order_id: number;
+  invoice_number: number | null;
+  customer_name: string | null;
+  customer_mobile: string | null;
+  brands: string[];
+  express: boolean;
+  soaking: boolean;
+  home_delivery: boolean | null;
+  delivery_date: string | null;
+  garments: CompletedGarmentLite[];
+}
+
+export interface CompletedOrdersPage {
+  rows: CompletedOrderGroup[];
+  totalCount: number;
+}
+
+/**
+ * Paginated completed orders. Calls get_completed_orders_page RPC which
+ * returns order groups with garments pre-aggregated — no client-side
+ * grouping needed.
+ */
+export const getCompletedOrdersPage = async (
+  page: number,
+  pageSize: number,
+): Promise<CompletedOrdersPage> => {
+  const { data, error } = await db.rpc('get_completed_orders_page', {
+    p_page: page,
+    p_page_size: pageSize,
+    p_days_back: null,
+  });
 
   if (error) {
-    console.error('getCompletedOrderGarments error:', error);
-    return [];
+    throw new Error(`getCompletedOrdersPage: failed to fetch completed orders: ${error.message}`);
   }
 
-  return (data ?? [])
-    .filter((g: any) => {
-      if (!g.order) return false;
-      const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
-      return wo?.order_phase === 'completed';
-    })
-    .map(flattenGarment);
+  const payload = (data ?? {}) as {
+    data?: CompletedOrderGroup[];
+    total_count?: number;
+  };
+
+  return {
+    rows: payload.data ?? [],
+    totalCount: payload.total_count ?? 0,
+  };
 };
 
 export const receiveGarments = async (ids: string[]): Promise<void> => {
@@ -194,7 +525,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .from('garments')
     .update({ location: 'workshop' as any, in_production: false })
     .in('id', ids);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`receiveGarments: failed to mark garments as received at workshop: ${error.message}`);
 
   // Accepted brovas go straight to ready_for_dispatch — no production needed,
   // they're just waiting to be dispatched back with the rest of the order
@@ -203,7 +534,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .update({ piece_stage: 'ready_for_dispatch' as PieceStage })
     .in('id', ids)
     .eq('feedback_status', 'accepted');
-  if (eAccepted) throw new Error(eAccepted.message);
+  if (eAccepted) throw new Error(`receiveGarments: failed to advance accepted brovas to ready_for_dispatch: ${eAccepted.message}`);
 
   // For return garments with non-accepted feedback, set piece_stage to waiting_cut
   const { error: e2 } = await db
@@ -213,7 +544,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .not('feedback_status', 'is', null)
     .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
-  if (e2) throw new Error(e2.message);
+  if (e2) throw new Error(`receiveGarments: failed to reset returning garments to waiting_cut: ${e2.message}`);
 
   // Clear stale production fields for returning garments (trip > 1)
   // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
@@ -223,7 +554,7 @@ export const receiveGarments = async (ids: string[]): Promise<void> => {
     .update({ production_plan: null, completion_time: null, start_time: null })
     .in('id', ids)
     .gt('trip_number', 1);
-  if (e3) throw new Error(e3.message);
+  if (e3) throw new Error(`receiveGarments: failed to clear stale production fields on returning garments: ${e3.message}`);
 };
 
 export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
@@ -232,7 +563,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .from('garments')
     .update({ location: 'workshop' as any })
     .in('id', ids);
-  if (e1) throw new Error(e1.message);
+  if (e1) throw new Error(`receiveAndStartGarments: failed to mark garments as received at workshop: ${e1.message}`);
 
   // Accepted brovas go straight to ready_for_dispatch — no production needed
   const { error: eAccepted } = await db
@@ -240,7 +571,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .update({ piece_stage: 'ready_for_dispatch' as PieceStage, in_production: false })
     .in('id', ids)
     .eq('feedback_status', 'accepted');
-  if (eAccepted) throw new Error(eAccepted.message);
+  if (eAccepted) throw new Error(`receiveAndStartGarments: failed to advance accepted brovas to ready_for_dispatch: ${eAccepted.message}`);
 
   // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
   // (finals parked for brova trial must stay out of production)
@@ -252,7 +583,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .in('id', ids)
     .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null')
     .or('feedback_status.neq.accepted,feedback_status.is.null');
-  if (e2) throw new Error(e2.message);
+  if (e2) throw new Error(`receiveAndStartGarments: failed to start production on garments: ${e2.message}`);
 
   // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
   // so they appear in the scheduler
@@ -263,7 +594,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .not('feedback_status', 'is', null)
     .neq('feedback_status', 'accepted')
     .eq('piece_stage', 'brova_trialed');
-  if (e3) throw new Error(e3.message);
+  if (e3) throw new Error(`receiveAndStartGarments: failed to reset returning brovas to waiting_cut: ${e3.message}`);
 
   // Clear stale production fields for returning garments (trip > 1)
   // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
@@ -273,7 +604,7 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
     .update({ production_plan: null, completion_time: null, start_time: null })
     .in('id', ids)
     .gt('trip_number', 1);
-  if (e4) throw new Error(e4.message);
+  if (e4) throw new Error(`receiveAndStartGarments: failed to clear stale production fields on returning garments: ${e4.message}`);
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
@@ -281,7 +612,7 @@ export const sendToScheduler = async (ids: string[]): Promise<void> => {
     .from('garments')
     .update({ in_production: true })
     .in('id', ids);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${error.message}`);
 };
 
 export const sendReturnToProduction = async (id: string, _reentryStage: PieceStage): Promise<void> => {
@@ -297,7 +628,7 @@ export const sendReturnToProduction = async (id: string, _reentryStage: PieceSta
       piece_stage: 'waiting_cut' as PieceStage,
     })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`sendReturnToProduction: failed to send garment back to production: ${error.message}`);
 };
 
 export const scheduleGarments = async (
@@ -320,21 +651,21 @@ export const scheduleGarments = async (
       .from('garments')
       .update({ ...baseUpdate, piece_stage: reentryStage })
       .in('id', ids);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`scheduleGarments: failed to schedule garments with reentry stage: ${error.message}`);
   } else if (soakingIds?.length && nonSoakingIds?.length) {
     const [r1, r2] = await Promise.all([
       db.from('garments').update({ ...baseUpdate, piece_stage: 'soaking' as PieceStage }).in('id', soakingIds),
       db.from('garments').update({ ...baseUpdate, piece_stage: 'cutting' as PieceStage }).in('id', nonSoakingIds),
     ]);
-    if (r1.error) throw new Error(r1.error.message);
-    if (r2.error) throw new Error(r2.error.message);
+    if (r1.error) throw new Error(`scheduleGarments: failed to schedule soaking garments: ${r1.error.message}`);
+    if (r2.error) throw new Error(`scheduleGarments: failed to schedule cutting garments: ${r2.error.message}`);
   } else {
     const firstStage: PieceStage = (soakingIds?.length && plan.soaker) ? 'soaking' : 'cutting';
     const { error } = await db
       .from('garments')
       .update({ ...baseUpdate, piece_stage: firstStage })
       .in('id', ids);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`scheduleGarments: failed to schedule garments: ${error.message}`);
   }
 
   // Append trip_history entry for each garment
@@ -389,7 +720,7 @@ export const startGarment = async (id: string): Promise<void> => {
     .from('garments')
     .update({ start_time: new Date().toISOString() })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`startGarment: failed to record garment start time: ${error.message}`);
 };
 
 export const completeAndAdvance = async (
@@ -405,7 +736,7 @@ export const completeAndAdvance = async (
     .eq('id', id)
     .single();
 
-  if (fetchErr) throw new Error(fetchErr.message);
+  if (fetchErr) throw new Error(`completeAndAdvance: failed to fetch garment for stage advance: ${fetchErr.message}`);
 
   // Stage validation: reject if garment is not at the claimed stage
   if (existing?.piece_stage !== stage) {
@@ -425,7 +756,7 @@ export const completeAndAdvance = async (
       worker_history: history,
     })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`completeAndAdvance: failed to advance garment to next stage: ${error.message}`);
 };
 
 export const qcPass = async (
@@ -439,7 +770,7 @@ export const qcPass = async (
     .eq('id', id)
     .single();
 
-  if (fetchErr) throw new Error(fetchErr.message);
+  if (fetchErr) throw new Error(`qcPass: failed to fetch garment for QC pass: ${fetchErr.message}`);
 
   const history = (existing?.worker_history as Record<string, string>) ?? {};
   history['quality_checker'] = worker;
@@ -472,7 +803,7 @@ export const qcPass = async (
       trip_history: tripHistory,
     })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`qcPass: failed to record QC pass: ${error.message}`);
 };
 
 export const qcFail = async (id: string, returnStage: PieceStage, reason: string): Promise<void> => {
@@ -482,7 +813,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
     .eq('id', id)
     .single();
 
-  if (fetchErr) throw new Error(fetchErr.message);
+  if (fetchErr) throw new Error(`qcFail: failed to fetch garment for QC fail: ${fetchErr.message}`);
 
   const notes = existing?.notes ? `${existing.notes}\nQC Fail: ${reason}` : `QC Fail: ${reason}`;
 
@@ -505,7 +836,7 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
     .from('garments')
     .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`qcFail: failed to record QC failure: ${error.message}`);
 };
 
 export const dispatchGarments = async (ids: string[]): Promise<void> => {
@@ -513,7 +844,7 @@ export const dispatchGarments = async (ids: string[]): Promise<void> => {
     .from('garments')
     .update({ location: 'transit_to_shop', in_production: false, feedback_status: null })
     .in('id', ids);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`dispatchGarments: failed to dispatch garments to shop: ${error.message}`);
 
   // Append dispatch log entries (best-effort; don't block on failure).
   try {
@@ -613,7 +944,7 @@ export const releaseFinals = async (ids: string[]): Promise<void> => {
     .update({ piece_stage: 'waiting_cut' as PieceStage, in_production: false })
     .in('id', ids)
     .eq('piece_stage', 'waiting_for_acceptance');
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`releaseFinals: failed to release finals from waiting_for_acceptance: ${error.message}`);
 };
 
 /** Release finals with a production plan + assigned date — skips scheduler step.
@@ -634,7 +965,7 @@ export const releaseFinalsWithPlan = async (
       assigned_date: assignedDate,
     })
     .in('id', ids);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`releaseFinalsWithPlan: failed to release finals with production plan: ${error.message}`);
 };
 
 /** Update garment details (dates, production plan) — used by Assigned Orders editing.
@@ -655,7 +986,7 @@ export const updateGarmentDetails = async (
     .eq('id', id)
     .single();
 
-  if (fetchErr) throw new Error(fetchErr.message);
+  if (fetchErr) throw new Error(`updateGarmentDetails: failed to fetch garment for update: ${fetchErr.message}`);
   if (!current) throw new Error('Garment not found');
 
   const location = current.location ?? '';
@@ -689,7 +1020,7 @@ export const updateGarmentDetails = async (
     .from('garments')
     .update(filtered)
     .eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updateGarmentDetails: failed to update garment details: ${error.message}`);
 };
 
 /** Bulk update delivery_date for all garments in an order */
@@ -705,7 +1036,7 @@ export const updateOrderDeliveryDate = async (orderId: number, date: string): Pr
       .from('work_orders')
       .update({ delivery_date: date })
       .eq('id', wo.id);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${error.message}`);
   }
 };
 
@@ -782,7 +1113,7 @@ export const markLostInTransit = async (ids: string[]): Promise<void> => {
     .from('garments')
     .update({ location: 'lost_in_transit' as any, in_production: false })
     .in('id', ids);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`markLostInTransit: failed to mark garments as lost in transit: ${error.message}`);
 };
 
 /** Bulk update assigned_date for all garments in an order */
@@ -792,5 +1123,5 @@ export const updateOrderAssignedDate = async (orderId: number, date: string): Pr
     .update({ assigned_date: date })
     .eq('order_id', orderId)
     .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null');
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`updateOrderAssignedDate: failed to update order assigned date: ${error.message}`);
 };

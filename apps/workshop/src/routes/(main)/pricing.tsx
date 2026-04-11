@@ -217,7 +217,7 @@ function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
                 value={String(price.value)}
                 onSave={(v) => updatePrice.mutate({ key: price.key, brand, value: v }, {
                   onSuccess: () => setEditing(null),
-                  onError: (e) => toast.error(e.message),
+                  onError: (e) => toast.error(`Could not update system charge: ${e.message}`),
                 })}
                 onCancel={() => setEditing(null)}
                 isPending={updatePrice.isPending}
@@ -283,7 +283,7 @@ function StyleImageCard({ style }: { style: Style }) {
             value={String(style.rate_per_item ?? "0")}
             onSave={(v) => updateStyle.mutate({ id: style.id, rate_per_item: v }, {
               onSuccess: () => setEditing(false),
-              onError: (e) => toast.error(e.message),
+              onError: (e) => toast.error(`Could not update style price: ${e.message}`),
             })}
             onCancel={() => setEditing(false)}
             isPending={updateStyle.isPending}
@@ -368,7 +368,7 @@ function HashwaCard({ style }: { style: Style }) {
             value={String(style.rate_per_item ?? "0")}
             onSave={(v) => updateStyle.mutate({ id: style.id, rate_per_item: v }, {
               onSuccess: () => setEditing(false),
-              onError: (e) => toast.error(e.message),
+              onError: (e) => toast.error(`Could not update hashwa price: ${e.message}`),
             })}
             onCancel={() => setEditing(false)}
             isPending={updateStyle.isPending}
@@ -438,7 +438,7 @@ function StyleGlyphCard({ style }: { style: Style }) {
             value={String(style.rate_per_item ?? "0")}
             onSave={(v) => updateStyle.mutate({ id: style.id, rate_per_item: v }, {
               onSuccess: () => setEditing(false),
-              onError: (e) => toast.error(e.message),
+              onError: (e) => toast.error(`Could not update style price: ${e.message}`),
             })}
             onCancel={() => setEditing(false)}
             isPending={updateStyle.isPending}

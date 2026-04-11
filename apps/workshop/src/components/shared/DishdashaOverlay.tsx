@@ -1,12 +1,15 @@
+import type React from "react";
 import templateSvg from "@/assets/print/template.svg";
 import { STYLE_IMAGE_MAP, ACCESSORY_ICONS } from "@/lib/style-images";
 import {
   qualityCheckTemplateFields,
   type QualityTemplateFieldId,
 } from "../print/quality-check-field-layout";
+import { parseMeasurementParts } from "@repo/database";
 import type { WorkshopGarment, Measurement } from "@repo/database";
+import { MeasurementValue } from "./MeasurementValue";
 
-// ── Measurement helpers (mirrors TerminalQualityTemplatePrint) ───
+// ── Measurement helpers ──────────────────────────────────────────
 
 const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   collar: "collar_width",
@@ -28,23 +31,6 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   bottom: "bottom",
 };
 
-function fmtFrac(v: number): string {
-  const whole = Math.floor(v);
-  const rem = v - whole;
-  if (rem < 0.01) return `${whole}`;
-  if (Math.abs(rem - 0.25) < 0.01) return `${whole} ¼`;
-  if (Math.abs(rem - 0.5) < 0.01) return `${whole} ½`;
-  if (Math.abs(rem - 0.75) < 0.01) return `${whole} ¾`;
-  return v.toFixed(1);
-}
-
-function fmtVal(raw: unknown, degree: number): string {
-  if (raw == null || raw === "") return "";
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n === 0) return "";
-  return fmtFrac(degree ? n - degree : n);
-}
-
 function fmtThick(v: string | null | undefined): string {
   if (!v) return "—";
   const n = v.trim().toUpperCase();
@@ -57,43 +43,112 @@ function fmtThick(v: string | null | undefined): string {
 
 // ── Shared sub-components ────────────────────────────────────────
 
-function SectionBlock({
-  title,
-  children,
+function StyleImage({
+  image,
+  alt,
+  fallback,
 }: {
-  title: string;
-  children: React.ReactNode;
+  image: string | null | undefined;
+  alt: string;
+  fallback: string;
 }) {
+  if (image) {
+    return (
+      <img
+        src={image}
+        alt={alt}
+        className="h-20 w-full rounded-md border border-zinc-200 bg-zinc-50 object-contain"
+      />
+    );
+  }
   return (
-    <div className="border border-zinc-200 rounded overflow-hidden">
-      <div className="px-2 py-[3px] bg-zinc-100 border-b border-zinc-200">
-        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
-          {title}
-        </span>
-      </div>
-      <div className="p-2">{children}</div>
+    <div className="h-20 w-full rounded-md border border-zinc-200 bg-zinc-50 flex items-center justify-center text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+      {fallback}
     </div>
   );
 }
 
-function AccessoryBadge({
+function MeasureLayout({
+  image,
+  imageAlt,
+  imageFallback,
+  height,
+  width,
+  accessories,
+}: {
+  image: string | null | undefined;
+  imageAlt: string;
+  imageFallback: string;
+  height: React.ReactNode;
+  width?: React.ReactNode;
+  accessories?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="grid grid-cols-[6rem_auto] items-start gap-1.5">
+        <StyleImage image={image} alt={imageAlt} fallback={imageFallback} />
+        <div className="flex items-center justify-start">
+          <span className="inline-flex items-center justify-center w-9 h-20 rounded-md border border-zinc-200 bg-zinc-50 text-base font-semibold text-zinc-700">
+            <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
+          </span>
+        </div>
+      </div>
+      {width !== undefined && (
+        <div className="mt-1.5 w-24 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-base font-semibold text-zinc-700">
+          {width ?? "—"}
+        </div>
+      )}
+      {accessories && (
+        <div className="mt-2 flex flex-wrap justify-end gap-1">{accessories}</div>
+      )}
+    </div>
+  );
+}
+
+function ThicknessBadge({ value }: { value: string | null | undefined }) {
+  return (
+    <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold tracking-wide text-zinc-600 uppercase">
+      {fmtThick(value)}
+    </span>
+  );
+}
+
+function AccessoryPill({
   icon,
   label,
   rotate,
 }: {
-  icon: string;
+  icon?: string;
   label: string;
   rotate?: boolean;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold border border-zinc-200 rounded-full px-2 py-0.5 bg-zinc-50">
-      <img
-        src={icon}
-        alt=""
-        className={`h-3 w-auto object-contain ${rotate ? "-rotate-90" : ""}`}
-      />
+    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 uppercase">
+      {icon && (
+        <img src={icon} alt="" className={`h-3 w-auto object-contain ${rotate ? "-rotate-90" : ""}`} />
+      )}
       {label}
     </span>
+  );
+}
+
+function StyleSection({
+  title,
+  thickness,
+  children,
+}: {
+  title: string;
+  thickness?: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h4 className="text-[11px] font-bold tracking-wide text-zinc-700 uppercase">{title}</h4>
+        {thickness !== undefined && <ThicknessBadge value={thickness} />}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -112,15 +167,16 @@ export function DishdashaOverlay({
   const m = measurement;
   const degree = m?.degree ? Number(m.degree) : 0;
 
-  const fmtM = (key: keyof Measurement) =>
-    m ? fmtVal(m[key], degree) : "";
+  // Sidebar style measurements (pocket sizes, jabzour, collar dims) are absolute
+  // style dimensions — degree is a body-posture offset that applies only to the
+  // main body measurements shown on the SVG template, not to these.
+  const measureVal = (key: keyof Measurement) =>
+    m ? <MeasurementValue raw={m[key]} degree={0} /> : null;
 
   const styleLabel = String(g.style ?? "kuwaiti").toUpperCase();
   const lineCount = String(g.lines ?? 1);
   const lineLabel =
     lineCount === "1" ? "SINGLE" : lineCount === "2" ? "DOUBLE" : lineCount;
-  const garmentDisplayId = g.garment_id ?? g.id?.slice(0, 8);
-
   const frontPocket = g.front_pocket_type
     ? STYLE_IMAGE_MAP[g.front_pocket_type]
     : null;
@@ -144,53 +200,11 @@ export function DishdashaOverlay({
 
   return (
     <div className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900">
-      {/* ── Header ── */}
-      <div className="flex items-stretch border-b border-zinc-300 min-h-[60px]">
-        {/* Garment ID block */}
-        <div className="flex flex-col justify-center px-4 py-3 border-r border-zinc-300 min-w-[90px] shrink-0">
-          <span className="text-[8px] font-black uppercase tracking-[0.18em] text-zinc-400 leading-none mb-1">
-            N FAT
-          </span>
-          <span className="text-2xl font-black font-mono leading-none text-zinc-900">
-            {garmentDisplayId}
-          </span>
-        </div>
-
-        {/* Customer / Invoice */}
-        <div className="flex-1 px-4 py-3 flex flex-col justify-center gap-0.5 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm leading-tight">
-              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mr-1.5">
-                Customer
-              </span>
-              <span className="font-semibold">{g.customer_name ?? "—"}</span>
-            </span>
-            <span className="text-sm leading-tight">
-              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mr-1.5">
-                Invoice
-              </span>
-              <span className="font-semibold">
-                #{g.invoice_number ?? "—"}
-              </span>
-            </span>
-          </div>
-        </div>
-
-        {/* Brand */}
-        <div className="flex items-center justify-center px-4 py-3 border-l border-zinc-300 shrink-0">
-          <span className="text-sm font-black uppercase tracking-widest border-2 border-zinc-900 rounded-full px-3 py-1 leading-none">
-            {g.order_brand ?? "ERTH"}
-          </span>
-        </div>
-      </div>
-
       {/* ── Body ── */}
       <div className="flex min-h-0">
         {/* Template frame with measurement cells */}
-        <div
-          className="relative shrink-0 border-r border-zinc-200"
-          style={{ width: "57%", aspectRatio: "793.76 / 1122.56" }}
-        >
+        <div className="relative shrink-0 border-r border-zinc-200" style={{ width: "57%" }}>
+          <div className="relative w-full" style={{ aspectRatio: "793.76001 / 1122.5601" }}>
           <img
             src={templateSvg}
             alt="Measurement template"
@@ -199,8 +213,8 @@ export function DishdashaOverlay({
 
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
-            const val = m ? fmtVal(m[key], degree) : "";
-            if (!val) return null;
+            const parts = m ? parseMeasurementParts(m[key], degree) : null;
+            if (!parts) return null;
             const isVertical =
               "orientation" in field && field.orientation === "vertical";
             return (
@@ -212,12 +226,12 @@ export function DishdashaOverlay({
                   top: `${field.top}%`,
                   width: `${field.width}%`,
                   height: `${field.height}%`,
-                  fontSize: "clamp(7px, 1.45%, 11px)",
+                  fontSize: "clamp(14px, 2.8%, 20px)",
                   writingMode: isVertical ? "vertical-rl" : undefined,
                   borderRadius: "1.5px",
                 }}
               >
-                {val}
+                <MeasurementValue raw={m![key]} degree={degree} />
               </div>
             );
           })}
@@ -229,186 +243,122 @@ export function DishdashaOverlay({
               </span>
             </div>
           )}
+          </div>
         </div>
 
         {/* Style panel */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
-          {/* Style / Line / Type meta row */}
-          <div className="grid grid-cols-3 border-b border-zinc-200 shrink-0">
+          {/* Meta row */}
+          <div className="grid grid-cols-3 gap-1.5 p-2 border-b border-zinc-200 shrink-0">
             {[
               styleLabel,
               `LINE ${lineLabel}`,
               (g.garment_type ?? "FINAL").toUpperCase(),
             ].map((v, i) => (
-              <div
+              <span
                 key={i}
-                className={`px-2 py-2 text-center text-[10px] font-black uppercase tracking-wide ${i < 2 ? "border-r border-zinc-200" : ""}`}
+                className="rounded-lg border border-zinc-800 bg-white px-2 py-1 text-center text-[11px] font-bold tracking-wide text-zinc-900 uppercase"
               >
                 {v}
-              </div>
+              </span>
             ))}
           </div>
 
           {/* Sections */}
-          <div className="p-2 flex flex-col gap-1.5">
+          <div className="p-2 flex flex-col gap-2">
             {/* Front Pocket */}
-            <SectionBlock title="Front Pocket">
-              <div className="flex gap-2 items-start">
-                {frontPocket?.image ? (
-                  <img
-                    src={frontPocket.image}
-                    alt={frontPocket.label}
-                    className="h-10 w-auto object-contain shrink-0"
-                  />
-                ) : (
-                  <div className="h-10 w-10 border border-zinc-200 bg-zinc-50 flex items-center justify-center text-[8px] font-bold text-zinc-400 shrink-0">
-                    POCKET
-                  </div>
-                )}
-                <div className="flex flex-col gap-0.5 text-[11px] font-bold">
-                  <span>H {fmtM("top_pocket_length") || "—"}</span>
-                  <span>W {fmtM("top_pocket_width") || "—"}</span>
-                  <span className="text-zinc-500 text-[10px]">
-                    {fmtThick(g.front_pocket_thickness)}
-                  </span>
-                </div>
-              </div>
-              {g.pen_holder ? (
-                <div className="mt-1">
-                  <AccessoryBadge
-                    icon={ACCESSORY_ICONS.pen}
-                    label="PEN"
-                    rotate
-                  />
-                </div>
-              ) : null}
-            </SectionBlock>
+            <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness}>
+              <MeasureLayout
+                image={frontPocket?.image}
+                imageAlt={frontPocket?.label ?? "Front pocket"}
+                imageFallback="POCKET"
+                height={measureVal("top_pocket_length")}
+                width={measureVal("top_pocket_width")}
+                accessories={
+                  g.pen_holder ? (
+                    <AccessoryPill icon={ACCESSORY_ICONS.pen} label="PEN" rotate />
+                  ) : null
+                }
+              />
+            </StyleSection>
 
             {/* Jabzour */}
-            <SectionBlock title="Jabzour">
-              <div className="flex gap-2 items-start">
-                <div className="flex gap-1 shrink-0">
-                  {jabzourPrimary?.image ? (
-                    <img
-                      src={jabzourPrimary.image}
-                      alt=""
-                      className="h-9 w-auto object-contain rotate-90"
-                    />
-                  ) : (
-                    <div className="h-9 w-9 border border-zinc-200 bg-zinc-50 flex items-center justify-center text-[8px] font-bold text-zinc-400">
-                      JAB
-                    </div>
-                  )}
-                  {jabzourSecondary?.image && (
-                    <img
-                      src={jabzourSecondary.image}
-                      alt=""
-                      className="h-9 w-auto object-contain rotate-90"
-                    />
-                  )}
-                </div>
-                <div className="flex flex-col gap-0.5 text-[11px] font-bold">
-                  <span>L {fmtM("jabzour_length") || "—"}</span>
-                  <span className="text-zinc-500 text-[10px]">
-                    {fmtThick(g.jabzour_thickness)}
-                  </span>
-                </div>
-              </div>
-            </SectionBlock>
+            <StyleSection title="Jabzour" thickness={g.jabzour_thickness}>
+              <MeasureLayout
+                image={jabzourPrimary?.image}
+                imageAlt="Jabzour"
+                imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
+                height={measureVal("jabzour_length")}
+                accessories={
+                  isShaab ? (
+                    <AccessoryPill label="ZIPPER" />
+                  ) : null
+                }
+              />
+              {jabzourSecondary?.image && (
+                <img
+                  src={jabzourSecondary.image}
+                  alt=""
+                  className="mt-1 h-10 w-[4.5rem] rounded-md border border-zinc-200 bg-zinc-50 object-contain"
+                />
+              )}
+            </StyleSection>
 
             {/* Side Pocket */}
-            <SectionBlock title="Side Pocket">
-              <div className="flex gap-2 items-start">
-                {sidePocket?.image ? (
-                  <img
-                    src={sidePocket.image}
-                    alt="Side Pocket"
-                    className="h-12 w-auto object-contain shrink-0"
-                  />
-                ) : (
-                  <div className="h-12 w-10 border border-zinc-200 bg-zinc-50 flex items-center justify-center text-[8px] font-bold text-zinc-400 shrink-0">
-                    SIDE
-                  </div>
-                )}
-                <div className="flex flex-col gap-0.5 text-[11px] font-bold">
-                  <span>H {fmtM("side_pocket_length") || "—"}</span>
-                  <span>W {fmtM("side_pocket_width") || "—"}</span>
-                </div>
-              </div>
-              <div className="mt-1 flex gap-1 flex-wrap">
-                {g.wallet_pocket ? (
-                  <AccessoryBadge
-                    icon={ACCESSORY_ICONS.wallet}
-                    label="WALLET"
-                  />
-                ) : null}
-                <AccessoryBadge
-                  icon={ACCESSORY_ICONS.phone}
-                  label="MOBILE"
-                />
-              </div>
-            </SectionBlock>
+            <StyleSection title="Side Pocket">
+              <MeasureLayout
+                image={sidePocket?.image}
+                imageAlt="Side pocket"
+                imageFallback="SIDE"
+                height={measureVal("side_pocket_length")}
+                width={measureVal("side_pocket_width")}
+                accessories={
+                  (g.wallet_pocket || g.mobile_pocket) ? (
+                    <>
+                      {g.wallet_pocket && <AccessoryPill icon={ACCESSORY_ICONS.wallet} label="WALLET" />}
+                      {g.mobile_pocket && <AccessoryPill icon={ACCESSORY_ICONS.phone} label="MOBILE" />}
+                    </>
+                  ) : null
+                }
+              />
+            </StyleSection>
 
             {/* Cuffs */}
-            <SectionBlock title="Cuffs">
-              <div className="flex gap-2 items-start">
-                {cuffsType?.image ? (
-                  <img
-                    src={cuffsType.image}
-                    alt={cuffsType.label}
-                    className="h-9 w-auto object-contain shrink-0"
-                  />
-                ) : (
-                  <div className="h-9 w-9 border border-zinc-200 bg-zinc-50 flex items-center justify-center text-[8px] font-bold text-zinc-400 shrink-0">
-                    CUFFS
-                  </div>
-                )}
-                <div className="text-[10px] font-bold text-zinc-500">
-                  {fmtThick(g.cuffs_thickness)}
-                </div>
+            <StyleSection title="Cuffs" thickness={g.cuffs_thickness}>
+              <div className="w-24">
+                <StyleImage
+                  image={cuffsType?.image}
+                  alt={cuffsType?.label ?? "Cuffs"}
+                  fallback="NO CUFF"
+                />
               </div>
-            </SectionBlock>
+            </StyleSection>
 
             {/* Collar */}
-            <SectionBlock title="Collar">
-              <div className="flex gap-2 items-start">
-                {collarType?.image ? (
-                  <img
-                    src={collarType.image}
-                    alt={collarType.label}
-                    className="h-9 w-auto object-contain shrink-0"
-                  />
-                ) : (
-                  <div className="h-9 w-9 border border-zinc-200 bg-zinc-50 flex items-center justify-center text-[8px] font-bold text-zinc-400 shrink-0">
-                    COLLAR
-                  </div>
-                )}
-                <div className="flex flex-col gap-0.5 text-[11px] font-bold">
-                  <span>H {fmtM("collar_height") || "—"}</span>
-                  <span>W {fmtM("collar_width") || "—"}</span>
-                </div>
-              </div>
-              {(collarButton?.image || g.small_tabaggi) ? (
-                <div className="mt-1 flex gap-1 flex-wrap">
-                  {collarButton?.image ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold border border-zinc-200 rounded-full px-2 py-0.5 bg-zinc-50">
-                      <img src={collarButton.image} alt="" className="h-3.5 w-auto" />
-                      BUTTON
-                    </span>
-                  ) : null}
-                  {g.small_tabaggi ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold border border-zinc-200 rounded-full px-2 py-0.5 bg-zinc-50">
-                      <img src={ACCESSORY_ICONS.smallTabaggi} alt="" className="h-3.5 w-auto" />
-                      SMALL TABAGGI
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </SectionBlock>
+            <StyleSection title="Collar" thickness={g.collar_thickness}>
+              <MeasureLayout
+                image={collarType?.image}
+                imageAlt={collarType?.label ?? "Collar"}
+                imageFallback="COLLAR"
+                height={measureVal("collar_height")}
+                width={measureVal("collar_width")}
+                accessories={
+                  (collarButton || g.small_tabaggi) ? (
+                    <>
+                      {collarButton && (
+                        <AccessoryPill icon={collarButton.image ?? undefined} label={collarButton.label} />
+                      )}
+                      {g.small_tabaggi && (
+                        <AccessoryPill icon={ACCESSORY_ICONS.smallTabaggi} label="SMALL TABAGGI" />
+                      )}
+                    </>
+                  ) : null
+                }
+              />
+            </StyleSection>
 
-            {/* Lines (only shown when > 1) */}
             {g.lines && g.lines > 1 ? (
-              <div className="flex items-center justify-center py-1 border border-zinc-200 rounded text-[11px] font-black uppercase tracking-wide">
+              <div className="flex items-center justify-center py-1.5 rounded-lg border border-zinc-200 text-[11px] font-black uppercase tracking-wide text-zinc-700">
                 {g.lines} Lines
               </div>
             ) : null}
@@ -416,15 +366,6 @@ export function DishdashaOverlay({
         </div>
       </div>
 
-      {/* ── Notes ── */}
-      {g.notes ? (
-        <div className="border-t border-zinc-300 px-4 py-2 text-sm">
-          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mr-2">
-            Notes
-          </span>
-          <span className="font-medium">{g.notes}</span>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -450,7 +450,7 @@ function PendingRow({
         items: Array.from(qtys.entries()).map(([id, qty]) => ({ id, approved_qty: qty === "" ? 0 : qty })),
       });
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to approve");
+      toast.error(`Could not approve request: ${e?.message ?? String(e)}`);
     }
   };
 
@@ -709,7 +709,7 @@ function PendingRequestsList({
       });
       setRejectingRequest(null);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to reject");
+      toast.error(`Could not reject request: ${e?.message ?? String(e)}`);
     }
   };
 
@@ -901,7 +901,7 @@ function ApprovedRequestsList({
       });
       setDispatchingRequest(null);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to dispatch");
+      toast.error(`Could not dispatch request: ${e?.message ?? String(e)}`);
     }
   };
 

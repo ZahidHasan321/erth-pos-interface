@@ -78,6 +78,7 @@ export function usePaymentTransactions(orderId: number | undefined) {
         queryKey: ["payment-transactions", orderId],
         queryFn: () => getPaymentTransactions(orderId!),
         enabled: !!orderId,
+        staleTime: 30_000,
     });
 }
 
@@ -181,7 +182,7 @@ export function useOpenRegisterMutation() {
             }
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
-        onError: (error) => toast.error(`Error: ${error.message}`),
+        onError: (error) => toast.error(`Could not open register: ${error.message}`),
     });
 }
 
@@ -196,7 +197,7 @@ export function useReopenRegisterMutation() {
             }
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
-        onError: (error) => toast.error(`Error: ${error.message}`),
+        onError: (error) => toast.error(`Could not reopen register: ${error.message}`),
     });
 }
 
@@ -212,7 +213,7 @@ export function useCloseRegisterMutation() {
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
             queryClient.invalidateQueries({ queryKey: ["eod-report"], refetchType: "active" });
         },
-        onError: (error) => toast.error(`Error: ${error.message}`),
+        onError: (error) => toast.error(`Could not close register: ${error.message}`),
     });
 }
 
@@ -222,12 +223,12 @@ export function useAddCashMovementMutation() {
         mutationFn: addCashMovement,
         onSuccess: (response) => {
             if (response.status === "error") {
-                toast.error(`Failed: ${response.message}`);
+                toast.error(`Could not record cash movement: ${response.message}`);
                 return;
             }
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
-        onError: (error) => toast.error(`Error: ${error.message}`),
+        onError: (error) => toast.error(`Could not record cash movement: ${error.message}`),
     });
 }
 

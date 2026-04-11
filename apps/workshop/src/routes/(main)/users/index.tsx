@@ -792,7 +792,7 @@ function UsersPage() {
 
       setSheetOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save user");
+      toast.error(`Could not save user: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -807,7 +807,8 @@ function UsersPage() {
       setDeactivateDialogOpen(false);
       setDeactivateTarget(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
+      const action = deactivateTarget.is_active !== false ? "deactivate" : "activate";
+      toast.error(`Could not ${action} user: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

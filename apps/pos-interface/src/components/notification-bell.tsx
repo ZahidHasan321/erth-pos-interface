@@ -110,7 +110,10 @@ function NotificationRow({
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const { data: notifications = [] } = useNotifications();
+  // Only fetch the full list when the popover opens — the badge itself only
+  // needs the unread count, so the RPC for 50 rows shouldn't fire on every
+  // page mount. Cache persists across open/close within staleTime.
+  const { data: notifications = [] } = useNotifications(open);
   const unreadCount = useUnreadCount();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();

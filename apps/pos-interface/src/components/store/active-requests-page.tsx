@@ -261,7 +261,7 @@ export default function ActiveRequestsPage() {
       setConfirmCancel(null);
       if (expandedId === confirmCancel.id) setExpandedId(null);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to cancel");
+      toast.error(`Could not cancel request: ${e?.message ?? String(e)}`);
     }
   };
 

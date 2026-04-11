@@ -19,12 +19,15 @@ const AuthContext = React.createContext<AuthContext | null>(null);
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
-  const { data } = await db
+  const { data, error } = await db
     .from('users')
     .select('id, username, name, role, department, email, phone, employee_id')
     .eq('id', userId)
     .single();
 
+  if (error) {
+    throw new Error(`Failed to load user profile: ${error.message}`);
+  }
   if (!data) return null;
 
   return {
@@ -117,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await res.json();
 
       if (!res.ok) {
-        throw new Error(result.error || 'Login failed');
+        throw new Error(`Login failed: ${result.error || 'no error message from server'}`);
       }
 
       if (result.session) {
@@ -128,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const fullUser = await fetchUserFromSession(result.user.id);
-      if (!fullUser) throw new Error('Failed to load user profile');
+      if (!fullUser) throw new Error('Failed to load user profile: no matching user row found');
       setUser(fullUser);
     } finally {
       loginInProgress.current = false;

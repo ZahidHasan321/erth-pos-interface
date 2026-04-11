@@ -17,6 +17,11 @@ import { useAuth } from "@/context/auth";
 const TRANSFER_KEY = "transfer-requests";
 export const TRANSFER_BADGE_KEY = "transfer-badge-counts";
 
+// Realtime subscribes to transfer_requests + transfer_request_items and
+// invalidates both keys on every change, so navigations can reuse the cache
+// without refetching.
+const TRANSFER_STALE_TIME = 5 * 60 * 1000;
+
 /**
  * Lightweight count-only query for sidebar badges.
  * Single request, no joins — just 3 parallel HEAD counts.
@@ -27,6 +32,7 @@ export function useTransferBadgeCounts(enabled = true) {
     queryKey: [TRANSFER_BADGE_KEY, brand],
     queryFn: () => getTransferBadgeCounts(brand),
     enabled,
+    staleTime: TRANSFER_STALE_TIME,
   });
 }
 
@@ -36,6 +42,7 @@ export function useTransferRequests(filters?: TransferFilters) {
   return useQuery({
     queryKey: [TRANSFER_KEY, filtersWithBrand],
     queryFn: () => getTransferRequests(filtersWithBrand),
+    staleTime: TRANSFER_STALE_TIME,
   });
 }
 
@@ -111,9 +118,9 @@ export function useDispatchTransfer() {
       dispatchTransfer(transferId, user!.id, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
-      queryClient.invalidateQueries({ queryKey: ["fabrics"] });
-      queryClient.invalidateQueries({ queryKey: ["shelf"] });
-      queryClient.invalidateQueries({ queryKey: ["accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
     },
   });
 }
@@ -138,9 +145,9 @@ export function useReceiveTransfer() {
       receiveTransfer(transferId, user!.id, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
-      queryClient.invalidateQueries({ queryKey: ["fabrics"] });
-      queryClient.invalidateQueries({ queryKey: ["shelf"] });
-      queryClient.invalidateQueries({ queryKey: ["accessories"] });
+      queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
     },
   });
 }

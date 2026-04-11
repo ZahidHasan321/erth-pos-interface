@@ -339,7 +339,7 @@ function UnifiedFeedbackInterface() {
             setActiveOrder(res.data);
           }
         })
-        .catch(() => toast.error("Failed to load order"))
+        .catch((err) => toast.error(`Could not load order: ${err instanceof Error ? err.message : String(err)}`))
         .finally(() => setIsLoadingOrder(false));
     }
   }, [paramOrderId]);

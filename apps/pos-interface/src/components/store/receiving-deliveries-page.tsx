@@ -392,7 +392,7 @@ function PendingDeliveries({
       });
       toast.success("Item received");
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to receive item");
+      toast.error(`Could not receive item: ${e?.message ?? String(e)}`);
     }
   };
 
@@ -415,7 +415,7 @@ function PendingDeliveries({
       }
       setReceivingTransfer(null);
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to receive transfer");
+      toast.error(`Could not receive transfer: ${e?.message ?? String(e)}`);
     }
   };
 

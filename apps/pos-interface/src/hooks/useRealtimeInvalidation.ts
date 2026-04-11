@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { NOTIFICATIONS_KEY } from './useNotifications';
@@ -6,6 +6,23 @@ import { TRANSFER_BADGE_KEY } from './useTransfers';
 import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout>;
+  return ((...args: any[]) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
+
+// Locations that affect the "Orders at Showroom" page. Everything else
+// (workshop production stages) should not trigger a refetch of that query.
+const SHOWROOM_LOCATIONS = new Set(['shop', 'transit_to_shop']);
+
+function rowTouchesShowroom(row: any): boolean {
+  if (!row) return false;
+  return typeof row.location === 'string' && SHOWROOM_LOCATIONS.has(row.location);
+}
 
 /**
  * Subscribes to Supabase Realtime changes on key tables and invalidates
@@ -18,6 +35,76 @@ export function useRealtimeInvalidation() {
   const { user } = useAuth();
   const currentUserId = user?.id ?? null;
   const shownNotificationIds = useRef(new Set<number>());
+
+  // Debounced handlers so rapid bursts (e.g. workshop batch-updates) collapse
+  // into a single refetch instead of firing once per row.
+  //
+  // The showroom query is expensive and only cares about garments at the shop
+  // or in transit to the shop. A ref accumulates whether any of the debounced
+  // events touched a showroom-relevant location; if none did, the showroom
+  // refetch is skipped entirely. Other keys still invalidate because they
+  // care about workshop/dispatch state.
+  const showroomDirty = useRef(false);
+  const onGarmentChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      if (showroomDirty.current) {
+        qc.invalidateQueries({ queryKey: ['showroom-orders'] });
+        showroomDirty.current = false;
+      }
+      qc.invalidateQueries({ queryKey: ['order-history'] });
+      qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
+      qc.invalidateQueries({ queryKey: ['redispatchGarments'] });
+      qc.invalidateQueries({ queryKey: ['inTransitToWorkshop'] });
+      qc.invalidateQueries({ queryKey: ['alteration-garments'] });
+    }, 500),
+    [qc],
+  );
+
+  const onOrderChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['showroom-orders'] });
+      qc.invalidateQueries({ queryKey: ['order-history'] });
+      qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
+      qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
+    }, 300),
+    [qc],
+  );
+
+  const onDispatchLogChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
+    }, 300),
+    [qc],
+  );
+
+  const onShelfItemChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['showroom-orders'] });
+      qc.invalidateQueries({ queryKey: ['order-history'] });
+    }, 300),
+    [qc],
+  );
+
+  const onTransferChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['transfer-requests'] });
+      qc.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
+    }, 300),
+    [qc],
+  );
+
+  const onInventoryChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['fabrics'] });
+      qc.invalidateQueries({ queryKey: ['shelf'] });
+      qc.invalidateQueries({ queryKey: ['accessories'] });
+    }, 300),
+    [qc],
+  );
 
   useEffect(() => {
     // Don't subscribe until we have an authenticated user — the realtime
@@ -53,78 +140,55 @@ export function useRealtimeInvalidation() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'garments' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
-            qc.invalidateQueries({ queryKey: ['orders'] });
-            qc.invalidateQueries({ queryKey: ['showroom-orders'] });
-            qc.invalidateQueries({ queryKey: ['order-history'] });
-            qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
-            qc.invalidateQueries({ queryKey: ['redispatchGarments'] });
-            qc.invalidateQueries({ queryKey: ['inTransitToWorkshop'] });
+          (payload) => {
+            // Mark showroom dirty if the row (old or new) is at/to/from shop.
+            // Everything else (workshop-only garment state) skips the
+            // expensive showroom RPC refetch entirely.
+            if (rowTouchesShowroom(payload.new) || rowTouchesShowroom(payload.old)) {
+              showroomDirty.current = true;
+            }
+            onGarmentChange();
           },
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'orders' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['orders'] });
-            qc.invalidateQueries({ queryKey: ['showroom-orders'] });
-            qc.invalidateQueries({ queryKey: ['order-history'] });
-            qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
-            qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
-          },
+          onOrderChange,
         )
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
-          },
+          onDispatchLogChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'order_shelf_items' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['orders'] });
-            qc.invalidateQueries({ queryKey: ['showroom-orders'] });
-            qc.invalidateQueries({ queryKey: ['order-history'] });
-          },
+          onShelfItemChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'transfer_requests' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['transfer-requests'] });
-            qc.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
-          },
+          onTransferChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'transfer_request_items' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['transfer-requests'] });
-          },
+          onTransferChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'fabrics' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['fabrics'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'shelf' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['shelf'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'accessories' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['accessories'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
@@ -168,12 +232,25 @@ export function useRealtimeInvalidation() {
 
     setup();
 
+    // When the tab comes back from background, the WebSocket may have been
+    // killed by the browser. Supabase reconnects automatically, but any
+    // events fired while backgrounded are lost. Invalidate all queries so
+    // the UI picks up changes that happened while away.
+    // Debounced to prevent multiple firings on rapid tab switches.
+    const onVisibilityChange = debounce(() => {
+      if (document.visibilityState === 'visible') {
+        qc.invalidateQueries({ refetchType: 'active' });
+      }
+    }, 100);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (channel) {
         (channel as any)._authUnsub?.();
         db.removeChannel(channel);
       }
     };
-  }, [qc, currentUserId]);
+  }, [qc, currentUserId, onGarmentChange, onOrderChange, onDispatchLogChange, onShelfItemChange, onTransferChange, onInventoryChange]);
 }

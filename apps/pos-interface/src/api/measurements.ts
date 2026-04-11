@@ -51,7 +51,7 @@ export const createMeasurement = async (
     .single();
 
   if (error) {
-    console.error('Error creating measurement:', error);
+    console.error('createMeasurement: failed to create measurement:', error);
     return { status: 'error', message: error.message };
   }
   return { status: 'success', data: data as any };
@@ -69,7 +69,7 @@ export const updateMeasurement = async (
     .single();
 
   if (error) {
-    console.error('Error updating measurement:', error);
+    console.error('updateMeasurement: failed to update measurement:', error);
     return { status: 'error', message: error.message };
   }
   return { status: 'success', data: data as any };

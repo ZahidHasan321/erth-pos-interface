@@ -202,8 +202,8 @@ export function CustomerDemographicsForm({
           toast.error(response.message || "Failed to create customer.");
         }
       },
-      onError: () => {
-        toast.error("Failed to create customer.");
+      onError: (err) => {
+        toast.error(`Could not create customer: ${err instanceof Error ? err.message : String(err)}`);
       },
     }
   );
@@ -232,8 +232,8 @@ export function CustomerDemographicsForm({
           toast.error(response.message || "Failed to update customer.");
         }
       },
-      onError: () => {
-        toast.error("Failed to update customer.");
+      onError: (err) => {
+        toast.error(`Could not update customer: ${err instanceof Error ? err.message : String(err)}`);
       },
     }
   );

@@ -1,11 +1,29 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { WORKSHOP_GARMENTS_KEY, ASSIGNED_VIEW_KEY } from './useWorkshopGarments';
+import {
+  WORKSHOP_GARMENTS_KEY,
+  SCHEDULER_KEY,
+  TERMINAL_KEY,
+  WORKLOAD_KEY,
+  COMPLETED_TODAY_KEY,
+  ASSIGNED_OVERVIEW_KEY,
+  ASSIGNED_PAGE_KEY,
+  COMPLETED_VIEW_KEY,
+} from './useWorkshopGarments';
+import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
 import { NOTIFICATIONS_KEY } from './useNotifications';
 import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout>;
+  return ((...args: any[]) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
 
 /**
  * Subscribes to Supabase Realtime changes on key tables and invalidates
@@ -18,6 +36,46 @@ export function useRealtimeInvalidation() {
   const { user } = useAuth();
   const currentUserId = user?.id ?? null;
   const shownNotificationIds = useRef(new Set<number>());
+
+  const onGarmentChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
+      qc.invalidateQueries({ queryKey: SCHEDULER_KEY });
+      qc.invalidateQueries({ queryKey: TERMINAL_KEY });
+      qc.invalidateQueries({ queryKey: WORKLOAD_KEY });
+      qc.invalidateQueries({ queryKey: COMPLETED_TODAY_KEY });
+      qc.invalidateQueries({ queryKey: SIDEBAR_COUNTS_KEY });
+      qc.invalidateQueries({ queryKey: ASSIGNED_OVERVIEW_KEY });
+      qc.invalidateQueries({ queryKey: ASSIGNED_PAGE_KEY });
+      qc.invalidateQueries({ queryKey: COMPLETED_VIEW_KEY });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'order-garments' });
+    }, 300),
+    [qc],
+  );
+
+  const onDispatchLogChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
+    }, 300),
+    [qc],
+  );
+
+  const onTransferChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['transfer-requests'] });
+    }, 300),
+    [qc],
+  );
+
+  const onInventoryChange = useCallback(
+    debounce(() => {
+      qc.invalidateQueries({ queryKey: ['fabrics'] });
+      qc.invalidateQueries({ queryKey: ['shelf'] });
+      qc.invalidateQueries({ queryKey: ['accessories'] });
+    }, 300),
+    [qc],
+  );
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -50,54 +108,37 @@ export function useRealtimeInvalidation() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'garments' },
-          () => {
-            qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
-            qc.invalidateQueries({ queryKey: ASSIGNED_VIEW_KEY });
-            qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
-            qc.invalidateQueries({ queryKey: ['completed-today-garments'] });
-          },
+          onGarmentChange,
         )
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['dispatchHistory'] });
-          },
+          onDispatchLogChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'transfer_requests' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['transfer-requests'] });
-          },
+          onTransferChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'transfer_request_items' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['transfer-requests'] });
-          },
+          onTransferChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'fabrics' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['fabrics'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'shelf' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['shelf'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'accessories' },
-          () => {
-            qc.invalidateQueries({ queryKey: ['accessories'] });
-          },
+          onInventoryChange,
         )
         .on(
           'postgres_changes',
@@ -141,12 +182,25 @@ export function useRealtimeInvalidation() {
 
     setup();
 
+    // When the tab comes back from background, the WebSocket may have been
+    // killed by the browser. Supabase reconnects automatically, but any
+    // events fired while backgrounded are lost. Invalidate all queries so
+    // the UI picks up changes that happened while away.
+    // Debounced to prevent multiple firings on rapid tab switches.
+    const onVisibilityChange = debounce(() => {
+      if (document.visibilityState === 'visible') {
+        qc.invalidateQueries({ refetchType: 'active' });
+      }
+    }, 100);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (channel) {
         (channel as any)._authUnsub?.();
         db.removeChannel(channel);
       }
     };
-  }, [qc, currentUserId]);
+  }, [qc, currentUserId, onGarmentChange, onDispatchLogChange, onTransferChange, onInventoryChange]);
 }

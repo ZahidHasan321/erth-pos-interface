@@ -61,7 +61,7 @@ function ReceivingInterface() {
             );
             const results = await Promise.all(promises);
             const error = results.find((r) => r.status === "error");
-            if (error) throw new Error(error.message);
+            if (error) throw new Error(`Could not receive garments: ${error.message}`);
             return { count: garments.length, orderId };
         },
         onMutate: async ({ orderId }) => {

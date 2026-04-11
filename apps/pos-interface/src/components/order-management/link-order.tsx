@@ -104,8 +104,8 @@ export default function LinkOrder() {
       } else {
         toast.info(`No confirmed orders found for ${customer.name}.`);
       }
-    } catch {
-      toast.error("Failed to fetch customer orders.");
+    } catch (err) {
+      toast.error(`Could not fetch customer orders: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -130,8 +130,8 @@ export default function LinkOrder() {
           setQuickSearch("");
         }
       }
-    } catch {
-      toast.error("Search failed");
+    } catch (err) {
+      toast.error(`Customer search failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsSearching(false);
     }
@@ -166,8 +166,8 @@ export default function LinkOrder() {
             ordersMap.set(res.data.id, mapOrderToSelected(res.data));
           }
         }
-      } catch {
-        toast.error("Failed to sync some group members");
+      } catch (err) {
+        toast.error(`Could not sync some group members: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -240,8 +240,8 @@ export default function LinkOrder() {
       queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
-    } catch {
-      toast.error("Failed to link orders. Please try again.");
+    } catch (err) {
+      toast.error(`Could not link orders: ${err instanceof Error ? err.message : String(err)}. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }

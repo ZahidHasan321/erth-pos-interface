@@ -146,7 +146,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 {isUpdating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><span>Dispatch{selectedIds.size < garments.length ? ` (${selectedIds.size})` : ""}</span><ChevronRight className="w-3 h-3 ml-1" /></>}
               </Button>
               <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0" aria-label={isExpanded ? "Collapse" : "Expand"} aria-expanded={isExpanded}>
-                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+                <ChevronDown className={cn("size-4 text-muted-foreground", isExpanded && "rotate-180")} />
               </button>
             </div>
           </div>
@@ -167,7 +167,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                 <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown"}</span>
               </div>
               <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0" aria-expanded={isExpanded}>
-                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
+                <ChevronDown className={cn("size-4 text-muted-foreground", isExpanded && "rotate-180")} />
               </button>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -186,87 +186,61 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
           </div>
         </div>
 
-        {/* Expanded garment table */}
-        {garments.length > 0 && (
-          <div className={cn(
-            "grid transition-[grid-template-rows] duration-300 ease-in-out",
-            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          )}>
-          <div className={cn(
-            "overflow-hidden",
-            isExpanded && "border-t-2 border-border/40 bg-muted/5"
-          )}>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                  <th className="py-2.5 px-3 w-10">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={(checked) => toggleAll(!!checked)}
-                    />
-                  </th>
-                  <th className="text-left py-2.5 px-5">Garment</th>
-                  <th className="text-left py-2.5 px-5">Type</th>
-                  <th className="text-left py-2.5 px-5">Style</th>
-                  <th className="text-left py-2.5 px-5">Fabric</th>
-                  <th className="text-left py-2.5 px-5">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {garments.map((g) => {
-                  const isSelected = selectedIds.has(g.id);
-                  return (
-                    <tr key={g.id} className={cn(
-                      "border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors",
+        {/* Expanded garment cards */}
+        {garments.length > 0 && isExpanded && (
+          <div className="border-t-2 border-border/40 bg-muted/5 p-3">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(checked) => toggleAll(!!checked)}
+              />
+              <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Select All</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {garments.map((g) => {
+                const isSelected = selectedIds.has(g.id);
+                return (
+                  <div
+                    key={g.id}
+                    className={cn(
+                      "flex items-start gap-2.5 rounded-lg border border-border/50 bg-background p-3 cursor-pointer hover:bg-muted/20 transition-colors",
                       !isSelected && "opacity-50"
-                    )}>
-                      <td className="py-2.5 px-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(checked) => toggleGarment(g.id, !!checked)}
-                        />
-                      </td>
-                      <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
-                      <td className="py-2.5 px-5">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn(
-                            "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
-                            g.garment_type === "brova"
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-emerald-50 text-emerald-700"
-                          )}>
-                            {g.garment_type}
-                          </span>
-                          {g.express && (
-                            <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
-                              Express
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
-                      <td className="py-2.5 px-5">
-                        {g.fabric_source === "IN" ? (
-                          <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
-                            {g.fabric?.name || "IN"}
-                          </span>
-                        ) : g.fabric_source === "OUT" ? (
-                          <span className="text-xs font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
-                            OUT
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    onClick={() => toggleGarment(g.id, !isSelected)}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => toggleGarment(g.id, !!checked)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span className="font-black text-sm">{g.garment_id}</span>
+                        <span className={cn(
+                          "text-xs font-black uppercase px-1.5 py-0.5 rounded",
+                          g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                        )}>
+                          {g.garment_type}
+                        </span>
+                        {g.express && (
+                          <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">Express</span>
                         )}
-                      </td>
-                      <td className="py-2.5 px-5 text-muted-foreground text-xs max-w-[200px] truncate">
-                        {g.notes || "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                        <span>{g.style || "Kuwaiti"}</span>
+                        {g.fabric_source === "IN" ? (
+                          <span className="font-bold text-emerald-700">{g.fabric?.name || "IN"}</span>
+                        ) : g.fabric_source === "OUT" ? (
+                          <span className="font-bold text-amber-700">OUT</span>
+                        ) : null}
+                        {g.notes && <span className="truncate max-w-[120px] italic">"{g.notes}"</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>
@@ -315,8 +289,10 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
   } = useQuery<ApiResponse<RedispatchGarment[]>>({
     queryKey: ["redispatchGarments", getBrand()],
     queryFn: () => getGarmentsForRedispatch() as Promise<ApiResponse<RedispatchGarment[]>>,
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    // Realtime invalidates on garment changes (see useRealtimeInvalidation),
+    // so navigations don't need a short staleTime.
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const garments = redispatchResponse?.data || [];
@@ -344,8 +320,8 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
     try {
       await dispatchGarmentToWorkshop(garment.id, garment.trip_number || 1);
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
-    } catch {
-      toast.error(`Failed to dispatch garment ${garment.garment_id || garment.id}`);
+    } catch (err) {
+      toast.error(`Could not dispatch garment ${garment.garment_id || garment.id}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDispatchingIds(prev => {
         const newSet = new Set(prev);
@@ -363,8 +339,8 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
         garments.map(g => dispatchGarmentToWorkshop(g.id, g.trip_number || 1))
       );
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
-    } catch {
-      toast.error("Bulk dispatch failed for some garments.");
+    } catch (err) {
+      toast.error(`Bulk dispatch failed for some garments: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsBulkDispatching(false);
     }
@@ -544,8 +520,8 @@ function InTransitToWorkshopTab() {
       const response = await getInTransitToWorkshopOrders();
       return response as ApiResponse<OrderWithDetails[]>;
     },
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const orders = transitResponse?.data || [];
@@ -955,8 +931,8 @@ function DispatchHistoryTab() {
   const { data: historyResp, isLoading, isError, error } = useQuery<ApiResponse<DispatchHistoryRow[]>>({
     queryKey: ['dispatchHistory', getBrand(), fromDate.toISOString(), toDate.toISOString(), 'to_workshop'],
     queryFn: () => getDispatchHistory(fromDate.toISOString(), toDate.toISOString(), 'to_workshop'),
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const rows = historyResp?.data ?? [];
@@ -1155,8 +1131,8 @@ export default function DispatchOrderPage() {
   const { data: redispatchResponse } = useQuery<ApiResponse<any[]>>({
     queryKey: ["redispatchGarments", getBrand()],
     queryFn: () => getGarmentsForRedispatch(),
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
   const returnCount = redispatchResponse?.data?.length || 0;
 
@@ -1167,8 +1143,8 @@ export default function DispatchOrderPage() {
       const response = await getInTransitToWorkshopOrders();
       return response as ApiResponse<OrderWithDetails[]>;
     },
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
   const transitOrders = transitResponse?.data || [];
   const transitGarmentCount = transitOrders.reduce((sum, o) => sum + (o.garments?.length || 0), 0);
@@ -1181,9 +1157,9 @@ export default function DispatchOrderPage() {
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
       await queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
       await queryClient.invalidateQueries({ queryKey: ["dispatchHistory"] });
-    } catch (error) {
-      console.error("Failed to dispatch order:", error);
-      toast.error(`Failed to dispatch Order #${orderId}`);
+    } catch (err) {
+      console.error("Failed to dispatch order:", err);
+      toast.error(`Could not dispatch Order #${orderId}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setUpdatingOrderIds((prev) => {
         const newSet = new Set(prev);
@@ -1201,8 +1177,8 @@ export default function DispatchOrderPage() {
     try {
       await Promise.all(orderIds.map(id => dispatchOrder(id)));
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
-    } catch {
-      toast.error("Bulk dispatch failed for some orders.");
+    } catch (err) {
+      toast.error(`Bulk dispatch failed for some orders: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsBulkUpdating(false);
     }

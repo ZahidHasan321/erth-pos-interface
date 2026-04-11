@@ -289,51 +289,51 @@
      transform="matrix(1.9753032,0,0,1.9753032,-320.04006,-507.36973)"
      style="display:inline">
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 294.13872,390.1296 c 0,0 -11.56393,323.12419 -20.16475,421.04334 55.82429,0.98764 142.72252,-0.81651 187.23221,0.83325 C 448.13613,710.69254 435.042,390.71288 435.042,390.71288 l 39.82955,175.4 35.16333,-14.33197 -59.57768,-232.22794 -62.07743,-18.24826 -5.62447,-9.08247 h -36.20489 l -3.83297,8.83249 -64.07725,19.24817 -62.99401,230.47811 34.99667,12.66546 c 0,0 43.66252,-173.40019 43.49587,-173.31687 z"
        id="path1163" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 363.77188,390.9929 v 39.00502 -0.11784"
        id="path1165" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 301.22749,439.99719 h 124.09724 v 0.35356"
        id="path1166" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 301.05071,495.50508 h 124.27402 v 0.35355"
        id="path1167" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 301.22749,559.49824 h 123.74368 v 0"
        id="path1168" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 342.41646,501.25032 v 54.88916 h 0.0884"
        id="path1169" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 392.22971,501.37957 v 54.88916 h 0.0884"
        id="path1169-1" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="M 300.3436,619.16037 H 426.03183 V 618.9836"
        id="path1170" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 363.62966,621.45847 v 50.91169 0"
        id="path1171" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 300.07844,675.64053 h 125.95339 v 0.0884"
        id="path1172" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 364.0716,699.15183 v 29.43332 h -0.17677"
        id="path1173" />
     <path
-       style="display:inline;fill:none;stroke:#000000;stroke-opacity:1"
+       style="display:inline;fill:none;stroke:#a6a300;stroke-width:0.999847;stroke-dasharray:none;stroke-opacity:1"
        d="m 300.25,730.125 h 125.875 v 0.625"
        id="path1174" />
     <path
@@ -495,7 +495,7 @@
        transform="translate(43.4755,419.38622)"><tspan
          x="357.4745"
          y="281.38513"
-         id="tspan2">BCK</tspan></text>
+         id="tspan1">BCK</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-44"
@@ -505,7 +505,7 @@
        transform="translate(-1.0245,468.88622)"><tspan
          x="349.03578"
          y="281.38513"
-         id="tspan3">BOTTOM</tspan></text>
+         id="tspan2">BOTTOM</tspan></text>
     <text
        xml:space="preserve"
        id="text1187"
@@ -515,7 +515,7 @@
        transform="translate(-0.25,2.25)"><tspan
          x="350.50564"
          y="281.38513"
-         id="tspan4">COLLAR</tspan></text>
+         id="tspan3">COLLAR</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-20"
@@ -525,7 +525,7 @@
        transform="translate(-42.0245,420.63622)"><tspan
          x="358.20597"
          y="281.38513"
-         id="tspan5">FRT</tspan></text>
+         id="tspan4">FRT</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-042"
@@ -535,7 +535,7 @@
        transform="translate(-0.3995,409.51122)"><tspan
          x="353.52425"
          y="281.38513"
-         id="tspan6">WAIST</tspan></text>
+         id="tspan5">WAIST</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-27"
@@ -545,7 +545,7 @@
        transform="translate(-35.8995,352.88622)"><tspan
          x="353.14292"
          y="281.38513"
-         id="tspan7">SHEST</tspan></text>
+         id="tspan6">SHEST</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-49"
@@ -555,7 +555,7 @@
        transform="translate(34.1005,353.76122)"><tspan
          x="342.46298"
          y="281.38513"
-         id="tspan8">HALF CHEST</tspan></text>
+         id="tspan7">HALF CHEST</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-0"
@@ -565,7 +565,7 @@
        transform="translate(-0.14949999,91.88622)"><tspan
          x="349.91285"
          y="281.38513"
-         id="tspan9">LENGTH</tspan></text>
+         id="tspan8">LENGTH</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-6"
@@ -575,7 +575,7 @@
        transform="translate(31.7255,116.88622)"><tspan
          x="357.4745"
          y="281.38513"
-         id="tspan10">BCK</tspan></text>
+         id="tspan9">BCK</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-2"
@@ -585,7 +585,7 @@
        transform="translate(-34.6495,118.13622)"><tspan
          x="358.20597"
          y="281.38513"
-         id="tspan11">FRT</tspan></text>
+         id="tspan10">FRT</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-2-4"
@@ -595,7 +595,7 @@
        transform="translate(-107.96138,157.44366)"><tspan
          x="351.63491"
          y="281.38513"
-         id="tspan12">ELBOW</tspan></text>
+         id="tspan11">ELBOW</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-08"
@@ -605,7 +605,7 @@
        transform="translate(3.2255,170.76122)"><tspan
          x="344.56552"
          y="281.38513"
-         id="tspan13">SHOULDER</tspan></text>
+         id="tspan12">SHOULDER</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-4"
@@ -615,7 +615,7 @@
        transform="translate(-47.1495,227.63622)"><tspan
          x="349.17185"
          y="281.38513"
-         id="tspan14">SLEEVES</tspan></text>
+         id="tspan13">SLEEVES</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-3"
@@ -625,7 +625,7 @@
        transform="translate(2.7255,227.63622)"><tspan
          x="346.73825"
          y="281.38513"
-         id="tspan15">ARMHOLE</tspan></text>
+         id="tspan14">ARMHOLE</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-9"
@@ -635,7 +635,7 @@
        transform="translate(0.6005,298.63622)"><tspan
          x="346.56578"
          y="281.38513"
-         id="tspan16">UP CHEST</tspan></text>
+         id="tspan15">UP CHEST</tspan></text>
     <text
        xml:space="preserve"
        id="text1187-04"
@@ -645,6 +645,6 @@
        transform="translate(48.9755,228.01122)"><tspan
          x="352.52585"
          y="281.38513"
-         id="tspan17">WIDTH</tspan></text>
+         id="tspan16">WIDTH</tspan></text>
   </g>
 </svg>

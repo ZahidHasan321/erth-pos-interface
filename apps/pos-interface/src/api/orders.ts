@@ -90,8 +90,8 @@ const ORDER_DETAILS_QUERY = `
     *,
     workOrder:work_orders!order_id(*),
     customer:customers(*),
-    garments:garments(*, fabric:fabrics(*)),
-    shelf_items:order_shelf_items(*, shelf:shelf(*))
+    garments:garments(*, fabric:fabrics(name, color)),
+    shelf_items:order_shelf_items(*, shelf:shelf(type, brand))
 `;
 
 export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
@@ -131,7 +131,7 @@ export const getOrdersForLinking = async (
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers(*),
+            customer:customers(id, name, nick_name, phone, country_code),
             child_orders:work_orders!linked_order_id(id:order_id)
         `, { count: 'exact' })
         .eq('customer_id', customerId)
@@ -161,7 +161,7 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
         .select(`
             *,
             workOrder:work_orders!order_id(*),
-            customer:customers(*),
+            customer:customers(id, name, nick_name, phone, country_code),
             child_orders:work_orders!linked_order_id(id:order_id)
         `)
         .eq('id', idOrInvoice)
@@ -177,7 +177,7 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers(*),
+            customer:customers(id, name, nick_name, phone, country_code),
             child_orders:work_orders!linked_order_id(id:order_id)
         `)
         .eq('workOrder.invoice_number', idOrInvoice)
@@ -200,8 +200,8 @@ export const getInTransitToWorkshopOrders = async (): Promise<ApiResponse<Order[
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers(*),
-            garments:garments!inner(*, fabric:fabrics(*))
+            customer:customers(id, name, nick_name, phone, country_code),
+            garments:garments!inner(*, fabric:fabrics(name, color))
             `, { count: 'exact' })
             .in('garments.location', ['transit_to_workshop', 'lost_in_transit'])
             .eq('brand', getBrand())
@@ -221,8 +221,8 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers(*),
-            garments:garments!inner(*, fabric:fabrics(*))
+            customer:customers(id, name, nick_name, phone, country_code),
+            garments:garments!inner(*, fabric:fabrics(name, color))
             `, { count: 'exact' })
             .in('garments.location', ['transit_to_shop', 'lost_in_transit'])
             .eq('brand', getBrand())
@@ -539,7 +539,7 @@ export const getOrdersList = async (filters: Record<string, any>): Promise<ApiRe
     let builder = db.from(TABLE_NAME).select(`
         *,
         workOrder:work_orders!order_id${hasWorkOrderFilter ? '!inner' : ''}(*),
-        customer:customers(*),
+        customer:customers(id, name, nick_name, phone, country_code),
         garments:garments(*, fabric:fabrics(name))
     `).eq('brand', getBrand());
 
@@ -574,7 +574,7 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers(*),
+            customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name))
         `)
         .eq('brand', getBrand())
@@ -756,7 +756,7 @@ export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
         .select(`
             *,
             workOrder:work_orders!order_id!inner(*),
-            customer:customers!customer_id(*)
+            customer:customers!customer_id(id, name, nick_name, phone, country_code)
         `)
         .not('workOrder.linked_order_id', 'is', null)
         .eq('brand', getBrand())

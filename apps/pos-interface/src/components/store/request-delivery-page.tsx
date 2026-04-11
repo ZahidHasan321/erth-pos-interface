@@ -210,7 +210,7 @@ export default function RequestDeliveryPage() {
       setAccessorySelections(new Map());
       setNotes("");
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to create request");
+      toast.error(`Could not create delivery request: ${e?.message ?? String(e)}`);
     }
   };
 

@@ -189,8 +189,8 @@ function ActiveDeliveriesPage() {
       await cancelTransfer.mutateAsync(confirmCancel.id);
       setConfirmCancel(null);
       if (expandedId === confirmCancel.id) setExpandedId(null);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to cancel");
+    } catch (err: any) {
+      toast.error(`Could not cancel delivery: ${err?.message ?? String(err)}`);
     }
   };
 

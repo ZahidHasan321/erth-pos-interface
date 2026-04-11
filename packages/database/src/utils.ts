@@ -3,6 +3,56 @@ import type { PieceStage, OrderPhase, GarmentType, Location } from "./schema";
 const TERMINAL: PieceStage[] = ["completed"];
 const PRE_DISPATCH: PieceStage[] = ["waiting_for_acceptance", "waiting_cut"];
 
+export type MeasurementParts = {
+  whole: number;
+  numerator: number;
+  denominator: number;
+  negative: boolean;
+};
+
+/**
+ * Parses a decimal measurement into whole + fraction parts.
+ * e.g. 12.5 → { whole: 12, numerator: 1, denominator: 2, negative: false }
+ * Returns null for null/zero/non-numeric values.
+ */
+export function parseMeasurementParts(raw: unknown, degree = 0): MeasurementParts | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n === 0) return null;
+  const adjusted = degree ? n - degree : n;
+  const negative = adjusted < 0;
+  const abs = Math.abs(adjusted);
+  const whole = Math.floor(abs);
+  const frac = abs - whole;
+
+  if (frac < 0.001) return { whole, numerator: 0, denominator: 1, negative };
+
+  const gcd = (a: number, b: number): number => (b < 0.0001 ? a : gcd(b, a % b));
+  const precision = 1000000;
+  const num = Math.round(frac * precision);
+  const divisor = gcd(num, precision);
+  return {
+    whole,
+    numerator: Math.round(num / divisor),
+    denominator: Math.round(precision / divisor),
+    negative,
+  };
+}
+
+/**
+ * Formats a decimal measurement as a plain text fraction string.
+ * e.g. 12.5 → "12 1/2". Falls back to this when React rendering isn't available.
+ */
+export function formatMeasurement(raw: unknown, degree = 0): string {
+  const p = parseMeasurementParts(raw, degree);
+  if (!p) return "";
+  const sign = p.negative ? "-" : "";
+  if (p.numerator === 0) return `${sign}${p.whole}`;
+  return p.whole > 0
+    ? `${sign}${p.whole} ${p.numerator}/${p.denominator}`
+    : `${sign}${p.numerator}/${p.denominator}`;
+}
+
 /**
  * Determines if a garment is in "alteration" territory based on trip number and type.
  * - Brova: trip >= 4 (trip 1=initial, 2=after first trial, 3=brova changes, 4+=alteration)

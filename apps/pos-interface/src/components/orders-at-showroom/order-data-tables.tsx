@@ -1,18 +1,12 @@
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   type ExpandedState,
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   type OnChangeFn,
   type RowSelectionState,
-  type SortingState,
   useReactTable,
-  type VisibilityState,
 } from "@tanstack/react-table";
 import * as React from "react";
 
@@ -30,7 +24,6 @@ import { Link } from "@tanstack/react-router";
 import { cn, clickableProps } from "@/lib/utils";
 
 import type { OrderRow } from "./types";
-import type { FilterState } from "./order-filters";
 
 import {
   Select,
@@ -45,8 +38,14 @@ type OrderDataTableProps = {
   data: OrderRow[];
   rowSelection: RowSelectionState;
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
-  filters: FilterState;
   selectedOrderId?: number;
+  // Server-driven pagination
+  pageIndex: number;                       // 0-indexed
+  pageSize: number;
+  totalCount: number;
+  onPageIndexChange: (pageIndex: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  isFetching?: boolean;
 };
 
 export function OrderDataTable({
@@ -54,138 +53,27 @@ export function OrderDataTable({
   data,
   rowSelection,
   onRowSelectionChange,
-  filters,
   selectedOrderId,
+  pageIndex,
+  pageSize,
+  totalCount,
+  onPageIndexChange,
+  onPageSizeChange,
+  isFetching,
 }: OrderDataTableProps) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
-  const [pageSize, setPageSize] = React.useState(20);
-  const [pageIndex, setPageIndex] = React.useState(0);
 
-  // Reset to first page when filters change
-  React.useEffect(() => {
-    setPageIndex(0);
-  }, [filters]);
-
-  // --- FILTERING & SORTING LOGIC ---
+  // Group linked orders together so primary is followed by its children.
+  // Filtering/sorting/pagination are all server-driven now, so this is the
+  // only client-side reshaping that remains.
   const processedData = React.useMemo(() => {
-    if (!data || !Array.isArray(data)) {
-      return [];
-    }
+    if (!data || !Array.isArray(data)) return [];
 
-    // Pre-compute filter values once (avoid re-creating per row)
-    const searchIdLower = filters.searchId ? filters.searchId.toLowerCase() : "";
-    const customerLower = filters.customer ? filters.customer.toLowerCase() : "";
-    const startTime = filters.deliveryDateStart ? new Date(filters.deliveryDateStart).getTime() : 0;
-    const endTime = filters.deliveryDateEnd ? new Date(filters.deliveryDateEnd).getTime() + 86400000 : 0;
-
-    // 1. Filter
-    const result = data.filter((row) => {
-      try {
-        const order = row.order;
-
-        // ID / Invoice Search (Combined)
-        if (searchIdLower) {
-          const orderIdMatch = (row.orderId || "").toLowerCase().includes(searchIdLower);
-          const fatouraMatch = String(row.fatoura || "").includes(searchIdLower);
-          if (!orderIdMatch && !fatouraMatch) return false;
-        }
-
-        // Customer / Mobile Search
-        if (customerLower) {
-          const nameMatch = (row.customerName || "").toLowerCase().includes(customerLower);
-          const nickMatch = (row.customerNickName || "").toLowerCase().includes(customerLower);
-          const mobileMatch = (row.mobileNumber || "").includes(customerLower);
-          if (!nameMatch && !nickMatch && !mobileMatch) return false;
-        }
-
-        // Stage
-        if (filters.stage && filters.stage !== "all") {
-          if (row.showroomStatus.label !== filters.stage) return false;
-        }
-
-        // Date Range (Delivery Date)
-        if (startTime || endTime) {
-          if (!row.deliveryDate) return false;
-          const deliveryTime = new Date(row.deliveryDate).getTime();
-
-          if (startTime && deliveryTime < startTime) return false;
-          if (endTime && deliveryTime > endTime) return false;
-        }
-
-        // Reminder Status Logic (Multi-select AND logic)
-        if (filters.reminderStatuses && filters.reminderStatuses.length > 0) {
-          for (const status of filters.reminderStatuses) {
-            let matchesCurrentStatus = false;
-
-            switch (status) {
-              case "r1_done":
-                if (order.r1_date) matchesCurrentStatus = true;
-                break;
-              case "r1_pending":
-                if (!order.r1_date) matchesCurrentStatus = true;
-                break;
-              
-              case "r2_done":
-                if (order.r2_date) matchesCurrentStatus = true;
-                break;
-              case "r2_pending":
-                if (!order.r2_date) matchesCurrentStatus = true;
-                break;
-
-              case "r3_done":
-                if (order.r3_date) matchesCurrentStatus = true;
-                break;
-              case "r3_pending":
-                if (!order.r3_date) matchesCurrentStatus = true;
-                break;
-
-              case "call_done":
-                if (order.call_status || order.call_reminder_date) matchesCurrentStatus = true;
-                break;
-              case "escalated":
-                if (order.escalation_date) matchesCurrentStatus = true;
-                break;
-            }
-
-            // AND Logic: If this specific filter fails, the whole row is excluded.
-            if (!matchesCurrentStatus) return false;
-          }
-        }
-
-        return true;
-      } catch (error) {
-        console.error("Filter error:", error);
-        return true;
-      }
-    });
-
-    // 2. Sort
-    result.sort((a, b) => {
-      switch (filters.sortBy) {
-        case "deliveryDate_asc":
-          return (new Date(a.deliveryDate || "2099-01-01").getTime()) - (new Date(b.deliveryDate || "2099-01-01").getTime());
-        
-        case "deliveryDate_desc":
-          return (new Date(b.deliveryDate || "1970-01-01").getTime()) - (new Date(a.deliveryDate || "1970-01-01").getTime());
-        
-        case "balance_desc":
-          return (b.balance || 0) - (a.balance || 0);
-        
-        case "created_desc":
-        default:
-           return Number(b.orderRecordId || 0) - Number(a.orderRecordId || 0);
-      }
-    });
-
-    // Group linked orders together: primary followed by its children
     const grouped: OrderRow[] = [];
     const added = new Set<string>();
     const childrenByParent = new Map<string, OrderRow[]>();
 
-    result.forEach(row => {
+    data.forEach((row) => {
       const parentId = (row.order as any).linked_order_id;
       if (parentId) {
         const key = String(parentId);
@@ -194,13 +82,13 @@ export function OrderDataTable({
       }
     });
 
-    result.forEach(row => {
+    data.forEach((row) => {
       if (added.has(row.orderId)) return;
-      if ((row.order as any).linked_order_id) return; // will be added under its primary
+      if ((row.order as any).linked_order_id) return; // added under its primary
       grouped.push(row);
       added.add(row.orderId);
       const children = childrenByParent.get(row.orderId) || [];
-      children.forEach(child => {
+      children.forEach((child) => {
         if (!added.has(child.orderId)) {
           grouped.push(child);
           added.add(child.orderId);
@@ -208,51 +96,42 @@ export function OrderDataTable({
       });
     });
 
-    // Orphaned children (primary not in current set)
-    result.forEach(row => {
+    // Orphaned children (primary not in current page)
+    data.forEach((row) => {
       if (!added.has(row.orderId)) grouped.push(row);
     });
 
     return grouped;
-  }, [data, filters]);
+  }, [data]);
+
+  const pageCount = Math.max(1, Math.ceil(totalCount / Math.max(pageSize, 1)));
 
   const table = useReactTable({
     data: processedData,
     columns,
     state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
       rowSelection,
       expanded,
       pagination: {
         pageIndex,
         pageSize,
-      }
+      },
     },
-    onPaginationChange: (updater) => {
-      const next = typeof updater === 'function'
-        ? updater({ pageIndex, pageSize })
-        : updater;
-      setPageIndex(next.pageIndex);
-      setPageSize(next.pageSize);
-    },
+    pageCount,
+    manualPagination: true,
+    manualFiltering: true,
+    manualSorting: true,
     enableRowSelection: true,
     enableExpanding: true,
     onRowSelectionChange,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
     onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    enableSorting: false, 
+    enableSorting: false,
   });
 
-  const totalFilteredCount = table.getFilteredRowModel().rows.length;
+  const canPrev = pageIndex > 0;
+  const canNext = pageIndex + 1 < pageCount;
 
   return (
     <div className="space-y-4">
@@ -419,46 +298,50 @@ export function OrderDataTable({
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Rows per page</span>
-            <Select value={pageSize.toString()} onValueChange={(v) => {
-                setPageSize(Number(v));
-                setPageIndex(0);
-            }}>
-                <SelectTrigger className="h-9 w-20 bg-card border-border/60">
-                    <SelectValue placeholder={pageSize.toString()} />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                </SelectContent>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(v) => {
+                onPageSizeChange(Number(v));
+                onPageIndexChange(0);
+              }}
+            >
+              <SelectTrigger className="h-9 w-20 bg-card border-border/60">
+                <SelectValue placeholder={pageSize.toString()} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
             </Select>
           </div>
-          
+
           <div className="text-sm text-muted-foreground">
-            {totalFilteredCount > 0 && (
-                <>
-                    Showing <span className="font-bold text-foreground">{table.getRowModel().rows.length}</span> out of{" "}
-                    <span className="font-bold text-foreground">{totalFilteredCount}</span> orders
-                </>
+            {totalCount > 0 && (
+              <>
+                Showing <span className="font-bold text-foreground">{table.getRowModel().rows.length}</span> out of{" "}
+                <span className="font-bold text-foreground">{totalCount}</span> orders
+                {isFetching && <span className="ml-2 text-xs opacity-60">(updating…)</span>}
+              </>
             )}
           </div>
 
           <div className="text-xs text-muted-foreground sm:border-l border-border/60 sm:pl-4">
-            {table.getFilteredSelectedRowModel().rows.length} row(s) selected
+            {Object.keys(rowSelection).length} row(s) selected
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground tabular-nums">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+            Page {pageIndex + 1} of {pageCount}
           </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               aria-label="Previous page"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
+              onClick={() => onPageIndexChange(Math.max(0, pageIndex - 1))}
+              disabled={!canPrev}
               className="h-10 w-10 p-0"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -467,8 +350,8 @@ export function OrderDataTable({
               variant="outline"
               size="sm"
               aria-label="Next page"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
+              onClick={() => onPageIndexChange(pageIndex + 1)}
+              disabled={!canNext}
               className="h-10 w-10 p-0"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />

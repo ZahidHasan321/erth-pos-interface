@@ -1,6 +1,14 @@
 import templateSvg from "@/assets/print/template.svg";
+import erthLogo from "@/assets/erth-dark.svg";
+import sakkbaLogo from "@/assets/sakkba.svg";
 import { ACCESSORY_ICONS, STYLE_IMAGE_MAP } from "@/lib/style-images";
+import { formatMeasurement } from "@repo/database";
 import type { Measurement, WorkshopGarment } from "@repo/database";
+
+const BRAND_LOGOS: Record<string, string> = {
+  ERTH: erthLogo,
+  SAKKBA: sakkbaLogo,
+};
 import {
   qualityCheckTemplateFields,
   type QualityTemplateFieldId,
@@ -29,26 +37,6 @@ const FIELD_MEASUREMENT_MAP: Record<QualityTemplateFieldId, keyof Measurement> =
 
 const EMPTY_VALUE = "-";
 
-function formatFraction(value: number): string {
-  const whole = Math.floor(value);
-  const remainder = value - whole;
-
-  if (Math.abs(remainder) < 0.01) return `${whole}`;
-  if (Math.abs(remainder - 0.25) < 0.01) return `${whole} 1/4`;
-  if (Math.abs(remainder - 0.5) < 0.01) return `${whole} 1/2`;
-  if (Math.abs(remainder - 0.75) < 0.01) return `${whole} 3/4`;
-
-  return value.toFixed(1);
-}
-
-function formatMeasuredValue(raw: unknown, degree: number): string {
-  if (raw == null || raw === "") return "";
-  if (raw instanceof Date) return "";
-  const numeric = Number(raw);
-  if (!Number.isFinite(numeric) || numeric === 0) return "";
-  const adjusted = degree ? numeric - degree : numeric;
-  return formatFraction(adjusted);
-}
 
 function formatThickness(value: string | null | undefined): string {
   if (!value) return EMPTY_VALUE;
@@ -97,28 +85,28 @@ export function TerminalQualityTemplatePrint({
     : optionFor(garment.jabzour_2);
   const jabzourSecondary = isShaab ? optionFor(garment.jabzour_2) : null;
 
-  const frontPocketHeight = formatMeasuredValue(
+  const frontPocketHeight = formatMeasurement(
     measurement?.top_pocket_length,
     degree,
   );
-  const frontPocketWidth = formatMeasuredValue(
+  const frontPocketWidth = formatMeasurement(
     measurement?.top_pocket_width,
     degree,
   );
-  const jabzourLength = formatMeasuredValue(
+  const jabzourLength = formatMeasurement(
     measurement?.jabzour_length,
     degree,
   );
-  const sidePocketHeight = formatMeasuredValue(
+  const sidePocketHeight = formatMeasurement(
     measurement?.side_pocket_length,
     degree,
   );
-  const sidePocketWidth = formatMeasuredValue(
+  const sidePocketWidth = formatMeasurement(
     measurement?.side_pocket_width,
     degree,
   );
-  const collarHeight = formatMeasuredValue(measurement?.collar_height, degree);
-  const collarWidth = formatMeasuredValue(measurement?.collar_width, degree);
+  const collarHeight = formatMeasurement(measurement?.collar_height, degree);
+  const collarWidth = formatMeasurement(measurement?.collar_width, degree);
 
   const garmentDisplayId = garment.garment_id ?? garment.id.slice(0, 8);
 
@@ -143,12 +131,19 @@ export function TerminalQualityTemplatePrint({
         </div>
 
         <div className="terminal-qc-print-brand">
-          {garment.order_brand ?? "ERTH"}
+          {(() => {
+            const brand = garment.order_brand ?? "ERTH";
+            const logo = BRAND_LOGOS[brand];
+            return logo
+              ? <img src={logo} alt={brand} className="terminal-qc-print-brand-logo" />
+              : <span>{brand}</span>;
+          })()}
         </div>
       </div>
 
       <div className="terminal-qc-print-main">
         <div className="terminal-qc-template-frame">
+          <div className="terminal-qc-template-frame-inner">
           <img
             src={templateSvg}
             alt="Measurement template"
@@ -158,7 +153,7 @@ export function TerminalQualityTemplatePrint({
           {qualityCheckTemplateFields.map((field) => {
             const measurementKey = FIELD_MEASUREMENT_MAP[field.id];
             const value = measurement
-              ? formatMeasuredValue(measurement[measurementKey], degree)
+              ? formatMeasurement(measurement[measurementKey], degree)
               : "";
 
             if (!value) return null;
@@ -178,6 +173,7 @@ export function TerminalQualityTemplatePrint({
               </div>
             );
           })}
+          </div>
         </div>
 
         <aside className="terminal-qc-style-panel">
@@ -268,9 +264,11 @@ export function TerminalQualityTemplatePrint({
                   WALLET
                 </span>
               ) : null}
-              <span>
-                <img src={ACCESSORY_ICONS.phone} alt="Mobile pocket" /> MOBILE
-              </span>
+              {garment.mobile_pocket ? (
+                <span>
+                  <img src={ACCESSORY_ICONS.phone} alt="Mobile pocket" /> MOBILE
+                </span>
+              ) : null}
             </div>
           </section>
 

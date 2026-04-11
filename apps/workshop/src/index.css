@@ -531,6 +531,12 @@ input[type="number"] {
     color: #000;
   }
 
+  body.terminal-printing .terminal-qc-print-brand-logo {
+    height: 7mm;
+    width: auto;
+    object-fit: contain;
+  }
+
   /* ── Body: template + style panel ── */
   body.terminal-printing .terminal-qc-print-main {
     display: flex;
@@ -541,12 +547,17 @@ input[type="number"] {
   body.terminal-printing .terminal-qc-template-frame {
     position: relative;
     width: 114mm;
-    aspect-ratio: 793.76001 / 1122.5601;
-    border: 0.5mm solid #000;
+    outline: 0.5mm solid #000;
     border-radius: 0;
-    overflow: hidden;
     background: #fff;
     flex-shrink: 0;
+  }
+
+  body.terminal-printing .terminal-qc-template-frame-inner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 793.76001 / 1122.5601;
+    overflow: hidden;
   }
 
   body.terminal-printing .terminal-qc-template-image {
