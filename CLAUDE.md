@@ -104,8 +104,8 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 
 #### Alteration Thresholds (trip number)
 
-- **Brova:** trip 1 = initial, trip 2-3 = brova returns, trip 4+ = alteration (alt# = trip - 3)
-- **Final:** trip 1 = initial, trip 2+ = alteration (alt# = trip - 1). Finals have no trial step.
+- **Brova and Final (unified):** trip 1 = initial, trip 2+ = alteration (alt# = trip - 1). Finals have no trial step; brova trip 2+ returns are treated as alterations too.
+- **QC-fail rework:** no trip increment — detected via `trip_history[current_trip].qc_attempts` containing a `result: "fail"` entry. Labeled `alt_p` in production terminals, distinct from trip-based `alt_N`.
 - Helper functions `isAlteration()` and `getAlterationNumber()` in `packages/database/src/utils.ts`.
 
 #### Step-by-Step Flow
@@ -153,9 +153,9 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 **9. Sending Garments Back** (`alterations` page or `dispatch > Return to Workshop` tab)
 - Both paths set: `piece_stage: waiting_cut`, `location: transit_to_workshop`, `trip_number += 1`, `in_production: false`
 
-**10. Workshop Re-receives** (workshop receiving page, tabs by trip)
-- Brova Returns tab: trip 2-3 brovas
-- Alteration In tab: brova trip 4+, final trip 2+
+**10. Workshop Re-receives** (workshop receiving page, Alterations section — all trip >= 2)
+- Single "Alterations" section covers every returning garment (brova or final trip 2+), and any QC-fail rework regardless of trip
+- All returning garments can be received or received & started immediately (no brova-approval gate at this point)
 - Resets `piece_stage: waiting_cut` if still `brova_trialed` with feedback
 
 **11. Final Collection** (feedback page, final tab)
@@ -170,7 +170,7 @@ Determines what shows on the "Orders at Showroom" page. Garment-state-driven —
 
 | Label | Condition | Staff Action |
 |-------|-----------|-------------|
-| `alteration_in` | Alteration garment at shop needing trial/action (brova trip 4+ with `awaiting_trial`, or any trip with `needs_repair`/`needs_redo` at alteration threshold) | Customer trial for returning alteration |
+| `alteration_in` | Alteration garment at shop needing trial/action (any trip 2+ with `awaiting_trial`, or `needs_repair`/`needs_redo` at alteration threshold) | Customer trial for returning alteration |
 | `brova_trial` | Brova at shop with `piece_stage: awaiting_trial` | Customer needs to try brovas on |
 | `needs_action` | Any garment at shop with `feedback_status: needs_repair/needs_redo` | Send rejected garment back to workshop |
 | `partial_ready` | All shop items done, but other garments still out (at workshop/transit) | Inform customer, partial pickup possible |
@@ -206,7 +206,7 @@ Order-level status on the Production Tracker. Brova returns and alterations are 
 
 **Priority:** at shop > ready for dispatch > in transit > awaiting finals release/brova trial > finals in production > brovas in production > fallback "In production".
 
-If brova is returning AND finals are in production → "Finals in production" wins (main order work). Brova return tracked separately in Brova Returns tab.
+If brova is returning AND finals are in production → "Finals in production" wins (main order work). Brova returns appear in the receiving page Alterations section alongside other returning garments.
 
 #### Order-Level Phase
 

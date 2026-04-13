@@ -53,36 +53,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     // Initial session restore
-    db.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancelled) return;
-      // Propagate the restored JWT to the Realtime client. supabase-js v2 only
-      // auto-sets realtime auth on SIGNED_IN / TOKEN_REFRESHED events — it does
-      // NOT react to INITIAL_SESSION, which is the only event fired when a
-      // cookie session is rehydrated on page reload. Without this line,
-      // postgres_changes channels would connect using the anon key and RLS
-      // policies that rely on auth.uid() (e.g. get_my_department()) silently
-      // filter out every event.
-      if (session?.access_token) {
-        db.realtime.setAuth(session.access_token);
-      }
-      if (session?.user?.app_metadata?.user_id) {
-        try {
-          const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
-          if (!cancelled) setUser(restored);
-        } catch {
-          // JWT may be expired — token refresh will fire SIGNED_IN/TOKEN_REFRESHED
-          // and the onAuthStateChange handler below will retry. Don't block loading.
-          console.warn('[Auth] Session restore failed — waiting for token refresh');
+    ;(async () => {
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        if (cancelled) return;
+        // Propagate the restored JWT to the Realtime client. supabase-js v2 only
+        // auto-sets realtime auth on SIGNED_IN / TOKEN_REFRESHED events — it does
+        // NOT react to INITIAL_SESSION, which is the only event fired when a
+        // cookie session is rehydrated on page reload. Without this line,
+        // postgres_changes channels would connect using the anon key and RLS
+        // policies that rely on auth.uid() (e.g. get_my_department()) silently
+        // filter out every event.
+        if (session?.access_token) {
+          try { db.realtime.setAuth(session.access_token); } catch (e) {
+            console.warn('[Auth] realtime.setAuth failed', e);
+          }
         }
+        if (session?.user?.app_metadata?.user_id) {
+          try {
+            const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
+            if (!cancelled) setUser(restored);
+          } catch {
+            console.warn('[Auth] Session restore failed — waiting for token refresh');
+          }
+        }
+      } catch (e) {
+        console.warn('[Auth] getSession failed', e);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-      if (!cancelled) setIsLoading(false);
-    });
+    })();
 
-    // React to auth state changes (token refresh, external sign-out)
-    const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
+    // React to auth state changes (token refresh, external sign-out).
+    //
+    // CRITICAL: onAuthStateChange callbacks must NOT make async supabase
+    // calls inline — supabase-js v2 holds an internal lock during the
+    // callback, so any nested db call deadlocks the entire client (every
+    // subsequent request hangs forever). Defer all async work via
+    // setTimeout(..., 0). See:
+    // https://supabase.com/docs/guides/troubleshooting/why-is-my-supabase-api-call-not-returning-PGzXw0
+    const { data: { subscription } } = db.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-
-      // Skip if login() is handling the session — avoids race condition
       if (loginInProgress.current) return;
 
       if (event === 'SIGNED_OUT' || !session) {
@@ -92,24 +103,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         if (session.access_token) {
-          db.realtime.setAuth(session.access_token);
-        }
-        const userId = session.user.app_metadata?.user_id;
-        if (userId) {
-          try {
-            const refreshed = await fetchUserFromSession(userId);
-            if (!cancelled) {
-              if (refreshed) {
-                setUser(refreshed);
-              } else {
-                await db.auth.signOut();
-              }
-            }
-          } catch {
-            // If fetch fails here too, user stays logged out
-            console.warn('[Auth] Failed to load user on', event);
+          try { db.realtime.setAuth(session.access_token); } catch (e) {
+            console.warn('[Auth] realtime.setAuth failed', e);
           }
         }
+        const userId = session.user.app_metadata?.user_id;
+        if (!userId) return;
+
+        setTimeout(async () => {
+          if (cancelled) return;
+          try {
+            const refreshed = await fetchUserFromSession(userId);
+            if (cancelled) return;
+            if (refreshed) {
+              setUser(refreshed);
+            } else {
+              await db.auth.signOut();
+            }
+          } catch {
+            console.warn('[Auth] Failed to load user on', event);
+          }
+        }, 0);
       }
     });
 
@@ -142,6 +156,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           access_token: result.session.access_token,
           refresh_token: result.session.refresh_token,
         });
+        try { db.realtime.setAuth(result.session.access_token); } catch (e) {
+          console.warn('[Auth] realtime.setAuth failed after login', e);
+        }
       }
 
       const fullUser = await fetchUserFromSession(result.user.id);

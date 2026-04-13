@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
-import type { WorkshopGarment, TripHistoryEntry } from '@repo/database';
+import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
 /** Map piece_stage → worker_history key (role-based) */
@@ -20,19 +20,80 @@ function parseTripHistory(raw: unknown): TripHistoryEntry[] {
   return [];
 }
 
+// ── stage_timings helpers ────────────────────────────────────────────────────
+
+function parseStageTimings(raw: unknown): StageTimings {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) as StageTimings; } catch { return {}; }
+  }
+  if (typeof raw === 'object') return raw as StageTimings;
+  return {};
+}
+
+/** Append a fresh in-progress entry to the given stage's session array. */
+function openStageSession(
+  timings: StageTimings,
+  stage: string,
+  at: string = new Date().toISOString(),
+): StageTimings {
+  const next: StageTimings = { ...timings };
+  const list = [...(next[stage] ?? [])];
+  // If the most recent entry is still open, don't stack — treat as idempotent.
+  const tail = list[list.length - 1];
+  if (tail && tail.completed_at === null) return timings;
+  list.push({ worker: null, started_at: at, completed_at: null });
+  next[stage] = list;
+  return next;
+}
+
+/** Close the most recent open session for the stage (sets completed_at + worker). */
+function closeStageSession(
+  timings: StageTimings,
+  stage: string,
+  worker: string | null,
+  at: string = new Date().toISOString(),
+): StageTimings {
+  const existing = timings[stage];
+  if (!existing || existing.length === 0) {
+    // Never opened — record a point-in-time entry so duration is at least non-null history.
+    return { ...timings, [stage]: [{ worker, started_at: at, completed_at: at }] };
+  }
+  const list = [...existing];
+  const idx = list.length - 1;
+  const tail = list[idx];
+  if (!tail || tail.completed_at !== null) return timings; // nothing open to close
+  list[idx] = { ...tail, completed_at: at, worker: worker ?? tail.worker };
+  return { ...timings, [stage]: list };
+}
+
+/** Discard the most recent open session for the stage (used on cancel-start). */
+function discardOpenStageSession(timings: StageTimings, stage: string): StageTimings {
+  const existing = timings[stage];
+  if (!existing || existing.length === 0) return timings;
+  const list = [...existing];
+  const tail = list[list.length - 1];
+  if (!tail || tail.completed_at !== null) return timings;
+  list.pop();
+  const next: StageTimings = { ...timings };
+  if (list.length === 0) delete next[stage];
+  else next[stage] = list;
+  return next;
+}
+
+// Silence lint on unused type import alias; StageTimingEntry is re-exported for callers.
+export type { StageTimingEntry };
+
 const WORKSHOP_QUERY = `
   *,
   order:orders!order_id(
     id,
     brand,
     checkout_status,
-    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery)
-  ),
-  customer:orders!order_id(
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
     customer:customers!customer_id(name, phone, country_code)
   ),
   measurement:measurements!measurement_id(*),
-  style_ref:styles!style_id(name, image_url),
   fabric_ref:fabrics!fabric_id(name, color)
 `;
 
@@ -46,19 +107,16 @@ const WORKSHOP_QUERY_LIGHT = `
     id,
     brand,
     checkout_status,
-    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery)
-  ),
-  customer:orders!order_id(
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
     customer:customers!customer_id(name, phone, country_code)
   ),
-  style_ref:styles!style_id(name, image_url),
   fabric_ref:fabrics!fabric_id(name, color)
 `;
 
 function flattenGarment(raw: any): WorkshopGarment {
-  const { order, customer, measurement, style_ref, fabric_ref, ...garment } = raw;
+  const { order, measurement, fabric_ref, ...garment } = raw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
-  const cust = Array.isArray(customer?.customer) ? customer.customer[0] : customer?.customer;
+  const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
 
   return {
     ...garment,
@@ -73,8 +131,8 @@ function flattenGarment(raw: any): WorkshopGarment {
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
-    style_name: style_ref?.name ?? garment.style ?? undefined,
-    style_image_url: style_ref?.image_url ?? undefined,
+    style_name: garment.style ?? undefined,
+    style_image_url: undefined,
     fabric_name: fabric_ref?.name ?? undefined,
     fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
   };
@@ -83,9 +141,9 @@ function flattenGarment(raw: any): WorkshopGarment {
 /** Flatten helper for WORKSHOP_QUERY_LIGHT rows. Same as flattenGarment but
  *  with no measurement field (the RPC shape never includes it). */
 function flattenLightGarment(raw: any): WorkshopGarment {
-  const { order, customer, style_ref, fabric_ref, ...garment } = raw;
+  const { order, fabric_ref, ...garment } = raw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
-  const cust = Array.isArray(customer?.customer) ? customer.customer[0] : customer?.customer;
+  const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
 
   return {
     ...garment,
@@ -100,8 +158,8 @@ function flattenLightGarment(raw: any): WorkshopGarment {
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
-    style_name: style_ref?.name ?? garment.style ?? undefined,
-    style_image_url: style_ref?.image_url ?? undefined,
+    style_name: garment.style ?? undefined,
+    style_image_url: undefined,
     fabric_name: fabric_ref?.name ?? undefined,
     fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
   };
@@ -173,26 +231,74 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
 };
 
+/** Piece stages shown as columns on the daily production board. */
+export const BOARD_STAGES = [
+  'soaking',
+  'cutting',
+  'post_cutting',
+  'sewing',
+  'finishing',
+  'ironing',
+  'quality_check',
+  'ready_for_dispatch',
+] as const;
+
+/**
+ * Production-board fetch: workshop garments in BOARD_STAGES. When dateStr is
+ * null (Live mode) returns every currently in-flight garment regardless of
+ * schedule date — matches terminal semantics so nothing an active worker is
+ * touching disappears from the board. When dateStr is a YYYY-MM-DD string
+ * (Scheduled mode) filters strictly by assigned_date.
+ */
+export const getBoardGarments = async (dateStr: string | null): Promise<WorkshopGarment[]> => {
+  let query = db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('location', 'workshop')
+    .in('piece_stage', BOARD_STAGES as unknown as string[])
+    .eq('order.checkout_status', 'confirmed');
+
+  if (dateStr) query = query.eq('assigned_date', dateStr);
+
+  const { data, error } = await query
+    .order('start_time', { ascending: true, nullsFirst: false })
+    .order('assigned_date', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true });
+
+  if (error) {
+    throw new Error(`getBoardGarments: failed to fetch board (${dateStr ?? 'live'}): ${error.message}`);
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+};
+
 /** Shape returned by getWorkshopWorkload. Only the fields PlanDialog (for
- *  worker workload) and team.tsx (for daily completion counts) read. */
+ *  worker workload), team.tsx (for daily completion counts), and the
+ *  scheduler calendar / workload panel actually read. */
 export interface WorkshopWorkloadRow {
   id: string;
   production_plan: Record<string, string> | null;
   worker_history: Record<string, string> | null;
   in_production: boolean;
   completion_time: string | null;
+  assigned_date: string | null;
 }
 
 /**
  * Super-lean workload fetch for PlanDialog + team dashboard. Returns just
- * five columns — no joins, no jsonb aggregation. Replaces the pattern of
- * pulling the entire workshop garment list (measurement + style + fabric +
- * order + customer) just to count worker assignments.
+ * five columns — no joins, no jsonb aggregation.
+ *
+ * Server-side filter: only rows the two consumers actually read.
+ *   - PlanDialog (useStepWorkload): in_production AND production_plan != null
+ *   - team.tsx (todayCompletions):  completion_time >= local midnight
+ * Without this filter we were pulling every row in the garments table on
+ * every dashboard mount, which is the dominant cause of the slow load times.
  */
 export const getWorkshopWorkload = async (): Promise<WorkshopWorkloadRow[]> => {
+  const todayMidnight = getLocalMidnightUtc();
   const { data, error } = await db
     .from('garments')
-    .select('id, production_plan, worker_history, in_production, completion_time');
+    .select('id, production_plan, worker_history, in_production, completion_time, assigned_date')
+    .or(`and(in_production.eq.true,production_plan.not.is.null),completion_time.gte.${todayMidnight},assigned_date.not.is.null`);
 
   if (error) {
     throw new Error(`getWorkshopWorkload: failed to fetch workload rows: ${error.message}`);
@@ -713,22 +819,39 @@ export const startGarment = async (id: string): Promise<void> => {
   // Idempotency: don't overwrite if already started
   const { data: existing } = await db
     .from('garments')
-    .select('start_time')
+    .select('start_time, piece_stage, stage_timings')
     .eq('id', id)
     .single();
   if (existing?.start_time) return;
 
+  const now = new Date().toISOString();
+  const stage = existing?.piece_stage ?? '';
+  const nextTimings = stage
+    ? openStageSession(parseStageTimings(existing?.stage_timings), stage, now)
+    : parseStageTimings(existing?.stage_timings);
+
   const { error } = await db
     .from('garments')
-    .update({ start_time: new Date().toISOString() })
+    .update({ start_time: now, stage_timings: nextTimings })
     .eq('id', id);
   if (error) throw new Error(`startGarment: failed to record garment start time: ${error.message}`);
 };
 
 export const cancelStartGarment = async (id: string): Promise<void> => {
+  const { data: existing } = await db
+    .from('garments')
+    .select('piece_stage, stage_timings')
+    .eq('id', id)
+    .single();
+
+  const stage = existing?.piece_stage ?? '';
+  const nextTimings = stage
+    ? discardOpenStageSession(parseStageTimings(existing?.stage_timings), stage)
+    : parseStageTimings(existing?.stage_timings);
+
   const { error } = await db
     .from('garments')
-    .update({ start_time: null })
+    .update({ start_time: null, stage_timings: nextTimings })
     .eq('id', id);
   if (error) throw new Error(`cancelStartGarment: failed to clear start time: ${error.message}`);
 };
@@ -742,7 +865,7 @@ export const completeAndAdvance = async (
   // Fetch current state and validate stage matches before advancing
   const { data: existing, error: fetchErr } = await db
     .from('garments')
-    .select('worker_history, piece_stage')
+    .select('worker_history, piece_stage, stage_timings')
     .eq('id', id)
     .single();
 
@@ -757,13 +880,17 @@ export const completeAndAdvance = async (
   const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
   history[historyKey] = workerName;
 
+  const now = new Date().toISOString();
+  const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), stage, workerName, now);
+
   const { error } = await db
     .from('garments')
     .update({
       piece_stage: nextStage as PieceStage,
-      completion_time: new Date().toISOString(),
+      completion_time: now,
       start_time: null,
       worker_history: history,
+      stage_timings: nextTimings,
     })
     .eq('id', id);
   if (error) throw new Error(`completeAndAdvance: failed to advance garment to next stage: ${error.message}`);
@@ -776,7 +903,7 @@ export const qcPass = async (
 ): Promise<void> => {
   const { data: existing, error: fetchErr } = await db
     .from('garments')
-    .select('worker_history, trip_history, trip_number')
+    .select('worker_history, trip_history, trip_number, stage_timings')
     .eq('id', id)
     .single();
 
@@ -802,6 +929,8 @@ export const qcPass = async (
     });
   }
 
+  const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', worker, now);
+
   const { error } = await db
     .from('garments')
     .update({
@@ -811,6 +940,7 @@ export const qcPass = async (
       completion_time: now,
       start_time: null,
       trip_history: tripHistory,
+      stage_timings: nextTimings,
     })
     .eq('id', id);
   if (error) throw new Error(`qcPass: failed to record QC pass: ${error.message}`);
@@ -819,7 +949,7 @@ export const qcPass = async (
 export const qcFail = async (id: string, returnStage: PieceStage, reason: string): Promise<void> => {
   const { data: existing, error: fetchErr } = await db
     .from('garments')
-    .select('notes, trip_history, trip_number, worker_history')
+    .select('notes, trip_history, trip_number, worker_history, stage_timings')
     .eq('id', id)
     .single();
 
@@ -842,9 +972,12 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
     });
   }
 
+  // Close the QC session so its duration is recorded (fail is still a completed visit to QC).
+  const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', null);
+
   const { error } = await db
     .from('garments')
-    .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory })
+    .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory, stage_timings: nextTimings })
     .eq('id', id);
   if (error) throw new Error(`qcFail: failed to record QC failure: ${error.message}`);
 };

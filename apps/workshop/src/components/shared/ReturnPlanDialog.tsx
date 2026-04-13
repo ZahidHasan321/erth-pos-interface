@@ -30,8 +30,7 @@ const STEPS: (PlanStep & { historyKey: string })[] = [
 const SELECTABLE_STEPS = STEPS.slice(0, -1);
 const QC_STEP = STEPS[STEPS.length - 1];
 
-// Default selected stages for returns
-const DEFAULT_SELECTED = new Set(["sewer", "finisher", "ironer"]);
+const DEFAULT_SELECTED = new Set<string>();
 
 interface ReturnPlanDialogProps {
   open: boolean;

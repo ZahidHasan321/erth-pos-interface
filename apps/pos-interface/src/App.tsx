@@ -1,26 +1,65 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 
 // Import the generated route tree
 import { router } from "./router";
 import "./index.css";
 import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "./context/auth";
+import { db } from "./lib/db";
+
+function isJwtError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.code === 'PGRST301' || e.code === '401') return true;
+  return typeof e.message === 'string' && /jwt|expired|invalid token/i.test(e.message);
+}
+
+let refreshInFlight: Promise<unknown> | null = null;
+function attemptSessionRecover() {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = db.auth.refreshSession()
+    .then((res) => {
+      if (res.error) return db.auth.signOut();
+    })
+    .catch(() => db.auth.signOut())
+    .finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2, // 2 min — data stays fresh, no refetch on mount/focus
-      gcTime: 1000 * 60 * 5, // 5 min — keep mobile memory usage low
-      refetchOnWindowFocus: false, // don't refetch when switching tabs
-      retry: 1, // only 1 retry on failure instead of 3
+      staleTime: 1000 * 60 * 2,
+      gcTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (isJwtError(error)) return failureCount < 1;
+        return failureCount < 1;
+      },
     },
   },
+  queryCache: new QueryCache({
+    onError: (err) => { if (isJwtError(err)) attemptSessionRecover(); },
+  }),
+  mutationCache: new MutationCache({
+    onError: (err) => { if (isJwtError(err)) attemptSessionRecover(); },
+  }),
 });
 
 function InnerApp() {
   const auth = useAuth()
 
-  // Don't render router until session restore completes
+  // Drop cached data on logout so a different user can't see stale rows
+  // through the cache while the new session is being established.
+  const wasAuthed = useRef(auth.isAuthenticated);
+  useEffect(() => {
+    if (wasAuthed.current && !auth.isAuthenticated) {
+      queryClient.clear();
+    }
+    wasAuthed.current = auth.isAuthenticated;
+  }, [auth.isAuthenticated]);
+
   if (auth.isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>

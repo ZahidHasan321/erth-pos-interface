@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSchedulerGarments, useBrovaPlans, useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
-import { BrandBadge, AlterationBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import {
   PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge,
@@ -14,19 +14,18 @@ import {
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Input } from "@repo/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, getKuwaitMidnight, getDeliveryUrgency, type OrderGroup } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, getKuwaitMidnight, getDeliveryUrgency } from "@/lib/utils";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Package, CheckSquare, Home, User, AlertTriangle, Eye,
-  Calendar, BarChart3, Droplets,
+  Clock, Package, Home, User, RotateCcw,
+  Calendar, BarChart3, Droplets, Zap, Search,
 } from "lucide-react";
-import { OrderPeekSheet } from "@/components/shared/PeekSheets";
 import { getAlterationNumber, isAlteration } from "@repo/database";
 import type { WorkshopGarment } from "@repo/database";
+import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/scheduler")({
   component: SchedulerPage,
@@ -37,7 +36,7 @@ function toIsoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-// ── Garment card for brova returns / alterations ─────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function feedbackInfo(g: WorkshopGarment): { label: string; color: PillColor } | null {
   if (g.acceptance_status && g.feedback_status === "needs_repair")
@@ -51,229 +50,261 @@ function feedbackInfo(g: WorkshopGarment): { label: string; color: PillColor } |
   return null;
 }
 
-function SchedulerGarmentRow({
-  garment: g,
-  selected,
-  onSelect,
+// ── Section wrapper ───────────────────────────────────────────────────────────
+
+function Section({
+  title,
+  icon: Icon,
+  count,
+  accent,
+  children,
 }: {
-  garment: WorkshopGarment;
-  selected: boolean;
-  onSelect: (id: string, checked: boolean) => void;
+  title: string;
+  icon: LucideIcon;
+  count: number;
+  accent?: string;
+  children: React.ReactNode;
 }) {
-  const urgency = getDeliveryUrgency(g.delivery_date_order);
-
-  const altNum = getAlterationNumber(g.trip_number, g.garment_type);
-  const isAlt = isAlteration(g.trip_number, g.garment_type);
-  const fb = feedbackInfo(g);
-
   return (
-    <div
-      className={cn(
-        "bg-card border rounded-xl px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] cursor-pointer",
-        "hover:bg-muted/20 pointer-coarse:active:scale-[0.995]",
-        g.express && "border-l-4 border-l-orange-400",
-        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
-      )}
-      onClick={() => onSelect(g.id, !selected)}
-    >
-      {/* Row 1 — Identity: type · ID · customer · brand */}
+    <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={(e) => { e.stopPropagation(); onSelect(g.id, e.target.checked); }}
-          onClick={(e) => e.stopPropagation()}
-          className="w-4 h-4 accent-primary cursor-pointer shrink-0"
-        />
-        <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
-          {g.garment_type === "brova" ? "B" : "F"}
-        </StatusPill>
-        <span className="font-mono font-bold text-sm">{g.garment_id ?? g.id.slice(0, 8)}</span>
-        <span className="text-sm text-muted-foreground truncate min-w-0">{g.customer_name ?? "—"}</span>
-        <div className="ml-auto shrink-0">
-          <BrandBadge brand={g.order_brand} />
-        </div>
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <h2 className="font-semibold text-base text-foreground">{title}</h2>
+        <Badge variant="secondary" className={cn("text-xs", accent)}>
+          {count}
+        </Badge>
       </div>
-
-      {/* Row 2 — Context: alteration # · feedback · fabric · delivery */}
-      <div className="flex items-center gap-1.5 mt-1.5 ml-6 flex-wrap">
-        {isAlt && altNum !== null && (
-          <StatusPill color="orange">Alt #{altNum}</StatusPill>
-        )}
-        {!isAlt && (g.trip_number ?? 1) > 1 && (
-          <StatusPill color="purple">Return #{(g.trip_number ?? 1) - 1}</StatusPill>
-        )}
-        {fb && <StatusPill color={fb.color}>{fb.label}</StatusPill>}
-        {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
-        <span className="flex-1" />
-        {g.fabric_name && (
-          <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-            {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
-          </span>
-        )}
-        {urgency.label ? (
-          urgency.status === "overdue" || urgency.status === "urgent" ? (
-            <StatusPill color={urgency.status === "overdue" ? "red" : "amber"} className="tabular-nums">
-              {urgency.label}
-            </StatusPill>
-          ) : (
-            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-              {urgency.label}
-            </span>
-          )
-        ) : g.delivery_date_order ? (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {formatDate(g.delivery_date_order)}
-          </span>
-        ) : null}
-      </div>
+      {children}
     </div>
   );
 }
 
-// ── OrderCard (order-level selection) ────────────────────────────────────────
+// ── Garment-level section table (Express / Brova) ─────────────────────────────
 
-function SchedulerOrderCard({
-  group,
-  selected,
+function SchedulerSectionTable({
+  garments,
+  selectedIds,
   onToggle,
+  showType,
+  showAlt,
+  showFeedback,
+  hideExpress,
+  disabled,
+  lockToOrder,
 }: {
-  group: OrderGroup;
-  selected: boolean;
-  onToggle: (checked: boolean) => void;
+  garments: WorkshopGarment[];
+  selectedIds: Set<string>;
+  onToggle: (id: string, checked: boolean) => void;
+  showType?: boolean;
+  showAlt?: boolean;
+  showFeedback?: boolean;
+  hideExpress?: boolean;
+  disabled?: boolean;
+  /** When true, only garments from the same order as any currently selected garment can be selected */
+  lockToOrder?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [peekOpen, setPeekOpen] = useState(false);
-  const deliveryDate = group.garments[0]?.delivery_date_order;
-  const urgency = getDeliveryUrgency(deliveryDate);
+  const allSelected = garments.length > 0 && garments.every((g) => selectedIds.has(g.id));
+
+  // The order that's currently "locked in" (first selected garment's order)
+  const lockedOrderId = lockToOrder && selectedIds.size > 0
+    ? garments.find((g) => selectedIds.has(g.id))?.order_id ?? null
+    : null;
 
   return (
-    <>
-    <div
-      className={cn(
-        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
-        group.express
-          ? "border-l-orange-400"
-          : urgency.status === "overdue"
-            ? "border-l-red-500"
-            : urgency.status === "urgent"
-              ? "border-l-amber-400"
-              : "border-l-transparent",
-        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
-      )}
-    >
-      <div
-        className="px-3 py-2.5 transition-colors rounded-t-xl"
-      >
-        <div className="flex items-center justify-between gap-2">
-          {/* Left: checkbox + identity */}
-          <div className="flex items-center gap-2 min-w-0">
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={(e) => onToggle(e.target.checked)}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Select order #${group.order_id}`}
-              className="w-4 h-4 accent-primary cursor-pointer shrink-0"
-            />
-            <span className="font-mono font-bold text-sm shrink-0">#{group.order_id}</span>
-            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-            <span className="text-sm text-muted-foreground truncate">{group.customer_name ?? "—"}</span>
-          </div>
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-10 px-3">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(c) => { for (const g of garments) onToggle(g.id, !!c); }}
+                aria-label="Select all"
+                className="size-4"
+                disabled={disabled}
+              />
+            </TableHead>
+            <TableHead className="w-[100px]">Garment</TableHead>
+            {showType && <TableHead className="w-[80px]">Type</TableHead>}
+            {showAlt && <TableHead className="w-[90px]">Alt</TableHead>}
+            <TableHead className="w-[170px]">Customer</TableHead>
+            <TableHead className="w-[100px]">Order / Invoice</TableHead>
+            {showFeedback && <TableHead className="w-[110px]">Feedback</TableHead>}
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[130px] text-center">Delivery</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {garments.map((g) => {
+            const selected = selectedIds.has(g.id);
+            const urgency = getDeliveryUrgency(g.delivery_date_order);
+            const altNum = showAlt ? getAlterationNumber(g.trip_number ?? 1, g.garment_type) : null;
+            const fb = showFeedback ? feedbackInfo(g) : null;
+            const rowDisabled = disabled || (lockedOrderId !== null && g.order_id !== lockedOrderId);
 
-          {/* Right: delivery + actions */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {urgency.label && (
-              urgency.status === "overdue" || urgency.status === "urgent" ? (
-                <StatusPill color={urgency.status === "overdue" ? "red" : "amber"} className="tabular-nums">
-                  {urgency.label}
-                </StatusPill>
-              ) : (
-                <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                  {urgency.label}
-                </span>
-              )
-            )}
-            <button onClick={(e) => { e.stopPropagation(); setPeekOpen(true); }} aria-label="View order details" className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground/40 hover:text-foreground cursor-pointer">
-              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-            <button
-              className={cn("p-1.5 rounded-md transition-colors cursor-pointer", expanded ? "bg-muted" : "text-muted-foreground/40 hover:text-foreground")}
-              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse garments" : "Expand garments"}
-            >
-              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        {/* Summary line */}
-        <div className="flex items-center gap-1.5 mt-1 ml-6 flex-wrap">
-          <span className="text-xs text-muted-foreground">{garmentSummary(group.garments)}</span>
-          {group.home_delivery && (
-            <span className="text-xs font-semibold text-indigo-600">
-              <Home className="w-3 h-3 inline mr-0.5" />Delivery
-            </span>
-          )}
-          {deliveryDate && !urgency.label && (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              <Clock className="w-2.5 h-2.5 inline mr-0.5" />{formatDate(deliveryDate)}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Expanded: garment details — fabric, soaking, style info */}
-      {expanded && (
-        <div className="border-t px-3 py-2 space-y-1 bg-muted/10">
-          {group.garments.map((g) => {
-            const isParked = g.piece_stage === "waiting_for_acceptance";
             return (
-              <div key={g.id} className={cn(
-                "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
-                isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
-              )}>
-                <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
-                  {g.garment_type === "brova" ? "B" : "F"}
-                </StatusPill>
-                <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                {g.fabric_name ? (
-                  <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
-                ) : (
-                  <span className="text-muted-foreground/50 truncate">Outside fabric</span>
+              <TableRow
+                key={g.id}
+                className={cn(
+                  "transition-colors",
+                  rowDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30",
+                  selected && "bg-primary/5",
                 )}
-                <div className="flex items-center gap-1 ml-auto shrink-0">
-                  {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
-                  {g.express && <StatusPill color="red">Express</StatusPill>}
-                  {isParked && <span className="text-muted-foreground/60 italic text-xs">parked</span>}
-                </div>
-              </div>
+                onClick={rowDisabled ? undefined : () => onToggle(g.id, !selected)}
+              >
+                <TableCell className="px-3 py-3">
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={(c) => onToggle(g.id, !!c)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="size-4"
+                    disabled={rowDisabled}
+                  />
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {!hideExpress && g.express && <ExpressBadge />}
+                      {g.soaking && (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                          <Droplets className="w-3 h-3" /> Soak
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                {showType && (
+                  <TableCell className="px-3 py-3">
+                    <GarmentTypeBadge type={g.garment_type ?? "final"} />
+                  </TableCell>
+                )}
+                {showAlt && (
+                  <TableCell className="px-3 py-3">
+                    {altNum !== null ? (
+                      <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+                        Alt {altNum}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
+                <TableCell className="px-3 py-3 text-sm">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{g.customer_name ?? "—"}</span>
+                    {g.customer_mobile && (
+                      <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="px-3 py-3 font-mono">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold">#{g.order_id}</span>
+                    {g.invoice_number && (
+                      <span className="text-xs text-muted-foreground">INV-{g.invoice_number}</span>
+                    )}
+                  </div>
+                </TableCell>
+                {showFeedback && (
+                  <TableCell className="px-3 py-3">
+                    {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
+                )}
+                <TableCell className="px-3 py-3">
+                  <BrandBadge brand={g.order_brand} />
+                </TableCell>
+                <TableCell className="px-3 py-3 text-center">
+                  <div className="flex flex-col items-center gap-1">
+                    {g.delivery_date_order ? (
+                      <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+                        <Clock className="w-3 h-3" />
+                        {formatDate(g.delivery_date_order)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    {g.home_delivery && (
+                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                        <Home className="w-3 h-3" /> Home
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </div>
-      )}
-    </div>
-    <OrderPeekSheet orderId={peekOpen ? group.order_id : null} open={peekOpen} onOpenChange={setPeekOpen} />
-    </>
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
-// ── Order Table (desktop, Orders tab) ───────────────────────────────────────
+// ── Order-level table (Finals / Returns) ──────────────────────────────────────
 
-function SchedulerOrderTable({
-  orders,
-  selectedOrderIds,
+type OrderRow = {
+  order_id: number;
+  invoice_number?: number;
+  customer_name?: string;
+  customer_mobile?: string;
+  order_brand: string;
+  delivery_date_order?: string;
+  home_delivery?: boolean;
+  garments: WorkshopGarment[];
+};
+
+function buildOrderRows(garments: WorkshopGarment[]): OrderRow[] {
+  const map = new Map<number, OrderRow>();
+  for (const g of garments) {
+    if (!map.has(g.order_id)) {
+      map.set(g.order_id, {
+        order_id: g.order_id,
+        invoice_number: g.invoice_number,
+        customer_name: g.customer_name,
+        customer_mobile: g.customer_mobile,
+        order_brand: g.order_brand,
+        delivery_date_order: g.delivery_date_order,
+        home_delivery: g.home_delivery,
+        garments: [],
+      });
+    }
+    map.get(g.order_id)!.garments.push(g);
+  }
+  // Sort by delivery date
+  return [...map.values()].sort((a, b) => {
+    if (a.delivery_date_order && b.delivery_date_order)
+      return a.delivery_date_order.localeCompare(b.delivery_date_order);
+    return a.delivery_date_order ? -1 : b.delivery_date_order ? 1 : 0;
+  });
+}
+
+function OrderGroupTable({
+  garments,
+  selectedIds,
   onToggleOrder,
+  showAlt,
+  showFeedback,
+  disabled,
 }: {
-  orders: OrderGroup[];
-  selectedOrderIds: Set<number>;
-  onToggleOrder: (orderId: number, checked: boolean) => void;
+  garments: WorkshopGarment[];
+  selectedIds: Set<string>;
+  onToggleOrder: (orderGarmentIds: string[], checked: boolean) => void;
+  showAlt?: boolean;
+  disabled?: boolean;
+  showFeedback?: boolean;
 }) {
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const orders = useMemo(() => buildOrderRows(garments), [garments]);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const allSelected = orders.length > 0 && orders.every((o) => o.garments.every((g) => selectedIds.has(g.id)));
+
+  // Lock to a single order once any is selected
+  const lockedOrderId = selectedIds.size > 0
+    ? (orders.find((o) => o.garments.some((g) => selectedIds.has(g.id)))?.order_id ?? null)
+    : null;
 
   const toggleExpand = (orderId: number) =>
-    setExpandedOrders((prev) => {
+    setExpanded((prev) => {
       const n = new Set(prev);
       n.has(orderId) ? n.delete(orderId) : n.add(orderId);
       return n;
@@ -286,135 +317,154 @@ function SchedulerOrderTable({
           <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
             <TableHead className="w-10 px-3">
               <Checkbox
-                checked={orders.length > 0 && orders.every((o) => selectedOrderIds.has(o.order_id))}
-                onCheckedChange={(checked) => {
-                  for (const o of orders) onToggleOrder(o.order_id, !!checked);
+                checked={allSelected}
+                onCheckedChange={(c) => {
+                  for (const o of orders) onToggleOrder(o.garments.map((g) => g.id), !!c);
                 }}
                 aria-label="Select all orders"
                 className="size-4"
+                disabled={disabled}
               />
             </TableHead>
-            <TableHead className="w-[90px]">Order</TableHead>
-            <TableHead className="w-[180px]">Customer</TableHead>
+            <TableHead className="w-[120px]">Order / Invoice</TableHead>
+            <TableHead className="w-[170px]">Customer</TableHead>
+            <TableHead className="w-[200px]">Garments</TableHead>
             <TableHead className="w-[80px]">Brand</TableHead>
-            <TableHead className="w-[150px]">Flags</TableHead>
-            <TableHead className="w-[150px] text-center">Delivery</TableHead>
-            <TableHead className="w-10" />
+            <TableHead className="w-[130px] text-center">Delivery</TableHead>
+            <TableHead className="w-8" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {orders.map((group) => {
-            const selected = selectedOrderIds.has(group.order_id);
-            const expanded = expandedOrders.has(group.order_id);
-            const deliveryDate = group.garments[0]?.delivery_date_order;
-            const tUrgency = getDeliveryUrgency(deliveryDate);
+          {orders.map((order) => {
+            const orderIds = order.garments.map((g) => g.id);
+            const isSelected = order.garments.every((g) => selectedIds.has(g.id));
+            const isExpanded = expanded.has(order.order_id);
+            const urgency = getDeliveryUrgency(order.delivery_date_order);
+            const rowDisabled = disabled || (lockedOrderId !== null && order.order_id !== lockedOrderId);
 
             return (
-              <React.Fragment key={group.order_id}>
+              <React.Fragment key={order.order_id}>
                 <TableRow
-                  className={cn("cursor-pointer hover:bg-muted/30 transition-colors", selected && "bg-primary/5")}
-                  onClick={() => toggleExpand(group.order_id)}
+                  className={cn(
+                    "transition-colors",
+                    rowDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30",
+                    isSelected && "bg-primary/5",
+                  )}
+                  onClick={() => toggleExpand(order.order_id)}
                 >
                   <TableCell className="px-3 py-3">
                     <Checkbox
-                      checked={selected}
-                      onCheckedChange={(checked) => onToggleOrder(group.order_id, !!checked)}
+                      checked={isSelected}
+                      onCheckedChange={(c) => onToggleOrder(orderIds, !!c)}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select order #${group.order_id}`}
                       className="size-4"
+                      disabled={rowDisabled}
                     />
                   </TableCell>
-                  <TableCell className="px-3 py-3">
+                  <TableCell className="px-3 py-3 font-mono">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold">#{group.order_id}</span>
-                      {group.invoice_number && (
-                        <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
+                      <span className="text-sm font-bold">#{order.order_id}</span>
+                      {order.invoice_number && (
+                        <span className="text-xs text-muted-foreground">INV-{order.invoice_number}</span>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="px-3 py-3 text-sm">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold">{group.customer_name ?? "—"}</span>
-                      <span className="text-xs text-muted-foreground">{garmentSummary(group.garments)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {group.express && <ExpressBadge />}
-                      {group.soaking && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-                          <Droplets className="w-3 h-3" /> Soak
-                        </span>
+                      <span className="font-semibold">{order.customer_name ?? "—"}</span>
+                      {order.customer_mobile && (
+                        <span className="text-xs font-mono text-muted-foreground">{order.customer_mobile}</span>
                       )}
-                      {group.home_delivery && (
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {order.garments.map((g) => {
+                        const altNum = showAlt ? getAlterationNumber(g.trip_number ?? 1, g.garment_type) : null;
+                        const fb = showFeedback ? feedbackInfo(g) : null;
+                        return (
+                          <span
+                            key={g.id}
+                            className="inline-flex items-center gap-1 text-xs font-mono bg-muted px-1.5 py-0.5 rounded"
+                          >
+                            <span className={cn(
+                              "font-bold",
+                              g.garment_type === "brova" ? "text-purple-600" : "text-blue-600",
+                            )}>
+                              {g.garment_type === "brova" ? "B" : "F"}
+                            </span>
+                            {g.garment_id ?? g.id.slice(0, 6)}
+                            {altNum !== null && (
+                              <span className="text-orange-500 font-bold">·A{altNum}</span>
+                            )}
+                            {fb && (
+                              <span className={cn(
+                                "font-bold",
+                                fb.color === "red" ? "text-red-500" : fb.color === "orange" ? "text-orange-500" : "text-amber-500",
+                              )}>·{fb.label.charAt(0)}</span>
+                            )}
+                            {g.soaking && <Droplets className="w-2.5 h-2.5 text-blue-500" />}
+                            {g.express && <span className="text-orange-500 font-bold">⚡</span>}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-3">
+                    <BrandBadge brand={order.order_brand} />
+                  </TableCell>
+                  <TableCell className="px-3 py-3 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      {order.delivery_date_order ? (
+                        <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+                          <Clock className="w-3 h-3" />
+                          {formatDate(order.delivery_date_order)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                      {order.home_delivery && (
                         <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
                           <Home className="w-3 h-3" /> Home
                         </span>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="px-3 py-3 align-middle text-center">
-                    <div className="flex flex-col gap-1 items-center">
-                      {deliveryDate ? (
-                        <span className={cn(
-                          "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
-                          tUrgency.text,
-                        )}>
-                          <Clock className="w-3 h-3" />
-                          {formatDate(deliveryDate)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                      {tUrgency.label && (
-                        tUrgency.status === "overdue" || tUrgency.status === "urgent" ? (
-                          <StatusPill color={tUrgency.status === "overdue" ? "red" : "amber"} className="tabular-nums text-[10px]">
-                            {tUrgency.label}
-                          </StatusPill>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground tabular-nums">{tUrgency.label}</span>
-                        )
-                      )}
-                    </div>
-                  </TableCell>
                   <TableCell className="px-3 py-3">
-                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200", expanded && "rotate-180")} />
+                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 transition-transform duration-150", isExpanded && "rotate-180")} />
                   </TableCell>
                 </TableRow>
-                {/* Garment expansion row */}
+
+                {/* Expanded garment detail */}
                 <TableRow className="border-0 hover:bg-transparent">
                   <TableCell colSpan={7} className="p-0">
                     <div className={cn(
                       "grid transition-[grid-template-rows] duration-200 ease-out",
-                      expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                      isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                     )}>
                       <div className="overflow-hidden">
-                        <div className="bg-muted/20 px-4 py-2.5 space-y-1.5 border-b">
-                          {group.garments.map((g) => {
-                            const isParked = g.piece_stage === "waiting_for_acceptance";
+                        <div className="bg-muted/20 px-4 py-2 space-y-1.5 border-b">
+                          {order.garments.map((g) => {
+                            const altNum = showAlt ? getAlterationNumber(g.trip_number ?? 1, g.garment_type) : null;
+                            const fb = showFeedback ? feedbackInfo(g) : null;
                             return (
-                              <div key={g.id} className={cn(
-                                "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
-                                isParked ? "bg-zinc-50/80 opacity-50" : "bg-card",
-                              )}>
-                                <StatusPill color={g.garment_type === "brova" ? "purple" : "blue"} className="shrink-0">
-                                  {g.garment_type === "brova" ? "B" : "F"}
-                                </StatusPill>
+                              <div key={g.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs bg-card">
+                                <GarmentTypeBadge type={g.garment_type ?? "final"} />
                                 <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
                                 {g.fabric_name ? (
                                   <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
                                 ) : (
-                                  <span className="text-muted-foreground/50 truncate">Outside fabric</span>
+                                  <span className="text-muted-foreground/50">Outside fabric</span>
                                 )}
                                 <div className="flex items-center gap-1 ml-auto shrink-0">
+                                  {altNum !== null && (
+                                    <Badge className="bg-orange-500 text-white text-[10px] border-0 py-0">
+                                      Alt {altNum}
+                                    </Badge>
+                                  )}
+                                  {fb && <StatusPill color={fb.color}>{fb.label}</StatusPill>}
                                   {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
                                   {g.express && <StatusPill color="red">Express</StatusPill>}
-                                  {isParked && <span className="text-muted-foreground/60 italic">parked</span>}
                                 </div>
                               </div>
                             );
@@ -433,129 +483,7 @@ function SchedulerOrderTable({
   );
 }
 
-// ── Garment Table (desktop, Brova / Alteration tabs) ─────────────────────────
-
-function SchedulerGarmentTable({
-  garments,
-  selectedIds,
-  onToggle,
-  showAlteration,
-}: {
-  garments: WorkshopGarment[];
-  selectedIds: Set<string>;
-  onToggle: (id: string, checked: boolean) => void;
-  showAlteration?: boolean;
-}) {
-  return (
-    <TableContainer>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-            <TableHead className="w-10 px-3">
-              <Checkbox
-                checked={garments.length > 0 && garments.every((g) => selectedIds.has(g.id))}
-                onCheckedChange={(checked) => {
-                  for (const g of garments) onToggle(g.id, !!checked);
-                }}
-                aria-label="Select all garments"
-                className="size-4"
-              />
-            </TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Garment</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Invoice</TableHead>
-            <TableHead>Trip</TableHead>
-            {showAlteration && <TableHead>Alt #</TableHead>}
-            <TableHead>Feedback</TableHead>
-            <TableHead>Flags</TableHead>
-            <TableHead className="w-[120px] text-center">Delivery</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {garments.map((g) => {
-            const selected = selectedIds.has(g.id);
-            const gUrgency = getDeliveryUrgency(g.delivery_date_order);
-            const fb = feedbackInfo(g);
-            return (
-              <TableRow
-                key={g.id}
-                className={cn("cursor-pointer hover:bg-muted/30 transition-colors", selected && "bg-primary/5")}
-                onClick={() => onToggle(g.id, !selected)}
-              >
-                <TableCell className="px-3 py-3">
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={(checked) => onToggle(g.id, !!checked)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`Select garment ${g.garment_id ?? g.id.slice(0, 8)}`}
-                    className="size-4"
-                  />
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                    {g.fabric_name && (
-                      <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                        {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="px-3 py-3 text-sm text-muted-foreground">
-                  {g.customer_name ?? "—"}
-                </TableCell>
-                <TableCell className="px-3 py-3 text-sm text-muted-foreground font-mono">
-                  {g.invoice_number ? `#${g.invoice_number}` : "—"}
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <Badge variant="secondary" className="text-xs font-bold">
-                    {g.trip_number ?? 1}
-                  </Badge>
-                </TableCell>
-                {showAlteration && (
-                  <TableCell className="px-3 py-3">
-                    <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
-                  </TableCell>
-                )}
-                <TableCell className="px-3 py-3">
-                  {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-xs text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <div className="flex items-center gap-1">
-                    {g.express && <ExpressBadge />}
-                    {g.soaking && (
-                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-                        <Droplets className="w-3 h-3" /> Soak
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="px-3 py-3 align-middle text-center">
-                  {g.delivery_date_order ? (
-                    <span className={cn(
-                      "text-xs font-bold tabular-nums",
-                      gUrgency.text,
-                    )}>
-                      {formatDate(g.delivery_date_order)}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}
-
-// ── Heat-Map Calendar ────────────────────────────────────────────────────────
+// ── Heat-Map Calendar ─────────────────────────────────────────────────────────
 
 function HeatCalendar({
   selected,
@@ -569,7 +497,6 @@ function HeatCalendar({
   maxPerDay: number;
 }) {
   const todayObj = getKuwaitMidnight();
-
   const [viewDate, setViewDate] = useState(() => new Date(todayObj));
 
   const year = viewDate.getFullYear();
@@ -582,11 +509,7 @@ function HeatCalendar({
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const monthLabel = viewDate.toLocaleString("default", {
-    month: "long",
-    year: "numeric",
-  });
-
+  const monthLabel = viewDate.toLocaleString("default", { month: "long", year: "numeric" });
   const selectedObj = selected ? new Date(selected + "T00:00:00") : null;
 
   const handleDay = (day: number) => {
@@ -595,7 +518,6 @@ function HeatCalendar({
     onSelect(toIsoDate(year, month, day));
   };
 
-  /** Returns a heat level 0-4 for a count relative to max */
   const heatLevel = (count: number) => {
     if (count === 0 || maxPerDay === 0) return 0;
     const ratio = count / maxPerDay;
@@ -605,45 +527,26 @@ function HeatCalendar({
     return 1;
   };
 
-  const HEAT_BG = [
-    "", // 0 = none
-    "bg-emerald-100/70",
-    "bg-amber-100/80",
-    "bg-orange-100/80",
-    "bg-red-100/80",
-  ];
+  const HEAT_BG = ["", "bg-emerald-100/70", "bg-amber-100/80", "bg-orange-100/80", "bg-red-100/80"];
 
   return (
     <div className="select-none">
-      {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => setViewDate(new Date(year, month - 1, 1))}
-          aria-label="Previous month"
-          className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation"
-        >
-          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+        <button onClick={() => setViewDate(new Date(year, month - 1, 1))} aria-label="Previous month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+          <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="font-bold text-sm tracking-tight">{monthLabel}</span>
-        <button
-          onClick={() => setViewDate(new Date(year, month + 1, 1))}
-          aria-label="Next month"
-          className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation"
-        >
-          <ChevronRight className="w-4 h-4" aria-hidden="true" />
+        <button onClick={() => setViewDate(new Date(year, month + 1, 1))} aria-label="Next month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Day-of-week headers */}
       <div className="grid grid-cols-7 gap-0.5 text-center mb-0.5">
         {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} className="text-[10px] font-bold text-muted-foreground/40 uppercase py-0.5">
-            {d}
-          </div>
+          <div key={d} className="text-[10px] font-bold text-muted-foreground/40 uppercase py-0.5">{d}</div>
         ))}
       </div>
 
-      {/* Day cells — tall rectangles for better touch targets in narrow columns */}
       <div className="grid grid-cols-7 gap-0.5">
         {cells.map((day, i) => {
           if (!day) return <div key={`e-${i}`} />;
@@ -661,8 +564,7 @@ function HeatCalendar({
               onClick={() => handleDay(day)}
               disabled={isPast}
               className={cn(
-                "relative h-10 rounded-md text-xs font-semibold transition-[color,background-color,border-color,box-shadow] touch-manipulation",
-                "flex flex-col items-center justify-center",
+                "relative h-10 rounded-md text-xs font-semibold transition-[color,background-color,border-color,box-shadow] touch-manipulation flex flex-col items-center justify-center",
                 isPast && "text-muted-foreground/20 cursor-not-allowed",
                 !isPast && !isSelected && "hover:bg-primary/10 pointer-coarse:active:scale-95 cursor-pointer",
                 !isPast && !isSelected && HEAT_BG[heat],
@@ -671,12 +573,10 @@ function HeatCalendar({
               )}
             >
               <span>{day}</span>
-              {/* Garment count */}
               {count > 0 && !isPast && (
                 <span className={cn(
                   "text-[9px] font-bold leading-none tabular-nums",
-                  isSelected
-                    ? "text-primary-foreground/70"
+                  isSelected ? "text-primary-foreground/70"
                     : heat >= 4 ? "text-red-600" : heat >= 3 ? "text-orange-600" : heat >= 2 ? "text-amber-600" : "text-emerald-600",
                 )}>
                   {count}
@@ -687,13 +587,10 @@ function HeatCalendar({
         })}
       </div>
 
-      {/* Heat legend */}
       <div className="flex items-center justify-center gap-2 mt-3 text-[10px] text-muted-foreground/50">
         <span>Light</span>
         <div className="flex gap-0.5">
-          {[1, 2, 3, 4].map((h) => (
-            <div key={h} className={cn("w-3 h-3 rounded-sm", HEAT_BG[h])} />
-          ))}
+          {[1, 2, 3, 4].map((h) => <div key={h} className={cn("w-3 h-3 rounded-sm", HEAT_BG[h])} />)}
         </div>
         <span>Full</span>
       </div>
@@ -701,16 +598,11 @@ function HeatCalendar({
   );
 }
 
-// ── Workload Summary ─────────────────────────────────────────────────────────
+// ── Workload Summary ──────────────────────────────────────────────────────────
 
 const STAGE_ICONS: Record<string, string> = {
-  soaking: "💧",
-  cutting: "✂️",
-  post_cutting: "📐",
-  sewing: "🧵",
-  finishing: "✨",
-  ironing: "♨️",
-  quality_check: "✅",
+  soaking: "💧", cutting: "✂️", post_cutting: "📐",
+  sewing: "🧵", finishing: "✨", ironing: "♨️", quality_check: "✅",
 };
 
 function WorkloadSummary({
@@ -720,7 +612,6 @@ function WorkloadSummary({
 }: {
   workload: Record<string, Record<string, { name: string; assigned: number; target: number | null }[]>>;
   totalForDate: number;
-  /** Stages where the responsibility has resources across multiple units */
   multiUnitStages: Set<string>;
 }) {
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
@@ -729,9 +620,7 @@ function WorkloadSummary({
     return (
       <div className="flex flex-col items-center justify-center py-6 text-center">
         <BarChart3 className="w-8 h-8 text-muted-foreground/15 mb-2" />
-        <p className="text-sm text-muted-foreground/50 font-medium">
-          No garments scheduled
-        </p>
+        <p className="text-sm text-muted-foreground/50 font-medium">No garments scheduled</p>
       </div>
     );
   }
@@ -742,40 +631,27 @@ function WorkloadSummary({
         const units = workload[stage];
         if (!units || Object.keys(units).length === 0) return null;
 
-        const allWorkers = Object.entries(units).flatMap(([unit, workers]) =>
-          workers.map((w) => ({ ...w, unit })),
-        );
+        const allWorkers = Object.entries(units).flatMap(([unit, workers]) => workers.map((w) => ({ ...w, unit })));
         const totalAssigned = allWorkers.reduce((s, w) => s + w.assigned, 0);
         const totalTarget = allWorkers.reduce((s, w) => s + (w.target ?? 0), 0);
         const isOver = totalTarget > 0 && totalAssigned > totalTarget;
         const isExpanded = expandedStage === stage;
         const showUnits = multiUnitStages.has(stage);
 
-        const stageLabel = stage.replace(/_/g, " ");
-
         return (
           <div key={stage}>
             <button
               onClick={() => setExpandedStage(isExpanded ? null : stage)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors",
-                isExpanded ? "bg-muted/60" : "hover:bg-muted/30",
-              )}
+              className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors", isExpanded ? "bg-muted/60" : "hover:bg-muted/30")}
             >
-              <span className="text-sm shrink-0" aria-hidden>{STAGE_ICONS[stage] ?? "⚙️"}</span>
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1 truncate">
-                {stageLabel}
-              </span>
-              <span className={cn(
-                "text-xs font-bold tabular-nums shrink-0 text-right",
-                isOver ? "text-red-600" : "text-muted-foreground",
-              )}>
+              <span className="text-sm shrink-0">{STAGE_ICONS[stage] ?? "⚙️"}</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1 truncate">{stage.replace(/_/g, " ")}</span>
+              <span className={cn("text-xs font-bold tabular-nums shrink-0", isOver ? "text-red-600" : "text-muted-foreground")}>
                 {totalAssigned}/{totalTarget || "—"}
               </span>
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground/30 transition-transform shrink-0", isExpanded && "rotate-180")} />
             </button>
 
-            {/* Workers — expanded on click */}
             {isExpanded && (
               <div className="pl-9 pr-3 py-2 space-y-1.5 animate-fade-in">
                 {allWorkers.map((w) => {
@@ -785,9 +661,7 @@ function WorkloadSummary({
                       <User className="w-3 h-3 text-muted-foreground/40 shrink-0" />
                       <span className="text-sm font-medium truncate flex-1">{w.name}</span>
                       {showUnits && (
-                        <span className="text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                          {w.unit}
-                        </span>
+                        <span className="text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{w.unit}</span>
                       )}
                       <span className={cn("text-sm font-bold tabular-nums", wOver ? "text-red-600" : "text-muted-foreground")}>
                         {w.assigned}{w.target ? `/${w.target}` : ""}
@@ -804,60 +678,145 @@ function WorkloadSummary({
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 function SchedulerPage() {
-  const isMobile = useIsMobile();
   const { data: schedulable = [], isLoading } = useSchedulerGarments();
-  const { data: allGarments = [] } = useWorkshopGarments();
+  // Workload payload: only rows with assigned_date / production_plan / today's
+  // completion. Replaces the old useWorkshopGarments() pull which dragged
+  // the entire workshop list (joins, measurements, etc.) just to count plans.
+  const { data: allGarments = [] } = useWorkshopWorkload();
   const scheduleMut = useScheduleGarments();
 
-  // Split by tab logic
-  const firstTrip = schedulable.filter(
-    (g) => !g.trip_number || g.trip_number === 1,
+  // ── Data slices ───────────────────────────────────────────────────────────
+  const trip1 = schedulable.filter((g) => (g.trip_number ?? 1) === 1);
+  const expressGarments = trip1.filter((g) => g.express);
+  const brovaGarments = trip1.filter((g) => !g.express && g.garment_type === "brova");
+  const finalsGarments = trip1.filter(
+    (g) => !g.express && g.garment_type === "final" && g.piece_stage !== "waiting_for_acceptance",
   );
+  const returnsGarments = schedulable.filter((g) => (g.trip_number ?? 1) >= 2);
 
-  const schedulableOrderIds = new Set(firstTrip.map((g) => g.order_id));
-  const waitingFinals = allGarments.filter(
-    (g) =>
-      schedulableOrderIds.has(g.order_id) &&
-      g.piece_stage === "waiting_for_acceptance" &&
-      g.garment_type === "final",
-  );
-  const ordersUnsorted = groupByOrder([...firstTrip, ...waitingFinals]);
-
-  // Sort: express first, then by delivery date (soonest first), then no-date last
-  const orders = useMemo(() => {
-    return [...ordersUnsorted].sort((a, b) => {
-      // Express always first
-      if (a.express && !b.express) return -1;
-      if (!a.express && b.express) return 1;
-      // Then by delivery date (earliest first, no date last)
-      if (a.delivery_date && b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
-      if (a.delivery_date && !b.delivery_date) return -1;
-      if (!a.delivery_date && b.delivery_date) return 1;
-      return 0;
-    });
-  }, [ordersUnsorted]);
-
-  const brovaReturns = schedulable.filter(
-    (g) =>
-      g.garment_type === "brova" &&
-      (g.trip_number === 2 || g.trip_number === 3),
-  );
-
-  const alterationIn = schedulable.filter(
-    (g) =>
-      ((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
-      ((g.trip_number ?? 0) >= 2 && g.garment_type === "final"),
-  );
-
-  const finalOnlyOrderIds = orders
-    .filter((o) => o.garments.every((g) => g.garment_type === "final"))
-    .map((o) => o.order_id);
+  // Brova plan lookup for final-only orders
+  const finalOnlyOrderIds = useMemo(() => {
+    const brovaOrderIds = new Set(brovaGarments.map((g) => g.order_id));
+    return [...new Set(finalsGarments.map((g) => g.order_id))].filter((id) => !brovaOrderIds.has(id));
+  }, [finalsGarments, brovaGarments]);
   const { data: brovaPlansMap = {} } = useBrovaPlans(finalOnlyOrderIds);
 
-  // Compute scheduled garments per date (for calendar heat)
+  // Sort by delivery date, brovas before finals within order
+  const groupByOrderSorted = (arr: WorkshopGarment[]): WorkshopGarment[] => {
+    const groups = new Map<number, WorkshopGarment[]>();
+    for (const g of arr) {
+      if (!groups.has(g.order_id)) groups.set(g.order_id, []);
+      groups.get(g.order_id)!.push(g);
+    }
+    return [...groups.values()]
+      .sort((a, b) => {
+        const da = a[0]?.delivery_date_order, db = b[0]?.delivery_date_order;
+        if (da && db) return da.localeCompare(db);
+        return da ? -1 : db ? 1 : 0;
+      })
+      .map((group) =>
+        group.sort((a, b) => {
+          if (a.garment_type === "brova" && b.garment_type !== "brova") return -1;
+          if (a.garment_type !== "brova" && b.garment_type === "brova") return 1;
+          return 0;
+        }),
+      )
+      .flat();
+  };
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const searchFilter = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return (g: WorkshopGarment) =>
+      (g.customer_name ?? "").toLowerCase().includes(q) ||
+      String(g.order_id).includes(q) ||
+      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
+      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
+      (g.garment_id ?? "").toLowerCase().includes(q);
+  }, [search]);
+  const applySearch = <T extends WorkshopGarment>(arr: T[]) => searchFilter ? arr.filter(searchFilter) : arr;
+
+  const sortedExpress = applySearch(groupByOrderSorted(expressGarments));
+  const sortedBrova = applySearch(groupByOrderSorted(brovaGarments));
+  const sortedFinals = applySearch(groupByOrderSorted(finalsGarments));
+  const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
+
+  // ── Selection state ───────────────────────────────────────────────────────
+  // Express + Brova: garment-level, freely mixable with each other
+  // Finals + Returns: order-level, must be selected independently
+  const [selExpress, setSelExpress] = useState<Set<string>>(new Set());
+  const [selBrova, setSelBrova] = useState<Set<string>>(new Set());
+  const [selFinals, setSelFinals] = useState<Set<string>>(new Set());
+  const [selReturns, setSelReturns] = useState<Set<string>>(new Set());
+
+  const toggleGarment =
+    (setFn: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    (id: string, checked: boolean) =>
+      setFn((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
+
+  const toggleFinalOrder = (orderGarmentIds: string[], checked: boolean) =>
+    setSelFinals((prev) => {
+      const n = new Set(prev);
+      for (const id of orderGarmentIds) checked ? n.add(id) : n.delete(id);
+      return n;
+    });
+
+  const toggleReturn = (id: string, checked: boolean) =>
+    setSelReturns((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
+
+  // Sections are disabled when another group has an active selection
+  const expressBrovaActive = selExpress.size > 0 || selBrova.size > 0;
+  const finalsActive = selFinals.size > 0;
+  const returnsActive = selReturns.size > 0;
+
+  const expressBrovaDisabled = finalsActive || returnsActive;
+  const finalsDisabled = expressBrovaActive || returnsActive;
+  const returnsDisabled = expressBrovaActive || finalsActive;
+
+  const clearAll = () => {
+    setSelExpress(new Set());
+    setSelBrova(new Set());
+    setSelFinals(new Set());
+    setSelReturns(new Set());
+  };
+
+  const totalSelected = selExpress.size + selBrova.size + selFinals.size + selReturns.size;
+
+  const getSelectedGarments = (): WorkshopGarment[] => {
+    const ids = new Set([...selExpress, ...selBrova, ...selFinals, ...selReturns]);
+    return schedulable.filter((g) => ids.has(g.id));
+  };
+
+  const getSelectedGarmentIds = () => getSelectedGarments().map((g) => g.id);
+  const selectedHasSoaking = getSelectedGarments().some((g) => g.soaking);
+
+  const isSchedulingReturns = selReturns.size > 0;
+
+  const getDefaultPlanForSelection = (): Record<string, string> | null => {
+    for (const id of selFinals) {
+      const g = finalsGarments.find((g) => g.id === id);
+      if (g && brovaPlansMap[g.order_id]) return brovaPlansMap[g.order_id];
+    }
+    for (const g of getSelectedGarments()) {
+      if (g.worker_history) return { ...g.worker_history } as Record<string, string>;
+    }
+    return null;
+  };
+
+  const getReturnWorkerHistory = (): Record<string, string> | null => {
+    for (const id of selReturns) {
+      const g = returnsGarments.find((g) => g.id === id);
+      if (g?.worker_history) return g.worker_history as Record<string, string>;
+    }
+    return null;
+  };
+
+  // ── Calendar / workload ───────────────────────────────────────────────────
   const scheduledDates = useMemo(() => {
     const map: Record<string, number> = {};
     for (const g of allGarments) {
@@ -868,7 +827,6 @@ function SchedulerPage() {
     return map;
   }, [allGarments]);
 
-  // Max per day — for heat scaling
   const maxPerDay = useMemo(() => {
     const vals = Object.values(scheduledDates);
     return vals.length > 0 ? Math.max(...vals) : 0;
@@ -878,27 +836,21 @@ function SchedulerPage() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [planOpen, setPlanOpen] = useState(false);
   const [returnPlanOpen, setReturnPlanOpen] = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   const { data: resources = [] } = useResources();
 
-  // Compute per-worker workload for selected date, grouped by stage → unit
   const workload = useMemo(() => {
     const roleToStage: Record<string, string> = {
-      cutter: "cutting",
-      post_cutter: "post_cutting",
-      sewer: "sewing",
-      finisher: "finishing",
-      ironer: "ironing",
-      quality_checker: "quality_check",
+      cutter: "cutting", post_cutter: "post_cutting", sewer: "sewing",
+      finisher: "finishing", ironer: "ironing", quality_checker: "quality_check",
     };
 
     const workerCounts: Record<string, { assigned: number; target: number | null; stage: string; unit: string }> = {};
-
     for (const g of allGarments) {
       if (!g.assigned_date || !g.in_production || !g.production_plan) continue;
       const dateStr = toLocalDateStr(g.assigned_date);
       if (dateStr !== selectedDate) continue;
-
       const plan = g.production_plan as Record<string, string>;
       for (const [role, workerName] of Object.entries(plan)) {
         if (!workerName) continue;
@@ -919,19 +871,15 @@ function SchedulerPage() {
       if (!byStage[stage][data.unit]) byStage[stage][data.unit] = [];
       byStage[stage][data.unit].push({ name, assigned: data.assigned, target: data.target });
     }
-
-    for (const stage of Object.keys(byStage)) {
-      for (const unit of Object.keys(byStage[stage])) {
+    for (const stage of Object.keys(byStage))
+      for (const unit of Object.keys(byStage[stage]))
         byStage[stage][unit].sort((a, b) => b.assigned - a.assigned);
-      }
-    }
 
     return byStage;
   }, [allGarments, selectedDate, resources]);
 
   const totalForDate = scheduledDates[selectedDate] ?? 0;
 
-  // Stages where the responsibility has resources in more than one unit
   const multiUnitStages = useMemo(() => {
     const unitsByStage = new Map<string, Set<string>>();
     for (const r of resources) {
@@ -940,130 +888,22 @@ function SchedulerPage() {
       unitsByStage.get(r.responsibility)!.add(r.unit);
     }
     const result = new Set<string>();
-    for (const [stage, units] of unitsByStage) {
+    for (const [stage, units] of unitsByStage)
       if (units.size > 1) result.add(stage);
-    }
     return result;
   }, [resources]);
 
-  // Selection state
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
-  const [selectedBrovaReturnIds, setSelectedBrovaReturnIds] = useState<Set<string>>(new Set());
-  const [selectedAltInIds, setSelectedAltInIds] = useState<Set<string>>(new Set());
-
-  const toggleOrderInSet = (
-    setFn: React.Dispatch<React.SetStateAction<Set<number>>>,
-    orderId: number,
-    checked: boolean,
-  ) =>
-    setFn((prev) => {
-      const n = new Set(prev);
-      checked ? n.add(orderId) : n.delete(orderId);
-      return n;
-    });
-
-  const toggleGarmentInSet = (
-    setFn: React.Dispatch<React.SetStateAction<Set<string>>>,
-    id: string,
-    checked: boolean,
-  ) =>
-    setFn((prev) => {
-      const n = new Set(prev);
-      checked ? n.add(id) : n.delete(id);
-      return n;
-    });
-
-  const selectAllOrders = () => setSelectedOrderIds(new Set(orders.map((o) => o.order_id)));
-  const selectAllBrovaReturns = () => setSelectedBrovaReturnIds(new Set(brovaReturns.map((g) => g.id)));
-  const selectAllAltIn = () => setSelectedAltInIds(new Set(alterationIn.map((g) => g.id)));
-
-  const getSelectedGarments = (): WorkshopGarment[] => {
-    const selected: WorkshopGarment[] = [];
-    for (const og of orders) {
-      if (selectedOrderIds.has(og.order_id)) {
-        selected.push(...og.garments.filter((g) => g.piece_stage !== "waiting_for_acceptance"));
-      }
-    }
-    for (const id of selectedBrovaReturnIds) {
-      const g = brovaReturns.find((g) => g.id === id);
-      if (g) selected.push(g);
-    }
-    for (const id of selectedAltInIds) {
-      const g = alterationIn.find((g) => g.id === id);
-      if (g) selected.push(g);
-    }
-    return selected;
-  };
-
-  const getSelectedGarmentIds = (): string[] => getSelectedGarments().map((g) => g.id);
-  const selectedHasSoaking = getSelectedGarments().some((g) => g.soaking);
-
-  const totalSelected =
-    selectedOrderIds.size + selectedBrovaReturnIds.size + selectedAltInIds.size;
-
-  const isSchedulingReturns =
-    (selectedBrovaReturnIds.size > 0 || selectedAltInIds.size > 0) &&
-    selectedOrderIds.size === 0;
-
-  const getDefaultPlanForSelection = (): Record<string, string> | null => {
-    if (selectedOrderIds.size > 0) {
-      for (const orderId of selectedOrderIds) {
-        if (brovaPlansMap[orderId]) return brovaPlansMap[orderId];
-      }
-    }
-    if (selectedBrovaReturnIds.size > 0) {
-      for (const id of selectedBrovaReturnIds) {
-        const g = brovaReturns.find((g) => g.id === id);
-        if (g?.worker_history) return { ...g.worker_history } as Record<string, string>;
-      }
-    }
-    if (selectedAltInIds.size > 0) {
-      for (const id of selectedAltInIds) {
-        const g = alterationIn.find((g) => g.id === id);
-        if (g?.worker_history) return { ...g.worker_history } as Record<string, string>;
-      }
-    }
-    return null;
-  };
-
-  const getReturnWorkerHistory = (): Record<string, string> | null => {
-    if (selectedBrovaReturnIds.size > 0) {
-      for (const id of selectedBrovaReturnIds) {
-        const g = brovaReturns.find((g) => g.id === id);
-        if (g?.worker_history) return g.worker_history as Record<string, string>;
-      }
-    }
-    if (selectedAltInIds.size > 0) {
-      for (const id of selectedAltInIds) {
-        const g = alterationIn.find((g) => g.id === id);
-        if (g?.worker_history) return g.worker_history as Record<string, string>;
-      }
-    }
-    return null;
-  };
+  const selectedDateLabel = selectedDate
+    ? new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric" })
+    : "—";
 
   const handleSchedule = async (plan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
     const selected = getSelectedGarments();
     const soakingIds = selected.filter((g) => g.soaking).map((g) => g.id);
     const nonSoakingIds = selected.filter((g) => !g.soaking).map((g) => g.id);
     await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), soakingIds, nonSoakingIds, plan, date, reentryStage: reentryStage as any });
-    setSelectedOrderIds(new Set());
-    setSelectedBrovaReturnIds(new Set());
-    setSelectedAltInIds(new Set());
+    clearAll();
   };
-
-  const [activeTab, setActiveTab] = useState("orders");
-
-  // Mobile: toggle control panel visibility
-  const [showMobilePanel, setShowMobilePanel] = useState(false);
-
-  const selectedDateLabel = selectedDate
-    ? new Date(selectedDate + "T00:00:00").toLocaleDateString("default", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      })
-    : "—";
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-24 lg:pb-10">
@@ -1073,39 +913,26 @@ function SchedulerPage() {
         subtitle={`${schedulable.length} garment${schedulable.length !== 1 ? "s" : ""} awaiting production plans`}
       />
 
-      {/* ── Tablet/phone: calendar + workload on top, full width ── */}
+      {/* ── Tablet/phone: calendar + workload on top ── */}
       <div className="lg:hidden mb-3">
         <div className="bg-card border rounded-xl shadow-sm p-3">
           <div className="flex gap-3">
-            {/* Calendar — capped width so it doesn't overstretch */}
             <div className="w-[280px] shrink-0">
-              <HeatCalendar
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                scheduledDates={scheduledDates}
-                maxPerDay={maxPerDay}
-              />
+              <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
             </div>
-            {/* Workload — takes remaining space, only on wider tablets */}
             <div className="hidden sm:block flex-1 min-w-0 border-l pl-3">
               <div className="flex items-center gap-1.5 mb-2">
                 <BarChart3 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-bold">{selectedDateLabel}</span>
-                {totalForDate > 0 && (
-                  <span className="text-xs text-muted-foreground tabular-nums ml-auto">{totalForDate}</span>
-                )}
+                {totalForDate > 0 && <span className="text-xs text-muted-foreground tabular-nums ml-auto">{totalForDate}</span>}
               </div>
               <div className="max-h-[220px] overflow-y-auto">
                 <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
               </div>
             </div>
           </div>
-          {/* Workload on narrow screens — collapsible below calendar */}
           <div className="sm:hidden border-t mt-2 pt-2">
-            <button
-              onClick={() => setShowMobilePanel(!showMobilePanel)}
-              className="w-full flex items-center justify-between text-left touch-manipulation"
-            >
+            <button onClick={() => setShowMobilePanel(!showMobilePanel)} className="w-full flex items-center justify-between text-left touch-manipulation">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-bold">{selectedDateLabel}</span>
@@ -1125,167 +952,107 @@ function SchedulerPage() {
       {/* ── Layout: single col (tablet/phone) | 2col desktop ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_560px] gap-4 items-start">
 
-        {/* ── Col 1: Tabs + order list ── */}
-        <div className="min-w-0">
-          <Tabs defaultValue="orders" value={activeTab} onValueChange={setActiveTab}>
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden max-w-full">
-                <TabsTrigger value="orders" className="gap-1.5">
-                  Orders
-                  <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                    {orders.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="brova" className="gap-1.5">
-                  Brova
-                  <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                    {brovaReturns.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="alteration-in" className="gap-1.5">
-                  <span className="hidden min-[480px]:inline">Alteration</span>
-                  <span className="min-[480px]:hidden">Alt</span>
-                  {" (In)"}
-                  <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
-                    {alterationIn.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="alteration-out" className="gap-1.5" disabled>
-                  <span className="hidden min-[480px]:inline">Alteration</span>
-                  <span className="min-[480px]:hidden">Alt</span>
-                  {" (Out)"}
-                </TabsTrigger>
-              </TabsList>
+        {/* ── Col 1: Sections ── */}
+        <div className="space-y-8 min-w-0">
 
-              <button
-                className="text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1 shrink-0"
-                onClick={() => {
-                  if (activeTab === "orders") selectAllOrders();
-                  else if (activeTab === "brova") selectAllBrovaReturns();
-                  else if (activeTab === "alteration-in") selectAllAltIn();
-                }}
-              >
-                <CheckSquare className="w-3 h-3" />
-                <span className="hidden sm:inline">Select all</span>
-                <span className="sm:hidden">All</span>
-              </button>
-            </div>
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Customer, order #, invoice, phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
 
-            <TabsContent value="orders">
-              {isLoading ? (
-                <LoadingSkeleton />
-              ) : orders.length === 0 ? (
-                <EmptyState icon={CalendarDays} message="No orders to schedule" />
-              ) : isMobile ? (
-                <div className="space-y-2">
-                  {orders.map((group) => (
-                    <SchedulerOrderCard
-                      key={group.order_id}
-                      group={group}
-                      selected={selectedOrderIds.has(group.order_id)}
-                      onToggle={(checked) =>
-                        toggleOrderInSet(setSelectedOrderIds, group.order_id, checked)
-                      }
-                    />
-                  ))}
-                </div>
-              ) : (
-                <SchedulerOrderTable
-                  orders={orders}
-                  selectedOrderIds={selectedOrderIds}
-                  onToggleOrder={(orderId, checked) =>
-                    toggleOrderInSet(setSelectedOrderIds, orderId, checked)
-                  }
-                />
-              )}
-            </TabsContent>
+          {isLoading ? (
+            <LoadingSkeleton />
+          ) : (
+            <>
+              {/* ── EXPRESS ── */}
+              <Section title="Express" icon={Zap} count={sortedExpress.length} accent="bg-orange-100 text-orange-700">
+                {sortedExpress.length === 0 ? (
+                  <EmptyState icon={Zap} message="No express garments to schedule" />
+                ) : (
+                  <SchedulerSectionTable
+                    garments={sortedExpress}
+                    selectedIds={selExpress}
+                    onToggle={toggleGarment(setSelExpress)}
+                    showType
+                    hideExpress
+                    disabled={expressBrovaDisabled}
+                  />
+                )}
+              </Section>
 
-            <TabsContent value="brova">
-              {isLoading ? (
-                <LoadingSkeleton />
-              ) : brovaReturns.length === 0 ? (
-                <EmptyState icon={Package} message="No brova returns to schedule" />
-              ) : isMobile ? (
-                <div className="space-y-1.5">
-                  {brovaReturns.map((g) => (
-                    <SchedulerGarmentRow
-                      key={g.id}
-                      garment={g}
-                      selected={selectedBrovaReturnIds.has(g.id)}
-                      onSelect={(id, checked) => toggleGarmentInSet(setSelectedBrovaReturnIds, id, checked)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <SchedulerGarmentTable
-                  garments={brovaReturns}
-                  selectedIds={selectedBrovaReturnIds}
-                  onToggle={(id, checked) => toggleGarmentInSet(setSelectedBrovaReturnIds, id, checked)}
-                />
-              )}
-            </TabsContent>
+              {/* ── BROVA ── */}
+              <Section title="Brova" icon={Package} count={sortedBrova.length} accent="bg-amber-100 text-amber-700">
+                {sortedBrova.length === 0 ? (
+                  <EmptyState icon={Package} message="No brova garments to schedule" />
+                ) : (
+                  <SchedulerSectionTable
+                    garments={sortedBrova}
+                    selectedIds={selBrova}
+                    onToggle={toggleGarment(setSelBrova)}
+                    disabled={expressBrovaDisabled}
+                  />
+                )}
+              </Section>
 
-            <TabsContent value="alteration-in">
-              {isLoading ? (
-                <LoadingSkeleton />
-              ) : alterationIn.length === 0 ? (
-                <EmptyState icon={AlertTriangle} message="No alterations to schedule" />
-              ) : isMobile ? (
-                <div className="space-y-1.5">
-                  {alterationIn.map((g) => (
-                    <SchedulerGarmentRow
-                      key={g.id}
-                      garment={g}
-                      selected={selectedAltInIds.has(g.id)}
-                      onSelect={(id, checked) => toggleGarmentInSet(setSelectedAltInIds, id, checked)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <SchedulerGarmentTable
-                  garments={alterationIn}
-                  selectedIds={selectedAltInIds}
-                  onToggle={(id, checked) => toggleGarmentInSet(setSelectedAltInIds, id, checked)}
-                  showAlteration
-                />
-              )}
-            </TabsContent>
+              {/* ── APPROVED FINALS (order-level) ── */}
+              <Section title="Approved Finals" icon={Package} count={sortedFinals.length} accent="bg-emerald-100 text-emerald-700">
+                {sortedFinals.length === 0 ? (
+                  <EmptyState icon={Package} message="No approved finals to schedule" />
+                ) : (
+                  <OrderGroupTable
+                    garments={sortedFinals}
+                    selectedIds={selFinals}
+                    onToggleOrder={toggleFinalOrder}
+                    disabled={finalsDisabled}
+                  />
+                )}
+              </Section>
 
-            <TabsContent value="alteration-out">
-              <EmptyState message="Coming soon — externally-made dishdashas" />
-            </TabsContent>
-
-          </Tabs>
+              {/* ── RETURNS (garment-level) ── */}
+              <Section title="Returns" icon={RotateCcw} count={sortedReturns.length} accent="bg-purple-100 text-purple-700">
+                {sortedReturns.length === 0 ? (
+                  <EmptyState icon={RotateCcw} message="No returns to schedule" />
+                ) : (
+                  <SchedulerSectionTable
+                    garments={sortedReturns}
+                    selectedIds={selReturns}
+                    onToggle={toggleReturn}
+                    showType
+                    showAlt
+                    showFeedback
+                    disabled={returnsDisabled}
+                    lockToOrder
+                  />
+                )}
+              </Section>
+            </>
+          )}
         </div>
 
-        {/* ── Col 2: Calendar + workload combined (desktop only) ── */}
+        {/* ── Col 2: Calendar + workload (desktop only) ── */}
         <div className="hidden lg:block lg:sticky lg:top-4">
           <div className="bg-card border rounded-xl shadow-sm p-3 xl:p-4">
-            {/* xl+: side by side | lg: stacked */}
             <div className="flex flex-col xl:flex-row xl:gap-4">
-              {/* Calendar */}
               <div className="xl:w-[300px] xl:shrink-0 max-w-[320px]">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-4 h-4 text-primary" />
                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
                 </div>
-                <HeatCalendar
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  scheduledDates={scheduledDates}
-                  maxPerDay={maxPerDay}
-                />
+                <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
               </div>
-              {/* Workload — beside calendar on xl, below on lg */}
               <div className="border-t xl:border-t-0 xl:border-l mt-3 pt-3 xl:mt-0 xl:pt-0 xl:pl-4 xl:flex-1 xl:min-w-[180px]">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <BarChart3 className="w-3.5 h-3.5 text-primary" />
                     <span className="text-xs font-bold">{selectedDateLabel}</span>
                   </div>
-                  {totalForDate > 0 && (
-                    <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>
-                  )}
+                  {totalForDate > 0 && <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>}
                 </div>
                 <div className="max-h-[260px] overflow-y-auto">
                   <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
@@ -1293,24 +1060,14 @@ function SchedulerPage() {
               </div>
             </div>
 
-            {/* Action — below calendar + workload */}
             <div className="border-t mt-3 pt-3">
               {totalSelected > 0 ? (
-                <div className="mb-2">
-                  <p className="text-sm font-semibold">
-                    {getSelectedGarmentIds().length} garment{getSelectedGarmentIds().length !== 1 ? "s" : ""}
-                    <span className="text-muted-foreground font-normal text-xs">
-                      {" "}from{" "}
-                      {[
-                        selectedOrderIds.size > 0 && `${selectedOrderIds.size} order${selectedOrderIds.size !== 1 ? "s" : ""}`,
-                        selectedBrovaReturnIds.size > 0 && `${selectedBrovaReturnIds.size} return${selectedBrovaReturnIds.size !== 1 ? "s" : ""}`,
-                        selectedAltInIds.size > 0 && `${selectedAltInIds.size} alt${selectedAltInIds.size !== 1 ? "s" : ""}`,
-                      ].filter(Boolean).join(", ")}
-                    </span>
-                  </p>
-                </div>
+                <p className="text-sm font-semibold mb-2">
+                  {getSelectedGarmentIds().length} garment{getSelectedGarmentIds().length !== 1 ? "s" : ""}
+                  <span className="text-muted-foreground font-normal text-xs"> selected</span>
+                </p>
               ) : (
-                <p className="text-xs text-muted-foreground mb-2">Select orders to schedule</p>
+                <p className="text-xs text-muted-foreground mb-2">Select garments to schedule</p>
               )}
               <Button
                 className="w-full h-9 font-bold text-sm"
@@ -1326,14 +1083,7 @@ function SchedulerPage() {
       </div>
 
       {/* Mobile batch action bar */}
-      <BatchActionBar
-        count={totalSelected}
-        onClear={() => {
-          setSelectedOrderIds(new Set());
-          setSelectedBrovaReturnIds(new Set());
-          setSelectedAltInIds(new Set());
-        }}
-      >
+      <BatchActionBar count={totalSelected} onClear={clearAll}>
         <span className="text-xs opacity-70 hidden sm:inline">{selectedDateLabel}</span>
         <Button
           size="sm"

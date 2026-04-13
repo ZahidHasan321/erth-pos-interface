@@ -336,28 +336,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 5. Transactional RPC for saving work order garments and updating order totals
+-- 5. Transactional RPC for saving work order garments and updating order totals.
+--
+-- Strategy: sync by upsert, not delete+insert.
+--   • Garments removed from the list  → DELETE (targeted, not bulk)
+--   • Garments already in the list    → UPDATE design fields only (workshop fields untouched)
+--   • New garments                    → INSERT with initial workflow state
+--
+-- This preserves garment UUIDs across saves so any downstream references
+-- (dispatch_log, garment_feedback, etc.) remain valid even if the shop edits
+-- a draft order multiple times. Workshop-owned fields (piece_stage, location,
+-- trip_number, in_production, production_plan, worker_history, …) are never
+-- overwritten by this function.
+--
+-- Concurrency: the FOR UPDATE row lock on orders serializes concurrent calls
+-- for the same order so the targeted DELETE cannot race with the upsert.
 CREATE OR REPLACE FUNCTION save_work_order_garments(
-  p_order_id INT,
-  p_garments JSONB, -- Array of garment objects
-  p_order_updates JSONB -- { num_of_fabrics, fabric_charge, stitching_charge, style_charge, stitching_price, delivery_date, home_delivery }
+  p_order_id     INT,
+  p_garments     JSONB, -- Array of garment objects
+  p_order_updates JSONB  -- { num_of_fabrics, fabric_charge, stitching_charge, style_charge, stitching_price, delivery_date, home_delivery }
 ) RETURNS JSONB AS $$
 DECLARE
   v_garment JSONB;
 BEGIN
-  -- 0. Ensure order_type is WORK
+  -- 0. Serialize concurrent calls for the same order.
+  PERFORM id FROM orders WHERE id = p_order_id FOR UPDATE;
+
+  -- 0b. Ensure order_type is WORK.
   UPDATE orders SET order_type = 'WORK' WHERE id = p_order_id AND order_type != 'WORK';
 
-  -- 1. Update Work Order Totals
+  -- 1. Upsert work order totals.
   INSERT INTO work_orders (
-    order_id,
-    num_of_fabrics,
-    fabric_charge,
-    stitching_charge,
-    style_charge,
-    stitching_price,
-    delivery_date,
-    home_delivery
+    order_id, num_of_fabrics, fabric_charge, stitching_charge,
+    style_charge, stitching_price, delivery_date, home_delivery
   ) VALUES (
     p_order_id,
     (p_order_updates->>'num_of_fabrics')::INT,
@@ -369,27 +380,47 @@ BEGIN
     COALESCE((p_order_updates->>'home_delivery')::BOOLEAN, false)
   )
   ON CONFLICT (order_id) DO UPDATE SET
-    num_of_fabrics = EXCLUDED.num_of_fabrics,
-    fabric_charge = EXCLUDED.fabric_charge,
+    num_of_fabrics   = EXCLUDED.num_of_fabrics,
+    fabric_charge    = EXCLUDED.fabric_charge,
     stitching_charge = EXCLUDED.stitching_charge,
-    style_charge = EXCLUDED.style_charge,
-    stitching_price = EXCLUDED.stitching_price,
-    delivery_date = EXCLUDED.delivery_date,
-    home_delivery = EXCLUDED.home_delivery;
+    style_charge     = EXCLUDED.style_charge,
+    stitching_price  = EXCLUDED.stitching_price,
+    delivery_date    = EXCLUDED.delivery_date,
+    home_delivery    = EXCLUDED.home_delivery;
 
-  -- 2. Clear and Re-insert Garments (Atomic Sync)
-  DELETE FROM garments WHERE order_id = p_order_id;
+  -- 2. Remove garments that are no longer in the submitted list.
+  --    Targeted delete — only rows the shop explicitly removed.
+  DELETE FROM garments
+  WHERE order_id  = p_order_id
+    AND garment_id NOT IN (
+      SELECT elem->>'garment_id'
+      FROM   jsonb_array_elements(p_garments) AS elem
+    );
 
+  -- 3. Upsert each garment.
+  --    INSERT  → new garment: set all fields including initial workflow state.
+  --    UPDATE  → existing garment: update only POS-owned design fields.
+  --              Workshop fields (piece_stage, location, trip_number,
+  --              in_production, production_plan, worker_history, assigned_*,
+  --              acceptance_status, feedback_status, fulfillment_type, …)
+  --              are intentionally excluded from the DO UPDATE clause.
   FOR v_garment IN SELECT * FROM jsonb_array_elements(p_garments)
   LOOP
     INSERT INTO garments (
-      order_id, garment_id, fabric_id, style_id, measurement_id, fabric_source,
-      quantity, fabric_length, fabric_price_snapshot, stitching_price_snapshot,
-      style_price_snapshot, collar_type, collar_button, cuffs_type, cuffs_thickness,
-      front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder,
-      small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, notes,
-      soaking, express, garment_type, delivery_date, piece_stage, style, shop_name,
-      home_delivery, color, location, trip_number, acceptance_status, feedback_status, fulfillment_type
+      order_id, garment_id,
+      -- Design / spec fields
+      fabric_id, style_id, measurement_id, fabric_source,
+      quantity, fabric_length,
+      fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot,
+      collar_type, collar_button, cuffs_type, cuffs_thickness,
+      front_pocket_type, front_pocket_thickness,
+      wallet_pocket, pen_holder, small_tabaggi,
+      jabzour_1, jabzour_2, jabzour_thickness,
+      lines, notes, soaking, express, garment_type,
+      delivery_date, style, shop_name, home_delivery, color,
+      -- Initial workflow state (only meaningful on first INSERT)
+      piece_stage, location, trip_number,
+      acceptance_status, feedback_status, fulfillment_type
     ) VALUES (
       p_order_id,
       v_garment->>'garment_id',
@@ -420,29 +451,67 @@ BEGIN
       COALESCE((v_garment->>'express')::BOOLEAN, false),
       COALESCE(v_garment->>'garment_type', 'final')::garment_type,
       (v_garment->>'delivery_date')::TIMESTAMP,
-      COALESCE((v_garment->>'piece_stage')::piece_stage, 'waiting_cut'),
       COALESCE(v_garment->>'style', 'kuwaiti'),
       v_garment->>'shop_name',
       COALESCE((v_garment->>'home_delivery')::BOOLEAN, false),
       v_garment->>'color',
+      COALESCE((v_garment->>'piece_stage')::piece_stage, 'waiting_cut'),
       COALESCE((v_garment->>'location')::location, 'shop'),
       COALESCE((v_garment->>'trip_number')::INT, 0),
       (v_garment->>'acceptance_status')::BOOLEAN,
       v_garment->>'feedback_status',
       (v_garment->>'fulfillment_type')::fulfillment_type
-    );
+    )
+    ON CONFLICT (order_id, garment_id) DO UPDATE SET
+      -- POS-owned design fields only
+      fabric_id                = EXCLUDED.fabric_id,
+      style_id                 = EXCLUDED.style_id,
+      measurement_id           = EXCLUDED.measurement_id,
+      fabric_source            = EXCLUDED.fabric_source,
+      quantity                 = EXCLUDED.quantity,
+      fabric_length            = EXCLUDED.fabric_length,
+      fabric_price_snapshot    = EXCLUDED.fabric_price_snapshot,
+      stitching_price_snapshot = EXCLUDED.stitching_price_snapshot,
+      style_price_snapshot     = EXCLUDED.style_price_snapshot,
+      collar_type              = EXCLUDED.collar_type,
+      collar_button            = EXCLUDED.collar_button,
+      cuffs_type               = EXCLUDED.cuffs_type,
+      cuffs_thickness          = EXCLUDED.cuffs_thickness,
+      front_pocket_type        = EXCLUDED.front_pocket_type,
+      front_pocket_thickness   = EXCLUDED.front_pocket_thickness,
+      wallet_pocket            = EXCLUDED.wallet_pocket,
+      pen_holder               = EXCLUDED.pen_holder,
+      small_tabaggi            = EXCLUDED.small_tabaggi,
+      jabzour_1                = EXCLUDED.jabzour_1,
+      jabzour_2                = EXCLUDED.jabzour_2,
+      jabzour_thickness        = EXCLUDED.jabzour_thickness,
+      lines                    = EXCLUDED.lines,
+      notes                    = EXCLUDED.notes,
+      soaking                  = EXCLUDED.soaking,
+      express                  = EXCLUDED.express,
+      garment_type             = EXCLUDED.garment_type,
+      delivery_date            = EXCLUDED.delivery_date,
+      style                    = EXCLUDED.style,
+      shop_name                = EXCLUDED.shop_name,
+      home_delivery            = EXCLUDED.home_delivery,
+      color                    = EXCLUDED.color;
+      -- Workshop-owned fields NOT listed here (never overwritten by POS):
+      --   piece_stage, location, trip_number, in_production,
+      --   production_plan, worker_history, assigned_date, assigned_unit,
+      --   assigned_person, start_time, completion_time,
+      --   quality_check_ratings, trip_history,
+      --   acceptance_status, feedback_status, fulfillment_type
   END LOOP;
 
-  -- 3. If order has any brova garments, park finals as waiting_for_acceptance
-  --    (finals can't progress until their brova is trialed & accepted)
+  -- 4. Park finals if the order has any brova (finals wait for brova acceptance).
   IF EXISTS (
     SELECT 1 FROM garments WHERE order_id = p_order_id AND garment_type = 'brova'
   ) THEN
     UPDATE garments
     SET piece_stage = 'waiting_for_acceptance'
-    WHERE order_id = p_order_id
+    WHERE order_id    = p_order_id
       AND garment_type = 'final'
-      AND piece_stage = 'waiting_cut';
+      AND piece_stage  = 'waiting_cut';
   END IF;
 
   RETURN jsonb_build_object('status', 'success');
@@ -491,6 +560,13 @@ CREATE TRIGGER garment_stage_change_trigger
 AFTER INSERT OR UPDATE OF piece_stage ON garments
 FOR EACH ROW
 EXECUTE FUNCTION recompute_order_phase();
+
+-- 6b. Unique constraint: prevent duplicate garments for the same order.
+--     Belt-and-suspenders for the FOR UPDATE lock in save_work_order_garments —
+--     any concurrent insert that slips through will fail here instead of silently
+--     producing a duplicate row.
+CREATE UNIQUE INDEX IF NOT EXISTS garments_order_garment_id_unique
+  ON garments(order_id, garment_id);
 
 -- 7. Cleanup defaults
 ALTER TABLE orders ALTER COLUMN paid DROP DEFAULT;
@@ -3396,11 +3472,9 @@ BEGIN
                         'in_production',   g.in_production,
                         'production_plan', g.production_plan,
                         'worker_history',  g.worker_history,
-                        'style_name',      COALESCE(st.name, g.style),
-                        'style_image_url', st.image_url
+                        'style_name',      g.style
                     ) ORDER BY g.garment_id NULLS LAST)
                     FROM garments g
-                    LEFT JOIN styles st ON st.id = g.style_id
                     WHERE g.order_id = p.order_id
                 ), '[]'::jsonb)
             ) AS row_json

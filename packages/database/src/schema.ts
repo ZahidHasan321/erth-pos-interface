@@ -490,6 +490,19 @@ export interface TripHistoryEntry {
     qc_attempts: QcAttempt[];
 }
 
+/**
+ * Per-stage timing session. A garment can visit the same stage multiple times
+ * (e.g. QC fail → sewing → QC → sewing), so stage_timings stores an ARRAY per
+ * stage. The last entry with completed_at === null is the active session.
+ */
+export interface StageTimingEntry {
+    worker: string | null;
+    started_at: string;          // ISO timestamp
+    completed_at: string | null; // ISO timestamp; null = still in progress
+}
+
+export type StageTimings = Partial<Record<string, StageTimingEntry[]>>;
+
 // --- 6. GARMENTS (Line Items) ---
 export const garments = pgTable("garments", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -497,7 +510,10 @@ export const garments = pgTable("garments", {
 
     order_id: integer("order_id").references(() => orders.id, { onDelete: 'cascade' }).notNull(),
     fabric_id: integer("fabric_id").references(() => fabrics.id),
-    style_id: integer("style_id").references(() => styles.id),
+    // Per-order style group counter (1, 2, 3...). Garments sharing identical
+    // style selections within the same order get the same value. NOT a FK.
+    // Computed by computeStyleGroups() in utils.ts on save.
+    style_id: integer("style_id"),
     style: text("style").default("kuwaiti"),
     measurement_id: uuid("measurement_id").references(() => measurements.id),
 
@@ -557,6 +573,10 @@ export const garments = pgTable("garments", {
     completion_time: timestamp("completion_time", { withTimezone: true }),
     quality_check_ratings: jsonb("quality_check_ratings"),
     trip_history: jsonb("trip_history").$type<TripHistoryEntry[]>(),
+    // Per-stage timing log. Each stage key maps to an array of sessions so we
+    // can track repeat visits (QC-fail → same stage re-entered). Mirrors
+    // start_time/completion_time/worker_history but adds durations + history.
+    stage_timings: jsonb("stage_timings").$type<StageTimings>(),
 
     // Refund tracking (which price components have been refunded)
     refunded_fabric: boolean("refunded_fabric").default(false),
@@ -566,6 +586,7 @@ export const garments = pgTable("garments", {
     refunded_soaking: boolean("refunded_soaking").default(false),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
+    orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
 }));
 
 // --- 6.25 DISPATCH LOG (append-only audit of shop↔workshop dispatches) ---
@@ -617,6 +638,9 @@ export const garmentFeedback = pgTable("garment_feedback", {
     measurement_diffs: text("measurement_diffs"),
         // JSON: array of { field, original_value, actual_value, difference, reason }
         // reason: "customer_request" | "workshop_error" | "shop_error"
+    previous_measurement_id: uuid("previous_measurement_id").references(() => measurements.id),
+        // Audit: measurement_id the garment had BEFORE this feedback created a new one.
+        // Only set when Customer Request reasons triggered a new measurements row.
 
     // --- Options Verification ---
     options_checklist: text("options_checklist"),
@@ -869,7 +893,6 @@ export const workOrdersRelations = relations(workOrders, ({ one }) => ({
 export const garmentsRelations = relations(garments, ({ one, many }) => ({
     order: one(orders, { fields: [garments.order_id], references: [orders.id] }),
     fabric: one(fabrics, { fields: [garments.fabric_id], references: [fabrics.id] }),
-    style: one(styles, { fields: [garments.style_id], references: [styles.id] }),
     measurement: one(measurements, { fields: [garments.measurement_id], references: [measurements.id] }),
     feedback: many(garmentFeedback),
 }));

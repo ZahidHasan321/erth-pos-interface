@@ -22,6 +22,7 @@ import {
   ArrowDownToLine,
   CirclePause,
   CalendarClock,
+  Columns3,
   Activity,
   Droplets,
   Scissors,
@@ -69,6 +70,7 @@ export function WorkshopSidebar() {
     { label: "Receiving",          icon: ArrowDownToLine, href: "/receiving",  count: counts?.receiving,  badgeColor: "bg-blue-100 text-blue-700" },
     { label: "Parking",            icon: CirclePause,     href: "/parking",    count: counts?.parking,    badgeColor: "bg-amber-100 text-amber-700" },
     { label: "Scheduler",          icon: CalendarClock,   href: "/scheduler",  count: counts?.scheduler,  badgeColor: "bg-purple-100 text-purple-700" },
+    { label: "Production Board",   icon: Columns3,        href: "/board" },
     { label: "Production Tracker", icon: Activity,        href: "/assigned",  count: attentionCount,     badgeColor: attentionCount && attentionCount > 0 ? "bg-red-100 text-red-700" : undefined },
   ];
 

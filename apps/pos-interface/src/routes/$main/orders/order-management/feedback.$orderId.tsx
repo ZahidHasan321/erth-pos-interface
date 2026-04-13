@@ -44,14 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@repo/ui/table";
 import { Label } from "@repo/ui/label";
 import { Checkbox } from "@repo/ui/checkbox";
 import { toast } from "sonner";
@@ -62,8 +54,8 @@ import { SignaturePad } from "@/components/forms/signature-pad";
 
 // API and Types
 import { getOrderById } from "@/api/orders";
-import { getMeasurementById } from "@/api/measurements";
-import { updateGarment } from "@/api/garments";
+import { getMeasurementById, createMeasurement } from "@/api/measurements";
+import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/api/garments";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 // Storage helpers ready but not active — enable when Supabase Storage bucket is set up
 // import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
@@ -80,6 +72,7 @@ import {
   walletIcon,
   penIcon,
   smallTabaggiImage,
+  thicknessOptions,
   type BaseOption
 } from "@/components/forms/fabric-selection-and-options/constants";
 
@@ -148,17 +141,27 @@ const DIFFERENCE_REASONS = [
   { label: "Shop Error", color: "text-muted-foreground bg-muted/50" },
 ];
 
+// Maps optionRows id → picker option list for style rejection replacement
+const STYLE_OPTION_LISTS: Record<string, BaseOption[] | undefined> = {
+  collar: collarTypes,
+  collarBtn: collarButtons,
+  frontPocket: topPocketTypes,
+  cuff: cuffTypes,
+  jabzour: jabzourTypes,
+};
+
 // --- Types ---
 
 interface GarmentFeedbackState {
-  workshopMeasurements: Record<string, number | "">;
   feedbackMeasurements: Record<string, number | "">;
   differenceReasons: Record<string, string>;
   measurementNotes: Record<string, string>;
   optionNotes: Record<string, string>;
   optionChecks: Record<string, boolean>;
-  evidence: Record<string, { type: "photo" | "video"; url: string } | null>;
-  voiceNotes: Record<string, string | null>;
+  styleChanges: Record<string, string>;
+  hashwaChanges: Record<string, string>;
+  sharedPhotos: Array<{ type: "photo" | "video"; url: string }>;
+  sharedVoiceNotes: string[];
   satisfaction: string | null;
   feedbackAction: string | null;
   distributionAction: string | null;
@@ -171,14 +174,15 @@ interface GarmentFeedbackState {
 }
 
 const createEmptyGarmentState = (): GarmentFeedbackState => ({
-  workshopMeasurements: {},
   feedbackMeasurements: {},
   differenceReasons: {},
   measurementNotes: {},
   optionNotes: {},
   optionChecks: {},
-  evidence: {},
-  voiceNotes: {},
+  styleChanges: {},
+  hashwaChanges: {},
+  sharedPhotos: [],
+  sharedVoiceNotes: [],
   satisfaction: null,
   feedbackAction: null,
   distributionAction: null,
@@ -346,13 +350,6 @@ function UnifiedFeedbackInterface() {
 
   // --- Handlers ---
 
-  const handleWorkshopMeasurementChange = (key: string, value: string) => {
-    const numValue = value === "" ? "" : parseFloat(value);
-    updateGarmentState(selectedGarmentId, {
-      workshopMeasurements: { ...currentState.workshopMeasurements, [key]: numValue },
-    });
-  };
-
   const handleFeedbackMeasurementChange = (key: string, value: string) => {
     const numValue = value === "" ? "" : parseFloat(value);
     updateGarmentState(selectedGarmentId, {
@@ -384,17 +381,34 @@ function UnifiedFeedbackInterface() {
     });
   };
 
-  // TODO: When storage is set up, replace blob URLs with real uploads via storage.ts
-  const handleCapture = (optionId: string, type: "photo" | "video", file: File | null) => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
+  const handleStyleChange = (optionId: string, value: string) => {
     updateGarmentState(selectedGarmentId, {
-      evidence: { ...currentState.evidence, [optionId]: { type, url } },
+      styleChanges: { ...currentState.styleChanges, [optionId]: value },
     });
   };
 
-  // Voice recording handlers
-  const startRecording = async (optionId: string) => {
+  const handleHashwaChange = (optionId: string, value: string) => {
+    updateGarmentState(selectedGarmentId, {
+      hashwaChanges: { ...currentState.hashwaChanges, [optionId]: value },
+    });
+  };
+
+  // TODO: When storage is set up, replace blob URLs with real uploads via storage.ts
+  const handleAddPhoto = (file: File | null) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    updateGarmentState(selectedGarmentId, {
+      sharedPhotos: [...currentState.sharedPhotos, { type: "photo", url }],
+    });
+  };
+
+  const handleRemovePhoto = (idx: number) => {
+    updateGarmentState(selectedGarmentId, {
+      sharedPhotos: currentState.sharedPhotos.filter((_, i) => i !== idx),
+    });
+  };
+
+  const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -410,14 +424,14 @@ function UnifiedFeedbackInterface() {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const url = URL.createObjectURL(blob);
         updateGarmentState(selectedGarmentId, {
-          voiceNotes: { ...currentState.voiceNotes, [optionId]: url },
+          sharedVoiceNotes: [...currentState.sharedVoiceNotes, url],
         });
         stream.getTracks().forEach(t => t.stop());
         setRecordingOptionId(null);
       };
 
       mediaRecorder.start();
-      setRecordingOptionId(optionId);
+      setRecordingOptionId("shared");
     } catch {
       toast.error("Could not access microphone");
     }
@@ -429,9 +443,9 @@ function UnifiedFeedbackInterface() {
     }
   };
 
-  const removeVoiceNote = (optionId: string) => {
+  const removeVoiceNote = (idx: number) => {
     updateGarmentState(selectedGarmentId, {
-      voiceNotes: { ...currentState.voiceNotes, [optionId]: null },
+      sharedVoiceNotes: currentState.sharedVoiceNotes.filter((_, i) => i !== idx),
     });
   };
 
@@ -487,7 +501,7 @@ function UnifiedFeedbackInterface() {
             await updateGarment(activeGarment.id, updatePayload);
         }
 
-        // Build measurement diffs JSON
+        // Build measurement diffs JSON (logs all rows with feedback value, regardless of reason)
         const measurementDiffs = MEASUREMENT_ROWS
           .filter(row => {
             const orderVal = measurement ? (measurement[row.key as keyof Measurement] as number | null) : null;
@@ -503,17 +517,91 @@ function UnifiedFeedbackInterface() {
               state.feedbackMeasurements[row.key]
             ),
             reason: state.differenceReasons[row.key] || null,
+            notes: state.measurementNotes[row.key] || null,
           }));
 
-        // Build options checklist JSON
+        // --- Measurement propagation (Customer Request only) ---
+        // Customer Request rows feed a new measurements row; Workshop Error rows stay
+        // logged in measurement_diffs only (original spec preserved — workshop just refixes).
+        let newMeasurementId: string | null = null;
+        const previousMeasurementId = activeGarment.measurement_id || null;
+        const customerReqRows = MEASUREMENT_ROWS.filter(row => {
+          const fbVal = state.feedbackMeasurements[row.key];
+          return (
+            state.differenceReasons[row.key] === "Customer Request" &&
+            fbVal !== "" &&
+            fbVal !== undefined
+          );
+        });
+
+        if (customerReqRows.length > 0 && measurement && activeOrder.customer?.id) {
+          const base: Partial<Measurement> = { ...(measurement as any) };
+          delete (base as any).id;
+          delete (base as any).created_at;
+          delete (base as any).updated_at;
+          (base as any).measurement_date = new Date().toISOString();
+          for (const row of customerReqRows) {
+            (base as any)[row.key] = state.feedbackMeasurements[row.key];
+          }
+          const created = await createMeasurement(base);
+          if (created.status === "success" && created.data) {
+            newMeasurementId = created.data.id;
+
+            // Repoint: brovas only. Finals stay on their own measurement_id.
+            if (activeGarment.garment_type === "brova" && previousMeasurementId) {
+              await bulkRepointMeasurement(
+                activeOrder.id,
+                previousMeasurementId,
+                newMeasurementId,
+              );
+            } else {
+              await updateGarment(activeGarment.id, { measurement_id: newMeasurementId });
+            }
+          }
+        }
+
+        // --- Style propagation (brova only) ---
+        // Main style rejection → overwrite style fields on sibling brovas sharing same style_id.
+        // style_id itself stays fixed so grouping holds.
+        if (activeGarment.garment_type === "brova" && activeGarment.style_id != null) {
+          const styleFieldUpdates: Partial<Garment> = {};
+          const hashwaFieldUpdates: Partial<Garment> = {};
+          for (const opt of optionRows) {
+            const mainRejected = state.optionChecks[`${opt.id}-main`] === false;
+            const mainNewValue = state.styleChanges[opt.id];
+            const hashwaRejected = state.optionChecks[`${opt.id}-hashwa`] === false;
+            const hashwaNewValue = state.hashwaChanges[opt.id];
+
+            if (mainRejected && mainNewValue) {
+              // Map option id → garment field
+              if (opt.id === "collar") styleFieldUpdates.collar_type = mainNewValue;
+              else if (opt.id === "collarBtn") styleFieldUpdates.collar_button = mainNewValue;
+              else if (opt.id === "frontPocket") styleFieldUpdates.front_pocket_type = mainNewValue;
+              else if (opt.id === "cuff") styleFieldUpdates.cuffs_type = mainNewValue;
+              else if (opt.id === "jabzour") styleFieldUpdates.jabzour_2 = mainNewValue;
+            }
+            if (hashwaRejected && hashwaNewValue) {
+              if (opt.id === "frontPocket") hashwaFieldUpdates.front_pocket_thickness = hashwaNewValue;
+              else if (opt.id === "cuff") hashwaFieldUpdates.cuffs_thickness = hashwaNewValue;
+              else if (opt.id === "jabzour") hashwaFieldUpdates.jabzour_thickness = hashwaNewValue;
+            }
+          }
+          const combined = { ...styleFieldUpdates, ...hashwaFieldUpdates };
+          if (Object.keys(combined).length > 0) {
+            await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
+          }
+        }
+
+        // Build options checklist JSON (logs verdict + any replacement values)
         const optionsChecklist = optionRows.map(opt => ({
           option_name: opt.id,
           expected_value: opt.mainValue,
           actual_correct: state.optionChecks[`${opt.id}-main`] === true,
           rejected: state.optionChecks[`${opt.id}-main`] === false,
+          new_value: state.styleChanges[opt.id] || null,
           hashwa_correct: opt.hashwaValue ? state.optionChecks[`${opt.id}-hashwa`] === true : null,
           hashwa_rejected: opt.hashwaValue ? state.optionChecks[`${opt.id}-hashwa`] === false : null,
-          hashwa_notes: opt.hashwaValue ? (state.optionNotes[`${opt.id}-hashwa`] || null) : null,
+          hashwa_new_value: opt.hashwaValue ? (state.hashwaChanges[opt.id] || null) : null,
           notes: state.optionNotes[opt.id] || null,
         }));
 
@@ -532,20 +620,18 @@ function UnifiedFeedbackInterface() {
           trip_number: activeGarment.trip_number || 1,
           action: state.feedbackAction ?? undefined,
           previous_stage: (activeGarment.piece_stage ?? undefined) as string | undefined,
+          previous_measurement_id: newMeasurementId ? previousMeasurementId : null,
           distribution: state.distributionAction || null,
           satisfaction_level: satLevel?.numericValue || null,
           measurement_diffs: measurementDiffs.length > 0 ? JSON.stringify(measurementDiffs) : null,
           options_checklist: optionsChecklist.length > 0 ? JSON.stringify(optionsChecklist) : null,
           customer_signature: state.customerSignature || null,
-          photo_urls: Object.values(state.evidence).filter(Boolean).length > 0
-            ? JSON.stringify(Object.values(state.evidence).filter(Boolean).map(e => e!.url))
+          photo_urls: state.sharedPhotos.length > 0
+            ? JSON.stringify(state.sharedPhotos.map(p => p.url))
             : null,
-          voice_note_urls: (() => {
-            const validNotes = Object.fromEntries(
-              Object.entries(state.voiceNotes).filter(([, v]) => v != null)
-            );
-            return Object.keys(validNotes).length > 0 ? JSON.stringify(validNotes) : null;
-          })(),
+          voice_note_urls: state.sharedVoiceNotes.length > 0
+            ? JSON.stringify(state.sharedVoiceNotes)
+            : null,
           notes: state.notes || null,
           difference_reasons: Object.keys(state.differenceReasons).length > 0
             ? JSON.stringify(state.differenceReasons)
@@ -966,88 +1052,99 @@ function UnifiedFeedbackInterface() {
                     </CardHeader>
 
                     <div className="relative overflow-x-auto">
-                        <Table>
-                            <TableHeader className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
-                                <TableRow className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                    <TableHead className="w-[12%] p-3">Dimension</TableHead>
-                                    <TableHead className="text-center bg-muted/30 w-[10%] p-3">Order (in)</TableHead>
-                                    <TableHead className="text-center w-[10%] bg-muted/30 p-3">QC (in)</TableHead>
-                                    <TableHead className="text-center w-[12%] bg-primary/5 p-3">{activeTab === 'brova' ? 'Brova' : 'Final'} (in)</TableHead>
-                                    <TableHead className="text-center w-[10%] p-3">Delta</TableHead>
-                                    <TableHead className="text-center w-[15%] p-3">Reason</TableHead>
-                                    <TableHead className="p-3">Adjustment Notes</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {MEASUREMENT_ROWS.map((row) => {
-                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                    const workshopValue = currentState.workshopMeasurements[row.key];
-                                    const feedbackValue = currentState.feedbackMeasurements[row.key];
-                                    const reasonValue = currentState.differenceReasons[row.key] || "";
-                                    const noteValue = currentState.measurementNotes[row.key] || "";
-
-                                    const diffOrder = getDifference(orderValue, feedbackValue);
-                                    const statusOrder = getDiffStatus(diffOrder);
-                                    const isMissing = orderValue === null || orderValue === undefined || orderValue === 0;
-
-                                    if (isMissing) return null;
-
-                                    const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
-
-                                    return (
-                                        <TableRow key={row.key} className="hover:bg-muted/20 transition-colors group">
-                                            <TableCell className="p-3">
-                                                <div className="font-bold text-xs uppercase tracking-tight">{row.type}</div>
-                                                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{row.subType}</div>
-                                            </TableCell>
-                                            <TableCell className="text-center font-black text-sm bg-muted/30">
-                                                {orderValue || "-"}
-                                            </TableCell>
-                                            <TableCell className="p-1.5 bg-muted/30">
+                        <table className="w-full border-collapse">
+                            <thead className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
+                                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                    <th className="text-left p-3 bg-muted/60 border-r border-border/60 min-w-[110px] sticky left-0 z-20">Label</th>
+                                    {MEASUREMENT_ROWS.map((row) => (
+                                        <th key={row.key} className="p-2 text-center border border-border/40 min-w-[96px]">
+                                            <div className="font-black text-[11px] leading-tight">{row.type}</div>
+                                            <div className="font-bold text-[10px] text-muted-foreground/80 leading-tight">{row.subType}</div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {/* Current row */}
+                                <tr className="border-b border-border/40">
+                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Current</td>
+                                    {MEASUREMENT_ROWS.map((row) => {
+                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                        return (
+                                            <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
+                                                <span className="font-black text-sm tabular-nums">{orderValue ?? "—"}</span>
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                {/* New row */}
+                                <tr className="border-b border-border/40">
+                                    <td className="p-3 bg-primary/5 border-r border-border/60 font-black text-xs uppercase tracking-widest text-primary sticky left-0 z-10">New</td>
+                                    {MEASUREMENT_ROWS.map((row) => {
+                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                        const diff = getDifference(orderValue, feedbackValue);
+                                        const status = getDiffStatus(diff);
+                                        return (
+                                            <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
                                                 <Input
                                                     type="number"
-                                                    className="h-8 w-20 mx-auto text-center font-bold text-sm border-transparent bg-transparent hover:border-border focus:bg-background transition-all"
-                                                    placeholder="0.0"
-                                                    value={workshopValue ?? ""}
-                                                    onChange={(e) => handleWorkshopMeasurementChange(row.key, e.target.value)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="p-1.5 bg-primary/[0.02]">
-                                                <Input
-                                                    type="number"
+                                                    step="0.01"
                                                     className={cn(
-                                                        "h-8 w-20 mx-auto text-center font-black text-sm border-2 transition-all",
-                                                        statusOrder === 'error' && "border-destructive bg-destructive/5 text-destructive",
-                                                        statusOrder === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
-                                                        statusOrder === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                                                        "h-8 w-full text-center font-black text-sm tabular-nums border transition-all",
+                                                        status === 'error' && "border-destructive bg-destructive/5 text-destructive",
+                                                        status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
+                                                        status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
                                                         !feedbackValue && "border-border hover:border-primary/40"
                                                     )}
-                                                    placeholder="0.0"
+                                                    placeholder="—"
                                                     value={feedbackValue ?? ""}
                                                     onChange={(e) => handleFeedbackMeasurementChange(row.key, e.target.value)}
                                                 />
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                    {diffOrder !== null ? (
-                                                            <Badge variant="secondary" className={cn(
-                                                                "font-black text-xs h-6 px-1.5 shadow-sm",
-                                                                statusOrder === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
-                                                                statusOrder === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
-                                                                statusOrder === 'error' && "bg-red-100 text-red-800 border-red-200"
-                                                            )}>
-                                                                {diffOrder > 0 ? `+${diffOrder}` : diffOrder}
-                                                            </Badge>
-                                                    ) : (
-                                                        <span className="text-muted-foreground font-black text-xs opacity-20">{"\u2014"}</span>
-                                                    )}
-                                            </TableCell>
-                                            <TableCell className="p-1.5">
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                {/* Delta row */}
+                                <tr className="border-b border-border/40">
+                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Delta</td>
+                                    {MEASUREMENT_ROWS.map((row) => {
+                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                        const diff = getDifference(orderValue, feedbackValue);
+                                        const status = getDiffStatus(diff);
+                                        return (
+                                            <td key={row.key} className="p-2 text-center border border-border/30">
+                                                {diff !== null ? (
+                                                    <Badge variant="secondary" className={cn(
+                                                        "font-black text-xs h-5 px-1.5",
+                                                        status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                                        status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
+                                                        status === 'error' && "bg-red-100 text-red-800 border-red-200"
+                                                    )}>
+                                                        {diff > 0 ? `+${diff}` : diff}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground/30 font-black text-xs">—</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                {/* Reason row */}
+                                <tr className="border-b border-border/40">
+                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Reason</td>
+                                    {MEASUREMENT_ROWS.map((row) => {
+                                        const reasonValue = currentState.differenceReasons[row.key] || "";
+                                        const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
+                                        return (
+                                            <td key={row.key} className="p-1 border border-border/30">
                                                 <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
                                                     <SelectTrigger className={cn(
-                                                        "h-8 text-xs font-bold border-none shadow-none rounded-lg px-2 transition-colors",
+                                                        "h-8 text-[10px] font-bold border-none shadow-none rounded px-1.5 transition-colors",
                                                         selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
                                                     )}>
-                                                        <SelectValue placeholder="Select" />
+                                                        <SelectValue placeholder="—" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {DIFFERENCE_REASONS.map(r => (
@@ -1057,23 +1154,29 @@ function UnifiedFeedbackInterface() {
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                            </TableCell>
-                                            <TableCell className="p-1.5">
-                                                <div className="flex items-center gap-2 bg-muted/10 rounded-lg px-2 group-focus-within:bg-background transition-colors border border-transparent group-focus-within:border-border">
-                                                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/40" />
-                                                    <Input
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-xs font-bold h-8"
-                                                        placeholder="Adjustment note..."
-                                                        value={noteValue}
-                                                        onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
-                                                    />
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                {/* Notes row */}
+                                <tr>
+                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Notes</td>
+                                    {MEASUREMENT_ROWS.map((row) => {
+                                        const noteValue = currentState.measurementNotes[row.key] || "";
+                                        return (
+                                            <td key={row.key} className="p-1 border border-border/30">
+                                                <Input
+                                                    className="h-8 w-full text-[11px] font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
+                                                    placeholder="—"
+                                                    value={noteValue}
+                                                    onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
+                                                />
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </Card>
 
@@ -1091,70 +1194,58 @@ function UnifiedFeedbackInterface() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-4">
-                       <div className="space-y-3">
-                                {optionRows.map((opt) => {
-                                    const isConfirmed = currentState.optionChecks[`${opt.id}-main`] === true;
-                                    const isRejected = currentState.optionChecks[`${opt.id}-main`] === false;
-                                    const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] === true;
-                                    const hashwaRejected = currentState.optionChecks[`${opt.id}-hashwa`] === false;
-                                    return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {optionRows.map((opt) => {
+                                const isConfirmed = currentState.optionChecks[`${opt.id}-main`] === true;
+                                const isRejected = currentState.optionChecks[`${opt.id}-main`] === false;
+                                const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] === true;
+                                const hashwaRejected = currentState.optionChecks[`${opt.id}-hashwa`] === false;
+
+                                const pickerList = STYLE_OPTION_LISTS[opt.id];
+                                const newStyleValue = currentState.styleChanges[opt.id] || "";
+                                const newStyleImage = pickerList ? findOptionImage(pickerList, newStyleValue) : null;
+                                const newStyleText = pickerList ? findDisplayText(pickerList, newStyleValue) : newStyleValue;
+                                const newHashwaValue = currentState.hashwaChanges[opt.id] || "";
+
+                                return (
                                     <div
                                         key={opt.id}
                                         className={cn(
-                                            "rounded-xl border-2 p-4 transition-all",
-                                            isConfirmed
-                                                ? "border-emerald-300 bg-emerald-50/50"
-                                                : isRejected
-                                                    ? "border-red-300 bg-red-50/50"
-                                                    : "border-border bg-card hover:border-primary/30"
+                                            "rounded-xl border-2 p-3 transition-all",
+                                            isConfirmed && "border-emerald-300 bg-emerald-50/40",
+                                            isRejected && "border-red-300 bg-red-50/40",
+                                            !isConfirmed && !isRejected && "border-border bg-card"
                                         )}
                                     >
-                                        {/* Top row: image + label + value + confirm toggle */}
-                                        <div className="flex items-center gap-4">
-                                            {/* Image reference */}
+                                        <div className="flex items-stretch gap-3">
+                                            {/* Current option image */}
                                             {opt.mainImage ? (
                                                 <div className={cn(
-                                                    "h-16 w-16 shrink-0 rounded-xl border-2 p-1.5 shadow-sm bg-white",
-                                                    isConfirmed ? "border-emerald-300" : "border-border"
+                                                    "h-14 w-14 shrink-0 rounded-lg border-2 p-1 shadow-sm bg-white",
+                                                    isConfirmed ? "border-emerald-300" : isRejected ? "border-red-200" : "border-border"
                                                 )}>
-                                                    <img
-                                                        src={opt.mainImage}
-                                                        alt={opt.label}
-                                                        className="w-full h-full object-contain"
-                                                    />
+                                                    <img src={opt.mainImage} alt={opt.label} className="w-full h-full object-contain" />
                                                 </div>
                                             ) : (
-                                                <div className="h-16 w-16 shrink-0 bg-muted/20 rounded-xl border-2 border-dashed border-border flex items-center justify-center">
-                                                    <Package className="w-5 h-5 text-muted-foreground/30" />
+                                                <div className="h-14 w-14 shrink-0 bg-muted/20 rounded-lg border-2 border-dashed border-border flex items-center justify-center">
+                                                    <Package className="w-4 h-4 text-muted-foreground/30" />
                                                 </div>
                                             )}
 
-                                            {/* Label + value */}
-                                            <div className="flex-1 min-w-0 space-y-1">
-                                                <p className="font-black text-sm uppercase tracking-tight text-foreground">{opt.label}</p>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                        "font-bold text-xs px-2.5 py-0.5",
-                                                        isConfirmed
-                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                            : isRejected
-                                                                ? "bg-red-100 text-red-800 border-red-300"
-                                                                : "bg-primary/5 text-primary border-primary/20"
-                                                    )}
-                                                >
-                                                    {opt.displayText || opt.mainValue}
-                                                </Badge>
+                                            {/* Label + current value */}
+                                            <div className="flex-1 min-w-0 flex flex-col justify-between">
+                                                <div>
+                                                    <p className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</p>
+                                                    <p className="text-[11px] font-bold text-muted-foreground truncate">{opt.displayText || opt.mainValue}</p>
+                                                </div>
                                                 {opt.hashwaValue && (
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            "ml-1.5 font-bold text-xs px-2 py-0.5",
-                                                            hashwaConfirmed
-                                                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                                                : hashwaRejected
-                                                                    ? "bg-red-100 text-red-800 border-red-300"
-                                                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                                            "self-start font-bold text-[10px] h-4 px-1.5 mt-1",
+                                                            hashwaConfirmed && "bg-emerald-100 text-emerald-800 border-emerald-300",
+                                                            hashwaRejected && "bg-red-100 text-red-800 border-red-300",
+                                                            !hashwaConfirmed && !hashwaRejected && "bg-amber-50 text-amber-700 border-amber-200"
                                                         )}
                                                     >
                                                         Hashwa: {opt.hashwaValue}
@@ -1162,172 +1253,217 @@ function UnifiedFeedbackInterface() {
                                                 )}
                                             </div>
 
-                                            {/* Confirm / Reject buttons */}
-                                            <div className="shrink-0 flex flex-col items-end gap-1.5">
-                                                <div className="flex gap-1.5">
-                                                    <button
-                                                        onClick={() => handleCheck(`${opt.id}-main`, true)}
-                                                        className={cn(
-                                                            "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
-                                                            isConfirmed
-                                                                ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
-                                                                : "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
-                                                        )}
-                                                    >
-                                                        <Check className="w-4 h-4" />
-                                                        {isConfirmed ? "Confirmed" : "Confirm"}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleCheck(`${opt.id}-main`, false)}
-                                                        className={cn(
-                                                            "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
-                                                            isRejected
-                                                                ? "bg-red-500 border-red-500 text-white shadow-sm"
-                                                                : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600"
-                                                        )}
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                        Reject
-                                                    </button>
-                                                </div>
-                                                {opt.hashwaValue && (
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <button
-                                                            onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
-                                                            className={cn(
-                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
-                                                                hashwaConfirmed
-                                                                    ? "bg-emerald-500 border-emerald-500 text-white shadow-sm"
-                                                                    : "bg-background border-amber-200 text-amber-600 hover:border-emerald-400"
-                                                            )}
-                                                        >
-                                                            <Check className="w-3.5 h-3.5" />
-                                                            Hashwa
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
-                                                            className={cn(
-                                                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-2 font-bold text-xs uppercase tracking-wide transition-all",
-                                                                hashwaRejected
-                                                                    ? "bg-red-500 border-red-500 text-white shadow-sm"
-                                                                    : "bg-background border-amber-200 text-amber-600 hover:border-red-400"
-                                                            )}
-                                                        >
-                                                            <X className="w-3.5 h-3.5" />
-                                                            Reject
-                                                        </button>
-                                                        {hashwaRejected && (
-                                                            <Select
-                                                                value={currentState.optionNotes[`${opt.id}-hashwa`] || ""}
-                                                                onValueChange={(val) => handleOptionNoteChange(`${opt.id}-hashwa`, val)}
-                                                            >
-                                                                <SelectTrigger className="h-8 text-xs w-32 border-red-200" onClick={(e) => e.stopPropagation()}>
-                                                                    <SelectValue placeholder="Request..." />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="SINGLE">Single</SelectItem>
-                                                                    <SelectItem value="DOUBLE">Double</SelectItem>
-                                                                    <SelectItem value="TRIPLE">Triple</SelectItem>
-                                                                    <SelectItem value="NO HASHWA">No Hashwa</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Bottom row: notes + evidence (collapsed when confirmed, unless has content) */}
-                                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
-                                            {/* Notes input */}
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-1 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
-                                                    <MessageSquare className="size-4 text-muted-foreground/40 shrink-0" />
-                                                    <Input
-                                                        className="border-none shadow-none focus-visible:ring-0 bg-transparent text-xs font-medium h-8 p-0"
-                                                        placeholder="Add a note..."
-                                                        value={currentState.optionNotes[opt.id] || ""}
-                                                        onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Evidence capture */}
-                                            <div className="shrink-0 flex items-center gap-2">
-                                                {currentState.evidence[opt.id] ? (
-                                                    <div className="relative group size-10 rounded-lg overflow-hidden border-2 border-primary/30 shadow-md">
-                                                        {currentState.evidence[opt.id]?.type === 'photo' ? (
-                                                            <img src={currentState.evidence[opt.id]?.url} alt="Captured" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <video src={currentState.evidence[opt.id]?.url} className="w-full h-full object-cover" />
-                                                        )}
-                                                        <button
-                                                            onClick={() => updateGarmentState(selectedGarmentId, {
-                                                                evidence: { ...currentState.evidence, [opt.id]: null },
-                                                            })}
-                                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            <X className="w-3.5 h-3.5 text-white" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-8 text-xs font-bold px-3"
-                                                            onClick={() => document.getElementById(`file-photo-${opt.id}`)?.click()}
-                                                        >
-                                                            <Camera className="w-3.5 h-3.5 mr-1.5" />
-                                                            Photo
-                                                        </Button>
-                                                        <Button
-                                                            variant={recordingOptionId === opt.id ? "destructive" : "outline"}
-                                                            size="sm"
-                                                            className="h-8 text-xs font-bold px-3"
-                                                            onClick={recordingOptionId === opt.id ? stopRecording : () => startRecording(opt.id)}
-                                                        >
-                                                            {recordingOptionId === opt.id ? (
-                                                                <><MicOff className="w-3.5 h-3.5 mr-1.5" />Stop</>
-                                                            ) : (
-                                                                <><Mic className="w-3.5 h-3.5 mr-1.5" />Voice</>
-                                                            )}
-                                                        </Button>
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            className="hidden"
-                                                            id={`file-photo-${opt.id}`}
-                                                            onChange={(e) => handleCapture(opt.id, 'photo', e.target.files?.[0] || null)}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Recording indicator */}
-                                        {recordingOptionId === opt.id && (
-                                            <div className="flex items-center gap-2 mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                                                <div className="size-2.5 rounded-full bg-red-500 animate-pulse" />
-                                                <span className="text-xs font-bold uppercase tracking-wide text-red-700">Recording...</span>
-                                            </div>
-                                        )}
-                                        {currentState.voiceNotes[opt.id] && (
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <audio src={currentState.voiceNotes[opt.id]!} controls className="flex-1 h-8" />
+                                            {/* Confirm / Reject */}
+                                            <div className="shrink-0 flex flex-col gap-1">
                                                 <button
-                                                    onClick={() => removeVoiceNote(opt.id)}
-                                                    className="text-muted-foreground hover:text-destructive p-1"
+                                                    onClick={() => handleCheck(`${opt.id}-main`, true)}
+                                                    className={cn(
+                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all",
+                                                        isConfirmed
+                                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
+                                                    )}
                                                 >
-                                                    <X className="size-4" />
+                                                    <Check className="w-3 h-3" />
+                                                    OK
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCheck(`${opt.id}-main`, false)}
+                                                    className={cn(
+                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all",
+                                                        isRejected
+                                                            ? "bg-red-500 border-red-500 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600"
+                                                    )}
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                    No
                                                 </button>
                                             </div>
-                                        )}
-                                    </div>
-                                    );
-                                })}
+                                        </div>
 
-                       </div>
+                                        {/* Rejected → pick new main style */}
+                                        {isRejected && pickerList && (
+                                            <div className="mt-3 pt-3 border-t border-red-200 flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">New →</span>
+                                                <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
+                                                    <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
+                                                        {newStyleValue ? (
+                                                            <div className="flex items-center gap-2">
+                                                                {newStyleImage && <img src={newStyleImage} alt={newStyleText || ""} className="h-7 w-7 object-contain" />}
+                                                                <span className="text-xs font-bold">{newStyleText}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <SelectValue placeholder="Select replacement..." />
+                                                        )}
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {pickerList.map((o) => (
+                                                            <SelectItem key={o.value} value={o.value}>
+                                                                <div className="flex items-center gap-2">
+                                                                    {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
+                                                                    <span className="text-xs font-bold">{o.displayText}</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+
+                                        {/* Hashwa row */}
+                                        {opt.hashwaValue && (
+                                            <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Hashwa</span>
+                                                <button
+                                                    onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
+                                                    className={cn(
+                                                        "flex items-center gap-1 px-2 h-6 rounded border font-bold text-[10px] uppercase transition-all",
+                                                        hashwaConfirmed
+                                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:border-emerald-400"
+                                                    )}
+                                                >
+                                                    <Check className="w-3 h-3" /> OK
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
+                                                    className={cn(
+                                                        "flex items-center gap-1 px-2 h-6 rounded border font-bold text-[10px] uppercase transition-all",
+                                                        hashwaRejected
+                                                            ? "bg-red-500 border-red-500 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:border-red-400"
+                                                    )}
+                                                >
+                                                    <X className="w-3 h-3" /> No
+                                                </button>
+                                                {hashwaRejected && (
+                                                    <Select value={newHashwaValue} onValueChange={(v) => handleHashwaChange(opt.id, v)}>
+                                                        <SelectTrigger className="h-7 text-[11px] flex-1 bg-background border-red-200">
+                                                            <SelectValue placeholder="New thickness..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {thicknessOptions.map((t) => (
+                                                                <SelectItem key={t.value} value={t.value} className="text-xs font-bold">
+                                                                    {t.value === "NO HASHWA" ? "No Hashwa" : t.value.charAt(0) + t.value.slice(1).toLowerCase()}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Notes */}
+                                        <div className="mt-2 flex items-center gap-2 bg-muted/20 rounded px-2 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
+                                            <MessageSquare className="size-3.5 text-muted-foreground/40 shrink-0" />
+                                            <Input
+                                                className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[11px] font-medium h-7 p-0"
+                                                placeholder="Note..."
+                                                value={currentState.optionNotes[opt.id] || ""}
+                                                onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* SHARED MEDIA (photos + voice notes) */}
+                <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
+                    <CardHeader className="bg-muted/30 border-b px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                                <Camera className="w-4 h-4" />
+                            </div>
+                            <CardTitle className="text-base font-bold uppercase tracking-tight">Attachments</CardTitle>
+                            <Badge variant="secondary" className="ml-auto text-xs font-bold">
+                                {currentState.sharedPhotos.length + currentState.sharedVoiceNotes.length} items
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-3">
+                        {/* Capture buttons */}
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 font-bold text-xs"
+                                onClick={() => document.getElementById("shared-photo-input")?.click()}
+                            >
+                                <Camera className="w-3.5 h-3.5 mr-1.5" />
+                                Add Photo
+                            </Button>
+                            <Button
+                                variant={recordingOptionId === "shared" ? "destructive" : "outline"}
+                                size="sm"
+                                className="h-9 font-bold text-xs"
+                                onClick={recordingOptionId === "shared" ? stopRecording : startRecording}
+                            >
+                                {recordingOptionId === "shared" ? (
+                                    <><MicOff className="w-3.5 h-3.5 mr-1.5" />Stop</>
+                                ) : (
+                                    <><Mic className="w-3.5 h-3.5 mr-1.5" />Record Voice Note</>
+                                )}
+                            </Button>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                id="shared-photo-input"
+                                onChange={(e) => handleAddPhoto(e.target.files?.[0] || null)}
+                            />
+                        </div>
+
+                        {/* Recording indicator */}
+                        {recordingOptionId === "shared" && (
+                            <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                <div className="size-2.5 rounded-full bg-red-500 animate-pulse" />
+                                <span className="text-xs font-bold uppercase tracking-wide text-red-700">Recording...</span>
+                            </div>
+                        )}
+
+                        {/* Photo thumbnails */}
+                        {currentState.sharedPhotos.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {currentState.sharedPhotos.map((p, i) => (
+                                    <div key={i} className="relative group size-20 rounded-lg overflow-hidden border-2 border-border shadow-sm">
+                                        <img src={p.url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => handleRemovePhoto(i)}
+                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="size-4 text-white" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Voice notes */}
+                        {currentState.sharedVoiceNotes.length > 0 && (
+                            <div className="space-y-2">
+                                {currentState.sharedVoiceNotes.map((url, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <audio src={url} controls className="flex-1 h-8" />
+                                        <button
+                                            onClick={() => removeVoiceNote(i)}
+                                            className="text-muted-foreground hover:text-destructive p-1"
+                                        >
+                                            <X className="size-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {currentState.sharedPhotos.length === 0 && currentState.sharedVoiceNotes.length === 0 && (
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60 text-center py-2">
+                                No attachments yet
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 

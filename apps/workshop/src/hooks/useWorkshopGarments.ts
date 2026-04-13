@@ -3,6 +3,7 @@ import {
   getWorkshopGarments,
   getSchedulerGarments,
   getTerminalStageGarments,
+  getBoardGarments,
   getCompletedTodayGarments,
   getGarmentById,
   getOrderGarments,
@@ -21,6 +22,7 @@ import {
 // entire workshop garment list on every change.
 export const SCHEDULER_KEY = ['scheduler-garments'] as const;
 export const TERMINAL_KEY = ['terminal-garments'] as const;
+export const BOARD_KEY = ['board-garments'] as const;
 export const WORKLOAD_KEY = ['workshop-workload'] as const;
 export const COMPLETED_TODAY_KEY = ['completed-today-garments'] as const;
 export const ASSIGNED_OVERVIEW_KEY = ['assigned-overview'] as const;
@@ -140,6 +142,21 @@ export function useTerminalGarments(stage: string) {
   });
 }
 
+/**
+ * Production-board garments. Pass null for Live mode (every in-flight
+ * workshop garment) or a YYYY-MM-DD string for Scheduled mode (strict
+ * assigned_date filter). The mode key lives in the cache so both views
+ * can coexist without fighting each other.
+ */
+export function useBoardGarments(dateStr: string | null) {
+  return useQuery({
+    queryKey: [...BOARD_KEY, dateStr ?? 'live'],
+    queryFn: () => getBoardGarments(dateStr),
+    staleTime: LIST_STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useCompletedTodayGarments() {
   return useQuery({
     queryKey: COMPLETED_TODAY_KEY,
@@ -163,8 +180,11 @@ export function useWorkshopWorkload() {
 }
 
 export function useBrovaPlans(orderIds: number[]) {
+  // Single string key keeps the cache stable when the id set changes by one
+  // element — spreading the array used to allocate a new key per change.
+  const key = [...orderIds].sort((a, b) => a - b).join(',');
   return useQuery({
-    queryKey: ['brova-plans', ...[...orderIds].sort()],
+    queryKey: ['brova-plans', key],
     queryFn: () => getBrovaPlansForOrders(orderIds),
     enabled: orderIds.length > 0,
     staleTime: LIST_STALE_TIME,
@@ -172,8 +192,9 @@ export function useBrovaPlans(orderIds: number[]) {
 }
 
 export function useBrovaStatus(orderIds: number[]) {
+  const key = [...orderIds].sort((a, b) => a - b).join(',');
   return useQuery({
-    queryKey: ['brova-status', ...[...orderIds].sort()],
+    queryKey: ['brova-status', key],
     queryFn: () => getBrovaStatusForOrders(orderIds),
     enabled: orderIds.length > 0,
     staleTime: LIST_STALE_TIME,

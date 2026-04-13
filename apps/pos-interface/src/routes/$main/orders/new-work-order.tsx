@@ -69,6 +69,17 @@ import { getAppointmentById, updateAppointment } from "@/api/appointments";
 import { getCustomerById } from "@/api/customers";
 import type { AppointmentWithRelations } from "@/api/appointments";
 
+/** Aggregate fabric usage already committed to an order (fabric_id → meters). */
+function computeSavedFabricUsage(garments: GarmentSchema[]): Map<number, number> {
+    const map = new Map<number, number>();
+    for (const g of garments) {
+        if (g.fabric_source === 'IN' && g.fabric_id && g.fabric_length) {
+            map.set(g.fabric_id, (map.get(g.fabric_id) ?? 0) + g.fabric_length);
+        }
+    }
+    return map;
+}
+
 type OrderSearch = {
     orderId?: number;
     appointmentId?: string;
@@ -217,9 +228,14 @@ function NewWorkOrder() {
         },
     });
 
+    // Fabric already committed to this order in the DB (fabric_id → meters).
+    // Populated on order load and updated after each successful save so the
+    // schema validation only checks the NET delta, not the full amount.
+    const [savedFabricUsage, setSavedFabricUsage] = React.useState<Map<number, number>>(new Map());
+
     const fabricSelectionResolver = React.useMemo(() => {
-        return zodResolver(createFabricSelectionFormSchema(fabricsResponse || []));
-    }, [fabricsResponse]);
+        return zodResolver(createFabricSelectionFormSchema(fabricsResponse || [], savedFabricUsage));
+    }, [fabricsResponse, savedFabricUsage]);
 
     const fabricSelectionForm = useForm<{
         garments: GarmentSchema[];
@@ -254,6 +270,7 @@ function NewWorkOrder() {
             garments: [],
             signature: "",
         });
+        setSavedFabricUsage(new Map());
         shelfForm.reset({ products: [] });
         OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
         setIsLoadingOrderData(false);
@@ -439,6 +456,10 @@ function NewWorkOrder() {
                     const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => mapGarmentToFormValues(g));
                     fabricSelectionForm.setValue("garments", mappedGarments);
                     setFabricSelections(mappedGarments);
+
+                    // Snapshot what's already in the DB so the validator only checks
+                    // the net delta on re-save (same fabric amount = always OK).
+                    setSavedFabricUsage(computeSavedFabricUsage(mappedGarments));
 
                     // Mark as complete if confirmed, or if it's a reload of a draft that had garments saved
                     addSavedStep(2);
@@ -677,6 +698,9 @@ function NewWorkOrder() {
         signature: string;
     }) => {
         setFabricSelections(data.garments);
+        // Snapshot the committed fabric amounts so the next save only validates
+        // the net delta (re-saving unchanged amounts always passes).
+        setSavedFabricUsage(computeSavedFabricUsage(data.garments));
         addSavedStep(2);
 
         // Update number of fabrics

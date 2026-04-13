@@ -24,6 +24,51 @@ export const updateGarment = async (
   return { status: 'success', data: data as any };
 };
 
+// Repoint every brova garment in an order that currently points to `oldMeasurementId`
+// over to `newMeasurementId`. Used by feedback page when a new measurements row is
+// created from customer-requested changes — siblings sharing the same old id inherit it.
+export const bulkRepointMeasurement = async (
+  orderId: number,
+  oldMeasurementId: string,
+  newMeasurementId: string,
+): Promise<ApiResponse<Garment[]>> => {
+  const { data, error } = await db
+    .from(TABLE_NAME)
+    .update({ measurement_id: newMeasurementId })
+    .eq('order_id', orderId)
+    .eq('measurement_id', oldMeasurementId)
+    .eq('garment_type', 'brova')
+    .select();
+
+  if (error) {
+    console.error('bulkRepointMeasurement: failed to repoint sibling brova garments:', error);
+    throw error;
+  }
+  return { status: 'success', data: data as any };
+};
+
+// Overwrite style-related fields on every brova garment in an order that shares the
+// same per-order `style_id` group. `style_id` itself stays fixed so grouping holds.
+export const bulkUpdateStyleFields = async (
+  orderId: number,
+  styleId: number,
+  fields: Partial<Garment>,
+): Promise<ApiResponse<Garment[]>> => {
+  const { data, error } = await db
+    .from(TABLE_NAME)
+    .update(fields)
+    .eq('order_id', orderId)
+    .eq('style_id', styleId)
+    .eq('garment_type', 'brova')
+    .select();
+
+  if (error) {
+    console.error('bulkUpdateStyleFields: failed to update sibling style fields:', error);
+    throw error;
+  }
+  return { status: 'success', data: data as any };
+};
+
 export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number

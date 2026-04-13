@@ -1,36 +1,37 @@
 import "dotenv/config";
 import { db } from "../src/client";
-import { orders, workOrders, garments } from "../src/schema";
-import { eq } from "drizzle-orm";
+import { garments } from "../src/schema";
+import { inArray, sql } from "drizzle-orm";
 
 async function main() {
-  const orderId = 5;
+  // Find all garments, group by (order_id, garment_id), keep earliest inserted (lowest uuid sort), delete rest
+  const all = await db
+    .select({ id: garments.id, order_id: garments.order_id, garment_id: garments.garment_id })
+    .from(garments);
 
-  const orderResult = await db
-    .select()
-    .from(orders)
-    .leftJoin(workOrders, eq(workOrders.order_id, orders.id))
-    .where(eq(orders.id, orderId));
+  const groups = new Map<string, typeof all>();
+  for (const g of all) {
+    const key = `${g.order_id}::${g.garment_id}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(g);
+  }
 
-  console.log("Order 5:");
-  console.table(orderResult.map(r => ({ ...r.orders, ...r.work_orders })));
+  const toDelete: string[] = [];
+  for (const [key, rows] of groups) {
+    if (rows.length > 1) {
+      console.log(`Duplicate (${key}) × ${rows.length} — keeping ${rows[0].id}, deleting ${rows.slice(1).map(r => r.id).join(', ')}`);
+      toDelete.push(...rows.slice(1).map(r => r.id));
+    }
+  }
 
-  const garmentResult = await db
-    .select({
-      id: garments.id,
-      garment_type: garments.garment_type,
-      piece_stage: garments.piece_stage,
-      location: garments.location,
-      feedback_status: garments.feedback_status,
-      acceptance_status: garments.acceptance_status,
-      trip_number: garments.trip_number,
-      in_production: garments.in_production,
-    })
-    .from(garments)
-    .where(eq(garments.order_id, orderId));
+  if (toDelete.length === 0) {
+    console.log("No duplicates found across all garments.");
+    process.exit(0);
+  }
 
-  console.log("\nGarments:");
-  console.table(garmentResult);
+  console.log(`\nDeleting ${toDelete.length} duplicate garment(s)...`);
+  await db.delete(garments).where(inArray(garments.id, toDelete));
+  console.log("Done.");
   process.exit(0);
 }
 main().catch(console.error);

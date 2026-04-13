@@ -1,135 +1,313 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useTerminalGarments, useCompletedTodayGarments } from "@/hooks/useWorkshopGarments";
-import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
-import { Pagination, usePagination } from "@/components/shared/Pagination";
-import { PageHeader } from "@/components/shared/PageShell";
-import { Skeleton } from "@repo/ui/skeleton";
+import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
+import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge } from "@/components/shared/PageShell";
 import { Badge } from "@repo/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Input } from "@repo/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
+import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
+import { cn, clickableProps, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
-import { isAlteration } from "@repo/database";
+import type { LucideIcon } from "lucide-react";
+import {
+  CalendarDays, Clock, Zap, Package, Wrench, PlayCircle, Search, Droplets, Home,
+} from "lucide-react";
 
 interface ProductionTerminalProps {
   terminalStage: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const HISTORY_KEY_MAP: Record<string, string> = {
-  soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
-  sewing: "sewer", finishing: "finisher", ironing: "ironer",
-  quality_check: "quality_checker",
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function hasQcFailThisTrip(g: WorkshopGarment): boolean {
+  const trip = g.trip_number ?? 1;
+  const hist = g.trip_history as TripHistoryEntry[] | null;
+  const entry = hist?.find((t) => t.trip === trip);
+  return !!entry?.qc_attempts?.some((a) => a.result === "fail");
+}
+
+/** Alt label for a returning garment. Priority: QC-fail (alt_p) > trip-based (alt_N). */
+function getAltLabel(g: WorkshopGarment): string | null {
+  if (hasQcFailThisTrip(g)) return "alt_p";
+  const trip = g.trip_number ?? 1;
+  if (trip >= 2) return `alt_${trip - 1}`;
+  return null;
+}
+
+function isAlterationRow(g: WorkshopGarment): boolean {
+  return (g.trip_number ?? 1) >= 2 || hasQcFailThisTrip(g);
+}
+
+function isWorking(g: WorkshopGarment): boolean {
+  return !!g.in_production || !!g.start_time;
+}
+
+type SectionKey = "working" | "express" | "brova" | "final" | "alterations";
+
+/** Exclusive assignment: each garment lands in one section. Currently working wins. */
+function classify(g: WorkshopGarment): SectionKey {
+  if (isWorking(g)) return "working";
+  if (g.express) return "express";
+  if (isAlterationRow(g)) return "alterations";
+  return g.garment_type === "brova" ? "brova" : "final";
+}
+
+// ── alt badge ────────────────────────────────────────────────────────────────
+
+function AltBadge({ label }: { label: string }) {
+  const isQc = label === "alt_p";
+  return (
+    <Badge
+      className={cn(
+        "font-semibold text-xs uppercase tracking-wide border-0 text-white",
+        isQc ? "bg-red-600" : "bg-orange-500",
+      )}
+    >
+      {label}
+    </Badge>
+  );
+}
+
+// ── row ──────────────────────────────────────────────────────────────────────
+
+function GarmentRow({
+  garment,
+  onClick,
+  showAlt,
+  showExpressFlag,
+}: {
+  garment: WorkshopGarment;
+  onClick?: () => void;
+  showAlt?: boolean;
+  showExpressFlag?: boolean;
+}) {
+  const urgency = getDeliveryUrgency(garment.delivery_date_order);
+  const altLabel = showAlt ? getAltLabel(garment) : null;
+  const working = isWorking(garment);
+
+  return (
+    <TableRow
+      {...(onClick ? clickableProps(onClick) : {})}
+      className={cn(
+        onClick && "cursor-pointer hover:bg-muted/40",
+        working && "bg-emerald-50/40",
+      )}
+    >
+      <TableCell className="px-3 py-3">
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-sm font-bold">
+            {garment.garment_id ?? garment.id.slice(0, 8)}
+          </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {showExpressFlag && garment.express && <ExpressBadge />}
+            {garment.soaking && (
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                <Droplets className="w-3 h-3" /> Soak
+              </span>
+            )}
+            {working && (
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <PlayCircle className="w-3 h-3" /> Working
+              </span>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-3">
+        <GarmentTypeBadge type={garment.garment_type ?? "final"} />
+      </TableCell>
+      {showAlt && (
+        <TableCell className="px-3 py-3">
+          {altLabel && <AltBadge label={altLabel} />}
+        </TableCell>
+      )}
+      <TableCell className="px-3 py-3 font-mono">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-bold">#{garment.order_id}</span>
+          {garment.invoice_number && (
+            <span className="text-xs text-muted-foreground">INV-{garment.invoice_number}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-3 text-sm">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold">{garment.customer_name ?? "—"}</span>
+          {garment.customer_mobile && (
+            <span className="text-xs font-mono text-muted-foreground">{garment.customer_mobile}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-3 text-sm">
+        {garment.fabric_name ? (
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="font-medium truncate">{garment.fabric_name}</span>
+            {garment.fabric_color && (
+              <span className="text-xs text-muted-foreground truncate">{garment.fabric_color}</span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">Outside</span>
+        )}
+      </TableCell>
+      <TableCell className="px-3 py-3 text-sm">
+        <span className="truncate block max-w-[160px]">{garment.style_name ?? garment.style ?? "—"}</span>
+      </TableCell>
+      <TableCell className="px-3 py-3">
+        <BrandBadge brand={garment.order_brand} />
+      </TableCell>
+      <TableCell className="px-3 py-3 text-center">
+        {garment.delivery_date_order ? (
+          <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+            <Clock className="w-3 h-3" />
+            {formatDate(garment.delivery_date_order)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+        {garment.home_delivery && (
+          <div>
+            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full mt-1">
+              <Home className="w-3 h-3" /> Home
+            </span>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ── section table ────────────────────────────────────────────────────────────
+
+function SectionTable({
+  garments,
+  onRowClick,
+  showAlt,
+  showExpressFlag,
+}: {
+  garments: WorkshopGarment[];
+  onRowClick?: (g: WorkshopGarment) => void;
+  showAlt?: boolean;
+  showExpressFlag?: boolean;
+}) {
+  return (
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-[120px]">Garment</TableHead>
+            <TableHead className="w-[80px]">Type</TableHead>
+            {showAlt && <TableHead className="w-[80px]">Alt</TableHead>}
+            <TableHead className="w-[110px]">Order / Invoice</TableHead>
+            <TableHead className="w-[170px]">Customer</TableHead>
+            <TableHead className="w-[160px]">Fabric</TableHead>
+            <TableHead className="w-[160px]">Style</TableHead>
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[130px] text-center">Delivery</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {garments.map((g) => (
+            <GarmentRow
+              key={g.id}
+              garment={g}
+              onClick={onRowClick ? () => onRowClick(g) : undefined}
+              showAlt={showAlt}
+              showExpressFlag={showExpressFlag}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
+// ── section wrapper ──────────────────────────────────────────────────────────
+
+function Section({
+  title,
+  icon: Icon,
+  count,
+  accent,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  count: number;
+  accent?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <h2 className="font-semibold text-base text-foreground">{title}</h2>
+        <Badge variant="secondary" className={cn("text-xs", accent)}>
+          {count}
+        </Badge>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── sort helper ──────────────────────────────────────────────────────────────
+
+const sortByAssigned = (a: WorkshopGarment, b: WorkshopGarment) => {
+  const da = a.assigned_date ?? "";
+  const db = b.assigned_date ?? "";
+  return da.localeCompare(db);
 };
 
-type GarmentFilter = "all" | "production" | "fix";
-
-function isFixGarment(g: WorkshopGarment): boolean {
-  const trip = g.trip_number ?? 1;
-  // QC fail in current trip
-  const tripHistory = g.trip_history as TripHistoryEntry[] | null;
-  const tripEntry = tripHistory?.find((t) => t.trip === trip);
-  if (tripEntry?.qc_attempts?.some((a) => a.result === "fail")) return true;
-  // Brova return (trip 2-3)
-  if (g.garment_type === "brova" && trip >= 2 && trip <= 3) return true;
-  // Alteration
-  if (isAlteration(trip, g.garment_type)) return true;
-  return false;
-}
-
-function applyFilter(garments: WorkshopGarment[], filter: GarmentFilter): WorkshopGarment[] {
-  if (filter === "all") return garments;
-  if (filter === "fix") return garments.filter(isFixGarment);
-  return garments.filter((g) => !isFixGarment(g));
-}
+// ── main ─────────────────────────────────────────────────────────────────────
 
 export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerminalProps) {
   const { data: stageGarments = [], isLoading } = useTerminalGarments(terminalStage);
-  const { data: completedTodayAll = [] } = useCompletedTodayGarments();
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<GarmentFilter>("all");
-  const [activeTab, setActiveTab] = useState("queue");
+  const [search, setSearch] = useState("");
 
   const stageLabel = PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ?? terminalStage;
-  const historyKey = HISTORY_KEY_MAP[terminalStage] ?? terminalStage;
 
-  // Stage order for "done" detection — garment is past this stage if its order > ours
-  const STAGE_ORDER: Record<string, number> = {
-    soaking: 0, cutting: 1, post_cutting: 2, sewing: 3,
-    finishing: 4, ironing: 5, quality_check: 6, ready_for_dispatch: 7,
-  };
-  const thisStageOrder = STAGE_ORDER[terminalStage] ?? 0;
+  const searchFilter = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return (g: WorkshopGarment) =>
+      (g.customer_name ?? "").toLowerCase().includes(q) ||
+      String(g.order_id).includes(q) ||
+      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
+      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
+      (g.garment_id ?? "").toLowerCase().includes(q) ||
+      (g.fabric_name ?? "").toLowerCase().includes(q) ||
+      (g.style_name ?? "").toLowerCase().includes(q);
+  }, [search]);
 
-  const todayStr = useMemo(() => getLocalDateStr(), []);
-
-  const { queue, pending } = useMemo(() => {
-    const q: WorkshopGarment[] = [];
-    const p: WorkshopGarment[] = [];
-    for (const g of stageGarments) {
-      const dateStr = toLocalDateStr(g.assigned_date);
-      if (g.start_time) {
-        // Already started — always show in queue
-        q.push(g);
-      } else if (dateStr && dateStr < todayStr) {
-        // Past due
-        p.push(g);
-      } else {
-        // Today, future, or no date — show in queue
-        q.push(g);
-      }
-    }
-    // Sort: started first, then express, then by assigned date
-    const sortFn = (a: WorkshopGarment, b: WorkshopGarment) => {
-      if (a.start_time && !b.start_time) return -1;
-      if (!a.start_time && b.start_time) return 1;
-      if (a.express && !b.express) return -1;
-      if (!a.express && b.express) return 1;
-      const dateA = a.assigned_date ?? "";
-      const dateB = b.assigned_date ?? "";
-      return dateA.localeCompare(dateB);
+  const sections = useMemo(() => {
+    const base: Record<SectionKey, WorkshopGarment[]> = {
+      working: [], express: [], brova: [], final: [], alterations: [],
     };
-    q.sort(sortFn);
-    p.sort(sortFn);
-    return { queue: q, pending: p };
-  }, [stageGarments, todayStr]);
+    for (const g of stageGarments) {
+      if (searchFilter && !searchFilter(g)) continue;
+      base[classify(g)].push(g);
+    }
+    for (const k of Object.keys(base) as SectionKey[]) {
+      base[k].sort(sortByAssigned);
+    }
+    return base;
+  }, [stageGarments, searchFilter]);
 
-  // "Done" = garments completed today that passed through this station
-  const completedToday = useMemo(() => {
-    return completedTodayAll.filter((g) => {
-      const wh = g.worker_history as Record<string, string> | null;
-      if (!wh?.[terminalStage] && !wh?.[historyKey]) return false;
-      // Must be beyond this stage
-      const gStageOrder = STAGE_ORDER[g.piece_stage ?? ""] ?? 99;
-      if (g.location === "workshop" && gStageOrder <= thisStageOrder) return false;
-      return true;
-    });
-  }, [completedTodayAll, terminalStage, historyKey, thisStageOrder]);
-
-  // Fix counts for filter pills
-  const fixCountQueue = useMemo(() => queue.filter(isFixGarment).length, [queue]);
-  const fixCountPending = useMemo(() => pending.filter(isFixGarment).length, [pending]);
-  const fixCountCompleted = useMemo(() => completedToday.filter(isFixGarment).length, [completedToday]);
-  const activeFixCount = activeTab === "queue" ? fixCountQueue : activeTab === "pending" ? fixCountPending : fixCountCompleted;
-
-  // Apply filter
-  const filteredQueue = useMemo(() => applyFilter(queue, filter), [queue, filter]);
-  const filteredPending = useMemo(() => applyFilter(pending, filter), [pending, filter]);
-  const filteredCompleted = useMemo(() => applyFilter(completedToday, filter), [completedToday, filter]);
-
-  const completedPagination = usePagination(filteredCompleted, 15);
-
-  const handleCardClick = (g: WorkshopGarment) => {
+  const handleClick = (g: WorkshopGarment) => {
     navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
   };
 
+  const total = stageGarments.length;
+
   return (
-    <div className="p-4 sm:p-6 max-w-4xl md:max-w-5xl lg:max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10 space-y-8">
       <PageHeader
         icon={Icon}
         title={stageLabel}
-        subtitle={`${stageGarments.length} garment${stageGarments.length !== 1 ? "s" : ""} at this station`}
+        subtitle={`${total} garment${total !== 1 ? "s" : ""} at this station`}
       >
         <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground bg-card border px-2.5 py-1 rounded-md">
           <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
@@ -137,93 +315,101 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
         </div>
       </PageHeader>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="queue" className="gap-1.5">
-            <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-            Queue
-            <Badge variant="secondary" className="ml-0.5 text-xs bg-blue-100 text-blue-700">{queue.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="pending" className="gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            Overdue
-            <Badge variant="secondary" className={`ml-0.5 text-xs ${pending.length > 0 ? "bg-red-100 text-red-700" : ""}`}>
-              {pending.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-            Done
-            <Badge variant="secondary" className="ml-0.5 text-xs bg-green-100 text-green-700">{completedToday.length}</Badge>
-          </TabsTrigger>
-        </TabsList>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder="Garment, customer, order, fabric, style…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
-        <div className="flex items-center gap-1.5 mb-3 border-t pt-3">
-          {(["all", "production", "fix"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide transition-colors cursor-pointer",
-                filter === f
-                  ? f === "fix"
-                    ? "bg-red-600 text-white"
-                    : "bg-zinc-800 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200",
-              )}
-            >
-              {f === "all" ? "All" : f === "production" ? "Production" : `Fixes${activeFixCount > 0 ? ` (${activeFixCount})` : ""}`}
-            </button>
-          ))}
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-4">
-            {/* Order group skeleton */}
-            {Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-20 rounded" />
-                  <Skeleton className="h-4 w-32 rounded" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {Array.from({ length: i === 0 ? 3 : 2 }, (_, j) => (
-                    <div key={j} className="p-3 bg-card border rounded-lg space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <Skeleton className="h-5 w-6 rounded" />
-                          <Skeleton className="h-3.5 w-16 rounded" />
-                        </div>
-                        <Skeleton className="h-4 w-16 rounded-full" />
-                      </div>
-                      <Skeleton className="h-3 w-24 rounded" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <>
-            <TabsContent value="queue">
-              <GroupedGarmentList garments={filteredQueue} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments in queue" : filter === "production" ? "No production garments in queue" : undefined} />
-            </TabsContent>
-            <TabsContent value="pending">
-              <GroupedGarmentList garments={filteredPending} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments overdue" : "No overdue garments"} />
-            </TabsContent>
-            <TabsContent value="completed">
-              <GroupedGarmentList garments={completedPagination.paged} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments completed today" : "No completions today"} />
-              <Pagination
-                page={completedPagination.page}
-                totalPages={completedPagination.totalPages}
-                onPageChange={completedPagination.setPage}
-                totalItems={completedPagination.totalItems}
-                pageSize={completedPagination.pageSize}
+      {isLoading ? (
+        <LoadingSkeleton />
+      ) : (
+        <>
+          {/* ── Currently Working ── */}
+          <Section
+            title="Currently Working"
+            icon={PlayCircle}
+            count={sections.working.length}
+            accent="bg-emerald-100 text-emerald-700"
+          >
+            {sections.working.length === 0 ? (
+              <EmptyState icon={PlayCircle} message="Nothing in production right now" />
+            ) : (
+              <SectionTable
+                garments={sections.working}
+                onRowClick={handleClick}
+                showAlt
+                showExpressFlag
               />
-            </TabsContent>
-          </>
-        )}
-      </Tabs>
+            )}
+          </Section>
+
+          {/* ── Express ── */}
+          <Section
+            title="Express"
+            icon={Zap}
+            count={sections.express.length}
+            accent="bg-orange-100 text-orange-700"
+          >
+            {sections.express.length === 0 ? (
+              <EmptyState icon={Zap} message="No express garments waiting" />
+            ) : (
+              <SectionTable garments={sections.express} onRowClick={handleClick} />
+            )}
+          </Section>
+
+          {/* ── Brova ── */}
+          <Section
+            title="Brova"
+            icon={Package}
+            count={sections.brova.length}
+            accent="bg-amber-100 text-amber-700"
+          >
+            {sections.brova.length === 0 ? (
+              <EmptyState icon={Package} message="No brova garments waiting" />
+            ) : (
+              <SectionTable garments={sections.brova} onRowClick={handleClick} />
+            )}
+          </Section>
+
+          {/* ── Final ── */}
+          <Section
+            title="Final"
+            icon={Package}
+            count={sections.final.length}
+            accent="bg-emerald-100 text-emerald-700"
+          >
+            {sections.final.length === 0 ? (
+              <EmptyState icon={Package} message="No final garments waiting" />
+            ) : (
+              <SectionTable garments={sections.final} onRowClick={handleClick} />
+            )}
+          </Section>
+
+          {/* ── Alterations ── */}
+          <Section
+            title="Alterations"
+            icon={Wrench}
+            count={sections.alterations.length}
+            accent="bg-purple-100 text-purple-700"
+          >
+            {sections.alterations.length === 0 ? (
+              <EmptyState icon={Wrench} message="No alterations waiting" />
+            ) : (
+              <SectionTable
+                garments={sections.alterations}
+                onRowClick={handleClick}
+                showAlt
+                showExpressFlag
+              />
+            )}
+          </Section>
+        </>
+      )}
     </div>
   );
 }

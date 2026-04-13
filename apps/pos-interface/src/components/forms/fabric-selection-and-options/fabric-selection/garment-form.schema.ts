@@ -123,17 +123,24 @@ export const garmentDefaults: GarmentSchema = {
 };
 
 /**
- * Creates a schema for the entire fabric selection form, 
+ * Creates a schema for the entire fabric selection form,
  * optionally including stock validation if fabrics data is provided.
+ *
+ * savedUsage: fabric already committed to this order in the DB (fabric_id → meters).
+ * When re-saving an existing draft, only the NET delta needs to be available in stock.
+ * effective_available = shop_stock + savedUsage  (i.e. validate delta only)
  */
-export const createFabricSelectionFormSchema = (fabrics: any[] = []) => {
+export const createFabricSelectionFormSchema = (
+  fabrics: any[] = [],
+  savedUsage: Map<number, number> = new Map(),
+) => {
   return z.object({
     garments: z.array(garmentSchema).min(1, "At least one garment is required"),
     signature: z.string().min(1, "Customer signature is required"),
   }).superRefine((data, ctx) => {
     if (!fabrics || fabrics.length === 0) return;
 
-    // Aggregate stock check
+    // Aggregate total usage by fabric in the current form state
     const usage = new Map<number, number>();
     data.garments.forEach((g) => {
       if (g.fabric_source === 'IN' && g.fabric_id) {
@@ -144,15 +151,18 @@ export const createFabricSelectionFormSchema = (fabrics: any[] = []) => {
     usage.forEach((totalUsed, fabricId) => {
       const fabric = fabrics.find(f => f.id === fabricId);
       if (fabric) {
-        const available = parseFloat(fabric.shop_stock?.toString() || "0");
-        if (totalUsed > available) {
-          // Find all rows using this fabric to mark them
+        const stock = parseFloat(fabric.shop_stock?.toString() || "0");
+        // Add back what this order already has in the DB so we only validate
+        // the net increase, not the full amount (re-saving same amounts = delta 0 = always OK).
+        const alreadyCommitted = savedUsage.get(fabricId) ?? 0;
+        const effective = stock + alreadyCommitted;
+        if (totalUsed > effective) {
           data.garments.forEach((g, index) => {
             if (g.fabric_source === 'IN' && g.fabric_id === fabricId) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: `Insufficient stock for ${fabric.name}. Total requested: ${totalUsed.toFixed(2)}m, Available: ${available.toFixed(2)}m`,
-                path: ["garments", index, "fabric_length"]
+                message: `Insufficient stock for ${fabric.name}. Need: ${totalUsed.toFixed(2)}m, Available: ${effective.toFixed(2)}m`,
+                path: ["garments", index, "fabric_length"],
               });
             }
           });

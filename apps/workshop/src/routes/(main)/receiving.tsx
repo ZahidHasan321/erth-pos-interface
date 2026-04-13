@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useReceiveGarments, useReceiveAndStart, useMarkLostInTransit } from "@/hooks/useGarmentMutations";
-import { GarmentCard } from "@/components/shared/GarmentCard";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import {
   PageHeader, EmptyState, LoadingSkeleton,
@@ -11,406 +10,217 @@ import {
 import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
+import { Input } from "@repo/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
-import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
-import { cn, formatDate, groupByOrder, garmentSummary, getDeliveryUrgency, type OrderGroup } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
 import { toast } from "sonner";
+import type { LucideIcon } from "lucide-react";
 import {
-  Inbox, ChevronDown, Clock, Package, Home,
-  Droplets, AlertTriangle, CircleX,
+  Inbox, Clock, Package, AlertTriangle, CircleX, Zap, Home,
+  Droplets, Search,
 } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/receiving")({
   component: ReceivingPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as string) || undefined,
-  }),
   head: () => ({ meta: [{ title: "Receiving" }] }),
 });
 
-// ── Garment Row (per-garment inside an order dropdown) ─────────────────────
+// ── Alt badge (trip - 1 for brova returns) ──────────────────────────────────
+
+function AltBadge({ trip }: { trip: number }) {
+  const alt = trip - 1;
+  return (
+    <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+      Alt {alt}
+    </Badge>
+  );
+}
+
+// ── Garment table row ────────────────────────────────────────────────────────
+
+type ActionVariant = "receive-start-lost" | "receive-start" | "receive-lost" | "receive-only" | "found";
 
 function GarmentRow({
   garment,
+  selected,
+  onToggle,
   onReceive,
   onReceiveAndStart,
-  onLostInTransit,
-  isReceiving,
+  onLost,
+  isBusy,
+  actionVariant,
+  showType,
+  showAlt,
+  hideExpress,
 }: {
   garment: WorkshopGarment;
+  selected: boolean;
+  onToggle: (checked: boolean) => void;
   onReceive: () => void;
-  onReceiveAndStart: () => void;
-  onLostInTransit: () => void;
-  isReceiving: boolean;
+  onReceiveAndStart?: () => void;
+  onLost?: () => void;
+  isBusy: boolean;
+  actionVariant: ActionVariant;
+  showType?: boolean;
+  showAlt?: boolean;
+  hideExpress?: boolean;
 }) {
+  const urgency = getDeliveryUrgency(garment.delivery_date_order);
+
   return (
-    <div className="bg-card rounded-lg border p-2.5 flex flex-col gap-2">
-      {/* Top: identity + actions */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <GarmentTypeBadge type={garment.garment_type ?? "final"} />
+    <TableRow className={cn(selected && "bg-primary/5")}>
+      <TableCell className="px-3 py-3">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(c) => onToggle(!!c)}
+          aria-label={`Select ${garment.garment_id ?? garment.id.slice(0, 8)}`}
+          className="size-4"
+        />
+      </TableCell>
+      <TableCell className="px-3 py-3">
+        <div className="flex flex-col gap-1">
           <span className="font-mono text-sm font-bold">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
-          {garment.express && <ExpressBadge />}
-          {garment.soaking && (
-            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-              <Droplets className="w-3 h-3" /> Soak
+          {((!hideExpress && garment.express) || garment.soaking) && (
+            <div className="flex items-center gap-1">
+              {!hideExpress && garment.express && <ExpressBadge />}
+              {garment.soaking && (
+                <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                  <Droplets className="w-3 h-3" /> Soak
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </TableCell>
+      {showAlt && (
+        <TableCell className="px-3 py-3">
+          {(garment.trip_number ?? 1) >= 2 && <AltBadge trip={garment.trip_number ?? 1} />}
+        </TableCell>
+      )}
+      {showType && (
+        <TableCell className="px-3 py-3">
+          <GarmentTypeBadge type={garment.garment_type ?? "final"} />
+        </TableCell>
+      )}
+      <TableCell className="px-3 py-3 text-sm">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold">{garment.customer_name ?? "—"}</span>
+          {garment.customer_mobile && (
+            <span className="text-xs font-mono text-muted-foreground">{garment.customer_mobile}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-3 font-mono">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-bold">#{garment.order_id}</span>
+          {garment.invoice_number && (
+            <span className="text-xs text-muted-foreground">INV-{garment.invoice_number}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-3">
+        <BrandBadge brand={garment.order_brand} />
+      </TableCell>
+      <TableCell className="px-3 py-3 text-center">
+        <div className="flex flex-col items-center gap-1">
+          {garment.delivery_date_order ? (
+            <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+              <Clock className="w-3 h-3" />
+              {formatDate(garment.delivery_date_order)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+          {garment.home_delivery && (
+            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+              <Home className="w-3 h-3" /> Home
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="outline" onClick={onReceive} disabled={isReceiving} className="text-xs h-7">
-            Receive
-          </Button>
-          <Button size="sm" onClick={onReceiveAndStart} disabled={isReceiving} className="text-xs h-7">
-            Receive & Start
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onLostInTransit} disabled={isReceiving} className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10">
-            <AlertTriangle className="w-3 h-3 mr-1" /> Lost
-          </Button>
-        </div>
-      </div>
-      {/* Bottom: fabric & style info */}
-      <div className="flex items-center gap-3 text-xs text-muted-foreground pl-1">
-        {garment.fabric_name ? (
-          <span className="truncate">
-            <span className="font-medium text-foreground">{garment.fabric_name}</span>
-            {garment.fabric_color && <span className="ml-1 text-muted-foreground">({garment.fabric_color})</span>}
-          </span>
-        ) : (
-          <span>
-            Source: Outside
-            {garment.fabric_color && <span className="ml-1">({garment.fabric_color})</span>}
-          </span>
-        )}
-        {garment.style_name && (
-          <span className="capitalize truncate">{garment.style_name}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── OrderCard (order-level, for Incoming tab — mobile) ──────────────────────
-
-function OrderCard({
-  group,
-  selected,
-  onToggle,
-  onReceiveGarment,
-  onReceiveAndStartGarment,
-  onLostGarment,
-  onReceivePark,
-  onReceiveSchedule,
-  isReceiving,
-}: {
-  group: OrderGroup;
-  selected: boolean;
-  onToggle: (checked: boolean) => void;
-  onReceiveGarment: (id: string) => void;
-  onReceiveAndStartGarment: (id: string) => void;
-  onLostGarment: (id: string) => void;
-  onReceivePark: () => void;
-  onReceiveSchedule: () => void;
-  isReceiving: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const deliveryDate = group.garments[0]?.delivery_date_order;
-  const urgency = getDeliveryUrgency(deliveryDate);
-
-  return (
-    <div
-      className={cn(
-        "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4 cursor-pointer",
-        group.express ? "border-l-orange-400 ring-1 ring-orange-200" : "border-l-border",
-        selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
-      )}
-      onClick={() => setExpanded((v) => !v)}
-    >
-      <div className="px-3 py-2.5 transition-colors rounded-t-xl">
-        {/* Row 1: Identity + actions */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <Checkbox
-              checked={selected}
-              onCheckedChange={(checked) => { onToggle(!!checked); }}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Select order #${group.order_id}`}
-              className="size-4"
-            />
-            <span className="font-mono font-bold text-sm shrink-0">#{group.order_id}</span>
-            {group.invoice_number && (
-              <span className="text-xs text-muted-foreground/50 font-mono shrink-0">· #{group.invoice_number}</span>
-            )}
-            {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-            <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onReceivePark(); }} disabled={isReceiving} className="text-xs h-7">
-              Receive All
+      </TableCell>
+      <TableCell className="px-3 py-3">
+        <div className="flex items-center justify-end gap-1.5">
+          {actionVariant === "found" ? (
+            <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+              Found — Receive
             </Button>
-            <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(); }} disabled={isReceiving} className="text-xs h-7">
-              Receive & Start All
+          ) : actionVariant === "receive-only" ? (
+            <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+              Receive
             </Button>
-            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-          </div>
-        </div>
-
-        {/* Row 2: Status (left) + Logistics (right) */}
-        <div className="flex items-center justify-between gap-2 mt-1.5">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="text-xs text-muted-foreground/60">{garmentSummary(group.garments)}</span>
-            {group.express && <ExpressBadge />}
-          </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            {group.home_delivery && (
-              <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold">
-                <Home className="w-3 h-3" /> Delivery
-              </span>
-            )}
-            {deliveryDate && (
-              <span className={cn(
-                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                urgency.pill,
-              )}>
-                <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Garment dropdown list — animated */}
-      <div className={cn(
-        "grid transition-[grid-template-rows] duration-200 ease-out",
-        expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-      )}>
-        <div className="overflow-hidden">
-          <div className="border-t bg-muted/20 px-3 py-2 space-y-1.5">
-            {group.garments.map((g) => (
-              <GarmentRow
-                key={g.id}
-                garment={g}
-                onReceive={() => onReceiveGarment(g.id)}
-                onReceiveAndStart={() => onReceiveAndStartGarment(g.id)}
-                onLostInTransit={() => onLostGarment(g.id)}
-                isReceiving={isReceiving}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Incoming Table (order-level, desktop) ───────────────────────────────────
-
-function IncomingTable({
-  orders,
-  selectedOrderIds,
-  onToggleOrder,
-  onReceivePark,
-  onReceiveSchedule,
-  onReceiveGarment,
-  onReceiveAndStartGarment,
-  onLostGarment,
-  isReceiving,
-}: {
-  orders: OrderGroup[];
-  selectedOrderIds: Set<number>;
-  onToggleOrder: (orderId: number, checked: boolean) => void;
-  onReceivePark: (group: OrderGroup) => void;
-  onReceiveSchedule: (group: OrderGroup) => void;
-  onReceiveGarment: (id: string) => void;
-  onReceiveAndStartGarment: (id: string) => void;
-  onLostGarment: (id: string) => void;
-  isReceiving: boolean;
-}) {
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
-
-  const toggleExpand = (orderId: number) =>
-    setExpandedOrders((prev) => {
-      const n = new Set(prev);
-      n.has(orderId) ? n.delete(orderId) : n.add(orderId);
-      return n;
-    });
-
-  return (
-    <TableContainer>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-            <TableHead className="w-10 px-3">
-              <Checkbox
-                checked={orders.length > 0 && orders.every((o) => selectedOrderIds.has(o.order_id))}
-                onCheckedChange={(checked) => {
-                  for (const o of orders) onToggleOrder(o.order_id, !!checked);
-                }}
-                aria-label="Select all orders"
-                className="size-4"
-              />
-            </TableHead>
-            <TableHead className="w-[90px]">Order</TableHead>
-            <TableHead className="w-[180px]">Customer</TableHead>
-            <TableHead className="w-[80px]">Brand</TableHead>
-            <TableHead className="w-[150px]">Flags</TableHead>
-            <TableHead className="w-[150px] text-center">Delivery</TableHead>
-            <TableHead className="text-right w-[220px]">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orders.map((group) => {
-            const selected = selectedOrderIds.has(group.order_id);
-            const expanded = expandedOrders.has(group.order_id);
-            const deliveryDate = group.garments[0]?.delivery_date_order;
-            const urgency = getDeliveryUrgency(deliveryDate);
-            const rowBg = cn(selected && "bg-primary/5");
-
-            return (
-              <React.Fragment key={group.order_id}>
-                {/* Order row */}
-                <TableRow
-                  className={cn("cursor-pointer hover:bg-muted/30 transition-colors", rowBg)}
-                  onClick={() => toggleExpand(group.order_id)}
+          ) : actionVariant === "receive-lost" ? (
+            <>
+              <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+                Receive
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onLost}
+                disabled={isBusy}
+                className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+                Receive
+              </Button>
+              <Button size="sm" onClick={onReceiveAndStart} disabled={isBusy} className="text-xs h-7">
+                Receive & Start
+              </Button>
+              {actionVariant === "receive-start-lost" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onLost}
+                  disabled={isBusy}
+                  className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
-                  <TableCell className="px-3 py-3">
-                    <Checkbox
-                      checked={selected}
-                      onCheckedChange={(checked) => onToggleOrder(group.order_id, !!checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select order #${group.order_id}`}
-                      className="size-4"
-                    />
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold">#{group.order_id}</span>
-                      {group.invoice_number && (
-                        <span className="text-[10px] text-muted-foreground font-medium">INV-{group.invoice_number}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3 text-sm">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold">{group.customer_name ?? "—"}</span>
-                      {group.customer_mobile && (
-                        <span className="text-xs font-mono text-muted-foreground">{group.customer_mobile}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {group.express && <ExpressBadge />}
-                      {group.soaking && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-                          <Droplets className="w-3 h-3" /> Soak
-                        </span>
-                      )}
-                      {group.home_delivery && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
-                          <Home className="w-3 h-3" /> Home
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3 align-middle text-center">
-                    <div className="flex flex-col gap-1 items-center">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
-                        urgency.text,
-                      )}>
-                        <Clock className="w-3 h-3" />
-                        {deliveryDate ? formatDate(deliveryDate) : "—"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {(() => {
-                          const b = group.garments.filter((g) => g.garment_type === "brova").length;
-                          const f = group.garments.filter((g) => g.garment_type === "final").length;
-                          return (
-                            <>
-                              {b > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{b}B</span>}
-                              {f > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{f}F</span>}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onReceivePark(group); }} disabled={isReceiving} className="text-xs h-7">
-                        Receive All
-                      </Button>
-                      <Button size="sm" onClick={(e) => { e.stopPropagation(); onReceiveSchedule(group); }} disabled={isReceiving} className="text-xs h-7">
-                        Receive & Start All
-                      </Button>
-                      <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", expanded && "rotate-180")} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {/* Garment expansion row — animated */}
-                <TableRow className="border-0 hover:bg-transparent">
-                  <TableCell colSpan={8} className="p-0">
-                    <div className={cn(
-                      "grid transition-[grid-template-rows] duration-200 ease-out",
-                      expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                    )}>
-                      <div className="overflow-hidden">
-                        <div className="bg-muted/20 px-4 py-2.5 space-y-1.5 border-b">
-                          {group.garments.map((g) => (
-                            <GarmentRow
-                              key={g.id}
-                              garment={g}
-                              onReceive={() => onReceiveGarment(g.id)}
-                              onReceiveAndStart={() => onReceiveAndStartGarment(g.id)}
-                              onLostInTransit={() => onLostGarment(g.id)}
-                              isReceiving={isReceiving}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </React.Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                  <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
-// ── Garment Table (garment-level, desktop — for Brova Returns & Alteration In) ──
+// ── Section table ────────────────────────────────────────────────────────────
 
-function GarmentTable({
+function SectionTable({
   garments,
   selectedIds,
   onToggle,
   onReceive,
   onReceiveAndStart,
-  isReceiving,
-  isReceiveStarting,
-  showAlteration,
+  onLost,
+  isBusy,
+  actionVariant,
+  showType,
+  showAlt,
+  hideExpress,
 }: {
   garments: WorkshopGarment[];
   selectedIds: Set<string>;
   onToggle: (id: string, checked: boolean) => void;
   onReceive: (id: string) => void;
-  onReceiveAndStart: (id: string) => void;
-  isReceiving: boolean;
-  isReceiveStarting: boolean;
-  showAlteration?: boolean;
+  onReceiveAndStart?: (id: string) => void;
+  onLost?: (id: string) => void;
+  isBusy: boolean;
+  actionVariant: ActionVariant | ((g: WorkshopGarment) => ActionVariant);
+  showType?: boolean;
+  showAlt?: boolean;
+  hideExpress?: boolean;
 }) {
+  const allSelected = garments.length > 0 && garments.every((g) => selectedIds.has(g.id));
+
   return (
     <TableContainer>
       <Table>
@@ -418,152 +228,72 @@ function GarmentTable({
           <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
             <TableHead className="w-10 px-3">
               <Checkbox
-                checked={garments.length > 0 && garments.every((g) => selectedIds.has(g.id))}
-                onCheckedChange={(checked) => {
-                  for (const g of garments) onToggle(g.id, !!checked);
+                checked={allSelected}
+                onCheckedChange={(c) => {
+                  for (const g of garments) onToggle(g.id, !!c);
                 }}
-                aria-label="Select all garments"
+                aria-label="Select all"
                 className="size-4"
               />
             </TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Garment</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Invoice</TableHead>
-            <TableHead>Trip</TableHead>
-            {showAlteration && <TableHead>Alt #</TableHead>}
-            <TableHead>Flags</TableHead>
-            <TableHead className="w-[120px] text-center">Delivery</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="w-[100px]">Garment</TableHead>
+            {showAlt && <TableHead className="w-[80px]">Alt</TableHead>}
+            {showType && <TableHead className="w-[80px]">Type</TableHead>}
+            <TableHead className="w-[170px]">Customer</TableHead>
+            <TableHead className="w-[100px]">Order / Invoice</TableHead>
+            <TableHead className="w-[80px]">Brand</TableHead>
+            <TableHead className="w-[130px] text-center">Delivery</TableHead>
+            <TableHead className="w-[260px] text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {garments.map((g) => {
-            const selected = selectedIds.has(g.id);
-            const gUrgency = getDeliveryUrgency(g.delivery_date_order);
-            return (
-              <TableRow
-                key={g.id}
-                className={cn(
-                  selected && "bg-primary/5",
-                )}
-              >
-                <TableCell className="px-3 py-3">
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={(checked) => onToggle(g.id, !!checked)}
-                    aria-label={`Select garment ${g.garment_id ?? g.id.slice(0, 8)}`}
-                    className="size-4"
-                  />
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                </TableCell>
-                <TableCell className="px-3 py-3 text-sm text-muted-foreground">
-                  {g.customer_name ?? "—"}
-                </TableCell>
-                <TableCell className="px-3 py-3 text-sm text-muted-foreground font-mono">
-                  {g.invoice_number ? `#${g.invoice_number}` : "—"}
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <Badge variant="secondary" className="text-xs font-bold">
-                    {g.trip_number ?? 1}
-                  </Badge>
-                </TableCell>
-                {showAlteration && (
-                  <TableCell className="px-3 py-3">
-                    <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
-                  </TableCell>
-                )}
-                <TableCell className="px-3 py-3">
-                  <div className="flex items-center gap-1">
-                    {g.express && <ExpressBadge />}
-                    {g.soaking && (
-                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-                        <Droplets className="w-3 h-3" /> Soak
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="px-3 py-3 align-middle text-center">
-                  {g.delivery_date_order ? (
-                    <span className={cn(
-                      "text-xs font-bold tabular-nums",
-                      gUrgency.text,
-                    )}>
-                      {formatDate(g.delivery_date_order)}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onReceive(g.id)}
-                      disabled={isReceiving}
-                      className="text-xs h-7"
-                    >
-                      Receive
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => onReceiveAndStart(g.id)}
-                      disabled={isReceiveStarting}
-                      className="text-xs h-7"
-                    >
-                      Receive & Start
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {garments.map((g) => (
+            <GarmentRow
+              key={g.id}
+              garment={g}
+              selected={selectedIds.has(g.id)}
+              onToggle={(c) => onToggle(g.id, c)}
+              onReceive={() => onReceive(g.id)}
+              onReceiveAndStart={onReceiveAndStart ? () => onReceiveAndStart(g.id) : undefined}
+              onLost={onLost ? () => onLost(g.id) : undefined}
+              isBusy={isBusy}
+              actionVariant={typeof actionVariant === "function" ? actionVariant(g) : actionVariant}
+              showType={showType}
+              showAlt={showAlt}
+              hideExpress={hideExpress}
+            />
+          ))}
         </TableBody>
       </Table>
     </TableContainer>
   );
 }
 
-// ── Lost in Transit Card ────────────────────────────────────────────────────
+// ── Section wrapper ───────────────────────────────────────────────────────────
 
-function LostGarmentCard({
-  garment,
-  onReceive,
-  isReceiving,
+function Section({
+  title,
+  icon: Icon,
+  count,
+  accent,
+  children,
 }: {
-  garment: WorkshopGarment;
-  onReceive: () => void;
-  isReceiving: boolean;
+  title: string;
+  icon: LucideIcon;
+  count: number;
+  accent?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="bg-card border border-destructive/20 rounded-xl p-3 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="p-1.5 rounded-lg bg-destructive/10">
-          <AlertTriangle className="w-4 h-4 text-destructive" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <GarmentTypeBadge type={garment.garment_type ?? "final"} />
-            <span className="font-mono text-sm font-bold">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
-            {garment.express && <ExpressBadge />}
-            <BrandBadge brand={garment.order_brand} />
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-            <span>{garment.customer_name ?? "—"}</span>
-            {garment.invoice_number && <span className="font-mono">#{garment.invoice_number}</span>}
-            {garment.fabric_name && <span>{garment.fabric_name}</span>}
-          </div>
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <h2 className="font-semibold text-base text-foreground">{title}</h2>
+        <Badge variant="secondary" className={cn("text-xs", accent)}>
+          {count}
+        </Badge>
       </div>
-      <Button size="sm" variant="outline" onClick={onReceive} disabled={isReceiving} className="text-xs h-7 shrink-0">
-        Found — Receive
-      </Button>
+      {children}
     </div>
   );
 }
@@ -571,57 +301,84 @@ function LostGarmentCard({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function ReceivingPage() {
-  const { tab: searchTab } = Route.useSearch();
-  const [activeTab, setActiveTab] = useState(searchTab ?? "incoming");
-  const isMobile = useIsMobile();
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const receiveMut = useReceiveGarments();
   const receiveStartMut = useReceiveAndStart();
   const lostMut = useMarkLostInTransit();
 
-  // Sync tab when navigating via notification deep links
-  useEffect(() => {
-    if (searchTab) setActiveTab(searchTab);
-  }, [searchTab]);
+  const isBusy = receiveMut.isPending || receiveStartMut.isPending || lostMut.isPending;
 
-  // Split by tab
-  const inTransit = allGarments.filter((g) => g.location === "transit_to_workshop");
-  const incoming = inTransit.filter((g) => (g.trip_number ?? 1) === 1);
-  // Brova returns: trip 2 or 3 (after first/second trial, before alteration threshold)
-  const brovaReturns = inTransit.filter(
-    (g) => g.garment_type === "brova" && (g.trip_number === 2 || g.trip_number === 3),
+  const [search, setSearch] = useState("");
+  const searchFilter = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return (g: WorkshopGarment) =>
+      (g.customer_name ?? "").toLowerCase().includes(q) ||
+      String(g.order_id).includes(q) ||
+      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
+      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
+      (g.garment_id ?? "").toLowerCase().includes(q);
+  }, [search]);
+
+  const applySearch = <T extends WorkshopGarment>(arr: T[]) =>
+    searchFilter ? arr.filter(searchFilter) : arr;
+
+  // Orders that have at least one brova (finals in these orders must park)
+  const orderIdsWithBrova = new Set(
+    allGarments.filter((g) => g.garment_type === "brova").map((g) => g.order_id),
   );
-  // Alterations: brova trip >= 4, final trip >= 2
-  const alterationIn = inTransit.filter(
-    (g) =>
-      ((g.trip_number ?? 0) >= 4 && g.garment_type === "brova") ||
-      ((g.trip_number ?? 0) >= 2 && g.garment_type === "final"),
-  );
-  // Lost in transit
+
+  // ── Filter into sections ──────────────────────────────────────────────────
+  const inTransit = allGarments
+    .filter((g) => g.location === "transit_to_workshop")
+    .filter((g, i, arr) => arr.findIndex((x) => x.id === g.id) === i);
   const lostInTransit = allGarments.filter((g) => g.location === "lost_in_transit");
 
-  const incomingOrders = groupByOrder(incoming).sort((a, b) => {
-    if (a.express && !b.express) return -1;
-    if (!a.express && b.express) return 1;
-    if (a.delivery_date && b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
-    if (a.delivery_date && !b.delivery_date) return -1;
-    if (!a.delivery_date && b.delivery_date) return 1;
-    return 0;
-  });
+  // Initial trip only (trip 1), split by express / brova / final
+  const initialTrip = inTransit.filter((g) => (g.trip_number ?? 1) === 1);
+  const expressGarments = initialTrip.filter((g) => g.express);
+  const brovaInitial = initialTrip.filter((g) => !g.express && g.garment_type === "brova");
+  const finalsInitial = initialTrip.filter((g) => !g.express && g.garment_type === "final");
 
-  // Selection state per tab (Incoming selects at order level)
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
-  const [selectedBrova, setSelectedBrova] = useState<Set<string>>(new Set());
-  const [selectedAltIn, setSelectedAltIn] = useState<Set<string>>(new Set());
+  // Alterations: any garment returning (trip >= 2)
+  const alterations = inTransit.filter((g) => (g.trip_number ?? 1) >= 2);
 
-  const toggleOrder = (orderId: number, checked: boolean) =>
-    setSelectedOrderIds((prev) => {
-      const n = new Set(prev);
-      checked ? n.add(orderId) : n.delete(orderId);
-      return n;
-    });
+  // Group garments by order, sort groups by delivery date, brovas before finals, flatten
+  const groupByOrderSorted = (garments: WorkshopGarment[]): WorkshopGarment[] => {
+    const groups = new Map<number, WorkshopGarment[]>();
+    for (const g of garments) {
+      if (!groups.has(g.order_id)) groups.set(g.order_id, []);
+      groups.get(g.order_id)!.push(g);
+    }
+    return [...groups.values()]
+      .sort((a, b) => {
+        const da = a[0]?.delivery_date_order;
+        const db = b[0]?.delivery_date_order;
+        if (da && db) return da.localeCompare(db);
+        if (da) return -1;
+        if (db) return 1;
+        return 0;
+      })
+      .map((group) => group.sort((a, b) => {
+        if (a.garment_type === "brova" && b.garment_type !== "brova") return -1;
+        if (a.garment_type !== "brova" && b.garment_type === "brova") return 1;
+        return 0;
+      }))
+      .flat();
+  };
 
-  const toggleGarment =
+  const sortedExpress = applySearch(groupByOrderSorted(expressGarments));
+  const sortedBrova = applySearch(groupByOrderSorted(brovaInitial));
+  const sortedFinals = applySearch(groupByOrderSorted(finalsInitial));
+  const sortedAlterations = applySearch(groupByOrderSorted(alterations));
+
+  // ── Selection state per section ───────────────────────────────────────────
+  const [selExpress, setSelExpress] = useState<Set<string>>(new Set());
+  const [selBrova, setSelBrova] = useState<Set<string>>(new Set());
+  const [selFinals, setSelFinals] = useState<Set<string>>(new Set());
+  const [selAlterations, setSelAlterations] = useState<Set<string>>(new Set());
+
+  const toggle =
     (setFn: React.Dispatch<React.SetStateAction<Set<string>>>) =>
     (id: string, checked: boolean) =>
       setFn((prev) => {
@@ -630,353 +387,233 @@ function ReceivingPage() {
         return n;
       });
 
-  const getSelectedIncomingGarmentIds = () =>
-    incomingOrders
-      .filter((g) => selectedOrderIds.has(g.order_id))
-      .flatMap((g) => g.garments.map((gg) => gg.id));
+  const allVisible = [...sortedExpress, ...sortedBrova, ...sortedFinals, ...sortedAlterations];
+  const totalSelected = selExpress.size + selBrova.size + selFinals.size + selAlterations.size;
+  const allSelected = allVisible.length > 0 && totalSelected === allVisible.length;
 
-  // Per-card actions for incoming orders
-  const handleReceiveParkOrder = async (group: OrderGroup) => {
-    const ids = group.garments.map((g) => g.id);
-    await receiveMut.mutateAsync(ids);
+  const selectAll = () => {
+    setSelExpress(new Set(sortedExpress.map((g) => g.id)));
+    setSelBrova(new Set(sortedBrova.map((g) => g.id)));
+    setSelFinals(new Set(sortedFinals.map((g) => g.id)));
+    setSelAlterations(new Set(sortedAlterations.map((g) => g.id)));
+  };
+  const clearAll = () => {
+    setSelExpress(new Set());
+    setSelBrova(new Set());
+    setSelFinals(new Set());
+    setSelAlterations(new Set());
   };
 
-  const handleReceiveScheduleOrder = async (group: OrderGroup) => {
-    const ids = group.garments.map((g) => g.id);
-    await receiveStartMut.mutateAsync(ids);
-  };
-
-  // Per-garment actions
-  const handleReceiveSingle = async (id: string) => {
-    await receiveMut.mutateAsync([id]);
-  };
-
-  const handleReceiveAndStartSingle = async (id: string) => {
-    await receiveStartMut.mutateAsync([id]);
-  };
-
-  const handleLostSingle = async (id: string) => {
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const receive = async (ids: string[]) => receiveMut.mutateAsync(ids);
+  const receiveAndStart = async (ids: string[]) => receiveStartMut.mutateAsync(ids);
+  const markLost = async (id: string) => {
     await lostMut.mutateAsync([id]);
     toast.warning("Garment marked as lost in transit");
   };
 
-  // Batch actions
-  const handleReceiveOrders = async () => {
-    const ids = getSelectedIncomingGarmentIds();
-    await receiveMut.mutateAsync(ids);
-    setSelectedOrderIds(new Set());
-  };
-
-  const handleReceiveAndStartOrders = async () => {
-    const ids = getSelectedIncomingGarmentIds();
-    await receiveStartMut.mutateAsync(ids);
-    setSelectedOrderIds(new Set());
-  };
-
-  const handleReceiveBatch = async (
-    ids: Set<string>,
-    clearFn: () => void,
-  ) => {
-    await receiveMut.mutateAsync([...ids]);
-    clearFn();
-  };
-
-  const isBusy = receiveMut.isPending || receiveStartMut.isPending || lostMut.isPending;
+  const totalIncoming = sortedExpress.length + sortedBrova.length + sortedFinals.length + sortedAlterations.length;
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28">
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-8">
       <PageHeader
         icon={Inbox}
         title="Receiving"
-        subtitle={`${inTransit.length} garment${inTransit.length !== 1 ? "s" : ""} in transit from shop`}
+        subtitle={`${totalIncoming} garment${totalIncoming !== 1 ? "s" : ""} in transit · ${lostInTransit.length} lost`}
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="incoming">
-            Incoming{" "}
-            <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
-              {incomingOrders.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="brova-returns">
-            Brova Returns{" "}
-            <Badge variant="secondary" className="ml-1 text-xs bg-purple-100 text-purple-700">
-              {brovaReturns.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="alteration-in">
-            Alteration In{" "}
-            <Badge variant="secondary" className="ml-1 text-xs bg-orange-100 text-orange-700">
-              {alterationIn.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="alteration-out">
-            Alteration Out{" "}
-            <Badge variant="secondary" className="ml-1 text-xs">
-              0
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="lost-in-transit">
-            Lost in Transit{" "}
-            {lostInTransit.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs bg-red-100 text-red-700">
-                {lostInTransit.length}
-              </Badge>
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Customer, order #, invoice, phone…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        {allVisible.length > 0 && (
+          <Button
+            variant={allSelected ? "secondary" : "outline"}
+            size="sm"
+            onClick={allSelected ? clearAll : selectAll}
+            className="shrink-0"
+          >
+            {allSelected ? `Deselect All (${totalSelected})` : `Select All (${allVisible.length})`}
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <LoadingSkeleton />
+      ) : (
+        <>
+          {/* ── EXPRESS ── */}
+          <Section title="Express" icon={Zap} count={sortedExpress.length} accent="bg-orange-100 text-orange-700">
+            {sortedExpress.length === 0 ? (
+              <EmptyState icon={Zap} message="No express garments in transit" />
+            ) : (
+              <>
+                <SectionTable
+                  garments={sortedExpress}
+                  selectedIds={selExpress}
+                  onToggle={toggle(setSelExpress)}
+                  onReceive={(id) => receive([id])}
+                  onReceiveAndStart={(id) => receiveAndStart([id])}
+                  onLost={markLost}
+                  isBusy={isBusy}
+                  actionVariant={(g) =>
+                    g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
+                      ? "receive-lost"
+                      : "receive-start-lost"
+                  }
+                  showType
+                  hideExpress
+                />
+                {(() => {
+                  const selectedGarments = sortedExpress.filter((g) => selExpress.has(g.id));
+                  const allBrovas = selectedGarments.every(
+                    (g) => g.garment_type === "brova" || !orderIdsWithBrova.has(g.order_id),
+                  );
+                  return (
+                    <BatchActionBar count={selExpress.size} onClear={() => setSelExpress(new Set())}>
+                      <Button size="sm" variant="secondary" onClick={() => { receive([...selExpress]); setSelExpress(new Set()); }} disabled={receiveMut.isPending}>
+                        Receive
+                      </Button>
+                      {allBrovas && (
+                        <Button size="sm" onClick={() => { receiveAndStart([...selExpress]); setSelExpress(new Set()); }} disabled={receiveStartMut.isPending}>
+                          Receive & Start
+                        </Button>
+                      )}
+                    </BatchActionBar>
+                  );
+                })()}
+              </>
             )}
-          </TabsTrigger>
-        </TabsList>
+          </Section>
 
-        {/* ── INCOMING — order level with per-garment dropdown ── */}
-        <TabsContent value="incoming">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : incomingOrders.length === 0 ? (
-            <EmptyState icon={Inbox} message="No incoming orders" />
-          ) : isMobile ? (
-            <div className="space-y-2">
-              {incomingOrders.map((group) => (
-                <OrderCard
-                  key={group.order_id}
-                  group={group}
-                  selected={selectedOrderIds.has(group.order_id)}
-                  onToggle={(checked) => toggleOrder(group.order_id, checked)}
-                  onReceiveGarment={handleReceiveSingle}
-                  onReceiveAndStartGarment={handleReceiveAndStartSingle}
-                  onLostGarment={handleLostSingle}
-                  onReceivePark={() => handleReceiveParkOrder(group)}
-                  onReceiveSchedule={() => handleReceiveScheduleOrder(group)}
-                  isReceiving={isBusy}
+          {/* ── BROVA ── */}
+          <Section title="Brova" icon={Package} count={sortedBrova.length} accent="bg-amber-100 text-amber-700">
+            {sortedBrova.length === 0 ? (
+              <EmptyState icon={Package} message="No brova garments in transit" />
+            ) : (
+              <>
+                <SectionTable
+                  garments={sortedBrova}
+                  selectedIds={selBrova}
+                  onToggle={toggle(setSelBrova)}
+                  onReceive={(id) => receive([id])}
+                  onReceiveAndStart={(id) => receiveAndStart([id])}
+                  onLost={markLost}
+                  isBusy={isBusy}
+                  actionVariant="receive-start-lost"
                 />
-              ))}
-            </div>
-          ) : (
-            <IncomingTable
-              orders={incomingOrders}
-              selectedOrderIds={selectedOrderIds}
-              onToggleOrder={toggleOrder}
-              onReceivePark={handleReceiveParkOrder}
-              onReceiveSchedule={handleReceiveScheduleOrder}
-              onReceiveGarment={handleReceiveSingle}
-              onReceiveAndStartGarment={handleReceiveAndStartSingle}
-              onLostGarment={handleLostSingle}
-              isReceiving={isBusy}
-            />
-          )}
-          <BatchActionBar
-            count={selectedOrderIds.size}
-            onClear={() => setSelectedOrderIds(new Set())}
-          >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleReceiveOrders}
-              disabled={receiveMut.isPending}
-            >
-              Receive
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleReceiveAndStartOrders}
-              disabled={receiveStartMut.isPending}
-            >
-              Receive & Start
-            </Button>
-          </BatchActionBar>
-        </TabsContent>
+                <BatchActionBar count={selBrova.size} onClear={() => setSelBrova(new Set())}>
+                  <Button size="sm" variant="secondary" onClick={() => { receive([...selBrova]); setSelBrova(new Set()); }} disabled={receiveMut.isPending}>
+                    Receive
+                  </Button>
+                  <Button size="sm" onClick={() => { receiveAndStart([...selBrova]); setSelBrova(new Set()); }} disabled={receiveStartMut.isPending}>
+                    Receive & Start
+                  </Button>
+                </BatchActionBar>
+              </>
+            )}
+          </Section>
 
-        {/* ── BROVA RETURNS — garment level ── */}
-        <TabsContent value="brova-returns">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : brovaReturns.length === 0 ? (
-            <EmptyState icon={Package} message="No brova returns in transit" />
-          ) : isMobile ? (
-            <div className="space-y-2">
-              {brovaReturns.map((g, i) => (
-                <GarmentCard
-                  key={g.id}
-                  garment={g}
-                  selected={selectedBrova.has(g.id)}
-                  onSelect={toggleGarment(setSelectedBrova)}
-                  showPipeline={false}
-                  index={i}
-                  actions={
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReceiveSingle(g.id)}
-                        disabled={receiveMut.isPending}
-                        className="text-xs h-7"
-                      >
-                        Receive
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          await receiveStartMut.mutateAsync([g.id]);
-                        }}
-                        disabled={receiveStartMut.isPending}
-                        className="text-xs h-7"
-                      >
-                        Receive & Start
-                      </Button>
-                    </div>
+          {/* ── FINALS ── */}
+          <Section title="Finals" icon={Package} count={sortedFinals.length} accent="bg-emerald-100 text-emerald-700">
+            {sortedFinals.length === 0 ? (
+              <EmptyState icon={Package} message="No final garments in transit" />
+            ) : (
+              <>
+                <SectionTable
+                  garments={sortedFinals}
+                  selectedIds={selFinals}
+                  onToggle={toggle(setSelFinals)}
+                  onReceive={(id) => receive([id])}
+                  onReceiveAndStart={(id) => receiveAndStart([id])}
+                  onLost={markLost}
+                  isBusy={isBusy}
+                  actionVariant={(g) =>
+                    orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
                   }
                 />
-              ))}
-            </div>
-          ) : (
-            <GarmentTable
-              garments={brovaReturns}
-              selectedIds={selectedBrova}
-              onToggle={toggleGarment(setSelectedBrova)}
-              onReceive={handleReceiveSingle}
-              onReceiveAndStart={async (id) => {
-                await receiveStartMut.mutateAsync([id]);
-              }}
-              isReceiving={receiveMut.isPending}
-              isReceiveStarting={receiveStartMut.isPending}
-            />
-          )}
-          <BatchActionBar
-            count={selectedBrova.size}
-            onClear={() => setSelectedBrova(new Set())}
-          >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                handleReceiveBatch(selectedBrova, () => setSelectedBrova(new Set()))
-              }
-              disabled={receiveMut.isPending}
-            >
-              Receive
-            </Button>
-            <Button
-              size="sm"
-              onClick={async () => {
-                await receiveStartMut.mutateAsync([...selectedBrova]);
-                setSelectedBrova(new Set());
-              }}
-              disabled={receiveStartMut.isPending}
-            >
-              Receive & Start
-            </Button>
-          </BatchActionBar>
-        </TabsContent>
-
-        {/* ── ALTERATION IN — garment level ── */}
-        <TabsContent value="alteration-in">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : alterationIn.length === 0 ? (
-            <EmptyState icon={Clock} message="No alteration returns in transit" />
-          ) : isMobile ? (
-            <div className="space-y-2">
-              {alterationIn.map((g, i) => (
-                <GarmentCard
-                  key={g.id}
-                  garment={g}
-                  selected={selectedAltIn.has(g.id)}
-                  onSelect={toggleGarment(setSelectedAltIn)}
-                  showPipeline={false}
-                  index={i}
-                  actions={
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReceiveSingle(g.id)}
-                        disabled={receiveMut.isPending}
-                        className="text-xs h-7"
-                      >
+                {(() => {
+                  const selectedGarments = sortedFinals.filter((g) => selFinals.has(g.id));
+                  const canStart = selectedGarments.every((g) => !orderIdsWithBrova.has(g.order_id));
+                  return (
+                    <BatchActionBar count={selFinals.size} onClear={() => setSelFinals(new Set())}>
+                      <Button size="sm" variant="secondary" onClick={() => { receive([...selFinals]); setSelFinals(new Set()); }} disabled={receiveMut.isPending}>
                         Receive
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          await receiveStartMut.mutateAsync([g.id]);
-                        }}
-                        disabled={receiveStartMut.isPending}
-                        className="text-xs h-7"
-                      >
-                        Receive & Start
-                      </Button>
-                    </div>
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <GarmentTable
-              garments={alterationIn}
-              selectedIds={selectedAltIn}
-              onToggle={toggleGarment(setSelectedAltIn)}
-              onReceive={handleReceiveSingle}
-              onReceiveAndStart={async (id) => {
-                await receiveStartMut.mutateAsync([id]);
-              }}
-              isReceiving={receiveMut.isPending}
-              isReceiveStarting={receiveStartMut.isPending}
-              showAlteration
-            />
-          )}
-          <BatchActionBar
-            count={selectedAltIn.size}
-            onClear={() => setSelectedAltIn(new Set())}
-          >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                handleReceiveBatch(selectedAltIn, () => setSelectedAltIn(new Set()))
-              }
-              disabled={receiveMut.isPending}
-            >
-              Receive
-            </Button>
-            <Button
-              size="sm"
-              onClick={async () => {
-                await receiveStartMut.mutateAsync([...selectedAltIn]);
-                setSelectedAltIn(new Set());
-              }}
-              disabled={receiveStartMut.isPending}
-            >
-              Receive & Start
-            </Button>
-          </BatchActionBar>
-        </TabsContent>
+                      {canStart && (
+                        <Button size="sm" onClick={() => { receiveAndStart([...selFinals]); setSelFinals(new Set()); }} disabled={receiveStartMut.isPending}>
+                          Receive & Start
+                        </Button>
+                      )}
+                    </BatchActionBar>
+                  );
+                })()}
+              </>
+            )}
+          </Section>
 
-        {/* ── ALTERATION OUT — placeholder ── */}
-        <TabsContent value="alteration-out">
-          <EmptyState message="No outgoing alterations" />
-        </TabsContent>
-
-        {/* ── LOST IN TRANSIT ── */}
-        <TabsContent value="lost-in-transit">
-          {isLoading ? (
-            <LoadingSkeleton />
-          ) : lostInTransit.length === 0 ? (
-            <EmptyState icon={CircleX} message="No garments lost in transit" />
-          ) : (
-            <div className="space-y-2">
-              {lostInTransit.map((g) => (
-                <LostGarmentCard
-                  key={g.id}
-                  garment={g}
-                  onReceive={async () => {
-                    await receiveMut.mutateAsync([g.id]);
-                  }}
-                  isReceiving={receiveMut.isPending}
+          {/* ── ALTERATIONS ── */}
+          <Section title="Alterations" icon={Package} count={sortedAlterations.length} accent="bg-purple-100 text-purple-700">
+            {sortedAlterations.length === 0 ? (
+              <EmptyState icon={Package} message="No alterations in transit" />
+            ) : (
+              <>
+                <SectionTable
+                  garments={sortedAlterations}
+                  selectedIds={selAlterations}
+                  onToggle={toggle(setSelAlterations)}
+                  onReceive={(id) => receive([id])}
+                  onReceiveAndStart={(id) => receiveAndStart([id])}
+                  onLost={markLost}
+                  isBusy={isBusy}
+                  actionVariant="receive-start-lost"
+                  showAlt
+                  showType
                 />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                <BatchActionBar count={selAlterations.size} onClear={() => setSelAlterations(new Set())}>
+                  <Button size="sm" variant="secondary" onClick={() => { receive([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveMut.isPending}>
+                    Receive
+                  </Button>
+                  <Button size="sm" onClick={() => { receiveAndStart([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveStartMut.isPending}>
+                    Receive & Start
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { lostMut.mutateAsync([...selAlterations]).then(() => { toast.warning(`${selAlterations.size} garment${selAlterations.size !== 1 ? "s" : ""} marked as lost`); setSelAlterations(new Set()); }); }}
+                    disabled={lostMut.isPending}
+                    className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+                  </Button>
+                </BatchActionBar>
+              </>
+            )}
+          </Section>
+
+          {/* ── LOST IN TRANSIT ── */}
+          <Section title="Lost in Transit" icon={CircleX} count={lostInTransit.length} accent={lostInTransit.length > 0 ? "bg-red-100 text-red-700" : undefined}>
+            {lostInTransit.length === 0 ? (
+              <EmptyState icon={CircleX} message="No garments lost in transit" />
+            ) : (
+              <SectionTable
+                garments={lostInTransit}
+                selectedIds={new Set()}
+                onToggle={() => {}}
+                onReceive={(id) => receive([id])}
+                isBusy={isBusy}
+                actionVariant="found"
+              />
+            )}
+          </Section>
+        </>
+      )}
     </div>
   );
 }

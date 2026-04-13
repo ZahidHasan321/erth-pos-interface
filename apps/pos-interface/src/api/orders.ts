@@ -1,5 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
+import { computeStyleGroups } from "@repo/database";
 import { db } from "@/lib/db";
 import { BRAND_NAMES } from "../lib/constants";
 
@@ -732,6 +733,8 @@ export const saveWorkOrderGarments = async (
         home_delivery?: boolean;
     }
 ): Promise<ApiResponse<any>> => {
+    computeStyleGroups(garments);
+
     const { data, error } = await db.rpc('save_work_order_garments', {
         p_order_id: orderId,
         p_garments: garments,

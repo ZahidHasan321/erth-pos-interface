@@ -7,12 +7,16 @@ import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
-  let timer: ReturnType<typeof setTimeout>;
-  return ((...args: any[]) => {
-    clearTimeout(timer);
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const debounced = ((...args: Parameters<T>) => {
+    if (timer) clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
-  }) as T;
+  }) as { (...args: Parameters<T>): void; cancel: () => void };
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
 }
 
 // Locations that affect the "Orders at Showroom" page. Everything else
@@ -35,16 +39,8 @@ export function useRealtimeInvalidation() {
   const { user } = useAuth();
   const currentUserId = user?.id ?? null;
   const shownNotificationIds = useRef(new Set<number>());
-
-  // Debounced handlers so rapid bursts (e.g. workshop batch-updates) collapse
-  // into a single refetch instead of firing once per row.
-  //
-  // The showroom query is expensive and only cares about garments at the shop
-  // or in transit to the shop. A ref accumulates whether any of the debounced
-  // events touched a showroom-relevant location; if none did, the showroom
-  // refetch is skipped entirely. Other keys still invalidate because they
-  // care about workshop/dispatch state.
   const showroomDirty = useRef(false);
+
   const onGarmentChange = useCallback(
     debounce(() => {
       qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
@@ -107,150 +103,132 @@ export function useRealtimeInvalidation() {
   );
 
   useEffect(() => {
-    // Don't subscribe until we have an authenticated user — the realtime
-    // websocket must carry the JWT so RLS policies pass. Without this guard
-    // the channel connects under the anon role and all events are filtered out.
+    // AuthProvider is the single owner of db.realtime.setAuth — it sets it on
+    // initial session restore AND on every TOKEN_REFRESHED/SIGNED_IN event.
+    // By the time currentUserId is non-null here, the realtime socket already
+    // carries the JWT, so no second listener is needed in this hook.
     if (!currentUserId) return;
 
-    let channel: RealtimeChannel | null = null;
-    let cancelled = false;
-
-    async function setup() {
-      // Ensure the realtime socket carries the current session JWT before
-      // subscribing, otherwise RLS silently filters out all events.
-      const { data: { session } } = await db.auth.getSession();
-      if (session?.access_token) {
-        db.realtime.setAuth(session.access_token);
-      }
-
-      if (cancelled) return;
-
-      // Keep the realtime socket auth fresh when the JWT is refreshed,
-      // so the channel doesn't drop on token expiry.
-      const { data: { subscription: authSub } } = db.auth.onAuthStateChange(
-        (event, newSession) => {
-          if (newSession?.access_token && (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN')) {
-            db.realtime.setAuth(newSession.access_token);
+    const channel: RealtimeChannel = db
+      .channel('pos-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'garments' },
+        (payload) => {
+          if (rowTouchesShowroom(payload.new) || rowTouchesShowroom(payload.old)) {
+            showroomDirty.current = true;
           }
+          onGarmentChange();
         },
-      );
-
-      channel = db
-        .channel('pos-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'garments' },
-          (payload) => {
-            // Mark showroom dirty if the row (old or new) is at/to/from shop.
-            // Everything else (workshop-only garment state) skips the
-            // expensive showroom RPC refetch entirely.
-            if (rowTouchesShowroom(payload.new) || rowTouchesShowroom(payload.old)) {
-              showroomDirty.current = true;
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        onOrderChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
+        onDispatchLogChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_shelf_items' },
+        onShelfItemChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transfer_requests' },
+        onTransferChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transfer_request_items' },
+        onTransferChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fabrics' },
+        onInventoryChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shelf' },
+        onInventoryChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'accessories' },
+        onInventoryChange,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const row = payload.new as {
+            id?: number;
+            department?: string;
+            scope?: 'department' | 'user';
+            recipient_user_id?: string | null;
+            title?: string;
+            body?: string | null;
+            type?: string;
+          };
+          const isForMe =
+            row.scope === 'user'
+              ? !!currentUserId && row.recipient_user_id === currentUserId
+              : row.department === 'shop';
+          if (!isForMe) return;
+          qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+          if (row.id != null) {
+            if (shownNotificationIds.current.has(row.id)) return;
+            shownNotificationIds.current.add(row.id);
+            if (shownNotificationIds.current.size > 200) {
+              const first = shownNotificationIds.current.values().next().value!;
+              shownNotificationIds.current.delete(first);
             }
-            onGarmentChange();
-          },
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'orders' },
-          onOrderChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'dispatch_log' },
-          onDispatchLogChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'order_shelf_items' },
-          onShelfItemChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'transfer_requests' },
-          onTransferChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'transfer_request_items' },
-          onTransferChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'fabrics' },
-          onInventoryChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'shelf' },
-          onInventoryChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'accessories' },
-          onInventoryChange,
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications' },
-          (payload) => {
-            const row = payload.new as {
-              id?: number;
-              department?: string;
-              scope?: 'department' | 'user';
-              recipient_user_id?: string | null;
-              title?: string;
-              body?: string | null;
-              type?: string;
-            };
-            const isForMe =
-              row.scope === 'user'
-                ? !!currentUserId && row.recipient_user_id === currentUserId
-                : row.department === 'shop';
-            if (!isForMe) return;
-            qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-            // Deduplicate: skip if we already showed a toast for this notification
-            if (row.id != null) {
-              if (shownNotificationIds.current.has(row.id)) return;
-              shownNotificationIds.current.add(row.id);
-              // Cap the set size so it doesn't grow unbounded
-              if (shownNotificationIds.current.size > 200) {
-                const first = shownNotificationIds.current.values().next().value!;
-                shownNotificationIds.current.delete(first);
-              }
-            }
-            if (row.title) showNotificationToast({ title: row.title, body: row.body, type: row.type });
-          },
-        )
-        .subscribe((status, err) => {
-          console.log('[Realtime] pos-realtime status:', status, err ?? '');
-        });
+          }
+          if (row.title) showNotificationToast({ title: row.title, body: row.body, type: row.type });
+        },
+      )
+      .subscribe((status, err) => {
+        console.log('[Realtime] pos-realtime status:', status, err ?? '');
+      });
 
-      // Store auth subscription cleanup alongside channel
-      (channel as any)._authUnsub = authSub.unsubscribe;
-    }
-
-    setup();
-
-    // When the tab comes back from background, the WebSocket may have been
-    // killed by the browser. Supabase reconnects automatically, but any
-    // events fired while backgrounded are lost. Invalidate all queries so
-    // the UI picks up changes that happened while away.
-    // Debounced to prevent multiple firings on rapid tab switches.
+    // When the tab returns from background, refetch only POS slice keys
+    // (not the whole cache — that triggers a thundering herd of refetches and
+    // can lock the UI). Throttle to once per 30s.
+    let lastFocusRefetch = 0;
     const onVisibilityChange = debounce(() => {
-      if (document.visibilityState === 'visible') {
-        qc.invalidateQueries({ refetchType: 'active' });
-      }
-    }, 100);
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastFocusRefetch < 30_000) return;
+      lastFocusRefetch = now;
+      // Cancel anything still "fetching" — fetches issued while the tab was
+      // hidden may never resolve, and TanStack dedupes new mounts onto that
+      // dead promise. Cancelling flips them back to idle so the next mount /
+      // invalidate actually re-fires the queryFn.
+      qc.cancelQueries({ fetchStatus: 'fetching' });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['showroom-orders'] });
+      qc.invalidateQueries({ queryKey: ['order-history'] });
+      qc.invalidateQueries({ queryKey: ['dispatched-orders'] });
+      qc.invalidateQueries({ queryKey: ['dispatchOrders'] });
+      qc.invalidateQueries({ queryKey: ['transfer-requests'] });
+      qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+    }, 200);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      cancelled = true;
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      if (channel) {
-        (channel as any)._authUnsub?.();
-        db.removeChannel(channel);
-      }
+      onVisibilityChange.cancel();
+      onGarmentChange.cancel();
+      onOrderChange.cancel();
+      onDispatchLogChange.cancel();
+      onShelfItemChange.cancel();
+      onTransferChange.cancel();
+      onInventoryChange.cancel();
+      db.removeChannel(channel);
     };
   }, [qc, currentUserId, onGarmentChange, onOrderChange, onDispatchLogChange, onShelfItemChange, onTransferChange, onInventoryChange]);
 }

@@ -75,6 +75,50 @@ export function getAlterationNumber(tripNumber: number | null | undefined, garme
     return trip >= 4 ? trip - 3 : null;
 }
 
+// Style fields that define a garment's "style identity" for grouping.
+// Two garments with identical values across these fields share a style_id
+// within the same order. Excludes fabric/color/measurement/quantity/notes —
+// only the style design itself counts.
+const STYLE_IDENTITY_FIELDS = [
+    "style",
+    "collar_type", "collar_button",
+    "cuffs_type", "cuffs_thickness",
+    "front_pocket_type", "front_pocket_thickness",
+    "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi",
+    "jabzour_1", "jabzour_2", "jabzour_thickness",
+    "lines",
+] as const;
+
+function styleFingerprint(g: Record<string, unknown>): string {
+    return STYLE_IDENTITY_FIELDS
+        .map(f => `${f}=${g[f] ?? ""}`)
+        .join("|");
+}
+
+/**
+ * Assigns a per-order integer style_id (1, 2, 3...) to each garment based on
+ * its style fingerprint. Garments with identical style selections share the
+ * same id. Mutates input array (returns same reference for chaining).
+ *
+ * Numbering is stable within a single call (first unique fingerprint = 1)
+ * but not stable across saves — re-saving the same order may renumber if
+ * order of garments changes. style_id is a *grouping* key, not an identity.
+ */
+export function computeStyleGroups<T extends Record<string, any>>(garments: T[]): T[] {
+    const seen = new Map<string, number>();
+    let next = 1;
+    for (const g of garments) {
+        const fp = styleFingerprint(g);
+        let id = seen.get(fp);
+        if (id === undefined) {
+            id = next++;
+            seen.set(fp, id);
+        }
+        (g as any).style_id = id;
+    }
+    return garments;
+}
+
 /**
  * Re-computes the order phase based on the current stages of its garments.
  * Logic matches the DB trigger recompute_order_phase().

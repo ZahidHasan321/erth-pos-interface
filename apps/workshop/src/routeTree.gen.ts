@@ -20,6 +20,7 @@ import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainNotificationsRouteImport } from './routes/(main)/notifications'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
+import { Route as mainBoardRouteImport } from './routes/(main)/board'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as mainCompletedRouteRouteImport } from './routes/(main)/completed/route'
 import { Route as mainAssignedRouteRouteImport } from './routes/(main)/assigned/route'
@@ -100,6 +101,11 @@ const mainDispatchRoute = mainDispatchRouteImport.update({
 const mainDashboardRoute = mainDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainBoardRoute = mainBoardRouteImport.update({
+  id: '/board',
+  path: '/board',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const authLoginRoute = authLoginRouteImport.update({
@@ -253,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/assigned': typeof mainAssignedRouteRouteWithChildren
   '/completed': typeof mainCompletedRouteRouteWithChildren
   '/login': typeof authLoginRoute
+  '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/notifications': typeof mainNotificationsRoute
@@ -290,6 +297,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof authLoginRoute
+  '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
   '/notifications': typeof mainNotificationsRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/(main)/assigned': typeof mainAssignedRouteRouteWithChildren
   '/(main)/completed': typeof mainCompletedRouteRouteWithChildren
   '/(auth)/login': typeof authLoginRoute
+  '/(main)/board': typeof mainBoardRoute
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/notifications': typeof mainNotificationsRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/assigned'
     | '/completed'
     | '/login'
+    | '/board'
     | '/dashboard'
     | '/dispatch'
     | '/notifications'
@@ -409,6 +419,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/board'
     | '/dashboard'
     | '/dispatch'
     | '/notifications'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/(main)/assigned'
     | '/(main)/completed'
     | '/(auth)/login'
+    | '/(main)/board'
     | '/(main)/dashboard'
     | '/(main)/dispatch'
     | '/(main)/notifications'
@@ -567,6 +579,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof mainDashboardRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/board': {
+      id: '/(main)/board'
+      path: '/board'
+      fullPath: '/board'
+      preLoaderRoute: typeof mainBoardRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(auth)/login': {
@@ -792,6 +811,7 @@ const mainCompletedRouteRouteWithChildren =
 interface mainRouteRouteChildren {
   mainAssignedRouteRoute: typeof mainAssignedRouteRouteWithChildren
   mainCompletedRouteRoute: typeof mainCompletedRouteRouteWithChildren
+  mainBoardRoute: typeof mainBoardRoute
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
   mainNotificationsRoute: typeof mainNotificationsRoute
@@ -825,6 +845,7 @@ interface mainRouteRouteChildren {
 const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainAssignedRouteRoute: mainAssignedRouteRouteWithChildren,
   mainCompletedRouteRoute: mainCompletedRouteRouteWithChildren,
+  mainBoardRoute: mainBoardRoute,
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
   mainNotificationsRoute: mainNotificationsRoute,
