@@ -3,16 +3,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialo
 import { Button } from "@repo/ui/button";
 import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
-import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { useResources } from "@/hooks/useResources";
-import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Droplets, Scissors, Check } from "lucide-react";
+import { Droplets, Scissors } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
-import type { ProductionPlan } from "@repo/database";
+import {
+  useStepWorkload,
+  sortWorkersByLoad,
+  WorkloadBar,
+  WorkerChip,
+  StageSelector,
+  PipelineStepHeader,
+  type PlanStep,
+} from "./plan-dialog-shared";
 
-const PLAN_STEPS = [
+const PLAN_STEPS: (PlanStep & { required: boolean })[] = [
   { key: "soaker",          label: "Soaking",       responsibility: "soaking",       required: false, icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
   { key: "cutter",          label: "Cutting",       responsibility: "cutting",       required: true,  icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
   { key: "post_cutter",     label: "Post-Cutting",  responsibility: "post_cutting",  required: true,  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
@@ -22,13 +27,10 @@ const PLAN_STEPS = [
   { key: "quality_checker", label: "Quality Check",  responsibility: "quality_check", required: true,  icon: IconRosette,   color: "text-indigo-600",  accent: "bg-indigo-500" },
 ];
 
-const ALTERATION_REENTRY_STAGES = [
-  "soaking", "cutting", "post_cutting", "sewing", "finishing", "ironing",
-] as const;
-
-const STAGE_TO_STEP_INDEX: Record<string, number> = {
-  soaking: 0, cutting: 1, post_cutting: 2, sewing: 3, finishing: 4, ironing: 5, quality_check: 6,
-};
+// All steps except QC for selective toggling in alteration mode
+const SELECTABLE_STEPS = PLAN_STEPS.slice(0, -1);
+const QC_STEP = PLAN_STEPS[PLAN_STEPS.length - 1];
+const DEFAULT_ALT_SELECTED = new Set(["sewer", "finisher", "ironer"]);
 
 interface PlanDialogProps {
   open: boolean;
@@ -47,168 +49,15 @@ interface PlanDialogProps {
   defaultDeliveryDate?: string;
 }
 
-// ── Workload bar ─────────────────────────────────────────────────────────────
-
-function WorkloadBar({ current, max }: { current: number; max: number }) {
-  if (max <= 0) return null;
-  const pct = Math.min((current / max) * 100, 100);
-  const isOver = current >= max;
-  return (
-    <div className="flex items-center gap-2 mt-0.5">
-      <div className="flex-1 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
-        <div
-          className={cn(
-            "h-full rounded-full transition-[width]",
-            isOver ? "bg-red-500" : pct > 60 ? "bg-orange-400" : "bg-emerald-400",
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className={cn(
-        "text-xs font-bold tabular-nums shrink-0",
-        isOver ? "text-red-600" : "text-muted-foreground",
-      )}>
-        {current}/{max}
-      </span>
-    </div>
-  );
-}
-
-// ── Worker button select ─────────────────────────────────────────────────────
-
-function WorkerSelect({
-  workers,
-  value,
-  onChange,
-  stepWorkload,
-  noUnit,
-}: {
-  workers: { id: string; resource_name: string; resource_type?: string | null; daily_target?: number | null }[];
-  value: string;
-  onChange: (v: string) => void;
-  stepWorkload: Record<string, number>;
-  required?: boolean;
-  noUnit: boolean;
-}) {
-  if (noUnit) {
-    return (
-      <p className="text-xs text-muted-foreground italic py-1">Select a unit first</p>
-    );
-  }
-
-  if (workers.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
-    );
-  }
-
-  // Sort: free first, then by load ascending, overloaded last
-  const sorted = [...workers].sort((a, b) => {
-    const aLoad = stepWorkload[a.resource_name] ?? 0;
-    const bLoad = stepWorkload[b.resource_name] ?? 0;
-    const aCap = a.daily_target ?? 0;
-    const bCap = b.daily_target ?? 0;
-    const aOver = aCap > 0 && aLoad >= aCap;
-    const bOver = bCap > 0 && bLoad >= bCap;
-    if (aOver !== bOver) return aOver ? 1 : -1;
-    return aLoad - bLoad;
-  });
-
-  const selectedWorker = sorted.find((r) => r.resource_name === value);
-  const selectedLoad = selectedWorker ? (stepWorkload[value] ?? 0) : 0;
-  const selectedCap = selectedWorker?.daily_target ?? 0;
-
-  return (
-    <div className="space-y-1.5">
-      {/* Worker chips — wrapping flex */}
-      <div className="flex flex-wrap gap-1.5">
-        {sorted.map((r) => {
-          const load = stepWorkload[r.resource_name] ?? 0;
-          const capacity = r.daily_target ?? 0;
-          const isOverloaded = capacity > 0 && load >= capacity;
-          const isSelected = value === r.resource_name;
-
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onChange(isSelected ? "" : r.resource_name)}
-              aria-pressed={isSelected}
-              className={cn(
-                "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow] cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]",
-                isSelected
-                  ? "border-primary bg-primary text-white shadow-sm"
-                  : isOverloaded
-                    ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                    : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
-              )}
-            >
-              {isSelected && <Check className="w-3 h-3 shrink-0" />}
-              <span className="truncate max-w-[100px]">{r.resource_name}</span>
-              {r.resource_type === "Senior" && (
-                <span className={cn(
-                  "text-xs font-bold uppercase",
-                  isSelected ? "text-white/80" : "text-amber-500",
-                )}>
-                  Sr
-                </span>
-              )}
-              {/* Compact load indicator */}
-              <span className={cn(
-                "text-xs font-bold tabular-nums",
-                isSelected
-                  ? "text-white/70"
-                  : isOverloaded
-                    ? "text-red-500"
-                    : load > 0
-                      ? "text-orange-500"
-                      : "text-emerald-500",
-              )}>
-                {capacity > 0 ? `${load}/${capacity}` : load > 0 ? load : "0"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Workload detail — shown below when a worker is selected */}
-      {selectedWorker && selectedCap > 0 && (
-        <WorkloadBar current={selectedLoad} max={selectedCap} />
-      )}
-    </div>
-  );
-}
-
-// ── Main dialog ──────────────────────────────────────────────────────────────
-
 export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate }: PlanDialogProps) {
   const { data: resources = [] } = useResources();
-  const { data: allGarments = [] } = useWorkshopWorkload();
+  const workload = useStepWorkload(PLAN_STEPS);
 
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
   const [deliveryDate, setDeliveryDate] = useState(defaultDeliveryDate ?? "");
   const [date, setDate] = useState(defaultDate ?? getLocalDateStr());
-  const [reentryStage, setReentryStage] = useState<string>("sewing");
-
-  // Compute workload: per plan-key → worker name → garment count
-  const workload = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {};
-    for (const step of PLAN_STEPS) {
-      map[step.key] = {};
-    }
-    for (const g of allGarments) {
-      if (!g.production_plan || !g.in_production) continue;
-      const pp = g.production_plan as ProductionPlan;
-      for (const step of PLAN_STEPS) {
-        const workerName = pp[step.key as keyof ProductionPlan];
-        if (workerName) {
-          map[step.key][workerName] = (map[step.key][workerName] ?? 0) + 1;
-        }
-      }
-    }
-    return map;
-  }, [allGarments]);
+  const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set(DEFAULT_ALT_SELECTED));
 
   // Per-responsibility: unique units
   const stageUnits = useMemo(() => {
@@ -238,7 +87,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
       setPlan(defaultPlan ? { ...defaultPlan } : {});
       setDate(defaultDate ?? getLocalDateStr());
       setDeliveryDate(defaultDeliveryDate ?? "");
-      setReentryStage("sewing");
+      setSelectedStages(new Set(DEFAULT_ALT_SELECTED));
 
       const units: Record<string, string> = {};
       for (const step of PLAN_STEPS) {
@@ -265,20 +114,45 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
     }
   };
 
+  const handleStageToggle = (key: string) => {
+    setSelectedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+        setPlan((p) => { const n = { ...p }; delete n[key]; return n; });
+      } else {
+        next.add(key);
+        if (defaultPlan?.[key]) {
+          setPlan((p) => ({ ...p, [key]: defaultPlan[key] }));
+        }
+      }
+      return next;
+    });
+  };
+
   // Visible steps
-  const startIndex = isAlteration ? (STAGE_TO_STEP_INDEX[reentryStage] ?? 0) : 0;
-  const visibleSteps = PLAN_STEPS.slice(startIndex)
-    // Hide soaking unless batch has garments that need it
-    .filter((s) => s.key !== "soaker" || hasSoaking)
-    // When hasSoaking, mark soaking as required
-    .map((s) => s.key === "soaker" && hasSoaking ? { ...s, required: true } : s);
+  const visibleSteps = isAlteration
+    ? [...PLAN_STEPS.filter((s) => selectedStages.has(s.key)).map((s) => ({ ...s, required: true })), QC_STEP]
+    : PLAN_STEPS
+        .filter((s) => s.key !== "soaker" || hasSoaking)
+        .map((s) => s.key === "soaker" && hasSoaking ? { ...s, required: true } : s);
+
+  // Derive first selected stage for reentryStage param (alteration mode)
+  const firstSelectedStage = useMemo(() => {
+    if (!isAlteration) return undefined;
+    for (const step of SELECTABLE_STEPS) {
+      if (selectedStages.has(step.key)) return step.responsibility;
+    }
+    return "quality_check";
+  }, [isAlteration, selectedStages]);
 
   const allRequiredFilled = visibleSteps
     .filter((s) => s.required)
     .every((s) => !!plan[s.key]);
 
   const filledCount = visibleSteps.filter((s) => !!plan[s.key]).length;
-  const canSubmit = !!date && allRequiredFilled;
+  const hasAtLeastOneStage = !isAlteration || selectedStages.size > 0;
+  const canSubmit = !!date && allRequiredFilled && hasAtLeastOneStage;
 
   const handleConfirm = () => {
     if (!canSubmit) return;
@@ -286,7 +160,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
     for (const step of visibleSteps) {
       if (plan[step.key]) finalPlan[step.key] = plan[step.key];
     }
-    onConfirm(finalPlan, date, undefined, isAlteration ? reentryStage : undefined, showDeliveryDate ? deliveryDate : undefined);
+    onConfirm(finalPlan, date, undefined, firstSelectedStage, showDeliveryDate ? deliveryDate : undefined);
     onOpenChange(false);
   };
 
@@ -304,8 +178,8 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
             </p>
           )}
 
-          {/* Date + re-entry + delivery */}
-          <div className={cn("mt-3 grid gap-3", isAlteration ? "grid-cols-2" : showDeliveryDate ? "grid-cols-2" : "grid-cols-1")}>
+          {/* Date + delivery */}
+          <div className={cn("mt-3 grid gap-3", showDeliveryDate ? "grid-cols-2" : "grid-cols-1")}>
             <div className="space-y-1">
               <Label className="text-xs font-medium">Assigned Date <span className="text-red-500">*</span></Label>
               <DatePicker
@@ -324,22 +198,22 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 />
               </div>
             )}
-            {isAlteration && (
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Re-entry Stage <span className="text-red-500">*</span></Label>
-                <Select value={reentryStage} onValueChange={setReentryStage}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ALTERATION_REENTRY_STAGES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
+
+          {/* Alteration: stage selector — multi-toggle */}
+          {isAlteration && (
+            <div className="mt-3 space-y-1.5">
+              <Label className="text-xs font-medium">Stages to repeat</Label>
+              <StageSelector
+                steps={SELECTABLE_STEPS}
+                selectedStages={selectedStages}
+                onToggle={handleStageToggle}
+              />
+              {!hasAtLeastOneStage && (
+                <p className="text-xs text-red-500 mt-1">Select at least one stage</p>
+              )}
+            </div>
+          )}
 
           {/* Progress indicator */}
           <div className="flex items-center gap-1.5 mt-3">
@@ -364,7 +238,6 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
         {/* Pipeline steps */}
         <div className="px-5 py-4 space-y-1">
           {visibleSteps.map((step, i) => {
-            const Icon = step.icon;
             const units = stageUnits[step.key] ?? [];
             const workers = getWorkers(step.key, step.responsibility);
             const selectedWorker = plan[step.key] ?? "";
@@ -388,43 +261,19 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                       : "border-zinc-200 bg-card",
                 )}>
                   {/* Step header */}
-                  <div className="flex items-center gap-2.5 mb-2.5">
-                    <div className={cn(
-                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                      isFilled ? step.accent + " text-white" : "bg-zinc-100",
-                    )}>
-                      {isFilled ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <Icon className={cn("w-4 h-4", step.color)} />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold">{step.label}</span>
-                        {!step.required && (
-                          <span className="text-xs text-muted-foreground font-medium">(skip)</span>
-                        )}
-                        {step.required && !isFilled && (
-                          <span className="text-red-400 text-xs">*</span>
-                        )}
-                      </div>
-                      {isFilled && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {unitSelections[step.key] && <span>{unitSelections[step.key]} &middot; </span>}
-                          {selectedWorker}
-                        </p>
-                      )}
-                    </div>
-                    {isFilled && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setPlan((prev) => ({ ...prev, [step.key]: "" }))}
-                      >
-                        Change
-                      </Button>
+                  <div className="mb-2.5">
+                    <PipelineStepHeader
+                      step={step}
+                      isFilled={isFilled}
+                      workerName={selectedWorker}
+                      unitName={unitSelections[step.key]}
+                      onClear={isFilled ? () => setPlan((prev) => ({ ...prev, [step.key]: "" })) : undefined}
+                    />
+                    {!isFilled && !step.required && (
+                      <span className="text-xs text-muted-foreground font-medium ml-9.5">(skip)</span>
+                    )}
+                    {!isFilled && step.required && (
+                      <span className="text-red-400 text-xs ml-9.5">*</span>
                     )}
                   </div>
 
@@ -463,14 +312,36 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
                           Worker
                         </Label>
-                        <WorkerSelect
-                          workers={workers}
-                          value={selectedWorker}
-                          onChange={(v) => setPlan((prev) => ({ ...prev, [step.key]: v }))}
-                          stepWorkload={stepWorkload}
-                          required={step.required}
-                          noUnit={noUnit}
-                        />
+                        {noUnit ? (
+                          <p className="text-xs text-muted-foreground italic py-1">Select a unit first</p>
+                        ) : workers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap gap-1.5">
+                              {sortWorkersByLoad(workers, stepWorkload).map((r) => (
+                                <WorkerChip
+                                  key={r.id}
+                                  worker={r}
+                                  isSelected={selectedWorker === r.resource_name}
+                                  load={stepWorkload[r.resource_name] ?? 0}
+                                  capacity={r.daily_target ?? 0}
+                                  onSelect={() => setPlan((prev) => ({
+                                    ...prev,
+                                    [step.key]: selectedWorker === r.resource_name ? "" : r.resource_name,
+                                  }))}
+                                />
+                              ))}
+                            </div>
+                            {/* Workload detail — shown below when a worker is selected */}
+                            {(() => {
+                              const sw = workers.find((r) => r.resource_name === selectedWorker);
+                              return sw && (sw.daily_target ?? 0) > 0 ? (
+                                <WorkloadBar current={stepWorkload[selectedWorker] ?? 0} max={sw.daily_target ?? 0} />
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

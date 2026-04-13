@@ -18,11 +18,11 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   lengthBack: "length_back",
   elbow: "elbow",
   shoulder: "shoulder",
-  sideUpper: "armhole_front",
+  sideUpper: "side_pocket_distance",
   sleeves: "sleeve_length",
   armhole: "armhole",
   width: "sleeve_width",
-  sideLower: "armhole_provision",
+  sideLower: "side_pocket_opening",
   upperChest: "chest_upper",
   chest: "chest_front",
   halfChest: "chest_back",
@@ -289,6 +289,7 @@ export function DishdashaOverlay({
                 imageAlt="Jabzour"
                 imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
                 height={measureVal("jabzour_length")}
+                width={measureVal("jabzour_width")}
                 accessories={
                   isShaab ? (
                     <AccessoryPill label="ZIPPER" />

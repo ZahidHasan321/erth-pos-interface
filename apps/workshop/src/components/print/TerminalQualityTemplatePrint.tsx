@@ -22,11 +22,11 @@ const FIELD_MEASUREMENT_MAP: Record<QualityTemplateFieldId, keyof Measurement> =
     lengthBack: "length_back",
     elbow: "elbow",
     shoulder: "shoulder",
-    sideUpper: "armhole_front",
+    sideUpper: "side_pocket_distance",
     sleeves: "sleeve_length",
     armhole: "armhole",
     width: "sleeve_width",
-    sideLower: "armhole_provision",
+    sideLower: "side_pocket_opening",
     upperChest: "chest_upper",
     chest: "chest_front",
     halfChest: "chest_back",
@@ -95,6 +95,10 @@ export function TerminalQualityTemplatePrint({
   );
   const jabzourLength = formatMeasurement(
     measurement?.jabzour_length,
+    degree,
+  );
+  const jabzourWidth = formatMeasurement(
+    measurement?.jabzour_width,
     degree,
   );
   const sidePocketHeight = formatMeasurement(
@@ -235,6 +239,7 @@ export function TerminalQualityTemplatePrint({
               </div>
               <div className="terminal-qc-style-values">
                 <span>L {valueOrDash(jabzourLength)}</span>
+                <span>W {valueOrDash(jabzourWidth)}</span>
                 <span>HASHWA {formatThickness(garment.jabzour_thickness)}</span>
               </div>
             </div>

@@ -14,7 +14,7 @@ import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
-import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, groupByOrder, garmentSummary, getDeliveryUrgency, type OrderGroup } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { WorkshopGarment } from "@repo/database";
 import { toast } from "sonner";
@@ -118,11 +118,7 @@ function OrderCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const deliveryDate = group.garments[0]?.delivery_date_order;
-  const daysLeft = deliveryDate
-    ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
-    : null;
-  const isOverdue = daysLeft !== null && daysLeft < 0;
-  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+  const urgency = getDeliveryUrgency(deliveryDate);
 
   return (
     <div
@@ -178,9 +174,7 @@ function OrderCard({
             {deliveryDate && (
               <span className={cn(
                 "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                isOverdue && "bg-red-100 text-red-800",
-                isUrgent && "bg-amber-100 text-amber-800",
-                !isUrgent && !isOverdue && "text-muted-foreground",
+                urgency.pill,
               )}>
                 <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
               </span>
@@ -273,11 +267,7 @@ function IncomingTable({
             const selected = selectedOrderIds.has(group.order_id);
             const expanded = expandedOrders.has(group.order_id);
             const deliveryDate = group.garments[0]?.delivery_date_order;
-            const daysLeft = deliveryDate
-              ? Math.ceil((new Date(deliveryDate).getTime() - Date.now()) / 86400000)
-              : null;
-            const isOverdue = daysLeft !== null && daysLeft < 0;
-            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+            const urgency = getDeliveryUrgency(deliveryDate);
             const rowBg = cn(selected && "bg-primary/5");
 
             return (
@@ -336,9 +326,7 @@ function IncomingTable({
                     <div className="flex flex-col gap-1 items-center">
                       <span className={cn(
                         "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
-                        isOverdue && "text-red-700",
-                        isUrgent && "text-amber-700",
-                        !isUrgent && !isOverdue && "text-muted-foreground",
+                        urgency.text,
                       )}>
                         <Clock className="w-3 h-3" />
                         {deliveryDate ? formatDate(deliveryDate) : "—"}
@@ -452,11 +440,7 @@ function GarmentTable({
         <TableBody>
           {garments.map((g) => {
             const selected = selectedIds.has(g.id);
-            const daysLeft = g.delivery_date_order
-              ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
-              : null;
-            const isOverdue = daysLeft !== null && daysLeft < 0;
-            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+            const gUrgency = getDeliveryUrgency(g.delivery_date_order);
             return (
               <TableRow
                 key={g.id}
@@ -508,9 +492,7 @@ function GarmentTable({
                   {g.delivery_date_order ? (
                     <span className={cn(
                       "text-xs font-bold tabular-nums",
-                      isOverdue && "text-red-700",
-                      isUrgent && "text-amber-700",
-                      !isUrgent && !isOverdue && "text-muted-foreground",
+                      gUrgency.text,
                     )}>
                       {formatDate(g.delivery_date_order)}
                     </span>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments, useCompletedTodayGarments } from "@/hooks/useWorkshopGarments";
 import { GroupedGarmentList } from "@/components/shared/GroupedGarmentList";
@@ -8,9 +8,10 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Badge } from "@repo/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { getLocalDateStr, toLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Clock, AlertCircle, CheckCircle2, CalendarDays } from "lucide-react";
-import type { WorkshopGarment } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
+import { isAlteration } from "@repo/database";
 
 interface ProductionTerminalProps {
   terminalStage: string;
@@ -23,10 +24,33 @@ const HISTORY_KEY_MAP: Record<string, string> = {
   quality_check: "quality_checker",
 };
 
+type GarmentFilter = "all" | "production" | "fix";
+
+function isFixGarment(g: WorkshopGarment): boolean {
+  const trip = g.trip_number ?? 1;
+  // QC fail in current trip
+  const tripHistory = g.trip_history as TripHistoryEntry[] | null;
+  const tripEntry = tripHistory?.find((t) => t.trip === trip);
+  if (tripEntry?.qc_attempts?.some((a) => a.result === "fail")) return true;
+  // Brova return (trip 2-3)
+  if (g.garment_type === "brova" && trip >= 2 && trip <= 3) return true;
+  // Alteration
+  if (isAlteration(trip, g.garment_type)) return true;
+  return false;
+}
+
+function applyFilter(garments: WorkshopGarment[], filter: GarmentFilter): WorkshopGarment[] {
+  if (filter === "all") return garments;
+  if (filter === "fix") return garments.filter(isFixGarment);
+  return garments.filter((g) => !isFixGarment(g));
+}
+
 export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerminalProps) {
   const { data: stageGarments = [], isLoading } = useTerminalGarments(terminalStage);
   const { data: completedTodayAll = [] } = useCompletedTodayGarments();
   const navigate = useNavigate();
+  const [filter, setFilter] = useState<GarmentFilter>("all");
+  const [activeTab, setActiveTab] = useState("queue");
 
   const stageLabel = PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ?? terminalStage;
   const historyKey = HISTORY_KEY_MAP[terminalStage] ?? terminalStage;
@@ -83,7 +107,18 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
     });
   }, [completedTodayAll, terminalStage, historyKey, thisStageOrder]);
 
-  const completedPagination = usePagination(completedToday, 15);
+  // Fix counts for filter pills
+  const fixCountQueue = useMemo(() => queue.filter(isFixGarment).length, [queue]);
+  const fixCountPending = useMemo(() => pending.filter(isFixGarment).length, [pending]);
+  const fixCountCompleted = useMemo(() => completedToday.filter(isFixGarment).length, [completedToday]);
+  const activeFixCount = activeTab === "queue" ? fixCountQueue : activeTab === "pending" ? fixCountPending : fixCountCompleted;
+
+  // Apply filter
+  const filteredQueue = useMemo(() => applyFilter(queue, filter), [queue, filter]);
+  const filteredPending = useMemo(() => applyFilter(pending, filter), [pending, filter]);
+  const filteredCompleted = useMemo(() => applyFilter(completedToday, filter), [completedToday, filter]);
+
+  const completedPagination = usePagination(filteredCompleted, 15);
 
   const handleCardClick = (g: WorkshopGarment) => {
     navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
@@ -102,7 +137,7 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
         </div>
       </PageHeader>
 
-      <Tabs defaultValue="queue">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="queue" className="gap-1.5">
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
@@ -122,6 +157,25 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
             <Badge variant="secondary" className="ml-0.5 text-xs bg-green-100 text-green-700">{completedToday.length}</Badge>
           </TabsTrigger>
         </TabsList>
+
+        <div className="flex items-center gap-1.5 mb-3 border-t pt-3">
+          {(["all", "production", "fix"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide transition-colors cursor-pointer",
+                filter === f
+                  ? f === "fix"
+                    ? "bg-red-600 text-white"
+                    : "bg-zinc-800 text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200",
+              )}
+            >
+              {f === "all" ? "All" : f === "production" ? "Production" : `Fixes${activeFixCount > 0 ? ` (${activeFixCount})` : ""}`}
+            </button>
+          ))}
+        </div>
 
         {isLoading ? (
           <div className="space-y-4">
@@ -152,13 +206,13 @@ export function ProductionTerminal({ terminalStage, icon: Icon }: ProductionTerm
         ) : (
           <>
             <TabsContent value="queue">
-              <GroupedGarmentList garments={queue} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} />
+              <GroupedGarmentList garments={filteredQueue} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments in queue" : filter === "production" ? "No production garments in queue" : undefined} />
             </TabsContent>
             <TabsContent value="pending">
-              <GroupedGarmentList garments={pending} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} emptyText="No overdue garments" />
+              <GroupedGarmentList garments={filteredPending} onCardClick={handleCardClick} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments overdue" : "No overdue garments"} />
             </TabsContent>
             <TabsContent value="completed">
-              <GroupedGarmentList garments={completedPagination.paged} emptyIcon={<Icon className="w-10 h-10" />} emptyText="No completions today" />
+              <GroupedGarmentList garments={completedPagination.paged} emptyIcon={<Icon className="w-10 h-10" />} emptyText={filter === "fix" ? "No fix garments completed today" : "No completions today"} />
               <Pagination
                 page={completedPagination.page}
                 totalPages={completedPagination.totalPages}

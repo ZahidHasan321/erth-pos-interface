@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Card, CardContent } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
-import { cn, clickableProps, formatDate, parseUtcTimestamp } from "@/lib/utils";
-import { StageBadge, FeedbackStatusBadge, AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
+import { cn, clickableProps, formatDate, getDeliveryUrgency } from "@/lib/utils";
+import { StageBadge, FeedbackStatusBadge, AlterationBadge, QcFixBadge, BrovaReturnBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
 import { GarmentTypeBadge, GarmentTypeBadgeCompact } from "./PageShell";
 import { GarmentPeekSheet } from "./PeekSheets";
@@ -23,7 +23,7 @@ interface GarmentCardProps {
   onClick?: () => void;
 }
 
-export function GarmentCard({
+export const GarmentCard = memo(function GarmentCard({
   garment,
   selected = false,
   onSelect,
@@ -38,11 +38,7 @@ export function GarmentCard({
   const hasSoaking = !!garment.soaking;
 
   const effectiveDeliveryDate = (garment.delivery_date as unknown as string | null) ?? garment.delivery_date_order ?? null;
-  const daysLeft = effectiveDeliveryDate
-    ? Math.ceil((parseUtcTimestamp(effectiveDeliveryDate).getTime() - Date.now()) / 86400000)
-    : null;
-  const isOverdue = daysLeft !== null && daysLeft < 0;
-  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+  const urgency = getDeliveryUrgency(effectiveDeliveryDate);
 
   // ── Grid tile card (terminal list) ──
   if (onClick && compact) {
@@ -91,6 +87,8 @@ export function GarmentCard({
           )}
           <div className="flex items-center gap-1.5 mt-auto pt-2 flex-wrap">
             {hasSoaking && (garment.piece_stage === "waiting_cut" || garment.piece_stage === "soaking") && <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
+            <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
+            <BrovaReturnBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             {garment.assigned_date && (
               <span className="text-[10px] font-semibold text-red-600">{formatDate(garment.assigned_date)}</span>
@@ -180,6 +178,8 @@ export function GarmentCard({
                       <Badge variant="outline" className="border-0 font-semibold text-xs uppercase tracking-wide bg-emerald-200 text-emerald-900">Accepted</Badge>
                     )}
                     <FeedbackStatusBadge status={garment.feedback_status} />
+                    <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
+                    <BrovaReturnBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
                     <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
                     {garment.express && <ExpressBadge />}
                   </>
@@ -196,9 +196,7 @@ export function GarmentCard({
                 {effectiveDeliveryDate && (
                   <span className={cn(
                     "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                    isOverdue && "bg-red-100 text-red-800",
-                    isUrgent && "bg-amber-100 text-amber-800",
-                    !isUrgent && !isOverdue && "text-muted-foreground",
+                    urgency.pill,
                   )}>
                     <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
                     {formatDate(effectiveDeliveryDate)}
@@ -224,4 +222,4 @@ export function GarmentCard({
       />
     </>
   );
-}
+});

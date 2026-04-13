@@ -2237,7 +2237,7 @@ BEGIN
 
   UPDATE transfer_requests
   SET status = CASE
-        WHEN v_all_received AND NOT v_has_discrepancy THEN 'received'
+        WHEN v_all_received THEN 'received'
         ELSE 'partially_received'
       END,
       received_at = COALESCE(v_transfer.received_at, NOW()),

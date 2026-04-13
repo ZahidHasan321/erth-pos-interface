@@ -518,7 +518,7 @@ function PerformancePage() {
                       tick={{ fontSize: 10 }}
                       tickFormatter={(v) => {
                         const d = new Date(v + "T12:00:00");
-                        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                        return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
                       }}
                     />
                     <YAxis tick={{ fontSize: 10 }} width={35} />
@@ -526,7 +526,7 @@ function PerformancePage() {
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                       labelFormatter={(v) => {
                         const d = new Date(v + "T12:00:00");
-                        return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                        return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
                       }}
                     />
                     {summary.dailyTarget > 0 && (

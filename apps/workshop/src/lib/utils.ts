@@ -51,7 +51,7 @@ export function formatDate(value?: string | null): string {
   if (isNaN(d.getTime())) return value;
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("en-GB", {
     timeZone: TZ,
     month: "short",
     day: "numeric",
@@ -107,6 +107,26 @@ export function garmentSummary(garments: WorkshopGarment[]): string {
   if (b) parts.push(`${b} Brova`);
   if (f) parts.push(`${f} Final${f > 1 ? "s" : ""}`);
   return parts.join(" + ") || `${garments.length} garment${garments.length !== 1 ? "s" : ""}`;
+}
+
+// ── Delivery urgency helpers ────────────────────────────────────────────────
+
+export type DeliveryUrgencyStatus = 'overdue' | 'urgent' | 'normal' | 'none';
+
+export const DELIVERY_URGENCY_STYLES = {
+  overdue: { pill: "bg-red-100 text-red-800", text: "text-red-700" },
+  urgent: { pill: "bg-amber-100 text-amber-800", text: "text-amber-700" },
+  normal: { pill: "text-muted-foreground", text: "text-muted-foreground" },
+  none: { pill: "", text: "" },
+} as const;
+
+export function getDeliveryUrgency(dateValue: string | null | undefined) {
+  if (!dateValue) return { daysLeft: null, label: null, status: 'none' as const, ...DELIVERY_URGENCY_STYLES.none };
+  const daysLeft = Math.ceil((parseUtcTimestamp(dateValue).getTime() - Date.now()) / 86400000);
+  const label = daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Due today" : `${daysLeft}d`;
+  if (daysLeft < 0) return { daysLeft, label, status: 'overdue' as const, ...DELIVERY_URGENCY_STYLES.overdue };
+  if (daysLeft <= 2) return { daysLeft, label, status: 'urgent' as const, ...DELIVERY_URGENCY_STYLES.urgent };
+  return { daysLeft, label, status: 'normal' as const, ...DELIVERY_URGENCY_STYLES.normal };
 }
 
 /** Props to make a non-button element keyboard-accessible as a button */

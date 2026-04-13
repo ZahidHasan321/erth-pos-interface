@@ -353,6 +353,16 @@ input[type="number"] {
   animation: slide-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes soak-start {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  40%  { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.15); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.animate-soak-start {
+  animation: soak-start 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Staggered children — add to parent, children auto-stagger */
 .stagger-children > * {
   animation: fade-in 0.2s ease-out both;

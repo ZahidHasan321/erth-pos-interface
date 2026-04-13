@@ -202,7 +202,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
 }) {
     const [unpaidVisible, setUnpaidVisible] = useState(UNPAID_PAGE_SIZE);
     const now = new Date();
-    const monthName = now.toLocaleDateString("en-US", { month: "long" });
+    const monthName = now.toLocaleDateString("en-GB", { month: "long" });
 
     const todayCount = Number(summary.today_count);
     const todayBilled = Number(summary.today_billed);

@@ -4,23 +4,34 @@ import { Button } from "@repo/ui/button";
 import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Droplets, Scissors, Check } from "lucide-react";
+import { Droplets, Scissors } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
-import type { ProductionPlan } from "@repo/database";
+import {
+  useStepWorkload,
+  sortWorkersByLoad,
+  WorkerChip,
+  StageSelector,
+  PipelineStepHeader,
+  type PlanStep,
+} from "./plan-dialog-shared";
 
-const STEPS = [
-  { planKey: "soaker",          historyKey: "soaking",       label: "Soaking",       responsibility: "soaking",       icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
-  { planKey: "cutter",          historyKey: "cutting",       label: "Cutting",       responsibility: "cutting",       icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
-  { planKey: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
-  { planKey: "sewer",           historyKey: "sewing",        label: "Sewing",        responsibility: "sewing",        icon: IconNeedle,    color: "text-purple-600",  accent: "bg-purple-500" },
-  { planKey: "finisher",        historyKey: "finishing",      label: "Finishing",      responsibility: "finishing",     icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
-  { planKey: "ironer",          historyKey: "ironing",        label: "Ironing",        responsibility: "ironing",       icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },
-  { planKey: "quality_checker", historyKey: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: IconRosette,   color: "text-indigo-600",  accent: "bg-indigo-500" },
+const STEPS: (PlanStep & { historyKey: string })[] = [
+  { key: "soaker",          historyKey: "soaking",       label: "Soaking",       responsibility: "soaking",       icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
+  { key: "cutter",          historyKey: "cutting",       label: "Cutting",       responsibility: "cutting",       icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
+  { key: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
+  { key: "sewer",           historyKey: "sewing",        label: "Sewing",        responsibility: "sewing",        icon: IconNeedle,    color: "text-purple-600",  accent: "bg-purple-500" },
+  { key: "finisher",        historyKey: "finishing",      label: "Finishing",      responsibility: "finishing",     icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
+  { key: "ironer",          historyKey: "ironing",        label: "Ironing",        responsibility: "ironing",       icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },
+  { key: "quality_checker", historyKey: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: IconRosette,   color: "text-indigo-600",  accent: "bg-indigo-500" },
 ];
 
-const REENTRY_STAGES = STEPS.slice(0, -1); // can't re-enter at quality_check
+// All stages except QC — QC is always locked on
+const SELECTABLE_STEPS = STEPS.slice(0, -1);
+const QC_STEP = STEPS[STEPS.length - 1];
+
+// Default selected stages for returns
+const DEFAULT_SELECTED = new Set(["sewer", "finisher", "ironer"]);
 
 interface ReturnPlanDialogProps {
   open: boolean;
@@ -35,7 +46,7 @@ interface ReturnPlanDialogProps {
 
 export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, workerHistory, title }: ReturnPlanDialogProps) {
   const { data: resources = [] } = useResources();
-  const { data: allGarments = [] } = useWorkshopGarments();
+  const workload = useStepWorkload(STEPS);
 
   // Convert worker_history (responsibility keys) to plan keys
   const historyAsPlan = useMemo(() => {
@@ -43,54 +54,64 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
     const mapped: Record<string, string> = {};
     for (const step of STEPS) {
       if (workerHistory[step.historyKey]) {
-        mapped[step.planKey] = workerHistory[step.historyKey];
+        mapped[step.key] = workerHistory[step.historyKey];
       }
     }
     return mapped;
   }, [workerHistory]);
 
-  const [reentryIndex, setReentryIndex] = useState(3); // default: sewing
+  const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set(DEFAULT_SELECTED));
   const [plan, setPlan] = useState<Record<string, string>>({});
   const [editingStep, setEditingStep] = useState<string | null>(null);
   const [date, setDate] = useState(defaultDate ?? getLocalDateStr());
-
-  // Compute workload per step
-  const workload = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {};
-    for (const step of STEPS) map[step.planKey] = {};
-    for (const g of allGarments) {
-      if (!g.production_plan || !g.in_production) continue;
-      const pp = g.production_plan as ProductionPlan;
-      for (const step of STEPS) {
-        const name = pp[step.planKey as keyof ProductionPlan];
-        if (name) map[step.planKey][name] = (map[step.planKey][name] ?? 0) + 1;
-      }
-    }
-    return map;
-  }, [allGarments]);
 
   // Reset on open
   useEffect(() => {
     if (open) {
       setPlan({ ...historyAsPlan });
       setDate(defaultDate ?? getLocalDateStr());
-      setReentryIndex(3); // sewing
+      setSelectedStages(new Set(DEFAULT_SELECTED));
       setEditingStep(null);
     }
   }, [open, historyAsPlan, defaultDate]);
 
-  const reentryStage = STEPS[reentryIndex].historyKey; // responsibility key = piece_stage value
-  const visibleSteps = STEPS.slice(reentryIndex);
+  const toggleStage = (planKey: string) => {
+    setSelectedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(planKey)) {
+        next.delete(planKey);
+        setPlan((p) => { const n = { ...p }; delete n[planKey]; return n; });
+      } else {
+        next.add(planKey);
+        if (historyAsPlan[planKey]) {
+          setPlan((p) => ({ ...p, [planKey]: historyAsPlan[planKey] }));
+        }
+      }
+      return next;
+    });
+  };
 
-  const allFilled = visibleSteps.every((s) => !!plan[s.planKey]);
+  // Visible steps = selected stages + QC (always)
+  const visibleSteps = [...STEPS.filter((s) => selectedStages.has(s.key)), QC_STEP];
+
+  const hasAtLeastOneStage = selectedStages.size > 0;
+  const allFilled = visibleSteps.every((s) => !!plan[s.key]);
+
+  // Derive first selected stage (for reentryStage param)
+  const firstSelectedStage = useMemo(() => {
+    for (const step of SELECTABLE_STEPS) {
+      if (selectedStages.has(step.key)) return step.historyKey;
+    }
+    return "quality_check"; // fallback, shouldn't happen
+  }, [selectedStages]);
 
   const handleConfirm = () => {
-    if (!date) return;
+    if (!date || !hasAtLeastOneStage) return;
     const finalPlan: Record<string, string> = {};
     for (const step of visibleSteps) {
-      if (plan[step.planKey]) finalPlan[step.planKey] = plan[step.planKey];
+      if (plan[step.key]) finalPlan[step.key] = plan[step.key];
     }
-    onConfirm(finalPlan, date, undefined, reentryStage);
+    onConfirm(finalPlan, date, undefined, firstSelectedStage);
     onOpenChange(false);
   };
 
@@ -117,86 +138,44 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
             />
           </div>
 
-          {/* Re-entry stage picker */}
+          {/* Stage selector — multi-toggle */}
           <div className="mt-3 space-y-1.5">
-            <Label className="text-xs font-medium">Send back to</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {REENTRY_STAGES.map((step, i) => {
-                const Icon = step.icon;
-                const isSelected = reentryIndex === i;
-                return (
-                  <button
-                    key={step.planKey}
-                    type="button"
-                    onClick={() => setReentryIndex(i)}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-[color,background-color,border-color,box-shadow]",
-                      isSelected
-                        ? "border-primary bg-primary text-white shadow-md scale-[1.02]"
-                        : "border-zinc-200 bg-card text-zinc-600 hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm cursor-pointer",
-                    )}
-                  >
-                    <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : step.color)} />
-                    {step.label}
-                  </button>
-                );
-              })}
-            </div>
+            <Label className="text-xs font-medium">Stages to repeat</Label>
+            <StageSelector
+              steps={SELECTABLE_STEPS}
+              selectedStages={selectedStages}
+              onToggle={toggleStage}
+            />
+            {!hasAtLeastOneStage && (
+              <p className="text-xs text-red-500 mt-1">Select at least one stage</p>
+            )}
           </div>
         </div>
 
-        {/* Pipeline: previous worker → keep or change */}
+        {/* Pipeline: worker assignment for selected stages */}
         <div className="px-5 py-4 space-y-1">
           {visibleSteps.map((step, i) => {
-            const Icon = step.icon;
-            const currentWorker = plan[step.planKey] ?? "";
-            const previousWorker = historyAsPlan[step.planKey];
-            const isEditing = editingStep === step.planKey;
+            const currentWorker = plan[step.key] ?? "";
+            const previousWorker = historyAsPlan[step.key];
+            const isEditing = editingStep === step.key;
             const stepWorkers = resources.filter((r) => r.responsibility === step.responsibility);
-            const stepWorkload = workload[step.planKey] ?? {};
+            const stepWorkload = workload[step.key] ?? {};
 
             return (
-              <div key={step.planKey} className="relative">
+              <div key={step.key} className="relative">
                 {i > 0 && <div className="absolute left-[13px] -top-1 w-0.5 h-2 bg-zinc-200" />}
 
                 <div className={cn(
                   "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
                   currentWorker ? "border-zinc-300 bg-card" : "border-zinc-200 bg-zinc-50",
                 )}>
-                  {/* Step header */}
-                  <div className="flex items-center gap-2.5">
-                    <div className={cn(
-                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                      currentWorker ? step.accent + " text-white" : "bg-zinc-100",
-                    )}>
-                      {currentWorker ? <Check className="w-4 h-4" /> : <Icon className={cn("w-4 h-4", step.color)} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-semibold">{step.label}</span>
-                      {currentWorker && (
-                        <p className="text-xs text-muted-foreground">
-                          {currentWorker}
-                          {previousWorker && currentWorker !== previousWorker && (
-                            <span className="text-orange-500 ml-1">(was {previousWorker})</span>
-                          )}
-                        </p>
-                      )}
-                      {!currentWorker && previousWorker && (
-                        <p className="text-xs text-muted-foreground italic">Previously: {previousWorker}</p>
-                      )}
-                    </div>
-                    {currentWorker && !isEditing && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setEditingStep(step.planKey)}
-                      >
-                        Change
-                      </Button>
-                    )}
-                  </div>
+                  <PipelineStepHeader
+                    step={step}
+                    isFilled={!!currentWorker}
+                    workerName={currentWorker}
+                    previousWorker={previousWorker}
+                    onClear={currentWorker && !isEditing ? () => setEditingStep(step.key) : undefined}
+                  />
 
                   {/* Worker selection — shown when no worker or editing */}
                   {(!currentWorker || isEditing) && (
@@ -205,50 +184,19 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
                         {stepWorkers.length === 0 ? (
                           <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
                         ) : (
-                          stepWorkers
-                            .sort((a, b) => {
-                              const aLoad = stepWorkload[a.resource_name] ?? 0;
-                              const bLoad = stepWorkload[b.resource_name] ?? 0;
-                              return aLoad - bLoad;
-                            })
-                            .map((r) => {
-                              const load = stepWorkload[r.resource_name] ?? 0;
-                              const cap = r.daily_target ?? 0;
-                              const isOver = cap > 0 && load >= cap;
-                              const isSelected = currentWorker === r.resource_name;
-
-                              return (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setPlan((prev) => ({ ...prev, [step.planKey]: r.resource_name }));
-                                    setEditingStep(null);
-                                  }}
-                                  aria-pressed={isSelected}
-                                  className={cn(
-                                    "inline-flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]",
-                                    isSelected
-                                      ? "border-primary bg-primary text-white shadow-sm"
-                                      : isOver
-                                        ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                                        : "border-zinc-200 bg-card text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
-                                  )}
-                                >
-                                  {isSelected && <Check className="w-3 h-3 shrink-0" />}
-                                  <span className="truncate max-w-[100px]">{r.resource_name}</span>
-                                  {r.resource_type === "Senior" && (
-                                    <span className={cn("text-xs font-bold uppercase", isSelected ? "text-white/80" : "text-amber-500")}>Sr</span>
-                                  )}
-                                  <span className={cn(
-                                    "text-xs font-bold tabular-nums",
-                                    isSelected ? "text-white/70" : isOver ? "text-red-500" : load > 0 ? "text-orange-500" : "text-emerald-500",
-                                  )}>
-                                    {cap > 0 ? `${load}/${cap}` : load > 0 ? load : "0"}
-                                  </span>
-                                </button>
-                              );
-                            })
+                          sortWorkersByLoad(stepWorkers, stepWorkload).map((r) => (
+                            <WorkerChip
+                              key={r.id}
+                              worker={r}
+                              isSelected={currentWorker === r.resource_name}
+                              load={stepWorkload[r.resource_name] ?? 0}
+                              capacity={r.daily_target ?? 0}
+                              onSelect={() => {
+                                setPlan((prev) => ({ ...prev, [step.key]: r.resource_name }));
+                                setEditingStep(null);
+                              }}
+                            />
+                          ))
                         )}
                       </div>
                     </div>
@@ -262,7 +210,7 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
         {/* Footer */}
         <div className="sticky bottom-0 bg-card border-t px-5 py-3 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!date || !allFilled}>
+          <Button onClick={handleConfirm} disabled={!date || !allFilled || !hasAtLeastOneStage}>
             Schedule
           </Button>
         </div>

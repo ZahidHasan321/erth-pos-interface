@@ -122,6 +122,7 @@ export function useGarment(id: string) {
   return useQuery({
     queryKey: ['garment', id],
     queryFn: () => getGarmentById(id),
+    enabled: !!id,
     staleTime: LIST_STALE_TIME,
   });
 }

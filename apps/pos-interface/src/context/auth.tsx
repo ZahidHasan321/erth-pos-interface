@@ -26,12 +26,15 @@ const AuthContext = React.createContext<AuthContext | null>(null)
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
-  const { data } = await db
+  const { data, error } = await db
     .from('users')
     .select('id, username, name, brands, role, department, email, phone, employee_id')
     .eq('id', userId)
     .single()
 
+  if (error) {
+    throw new Error(`Failed to load user profile: ${error.message}`)
+  }
   if (!data) return null
 
   return {
@@ -71,8 +74,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         db.realtime.setAuth(session.access_token)
       }
       if (session?.user?.app_metadata?.user_id) {
-        const restored = await fetchUserFromSession(session.user.app_metadata.user_id)
-        if (!cancelled) setUser(restored)
+        try {
+          const restored = await fetchUserFromSession(session.user.app_metadata.user_id)
+          if (!cancelled) setUser(restored)
+        } catch {
+          // JWT may be expired — token refresh will fire SIGNED_IN/TOKEN_REFRESHED
+          // and the onAuthStateChange handler below will retry. Don't block loading.
+          console.warn('[Auth] Session restore failed — waiting for token refresh')
+        }
       }
       if (!cancelled) setIsLoading(false)
     })
@@ -89,18 +98,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // On token refresh, re-fetch user data (role/brands may have changed)
-      if (event === 'TOKEN_REFRESHED') {
+      // On token refresh or sign-in, re-fetch user data (role/brands may have changed,
+      // or initial restore may have failed with an expired JWT that is now refreshed)
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        if (session.access_token) {
+          db.realtime.setAuth(session.access_token)
+        }
         const userId = session.user.app_metadata?.user_id
         if (userId) {
-          const refreshed = await fetchUserFromSession(userId)
-          if (!cancelled) {
-            if (refreshed) {
-              setUser(refreshed)
-            } else {
-              // User deleted or deactivated — force logout
-              await db.auth.signOut()
+          try {
+            const refreshed = await fetchUserFromSession(userId)
+            if (!cancelled) {
+              if (refreshed) {
+                setUser(refreshed)
+              } else {
+                // User deleted or deactivated — force logout
+                await db.auth.signOut()
+              }
             }
+          } catch {
+            console.warn('[Auth] Failed to load user on', event)
           }
         }
       }

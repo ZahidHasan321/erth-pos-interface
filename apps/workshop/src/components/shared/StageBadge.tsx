@@ -1,7 +1,7 @@
 import { Badge } from "@repo/ui/badge";
 import { PIECE_STAGE_LABELS, FEEDBACK_STATUS_LABELS, FEEDBACK_STATUS_COLORS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { PieceStage } from "@repo/database";
+import type { PieceStage, TripHistoryEntry } from "@repo/database";
 
 const STAGE_COLOR: Record<string, string> = {
   waiting_for_acceptance: "bg-zinc-100 text-zinc-700",
@@ -114,6 +114,36 @@ export function AlterationBadge({ tripNumber, garmentType }: { tripNumber: numbe
       className="border-0 bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide"
     >
       Alt {altNum}
+    </Badge>
+  );
+}
+
+/** Shows "QC Fix" when the garment was sent back from quality check (same trip). */
+export function QcFixBadge({ tripNumber, tripHistory }: { tripNumber: number | null | undefined; tripHistory: TripHistoryEntry[] | null | undefined }) {
+  if (!tripHistory) return null;
+  const currentTrip = tripNumber ?? 1;
+  const entry = tripHistory.find((t) => t.trip === currentTrip);
+  if (!entry?.qc_attempts?.some((a) => a.result === "fail")) return null;
+  return (
+    <Badge
+      variant="outline"
+      className="border-0 bg-red-600 text-white font-bold text-xs uppercase tracking-wide"
+    >
+      QC Fix
+    </Badge>
+  );
+}
+
+/** Shows "Return" for brova trip 2-3 (brova return, not yet alteration threshold). */
+export function BrovaReturnBadge({ tripNumber, garmentType }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
+  const trip = tripNumber ?? 1;
+  if (garmentType !== "brova" || trip < 2 || trip > 3) return null;
+  return (
+    <Badge
+      variant="outline"
+      className="border-0 bg-amber-600 text-white font-bold text-xs uppercase tracking-wide"
+    >
+      Return {trip - 1}
     </Badge>
   );
 }

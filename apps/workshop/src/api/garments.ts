@@ -163,7 +163,9 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
     .select(WORKSHOP_QUERY_LIGHT)
     .eq('location', 'workshop')
     .eq('piece_stage', stage)
-    .eq('order.checkout_status', 'confirmed');
+    .eq('order.checkout_status', 'confirmed')
+    .order('assigned_date', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true });
 
   if (error) {
     throw new Error(`getTerminalStageGarments: failed to fetch stage '${stage}': ${error.message}`);
@@ -721,6 +723,14 @@ export const startGarment = async (id: string): Promise<void> => {
     .update({ start_time: new Date().toISOString() })
     .eq('id', id);
   if (error) throw new Error(`startGarment: failed to record garment start time: ${error.message}`);
+};
+
+export const cancelStartGarment = async (id: string): Promise<void> => {
+  const { error } = await db
+    .from('garments')
+    .update({ start_time: null })
+    .eq('id', id);
+  if (error) throw new Error(`cancelStartGarment: failed to clear start time: ${error.message}`);
 };
 
 export const completeAndAdvance = async (

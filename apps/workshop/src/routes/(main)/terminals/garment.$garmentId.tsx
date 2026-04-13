@@ -4,6 +4,7 @@ import { useGarment } from "@/hooks/useWorkshopGarments";
 import {
   useCompleteAndAdvance,
   useStartGarment,
+  useCancelStartGarment,
   useQcPass,
   useQcFail,
 } from "@/hooks/useGarmentMutations";
@@ -32,25 +33,30 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   PIECE_STAGE_LABELS,
-  STAGE_NEXT,
   PRODUCTION_STAGES,
+  getNextPlanStage,
 } from "@/lib/constants";
 import {
   ArrowLeft,
-  ArrowRight,
   Play,
   Printer,
   Star,
   Check,
   X,
+  AlertTriangle,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import type {
   WorkshopGarment,
   PieceStage,
   ProductionPlan,
+  TripHistoryEntry,
 } from "@repo/database";
+import { isAlteration, getAlterationNumber } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
   component: TerminalGarmentPage,
@@ -146,6 +152,17 @@ function TerminalGarmentPage() {
   const isQC = stage === "quality_check";
   const isProductionStage = PRODUCTION_STAGES.includes(stage as any);
 
+  // Repair detection
+  const tripHistory = garment.trip_history as TripHistoryEntry[] | null;
+  const currentTrip = garment.trip_number ?? 1;
+  const tripEntry = tripHistory?.find((t) => t.trip === currentTrip);
+  const hasQcFail = !!tripEntry?.qc_attempts?.some((a) => a.result === "fail");
+  const lastQcFail = tripEntry?.qc_attempts?.filter((a) => a.result === "fail").at(-1);
+  const isBrovaReturn = garment.garment_type === "brova" && currentTrip >= 2 && currentTrip <= 3;
+  const isAlt = isAlteration(currentTrip, garment.garment_type);
+  const altNum = getAlterationNumber(currentTrip, garment.garment_type);
+  const isRepair = hasQcFail || isBrovaReturn || isAlt;
+
   const handlePrint = () => {
     const className = "terminal-printing";
 
@@ -178,6 +195,32 @@ function TerminalGarmentPage() {
             Print
           </Button>
         </div>
+
+        {isRepair && (
+          <div className={cn(
+            "mb-3 flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5",
+            hasQcFail
+              ? "bg-red-50 border-red-200 text-red-800"
+              : isAlt
+                ? "bg-orange-50 border-orange-200 text-orange-800"
+                : "bg-amber-50 border-amber-200 text-amber-800",
+          )}>
+            {hasQcFail ? (
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+            ) : (
+              <RotateCcw className="w-5 h-5 shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-bold">
+                {hasQcFail ? "QC Fix" : isAlt ? `Alteration ${altNum}` : `Brova Return ${currentTrip - 1}`}
+                {" "}<span className="font-normal">— not standard production</span>
+              </p>
+              {hasQcFail && lastQcFail?.fail_reason && (
+                <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <DishdashaOverlay
           garment={garment}
@@ -231,28 +274,68 @@ function ElapsedTimer({ since }: { since: string | Date }) {
   );
 }
 
-// ── Terminal Actions (floating bar) ─────────────────────────────
+// ── Terminal Actions (floating buttons) ─────────────────────────
 
 function TerminalActions({ garment }: { garment: WorkshopGarment }) {
   const router = useRouter();
   const startMut = useStartGarment();
+  const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
 
   const stage = garment.piece_stage ?? "";
-  const nextStage = STAGE_NEXT[stage];
-  const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
   const plan = garment.production_plan as ProductionPlan | null;
+  const nextStage = getNextPlanStage(stage, plan as Record<string, string> | null);
+  const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
   const plannedWorker = (plan as any)?.[historyKey] ?? "";
 
   const [worker, setWorker] = useState(plannedWorker);
   const [workerOverride, setWorkerOverride] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Track visual mode locally so we control the transition timing
+  const isStarted = !!garment.start_time;
+  const [visualMode, setVisualMode] = useState<"idle" | "starting" | "started" | "cancelling">(
+    isStarted ? "started" : "idle",
+  );
+
+  // Sync visual mode when garment data changes (after mutation settles)
+  useEffect(() => {
+    if (isStarted && visualMode === "idle") {
+      // Was starting → now confirmed started
+      setVisualMode("started");
+    } else if (!isStarted && visualMode === "started") {
+      // Was cancelling → now confirmed cancelled
+      setVisualMode("idle");
+    }
+  }, [isStarted]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!nextStage) return null;
 
   const nextLabel =
     PIECE_STAGE_LABELS[nextStage as keyof typeof PIECE_STAGE_LABELS] ??
     nextStage;
+
+  const handleStart = () => {
+    setVisualMode("starting");
+    startMut.mutate(garment.id, {
+      onSuccess: () => setVisualMode("started"),
+      onError: (err) => {
+        setVisualMode("idle");
+        toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`);
+      },
+    });
+  };
+
+  const handleCancel = () => {
+    setVisualMode("cancelling");
+    cancelMut.mutate(garment.id, {
+      onSuccess: () => setVisualMode("idle"),
+      onError: (err) => {
+        setVisualMode("started");
+        toast.error(`Failed to cancel: ${err?.message ?? "Unknown error"}`);
+      },
+    });
+  };
 
   const handleComplete = async () => {
     if (!worker) return;
@@ -270,73 +353,98 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
     }
   };
 
+  const showStarted = visualMode === "started" || visualMode === "cancelling";
+
   return (
     <>
-      <div className="bg-card border rounded-xl shadow-sm p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            {worker && !workerOverride ? (
-              <button
-                onClick={() => setWorkerOverride(true)}
-                className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80 transition-opacity"
-              >
-                <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
-                  By
-                </span>
-                <span className="font-bold text-emerald-900 truncate text-base">
-                  {worker}
-                </span>
-                <span className="text-xs text-muted-foreground">(change)</span>
-              </button>
-            ) : (
-              <WorkerDropdown
-                responsibility={stage}
-                value={worker}
-                onChange={(v) => {
-                  setWorker(v);
-                  setWorkerOverride(false);
-                }}
-                placeholder="Who completed this?"
-              />
-            )}
+      {/* Worker selection card — only visible once started */}
+      {showStarted && (
+        <div className="bg-card border rounded-xl shadow-sm p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              {worker && !workerOverride ? (
+                <button
+                  onClick={() => setWorkerOverride(true)}
+                  className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
+                    By
+                  </span>
+                  <span className="font-bold text-emerald-900 truncate text-base">
+                    {worker}
+                  </span>
+                  <span className="text-xs text-muted-foreground">(change)</span>
+                </button>
+              ) : (
+                <WorkerDropdown
+                  responsibility={stage}
+                  value={worker}
+                  onChange={(v) => {
+                    setWorker(v);
+                    setWorkerOverride(false);
+                  }}
+                  placeholder="Who completed this?"
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-sm font-bold text-emerald-700">
+                In Progress
+              </span>
+              <ElapsedTimer since={garment.start_time!} />
+            </div>
           </div>
+        </div>
+      )}
 
-          <div className="flex gap-2 shrink-0 items-center">
-            {!garment.start_time ? (
-              <Button
-                variant="outline"
-                className="h-12 px-5 text-base font-bold"
-                onClick={() => {
-                  startMut.mutate(garment.id, {
-                    onError: (err) =>
-                      toast.error(
-                        `Failed to start: ${err?.message ?? "Unknown error"}`,
-                      ),
-                  });
-                }}
-                disabled={startMut.isPending}
-              >
-                <Play className="w-5 h-5 mr-1.5" />
-                Start
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="text-sm font-bold text-emerald-700">
-                  In Progress
-                </span>
-                <ElapsedTimer since={garment.start_time} />
-              </div>
-            )}
+      {/* Floating action buttons — bottom-right */}
+      <div className="fixed bottom-6 right-6 z-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center gap-3 transition-all duration-300 ease-in-out">
+          {!showStarted ? (
             <Button
-              className="h-12 px-6 text-base font-bold bg-emerald-600 hover:bg-emerald-700 pointer-coarse:active:scale-95 transition-all"
-              onClick={() => setConfirmOpen(true)}
-              disabled={!worker || completeMut.isPending}
+              key="start"
+              size="lg"
+              className="h-16 px-8 text-2xl font-bold rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg animate-in fade-in zoom-in-95 duration-200"
+              onClick={handleStart}
+              disabled={visualMode === "starting"}
             >
-              Done
-              <ArrowRight className="w-5 h-5 ml-1.5" />
+              {visualMode === "starting" ? (
+                <Loader2 className="w-6 h-6 mr-2.5 animate-spin" />
+              ) : (
+                <Play className="w-6 h-6 mr-2.5" />
+              )}
+              {visualMode === "starting" ? "Starting…" : "Start"}
             </Button>
-          </div>
+          ) : (
+            <>
+              <Button
+                key="cancel"
+                variant="outline"
+                size="lg"
+                className="h-16 px-8 text-2xl font-bold rounded-full shadow-lg animate-in fade-in slide-in-from-right-4 duration-200"
+                onClick={handleCancel}
+                disabled={visualMode === "cancelling"}
+              >
+                {visualMode === "cancelling" ? (
+                  <Loader2 className="w-6 h-6 mr-2.5 animate-spin" />
+                ) : (
+                  <X className="w-6 h-6 mr-2.5" />
+                )}
+                {visualMode === "cancelling" ? "Cancelling…" : "Cancel"}
+              </Button>
+              <Button
+                key="done"
+                size="lg"
+                className="h-16 px-8 text-2xl font-bold rounded-full bg-emerald-600 hover:bg-emerald-700 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                onClick={() => setConfirmOpen(true)}
+                disabled={!worker || completeMut.isPending}
+              >
+                <Check className="w-6 h-6 mr-2.5" />
+                Done
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

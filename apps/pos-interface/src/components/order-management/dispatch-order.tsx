@@ -91,7 +91,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
     }
   };
 
-  const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString() : "No Date";
+  const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString("en-GB") : "No Date";
 
   return (
     <Card className={cn(
@@ -571,7 +571,7 @@ function InTransitToWorkshopTab() {
         const garments = order.garments || [];
         const lostCount = garments.filter(g => g.location === "lost_in_transit").length;
         const transitCount = garments.filter(g => g.location === "transit_to_workshop").length;
-        const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString() : "No Date";
+        const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString("en-GB") : "No Date";
 
         return (
           <Card key={order.id} className={cn(
@@ -857,7 +857,7 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
           </div>
         </td>
         <td className="py-2.5 px-4 whitespace-nowrap">
-          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString()}</div>
+          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString("en-GB")}</div>
           <div className="text-[10px] text-muted-foreground">{lastDispatch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
         </td>
       </tr>
@@ -1051,7 +1051,7 @@ function DispatchHistoryTab() {
               <tbody>
                 {rows.map((r) => {
                   const d = new Date(r.dispatched_at);
-                  const dateStr = d.toLocaleDateString();
+                  const dateStr = d.toLocaleDateString("en-GB");
                   const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   return (
                     <tr key={r.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">

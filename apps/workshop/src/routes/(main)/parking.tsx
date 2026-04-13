@@ -30,7 +30,7 @@ import {
 import { BrandBadge, ExpressBadge, StageBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { cn, formatDate, groupByOrder, garmentSummary, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, groupByOrder, garmentSummary, getDeliveryUrgency, type OrderGroup } from "@/lib/utils";
 import { useResources } from "@/hooks/useResources";
 import { toast } from "sonner";
 import {
@@ -105,11 +105,7 @@ function ParkingOrderCard({
   const allParked = isAllWaitingAcceptance(group.garments);
   const brovaBlock = getBrovaBlockReason(allOrderGarments);
   const deliveryDate = group.garments[0]?.delivery_date_order;
-  const daysLeft = deliveryDate
-    ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
-    : null;
-  const isOverdue = daysLeft !== null && daysLeft < 0;
-  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+  const urgency = getDeliveryUrgency(deliveryDate);
 
   return (
     <>
@@ -184,9 +180,7 @@ function ParkingOrderCard({
             {deliveryDate && (
               <span className={cn(
                 "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
-                isOverdue && "bg-red-100 text-red-800",
-                isUrgent && "bg-amber-100 text-amber-800",
-                !isUrgent && !isOverdue && "text-muted-foreground",
+                urgency.pill,
               )}>
                 <Clock className="w-3 h-3" /> {formatDate(deliveryDate)}
               </span>
@@ -1184,11 +1178,7 @@ function ParkingPage() {
                     const allParked = isAllWaitingAcceptance(group.garments);
                     const brovaBlock = getBrovaBlockReason(allGarmentsByOrder.get(group.order_id) ?? group.garments);
                     const deliveryDate = group.garments[0]?.delivery_date_order;
-                    const daysLeft = deliveryDate
-                      ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
-                      : null;
-                    const isOverdue = daysLeft !== null && daysLeft < 0;
-                    const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+                    const tUrgency = getDeliveryUrgency(deliveryDate);
                     const isExpanded = expandedOrderRows.has(group.order_id);
                     return (
                       <>
@@ -1256,9 +1246,7 @@ function ParkingPage() {
                             <div className="flex flex-col gap-1 items-center">
                               <span className={cn(
                                 "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
-                                isOverdue && "text-red-700",
-                                isUrgent && "text-amber-700",
-                                !isUrgent && !isOverdue && "text-muted-foreground",
+                                tUrgency.text,
                               )}>
                                 {deliveryDate ? formatDate(deliveryDate) : "—"}
                               </span>
@@ -1563,11 +1551,7 @@ function ParkingPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredReturns.map((g) => {
-                    const daysLeft = g.delivery_date_order
-                      ? Math.ceil((new Date(g.delivery_date_order).getTime() - Date.now()) / 86400000)
-                      : null;
-                    const isOverdue = daysLeft !== null && daysLeft < 0;
-                    const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+                    const gUrgency = getDeliveryUrgency(g.delivery_date_order);
                     return (
                     <TableRow key={g.id} className={cn(selectedReturnIds.has(g.id) && "bg-primary/5")}>
                       <TableCell>
@@ -1596,9 +1580,7 @@ function ParkingPage() {
                         {g.delivery_date_order ? (
                           <span className={cn(
                             "text-xs font-bold tabular-nums",
-                            isOverdue && "text-red-700",
-                            isUrgent && "text-amber-700",
-                            !isUrgent && !isOverdue && "text-muted-foreground",
+                            gUrgency.text,
                           )}>
                             {formatDate(g.delivery_date_order)}
                           </span>

@@ -17,7 +17,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, parseUtcTimestamp, getKuwaitMidnight, type OrderGroup } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, groupByOrder, garmentSummary, getKuwaitMidnight, getDeliveryUrgency, type OrderGroup } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
@@ -60,14 +60,7 @@ function SchedulerGarmentRow({
   selected: boolean;
   onSelect: (id: string, checked: boolean) => void;
 }) {
-  const daysLeft = g.delivery_date_order
-    ? Math.ceil((parseUtcTimestamp(g.delivery_date_order).getTime() - Date.now()) / 86400000)
-    : null;
-  const isOverdue = daysLeft !== null && daysLeft < 0;
-  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
-  const daysLabel = daysLeft !== null
-    ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`
-    : null;
+  const urgency = getDeliveryUrgency(g.delivery_date_order);
 
   const altNum = getAlterationNumber(g.trip_number, g.garment_type);
   const isAlt = isAlteration(g.trip_number, g.garment_type);
@@ -118,14 +111,14 @@ function SchedulerGarmentRow({
             {g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}
           </span>
         )}
-        {daysLabel ? (
-          isOverdue || isUrgent ? (
-            <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums">
-              {daysLabel}
+        {urgency.label ? (
+          urgency.status === "overdue" || urgency.status === "urgent" ? (
+            <StatusPill color={urgency.status === "overdue" ? "red" : "amber"} className="tabular-nums">
+              {urgency.label}
             </StatusPill>
           ) : (
             <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-              {daysLabel}
+              {urgency.label}
             </span>
           )
         ) : g.delivery_date_order ? (
@@ -152,14 +145,7 @@ function SchedulerOrderCard({
   const [expanded, setExpanded] = useState(false);
   const [peekOpen, setPeekOpen] = useState(false);
   const deliveryDate = group.garments[0]?.delivery_date_order;
-  const daysLeft = deliveryDate
-    ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
-    : null;
-  const isOverdue = daysLeft !== null && daysLeft < 0;
-  const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
-  const daysLabel = daysLeft !== null
-    ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Due today" : `${daysLeft}d`
-    : null;
+  const urgency = getDeliveryUrgency(deliveryDate);
 
   return (
     <>
@@ -168,9 +154,9 @@ function SchedulerOrderCard({
         "bg-card border rounded-xl transition-[color,background-color,border-color,box-shadow] shadow-sm border-l-4",
         group.express
           ? "border-l-orange-400"
-          : isOverdue
+          : urgency.status === "overdue"
             ? "border-l-red-500"
-            : isUrgent
+            : urgency.status === "urgent"
               ? "border-l-amber-400"
               : "border-l-transparent",
         selected && "border-primary ring-2 ring-primary/20 bg-primary/5",
@@ -197,14 +183,14 @@ function SchedulerOrderCard({
 
           {/* Right: delivery + actions */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {daysLabel && (
-              isOverdue || isUrgent ? (
-                <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums">
-                  {daysLabel}
+            {urgency.label && (
+              urgency.status === "overdue" || urgency.status === "urgent" ? (
+                <StatusPill color={urgency.status === "overdue" ? "red" : "amber"} className="tabular-nums">
+                  {urgency.label}
                 </StatusPill>
               ) : (
                 <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                  {daysLabel}
+                  {urgency.label}
                 </span>
               )
             )}
@@ -230,7 +216,7 @@ function SchedulerOrderCard({
               <Home className="w-3 h-3 inline mr-0.5" />Delivery
             </span>
           )}
-          {deliveryDate && !daysLabel && (
+          {deliveryDate && !urgency.label && (
             <span className="text-xs text-muted-foreground tabular-nums">
               <Clock className="w-2.5 h-2.5 inline mr-0.5" />{formatDate(deliveryDate)}
             </span>
@@ -321,14 +307,7 @@ function SchedulerOrderTable({
             const selected = selectedOrderIds.has(group.order_id);
             const expanded = expandedOrders.has(group.order_id);
             const deliveryDate = group.garments[0]?.delivery_date_order;
-            const daysLeft = deliveryDate
-              ? Math.ceil((parseUtcTimestamp(deliveryDate).getTime() - Date.now()) / 86400000)
-              : null;
-            const isOverdue = daysLeft !== null && daysLeft < 0;
-            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
-            const daysLabel = daysLeft !== null
-              ? daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`
-              : null;
+            const tUrgency = getDeliveryUrgency(deliveryDate);
 
             return (
               <React.Fragment key={group.order_id}>
@@ -384,9 +363,7 @@ function SchedulerOrderTable({
                       {deliveryDate ? (
                         <span className={cn(
                           "inline-flex items-center gap-1 text-xs font-bold tabular-nums",
-                          isOverdue && "text-red-700",
-                          isUrgent && "text-amber-700",
-                          !isUrgent && !isOverdue && "text-muted-foreground",
+                          tUrgency.text,
                         )}>
                           <Clock className="w-3 h-3" />
                           {formatDate(deliveryDate)}
@@ -394,13 +371,13 @@ function SchedulerOrderTable({
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
-                      {daysLabel && (
-                        isOverdue || isUrgent ? (
-                          <StatusPill color={isOverdue ? "red" : "amber"} className="tabular-nums text-[10px]">
-                            {daysLabel}
+                      {tUrgency.label && (
+                        tUrgency.status === "overdue" || tUrgency.status === "urgent" ? (
+                          <StatusPill color={tUrgency.status === "overdue" ? "red" : "amber"} className="tabular-nums text-[10px]">
+                            {tUrgency.label}
                           </StatusPill>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground tabular-nums">{daysLabel}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{tUrgency.label}</span>
                         )
                       )}
                     </div>
@@ -498,11 +475,7 @@ function SchedulerGarmentTable({
         <TableBody>
           {garments.map((g) => {
             const selected = selectedIds.has(g.id);
-            const daysLeft = g.delivery_date_order
-              ? Math.ceil((parseUtcTimestamp(g.delivery_date_order).getTime() - Date.now()) / 86400000)
-              : null;
-            const isOverdue = daysLeft !== null && daysLeft < 0;
-            const isUrgent = daysLeft !== null && daysLeft <= 2 && !isOverdue;
+            const gUrgency = getDeliveryUrgency(g.delivery_date_order);
             const fb = feedbackInfo(g);
             return (
               <TableRow
@@ -565,9 +538,7 @@ function SchedulerGarmentTable({
                   {g.delivery_date_order ? (
                     <span className={cn(
                       "text-xs font-bold tabular-nums",
-                      isOverdue && "text-red-700",
-                      isUrgent && "text-amber-700",
-                      !isUrgent && !isOverdue && "text-muted-foreground",
+                      gUrgency.text,
                     )}>
                       {formatDate(g.delivery_date_order)}
                     </span>

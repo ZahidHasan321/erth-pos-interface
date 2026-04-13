@@ -224,7 +224,7 @@ function WorkerDetailPage() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Best Day</p>
             <p className="text-lg font-black tabular-nums">{bestDay.completed}</p>
             <p className="text-[10px] text-muted-foreground">
-              {new Date(bestDay.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {new Date(bestDay.date + "T12:00:00").toLocaleDateString("en-GB", { month: "short", day: "numeric" })}
             </p>
           </div>
         )}
@@ -268,7 +268,7 @@ function WorkerDetailPage() {
                 tick={{ fontSize: 10 }}
                 tickFormatter={(v) => {
                   const d = new Date(v + "T12:00:00");
-                  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
                 }}
               />
               <YAxis tick={{ fontSize: 10 }} width={35} />
@@ -276,7 +276,7 @@ function WorkerDetailPage() {
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                 labelFormatter={(v) => {
                   const d = new Date(v + "T12:00:00");
-                  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                  return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
                 }}
               />
               {worker.dailyTarget > 0 && (
@@ -309,7 +309,7 @@ function WorkerDetailPage() {
           <div className="text-center py-12">
             <p className="text-3xl font-black tabular-nums">{dailyData[0].completed}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {new Date(dailyData[0].date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+              {new Date(dailyData[0].date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
         ) : (
@@ -333,7 +333,7 @@ function WorkerDetailPage() {
                   tick={{ fontSize: 9 }}
                   tickFormatter={(v) => {
                     const d = new Date(v + "T12:00:00");
-                    return d.toLocaleDateString("en-US", { day: "numeric" });
+                    return d.toLocaleDateString("en-GB", { day: "numeric" });
                   }}
                 />
                 <YAxis tick={{ fontSize: 10 }} width={30} />
@@ -341,7 +341,7 @@ function WorkerDetailPage() {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                   labelFormatter={(v) => {
                     const d = new Date(v + "T12:00:00");
-                    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                    return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
                   }}
                 />
                 {worker.dailyTarget > 0 && (
@@ -364,7 +364,7 @@ function WorkerDetailPage() {
                 return (
                   <div key={d.date} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/5">
                     <span className="text-xs text-muted-foreground">
-                      {new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      {new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" })}
                     </span>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold tabular-nums">{d.completed}</span>

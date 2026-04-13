@@ -253,12 +253,6 @@ function ReadyOrderCard({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                <th className="py-2.5 px-3 w-10">
-                  <Checkbox
-                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                    onCheckedChange={(checked) => toggleAll(!!checked)}
-                  />
-                </th>
                 <th className="text-left py-2.5 px-4">Garment</th>
                 <th className="text-left py-2.5 px-4">Type</th>
                 <th className="text-left py-2.5 px-4">Stage</th>
@@ -276,13 +270,6 @@ function ReadyOrderCard({
                     )}
                     onClick={() => toggleOne(g.id, !isSelected)}
                   >
-                    <td className="py-2.5 px-3">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => toggleOne(g.id, !!checked)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
                     <td className="py-2.5 px-4 font-mono font-bold">
                       <div className="flex items-center gap-1.5">
                         {g.garment_id}
@@ -591,7 +578,7 @@ function DispatchHistoryTab() {
                 return (
                   <TableRow key={r.id}>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-xs font-bold">{d.toLocaleDateString()}</div>
+                      <div className="text-xs font-bold">{d.toLocaleDateString("en-GB")}</div>
                       <div className="text-[10px] text-muted-foreground">
                         {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>

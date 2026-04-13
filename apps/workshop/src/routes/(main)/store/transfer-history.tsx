@@ -48,7 +48,7 @@ function getToday(): string {
 
 function getWeekStart(): string {
   const d = new Date();
-  d.setDate(d.getDate() - d.getDay()); // Sunday
+  d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); // Saturday
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

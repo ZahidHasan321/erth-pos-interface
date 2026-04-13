@@ -194,7 +194,7 @@ function OrderCard({
     const lostCount = dispatchedGarments.filter((g) => g.location === "lost_in_transit").length;
     const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
-    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString() : "No Date";
+    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB") : "No Date";
 
     return (
         <Card className={cn(

@@ -66,8 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         db.realtime.setAuth(session.access_token);
       }
       if (session?.user?.app_metadata?.user_id) {
-        const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
-        if (!cancelled) setUser(restored);
+        try {
+          const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
+          if (!cancelled) setUser(restored);
+        } catch {
+          // JWT may be expired — token refresh will fire SIGNED_IN/TOKEN_REFRESHED
+          // and the onAuthStateChange handler below will retry. Don't block loading.
+          console.warn('[Auth] Session restore failed — waiting for token refresh');
+        }
       }
       if (!cancelled) setIsLoading(false);
     });
@@ -84,16 +90,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (event === 'TOKEN_REFRESHED') {
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        if (session.access_token) {
+          db.realtime.setAuth(session.access_token);
+        }
         const userId = session.user.app_metadata?.user_id;
         if (userId) {
-          const refreshed = await fetchUserFromSession(userId);
-          if (!cancelled) {
-            if (refreshed) {
-              setUser(refreshed);
-            } else {
-              await db.auth.signOut();
+          try {
+            const refreshed = await fetchUserFromSession(userId);
+            if (!cancelled) {
+              if (refreshed) {
+                setUser(refreshed);
+              } else {
+                await db.auth.signOut();
+              }
             }
+          } catch {
+            // If fetch fails here too, user stays logged out
+            console.warn('[Auth] Failed to load user on', event);
           }
         }
       }

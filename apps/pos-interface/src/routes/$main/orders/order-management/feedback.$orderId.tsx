@@ -1377,7 +1377,7 @@ function UnifiedFeedbackInterface() {
                                                 </Badge>
                                             </div>
                                             <span className="text-xs font-bold text-muted-foreground">
-                                                {fb.created_at ? new Date(fb.created_at).toLocaleDateString() : ""}
+                                                {fb.created_at ? new Date(fb.created_at).toLocaleDateString("en-GB") : ""}
                                             </span>
                                         </div>
                                         {fb.satisfaction_level && (

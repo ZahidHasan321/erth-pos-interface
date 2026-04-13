@@ -221,7 +221,7 @@ export function PendingOrdersDialog({
         if (!dateString) return "No date";
         try {
             const date = new Date(dateString);
-            return date.toLocaleDateString("en-US", {
+            return date.toLocaleDateString("en-GB", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",

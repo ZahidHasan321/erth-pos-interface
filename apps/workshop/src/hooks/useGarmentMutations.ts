@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   receiveGarments,
   receiveAndStartGarments,
@@ -7,6 +8,7 @@ import {
   sendReturnToProduction,
   scheduleGarments,
   startGarment,
+  cancelStartGarment,
   completeAndAdvance,
   qcPass,
   qcFail,
@@ -30,6 +32,10 @@ import {
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
 import type { WorkshopGarment } from '@repo/database';
 import type { PieceStage } from '@repo/database';
+
+function errorMsg(err: unknown): string {
+  return err instanceof Error ? err.message : 'Unknown error';
+}
 
 /** Invalidate all garment-related queries (background refetch, no flash) */
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
@@ -69,10 +75,13 @@ function optimisticPatch(
 
 
 /** Simple mutation — no optimistic update, just invalidate on settle */
-function useMut<TArgs>(fn: (args: TArgs) => Promise<void>) {
+function useMut<TArgs>(fn: (args: TArgs) => Promise<void>, errorLabel?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
+    onError: (err) => {
+      if (errorLabel) toast.error(`${errorLabel}: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -87,7 +96,13 @@ export function useReceiveGarments() {
       location: 'workshop' as any,
       in_production: false,
     }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} received`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to receive garments: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -100,7 +115,13 @@ export function useReceiveAndStart() {
       location: 'workshop' as any,
       in_production: true,
     }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} received & started`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to receive & start garments: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -113,7 +134,10 @@ export function useMarkLostInTransit() {
       location: 'lost_in_transit' as any,
       in_production: false,
     }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to mark as lost in transit: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -125,7 +149,13 @@ export function useSendToScheduler() {
   return useMutation({
     mutationFn: (ids: string[]) => sendToScheduler(ids),
     onMutate: (ids) => optimisticPatch(qc, ids, { in_production: true }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} sent to scheduler`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to send to scheduler: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -140,7 +170,13 @@ export function useSendReturnToProduction() {
       piece_stage: 'waiting_cut' as PieceStage,
       production_plan: null,
     }),
-    onError: (_err, _args, rollback) => rollback?.(),
+    onSuccess: () => {
+      toast.success('Garment sent to production');
+    },
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to send return to production: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -186,7 +222,13 @@ export function useScheduleGarments() {
       }
       return () => { if (prev) qc.setQueryData(WORKSHOP_GARMENTS_KEY, prev); };
     },
-    onError: (_err, _args, rollback) => rollback?.(),
+    onSuccess: (_data, args) => {
+      toast.success(`${args.ids.length} garment${args.ids.length > 1 ? 's' : ''} scheduled`);
+    },
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to schedule garments: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -200,7 +242,25 @@ export function useStartGarment() {
     onMutate: (id) => optimisticPatch(qc, [id], {
       start_time: new Date() as any,
     }),
-    onError: (_err, _id, rollback) => rollback?.(),
+    onError: (err, _id, rollback) => {
+      rollback?.();
+      toast.error(`Failed to start garment: ${errorMsg(err)}`);
+    },
+    onSettled: () => invalidateAll(qc),
+  });
+}
+
+export function useCancelStartGarment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelStartGarment(id),
+    onMutate: (id) => optimisticPatch(qc, [id], {
+      start_time: null,
+    }),
+    onError: (err, _id, rollback) => {
+      rollback?.();
+      toast.error(`Failed to cancel start: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -214,7 +274,10 @@ export function useCompleteAndAdvance() {
       piece_stage: args.nextStage as PieceStage,
       start_time: null,
     }),
-    onError: (_err, _args, rollback) => rollback?.(),
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to advance garment: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -229,7 +292,10 @@ export function useQcPass() {
       start_time: null,
       quality_check_ratings: args.ratings,
     }),
-    onError: (_err, _args, rollback) => rollback?.(),
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`QC pass failed: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -243,7 +309,10 @@ export function useQcFail() {
       piece_stage: args.returnStage,
       start_time: null,
     }),
-    onError: (_err, _args, rollback) => rollback?.(),
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`QC fail action failed: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -258,7 +327,13 @@ export function useDispatchGarments() {
       location: 'transit_to_shop' as any,
       in_production: false,
     }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} dispatched`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to dispatch garments: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -273,7 +348,13 @@ export function useReleaseFinals() {
       piece_stage: 'waiting_cut' as PieceStage,
       in_production: false,
     }),
-    onError: (_err, _ids, rollback) => rollback?.(),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} final${ids.length > 1 ? 's' : ''} released`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to release finals: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -292,7 +373,13 @@ export function useReleaseFinalsWithPlan() {
         assigned_date: args.date,
       });
     },
-    onError: (_err, _args, rollback) => rollback?.(),
+    onSuccess: (_data, args) => {
+      toast.success(`${args.ids.length} final${args.ids.length > 1 ? 's' : ''} released & scheduled`);
+    },
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to release finals: ${errorMsg(err)}`);
+    },
     onSettled: () => invalidateAll(qc),
   });
 }
@@ -300,19 +387,25 @@ export function useReleaseFinalsWithPlan() {
 // ── Detail updates ─────────────────────────────────────────────────────────
 
 export function useUpdateGarmentDetails() {
-  return useMut((args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null; piece_stage?: string | null } }) =>
-    updateGarmentDetails(args.id, args.updates),
+  return useMut(
+    (args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null; piece_stage?: string | null } }) =>
+      updateGarmentDetails(args.id, args.updates),
+    'Failed to update garment details',
   );
 }
 
 export function useUpdateOrderDeliveryDate() {
-  return useMut((args: { orderId: number; date: string }) =>
-    updateOrderDeliveryDate(args.orderId, args.date),
+  return useMut(
+    (args: { orderId: number; date: string }) =>
+      updateOrderDeliveryDate(args.orderId, args.date),
+    'Failed to update delivery date',
   );
 }
 
 export function useUpdateOrderAssignedDate() {
-  return useMut((args: { orderId: number; date: string }) =>
-    updateOrderAssignedDate(args.orderId, args.date),
+  return useMut(
+    (args: { orderId: number; date: string }) =>
+      updateOrderAssignedDate(args.orderId, args.date),
+    'Failed to update assigned date',
   );
 }

@@ -151,20 +151,19 @@ function ActiveRequestRow({
           <span className="text-sm">{request.requested_by_user?.name ?? "—"}</span>
         </TableCell>
         <TableCell className="py-3.5 text-right">
-          {canCancel && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancel();
-              }}
-            >
-              <X className="h-3.5 w-3.5 mr-1.5" />
-              Cancel
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canCancel}
+            className="text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancel();
+            }}
+          >
+            <X className="h-3.5 w-3.5 mr-1.5" />
+            Cancel
+          </Button>
         </TableCell>
       </TableRow>
 

@@ -57,7 +57,7 @@ export const PRODUCTION_STAGES = [
 
 export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 
-// Stage → next stage transition map
+// Stage → next stage transition map (linear fallback)
 export const STAGE_NEXT: Record<string, string> = {
   soaking: "cutting",
   cutting: "post_cutting",
@@ -67,3 +67,34 @@ export const STAGE_NEXT: Record<string, string> = {
   ironing: "quality_check",
   quality_check: "ready_for_dispatch",
 };
+
+// Maps between plan keys (production_plan) and piece_stage values
+export const STAGE_TO_PLAN_KEY: Record<string, string> = {
+  soaking: "soaker",
+  cutting: "cutter",
+  post_cutting: "post_cutter",
+  sewing: "sewer",
+  finishing: "finisher",
+  ironing: "ironer",
+  quality_check: "quality_checker",
+};
+
+/**
+ * Plan-aware next stage: skips stages that have no worker in the production plan.
+ * Falls back to linear STAGE_NEXT when no plan is provided (first-time orders).
+ */
+export function getNextPlanStage(currentStage: string, plan: Record<string, string> | null | undefined): string | null {
+  if (!plan) return STAGE_NEXT[currentStage] ?? null;
+
+  const currentIdx = PRODUCTION_STAGES.indexOf(currentStage as ProductionStage);
+  if (currentIdx === -1) return null;
+
+  for (let i = currentIdx + 1; i < PRODUCTION_STAGES.length; i++) {
+    const stage = PRODUCTION_STAGES[i];
+    const planKey = STAGE_TO_PLAN_KEY[stage];
+    if (planKey && plan[planKey]) return stage;
+  }
+
+  // Past all planned stages → ready_for_dispatch
+  return "ready_for_dispatch";
+}

@@ -75,10 +75,10 @@ function kwToday(): string {
   return kwNow.toISOString().slice(0, 10);
 }
 
-/** Sunday of the current week in Kuwait (Sun–Sat week) */
+/** Saturday of the current week in Kuwait (Sat–Fri week) */
 function kwWeekStart(): string {
   const kwNow = new Date(Date.now() + KW_OFFSET_MS);
-  kwNow.setUTCDate(kwNow.getUTCDate() - kwNow.getUTCDay());
+  kwNow.setUTCDate(kwNow.getUTCDate() - ((kwNow.getUTCDay() + 1) % 7));
   return kwNow.toISOString().slice(0, 10);
 }
 
