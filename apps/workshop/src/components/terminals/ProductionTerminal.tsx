@@ -1,11 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
-import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge } from "@/components/shared/PageShell";
+import {
+  PageHeader,
+  EmptyState,
+  LoadingSkeleton,
+  GarmentTypeBadge,
+} from "@/components/shared/PageShell";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableContainer,
+} from "@repo/ui/table";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, getNextPlanStage } from "@/lib/constants";
 import { cn, clickableProps } from "@/lib/utils";
@@ -15,11 +28,28 @@ import {
   useCancelStartGarment,
   useCompleteAndAdvance,
 } from "@/hooks/useGarmentMutations";
-import type { WorkshopGarment, TripHistoryEntry, StageTimings, ProductionPlan } from "@repo/database";
+import type {
+  WorkshopGarment,
+  TripHistoryEntry,
+  StageTimings,
+  ProductionPlan,
+} from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 import {
-  CalendarDays, Zap, Package, Wrench, PlayCircle, Search, Droplets, Timer, Clock,
-  Play, Check, X, Loader2, History,
+  CalendarDays,
+  Zap,
+  Package,
+  Wrench,
+  PlayCircle,
+  Search,
+  Droplets,
+  Timer,
+  Clock,
+  Play,
+  Check,
+  X,
+  Loader2,
+  History,
 } from "lucide-react";
 
 interface ProductionTerminalProps {
@@ -61,7 +91,10 @@ function isWorking(g: WorkshopGarment): boolean {
 
 /** Returns the ISO start time of the current open session at the given stage,
  * falling back to the top-level start_time column if stage_timings is empty. */
-function getCurrentSessionStart(g: WorkshopGarment, stage: string): string | null {
+function getCurrentSessionStart(
+  g: WorkshopGarment,
+  stage: string,
+): string | null {
   const timings = (g.stage_timings as StageTimings | null | undefined) ?? null;
   const list = timings?.[stage];
   const tail = list?.[list.length - 1];
@@ -69,14 +102,20 @@ function getCurrentSessionStart(g: WorkshopGarment, stage: string): string | nul
   return g.start_time ? String(g.start_time) : null;
 }
 
-type SectionKey = "working" | "express" | "brova" | "final" | "alterations" | "assigned";
+type SectionKey =
+  | "working"
+  | "express"
+  | "brova"
+  | "final"
+  | "alterations"
+  | "assigned";
 
 /** Exclusive assignment: each garment lands in one section. Currently working wins. */
 function classify(g: WorkshopGarment, variant: "full" | "simple"): SectionKey {
   if (isWorking(g)) return "working";
   if (variant === "simple") return "assigned";
-  if (g.express) return "express";
   if (isAlterationRow(g)) return "alterations";
+  if (g.express) return "express";
   return g.garment_type === "brova" ? "brova" : "final";
 }
 
@@ -93,7 +132,8 @@ function ElapsedTimer({ since }: { since: string }) {
   const mins = Math.floor(ms / 60_000);
   const hrs = Math.floor(mins / 60);
   const remainMins = mins % 60;
-  const display = hrs > 0 ? `${hrs}h ${remainMins}m` : mins > 0 ? `${mins}m` : "just now";
+  const display =
+    hrs > 0 ? `${hrs}h ${remainMins}m` : mins > 0 ? `${mins}m` : "just now";
   return (
     <span className="inline-flex items-center gap-0.5 text-xs font-mono font-bold text-emerald-700 tabular-nums">
       <Timer className="w-3 h-3" />
@@ -120,13 +160,22 @@ function AltBadge({ label }: { label: string }) {
 
 // ── inline actions (soaking terminal) ────────────────────────────────────────
 
-function InlineActions({ garment, stage }: { garment: WorkshopGarment; stage: string }) {
+function InlineActions({
+  garment,
+  stage,
+}: {
+  garment: WorkshopGarment;
+  stage: string;
+}) {
   const startMut = useStartGarment();
   const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
 
   const plan = garment.production_plan as ProductionPlan | null;
-  const nextStage = getNextPlanStage(stage, plan as Record<string, string> | null);
+  const nextStage = getNextPlanStage(
+    stage,
+    plan as Record<string, string> | null,
+  );
   const plannedWorker = (plan as any)?.soaker ?? "";
   const working = isWorking(garment);
 
@@ -135,14 +184,16 @@ function InlineActions({ garment, stage }: { garment: WorkshopGarment; stage: st
   const onStart = (e: React.MouseEvent) => {
     stop(e);
     startMut.mutate(garment.id, {
-      onError: (err) => toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`),
+      onError: (err) =>
+        toast.error(`Failed to start: ${err?.message ?? "Unknown error"}`),
     });
   };
 
   const onCancel = (e: React.MouseEvent) => {
     stop(e);
     cancelMut.mutate(garment.id, {
-      onError: (err) => toast.error(`Failed to cancel: ${err?.message ?? "Unknown error"}`),
+      onError: (err) =>
+        toast.error(`Failed to cancel: ${err?.message ?? "Unknown error"}`),
     });
   };
 
@@ -158,7 +209,10 @@ function InlineActions({ garment, stage }: { garment: WorkshopGarment; stage: st
     }
     completeMut.mutate(
       { id: garment.id, worker: plannedWorker, stage, nextStage },
-      { onError: (err) => toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`) },
+      {
+        onError: (err) =>
+          toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`),
+      },
     );
   };
 
@@ -269,7 +323,9 @@ function GarmentRow({
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-bold">#{garment.order_id}</span>
           {garment.invoice_number && (
-            <span className="text-xs text-muted-foreground">INV-{garment.invoice_number}</span>
+            <span className="text-xs text-muted-foreground">
+              INV-{garment.invoice_number}
+            </span>
           )}
         </div>
       </TableCell>
@@ -277,7 +333,9 @@ function GarmentRow({
         <div className="flex flex-col gap-0.5">
           <span className="font-semibold">{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
-            <span className="text-xs font-mono text-muted-foreground">{garment.customer_mobile}</span>
+            <span className="text-xs font-mono text-muted-foreground">
+              {garment.customer_mobile}
+            </span>
           )}
         </div>
       </TableCell>
@@ -286,7 +344,9 @@ function GarmentRow({
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className="font-medium truncate">{garment.fabric_name}</span>
             {garment.fabric_color && (
-              <span className="text-xs text-muted-foreground truncate">{garment.fabric_color}</span>
+              <span className="text-xs text-muted-foreground truncate">
+                {garment.fabric_color}
+              </span>
             )}
           </div>
         ) : (
@@ -294,7 +354,9 @@ function GarmentRow({
         )}
       </TableCell>
       <TableCell className="px-3 py-3 text-sm">
-        <span className="truncate block max-w-[160px]">{garment.style_name ?? garment.style ?? "—"}</span>
+        <span className="truncate block max-w-[160px]">
+          {garment.style_name ?? garment.style ?? "—"}
+        </span>
       </TableCell>
       <TableCell className="px-3 py-3">
         <BrandBadge brand={garment.order_brand} />
@@ -338,7 +400,9 @@ function SectionTable({
             <TableHead className="w-[160px]">Fabric</TableHead>
             <TableHead className="w-[160px]">Style</TableHead>
             <TableHead className="w-[80px]">Brand</TableHead>
-            {showActions && <TableHead className="w-[180px] text-right">Actions</TableHead>}
+            {showActions && (
+              <TableHead className="w-[180px] text-right">Actions</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -419,12 +483,19 @@ function groupByOrderSorted(garments: WorkshopGarment[]): WorkshopGarment[] {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
-export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full" }: ProductionTerminalProps) {
-  const { data: stageGarments = [], isLoading } = useTerminalGarments(terminalStage);
+export function ProductionTerminal({
+  terminalStage,
+  icon: Icon,
+  variant = "full",
+}: ProductionTerminalProps) {
+  const { data: stageGarments = [], isLoading } =
+    useTerminalGarments(terminalStage);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
 
-  const stageLabel = PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ?? terminalStage;
+  const stageLabel =
+    PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ??
+    terminalStage;
 
   const searchFilter = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -433,7 +504,9 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
       (g.customer_name ?? "").toLowerCase().includes(q) ||
       String(g.order_id).includes(q) ||
       (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
+      (g.customer_mobile ?? "")
+        .replace(/\s+/g, "")
+        .includes(q.replace(/\s+/g, "")) ||
       (g.garment_id ?? "").toLowerCase().includes(q) ||
       (g.fabric_name ?? "").toLowerCase().includes(q) ||
       (g.style_name ?? "").toLowerCase().includes(q);
@@ -441,7 +514,12 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
 
   const sections = useMemo(() => {
     const base: Record<SectionKey, WorkshopGarment[]> = {
-      working: [], express: [], brova: [], final: [], alterations: [], assigned: [],
+      working: [],
+      express: [],
+      brova: [],
+      final: [],
+      alterations: [],
+      assigned: [],
     };
     for (const g of stageGarments) {
       if (searchFilter && !searchFilter(g)) continue;
@@ -454,7 +532,10 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
   }, [stageGarments, searchFilter, variant]);
 
   const handleClick = (g: WorkshopGarment) => {
-    navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
+    navigate({
+      to: "/terminals/garment/$garmentId",
+      params: { garmentId: g.id },
+    });
   };
 
   const total = stageGarments.length;
@@ -470,14 +551,24 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate({ to: "/terminals/$stage/history", params: { stage: terminalStage } })}
+            onClick={() =>
+              navigate({
+                to: "/terminals/$stage/history",
+                params: { stage: terminalStage },
+              })
+            }
           >
             <History className="w-3.5 h-3.5 mr-1" />
             History
           </Button>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground bg-card border px-2.5 py-1 rounded-md">
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
-            {new Date().toLocaleDateString("default", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+            {new Date().toLocaleDateString("default", {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
           </div>
         </div>
       </PageHeader>
@@ -504,7 +595,10 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
             accent="bg-emerald-100 text-emerald-700"
           >
             {sections.working.length === 0 ? (
-              <EmptyState icon={PlayCircle} message="Nothing in production right now" />
+              <EmptyState
+                icon={PlayCircle}
+                message="Nothing in production right now"
+              />
             ) : (
               <SectionTable
                 garments={sections.working}
@@ -546,9 +640,16 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
                 accent="bg-orange-100 text-orange-700"
               >
                 {sections.express.length === 0 ? (
-                  <EmptyState icon={Zap} message="No express garments waiting" />
+                  <EmptyState
+                    icon={Zap}
+                    message="No express garments waiting"
+                  />
                 ) : (
-                  <SectionTable garments={sections.express} stage={terminalStage} onRowClick={handleClick} />
+                  <SectionTable
+                    garments={sections.express}
+                    stage={terminalStage}
+                    onRowClick={handleClick}
+                  />
                 )}
               </Section>
 
@@ -560,9 +661,16 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
                 accent="bg-amber-100 text-amber-700"
               >
                 {sections.brova.length === 0 ? (
-                  <EmptyState icon={Package} message="No brova garments waiting" />
+                  <EmptyState
+                    icon={Package}
+                    message="No brova garments waiting"
+                  />
                 ) : (
-                  <SectionTable garments={sections.brova} stage={terminalStage} onRowClick={handleClick} />
+                  <SectionTable
+                    garments={sections.brova}
+                    stage={terminalStage}
+                    onRowClick={handleClick}
+                  />
                 )}
               </Section>
 
@@ -574,9 +682,16 @@ export function ProductionTerminal({ terminalStage, icon: Icon, variant = "full"
                 accent="bg-emerald-100 text-emerald-700"
               >
                 {sections.final.length === 0 ? (
-                  <EmptyState icon={Package} message="No final garments waiting" />
+                  <EmptyState
+                    icon={Package}
+                    message="No final garments waiting"
+                  />
                 ) : (
-                  <SectionTable garments={sections.final} stage={terminalStage} onRowClick={handleClick} />
+                  <SectionTable
+                    garments={sections.final}
+                    stage={terminalStage}
+                    onRowClick={handleClick}
+                  />
                 )}
               </Section>
 

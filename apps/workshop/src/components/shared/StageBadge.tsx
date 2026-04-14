@@ -1,23 +1,27 @@
 import { Badge } from "@repo/ui/badge";
-import { PIECE_STAGE_LABELS, FEEDBACK_STATUS_LABELS, FEEDBACK_STATUS_COLORS } from "@/lib/constants";
+import {
+  PIECE_STAGE_LABELS,
+  FEEDBACK_STATUS_LABELS,
+  FEEDBACK_STATUS_COLORS,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PieceStage, TripHistoryEntry } from "@repo/database";
 
 const STAGE_COLOR: Record<string, string> = {
   waiting_for_acceptance: "bg-zinc-100 text-zinc-700",
-  waiting_cut:            "bg-zinc-100 text-zinc-700",
-  soaking:                "bg-sky-100 text-sky-800",
-  cutting:                "bg-amber-100 text-amber-800",
-  post_cutting:           "bg-orange-100 text-orange-800",
-  sewing:                 "bg-purple-100 text-purple-800",
-  finishing:              "bg-emerald-100 text-emerald-800",
-  ironing:                "bg-rose-100 text-rose-800",
-  quality_check:          "bg-indigo-100 text-indigo-800",
-  ready_for_dispatch:     "bg-green-100 text-green-800",
-  awaiting_trial:         "bg-blue-100 text-blue-800",
-  ready_for_pickup:       "bg-green-100 text-green-800",
-  brova_trialed:          "bg-violet-100 text-violet-800",
-  completed:              "bg-slate-100 text-slate-700",
+  waiting_cut: "bg-zinc-100 text-zinc-700",
+  soaking: "bg-sky-100 text-sky-800",
+  cutting: "bg-amber-100 text-amber-800",
+  post_cutting: "bg-orange-100 text-orange-800",
+  sewing: "bg-purple-100 text-purple-800",
+  finishing: "bg-emerald-100 text-emerald-800",
+  ironing: "bg-rose-100 text-rose-800",
+  quality_check: "bg-indigo-100 text-indigo-800",
+  ready_for_dispatch: "bg-green-100 text-green-800",
+  awaiting_trial: "bg-blue-100 text-blue-800",
+  ready_for_pickup: "bg-green-100 text-green-800",
+  brova_trialed: "bg-violet-100 text-violet-800",
+  completed: "bg-slate-100 text-slate-700",
 };
 
 interface StageBadgeProps {
@@ -25,23 +29,43 @@ interface StageBadgeProps {
   garmentType?: string | null;
   inProduction?: boolean;
   location?: string | null;
+  finalApprovalState?: "pending" | "approved";
   className?: string;
 }
 
-export function StageBadge({ stage, garmentType, inProduction, location, className }: StageBadgeProps) {
+export function StageBadge({
+  stage,
+  garmentType,
+  inProduction,
+  location,
+  finalApprovalState,
+  className,
+}: StageBadgeProps) {
   if (!stage) return null;
 
   // Location overrides — the physical movement is more meaningful than the last stage
   if (location === "transit_to_workshop") {
     return (
-      <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-sky-100 text-sky-800", className)}>
+      <Badge
+        variant="outline"
+        className={cn(
+          "border-0 font-semibold text-xs uppercase tracking-wide bg-sky-100 text-sky-800",
+          className,
+        )}
+      >
         In Transit
       </Badge>
     );
   }
   if (location === "transit_to_shop") {
     return (
-      <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-teal-100 text-teal-800", className)}>
+      <Badge
+        variant="outline"
+        className={cn(
+          "border-0 font-semibold text-xs uppercase tracking-wide bg-teal-100 text-teal-800",
+          className,
+        )}
+      >
         Dispatched
       </Badge>
     );
@@ -50,15 +74,40 @@ export function StageBadge({ stage, garmentType, inProduction, location, classNa
   // Finals have context-specific labels that don't map to raw stage names
   if (garmentType === "final") {
     if (stage === "waiting_for_acceptance") {
+      if (finalApprovalState === "approved") {
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "border-0 font-semibold text-xs uppercase tracking-wide bg-violet-100 text-violet-800",
+              className,
+            )}
+          >
+            Customer Approved
+          </Badge>
+        );
+      }
       return (
-        <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-amber-100 text-amber-800", className)}>
+        <Badge
+          variant="outline"
+          className={cn(
+            "border-0 font-semibold text-xs uppercase tracking-wide bg-amber-100 text-amber-800",
+            className,
+          )}
+        >
           Waiting Approval
         </Badge>
       );
     }
     if (stage === "waiting_cut" && !inProduction) {
       return (
-        <Badge variant="outline" className={cn("border-0 font-semibold text-xs uppercase tracking-wide bg-green-100 text-green-800", className)}>
+        <Badge
+          variant="outline"
+          className={cn(
+            "border-0 font-semibold text-xs uppercase tracking-wide bg-green-100 text-green-800",
+            className,
+          )}
+        >
           Shop Approved
         </Badge>
       );
@@ -66,7 +115,8 @@ export function StageBadge({ stage, garmentType, inProduction, location, classNa
   }
 
   const color = STAGE_COLOR[stage] ?? "bg-zinc-200 text-zinc-800";
-  const label = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
+  const label =
+    PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
   return (
     <Badge
       variant="outline"
@@ -81,10 +131,20 @@ export function StageBadge({ stage, garmentType, inProduction, location, classNa
   );
 }
 
-export function FeedbackStatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+export function FeedbackStatusBadge({
+  status,
+  className,
+}: {
+  status: string | null | undefined;
+  className?: string;
+}) {
   if (!status) return null;
-  const color = FEEDBACK_STATUS_COLORS[status as keyof typeof FEEDBACK_STATUS_COLORS] ?? "bg-zinc-200 text-zinc-800";
-  const label = FEEDBACK_STATUS_LABELS[status as keyof typeof FEEDBACK_STATUS_LABELS] ?? status;
+  const color =
+    FEEDBACK_STATUS_COLORS[status as keyof typeof FEEDBACK_STATUS_COLORS] ??
+    "bg-zinc-200 text-zinc-800";
+  const label =
+    FEEDBACK_STATUS_LABELS[status as keyof typeof FEEDBACK_STATUS_LABELS] ??
+    status;
   return (
     <Badge
       variant="outline"
@@ -99,7 +159,12 @@ export function FeedbackStatusBadge({ status, className }: { status: string | nu
   );
 }
 
-export function AlterationBadge({ tripNumber }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
+export function AlterationBadge({
+  tripNumber,
+}: {
+  tripNumber: number | null | undefined;
+  garmentType?: string | null;
+}) {
   const trip = tripNumber ?? 1;
   // Unified rule: any return (trip >= 2) is an alteration. alt# = trip - 1.
   if (trip < 2) return null;
@@ -114,7 +179,13 @@ export function AlterationBadge({ tripNumber }: { tripNumber: number | null | un
 }
 
 /** Shows "QC Fix" when the garment was sent back from quality check (same trip). */
-export function QcFixBadge({ tripNumber, tripHistory }: { tripNumber: number | null | undefined; tripHistory: TripHistoryEntry[] | null | undefined }) {
+export function QcFixBadge({
+  tripNumber,
+  tripHistory,
+}: {
+  tripNumber: number | null | undefined;
+  tripHistory: TripHistoryEntry[] | null | undefined;
+}) {
   if (!tripHistory) return null;
   const currentTrip = tripNumber ?? 1;
   const entry = tripHistory.find((t) => t.trip === currentTrip);
@@ -130,7 +201,11 @@ export function QcFixBadge({ tripNumber, tripHistory }: { tripNumber: number | n
 }
 
 /** Shows which trial cycle the garment is on (e.g. "Trial 1", "Trial 2") */
-export function TrialBadge({ tripNumber }: { tripNumber: number | null | undefined }) {
+export function TrialBadge({
+  tripNumber,
+}: {
+  tripNumber: number | null | undefined;
+}) {
   const trip = tripNumber ?? 1;
   return (
     <Badge
@@ -175,9 +250,9 @@ export function ExpressBadge() {
 export function BrandBadge({ brand }: { brand: string | null | undefined }) {
   if (!brand) return null;
   const colorMap: Record<string, string> = {
-    ERTH:   "bg-emerald-600 text-white",
+    ERTH: "bg-emerald-600 text-white",
     SAKKBA: "bg-blue-600 text-white",
-    QASS:   "bg-violet-600 text-white",
+    QASS: "bg-violet-600 text-white",
   };
   return (
     <Badge

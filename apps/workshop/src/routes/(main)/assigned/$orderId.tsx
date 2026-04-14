@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
-import {
-  useUpdateGarmentDetails,
-} from "@/hooks/useGarmentMutations";
+import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
-import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge, QcFixBadge, AlterationBadge } from "@/components/shared/StageBadge";
+import {
+  StageBadge,
+  BrandBadge,
+  ExpressBadge,
+  TrialBadge,
+  AlterationInBadge,
+  QcFixBadge,
+  AlterationBadge,
+} from "@/components/shared/StageBadge";
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
@@ -37,11 +43,26 @@ export const Route = createFileRoute("/(main)/assigned/$orderId")({
 const PLAN_STEPS = [
   { key: "soaker", label: "Soaker", responsibility: "soaking", stageOrder: 1 },
   { key: "cutter", label: "Cutter", responsibility: "cutting", stageOrder: 2 },
-  { key: "post_cutter", label: "Post-Cutter", responsibility: "post_cutting", stageOrder: 3 },
+  {
+    key: "post_cutter",
+    label: "Post-Cutter",
+    responsibility: "post_cutting",
+    stageOrder: 3,
+  },
   { key: "sewer", label: "Sewer", responsibility: "sewing", stageOrder: 4 },
-  { key: "finisher", label: "Finisher", responsibility: "finishing", stageOrder: 5 },
+  {
+    key: "finisher",
+    label: "Finisher",
+    responsibility: "finishing",
+    stageOrder: 5,
+  },
   { key: "ironer", label: "Ironer", responsibility: "ironing", stageOrder: 6 },
-  { key: "quality_checker", label: "QC Inspector", responsibility: "quality_check", stageOrder: 7 },
+  {
+    key: "quality_checker",
+    label: "QC Inspector",
+    responsibility: "quality_check",
+    stageOrder: 7,
+  },
 ] as const;
 
 const STAGE_ORDER: Record<string, number> = {
@@ -57,7 +78,9 @@ const STAGE_ORDER: Record<string, number> = {
 };
 
 /** Extract current trip entry from trip_history */
-function getCurrentTripEntry(garment: WorkshopGarment): TripHistoryEntry | null {
+function getCurrentTripEntry(
+  garment: WorkshopGarment,
+): TripHistoryEntry | null {
   const raw = garment.trip_history;
   const entries: TripHistoryEntry[] = !raw
     ? []
@@ -89,6 +112,11 @@ function AssignedOrderDetailPage() {
   const router = useRouter();
   const { data: garments = [], isLoading } = useOrderGarments(orderIdNum);
   const updateMut = useUpdateGarmentDetails();
+  const anyBrovaAccepted = garments.some(
+    (g) =>
+      g.garment_type === "brova" &&
+      (g.acceptance_status === true || g.piece_stage === "completed"),
+  );
 
   if (isLoading) {
     return (
@@ -125,7 +153,10 @@ function AssignedOrderDetailPage() {
   const plannedGarments = garments.filter((g) => g.production_plan);
   const sharedPlan = (() => {
     if (plannedGarments.length === 0) return null;
-    const ref = (plannedGarments[0].production_plan ?? {}) as Record<string, string>;
+    const ref = (plannedGarments[0].production_plan ?? {}) as Record<
+      string,
+      string
+    >;
     const nonSoakSteps = PLAN_STEPS.filter((s) => s.key !== "soaker");
     const allSame = plannedGarments.every((g) => {
       const p = (g.production_plan ?? {}) as Record<string, string>;
@@ -135,9 +166,12 @@ function AssignedOrderDetailPage() {
     // For soaker, only compare garments that both have soaking
     const soakingGarments = plannedGarments.filter((g) => g.soaking);
     if (soakingGarments.length > 1) {
-      const refSoaker = ((soakingGarments[0].production_plan ?? {}) as Record<string, string>).soaker ?? "";
+      const refSoaker =
+        ((soakingGarments[0].production_plan ?? {}) as Record<string, string>)
+          .soaker ?? "";
       const soakersSame = soakingGarments.every((g) => {
-        const soaker = ((g.production_plan ?? {}) as Record<string, string>).soaker ?? "";
+        const soaker =
+          ((g.production_plan ?? {}) as Record<string, string>).soaker ?? "";
         return soaker === refSoaker;
       });
       if (!soakersSame) return null;
@@ -150,7 +184,6 @@ function AssignedOrderDetailPage() {
     if (dates.length === 0) return null;
     return dates.every((d) => d === dates[0]) ? dates[0] : null;
   })();
-
 
   return (
     <div className="p-3 sm:p-4 max-w-5xl mx-auto pb-8">
@@ -193,22 +226,38 @@ function AssignedOrderDetailPage() {
             {brovas.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-xs">Brova</span>
+                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-xs">
+                    Brova
+                  </span>
                   {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
                 </h3>
                 {brovas.map((g) => (
-                  <GarmentPlanCard key={g.id} garment={g} updateMut={updateMut} sharedPlan={sharedPlan} />
+                  <GarmentPlanCard
+                    key={g.id}
+                    garment={g}
+                    updateMut={updateMut}
+                    sharedPlan={sharedPlan}
+                    anyBrovaAccepted={anyBrovaAccepted}
+                  />
                 ))}
               </div>
             )}
             {finals.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-xs">Final</span>
+                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-xs">
+                    Final
+                  </span>
                   {finals.length} garment{finals.length !== 1 ? "s" : ""}
                 </h3>
                 {finals.map((g) => (
-                  <GarmentPlanCard key={g.id} garment={g} updateMut={updateMut} sharedPlan={sharedPlan} />
+                  <GarmentPlanCard
+                    key={g.id}
+                    garment={g}
+                    updateMut={updateMut}
+                    sharedPlan={sharedPlan}
+                    anyBrovaAccepted={anyBrovaAccepted}
+                  />
                 ))}
               </div>
             )}
@@ -229,26 +278,44 @@ function OrderHeader({
   orderId: number;
 }) {
   const first = garments[0];
-  const brands = [...new Set(garments.map((g) => g.order_brand).filter(Boolean))] as string[];
+  const brands = [
+    ...new Set(garments.map((g) => g.order_brand).filter(Boolean)),
+  ] as string[];
   const hasExpress = garments.some((g) => g.express);
   const brovas = garments.filter((g) => g.garment_type === "brova");
   const finals = garments.filter((g) => g.garment_type === "final");
   const atShop = garments.filter((g) => g.location === "shop");
-  const waitingAcceptance = garments.filter((g) => g.piece_stage === "waiting_for_acceptance");
+  const waitingAcceptance = garments.filter(
+    (g) => g.piece_stage === "waiting_for_acceptance",
+  );
   const inProd = garments.filter((g) => g.in_production && g.production_plan);
-  const readyDispatch = garments.filter((g) => g.piece_stage === "ready_for_dispatch");
+  const readyDispatch = garments.filter(
+    (g) => g.piece_stage === "ready_for_dispatch",
+  );
   const brovasNeedRepair = brovas.filter(
-    (g) => g.location === "shop" && (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo"),
+    (g) =>
+      g.location === "shop" &&
+      (g.feedback_status === "needs_repair" ||
+        g.feedback_status === "needs_redo"),
   );
   const brovasAtShop = brovas.filter((g) => g.location === "shop");
+  const anyBrovaAccepted = brovas.some(
+    (g) => g.acceptance_status === true || g.piece_stage === "completed",
+  );
   const maxTrip = Math.max(...garments.map((g) => g.trip_number ?? 1));
   const urgency = getDeliveryUrgency(first.delivery_date_order);
 
   const statusLabel = (() => {
-    if (first.order_phase === "completed" || garments.every((g) => g.piece_stage === "completed"))
+    if (
+      first.order_phase === "completed" ||
+      garments.every((g) => g.piece_stage === "completed")
+    )
       return { text: "Completed", cls: "bg-green-100 text-green-800" };
     if (readyDispatch.length === garments.length)
-      return { text: "Ready for dispatch", cls: "bg-emerald-100 text-emerald-800" };
+      return {
+        text: "Ready for dispatch",
+        cls: "bg-emerald-100 text-emerald-800",
+      };
     // Alteration (In) only for trip 3+ (went back twice already)
     if (brovasNeedRepair.length > 0 && maxTrip >= 3)
       return { text: "Alteration (In)", cls: "bg-orange-100 text-orange-800" };
@@ -258,14 +325,49 @@ function OrderHeader({
     // Trip 1 at shop needing repair = needs changes after 1st trial
     if (brovasNeedRepair.length > 0)
       return { text: "Needs Changes", cls: "bg-amber-100 text-amber-800" };
-    if (brovas.length > 0 && brovasAtShop.length === brovas.length && finals.length === 0)
-      return { text: `At shop — Trial ${maxTrip}`, cls: "bg-green-100 text-green-800" };
-    if (waitingAcceptance.length > 0 && inProd.length === 0 && atShop.length > 0)
-      return { text: "Awaiting brova trial", cls: "bg-amber-100 text-amber-800" };
+    if (
+      brovas.length > 0 &&
+      brovasAtShop.length === brovas.length &&
+      finals.length === 0
+    )
+      return {
+        text: `At shop — Trial ${maxTrip}`,
+        cls: "bg-green-100 text-green-800",
+      };
+    if (
+      waitingAcceptance.length > 0 &&
+      inProd.length === 0 &&
+      atShop.length > 0
+    ) {
+      if (brovas.length > 0 && anyBrovaAccepted)
+        return {
+          text: "Awaiting finals release",
+          cls: "bg-violet-100 text-violet-800",
+        };
+      return {
+        text: "Awaiting brova trial",
+        cls: "bg-amber-100 text-amber-800",
+      };
+    }
     if (brovas.length > 0 && finals.length === 0)
-      return { text: maxTrip >= 3 ? `Alt #${maxTrip - 1} in production` : maxTrip === 2 ? "Brova return in production" : "Brova in production", cls: "bg-purple-100 text-purple-800" };
-    if (brovas.length === 0 && finals.length > 0 && waitingAcceptance.length > 0)
-      return { text: "Finals pending release", cls: "bg-amber-100 text-amber-800" };
+      return {
+        text:
+          maxTrip >= 3
+            ? `Alt #${maxTrip - 1} in production`
+            : maxTrip === 2
+              ? "Brova return in production"
+              : "Brova in production",
+        cls: "bg-purple-100 text-purple-800",
+      };
+    if (
+      brovas.length === 0 &&
+      finals.length > 0 &&
+      waitingAcceptance.length > 0
+    )
+      return {
+        text: "Finals pending release",
+        cls: "bg-amber-100 text-amber-800",
+      };
     if (inProd.length > 0)
       return { text: "In production", cls: "bg-blue-100 text-blue-800" };
     return { text: "In progress", cls: "bg-zinc-100 text-zinc-800" };
@@ -273,17 +375,21 @@ function OrderHeader({
 
   const bCount = brovas.length;
   const fCount = finals.length;
-  const summary = [bCount && `${bCount} Brova`, fCount && `${fCount} Final${fCount > 1 ? "s" : ""}`]
+  const summary = [
+    bCount && `${bCount} Brova`,
+    fCount && `${fCount} Final${fCount > 1 ? "s" : ""}`,
+  ]
     .filter(Boolean)
     .join(" + ");
 
-  const daysLabel = urgency.days !== null
-    ? urgency.days < 0
-      ? `${Math.abs(urgency.days)}d overdue`
-      : urgency.days === 0
-        ? "Due today"
-        : `${urgency.days}d left`
-    : null;
+  const daysLabel =
+    urgency.days !== null
+      ? urgency.days < 0
+        ? `${Math.abs(urgency.days)}d overdue`
+        : urgency.days === 0
+          ? "Due today"
+          : `${urgency.days}d left`
+      : null;
 
   return (
     <div className="bg-card border rounded-xl p-4 shadow-sm">
@@ -291,13 +397,24 @@ function OrderHeader({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-black text-lg">#{orderId}</span>
-            <span className="font-semibold text-sm">{first.customer_name ?? "—"}</span>
-            {brands.map((b) => <BrandBadge key={b} brand={b} />)}
+            <span className="font-semibold text-sm">
+              {first.customer_name ?? "—"}
+            </span>
+            {brands.map((b) => (
+              <BrandBadge key={b} brand={b} />
+            ))}
             {hasExpress && <ExpressBadge />}
             {first.home_delivery_order && (
-              <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
+              <MetadataChip icon={Home} variant="indigo">
+                Delivery
+              </MetadataChip>
             )}
-            <span className={cn("text-xs font-semibold uppercase px-2 py-0.5 rounded-md", statusLabel.cls)}>
+            <span
+              className={cn(
+                "text-xs font-semibold uppercase px-2 py-0.5 rounded-md",
+                statusLabel.cls,
+              )}
+            >
               {statusLabel.text}
             </span>
           </div>
@@ -318,17 +435,27 @@ function OrderHeader({
         {/* Delivery date — read-only */}
         {first.delivery_date_order && (
           <div className="shrink-0 text-right">
-            <span className={cn(
-              "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-1 rounded-md",
-              urgency.days !== null && urgency.days < 0 && "bg-red-100 text-red-800",
-              urgency.days !== null && urgency.days >= 0 && urgency.days <= 2 && "bg-amber-100 text-amber-800",
-              (urgency.days === null || urgency.days > 2) && "bg-muted text-foreground",
-            )}>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-1 rounded-md",
+                urgency.days !== null &&
+                  urgency.days < 0 &&
+                  "bg-red-100 text-red-800",
+                urgency.days !== null &&
+                  urgency.days >= 0 &&
+                  urgency.days <= 2 &&
+                  "bg-amber-100 text-amber-800",
+                (urgency.days === null || urgency.days > 2) &&
+                  "bg-muted text-foreground",
+              )}
+            >
               <Clock className="w-3.5 h-3.5" />
               {formatDate(first.delivery_date_order)}
             </span>
             {daysLabel && (
-              <p className={cn("text-xs font-bold mt-0.5", urgency.className)}>{daysLabel}</p>
+              <p className={cn("text-xs font-bold mt-0.5", urgency.className)}>
+                {daysLabel}
+              </p>
             )}
           </div>
         )}
@@ -437,10 +564,12 @@ function GarmentPlanCard({
   garment,
   updateMut,
   sharedPlan,
+  anyBrovaAccepted,
 }: {
   garment: WorkshopGarment;
   updateMut: ReturnType<typeof useUpdateGarmentDetails>;
   sharedPlan: Record<string, string> | null;
+  anyBrovaAccepted: boolean;
 }) {
   const plan = (garment.production_plan ?? {}) as Record<string, string>;
   const history = (garment.worker_history ?? {}) as Record<string, string>;
@@ -449,7 +578,8 @@ function GarmentPlanCard({
   const tripNum = garment.trip_number ?? 1;
   const needsRepairAtShop =
     garment.location === "shop" &&
-    (garment.feedback_status === "needs_repair" || garment.feedback_status === "needs_redo");
+    (garment.feedback_status === "needs_repair" ||
+      garment.feedback_status === "needs_redo");
   // Unified: any garment at shop with needs_repair/needs_redo is "Alteration (In)".
   const isAlterationIn = needsRepairAtShop;
   const isAtShopPostProduction =
@@ -458,7 +588,9 @@ function GarmentPlanCard({
   const isReturn = tripNum > 1;
   const currentTripEntry = getCurrentTripEntry(garment);
   const reentryStage = currentTripEntry?.reentry_stage ?? null;
-  const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
+  const qcFailCount =
+    currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ??
+    0;
   const hasQcFailThisTrip = qcFailCount > 0;
   const editability = getGarmentEditability(garment);
   const canEdit = editability.canEditPlan;
@@ -474,7 +606,10 @@ function GarmentPlanCard({
     if (garment.piece_stage === "completed")
       return { text: "Completed", cls: "text-green-700" };
     if (garment.piece_stage === "ready_for_dispatch")
-      return { text: "Production complete — ready for dispatch", cls: "text-emerald-700" };
+      return {
+        text: "Production complete — ready for dispatch",
+        cls: "text-emerald-700",
+      };
     // Transit
     if (garment.location === "transit_to_shop")
       return { text: "In transit to shop", cls: "text-cyan-700" };
@@ -490,14 +625,33 @@ function GarmentPlanCard({
     if (isAtShopPostProduction)
       return { text: "At shop", cls: "text-green-700" };
     // Workshop states
-    if (garment.piece_stage === "waiting_for_acceptance")
-      return { text: "Parked — awaiting brova acceptance", cls: "text-muted-foreground" };
+    if (garment.piece_stage === "waiting_for_acceptance") {
+      if (anyBrovaAccepted)
+        return {
+          text: "Customer approved — ready to release finals",
+          cls: "text-violet-700",
+        };
+      return {
+        text: "Parked — awaiting brova acceptance",
+        cls: "text-muted-foreground",
+      };
+    }
     if (garment.location === "workshop" && hasStarted)
       return { text: "In production", cls: "text-blue-700" };
     if (garment.location === "workshop" && !hasStarted && garment.in_production)
-      return { text: "Scheduled — waiting to start", cls: "text-muted-foreground" };
-    if (garment.location === "workshop" && !hasStarted && !garment.in_production)
-      return { text: "Received — not yet started", cls: "text-muted-foreground" };
+      return {
+        text: "Scheduled — waiting to start",
+        cls: "text-muted-foreground",
+      };
+    if (
+      garment.location === "workshop" &&
+      !hasStarted &&
+      !garment.in_production
+    )
+      return {
+        text: "Received — not yet started",
+        cls: "text-muted-foreground",
+      };
     return null;
   })();
 
@@ -522,11 +676,15 @@ function GarmentPlanCard({
   };
 
   return (
-    <div className={cn(
-      "bg-card border rounded-xl p-3 shadow-sm",
-      garment.express && "border-orange-200",
-      garment.piece_stage === "waiting_for_acceptance" && "opacity-50 bg-zinc-50",
-    )}>
+    <div
+      className={cn(
+        "bg-card border rounded-xl p-3 shadow-sm",
+        garment.express && "border-orange-200",
+        garment.piece_stage === "waiting_for_acceptance" &&
+          !anyBrovaAccepted &&
+          "opacity-50 bg-zinc-50",
+      )}
+    >
       {/* Garment header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -549,57 +707,128 @@ function GarmentPlanCard({
           </Link>
           {garment.express && <ExpressBadge />}
           {tripNum > 1 && <TrialBadge tripNumber={garment.trip_number} />}
-          <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
+          <AlterationBadge
+            tripNumber={garment.trip_number}
+            garmentType={garment.garment_type}
+          />
           {hasQcFailThisTrip && (
-            <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
+            <QcFixBadge
+              tripNumber={garment.trip_number}
+              tripHistory={garment.trip_history}
+            />
           )}
           {isAlterationIn && <AlterationInBadge />}
-          <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
-          <span className={cn(
-            "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
-            garment.location === "shop" ? "bg-green-100 text-green-800"
-              : garment.location === "workshop" ? "bg-blue-100 text-blue-800"
-              : garment.location === "transit_to_shop" ? "bg-cyan-100 text-cyan-800"
-              : garment.location === "transit_to_workshop" ? "bg-orange-100 text-orange-800"
-              : "bg-zinc-100 text-zinc-800",
-          )}>
-            {garment.location === "shop" ? "At Shop"
-              : garment.location === "workshop" ? "Workshop"
-              : garment.location === "transit_to_shop" ? "Transit to Shop"
-              : garment.location === "transit_to_workshop" ? "Transit to Workshop"
-              : garment.location}
+          <StageBadge
+            stage={garment.piece_stage}
+            garmentType={garment.garment_type}
+            inProduction={garment.in_production}
+            location={garment.location}
+            finalApprovalState={
+              garment.garment_type === "final" &&
+              garment.piece_stage === "waiting_for_acceptance"
+                ? anyBrovaAccepted
+                  ? "approved"
+                  : "pending"
+                : undefined
+            }
+          />
+          <span
+            className={cn(
+              "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
+              garment.location === "shop"
+                ? "bg-green-100 text-green-800"
+                : garment.location === "workshop"
+                  ? "bg-blue-100 text-blue-800"
+                  : garment.location === "transit_to_shop"
+                    ? "bg-cyan-100 text-cyan-800"
+                    : garment.location === "transit_to_workshop"
+                      ? "bg-orange-100 text-orange-800"
+                      : "bg-zinc-100 text-zinc-800",
+            )}
+          >
+            {garment.location === "shop"
+              ? "At Shop"
+              : garment.location === "workshop"
+                ? "Workshop"
+                : garment.location === "transit_to_shop"
+                  ? "Transit to Shop"
+                  : garment.location === "transit_to_workshop"
+                    ? "Transit to Workshop"
+                    : garment.location}
           </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right text-[11px] tabular-nums leading-tight">
-            {garment.delivery_date && (() => {
-              const days = Math.ceil((new Date(garment.delivery_date).getTime() - Date.now()) / 86400000);
-              const isDone = garment.piece_stage === "completed" || garment.piece_stage === "ready_for_pickup";
-              const daysText = days < 0 ? `${Math.abs(days)}d late` : days === 0 ? "today" : `${days}d`;
-              return (
-                <div className={cn(
-                  isDone ? "text-muted-foreground" : days < 0 ? "text-red-700" : days <= 2 ? "text-amber-700" : "text-muted-foreground",
-                )}>
-                  Due <span className="font-semibold">{formatDate(String(garment.delivery_date))}</span>
-                  <span className="ml-0.5">({daysText})</span>
-                </div>
-              );
-            })()}
-            {garment.assigned_date && (() => {
-              const days = Math.ceil((new Date(garment.assigned_date + "T23:59:59").getTime() - Date.now()) / 86400000);
-              const isPast = days < 0;
-              const isDone = garment.piece_stage === "ready_for_dispatch" || garment.piece_stage === "completed" || garment.piece_stage === "ready_for_pickup";
-              const daysText = days < 0 ? `${Math.abs(days)}d over` : days === 0 ? "today" : `${days}d`;
-              return (
-                <div className={cn(
-                  isPast && !isDone ? "text-red-600" : "text-muted-foreground",
-                )}>
-                  Assigned <span className="font-semibold">{formatDate(garment.assigned_date)}</span>
-                  <span className="ml-0.5">({daysText})</span>
-                </div>
-              );
-            })()}
+            {garment.delivery_date &&
+              (() => {
+                const days = Math.ceil(
+                  (new Date(garment.delivery_date).getTime() - Date.now()) /
+                    86400000,
+                );
+                const isDone =
+                  garment.piece_stage === "completed" ||
+                  garment.piece_stage === "ready_for_pickup";
+                const daysText =
+                  days < 0
+                    ? `${Math.abs(days)}d late`
+                    : days === 0
+                      ? "today"
+                      : `${days}d`;
+                return (
+                  <div
+                    className={cn(
+                      isDone
+                        ? "text-muted-foreground"
+                        : days < 0
+                          ? "text-red-700"
+                          : days <= 2
+                            ? "text-amber-700"
+                            : "text-muted-foreground",
+                    )}
+                  >
+                    Due{" "}
+                    <span className="font-semibold">
+                      {formatDate(String(garment.delivery_date))}
+                    </span>
+                    <span className="ml-0.5">({daysText})</span>
+                  </div>
+                );
+              })()}
+            {garment.assigned_date &&
+              (() => {
+                const days = Math.ceil(
+                  (new Date(garment.assigned_date + "T23:59:59").getTime() -
+                    Date.now()) /
+                    86400000,
+                );
+                const isPast = days < 0;
+                const isDone =
+                  garment.piece_stage === "ready_for_dispatch" ||
+                  garment.piece_stage === "completed" ||
+                  garment.piece_stage === "ready_for_pickup";
+                const daysText =
+                  days < 0
+                    ? `${Math.abs(days)}d over`
+                    : days === 0
+                      ? "today"
+                      : `${days}d`;
+                return (
+                  <div
+                    className={cn(
+                      isPast && !isDone
+                        ? "text-red-600"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Assigned{" "}
+                    <span className="font-semibold">
+                      {formatDate(garment.assigned_date)}
+                    </span>
+                    <span className="ml-0.5">({daysText})</span>
+                  </div>
+                );
+              })()}
           </div>
           {canEdit ? (
             <button
@@ -610,7 +839,10 @@ function GarmentPlanCard({
               <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           ) : editability.readOnlyReason ? (
-            <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5" title={editability.readOnlyReason}>
+            <span
+              className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5"
+              title={editability.readOnlyReason}
+            >
               <Lock className="w-3 h-3" />
             </span>
           ) : null}
@@ -629,7 +861,13 @@ function GarmentPlanCard({
       {/* Pipeline */}
       {garment.production_plan && (
         <div className="mt-2">
-          <ProductionPipeline currentStage={garment.piece_stage} compact hasSoaking={hasSoaking} reentryStage={isReturn ? reentryStage : undefined} qcFailCount={qcFailCount} />
+          <ProductionPipeline
+            currentStage={garment.piece_stage}
+            compact
+            hasSoaking={hasSoaking}
+            reentryStage={isReturn ? reentryStage : undefined}
+            qcFailCount={qcFailCount}
+          />
           {contextMessage && (
             <p className={cn("text-xs font-semibold mt-1", contextMessage.cls)}>
               {contextMessage.text}
@@ -645,74 +883,101 @@ function GarmentPlanCard({
         </p>
       )}
 
-
       {/* Worker summary — only show if different from shared plan, or no shared plan */}
-      {garment.production_plan && (() => {
-        // Find differences from shared plan
-        const diffs = sharedPlan
-          ? visibleSteps.filter((step) => {
-              const mine = plan[step.key] ?? "";
-              const shared = sharedPlan[step.key] ?? "";
-              return mine !== shared && mine !== "";
-            })
-          : visibleSteps.filter((step) => plan[step.key]);
+      {garment.production_plan &&
+        (() => {
+          // Find differences from shared plan
+          const diffs = sharedPlan
+            ? visibleSteps.filter((step) => {
+                const mine = plan[step.key] ?? "";
+                const shared = sharedPlan[step.key] ?? "";
+                return mine !== shared && mine !== "";
+              })
+            : visibleSteps.filter((step) => plan[step.key]);
 
-        // Also show completed stages (worker_history) regardless
-        const completed = visibleSteps.filter((step) => {
-          const isDone = currentStageOrder > step.stageOrder;
-          return isDone && history[step.key];
-        });
+          // Also show completed stages (worker_history) regardless
+          const completed = visibleSteps.filter((step) => {
+            const isDone = currentStageOrder > step.stageOrder;
+            return isDone && history[step.key];
+          });
 
-        const toShow = sharedPlan
-          ? [...new Set([...diffs, ...completed])]
-          : visibleSteps;
+          const toShow = sharedPlan
+            ? [...new Set([...diffs, ...completed])]
+            : visibleSteps;
 
-        if (toShow.length === 0 && sharedPlan) return null;
+          if (toShow.length === 0 && sharedPlan) return null;
 
-        return (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {!sharedPlan && toShow.map((step) => {
-              const worker = history[step.key] ?? plan[step.key];
-              if (!worker) return null;
-              const isDone = currentStageOrder > step.stageOrder;
-              const isCurrent = currentStageOrder === step.stageOrder;
-              return (
-                <span key={step.key} className={cn(
-                  "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded",
-                  isDone ? "bg-emerald-50 text-emerald-700"
-                    : isCurrent ? "bg-blue-50 text-blue-700 border border-blue-200"
-                    : "bg-zinc-50 text-muted-foreground",
-                )}>
-                  {isDone && <Check className="w-2.5 h-2.5" />}
-                  <span className="font-medium">{step.label}:</span>
-                  <span className="font-semibold">{worker}</span>
-                </span>
-              );
-            })}
-            {sharedPlan && diffs.length > 0 && (
-              <>
-                <span className="text-xs text-amber-600 font-semibold">Overrides:</span>
-                {diffs.map((step) => (
-                  <span key={step.key} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+          return (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {!sharedPlan &&
+                toShow.map((step) => {
+                  const worker = history[step.key] ?? plan[step.key];
+                  if (!worker) return null;
+                  const isDone = currentStageOrder > step.stageOrder;
+                  const isCurrent = currentStageOrder === step.stageOrder;
+                  return (
+                    <span
+                      key={step.key}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded",
+                        isDone
+                          ? "bg-emerald-50 text-emerald-700"
+                          : isCurrent
+                            ? "bg-blue-50 text-blue-700 border border-blue-200"
+                            : "bg-zinc-50 text-muted-foreground",
+                      )}
+                    >
+                      {isDone && <Check className="w-2.5 h-2.5" />}
+                      <span className="font-medium">{step.label}:</span>
+                      <span className="font-semibold">{worker}</span>
+                    </span>
+                  );
+                })}
+              {sharedPlan && diffs.length > 0 && (
+                <>
+                  <span className="text-xs text-amber-600 font-semibold">
+                    Overrides:
+                  </span>
+                  {diffs.map((step) => (
+                    <span
+                      key={step.key}
+                      className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+                    >
+                      <span className="font-medium">{step.label}:</span>
+                      <span className="font-semibold">{plan[step.key]}</span>
+                    </span>
+                  ))}
+                </>
+              )}
+              {sharedPlan &&
+                completed.length > 0 &&
+                diffs.length === 0 &&
+                completed.map((step) => (
+                  <span
+                    key={step.key}
+                    className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700"
+                  >
+                    <Check className="w-2.5 h-2.5" />
                     <span className="font-medium">{step.label}:</span>
-                    <span className="font-semibold">{plan[step.key]}</span>
+                    <span className="font-semibold">{history[step.key]}</span>
                   </span>
                 ))}
-              </>
-            )}
-            {sharedPlan && completed.length > 0 && diffs.length === 0 && completed.map((step) => (
-              <span key={step.key} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
-                <Check className="w-2.5 h-2.5" />
-                <span className="font-medium">{step.label}:</span>
-                <span className="font-semibold">{history[step.key]}</span>
-              </span>
-            ))}
-          </div>
-        );
-      })()}
+            </div>
+          );
+        })()}
 
       {/* Compact trip history for returning garments */}
-      {isReturn && <CompactTripHistory tripHistory={garment.trip_history as TripHistoryEntry[] | string | null | undefined} />}
+      {isReturn && (
+        <CompactTripHistory
+          tripHistory={
+            garment.trip_history as
+              | TripHistoryEntry[]
+              | string
+              | null
+              | undefined
+          }
+        />
+      )}
 
       {/* PlanDialog for editing — includes delivery date + reentry for returns */}
       {canEdit && (
@@ -722,13 +987,20 @@ function GarmentPlanCard({
           onConfirm={handlePlanConfirm}
           garmentCount={1}
           defaultDate={garment.assigned_date ?? undefined}
-          defaultPlan={(garment.production_plan ?? sharedPlan) as Record<string, string> | null}
+          defaultPlan={
+            (garment.production_plan ?? sharedPlan) as Record<
+              string,
+              string
+            > | null
+          }
           title={`Edit Plan — ${garment.garment_id}`}
           confirmLabel="Save Changes"
           hasSoaking={hasSoaking}
           isAlteration={isReturn}
           showDeliveryDate
-          defaultDeliveryDate={garment.delivery_date ? String(garment.delivery_date) : undefined}
+          defaultDeliveryDate={
+            garment.delivery_date ? String(garment.delivery_date) : undefined
+          }
         />
       )}
     </div>
@@ -747,7 +1019,11 @@ const WORKER_LABELS: Record<string, string> = {
   quality_checker: "QC",
 };
 
-function CompactTripHistory({ tripHistory: raw }: { tripHistory: TripHistoryEntry[] | string | null | undefined }) {
+function CompactTripHistory({
+  tripHistory: raw,
+}: {
+  tripHistory: TripHistoryEntry[] | string | null | undefined;
+}) {
   const [open, setOpen] = useState(false);
 
   const entries: TripHistoryEntry[] = !raw
@@ -770,43 +1046,68 @@ function CompactTripHistory({ tripHistory: raw }: { tripHistory: TripHistoryEntr
         <span className="font-semibold">
           Previous {entries.length === 1 ? "trip" : `${entries.length} trips`}
         </span>
-        <ChevronDown className={cn("w-3 h-3 ml-auto transition-transform duration-200", open && "rotate-180")} />
+        <ChevronDown
+          className={cn(
+            "w-3 h-3 ml-auto transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
-      <div className={cn(
-        "grid transition-[grid-template-rows] duration-250 ease-out",
-        open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-      )}>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-250 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
         <div className="overflow-hidden">
           <div className="mt-1.5 space-y-1.5 pb-0.5">
             {entries.map((entry, i) => (
               <div key={i} className="bg-muted/40 rounded-md px-2 py-1.5">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className={cn(
-                    "font-bold uppercase px-1.5 py-0.5 rounded",
-                    entry.trip === 1 ? "bg-blue-100 text-blue-700"
-                      : entry.trip === 2 ? "bg-amber-100 text-amber-700"
-                      : "bg-orange-100 text-orange-700",
-                  )}>
-                    {entry.trip === 1 ? "Original" : entry.trip === 2 ? "Return" : `Alt ${entry.trip - 2}`}
+                  <span
+                    className={cn(
+                      "font-bold uppercase px-1.5 py-0.5 rounded",
+                      entry.trip === 1
+                        ? "bg-blue-100 text-blue-700"
+                        : entry.trip === 2
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-orange-100 text-orange-700",
+                    )}
+                  >
+                    {entry.trip === 1
+                      ? "Original"
+                      : entry.trip === 2
+                        ? "Return"
+                        : `Alt ${entry.trip - 2}`}
                   </span>
                   {entry.assigned_date && (
                     <span className="text-muted-foreground">
                       {formatDate(entry.assigned_date)}
-                      {entry.completed_date && <span> → {formatDate(entry.completed_date)}</span>}
+                      {entry.completed_date && (
+                        <span> → {formatDate(entry.completed_date)}</span>
+                      )}
                     </span>
                   )}
                 </div>
-                {entry.worker_history && Object.keys(entry.worker_history).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {Object.entries(entry.worker_history).map(([key, name]) => (
-                      <span key={key} className="inline-flex items-center gap-0.5 text-[11px] bg-background px-1.5 py-0.5 rounded">
-                        <span className="text-muted-foreground">{WORKER_LABELS[key] ?? key}:</span>
-                        <span className="font-semibold">{name}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {entry.worker_history &&
+                  Object.keys(entry.worker_history).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(entry.worker_history).map(
+                        ([key, name]) => (
+                          <span
+                            key={key}
+                            className="inline-flex items-center gap-0.5 text-[11px] bg-background px-1.5 py-0.5 rounded"
+                          >
+                            <span className="text-muted-foreground">
+                              {WORKER_LABELS[key] ?? key}:
+                            </span>
+                            <span className="font-semibold">{name}</span>
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
               </div>
             ))}
           </div>
