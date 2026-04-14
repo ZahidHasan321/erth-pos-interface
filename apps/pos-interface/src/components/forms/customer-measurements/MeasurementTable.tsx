@@ -2,43 +2,25 @@ import { type UseFormReturn, type Path, useWatch } from "react-hook-form";
 import { forwardRef } from "react";
 import { FormControl, FormField } from "@repo/ui/form";
 import { Input } from "@repo/ui/input";
+import { parseMeasurementParts } from "@repo/database";
 import { cn } from "@/lib/utils";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
 
-// --- Fraction helpers ---
-function decimalToFractionParts(decimal: number) {
-  if (decimal === 0 || isNaN(decimal)) return null;
-  const isNegative = decimal < 0;
-  const absDecimal = Math.abs(decimal);
-  const whole = Math.floor(absDecimal);
-  const fractionalPart = absDecimal - whole;
-  if (fractionalPart < 0.001) return null;
-  const gcd = (a: number, b: number): number =>
-    b < 0.0001 ? a : gcd(b, a % b);
-  const precision = 1000000;
-  const numerator = Math.round(fractionalPart * precision);
-  const denominator = precision;
-  const divisor = gcd(numerator, denominator);
-  return {
-    whole,
-    numerator: Math.round(numerator / divisor),
-    denominator: Math.round(denominator / divisor),
-    isNegative,
-  };
-}
-
 function StackedFraction({ value }: { value: number }) {
-  const parts = decimalToFractionParts(value);
+  const parts = parseMeasurementParts(value);
   if (!parts) return null;
   return (
     <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
-      {parts.isNegative && <span>-</span>}
-      {parts.whole > 0 && <span>{parts.whole}</span>}
-      <span className="inline-flex flex-col items-center leading-none">
-        <span className="text-[10px]">{parts.numerator}</span>
-        <span className="w-full h-px bg-muted-foreground/60" />
-        <span className="text-[10px]">{parts.denominator}</span>
-      </span>
+      {parts.negative && <span>-</span>}
+      {(parts.whole > 0 || parts.numerator === 0) && <span>{parts.whole}</span>}
+      {parts.numerator > 0 && (
+        <span className="inline-flex flex-col items-center leading-none">
+          <span className="text-[10px]">{parts.numerator}</span>
+          <span className="w-full h-px bg-muted-foreground/60" />
+          <span className="text-[10px]">{parts.denominator}</span>
+        </span>
+      )}
+      {parts.hasDegree && <span>°</span>}
     </span>
   );
 }
@@ -75,14 +57,9 @@ function FractionCell({
   if (typeof value !== "number" || value === 0) {
     return <div className="h-5" />;
   }
-  const isInteger = Number.isInteger(value);
   return (
     <div className="flex justify-center h-5">
-      {isInteger ? (
-        <span className="text-xs text-muted-foreground tabular-nums">{value}</span>
-      ) : (
-        <StackedFraction value={value} />
-      )}
+      <StackedFraction value={value} />
     </div>
   );
 }

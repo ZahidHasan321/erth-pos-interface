@@ -3,7 +3,7 @@ import { Card, CardContent } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { cn, clickableProps, formatDate, getDeliveryUrgency } from "@/lib/utils";
-import { StageBadge, FeedbackStatusBadge, AlterationBadge, QcFixBadge, BrovaReturnBadge, ExpressBadge, BrandBadge } from "./StageBadge";
+import { StageBadge, FeedbackStatusBadge, AlterationBadge, QcFixBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { ProductionPipeline } from "./ProductionPipeline";
 import { GarmentTypeBadge, GarmentTypeBadgeCompact } from "./PageShell";
 import { GarmentPeekSheet } from "./PeekSheets";
@@ -88,7 +88,6 @@ export const GarmentCard = memo(function GarmentCard({
           <div className="flex items-center gap-1.5 mt-auto pt-2 flex-wrap">
             {hasSoaking && (garment.piece_stage === "waiting_cut" || garment.piece_stage === "soaking") && <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
             <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
-            <BrovaReturnBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             {garment.assigned_date && (
               <span className="text-[10px] font-semibold text-red-600">{formatDate(garment.assigned_date)}</span>
@@ -179,7 +178,6 @@ export const GarmentCard = memo(function GarmentCard({
                     )}
                     <FeedbackStatusBadge status={garment.feedback_status} />
                     <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
-                    <BrovaReturnBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
                     <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
                     {garment.express && <ExpressBadge />}
                   </>

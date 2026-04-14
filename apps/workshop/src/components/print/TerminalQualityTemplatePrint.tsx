@@ -1,9 +1,12 @@
+import type React from "react";
 import templateSvg from "@/assets/print/template.svg";
 import erthLogo from "@/assets/erth-dark.svg";
 import sakkbaLogo from "@/assets/sakkba.svg";
 import { ACCESSORY_ICONS, STYLE_IMAGE_MAP } from "@/lib/style-images";
-import { formatMeasurement } from "@repo/database";
+import { parseMeasurementParts } from "@repo/database";
 import type { Measurement, WorkshopGarment } from "@repo/database";
+import type { AlterationFilter } from "@/lib/alteration-filter";
+import { MeasurementValue } from "@/components/shared/MeasurementValue";
 
 const BRAND_LOGOS: Record<string, string> = {
   ERTH: erthLogo,
@@ -56,15 +59,79 @@ function optionFor(key: string | null | undefined) {
   return STYLE_IMAGE_MAP[key] ?? null;
 }
 
-function valueOrDash(value: string): string {
-  return value || EMPTY_VALUE;
+function MeasurementOrDash({
+  raw,
+  degree,
+}: {
+  raw: unknown;
+  degree: number;
+}) {
+  const parts = parseMeasurementParts(raw, degree);
+  if (!parts) return <>{EMPTY_VALUE}</>;
+  return <MeasurementValue raw={raw} degree={degree} />;
+}
+
+function StyleImageCell({
+  image,
+  alt,
+  fallback,
+}: {
+  image: string | null | undefined;
+  alt: string;
+  fallback: string;
+}) {
+  if (image) {
+    return <img src={image} alt={alt} className="terminal-qc-style-image" />;
+  }
+  return <div className="terminal-qc-style-placeholder">{fallback}</div>;
+}
+
+function MeasureLayout({
+  image,
+  imageAlt,
+  imageFallback,
+  height,
+  width,
+  accessories,
+}: {
+  image: string | null | undefined;
+  imageAlt: string;
+  imageFallback: string;
+  height: React.ReactNode;
+  width?: React.ReactNode;
+  accessories?: React.ReactNode;
+}) {
+  return (
+    <div className="terminal-qc-measure-layout">
+      <div className="terminal-qc-measure-row">
+        <StyleImageCell image={image} alt={imageAlt} fallback={imageFallback} />
+        <span className="terminal-qc-height-box">
+          <span className="terminal-qc-height-box-text">{height ?? EMPTY_VALUE}</span>
+        </span>
+      </div>
+      {width !== undefined && (
+        <div className="terminal-qc-width-box">{width ?? EMPTY_VALUE}</div>
+      )}
+      {accessories && (
+        <div className="terminal-qc-accessories-row">{accessories}</div>
+      )}
+    </div>
+  );
+}
+
+function ThicknessBadge({ value }: { value: string | null | undefined }) {
+  return <span className="terminal-qc-thickness-badge">{formatThickness(value)}</span>;
 }
 
 export function TerminalQualityTemplatePrint({
   garment,
+  alterationFilter,
 }: {
   garment: WorkshopGarment;
+  alterationFilter?: AlterationFilter | null;
 }) {
+  const showSection = (key: "frontPocket" | "jabzour" | "sidePocket" | "cuffs" | "collar") =>
+    !alterationFilter || alterationFilter.visibleSections.has(key);
   const measurement = garment.measurement ?? null;
   const degree = measurement?.degree ? Number(measurement.degree) : 0;
 
@@ -84,33 +151,6 @@ export function TerminalQualityTemplatePrint({
     ? optionFor("JAB_SHAAB")
     : optionFor(garment.jabzour_2);
   const jabzourSecondary = isShaab ? optionFor(garment.jabzour_2) : null;
-
-  const frontPocketHeight = formatMeasurement(
-    measurement?.top_pocket_length,
-    degree,
-  );
-  const frontPocketWidth = formatMeasurement(
-    measurement?.top_pocket_width,
-    degree,
-  );
-  const jabzourLength = formatMeasurement(
-    measurement?.jabzour_length,
-    degree,
-  );
-  const jabzourWidth = formatMeasurement(
-    measurement?.jabzour_width,
-    degree,
-  );
-  const sidePocketHeight = formatMeasurement(
-    measurement?.side_pocket_length,
-    degree,
-  );
-  const sidePocketWidth = formatMeasurement(
-    measurement?.side_pocket_width,
-    degree,
-  );
-  const collarHeight = formatMeasurement(measurement?.collar_height, degree);
-  const collarWidth = formatMeasurement(measurement?.collar_width, degree);
 
   const garmentDisplayId = garment.garment_id ?? garment.id.slice(0, 8);
 
@@ -156,16 +196,27 @@ export function TerminalQualityTemplatePrint({
 
           {qualityCheckTemplateFields.map((field) => {
             const measurementKey = FIELD_MEASUREMENT_MAP[field.id];
-            const value = measurement
-              ? formatMeasurement(measurement[measurementKey], degree)
-              : "";
+            if (alterationFilter && !alterationFilter.measurementKeys.has(measurementKey as string)) {
+              return null;
+            }
+            const parts = measurement
+              ? parseMeasurementParts(measurement[measurementKey], degree)
+              : null;
+            if (!parts) return null;
 
-            if (!value) return null;
+            const reason = alterationFilter?.fieldReasons.get(measurementKey as string);
+            const reasonClass = reason === "Customer Request"
+              ? "terminal-qc-measure-cell-reason-customer"
+              : reason === "Workshop Error"
+                ? "terminal-qc-measure-cell-reason-workshop"
+                : reason === "Shop Error"
+                  ? "terminal-qc-measure-cell-reason-shop"
+                  : "";
 
             return (
               <div
                 key={field.id}
-                className={`terminal-qc-measure-cell ${"orientation" in field && field.orientation === "vertical" ? "terminal-qc-measure-cell-vertical" : ""}`}
+                className={`terminal-qc-measure-cell ${"orientation" in field && field.orientation === "vertical" ? "terminal-qc-measure-cell-vertical" : ""} ${reasonClass}`}
                 style={{
                   left: `${field.left}%`,
                   top: `${field.top}%`,
@@ -173,7 +224,7 @@ export function TerminalQualityTemplatePrint({
                   height: `${field.height}%`,
                 }}
               >
-                {value}
+                <MeasurementValue raw={measurement![measurementKey]} degree={degree} />
               </div>
             );
           })}
@@ -187,148 +238,134 @@ export function TerminalQualityTemplatePrint({
             <span>{(garment.garment_type ?? "FINAL").toUpperCase()}</span>
           </div>
 
+          {showSection("frontPocket") && (
           <section className="terminal-qc-style-block">
-            <h4>Front Pocket</h4>
-            <div className="terminal-qc-style-row">
-              {frontPocket?.image ? (
-                <img
-                  src={frontPocket.image}
-                  alt={frontPocket.label}
-                  className="terminal-qc-style-image"
-                />
-              ) : (
-                <div className="terminal-qc-style-placeholder">POCKET</div>
-              )}
-              <div className="terminal-qc-style-values">
-                <span>H {valueOrDash(frontPocketHeight)}</span>
-                <span>W {valueOrDash(frontPocketWidth)}</span>
-                <span>
-                  HASHWA {formatThickness(garment.front_pocket_thickness)}
-                </span>
-              </div>
+            <div className="terminal-qc-style-header">
+              <h4>Front Pocket</h4>
+              <ThicknessBadge value={garment.front_pocket_thickness} />
             </div>
-            <div className="terminal-qc-accessories-row">
-              {garment.pen_holder ? (
-                <span>
-                  <img src={ACCESSORY_ICONS.pen} alt="Pen holder" /> PEN
-                </span>
-              ) : null}
+            <MeasureLayout
+              image={frontPocket?.image}
+              imageAlt={frontPocket?.label ?? "Front pocket"}
+              imageFallback="POCKET"
+              height={<MeasurementOrDash raw={measurement?.top_pocket_length} degree={degree} />}
+              width={<MeasurementOrDash raw={measurement?.top_pocket_width} degree={degree} />}
+              accessories={
+                garment.pen_holder ? (
+                  <span>
+                    <img src={ACCESSORY_ICONS.pen} alt="Pen holder" className="terminal-qc-accessory-rotate" /> PEN
+                  </span>
+                ) : null
+              }
+            />
+          </section>
+          )}
+
+          {showSection("jabzour") && (
+          <section className="terminal-qc-style-block">
+            <div className="terminal-qc-style-header">
+              <h4>Jabzour</h4>
+              <ThicknessBadge value={garment.jabzour_thickness} />
+            </div>
+            <MeasureLayout
+              image={jabzourPrimary?.image}
+              imageAlt={jabzourPrimary?.label ?? "Jabzour"}
+              imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
+              height={<MeasurementOrDash raw={measurement?.jabzour_length} degree={degree} />}
+              width={<MeasurementOrDash raw={measurement?.jabzour_width} degree={degree} />}
+              accessories={isShaab ? <span>ZIPPER</span> : null}
+            />
+            {jabzourSecondary?.image ? (
+              <img
+                src={jabzourSecondary.image}
+                alt={jabzourSecondary.label}
+                className="terminal-qc-jabzour-secondary"
+              />
+            ) : null}
+          </section>
+          )}
+
+          {showSection("sidePocket") && (
+          <section className="terminal-qc-style-block">
+            <div className="terminal-qc-style-header">
+              <h4>Side Pocket</h4>
+            </div>
+            <MeasureLayout
+              image={sidePocket?.image}
+              imageAlt={sidePocket?.label ?? "Side pocket"}
+              imageFallback="SIDE"
+              height={<MeasurementOrDash raw={measurement?.side_pocket_length} degree={degree} />}
+              width={<MeasurementOrDash raw={measurement?.side_pocket_width} degree={degree} />}
+              accessories={
+                (garment.wallet_pocket || garment.mobile_pocket) ? (
+                  <>
+                    {garment.wallet_pocket ? (
+                      <span>
+                        <img src={ACCESSORY_ICONS.wallet} alt="Wallet pocket" /> WALLET
+                      </span>
+                    ) : null}
+                    {garment.mobile_pocket ? (
+                      <span>
+                        <img src={ACCESSORY_ICONS.phone} alt="Mobile pocket" /> MOBILE
+                      </span>
+                    ) : null}
+                  </>
+                ) : null
+              }
+            />
+          </section>
+          )}
+
+          {showSection("cuffs") && (
+          <section className="terminal-qc-style-block">
+            <div className="terminal-qc-style-header">
+              <h4>Cuffs</h4>
+              <ThicknessBadge value={garment.cuffs_thickness} />
+            </div>
+            <div className="terminal-qc-cuffs-image-wrap">
+              <StyleImageCell
+                image={cuffs?.image}
+                alt={cuffs?.label ?? "Cuffs"}
+                fallback="NO CUFF"
+              />
             </div>
           </section>
+          )}
 
+          {showSection("collar") && (
           <section className="terminal-qc-style-block">
-            <h4>Jabzour</h4>
-            <div className="terminal-qc-style-row">
-              <div className="terminal-qc-jabzour-stack">
-                {jabzourPrimary?.image ? (
-                  <img
-                    src={jabzourPrimary.image}
-                    alt={jabzourPrimary.label}
-                    className="terminal-qc-style-image"
-                  />
-                ) : (
-                  <div className="terminal-qc-style-placeholder">JAB 1</div>
-                )}
-                {jabzourSecondary?.image ? (
-                  <img
-                    src={jabzourSecondary.image}
-                    alt={jabzourSecondary.label}
-                    className="terminal-qc-style-image"
-                  />
-                ) : null}
-              </div>
-              <div className="terminal-qc-style-values">
-                <span>L {valueOrDash(jabzourLength)}</span>
-                <span>W {valueOrDash(jabzourWidth)}</span>
-                <span>HASHWA {formatThickness(garment.jabzour_thickness)}</span>
-              </div>
+            <div className="terminal-qc-style-header">
+              <h4>Collar</h4>
+              <ThicknessBadge value={(garment as { collar_thickness?: string | null }).collar_thickness} />
             </div>
+            <MeasureLayout
+              image={collarType?.image}
+              imageAlt={collarType?.label ?? "Collar"}
+              imageFallback="COLLAR"
+              height={<MeasurementOrDash raw={measurement?.collar_height} degree={degree} />}
+              width={<MeasurementOrDash raw={measurement?.collar_width} degree={degree} />}
+              accessories={
+                (collarButton || garment.small_tabaggi) ? (
+                  <>
+                    {collarButton ? (
+                      <span>
+                        {collarButton.image ? (
+                          <img src={collarButton.image} alt={collarButton.label} />
+                        ) : null}
+                        {collarButton.label}
+                      </span>
+                    ) : null}
+                    {garment.small_tabaggi ? (
+                      <span>
+                        <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" /> SMALL TABAGGI
+                      </span>
+                    ) : null}
+                  </>
+                ) : null
+              }
+            />
           </section>
-
-          <section className="terminal-qc-style-block">
-            <h4>Side Pocket</h4>
-            <div className="terminal-qc-style-row">
-              {sidePocket?.image ? (
-                <img
-                  src={sidePocket.image}
-                  alt={sidePocket.label}
-                  className="terminal-qc-style-image"
-                />
-              ) : (
-                <div className="terminal-qc-style-placeholder">SIDE</div>
-              )}
-              <div className="terminal-qc-style-values">
-                <span>H {valueOrDash(sidePocketHeight)}</span>
-                <span>W {valueOrDash(sidePocketWidth)}</span>
-              </div>
-            </div>
-            <div className="terminal-qc-accessories-row">
-              {garment.wallet_pocket ? (
-                <span>
-                  <img src={ACCESSORY_ICONS.wallet} alt="Wallet pocket" />{" "}
-                  WALLET
-                </span>
-              ) : null}
-              {garment.mobile_pocket ? (
-                <span>
-                  <img src={ACCESSORY_ICONS.phone} alt="Mobile pocket" /> MOBILE
-                </span>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="terminal-qc-style-block">
-            <h4>Cuffs</h4>
-            <div className="terminal-qc-style-row">
-              {cuffs?.image ? (
-                <img
-                  src={cuffs.image}
-                  alt={cuffs.label}
-                  className="terminal-qc-style-image"
-                />
-              ) : (
-                <div className="terminal-qc-style-placeholder">NO CUFF</div>
-              )}
-              <div className="terminal-qc-style-values">
-                <span>HASHWA {formatThickness(garment.cuffs_thickness)}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="terminal-qc-style-block">
-            <h4>Collar</h4>
-            <div className="terminal-qc-style-row">
-              {collarType?.image ? (
-                <img
-                  src={collarType.image}
-                  alt={collarType.label}
-                  className="terminal-qc-style-image"
-                />
-              ) : (
-                <div className="terminal-qc-style-placeholder">COLLAR</div>
-              )}
-
-              <div className="terminal-qc-style-values">
-                <span>H {valueOrDash(collarHeight)}</span>
-                <span>W {valueOrDash(collarWidth)}</span>
-              </div>
-            </div>
-
-            <div className="terminal-qc-accessories-row terminal-qc-collar-row">
-              {collarButton?.image ? (
-                <span>
-                  <img src={collarButton.image} alt={collarButton.label} />{" "}
-                  BUTTON
-                </span>
-              ) : null}
-              {garment.small_tabaggi ? (
-                <span>
-                  <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" />
-                  SMALL TABAGGI
-                </span>
-              ) : null}
-            </div>
-          </section>
+          )}
         </aside>
       </div>
 

@@ -8,6 +8,8 @@ import {
 import { parseMeasurementParts } from "@repo/database";
 import type { WorkshopGarment, Measurement } from "@repo/database";
 import { MeasurementValue } from "./MeasurementValue";
+import type { AlterationFilter } from "@/lib/alteration-filter";
+import { ALTERATION_REASON_CELL_CLASS } from "@/lib/alteration-filter";
 
 // ── Measurement helpers ──────────────────────────────────────────
 
@@ -57,12 +59,12 @@ function StyleImage({
       <img
         src={image}
         alt={alt}
-        className="h-20 w-full rounded-md border border-zinc-200 bg-zinc-50 object-contain"
+        className="h-20 w-full rounded-md border border-zinc-200 bg-white object-contain"
       />
     );
   }
   return (
-    <div className="h-20 w-full rounded-md border border-zinc-200 bg-zinc-50 flex items-center justify-center text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+    <div className="h-20 w-full rounded-md border border-zinc-200 bg-white flex items-center justify-center text-xs font-semibold tracking-wide text-zinc-400 uppercase">
       {fallback}
     </div>
   );
@@ -88,13 +90,13 @@ function MeasureLayout({
       <div className="grid grid-cols-[6rem_auto] items-start gap-1.5">
         <StyleImage image={image} alt={imageAlt} fallback={imageFallback} />
         <div className="flex items-center justify-start">
-          <span className="inline-flex items-center justify-center w-9 h-20 rounded-md border border-zinc-200 bg-zinc-50 text-base font-semibold text-zinc-700">
+          <span className="inline-flex items-center justify-center w-9 h-20 rounded-md border border-zinc-200 bg-white text-base font-semibold text-zinc-700">
             <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
           </span>
         </div>
       </div>
       {width !== undefined && (
-        <div className="mt-1.5 w-24 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-base font-semibold text-zinc-700">
+        <div className="mt-1.5 w-24 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-center text-base font-semibold text-zinc-700">
           {width ?? "—"}
         </div>
       )}
@@ -105,13 +107,34 @@ function MeasureLayout({
   );
 }
 
+const THICKNESS_COLORS: Record<string, string> = {
+  SINGLE: "bg-blue-100 border-blue-300 text-blue-800",
+  DOUBLE: "bg-emerald-100 border-emerald-300 text-emerald-800",
+  TRIPLE: "bg-orange-100 border-orange-300 text-orange-800",
+  "NO HASHWA": "bg-zinc-100 border-zinc-300 text-zinc-500",
+};
+
 function ThicknessBadge({ value }: { value: string | null | undefined }) {
+  const v = fmtThick(value);
+  const color = THICKNESS_COLORS[v] ?? "bg-zinc-100 border-zinc-300 text-zinc-700";
   return (
-    <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold tracking-wide text-zinc-600 uppercase">
-      {fmtThick(value)}
+    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${color}`}>
+      {v}
     </span>
   );
 }
+
+const PILL_COLORS: Record<string, string> = {
+  PEN: "bg-amber-100 border-amber-300 text-amber-800",
+  MOBILE: "bg-sky-100 border-sky-300 text-sky-800",
+  WALLET: "bg-emerald-100 border-emerald-300 text-emerald-800",
+  ZIPPER: "bg-violet-100 border-violet-300 text-violet-800",
+  TABBAGI: "bg-rose-100 border-rose-300 text-rose-800",
+  "SMALL TABAGGI": "bg-teal-100 border-teal-300 text-teal-800",
+  ZARRAR: "bg-indigo-100 border-indigo-300 text-indigo-800",
+  "ARAVI ZARRAR": "bg-indigo-100 border-indigo-300 text-indigo-800",
+  "ZARRAR + TABBAGI": "bg-fuchsia-100 border-fuchsia-300 text-fuchsia-800",
+};
 
 function AccessoryPill({
   icon,
@@ -122,10 +145,11 @@ function AccessoryPill({
   label: string;
   rotate?: boolean;
 }) {
+  const color = PILL_COLORS[label.toUpperCase()] ?? "bg-zinc-100 border-zinc-300 text-zinc-700";
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 uppercase">
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold uppercase ${color}`}>
       {icon && (
-        <img src={icon} alt="" className={`h-3 w-auto object-contain ${rotate ? "-rotate-90" : ""}`} />
+        <img src={icon} alt="" className={`h-4 w-auto object-contain ${rotate ? "-rotate-90" : ""}`} />
       )}
       {label}
     </span>
@@ -142,8 +166,8 @@ function StyleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-2">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="rounded-lg border border-zinc-300 bg-zinc-50 p-2 shadow-sm">
+      <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
         <h4 className="text-[11px] font-bold tracking-wide text-zinc-700 uppercase">{title}</h4>
         {thickness !== undefined && <ThicknessBadge value={thickness} />}
       </div>
@@ -157,11 +181,16 @@ function StyleSection({
 interface DishdashaOverlayProps {
   garment: WorkshopGarment;
   measurement: Measurement | null | undefined;
+  /** On alterations, narrows the view to only measurements/sections that changed. */
+  alterationFilter?: AlterationFilter | null;
+  notes?: string | null;
 }
 
 export function DishdashaOverlay({
   garment,
   measurement,
+  alterationFilter,
+  notes,
 }: DishdashaOverlayProps) {
   const g = garment as any;
   const m = measurement;
@@ -199,12 +228,16 @@ export function DishdashaOverlay({
   const sidePocket = STYLE_IMAGE_MAP["SID_MUDAWWAR_SIDE_POCKET"];
 
   return (
-    <div className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900">
-      {/* ── Body ── */}
-      <div className="flex min-h-0">
-        {/* Template frame with measurement cells */}
-        <div className="relative shrink-0 border-r border-zinc-200" style={{ width: "57%" }}>
-          <div className="relative w-full" style={{ aspectRatio: "793.76001 / 1122.5601" }}>
+    <div
+      className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900 flex"
+      style={{ height: "calc(100vh - 180px)", maxHeight: "calc(100vh - 180px)" }}
+    >
+        {/* Template frame with measurement cells — height-driven so it always fits viewport */}
+        <div
+          className="relative shrink-0 border-r border-zinc-200 h-full"
+          style={{ aspectRatio: "793.76001 / 1122.5601" }}
+        >
+          <div className="relative w-full h-full">
           <img
             src={templateSvg}
             alt="Measurement template"
@@ -213,14 +246,21 @@ export function DishdashaOverlay({
 
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
+            if (alterationFilter && !alterationFilter.measurementKeys.has(key as string)) {
+              return null;
+            }
             const parts = m ? parseMeasurementParts(m[key], degree) : null;
             if (!parts) return null;
             const isVertical =
               "orientation" in field && field.orientation === "vertical";
+            const reason = alterationFilter?.fieldReasons.get(key as string);
+            const tintClass = reason
+              ? ALTERATION_REASON_CELL_CLASS[reason]
+              : "bg-white/95 border-zinc-500 text-zinc-900";
             return (
               <div
                 key={field.id}
-                className="absolute flex items-center justify-center bg-white/95 border border-zinc-500 font-black text-zinc-900 leading-none"
+                className={`absolute flex items-center justify-center border-2 font-black leading-none ${tintClass}`}
                 style={{
                   left: `${field.left}%`,
                   top: `${field.top}%`,
@@ -265,8 +305,9 @@ export function DishdashaOverlay({
           </div>
 
           {/* Sections */}
-          <div className="p-2 flex flex-col gap-2">
+          <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min">
             {/* Front Pocket */}
+            {(!alterationFilter || alterationFilter.visibleSections.has("frontPocket")) && (
             <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness}>
               <MeasureLayout
                 image={frontPocket?.image}
@@ -281,8 +322,10 @@ export function DishdashaOverlay({
                 }
               />
             </StyleSection>
+            )}
 
             {/* Jabzour */}
+            {(!alterationFilter || alterationFilter.visibleSections.has("jabzour")) && (
             <StyleSection title="Jabzour" thickness={g.jabzour_thickness}>
               <MeasureLayout
                 image={jabzourPrimary?.image}
@@ -300,12 +343,14 @@ export function DishdashaOverlay({
                 <img
                   src={jabzourSecondary.image}
                   alt=""
-                  className="mt-1 h-10 w-[4.5rem] rounded-md border border-zinc-200 bg-zinc-50 object-contain"
+                  className="mt-1 h-10 w-[4.5rem] rounded-md border border-zinc-200 bg-white object-contain"
                 />
               )}
             </StyleSection>
+            )}
 
             {/* Side Pocket */}
+            {(!alterationFilter || alterationFilter.visibleSections.has("sidePocket")) && (
             <StyleSection title="Side Pocket">
               <MeasureLayout
                 image={sidePocket?.image}
@@ -323,8 +368,10 @@ export function DishdashaOverlay({
                 }
               />
             </StyleSection>
+            )}
 
             {/* Cuffs */}
+            {(!alterationFilter || alterationFilter.visibleSections.has("cuffs")) && (
             <StyleSection title="Cuffs" thickness={g.cuffs_thickness}>
               <div className="w-24">
                 <StyleImage
@@ -334,8 +381,10 @@ export function DishdashaOverlay({
                 />
               </div>
             </StyleSection>
+            )}
 
             {/* Collar */}
+            {(!alterationFilter || alterationFilter.visibleSections.has("collar")) && (
             <StyleSection title="Collar" thickness={g.collar_thickness}>
               <MeasureLayout
                 image={collarType?.image}
@@ -357,16 +406,24 @@ export function DishdashaOverlay({
                 }
               />
             </StyleSection>
+            )}
 
             {g.lines && g.lines > 1 ? (
-              <div className="flex items-center justify-center py-1.5 rounded-lg border border-zinc-200 text-[11px] font-black uppercase tracking-wide text-zinc-700">
+              <div className="col-span-2 flex items-center justify-center py-1.5 rounded-lg border border-zinc-200 text-[11px] font-black uppercase tracking-wide text-zinc-700">
                 {g.lines} Lines
               </div>
             ) : null}
+
+            {notes && (
+              <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
+                <h4 className="text-[11px] font-bold tracking-wide text-amber-700 uppercase mb-1">
+                  Notes
+                </h4>
+                <p className="text-xs text-amber-900 whitespace-pre-wrap leading-snug">{notes}</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
     </div>
   );
 }

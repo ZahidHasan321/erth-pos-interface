@@ -124,6 +124,7 @@ function OrderHistoryPage() {
                             <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
                             <TabsTrigger value="WORK" className="text-[11px] font-bold px-2.5 py-1">Work</TabsTrigger>
                             <TabsTrigger value="SALES" className="text-[11px] font-bold px-2.5 py-1">Sales</TabsTrigger>
+                            <TabsTrigger value="ALTERATION" className="text-[11px] font-bold px-2.5 py-1">Alter</TabsTrigger>
                         </TabsList>
                     </Tabs>
 

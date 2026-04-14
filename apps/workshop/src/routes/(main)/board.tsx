@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Columns3, Loader2, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Columns3, Loader2, Zap, Search } from "lucide-react";
 import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { Calendar } from "@repo/ui/calendar";
 import { Skeleton } from "@repo/ui/skeleton";
@@ -84,23 +85,40 @@ function BoardPage() {
   const [mode, setMode] = useState<BoardMode>("live");
   const [dateStr, setDateStr] = useState<string>(today);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const queryDate = mode === "live" ? null : dateStr;
   const { data: garments = [], isLoading, isFetching } = useBoardGarments(queryDate);
 
+  const filteredGarments = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return garments;
+    const qDigits = q.replace(/\s+/g, "");
+    return garments.filter(
+      (g) =>
+        (g.customer_name ?? "").toLowerCase().includes(q) ||
+        String(g.order_id).includes(q) ||
+        (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
+        (g.customer_mobile ?? "").replace(/\s+/g, "").includes(qDigits) ||
+        (g.garment_id ?? "").toLowerCase().includes(q) ||
+        (g.fabric_name ?? "").toLowerCase().includes(q) ||
+        (g.style_name ?? "").toLowerCase().includes(q),
+    );
+  }, [garments, search]);
+
   const byStage = useMemo(() => {
     const m = new Map<string, WorkshopGarment[]>();
     for (const s of BOARD_STAGES) m.set(s, []);
-    for (const g of garments) {
+    for (const g of filteredGarments) {
       if (!g.piece_stage) continue;
       const bucket = m.get(g.piece_stage);
       if (bucket) bucket.push(g);
     }
     return m;
-  }, [garments]);
+  }, [filteredGarments]);
 
   const isToday = dateStr === today;
-  const total = garments.length;
+  const total = filteredGarments.length;
 
   const subtitle =
     mode === "live"
@@ -182,6 +200,16 @@ function BoardPage() {
         </div>
       </PageHeader>
 
+      <div className="relative max-w-sm mb-3">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder="Garment, customer, order, fabric, style…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x">
         {BOARD_STAGES.map((stage) => (
           <BoardColumn
@@ -207,7 +235,7 @@ function BoardColumn({ stage, garments, isLoading }: ColumnProps) {
   const accent = STAGE_ACCENT[stage] ?? "border-zinc-200 bg-zinc-50/60";
 
   return (
-    <div className="w-[260px] shrink-0 snap-start flex flex-col rounded-xl border bg-card shadow-sm max-h-[calc(100vh-170px)]">
+    <div className="w-[260px] shrink-0 snap-start flex flex-col rounded-xl border bg-card shadow-sm max-h-[calc(100vh-230px)]">
       <div className={cn("px-3 py-2 rounded-t-xl border-b-2", accent)}>
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-wider text-foreground">{label}</span>
@@ -242,7 +270,9 @@ function GarmentBoardCard({ g, stage }: { g: WorkshopGarment; stage: string }) {
   const started = !!g.start_time;
 
   const invoice = g.invoice_number ? `#${g.invoice_number}` : `#${g.order_id}`;
-  const deliveryRaw = g.delivery_date ?? g.delivery_date_order ?? null;
+  const deliveryRaw = g.delivery_date
+    ? (g.delivery_date instanceof Date ? g.delivery_date.toISOString() : g.delivery_date)
+    : g.delivery_date_order ?? null;
   const urgency = getDeliveryUrgency(deliveryRaw);
 
   return (

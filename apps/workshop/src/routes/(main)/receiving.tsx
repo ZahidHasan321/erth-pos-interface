@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
   Inbox, Clock, Package, AlertTriangle, CircleX, Zap, Home,
-  Droplets, Search,
+  Droplets, Search, Loader2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/receiving")({
@@ -49,7 +49,9 @@ function GarmentRow({
   onReceive,
   onReceiveAndStart,
   onLost,
-  isBusy,
+  receivePending,
+  receiveStartPending,
+  lostPending,
   actionVariant,
   showType,
   showAlt,
@@ -61,13 +63,16 @@ function GarmentRow({
   onReceive: () => void;
   onReceiveAndStart?: () => void;
   onLost?: () => void;
-  isBusy: boolean;
+  receivePending: boolean;
+  receiveStartPending: boolean;
+  lostPending: boolean;
   actionVariant: ActionVariant;
   showType?: boolean;
   showAlt?: boolean;
   hideExpress?: boolean;
 }) {
   const urgency = getDeliveryUrgency(garment.delivery_date_order);
+  const rowBusy = receivePending || receiveStartPending || lostPending;
 
   return (
     <TableRow className={cn(selected && "bg-primary/5")}>
@@ -143,34 +148,40 @@ function GarmentRow({
       <TableCell className="px-3 py-3">
         <div className="flex items-center justify-end gap-1.5">
           {actionVariant === "found" ? (
-            <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+            <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+              {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
               Found — Receive
             </Button>
           ) : actionVariant === "receive-only" ? (
-            <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+            <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+              {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
               Receive
             </Button>
           ) : actionVariant === "receive-lost" ? (
             <>
-              <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+              <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+                {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={onLost}
-                disabled={isBusy}
+                disabled={rowBusy}
                 className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+                {lostPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                Lost
               </Button>
             </>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={onReceive} disabled={isBusy} className="text-xs h-7">
+              <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+                {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive
               </Button>
-              <Button size="sm" onClick={onReceiveAndStart} disabled={isBusy} className="text-xs h-7">
+              <Button size="sm" onClick={onReceiveAndStart} disabled={rowBusy} className="text-xs h-7">
+                {receiveStartPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive & Start
               </Button>
               {actionVariant === "receive-start-lost" && (
@@ -178,10 +189,11 @@ function GarmentRow({
                   size="sm"
                   variant="ghost"
                   onClick={onLost}
-                  disabled={isBusy}
+                  disabled={rowBusy}
                   className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
-                  <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+                  {lostPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                  Lost
                 </Button>
               )}
             </>
@@ -201,7 +213,9 @@ function SectionTable({
   onReceive,
   onReceiveAndStart,
   onLost,
-  isBusy,
+  isReceivePending,
+  isReceiveStartPending,
+  isLostPending,
   actionVariant,
   showType,
   showAlt,
@@ -213,7 +227,9 @@ function SectionTable({
   onReceive: (id: string) => void;
   onReceiveAndStart?: (id: string) => void;
   onLost?: (id: string) => void;
-  isBusy: boolean;
+  isReceivePending: (id: string) => boolean;
+  isReceiveStartPending: (id: string) => boolean;
+  isLostPending: (id: string) => boolean;
   actionVariant: ActionVariant | ((g: WorkshopGarment) => ActionVariant);
   showType?: boolean;
   showAlt?: boolean;
@@ -256,7 +272,9 @@ function SectionTable({
               onReceive={() => onReceive(g.id)}
               onReceiveAndStart={onReceiveAndStart ? () => onReceiveAndStart(g.id) : undefined}
               onLost={onLost ? () => onLost(g.id) : undefined}
-              isBusy={isBusy}
+              receivePending={isReceivePending(g.id)}
+              receiveStartPending={isReceiveStartPending(g.id)}
+              lostPending={isLostPending(g.id)}
               actionVariant={typeof actionVariant === "function" ? actionVariant(g) : actionVariant}
               showType={showType}
               showAlt={showAlt}
@@ -306,7 +324,14 @@ function ReceivingPage() {
   const receiveStartMut = useReceiveAndStart();
   const lostMut = useMarkLostInTransit();
 
-  const isBusy = receiveMut.isPending || receiveStartMut.isPending || lostMut.isPending;
+  const pendingIdSet = (mut: { isPending: boolean; variables?: string[] }): Set<string> =>
+    mut.isPending && mut.variables ? new Set(mut.variables) : new Set();
+  const receivePendingIds = pendingIdSet(receiveMut);
+  const receiveStartPendingIds = pendingIdSet(receiveStartMut);
+  const lostPendingIds = pendingIdSet(lostMut);
+  const isReceivePending = (id: string) => receivePendingIds.has(id);
+  const isReceiveStartPending = (id: string) => receiveStartPendingIds.has(id);
+  const isLostPending = (id: string) => lostPendingIds.has(id);
 
   const [search, setSearch] = useState("");
   const searchFilter = useMemo(() => {
@@ -461,7 +486,9 @@ function ReceivingPage() {
                   onReceive={(id) => receive([id])}
                   onReceiveAndStart={(id) => receiveAndStart([id])}
                   onLost={markLost}
-                  isBusy={isBusy}
+                  isReceivePending={isReceivePending}
+                  isReceiveStartPending={isReceiveStartPending}
+                  isLostPending={isLostPending}
                   actionVariant={(g) =>
                     g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
                       ? "receive-lost"
@@ -478,10 +505,12 @@ function ReceivingPage() {
                   return (
                     <BatchActionBar count={selExpress.size} onClear={() => setSelExpress(new Set())}>
                       <Button size="sm" variant="secondary" onClick={() => { receive([...selExpress]); setSelExpress(new Set()); }} disabled={receiveMut.isPending}>
+                        {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                         Receive
                       </Button>
                       {allBrovas && (
                         <Button size="sm" onClick={() => { receiveAndStart([...selExpress]); setSelExpress(new Set()); }} disabled={receiveStartMut.isPending}>
+                          {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                           Receive & Start
                         </Button>
                       )}
@@ -505,14 +534,18 @@ function ReceivingPage() {
                   onReceive={(id) => receive([id])}
                   onReceiveAndStart={(id) => receiveAndStart([id])}
                   onLost={markLost}
-                  isBusy={isBusy}
+                  isReceivePending={isReceivePending}
+                  isReceiveStartPending={isReceiveStartPending}
+                  isLostPending={isLostPending}
                   actionVariant="receive-start-lost"
                 />
                 <BatchActionBar count={selBrova.size} onClear={() => setSelBrova(new Set())}>
                   <Button size="sm" variant="secondary" onClick={() => { receive([...selBrova]); setSelBrova(new Set()); }} disabled={receiveMut.isPending}>
+                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                     Receive
                   </Button>
                   <Button size="sm" onClick={() => { receiveAndStart([...selBrova]); setSelBrova(new Set()); }} disabled={receiveStartMut.isPending}>
+                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                     Receive & Start
                   </Button>
                 </BatchActionBar>
@@ -533,7 +566,9 @@ function ReceivingPage() {
                   onReceive={(id) => receive([id])}
                   onReceiveAndStart={(id) => receiveAndStart([id])}
                   onLost={markLost}
-                  isBusy={isBusy}
+                  isReceivePending={isReceivePending}
+                  isReceiveStartPending={isReceiveStartPending}
+                  isLostPending={isLostPending}
                   actionVariant={(g) =>
                     orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
                   }
@@ -544,10 +579,12 @@ function ReceivingPage() {
                   return (
                     <BatchActionBar count={selFinals.size} onClear={() => setSelFinals(new Set())}>
                       <Button size="sm" variant="secondary" onClick={() => { receive([...selFinals]); setSelFinals(new Set()); }} disabled={receiveMut.isPending}>
+                        {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                         Receive
                       </Button>
                       {canStart && (
                         <Button size="sm" onClick={() => { receiveAndStart([...selFinals]); setSelFinals(new Set()); }} disabled={receiveStartMut.isPending}>
+                          {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                           Receive & Start
                         </Button>
                       )}
@@ -571,16 +608,20 @@ function ReceivingPage() {
                   onReceive={(id) => receive([id])}
                   onReceiveAndStart={(id) => receiveAndStart([id])}
                   onLost={markLost}
-                  isBusy={isBusy}
+                  isReceivePending={isReceivePending}
+                  isReceiveStartPending={isReceiveStartPending}
+                  isLostPending={isLostPending}
                   actionVariant="receive-start-lost"
                   showAlt
                   showType
                 />
                 <BatchActionBar count={selAlterations.size} onClear={() => setSelAlterations(new Set())}>
                   <Button size="sm" variant="secondary" onClick={() => { receive([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveMut.isPending}>
+                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                     Receive
                   </Button>
                   <Button size="sm" onClick={() => { receiveAndStart([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveStartMut.isPending}>
+                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                     Receive & Start
                   </Button>
                   <Button
@@ -590,7 +631,8 @@ function ReceivingPage() {
                     disabled={lostMut.isPending}
                     className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
-                    <AlertTriangle className="w-3 h-3 mr-1" /> Lost
+                    {lostMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                    Lost
                   </Button>
                 </BatchActionBar>
               </>
@@ -607,7 +649,9 @@ function ReceivingPage() {
                 selectedIds={new Set()}
                 onToggle={() => {}}
                 onReceive={(id) => receive([id])}
-                isBusy={isBusy}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
                 actionVariant="found"
               />
             )}

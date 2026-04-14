@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useGarment } from "@/hooks/useWorkshopGarments";
+import { getFeedbackByGarmentAndTrip } from "@/api/feedback";
+import { buildAlterationFilter } from "@/lib/alteration-filter";
 import {
   useCompleteAndAdvance,
   useStartGarment,
@@ -9,10 +12,7 @@ import {
   useQcFail,
 } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
-import {
-  NotesSection,
-  HISTORY_KEY_MAP,
-} from "@/components/shared/GarmentDetailSections";
+import { HISTORY_KEY_MAP } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { Skeleton } from "@repo/ui/skeleton";
@@ -119,6 +119,16 @@ function TerminalGarmentPage() {
     };
   }, []);
 
+  const currentTrip = garment?.trip_number ?? 1;
+  const isAlt = garment ? isAlteration(currentTrip, garment.garment_type) : false;
+  const priorTrip = isAlt ? currentTrip - 1 : 0;
+  const { data: priorFeedback } = useQuery({
+    queryKey: ["garment-feedback", garment?.id, priorTrip],
+    queryFn: () => getFeedbackByGarmentAndTrip(garment!.id, priorTrip),
+    enabled: !!garment && isAlt && priorTrip >= 1,
+    staleTime: 60_000,
+  });
+
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
@@ -152,16 +162,15 @@ function TerminalGarmentPage() {
   const isQC = stage === "quality_check";
   const isProductionStage = PRODUCTION_STAGES.includes(stage as any);
 
-  // Repair detection
+  // Repair detection — unified: any trip >= 2 is alteration; QC fail this trip is alt_p.
   const tripHistory = garment.trip_history as TripHistoryEntry[] | null;
-  const currentTrip = garment.trip_number ?? 1;
   const tripEntry = tripHistory?.find((t) => t.trip === currentTrip);
   const hasQcFail = !!tripEntry?.qc_attempts?.some((a) => a.result === "fail");
   const lastQcFail = tripEntry?.qc_attempts?.filter((a) => a.result === "fail").at(-1);
-  const isBrovaReturn = garment.garment_type === "brova" && currentTrip >= 2 && currentTrip <= 3;
-  const isAlt = isAlteration(currentTrip, garment.garment_type);
   const altNum = getAlterationNumber(currentTrip, garment.garment_type);
-  const isRepair = hasQcFail || isBrovaReturn || isAlt;
+  const isRepair = hasQcFail || isAlt;
+
+  const alterationFilter = isAlt ? buildAlterationFilter(priorFeedback) : null;
 
   const handlePrint = () => {
     const className = "terminal-printing";
@@ -201,9 +210,7 @@ function TerminalGarmentPage() {
             "mb-3 flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5",
             hasQcFail
               ? "bg-red-50 border-red-200 text-red-800"
-              : isAlt
-                ? "bg-orange-50 border-orange-200 text-orange-800"
-                : "bg-amber-50 border-amber-200 text-amber-800",
+              : "bg-orange-50 border-orange-200 text-orange-800",
           )}>
             {hasQcFail ? (
               <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -212,8 +219,8 @@ function TerminalGarmentPage() {
             )}
             <div className="min-w-0">
               <p className="text-sm font-bold">
-                {hasQcFail ? "QC Fix" : isAlt ? `Alteration ${altNum}` : `Brova Return ${currentTrip - 1}`}
-                {" "}<span className="font-normal">— not standard production</span>
+                {hasQcFail ? "QC Fix (alt_p)" : `Alteration ${altNum}`}
+                {" "}<span className="font-normal">— partial re-entry, not standard production</span>
               </p>
               {hasQcFail && lastQcFail?.fail_reason && (
                 <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
@@ -222,16 +229,30 @@ function TerminalGarmentPage() {
           </div>
         )}
 
+        {isAlt && alterationFilter && alterationFilter.fieldReasons.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs">
+            <span className="font-semibold text-zinc-700">Cell colors:</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm border-2 border-emerald-500 bg-emerald-100" />
+              Customer Request
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm border-2 border-red-500 bg-red-100" />
+              Workshop Error
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm border-2 border-zinc-500 bg-zinc-200" />
+              Shop Error
+            </span>
+          </div>
+        )}
+
         <DishdashaOverlay
           garment={garment}
           measurement={garment.measurement}
+          alterationFilter={alterationFilter}
+          notes={garment.notes}
         />
-
-        {garment.notes && (
-          <div className="mt-3">
-            <NotesSection notes={garment.notes} />
-          </div>
-        )}
 
         <div className="mt-4">
           {isQC ? (
@@ -243,7 +264,7 @@ function TerminalGarmentPage() {
       </div>
 
       <div className="terminal-print-only hidden" aria-hidden="true">
-        <TerminalQualityTemplatePrint garment={garment} />
+        <TerminalQualityTemplatePrint garment={garment} alterationFilter={alterationFilter} />
       </div>
     </div>
   );
@@ -483,7 +504,11 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
               onClick={handleComplete}
               disabled={completeMut.isPending}
             >
-              <Check className="w-5 h-5 mr-1.5" />
+              {completeMut.isPending ? (
+                <Loader2 className="w-5 h-5 mr-1.5 animate-spin" />
+              ) : (
+                <Check className="w-5 h-5 mr-1.5" />
+              )}
               Confirm
             </Button>
           </DialogFooter>
@@ -610,7 +635,12 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             onClick={handlePass}
             disabled={!canPass || passMut.isPending}
           >
-            <Check className="w-4 h-4 mr-1.5" /> Pass & Send to Dispatch
+            {passMut.isPending ? (
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+            ) : (
+              <Check className="w-4 h-4 mr-1.5" />
+            )}
+            Pass & Send to Dispatch
           </Button>
 
           {!allRated && worker && (
@@ -657,7 +687,12 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             onClick={handleFail}
             disabled={!canFail || failMut.isPending}
           >
-            <X className="w-4 h-4 mr-1.5" /> Send Back
+            {failMut.isPending ? (
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+            ) : (
+              <X className="w-4 h-4 mr-1.5" />
+            )}
+            Send Back
           </Button>
         </div>
       )}

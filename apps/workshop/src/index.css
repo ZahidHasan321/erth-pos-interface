@@ -600,6 +600,23 @@ input[type="number"] {
     letter-spacing: 0.04mm;
   }
 
+  /* Alteration fault tints — match shop feedback DIFFERENCE_REASONS palette. */
+  body.terminal-printing .terminal-qc-measure-cell-reason-customer {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #064e3b;
+  }
+  body.terminal-printing .terminal-qc-measure-cell-reason-workshop {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+  }
+  body.terminal-printing .terminal-qc-measure-cell-reason-shop {
+    background: #e4e4e7;
+    border-color: #71717a;
+    color: #18181b;
+  }
+
   /* ── Style panel ── */
   body.terminal-printing .terminal-qc-style-panel {
     flex: 1;
@@ -640,22 +657,50 @@ input[type="number"] {
   }
 
   body.terminal-printing .terminal-qc-style-block h4 {
-    margin: 0 0 0.6mm;
+    margin: 0;
     font-size: 2mm;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.3mm;
     color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-style-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5mm;
+    margin-bottom: 0.8mm;
     border-bottom: 0.3mm solid #000;
     padding-bottom: 0.5mm;
   }
 
-  body.terminal-printing .terminal-qc-style-row {
-    display: grid;
-    grid-template-columns: 20mm minmax(0, 1fr);
-    gap: 1.5mm;
+  body.terminal-printing .terminal-qc-thickness-badge {
+    display: inline-flex;
     align-items: center;
-    padding-top: 0.5mm;
+    border: 0.3mm solid #000;
+    border-radius: 999px;
+    padding: 0.3mm 1.4mm;
+    font-size: 1.8mm;
+    font-weight: 900;
+    letter-spacing: 0.18mm;
+    text-transform: uppercase;
+    color: #000;
+    background: #fff;
+  }
+
+  body.terminal-printing .terminal-qc-measure-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8mm;
+    padding-top: 0.4mm;
+  }
+
+  body.terminal-printing .terminal-qc-measure-row {
+    display: grid;
+    grid-template-columns: 20mm auto;
+    gap: 1.5mm;
+    align-items: flex-start;
   }
 
   body.terminal-printing .terminal-qc-style-image,
@@ -680,26 +725,66 @@ input[type="number"] {
     filter: none;
   }
 
-  body.terminal-printing .terminal-qc-jabzour-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7mm;
+  body.terminal-printing .terminal-qc-height-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 7mm;
+    height: 14mm;
+    border: 0.3mm solid #000;
+    background: #fff;
+    color: #000;
+    font-size: 2.6mm;
+    font-weight: 900;
   }
 
-  body.terminal-printing .terminal-qc-style-values {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6mm;
-    font-size: 2.5mm;
-    font-weight: 700;
+  body.terminal-printing .terminal-qc-height-box-text {
+    display: inline-block;
+    transform: rotate(90deg);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  body.terminal-printing .terminal-qc-width-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20mm;
+    padding: 0.8mm 1.2mm;
+    border: 0.3mm solid #000;
+    background: #fff;
     color: #000;
+    font-size: 2.6mm;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  body.terminal-printing .terminal-qc-jabzour-secondary {
+    display: block;
+    margin-top: 0.8mm;
+    width: 20mm;
+    height: 10mm;
+    border: 0.3mm solid #555;
+    object-fit: contain;
+    background: #fff;
+    filter: grayscale(1) contrast(1.1);
+  }
+
+  body.terminal-printing .terminal-qc-cuffs-image-wrap {
+    width: 20mm;
+    padding-top: 0.4mm;
   }
 
   body.terminal-printing .terminal-qc-accessories-row {
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 1mm;
     margin-top: 0.8mm;
+  }
+
+  body.terminal-printing .terminal-qc-accessory-rotate {
+    transform: rotate(-90deg);
   }
 
   body.terminal-printing .terminal-qc-accessories-row span {
@@ -720,11 +805,6 @@ input[type="number"] {
     height: 3.4mm;
     object-fit: contain;
     filter: grayscale(1) contrast(1.2);
-  }
-
-  body.terminal-printing .terminal-qc-collar-row img {
-    width: 4.2mm;
-    height: 4.2mm;
   }
 
   /* ── Notes ── */

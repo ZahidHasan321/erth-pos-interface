@@ -5,7 +5,7 @@ import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Droplets, Scissors } from "lucide-react";
+import { Droplets, Scissors, Loader2 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import {
   useStepWorkload,
@@ -47,9 +47,10 @@ interface PlanDialogProps {
   /** Show delivery date field — for per-garment editing */
   showDeliveryDate?: boolean;
   defaultDeliveryDate?: string;
+  isPending?: boolean;
 }
 
-export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate }: PlanDialogProps) {
+export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate, isPending }: PlanDialogProps) {
   const { data: resources = [] } = useResources();
   const workload = useStepWorkload(PLAN_STEPS);
 
@@ -353,8 +354,9 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-card border-t px-5 py-3 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!canSubmit}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+          <Button onClick={handleConfirm} disabled={!canSubmit || isPending}>
+            {isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
             {confirmLabel ?? "Schedule"}
           </Button>
         </div>

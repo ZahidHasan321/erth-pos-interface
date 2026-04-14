@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useWorkshopGarments, useBrovaPlans } from "@/hooks/useWorkshopGarments";
 import { useSendToScheduler } from "@/hooks/useGarmentMutations";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { PageHeader, GarmentTypeBadge } from "@/components/shared/PageShell";
@@ -14,7 +14,7 @@ import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, Tab
 import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
-  ParkingSquare, Clock, RotateCcw, Unlock, Package, Home, Droplets, Zap, Search,
+  ParkingSquare, Clock, RotateCcw, Unlock, Package, Home, Droplets, Zap, Search, Loader2,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -42,7 +42,7 @@ function ParkingGarmentRow({
   onAction,
   actionLabel,
   actionVariant = "outline",
-  isBusy,
+  actionPending,
   showType,
   readOnly,
   hideExpress,
@@ -53,7 +53,7 @@ function ParkingGarmentRow({
   onAction: () => void;
   actionLabel: string;
   actionVariant?: ActionVariant;
-  isBusy: boolean;
+  actionPending: boolean;
   showType?: boolean;
   readOnly?: boolean;
   hideExpress?: boolean;
@@ -134,7 +134,7 @@ function ParkingGarmentRow({
               size="sm"
               variant={actionVariant === "outline" ? "outline" : "default"}
               onClick={onAction}
-              disabled={isBusy}
+              disabled={actionPending}
               className={cn(
                 "text-xs h-7",
                 actionVariant === "green" && "bg-green-600 hover:bg-green-700",
@@ -142,7 +142,11 @@ function ParkingGarmentRow({
                 actionVariant === "red" && "bg-red-600 hover:bg-red-700",
               )}
             >
-              {actionVariant === "green" && <Unlock className="w-3 h-3 mr-1" />}
+              {actionPending ? (
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              ) : actionVariant === "green" ? (
+                <Unlock className="w-3 h-3 mr-1" />
+              ) : null}
               {actionLabel}
             </Button>
           </div>
@@ -161,7 +165,7 @@ function ParkingGarmentTable({
   onAction = () => {},
   actionLabel = "",
   getActionVariant,
-  isBusy = false,
+  isActionPending = () => false,
   showType,
   readOnly,
   hideExpress,
@@ -172,7 +176,7 @@ function ParkingGarmentTable({
   onAction?: (g: WorkshopGarment) => void;
   actionLabel?: string;
   getActionVariant?: (g: WorkshopGarment) => ActionVariant;
-  isBusy?: boolean;
+  isActionPending?: (id: string) => boolean;
   showType?: boolean;
   readOnly?: boolean;
   hideExpress?: boolean;
@@ -212,7 +216,7 @@ function ParkingGarmentTable({
               onAction={() => onAction(g)}
               actionLabel={actionLabel}
               actionVariant={getActionVariant ? getActionVariant(g) : "outline"}
-              isBusy={isBusy}
+              actionPending={isActionPending(g.id)}
               showType={showType}
               readOnly={readOnly}
               hideExpress={hideExpress}
@@ -313,23 +317,70 @@ function ParkingPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
 
   // ── Data slices ──────────────────────────────────────────────────────────
-  const parked = allGarments.filter((g) => g.location === "workshop" && !g.in_production);
-  const trip1 = parked.filter((g) => (g.trip_number ?? 1) === 1);
-  const returnsGarments = parked.filter((g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted");
+  // Parking = active, schedulable garments at workshop. Finals locked on
+  // brova approval are blocked — not schedulable — so we exclude them.
+  const parked = useMemo(
+    () => allGarments.filter(
+      (g) =>
+        g.location === "workshop" &&
+        !g.in_production &&
+        g.piece_stage !== "waiting_for_acceptance",
+    ),
+    [allGarments],
+  );
+  const trip1 = useMemo(() => parked.filter((g) => (g.trip_number ?? 1) === 1), [parked]);
+  const returnsGarments = useMemo(
+    () => parked.filter((g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted"),
+    [parked],
+  );
 
-  // Express: all express trip-1 garments that can be scheduled now
-  const expressGarments = trip1.filter((g) => g.express && g.piece_stage !== "waiting_for_acceptance");
+  // Released finals (non-express AND express both allowed here — we split below).
+  // waiting_for_acceptance is already excluded from `parked`.
+  const releasedFinals = useMemo(
+    () => trip1.filter((g) => g.garment_type === "final"),
+    [trip1],
+  );
+
+  // Any brova currently in the workshop ecosystem proves the order had a brova.
+  // allGarments covers workshop + transit_to_* + lost_in_transit, not shop. For
+  // brovas already fully dispatched back & trialed (at shop) we fall back to
+  // the DB lookup via useBrovaPlans.
+  const brovaOrderIdSet = useMemo(
+    () => new Set(allGarments.filter((g) => g.garment_type === "brova").map((g) => g.order_id)),
+    [allGarments],
+  );
+  const finalOrderIdsNeedingLookup = useMemo(
+    () => [...new Set(releasedFinals.map((g) => g.order_id))].filter((id) => !brovaOrderIdSet.has(id)),
+    [releasedFinals, brovaOrderIdSet],
+  );
+  const { data: brovaPlansMap = {} } = useBrovaPlans(finalOrderIdsNeedingLookup);
+  const hadBrova = useMemo(
+    () => (orderId: number) => brovaOrderIdSet.has(orderId) || !!brovaPlansMap[orderId],
+    [brovaOrderIdSet, brovaPlansMap],
+  );
+
+  // Express: express brovas + express finals in orders with NO brova (no plan to inherit).
+  const expressGarments = useMemo(
+    () => trip1.filter(
+      (g) => g.express && (g.garment_type === "brova" || !hadBrova(g.order_id)),
+    ),
+    [trip1, hadBrova],
+  );
   // Brova: non-express brovas
-  const brovaGarments = trip1.filter((g) => !g.express && g.garment_type === "brova");
-  // Customer Approved: non-express finals already released (waiting_cut, not yet in production)
-  const customerApprovedGarments = trip1.filter(
-    (g) => !g.express && g.garment_type === "final" && g.piece_stage !== "waiting_for_acceptance",
+  const brovaGarments = useMemo(
+    () => trip1.filter((g) => !g.express && g.garment_type === "brova"),
+    [trip1],
   );
-  // Awaiting Approval: finals still locked (includes express — sorted first)
-  const awaitingGarments = trip1.filter(
-    (g) => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance",
+  // Customer Approved: any released final (express or not) whose order had brova.
+  const customerApprovedGarments = useMemo(
+    () => releasedFinals.filter((g) => hadBrova(g.order_id)),
+    [releasedFinals, hadBrova],
   );
-
+  // Finals: non-express released finals in orders with no brova — direct finals.
+  const directFinalsGarments = useMemo(
+    () => releasedFinals.filter((g) => !g.express && !hadBrova(g.order_id)),
+    [releasedFinals, hadBrova],
+  );
   // Group by order, sort groups by delivery date, brovas before finals within group, then flatten.
   const groupByOrderSorted = (arr: WorkshopGarment[]): WorkshopGarment[] => {
     const groups = new Map<number, WorkshopGarment[]>();
@@ -357,26 +408,7 @@ function ParkingPage() {
   const sortedExpress = groupByOrderSorted(expressGarments);
   const sortedBrova = groupByOrderSorted(brovaGarments);
   const sortedCustomerApproved = groupByOrderSorted(customerApprovedGarments);
-  // Awaiting: express orders first, then by delivery date, garments grouped by order
-  const sortedAwaiting = (() => {
-    const groups = new Map<number, WorkshopGarment[]>();
-    for (const g of awaitingGarments) {
-      if (!groups.has(g.order_id)) groups.set(g.order_id, []);
-      groups.get(g.order_id)!.push(g);
-    }
-    return [...groups.values()]
-      .sort((a, b) => {
-        const aExpress = a[0]?.express ?? false;
-        const bExpress = b[0]?.express ?? false;
-        if (aExpress && !bExpress) return -1;
-        if (!aExpress && bExpress) return 1;
-        const da = a[0]?.delivery_date_order;
-        const db = b[0]?.delivery_date_order;
-        if (da && db) return da.localeCompare(db);
-        return da ? -1 : db ? 1 : 0;
-      })
-      .flat();
-  })();
+  const sortedDirectFinals = groupByOrderSorted(directFinalsGarments);
 
   // ── Search ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -412,14 +444,27 @@ function ParkingPage() {
     await sendToSchedulerMut.mutateAsync(ids);
     setSel(new Set());
   };
-  const isBusy = sendToSchedulerMut.isPending;
+  const schedulePendingIds = useMemo(
+    () =>
+      sendToSchedulerMut.isPending && sendToSchedulerMut.variables
+        ? new Set(sendToSchedulerMut.variables)
+        : new Set<string>(),
+    [sendToSchedulerMut.isPending, sendToSchedulerMut.variables],
+  );
+  const isActionPending = (id: string) => schedulePendingIds.has(id);
 
   // ── Select all (schedulable sections only) ────────────────────────────────
   const searchedExpress = applySearch(sortedExpress);
   const searchedBrova = applySearch(sortedBrova);
   const searchedCustomerApproved = applySearch(sortedCustomerApproved);
-  const searchedAwaiting = applySearch(sortedAwaiting);
-  const allSchedulable = [...searchedExpress, ...searchedBrova, ...filteredReturns, ...searchedCustomerApproved];
+  const searchedDirectFinals = applySearch(sortedDirectFinals);
+  const allSchedulable = [
+    ...searchedExpress,
+    ...searchedBrova,
+    ...filteredReturns,
+    ...searchedDirectFinals,
+    ...searchedCustomerApproved,
+  ];
   const allSelected = allSchedulable.length > 0 && allSchedulable.every((g) => sel.has(g.id));
   const selectAll = () => setSel(new Set(allSchedulable.map((g) => g.id)));
   const clearAll = () => setSel(new Set());
@@ -470,7 +515,7 @@ function ParkingPage() {
                 onAction={(g) => handleSendToScheduler([g.id])}
                 actionLabel="Schedule"
                 getActionVariant={() => "green"}
-                isBusy={isBusy}
+                isActionPending={isActionPending}
                 showType
                 hideExpress
               />
@@ -489,7 +534,7 @@ function ParkingPage() {
                 onAction={(g) => handleSendToScheduler([g.id])}
                 actionLabel="Schedule"
                 getActionVariant={() => "green"}
-                isBusy={isBusy}
+                isActionPending={isActionPending}
               />
             )}
           </Section>
@@ -584,10 +629,14 @@ function ParkingPage() {
                               size="sm"
                               variant="default"
                               onClick={() => handleSendToScheduler([g.id])}
-                              disabled={isBusy}
+                              disabled={isActionPending(g.id)}
                               className="text-xs h-7 bg-green-600 hover:bg-green-700"
                             >
-                              <Unlock className="w-3 h-3 mr-1" />
+                              {isActionPending(g.id) ? (
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              ) : (
+                                <Unlock className="w-3 h-3 mr-1" />
+                              )}
                               Schedule
                             </Button>
                           </TableCell>
@@ -600,7 +649,22 @@ function ParkingPage() {
             )}
           </Section>
 
-          {/* ── CUSTOMER APPROVED ── */}
+          {/* ── FINALS (direct — no brova in order) ── */}
+          {searchedDirectFinals.length > 0 && (
+            <Section title="Finals" icon={Package} count={searchedDirectFinals.length} accent="bg-blue-100 text-blue-700">
+              <ParkingGarmentTable
+                garments={searchedDirectFinals}
+                selectedIds={sel}
+                onToggle={toggle}
+                onAction={(g) => handleSendToScheduler([g.id])}
+                actionLabel="Schedule"
+                getActionVariant={() => "green"}
+                isActionPending={isActionPending}
+              />
+            </Section>
+          )}
+
+          {/* ── CUSTOMER APPROVED (finals whose order had brova, express + non-express) ── */}
           <Section title="Customer Approved" icon={Unlock} count={searchedCustomerApproved.length} accent="bg-emerald-100 text-emerald-700">
             {searchedCustomerApproved.length === 0 ? (
               <EmptyState icon={Unlock} message="No customer approved finals in parking" />
@@ -612,24 +676,11 @@ function ParkingPage() {
                 onAction={(g) => handleSendToScheduler([g.id])}
                 actionLabel="Schedule"
                 getActionVariant={() => "green"}
-                isBusy={isBusy}
+                isActionPending={isActionPending}
               />
             )}
           </Section>
 
-          {/* ── FINALS AWAITING APPROVAL ── */}
-          <Section
-            title="Finals Awaiting Approval"
-            icon={Clock}
-            count={searchedAwaiting.length}
-            accent={searchedAwaiting.length > 0 ? "bg-amber-100 text-amber-700" : undefined}
-          >
-            {searchedAwaiting.length === 0 ? (
-              <EmptyState icon={Clock} message="No finals awaiting approval" />
-            ) : (
-              <ParkingGarmentTable garments={searchedAwaiting} readOnly />
-            )}
-          </Section>
         </>
       )}
 
@@ -638,9 +689,13 @@ function ParkingPage() {
           size="sm"
           className="bg-green-600 hover:bg-green-700"
           onClick={() => handleSendToScheduler([...sel])}
-          disabled={isBusy}
+          disabled={sendToSchedulerMut.isPending}
         >
-          <Unlock className="w-3.5 h-3.5 mr-1" />
+          {sendToSchedulerMut.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+          ) : (
+            <Unlock className="w-3.5 h-3.5 mr-1" />
+          )}
           Send to Scheduler
         </Button>
       </BatchActionBar>

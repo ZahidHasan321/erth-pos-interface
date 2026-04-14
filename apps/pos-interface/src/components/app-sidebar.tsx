@@ -16,6 +16,7 @@ import {
   PackageCheck,
   BarChart,
   PackagePlus,
+  Scissors,
   FileText,
   History,
   Banknote,
@@ -67,6 +68,12 @@ const data = {
           title: "New Sales Order",
           url: "orders/new-sales-order",
           icon: ShoppingCart,
+        },
+        {
+          title: "New Alteration Order",
+          url: "orders/new-alteration-order",
+          icon: Scissors,
+          allowedBrands: ["erth", "qass"] as const,
         },
         {
           title: "Orders at Showroom",
@@ -411,7 +418,11 @@ export function AppSidebar({
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.filter((subItem: any) => !subItem.erthOnly || isErth).map((subItem: any) => {
+                {item.items.filter((subItem: any) => {
+                  if (subItem.erthOnly && !isErth) return false;
+                  if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
+                  return true;
+                }).map((subItem: any) => {
                   if (subItem.isCollapsible && subItem.items) {
                     return (
                       <CollapsibleMenuItem

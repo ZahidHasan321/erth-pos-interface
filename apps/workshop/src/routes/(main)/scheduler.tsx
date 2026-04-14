@@ -21,9 +21,9 @@ import { cn, formatDate, getLocalDateStr, toLocalDateStr, getKuwaitMidnight, get
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, Home, User, RotateCcw,
-  Calendar, BarChart3, Droplets, Zap, Search,
+  Calendar, BarChart3, Droplets, Zap, Search, Loader2,
 } from "lucide-react";
-import { getAlterationNumber, isAlteration } from "@repo/database";
+import { getAlterationNumber } from "@repo/database";
 import type { WorkshopGarment } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 
@@ -240,249 +240,6 @@ function SchedulerSectionTable({
   );
 }
 
-// ── Order-level table (Finals / Returns) ──────────────────────────────────────
-
-type OrderRow = {
-  order_id: number;
-  invoice_number?: number;
-  customer_name?: string;
-  customer_mobile?: string;
-  order_brand: string;
-  delivery_date_order?: string;
-  home_delivery?: boolean;
-  garments: WorkshopGarment[];
-};
-
-function buildOrderRows(garments: WorkshopGarment[]): OrderRow[] {
-  const map = new Map<number, OrderRow>();
-  for (const g of garments) {
-    if (!map.has(g.order_id)) {
-      map.set(g.order_id, {
-        order_id: g.order_id,
-        invoice_number: g.invoice_number,
-        customer_name: g.customer_name,
-        customer_mobile: g.customer_mobile,
-        order_brand: g.order_brand,
-        delivery_date_order: g.delivery_date_order,
-        home_delivery: g.home_delivery,
-        garments: [],
-      });
-    }
-    map.get(g.order_id)!.garments.push(g);
-  }
-  // Sort by delivery date
-  return [...map.values()].sort((a, b) => {
-    if (a.delivery_date_order && b.delivery_date_order)
-      return a.delivery_date_order.localeCompare(b.delivery_date_order);
-    return a.delivery_date_order ? -1 : b.delivery_date_order ? 1 : 0;
-  });
-}
-
-function OrderGroupTable({
-  garments,
-  selectedIds,
-  onToggleOrder,
-  showAlt,
-  showFeedback,
-  disabled,
-}: {
-  garments: WorkshopGarment[];
-  selectedIds: Set<string>;
-  onToggleOrder: (orderGarmentIds: string[], checked: boolean) => void;
-  showAlt?: boolean;
-  disabled?: boolean;
-  showFeedback?: boolean;
-}) {
-  const orders = useMemo(() => buildOrderRows(garments), [garments]);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-
-  const allSelected = orders.length > 0 && orders.every((o) => o.garments.every((g) => selectedIds.has(g.id)));
-
-  // Lock to a single order once any is selected
-  const lockedOrderId = selectedIds.size > 0
-    ? (orders.find((o) => o.garments.some((g) => selectedIds.has(g.id)))?.order_id ?? null)
-    : null;
-
-  const toggleExpand = (orderId: number) =>
-    setExpanded((prev) => {
-      const n = new Set(prev);
-      n.has(orderId) ? n.delete(orderId) : n.add(orderId);
-      return n;
-    });
-
-  return (
-    <TableContainer>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-            <TableHead className="w-10 px-3">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={(c) => {
-                  for (const o of orders) onToggleOrder(o.garments.map((g) => g.id), !!c);
-                }}
-                aria-label="Select all orders"
-                className="size-4"
-                disabled={disabled}
-              />
-            </TableHead>
-            <TableHead className="w-[120px]">Order / Invoice</TableHead>
-            <TableHead className="w-[170px]">Customer</TableHead>
-            <TableHead className="w-[200px]">Garments</TableHead>
-            <TableHead className="w-[80px]">Brand</TableHead>
-            <TableHead className="w-[130px] text-center">Delivery</TableHead>
-            <TableHead className="w-8" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orders.map((order) => {
-            const orderIds = order.garments.map((g) => g.id);
-            const isSelected = order.garments.every((g) => selectedIds.has(g.id));
-            const isExpanded = expanded.has(order.order_id);
-            const urgency = getDeliveryUrgency(order.delivery_date_order);
-            const rowDisabled = disabled || (lockedOrderId !== null && order.order_id !== lockedOrderId);
-
-            return (
-              <React.Fragment key={order.order_id}>
-                <TableRow
-                  className={cn(
-                    "transition-colors",
-                    rowDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30",
-                    isSelected && "bg-primary/5",
-                  )}
-                  onClick={() => toggleExpand(order.order_id)}
-                >
-                  <TableCell className="px-3 py-3">
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={(c) => onToggleOrder(orderIds, !!c)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="size-4"
-                      disabled={rowDisabled}
-                    />
-                  </TableCell>
-                  <TableCell className="px-3 py-3 font-mono">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold">#{order.order_id}</span>
-                      {order.invoice_number && (
-                        <span className="text-xs text-muted-foreground">INV-{order.invoice_number}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3 text-sm">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold">{order.customer_name ?? "—"}</span>
-                      {order.customer_mobile && (
-                        <span className="text-xs font-mono text-muted-foreground">{order.customer_mobile}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {order.garments.map((g) => {
-                        const altNum = showAlt ? getAlterationNumber(g.trip_number ?? 1, g.garment_type) : null;
-                        const fb = showFeedback ? feedbackInfo(g) : null;
-                        return (
-                          <span
-                            key={g.id}
-                            className="inline-flex items-center gap-1 text-xs font-mono bg-muted px-1.5 py-0.5 rounded"
-                          >
-                            <span className={cn(
-                              "font-bold",
-                              g.garment_type === "brova" ? "text-purple-600" : "text-blue-600",
-                            )}>
-                              {g.garment_type === "brova" ? "B" : "F"}
-                            </span>
-                            {g.garment_id ?? g.id.slice(0, 6)}
-                            {altNum !== null && (
-                              <span className="text-orange-500 font-bold">·A{altNum}</span>
-                            )}
-                            {fb && (
-                              <span className={cn(
-                                "font-bold",
-                                fb.color === "red" ? "text-red-500" : fb.color === "orange" ? "text-orange-500" : "text-amber-500",
-                              )}>·{fb.label.charAt(0)}</span>
-                            )}
-                            {g.soaking && <Droplets className="w-2.5 h-2.5 text-blue-500" />}
-                            {g.express && <span className="text-orange-500 font-bold">⚡</span>}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <BrandBadge brand={order.order_brand} />
-                  </TableCell>
-                  <TableCell className="px-3 py-3 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      {order.delivery_date_order ? (
-                        <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
-                          <Clock className="w-3 h-3" />
-                          {formatDate(order.delivery_date_order)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                      {order.home_delivery && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
-                          <Home className="w-3 h-3" /> Home
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 transition-transform duration-150", isExpanded && "rotate-180")} />
-                  </TableCell>
-                </TableRow>
-
-                {/* Expanded garment detail */}
-                <TableRow className="border-0 hover:bg-transparent">
-                  <TableCell colSpan={7} className="p-0">
-                    <div className={cn(
-                      "grid transition-[grid-template-rows] duration-200 ease-out",
-                      isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                    )}>
-                      <div className="overflow-hidden">
-                        <div className="bg-muted/20 px-4 py-2 space-y-1.5 border-b">
-                          {order.garments.map((g) => {
-                            const altNum = showAlt ? getAlterationNumber(g.trip_number ?? 1, g.garment_type) : null;
-                            const fb = showFeedback ? feedbackInfo(g) : null;
-                            return (
-                              <div key={g.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs bg-card">
-                                <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                                <span className="font-mono font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                                {g.fabric_name ? (
-                                  <span className="text-muted-foreground truncate">{g.fabric_name}{g.fabric_color ? ` · ${g.fabric_color}` : ""}</span>
-                                ) : (
-                                  <span className="text-muted-foreground/50">Outside fabric</span>
-                                )}
-                                <div className="flex items-center gap-1 ml-auto shrink-0">
-                                  {altNum !== null && (
-                                    <Badge className="bg-orange-500 text-white text-[10px] border-0 py-0">
-                                      Alt {altNum}
-                                    </Badge>
-                                  )}
-                                  {fb && <StatusPill color={fb.color}>{fb.label}</StatusPill>}
-                                  {g.soaking && <StatusPill color="sky">Soak</StatusPill>}
-                                  {g.express && <StatusPill color="red">Express</StatusPill>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </React.Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}
-
 // ── Heat-Map Calendar ─────────────────────────────────────────────────────────
 
 function HeatCalendar({
@@ -689,20 +446,61 @@ function SchedulerPage() {
   const scheduleMut = useScheduleGarments();
 
   // ── Data slices ───────────────────────────────────────────────────────────
-  const trip1 = schedulable.filter((g) => (g.trip_number ?? 1) === 1);
-  const expressGarments = trip1.filter((g) => g.express);
-  const brovaGarments = trip1.filter((g) => !g.express && g.garment_type === "brova");
-  const finalsGarments = trip1.filter(
-    (g) => !g.express && g.garment_type === "final" && g.piece_stage !== "waiting_for_acceptance",
+  // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
+  // in_production=true, production_plan=null. So here we only split by trip /
+  // garment_type / express / whether the order had a brova.
+  const trip1 = useMemo(
+    () => schedulable.filter((g) => (g.trip_number ?? 1) === 1),
+    [schedulable],
   );
-  const returnsGarments = schedulable.filter((g) => (g.trip_number ?? 1) >= 2);
+  const returnsGarments = useMemo(
+    () => schedulable.filter((g) => (g.trip_number ?? 1) >= 2),
+    [schedulable],
+  );
+  const brovaGarments = useMemo(
+    () => trip1.filter((g) => !g.express && g.garment_type === "brova"),
+    [trip1],
+  );
+  const allReleasedFinals = useMemo(
+    () => trip1.filter((g) => g.garment_type === "final"),
+    [trip1],
+  );
 
-  // Brova plan lookup for final-only orders
-  const finalOnlyOrderIds = useMemo(() => {
-    const brovaOrderIds = new Set(brovaGarments.map((g) => g.order_id));
-    return [...new Set(finalsGarments.map((g) => g.order_id))].filter((id) => !brovaOrderIds.has(id));
-  }, [finalsGarments, brovaGarments]);
-  const { data: brovaPlansMap = {} } = useBrovaPlans(finalOnlyOrderIds);
+  // Any brova currently in the scheduler (express or not) proves the order had a brova.
+  const brovaOrderIdSet = useMemo(
+    () => new Set(trip1.filter((g) => g.garment_type === "brova").map((g) => g.order_id)),
+    [trip1],
+  );
+
+  // Brova plan lookup: released finals whose order has no brova currently in the
+  // scheduler (either already produced, or the order never had a brova).
+  const finalOrderIdsNeedingLookup = useMemo(
+    () => [...new Set(allReleasedFinals.map((g) => g.order_id))].filter((id) => !brovaOrderIdSet.has(id)),
+    [allReleasedFinals, brovaOrderIdSet],
+  );
+  const { data: brovaPlansMap = {} } = useBrovaPlans(finalOrderIdsNeedingLookup);
+
+  // Order had a brova if one is in the scheduler now OR a stored brova plan exists.
+  const hadBrova = useMemo(
+    () => (orderId: number) => brovaOrderIdSet.has(orderId) || !!brovaPlansMap[orderId],
+    [brovaOrderIdSet, brovaPlansMap],
+  );
+
+  // Express: express brovas + express finals in orders with NO brova (no plan to inherit).
+  const expressGarments = useMemo(
+    () => trip1.filter((g) => g.express && (g.garment_type === "brova" || !hadBrova(g.order_id))),
+    [trip1, hadBrova],
+  );
+  // Approved Finals: any released final in an order that had brova (express or not).
+  const finalsGarments = useMemo(
+    () => allReleasedFinals.filter((g) => hadBrova(g.order_id)),
+    [allReleasedFinals, hadBrova],
+  );
+  // Finals: non-express released finals in orders with no brova — manual plan, cross-order OK.
+  const directFinalsGarments = useMemo(
+    () => allReleasedFinals.filter((g) => !g.express && !hadBrova(g.order_id)),
+    [allReleasedFinals, hadBrova],
+  );
 
   // Sort by delivery date, brovas before finals within order
   const groupByOrderSorted = (arr: WorkshopGarment[]): WorkshopGarment[] => {
@@ -744,14 +542,18 @@ function SchedulerPage() {
   const sortedExpress = applySearch(groupByOrderSorted(expressGarments));
   const sortedBrova = applySearch(groupByOrderSorted(brovaGarments));
   const sortedFinals = applySearch(groupByOrderSorted(finalsGarments));
+  const sortedDirectFinals = applySearch(groupByOrderSorted(directFinalsGarments));
   const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
 
   // ── Selection state ───────────────────────────────────────────────────────
   // Express + Brova: garment-level, freely mixable with each other
-  // Finals + Returns: order-level, must be selected independently
+  // Approved Finals: garment-level, locked to a single order (shares brova plan)
+  // Direct Finals: garment-level, cross-order OK (manual plan)
+  // Returns: garment-level, independent
   const [selExpress, setSelExpress] = useState<Set<string>>(new Set());
   const [selBrova, setSelBrova] = useState<Set<string>>(new Set());
   const [selFinals, setSelFinals] = useState<Set<string>>(new Set());
+  const [selDirectFinals, setSelDirectFinals] = useState<Set<string>>(new Set());
   const [selReturns, setSelReturns] = useState<Set<string>>(new Set());
 
   const toggleGarment =
@@ -759,36 +561,35 @@ function SchedulerPage() {
     (id: string, checked: boolean) =>
       setFn((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
 
-  const toggleFinalOrder = (orderGarmentIds: string[], checked: boolean) =>
-    setSelFinals((prev) => {
-      const n = new Set(prev);
-      for (const id of orderGarmentIds) checked ? n.add(id) : n.delete(id);
-      return n;
-    });
-
   const toggleReturn = (id: string, checked: boolean) =>
     setSelReturns((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
 
   // Sections are disabled when another group has an active selection
   const expressBrovaActive = selExpress.size > 0 || selBrova.size > 0;
   const finalsActive = selFinals.size > 0;
+  const directFinalsActive = selDirectFinals.size > 0;
   const returnsActive = selReturns.size > 0;
 
-  const expressBrovaDisabled = finalsActive || returnsActive;
-  const finalsDisabled = expressBrovaActive || returnsActive;
-  const returnsDisabled = expressBrovaActive || finalsActive;
+  const expressBrovaDisabled = finalsActive || directFinalsActive || returnsActive;
+  const finalsDisabled = expressBrovaActive || directFinalsActive || returnsActive;
+  const directFinalsDisabled = expressBrovaActive || finalsActive || returnsActive;
+  const returnsDisabled = expressBrovaActive || finalsActive || directFinalsActive;
 
   const clearAll = () => {
     setSelExpress(new Set());
     setSelBrova(new Set());
     setSelFinals(new Set());
+    setSelDirectFinals(new Set());
     setSelReturns(new Set());
   };
 
-  const totalSelected = selExpress.size + selBrova.size + selFinals.size + selReturns.size;
+  const totalSelected =
+    selExpress.size + selBrova.size + selFinals.size + selDirectFinals.size + selReturns.size;
 
   const getSelectedGarments = (): WorkshopGarment[] => {
-    const ids = new Set([...selExpress, ...selBrova, ...selFinals, ...selReturns]);
+    const ids = new Set([
+      ...selExpress, ...selBrova, ...selFinals, ...selDirectFinals, ...selReturns,
+    ]);
     return schedulable.filter((g) => ids.has(g.id));
   };
 
@@ -1000,16 +801,29 @@ function SchedulerPage() {
                 )}
               </Section>
 
-              {/* ── APPROVED FINALS (order-level) ── */}
+              {/* ── FINALS (no brova — manual plan, cross-order OK) ── */}
+              {sortedDirectFinals.length > 0 && (
+                <Section title="Finals" icon={Package} count={sortedDirectFinals.length} accent="bg-blue-100 text-blue-700">
+                  <SchedulerSectionTable
+                    garments={sortedDirectFinals}
+                    selectedIds={selDirectFinals}
+                    onToggle={toggleGarment(setSelDirectFinals)}
+                    disabled={directFinalsDisabled}
+                  />
+                </Section>
+              )}
+
+              {/* ── APPROVED FINALS (garment-level, locked to single order — shares brova plan) ── */}
               <Section title="Approved Finals" icon={Package} count={sortedFinals.length} accent="bg-emerald-100 text-emerald-700">
                 {sortedFinals.length === 0 ? (
                   <EmptyState icon={Package} message="No approved finals to schedule" />
                 ) : (
-                  <OrderGroupTable
+                  <SchedulerSectionTable
                     garments={sortedFinals}
                     selectedIds={selFinals}
-                    onToggleOrder={toggleFinalOrder}
+                    onToggle={toggleGarment(setSelFinals)}
                     disabled={finalsDisabled}
+                    lockToOrder
                   />
                 )}
               </Section>
@@ -1074,7 +888,8 @@ function SchedulerPage() {
                 disabled={totalSelected === 0 || !selectedDate || scheduleMut.isPending}
                 onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
               >
-                Create Plan
+                {scheduleMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                {scheduleMut.isPending ? "Scheduling…" : "Create Plan"}
               </Button>
             </div>
           </div>
@@ -1090,6 +905,7 @@ function SchedulerPage() {
           disabled={!selectedDate || scheduleMut.isPending}
           onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
         >
+          {scheduleMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
           Create Plan ({getSelectedGarmentIds().length})
         </Button>
       </BatchActionBar>
@@ -1103,6 +919,7 @@ function SchedulerPage() {
         isAlteration={false}
         defaultPlan={getDefaultPlanForSelection()}
         hasSoaking={selectedHasSoaking}
+        isPending={scheduleMut.isPending}
       />
 
       <ReturnPlanDialog
@@ -1112,6 +929,7 @@ function SchedulerPage() {
         garmentCount={getSelectedGarmentIds().length}
         defaultDate={selectedDate}
         workerHistory={getReturnWorkerHistory()}
+        isPending={scheduleMut.isPending}
       />
     </div>
   );

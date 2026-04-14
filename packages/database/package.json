@@ -7,6 +7,7 @@
     "db:push": "drizzle-kit push:pg",
     "db:reset": "tsx scripts/reset.ts",
     "db:triggers": "tsx scripts/apply-triggers.ts",
+    "db:add-alteration-orders": "tsx scripts/add-alteration-orders.ts",
     "db:test": "tsx scripts/test-queries.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
     "db:migrate-styles-pricing": "tsx scripts/migrate-styles-pricing.ts",

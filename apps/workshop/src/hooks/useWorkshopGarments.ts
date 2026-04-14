@@ -13,6 +13,7 @@ import {
   getWorkshopWorkload,
   getBrovaStatusForOrders,
   getBrovaPlansForOrders,
+  getOrderLocationBreakdown,
   type AssignedTab,
   type AssignedChip,
 } from '@/api/garments';
@@ -186,6 +187,16 @@ export function useBrovaPlans(orderIds: number[]) {
   return useQuery({
     queryKey: ['brova-plans', key],
     queryFn: () => getBrovaPlansForOrders(orderIds),
+    enabled: orderIds.length > 0,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+export function useOrderLocationBreakdown(orderIds: number[]) {
+  const key = [...orderIds].sort((a, b) => a - b).join(',');
+  return useQuery({
+    queryKey: ['order-location-breakdown', key],
+    queryFn: () => getOrderLocationBreakdown(orderIds),
     enabled: orderIds.length > 0,
     staleTime: LIST_STALE_TIME,
   });

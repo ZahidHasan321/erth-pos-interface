@@ -1,3 +1,4 @@
+import { parseMeasurementParts } from "@repo/database";
 import type { Measurement } from "@repo/database";
 
 const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fields: { key: keyof Measurement; label: string }[] }[] = [
@@ -65,16 +66,11 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
   },
 ];
 
-function formatFraction(val: number): { whole: number; frac: string } {
-  const whole = Math.floor(val);
-  const rem = val - whole;
-  if (rem < 0.01) return { whole, frac: "" };
-  if (Math.abs(rem - 0.25) < 0.01) return { whole, frac: "¼" };
-  if (Math.abs(rem - 0.5) < 0.01) return { whole, frac: "½" };
-  if (Math.abs(rem - 0.75) < 0.01) return { whole, frac: "¾" };
-  // Non-standard fraction — show decimal
-  return { whole, frac: `.${Math.round(rem * 100)}` };
-}
+const UNICODE_FRAC: Record<string, string> = {
+  "1/4": "¼",
+  "1/2": "½",
+  "3/4": "¾",
+};
 
 interface MeasurementGridProps {
   measurement: Measurement | null | undefined;
@@ -100,16 +96,18 @@ export function MeasurementGrid({ measurement }: MeasurementGridProps) {
             </p>
             <div className="grid grid-cols-3 gap-1.5">
               {filled.map(({ key, label }) => {
-                const raw = Number(measurement[key]);
-                const adjusted = degree ? raw - degree : raw;
-                const { whole, frac } = formatFraction(adjusted);
+                const parts = parseMeasurementParts(measurement[key], degree);
+                if (!parts) return null;
+                const fracKey = parts.numerator > 0 ? `${parts.numerator}/${parts.denominator}` : "";
+                const frac = fracKey ? UNICODE_FRAC[fracKey] ?? fracKey : "";
                 return (
                   <div key={key} className={`flex items-baseline justify-between rounded-lg px-2.5 py-1.5 ${group.cellColor}`}>
                     <span className="text-xs text-muted-foreground">{label}</span>
                     <span className="text-sm font-bold tabular-nums">
-                      {whole}
+                      {parts.negative && "-"}
+                      {parts.whole}
                       {frac && <span className="text-xs font-semibold text-muted-foreground">({frac})</span>}
-                      <span className="text-xs text-muted-foreground font-normal">°</span>
+                      {parts.hasDegree && <span className="text-xs text-muted-foreground font-normal">°</span>}
                     </span>
                   </div>
                 );

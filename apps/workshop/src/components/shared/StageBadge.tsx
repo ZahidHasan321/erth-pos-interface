@@ -99,21 +99,16 @@ export function FeedbackStatusBadge({ status, className }: { status: string | nu
   );
 }
 
-export function AlterationBadge({ tripNumber, garmentType }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
+export function AlterationBadge({ tripNumber }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
   const trip = tripNumber ?? 1;
-  // Brova: alteration starts at trip 4, Final: alteration starts at trip 2
-  const altNum = garmentType === "final" && trip >= 2
-    ? trip - 1
-    : trip >= 4
-      ? trip - 3
-      : null;
-  if (altNum === null) return null;
+  // Unified rule: any return (trip >= 2) is an alteration. alt# = trip - 1.
+  if (trip < 2) return null;
   return (
     <Badge
       variant="outline"
       className="border-0 bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide"
     >
-      Alt {altNum}
+      Alt {trip - 1}
     </Badge>
   );
 }
@@ -130,20 +125,6 @@ export function QcFixBadge({ tripNumber, tripHistory }: { tripNumber: number | n
       className="border-0 bg-red-600 text-white font-bold text-xs uppercase tracking-wide"
     >
       QC Fix
-    </Badge>
-  );
-}
-
-/** Shows "Return" for brova trip 2-3 (brova return, not yet alteration threshold). */
-export function BrovaReturnBadge({ tripNumber, garmentType }: { tripNumber: number | null | undefined; garmentType?: string | null }) {
-  const trip = tripNumber ?? 1;
-  if (garmentType !== "brova" || trip < 2 || trip > 3) return null;
-  return (
-    <Badge
-      variant="outline"
-      className="border-0 bg-amber-600 text-white font-bold text-xs uppercase tracking-wide"
-    >
-      Return {trip - 1}
     </Badge>
   );
 }

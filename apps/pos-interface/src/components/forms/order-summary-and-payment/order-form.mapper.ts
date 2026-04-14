@@ -37,7 +37,7 @@ export function mapOrderToFormValues(order: Order): OrderSchema {
         delivery_date: toISOString(order.delivery_date),
         checkout_status: order.checkout_status ?? "draft",
         order_phase: order.order_phase ?? (order.order_type === "WORK" ? "new" : undefined),
-        order_type: order.order_type ?? "WORK",
+        order_type: (order.order_type === "ALTERATION" ? "WORK" : order.order_type) ?? "WORK",
         fabric_charge: parseNumeric(order.fabric_charge) ?? 0,
         stitching_charge: parseNumeric(order.stitching_charge) ?? 0,
         style_charge: parseNumeric(order.style_charge) ?? 0,

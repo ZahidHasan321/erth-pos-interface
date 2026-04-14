@@ -23,6 +23,8 @@ import {
   ArrowUp,
   Mic,
   MicOff,
+  Play,
+  Pause,
   ChevronDown,
   History,
   Home,
@@ -114,6 +116,29 @@ const MEASUREMENT_ROWS = [
   { type: "Bottom", subType: "Bottom", key: "bottom" },
 ] as const;
 
+type MeasurementRow = (typeof MEASUREMENT_ROWS)[number];
+
+const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[] }> = [
+  {
+    title: "Collar, Length & Chest",
+    rows: MEASUREMENT_ROWS.filter(r =>
+      ["collar_width", "collar_height", "length_front", "length_back", "chest_upper", "chest_full", "chest_front"].includes(r.key)
+    ),
+  },
+  {
+    title: "Pockets",
+    rows: MEASUREMENT_ROWS.filter(r =>
+      ["top_pocket_length", "top_pocket_width", "top_pocket_distance", "side_pocket_length", "side_pocket_width", "side_pocket_distance", "side_pocket_opening"].includes(r.key)
+    ),
+  },
+  {
+    title: "Waist, Arms & Bottom",
+    rows: MEASUREMENT_ROWS.filter(r =>
+      ["waist_front", "waist_back", "armhole", "elbow", "sleeve_length", "bottom"].includes(r.key)
+    ),
+  },
+];
+
 const SATISFACTION_LEVELS = [
   { value: "angry", label: "Angry", emoji: "\u{1F621}", numericValue: 1, color: "hover:bg-red-50 peer-data-[state=checked]:bg-red-100 peer-data-[state=checked]:border-red-500 text-red-600" },
   { value: "sad", label: "Unhappy", emoji: "\u{1F61E}", numericValue: 2, color: "hover:bg-orange-50 peer-data-[state=checked]:bg-orange-100 peer-data-[state=checked]:border-orange-500 text-orange-600" },
@@ -197,6 +222,186 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
 interface OrderWithDetails extends Order {
     customer?: Customer;
     garments?: Garment[];
+}
+
+// --- Voice Note Player ---
+
+function formatTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// Module-level registry so only one voice note plays at a time
+let currentlyPlayingAudio: HTMLAudioElement | null = null;
+
+function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string; onRemove: () => void }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const durationFixedRef = useRef(false);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+
+    // MediaRecorder webm blobs report duration: Infinity on Chromium until
+    // seeked past the end. Workaround: seek to a huge value on first metadata,
+    // read the real duration from the durationchange, then reset to 0.
+    const onLoaded = () => {
+      if (!durationFixedRef.current && a.duration === Infinity) {
+        durationFixedRef.current = true;
+        const prevMuted = a.muted;
+        a.muted = true;
+        const restore = () => {
+          a.removeEventListener("durationchange", restore);
+          if (isFinite(a.duration)) {
+            setDuration(a.duration);
+            a.currentTime = 0;
+          }
+          a.muted = prevMuted;
+        };
+        a.addEventListener("durationchange", restore);
+        try { a.currentTime = 1e101; } catch { /* ignore */ }
+        return;
+      }
+      if (isFinite(a.duration)) setDuration(a.duration);
+    };
+    const onTime = () => setCurrentTime(a.currentTime);
+    const onPlay = () => {
+      if (currentlyPlayingAudio && currentlyPlayingAudio !== a) {
+        currentlyPlayingAudio.pause();
+      }
+      currentlyPlayingAudio = a;
+      setPlaying(true);
+    };
+    const onPause = () => {
+      if (currentlyPlayingAudio === a) currentlyPlayingAudio = null;
+      setPlaying(false);
+    };
+    const onEnd = () => {
+      if (currentlyPlayingAudio === a) currentlyPlayingAudio = null;
+      setPlaying(false);
+      setCurrentTime(0);
+    };
+
+    a.addEventListener("loadedmetadata", onLoaded);
+    a.addEventListener("durationchange", onLoaded);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("play", onPlay);
+    a.addEventListener("pause", onPause);
+    a.addEventListener("ended", onEnd);
+    return () => {
+      if (currentlyPlayingAudio === a) {
+        a.pause();
+        currentlyPlayingAudio = null;
+      }
+      a.removeEventListener("loadedmetadata", onLoaded);
+      a.removeEventListener("durationchange", onLoaded);
+      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("play", onPlay);
+      a.removeEventListener("pause", onPause);
+      a.removeEventListener("ended", onEnd);
+    };
+  }, []);
+
+  const toggle = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play().catch(() => { /* ignored */ });
+    else a.pause();
+  };
+
+  const seekToClientX = (clientX: number) => {
+    const track = trackRef.current;
+    const a = audioRef.current;
+    if (!track || !a || !isFinite(duration) || duration <= 0) return;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    a.currentTime = pct * duration;
+    setCurrentTime(a.currentTime);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (duration <= 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    seekToClientX(e.clientX);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+    seekToClientX(e.clientX);
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const playLabel = `${playing ? "Pause" : "Play"} ${label}`;
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-muted/20">
+      <audio ref={audioRef} src={url} preload="metadata" className="hidden" />
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playLabel}
+        title={playLabel}
+        className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 active:scale-95 transition-all"
+      >
+        {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current ml-0.5" />}
+      </button>
+      <div className="flex flex-col flex-1 min-w-0 gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+            {label}
+          </span>
+          <span className="text-[11px] font-bold tabular-nums text-muted-foreground shrink-0">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+        <div
+          ref={trackRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          role="slider"
+          aria-label={`${label} progress`}
+          aria-valuemin={0}
+          aria-valuemax={Math.max(0, Math.floor(duration))}
+          aria-valuenow={Math.floor(currentTime)}
+          aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+          className="relative h-1.5 w-full bg-muted rounded-full cursor-pointer group touch-none select-none"
+        >
+          <div
+            className="absolute inset-y-0 left-0 bg-primary rounded-full transition-[width] duration-75 group-hover:bg-primary/90"
+            style={{ width: `${progressPct}%` }}
+          />
+          <div
+            className="absolute top-1/2 size-3 rounded-full bg-primary border-2 border-background shadow-sm opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ left: `${progressPct}%` }}
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        title={`Remove ${label}`}
+        className="shrink-0 text-muted-foreground hover:text-destructive p-1"
+      >
+        <X className="size-4" />
+      </button>
+    </div>
+  );
 }
 
 // --- Main Component ---
@@ -578,7 +783,21 @@ function UnifiedFeedbackInterface() {
               else if (opt.id === "collarBtn") styleFieldUpdates.collar_button = mainNewValue;
               else if (opt.id === "frontPocket") styleFieldUpdates.front_pocket_type = mainNewValue;
               else if (opt.id === "cuff") styleFieldUpdates.cuffs_type = mainNewValue;
-              else if (opt.id === "jabzour") styleFieldUpdates.jabzour_2 = mainNewValue;
+              else if (opt.id === "jabzour") {
+                // Shaab = ZIPPER (needs secondary jabzour_2). Non-shaab = BUTTON (actual style in jabzour_2).
+                if (mainNewValue === "JAB_SHAAB") {
+                  const secondary = state.styleChanges["jabzour_2"];
+                  styleFieldUpdates.jabzour_1 = "ZIPPER";
+                  if (secondary) styleFieldUpdates.jabzour_2 = secondary;
+                } else {
+                  styleFieldUpdates.jabzour_1 = "BUTTON";
+                  styleFieldUpdates.jabzour_2 = mainNewValue;
+                }
+              }
+            }
+            // smallTabaggi is a boolean toggle: reject = flip, no picker.
+            if (opt.id === "smallTabaggi" && mainRejected) {
+              styleFieldUpdates.small_tabaggi = !activeGarment.small_tabaggi;
             }
             if (hashwaRejected && hashwaNewValue) {
               if (opt.id === "frontPocket") hashwaFieldUpdates.front_pocket_thickness = hashwaNewValue;
@@ -754,16 +973,16 @@ function UnifiedFeedbackInterface() {
         hashwaLabel: null,
         hashwaValue: null,
       },
-      // Small Tabbagi
-      ...(g.small_tabaggi ? [{
+      // Small Tabbagi — always shown; reject flips the boolean
+      {
         id: "smallTabaggi",
         label: "Small Tabbagi",
-        mainValue: "Yes",
-        displayText: "Small Tabbagi",
+        mainValue: g.small_tabaggi ? "Yes" : "No",
+        displayText: g.small_tabaggi ? "Yes — Small Tabbagi present" : "No — Not applied",
         mainImage: smallTabaggiImage as string | null,
         hashwaLabel: null as string | null,
-        hashwaValue: null as string | null
-      }] : []),
+        hashwaValue: null as string | null,
+      },
       // Combined jabzour row: shows closure type (Zipper/Button) + style
       ...(g.jabzour_1 ? [{
         id: "jabzour",
@@ -1043,140 +1262,157 @@ function UnifiedFeedbackInterface() {
                                 <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
                                     <Ruler className="w-4 h-4" />
                                 </div>
-                                <CardTitle className="text-base font-bold uppercase tracking-tight">Adjustment Log</CardTitle>
+                                <CardTitle className="text-base font-bold uppercase tracking-tight">Measurement Feedback</CardTitle>
                             </div>
-                            <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">
-                                {isMeasurementLoading ? "SYNCING..." : "SYNCED"}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                                {isMeasurementLoading ? (
+                                    <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">LOADING…</Badge>
+                                ) : measurementId ? (
+                                    <Badge variant="outline" className="bg-background font-mono font-bold text-[10px] h-6 px-2" title="Measurement ID">
+                                        M: {String(measurementId).slice(0, 8)}
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">NO MEASUREMENT</Badge>
+                                )}
+                            </div>
                         </div>
                     </CardHeader>
 
-                    <div className="relative overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead className="bg-muted/50 sticky top-0 z-10 border-b-2 border-border/60">
-                                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                    <th className="text-left p-3 bg-muted/60 border-r border-border/60 min-w-[110px] sticky left-0 z-20">Label</th>
-                                    {MEASUREMENT_ROWS.map((row) => (
-                                        <th key={row.key} className="p-2 text-center border border-border/40 min-w-[96px]">
-                                            <div className="font-black text-[11px] leading-tight">{row.type}</div>
-                                            <div className="font-bold text-[10px] text-muted-foreground/80 leading-tight">{row.subType}</div>
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* Current row */}
-                                <tr className="border-b border-border/40">
-                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Current</td>
-                                    {MEASUREMENT_ROWS.map((row) => {
-                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                        return (
-                                            <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
-                                                <span className="font-black text-sm tabular-nums">{orderValue ?? "—"}</span>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                                {/* New row */}
-                                <tr className="border-b border-border/40">
-                                    <td className="p-3 bg-primary/5 border-r border-border/60 font-black text-xs uppercase tracking-widest text-primary sticky left-0 z-10">New</td>
-                                    {MEASUREMENT_ROWS.map((row) => {
-                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
-                                        const diff = getDifference(orderValue, feedbackValue);
-                                        const status = getDiffStatus(diff);
-                                        return (
-                                            <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
-                                                <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    className={cn(
-                                                        "h-8 w-full text-center font-black text-sm tabular-nums border transition-all",
-                                                        status === 'error' && "border-destructive bg-destructive/5 text-destructive",
-                                                        status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
-                                                        status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
-                                                        !feedbackValue && "border-border hover:border-primary/40"
-                                                    )}
-                                                    placeholder="—"
-                                                    value={feedbackValue ?? ""}
-                                                    onChange={(e) => handleFeedbackMeasurementChange(row.key, e.target.value)}
-                                                />
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                                {/* Delta row */}
-                                <tr className="border-b border-border/40">
-                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Delta</td>
-                                    {MEASUREMENT_ROWS.map((row) => {
-                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
-                                        const diff = getDifference(orderValue, feedbackValue);
-                                        const status = getDiffStatus(diff);
-                                        return (
-                                            <td key={row.key} className="p-2 text-center border border-border/30">
-                                                {diff !== null ? (
-                                                    <Badge variant="secondary" className={cn(
-                                                        "font-black text-xs h-5 px-1.5",
-                                                        status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
-                                                        status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
-                                                        status === 'error' && "bg-red-100 text-red-800 border-red-200"
-                                                    )}>
-                                                        {diff > 0 ? `+${diff}` : diff}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-muted-foreground/30 font-black text-xs">—</span>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                                {/* Reason row */}
-                                <tr className="border-b border-border/40">
-                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Reason</td>
-                                    {MEASUREMENT_ROWS.map((row) => {
-                                        const reasonValue = currentState.differenceReasons[row.key] || "";
-                                        const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
-                                        return (
-                                            <td key={row.key} className="p-1 border border-border/30">
-                                                <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
-                                                    <SelectTrigger className={cn(
-                                                        "h-8 text-[10px] font-bold border-none shadow-none rounded px-1.5 transition-colors",
-                                                        selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
-                                                    )}>
-                                                        <SelectValue placeholder="—" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {DIFFERENCE_REASONS.map(r => (
-                                                            <SelectItem key={r.label} value={r.label} className={cn("text-xs font-bold uppercase py-2", r.color)}>
-                                                                {r.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                                {/* Notes row */}
-                                <tr>
-                                    <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Notes</td>
-                                    {MEASUREMENT_ROWS.map((row) => {
-                                        const noteValue = currentState.measurementNotes[row.key] || "";
-                                        return (
-                                            <td key={row.key} className="p-1 border border-border/30">
-                                                <Input
-                                                    className="h-8 w-full text-[11px] font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
-                                                    placeholder="—"
-                                                    value={noteValue}
-                                                    onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
-                                                />
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div className="p-3 space-y-4">
+                        {MEASUREMENT_GROUPS.map((group) => (
+                            <div key={group.title} className="rounded-lg border border-border/60 overflow-hidden">
+                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                                    {group.title}
+                                </div>
+                                <div className="relative overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead className="bg-muted/30 border-b-2 border-border/60">
+                                            <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                                <th className="text-left p-3 bg-muted/50 border-r border-border/60 min-w-[110px] sticky left-0 z-20">Label</th>
+                                                {group.rows.map((row) => (
+                                                    <th key={row.key} className="p-2 text-center border border-border/40 min-w-[96px]">
+                                                        <div className="font-black text-[11px] leading-tight">{row.type}</div>
+                                                        <div className="font-bold text-[10px] text-muted-foreground/80 leading-tight">{row.subType}</div>
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {/* Current row */}
+                                            <tr className="border-b border-border/40">
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Current</td>
+                                                {group.rows.map((row) => {
+                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                    return (
+                                                        <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
+                                                            <span className="font-black text-sm tabular-nums">{orderValue ?? "—"}</span>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            {/* New row */}
+                                            <tr className="border-b border-border/40">
+                                                <td className="p-3 bg-primary/5 border-r border-border/60 font-black text-xs uppercase tracking-widest text-primary sticky left-0 z-10">New</td>
+                                                {group.rows.map((row) => {
+                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                    const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                                    const diff = getDifference(orderValue, feedbackValue);
+                                                    const status = getDiffStatus(diff);
+                                                    return (
+                                                        <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                className={cn(
+                                                                    "h-8 w-full text-center font-black text-sm tabular-nums border transition-all",
+                                                                    status === 'error' && "border-destructive bg-destructive/5 text-destructive",
+                                                                    status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
+                                                                    status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                                                                    !feedbackValue && "border-border hover:border-primary/40"
+                                                                )}
+                                                                placeholder="—"
+                                                                value={feedbackValue ?? ""}
+                                                                onChange={(e) => handleFeedbackMeasurementChange(row.key, e.target.value)}
+                                                            />
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            {/* Delta row */}
+                                            <tr className="border-b border-border/40">
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Delta</td>
+                                                {group.rows.map((row) => {
+                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                    const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                                    const diff = getDifference(orderValue, feedbackValue);
+                                                    const status = getDiffStatus(diff);
+                                                    return (
+                                                        <td key={row.key} className="p-2 text-center border border-border/30">
+                                                            {diff !== null ? (
+                                                                <Badge variant="secondary" className={cn(
+                                                                    "font-black text-xs h-5 px-1.5",
+                                                                    status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                                                    status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
+                                                                    status === 'error' && "bg-red-100 text-red-800 border-red-200"
+                                                                )}>
+                                                                    {diff > 0 ? `+${diff}` : diff}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-muted-foreground/30 font-black text-xs">—</span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            {/* Reason row */}
+                                            <tr className="border-b border-border/40">
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Reason</td>
+                                                {group.rows.map((row) => {
+                                                    const reasonValue = currentState.differenceReasons[row.key] || "";
+                                                    const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
+                                                    return (
+                                                        <td key={row.key} className="p-0 border border-border/30">
+                                                            <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
+                                                                <SelectTrigger className={cn(
+                                                                    "h-full min-h-10 w-full text-[10px] font-bold border-none shadow-none rounded-none px-2 transition-colors",
+                                                                    selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
+                                                                )}>
+                                                                    <SelectValue placeholder="—" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {DIFFERENCE_REASONS.map(r => (
+                                                                        <SelectItem key={r.label} value={r.label} className={cn("text-xs font-bold uppercase py-2", r.color)}>
+                                                                            {r.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            {/* Notes row */}
+                                            <tr>
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Notes</td>
+                                                {group.rows.map((row) => {
+                                                    const noteValue = currentState.measurementNotes[row.key] || "";
+                                                    return (
+                                                        <td key={row.key} className="p-1 border border-border/30">
+                                                            <Input
+                                                                className="h-8 w-full text-[11px] font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
+                                                                placeholder="—"
+                                                                value={noteValue}
+                                                                onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
+                                                            />
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </Card>
 
@@ -1284,30 +1520,76 @@ function UnifiedFeedbackInterface() {
 
                                         {/* Rejected → pick new main style */}
                                         {isRejected && pickerList && (
+                                            <div className="mt-3 pt-3 border-t border-red-200 space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">New →</span>
+                                                    <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
+                                                        <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
+                                                            {newStyleValue ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    {newStyleImage && <img src={newStyleImage} alt={newStyleText || ""} className="h-7 w-7 object-contain" />}
+                                                                    <span className="text-xs font-bold">{newStyleText}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <SelectValue placeholder="Select replacement..." />
+                                                            )}
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {pickerList.map((o) => (
+                                                                <SelectItem key={o.value} value={o.value}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
+                                                                        <span className="text-xs font-bold">{o.displayText}</span>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                {/* Shaab = Zipper → needs secondary jabzour_2 pick */}
+                                                {opt.id === "jabzour" && newStyleValue === "JAB_SHAAB" && (() => {
+                                                    const secondaryValue = currentState.styleChanges["jabzour_2"] || "";
+                                                    const secondaryList = jabzourTypes.filter(j => j.value !== "JAB_SHAAB");
+                                                    const secondaryImage = findOptionImage(secondaryList, secondaryValue);
+                                                    const secondaryText = findDisplayText(secondaryList, secondaryValue);
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">Under Zipper →</span>
+                                                            <Select value={secondaryValue} onValueChange={(v) => handleStyleChange("jabzour_2", v)}>
+                                                                <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
+                                                                    {secondaryValue ? (
+                                                                        <div className="flex items-center gap-2">
+                                                                            {secondaryImage && <img src={secondaryImage} alt={secondaryText || ""} className="h-7 w-7 object-contain" />}
+                                                                            <span className="text-xs font-bold">{secondaryText}</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <SelectValue placeholder="Select jabzour style..." />
+                                                                    )}
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {secondaryList.map((o) => (
+                                                                        <SelectItem key={o.value} value={o.value}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
+                                                                                <span className="text-xs font-bold">{o.displayText}</span>
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        {/* Small Tabbagi reject → flip indicator (no picker) */}
+                                        {isRejected && opt.id === "smallTabaggi" && (
                                             <div className="mt-3 pt-3 border-t border-red-200 flex items-center gap-2">
                                                 <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">New →</span>
-                                                <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
-                                                    <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
-                                                        {newStyleValue ? (
-                                                            <div className="flex items-center gap-2">
-                                                                {newStyleImage && <img src={newStyleImage} alt={newStyleText || ""} className="h-7 w-7 object-contain" />}
-                                                                <span className="text-xs font-bold">{newStyleText}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <SelectValue placeholder="Select replacement..." />
-                                                        )}
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {pickerList.map((o) => (
-                                                            <SelectItem key={o.value} value={o.value}>
-                                                                <div className="flex items-center gap-2">
-                                                                    {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                    <span className="text-xs font-bold">{o.displayText}</span>
-                                                                </div>
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Badge variant="outline" className="font-black text-xs bg-red-50 text-red-700 border-red-200">
+                                                    {activeGarment?.small_tabaggi ? "Remove Small Tabbagi" : "Add Small Tabbagi"}
+                                                </Badge>
                                             </div>
                                         )}
 
@@ -1446,15 +1728,12 @@ function UnifiedFeedbackInterface() {
                         {currentState.sharedVoiceNotes.length > 0 && (
                             <div className="space-y-2">
                                 {currentState.sharedVoiceNotes.map((url, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                        <audio src={url} controls className="flex-1 h-8" />
-                                        <button
-                                            onClick={() => removeVoiceNote(i)}
-                                            className="text-muted-foreground hover:text-destructive p-1"
-                                        >
-                                            <X className="size-4" />
-                                        </button>
-                                    </div>
+                                    <VoiceNotePlayer
+                                        key={i}
+                                        url={url}
+                                        label={`Voice Note ${i + 1}`}
+                                        onRemove={() => removeVoiceNote(i)}
+                                    />
                                 ))}
                             </div>
                         )}

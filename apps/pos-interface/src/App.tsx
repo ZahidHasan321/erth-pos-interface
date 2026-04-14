@@ -5,8 +5,8 @@ import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@ta
 import { router } from "./router";
 import "./index.css";
 import { RouterProvider } from "@tanstack/react-router";
-import { AuthProvider, useAuth } from "./context/auth";
-import { db } from "./lib/db";
+import { AuthProvider, useAuth } from "@/context/auth";
+import { db } from "@/lib/db";
 
 function isJwtError(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | null;

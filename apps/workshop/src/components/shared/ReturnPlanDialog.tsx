@@ -5,7 +5,7 @@ import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
-import { Droplets, Scissors } from "lucide-react";
+import { Droplets, Scissors, Loader2 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import {
   useStepWorkload,
@@ -41,9 +41,10 @@ interface ReturnPlanDialogProps {
   /** worker_history from the garment (uses responsibility keys like "sewing", "cutting") */
   workerHistory?: Record<string, string> | null;
   title?: string;
+  isPending?: boolean;
 }
 
-export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, workerHistory, title }: ReturnPlanDialogProps) {
+export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, workerHistory, title, isPending }: ReturnPlanDialogProps) {
   const { data: resources = [] } = useResources();
   const workload = useStepWorkload(STEPS);
 
@@ -208,8 +209,9 @@ export function ReturnPlanDialog({ open, onOpenChange, onConfirm, garmentCount, 
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-card border-t px-5 py-3 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!date || !allFilled || !hasAtLeastOneStage}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+          <Button onClick={handleConfirm} disabled={!date || !allFilled || !hasAtLeastOneStage || isPending}>
+            {isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
             Schedule
           </Button>
         </div>

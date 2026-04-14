@@ -440,7 +440,9 @@ export interface AssignedPageGarment {
 
 /**
  * Row returned by get_assigned_orders_page. Status label is pre-computed
- * server-side (see assigned_order_status_label in triggers.sql).
+ * server-side (see assigned_order_status_label in triggers.sql). Per-garment
+ * detail lives on the order detail page (useOrderGarments), so the list RPC
+ * only returns row-level aggregates — keeps the list payload light.
  */
 export interface AssignedOrderRow {
   order_id: number;
@@ -455,7 +457,12 @@ export interface AssignedOrderRow {
   delivery_date: string | null;
   max_trip: number | null;
   status_label: string;
-  garments: AssignedPageGarment[];
+  has_brova: boolean;
+  brova_count: number;
+  final_count: number;
+  garments_count: number;
+  /** Earliest per-garment delivery_date across all garments in this order. NULL when no garment has its own date. */
+  earliest_garment_delivery: string | null;
 }
 
 export interface AssignedPage {
@@ -1200,22 +1207,17 @@ export const getBrovaPlansForOrders = async (
     console.error('getBrovaPlansForOrders error:', error);
     return {};
   }
-  // Return merged plan: worker_history (complete) takes precedence, production_plan fills gaps
-  // Remap worker_history keys (stage names) to plan keys (role names)
-  const HISTORY_TO_PLAN: Record<string, string> = {
-    soaking: 'soaker', cutting: 'cutter', post_cutting: 'post_cutter',
-    sewing: 'sewer', finishing: 'finisher', ironing: 'ironer', quality_checker: 'quality_checker',
-  };
+  // Merged plan: start with production_plan, overlay with worker_history.
+  // worker_history already uses role keys (soaker, cutter, …) per HISTORY_KEY_MAP
+  // above, matching production_plan keys — no remap needed.
   const result: Record<number, Record<string, string>> = {};
   for (const g of data ?? []) {
     if (result[g.order_id]) continue;
     const plan = (g.production_plan ?? {}) as Record<string, string>;
     const history = (g.worker_history ?? {}) as Record<string, string>;
-    // Build merged plan: start with production_plan, overlay with worker_history
     const merged: Record<string, string> = { ...plan };
-    for (const [historyKey, worker] of Object.entries(history)) {
-      const planKey = HISTORY_TO_PLAN[historyKey] ?? historyKey;
-      if (worker) merged[planKey] = worker;
+    for (const [key, worker] of Object.entries(history)) {
+      if (worker) merged[key] = worker;
     }
     if (Object.keys(merged).length > 0) {
       result[g.order_id] = merged;
@@ -1246,6 +1248,50 @@ export const getBrovaStatusForOrders = async (
     const trialedStages = ['brova_trialed', 'completed'];
     if (trialedStages.includes(g.piece_stage ?? '')) entry.trialed++;
     if (g.acceptance_status === true) entry.accepted++;
+  }
+  return result;
+};
+
+/** Per-order breakdown of where every garment currently sits. Used by the
+ *  workshop dispatch page so each ReadyOrderCard can show how many of the
+ *  order's pieces are ready, still in production, at shop, in transit, or done.
+ *  A single IN-query keeps this O(1) fetches regardless of the order count. */
+export type OrderLocationBreakdown = {
+  total: number;
+  ready: number;
+  workshop: number;
+  transit: number;
+  shop: number;
+  done: number;
+};
+
+const READY_STAGES = new Set(['ready_for_dispatch', 'brova_trialed']);
+
+export const getOrderLocationBreakdown = async (
+  orderIds: number[],
+): Promise<Record<number, OrderLocationBreakdown>> => {
+  if (!orderIds.length) return {};
+  const { data, error } = await db
+    .from('garments')
+    .select('order_id, location, piece_stage')
+    .in('order_id', orderIds);
+  if (error) {
+    console.error('getOrderLocationBreakdown error:', error);
+    return {};
+  }
+  const result: Record<number, OrderLocationBreakdown> = {};
+  for (const g of data ?? []) {
+    const entry = result[g.order_id] ??= { total: 0, ready: 0, workshop: 0, transit: 0, shop: 0, done: 0 };
+    entry.total++;
+    if (g.piece_stage === 'completed') { entry.done++; continue; }
+    if (g.location === 'workshop') {
+      if (READY_STAGES.has(g.piece_stage ?? '')) entry.ready++;
+      else entry.workshop++;
+    } else if (g.location === 'transit_to_shop' || g.location === 'transit_to_workshop') {
+      entry.transit++;
+    } else if (g.location === 'shop') {
+      entry.shop++;
+    }
   }
   return result;
 };

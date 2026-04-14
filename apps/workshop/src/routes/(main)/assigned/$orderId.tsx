@@ -6,7 +6,7 @@ import {
 } from "@/hooks/useGarmentMutations";
 import { PlanDialog } from "@/components/shared/PlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
-import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge } from "@/components/shared/StageBadge";
+import { StageBadge, BrandBadge, ExpressBadge, TrialBadge, AlterationInBadge, QcFixBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
@@ -450,16 +450,16 @@ function GarmentPlanCard({
   const needsRepairAtShop =
     garment.location === "shop" &&
     (garment.feedback_status === "needs_repair" || garment.feedback_status === "needs_redo");
-  // Alteration (In) only for trip 3+ (went back twice already)
-  const isAlterationIn = needsRepairAtShop && tripNum >= 3;
-  const isBrovaReturn = needsRepairAtShop && tripNum === 2;
+  // Unified: any garment at shop with needs_repair/needs_redo is "Alteration (In)".
+  const isAlterationIn = needsRepairAtShop;
   const isAtShopPostProduction =
     garment.location === "shop" && !needsRepairAtShop;
   const hasStarted = !!garment.start_time;
-  const isReturn = (garment.trip_number ?? 1) > 1;
+  const isReturn = tripNum > 1;
   const currentTripEntry = getCurrentTripEntry(garment);
   const reentryStage = currentTripEntry?.reentry_stage ?? null;
   const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
+  const hasQcFailThisTrip = qcFailCount > 0;
   const editability = getGarmentEditability(garment);
   const canEdit = editability.canEditPlan;
 
@@ -483,10 +483,6 @@ function GarmentPlanCard({
     // Shop states
     if (isAlterationIn)
       return { text: "Needs to return for alteration", cls: "text-orange-700" };
-    if (isBrovaReturn)
-      return { text: "Brova return — needs changes", cls: "text-amber-700" };
-    if (needsRepairAtShop && tripNum === 1)
-      return { text: "Needs changes after 1st trial", cls: "text-amber-700" };
     if (garment.piece_stage === "awaiting_trial" && garment.location === "shop")
       return { text: "At shop — awaiting trial", cls: "text-green-700" };
     if (garment.piece_stage === "ready_for_pickup")
@@ -552,13 +548,12 @@ function GarmentPlanCard({
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </Link>
           {garment.express && <ExpressBadge />}
-          {(garment.trip_number ?? 1) > 1 && <TrialBadge tripNumber={garment.trip_number} />}
-          {isAlterationIn && <AlterationInBadge />}
-          {isBrovaReturn && (
-            <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-white">
-              Brova Return
-            </span>
+          {tripNum > 1 && <TrialBadge tripNumber={garment.trip_number} />}
+          <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
+          {hasQcFailThisTrip && (
+            <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
           )}
+          {isAlterationIn && <AlterationInBadge />}
           <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
           <span className={cn(
             "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",

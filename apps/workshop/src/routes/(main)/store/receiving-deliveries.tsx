@@ -103,14 +103,14 @@ function TransferRow({
   onToggle,
   onReceive,
   onReceiveItem,
-  isReceivingItem,
+  isReceivingItemId,
 }: {
   transfer: TransferRequestWithItems;
   isExpanded: boolean;
   onToggle: () => void;
   onReceive: () => void;
   onReceiveItem: (transferId: number, item: { id: number; received_qty: number }) => void;
-  isReceivingItem: boolean;
+  isReceivingItemId: (transferId: number, itemId: number) => boolean;
 }) {
   const pendingItems = transfer.items.filter((i) => i.received_qty == null);
   const receivedItems = transfer.items.filter((i) => i.received_qty != null);
@@ -218,6 +218,7 @@ function TransferRow({
                   <tbody>
                     {transfer.items.map((item) => {
                       const alreadyReceived = item.received_qty != null;
+                      const itemPending = isReceivingItemId(transfer.id, item.id);
                       return (
                         <tr
                           key={item.id}
@@ -252,7 +253,7 @@ function TransferRow({
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 text-xs"
-                                disabled={isReceivingItem}
+                                disabled={itemPending}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onReceiveItem(transfer.id, {
@@ -261,7 +262,7 @@ function TransferRow({
                                   });
                                 }}
                               >
-                                {isReceivingItem ? (
+                                {itemPending ? (
                                   <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                 ) : (
                                   <Check className="h-3 w-3 mr-1" />
@@ -354,6 +355,11 @@ function PendingDeliveries({
   search: string;
 }) {
   const receiveTransfer = useReceiveTransfer();
+  const isReceivingItemId = (transferId: number, itemId: number): boolean => {
+    if (!receiveTransfer.isPending || !receiveTransfer.variables) return false;
+    const vars = receiveTransfer.variables;
+    return vars.transferId === transferId && vars.items.some((i) => i.id === itemId);
+  };
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [receivingTransfer, setReceivingTransfer] =
     useState<TransferRequestWithItems | null>(null);
@@ -539,7 +545,7 @@ function PendingDeliveries({
                   }
                   onReceive={() => openReceiving(transfer)}
                   onReceiveItem={handleReceiveItem}
-                  isReceivingItem={receiveTransfer.isPending}
+                  isReceivingItemId={isReceivingItemId}
                 />
               );
             })}

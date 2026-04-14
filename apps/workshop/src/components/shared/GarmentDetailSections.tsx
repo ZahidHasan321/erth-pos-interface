@@ -1,6 +1,6 @@
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { MeasurementGrid } from "@/components/shared/MeasurementGrid";
-import { StageBadge, AlterationBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { StageBadge, AlterationBadge, ExpressBadge, QcFixBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
 import { STYLE_IMAGE_MAP, THICKNESS_LABELS, ACCESSORY_ICONS } from "@/lib/style-images";
@@ -101,6 +101,7 @@ export function GarmentHeader({
         <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
         {garment.express && <ExpressBadge />}
         <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
+        <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
       </div>
 
       {/* Info + dates row */}

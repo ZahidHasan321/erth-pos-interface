@@ -8,7 +8,7 @@ export type OrderHistoryItem = {
   invoice_number: number | null;
   order_date: string;
   delivery_date: string | null;
-  order_type: "WORK" | "SALES";
+  order_type: "WORK" | "SALES" | "ALTERATION";
   checkout_status: "draft" | "confirmed" | "cancelled";
   home_delivery: boolean;
   customer_name: string;
@@ -65,6 +65,7 @@ export function useOrderHistory({
         .select(`
           *,
           workOrder:work_orders!order_id${phaseFilter !== 'all' ? '!inner' : ''}(*),
+          alterationOrder:alteration_orders!order_id(*),
           customer:customers!inner(name, phone, nick_name),
           garments:garments(id),
           shelf_items:order_shelf_items(id)
@@ -131,7 +132,9 @@ export function useOrderHistory({
 
       const items = (data || []).map((order: any): OrderHistoryItem => {
         const workData = Array.isArray(order.workOrder) ? order.workOrder[0] : order.workOrder;
-        const mergedOrder = { ...order, ...workData };
+        const altData = Array.isArray(order.alterationOrder) ? order.alterationOrder[0] : order.alterationOrder;
+        // For ALTERATION orders, alteration_orders supplies invoice_number and totals
+        const mergedOrder = { ...order, ...workData, ...(altData ?? {}) };
 
         const fabricCharge = parseFloat(mergedOrder.fabric_charge?.toString() || "0");
         const stitchingCharge = parseFloat(mergedOrder.stitching_charge?.toString() || "0");

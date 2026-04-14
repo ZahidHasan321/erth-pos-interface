@@ -90,7 +90,7 @@ export type PaymentType = (typeof paymentTypeEnum.enumValues)[number];
 export const discountTypeEnum = pgEnum("discount_type", ["flat", "referral", "loyalty", "by_value"]);
 export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 
-export const orderTypeEnum = pgEnum("order_type", ["WORK", "SALES"]);
+export const orderTypeEnum = pgEnum("order_type", ["WORK", "SALES", "ALTERATION"]);
 export type OrderType = (typeof orderTypeEnum.enumValues)[number];
 
 export const brandEnum = pgEnum("brand", ["ERTH", "SAKKBA", "QASS"]);
@@ -470,6 +470,31 @@ export const workOrders = pgTable("work_orders", {
     invoiceIdx: uniqueIndex("work_orders_invoice_idx").on(t.invoice_number),
 }));
 
+// --- 5.6 ALTERATION ORDERS (customer-brought garments from outside) ---
+// Parent order has order_type='ALTERATION'. Garments live in the regular
+// `garments` table but use the alteration-specific fields (alteration_measurements,
+// alteration_issues, custom_price) and skip fabric/style pricing.
+export const alterationOrders = pgTable("alteration_orders", {
+    order_id: integer("order_id").primaryKey().references(() => orders.id, { onDelete: 'cascade' }),
+
+    // Identity (separate sequence from work_orders — alteration_invoice_seq)
+    invoice_number: integer("invoice_number"),
+
+    // Dates — per-garment requested delivery dates live on garments.delivery_date
+    received_date: timestamp("received_date"),
+
+    // State
+    order_phase: orderPhaseEnum("order_phase").default("new"),
+
+    // Financials (sum of per-garment custom_price * quantity)
+    alteration_total: numeric("alteration_total", { precision: 10, scale: 3 }),
+
+    // Meta
+    comments: text("comments"),
+}, (t) => ({
+    invoiceIdx: uniqueIndex("alteration_orders_invoice_idx").on(t.invoice_number),
+}));
+
 // --- Trip History (stored as JSONB array on garments) ---
 export interface QcAttempt {
     inspector: string;
@@ -584,6 +609,16 @@ export const garments = pgTable("garments", {
     refunded_style: boolean("refunded_style").default(false),
     refunded_express: boolean("refunded_express").default(false),
     refunded_soaking: boolean("refunded_soaking").default(false),
+
+    // --- Alteration-only fields (populated when parent order.order_type = 'ALTERATION') ---
+    // SVG overlay measurement values (keys from field-layout.ts in the alteration form)
+    alteration_measurements: jsonb("alteration_measurements"),
+    // Checkbox matrix of issue reasons (row id → column id → boolean)
+    alteration_issues: jsonb("alteration_issues"),
+    // Custom per-garment price for alteration work (not driven by fabric/style catalogs)
+    custom_price: numeric("custom_price", { precision: 10, scale: 3 }),
+    // BU/F/EXT code on the physical garment (written by customer)
+    bufi_ext: text("bufi_ext"),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
     orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
@@ -878,6 +913,7 @@ export const customersRelations = relations(customers, ({ many }) => ({
 export const ordersRelations = relations(orders, ({ one, many }) => ({
     customer: one(customers, { fields: [orders.customer_id], references: [customers.id] }),
     workOrder: one(workOrders, { fields: [orders.id], references: [workOrders.order_id] }),
+    alterationOrder: one(alterationOrders, { fields: [orders.id], references: [alterationOrders.order_id] }),
     garments: many(garments),
     shelfItems: many(orderShelfItems),
     paymentTransactions: many(paymentTransactions),
@@ -888,6 +924,10 @@ export const workOrdersRelations = relations(workOrders, ({ one }) => ({
     order: one(orders, { fields: [workOrders.order_id], references: [orders.id] }),
     campaign: one(campaigns, { fields: [workOrders.campaign_id], references: [campaigns.id] }),
     linkedOrder: one(orders, { fields: [workOrders.linked_order_id], references: [orders.id], relationName: "linked_orders" }),
+}));
+
+export const alterationOrdersRelations = relations(alterationOrders, ({ one }) => ({
+    order: one(orders, { fields: [alterationOrders.order_id], references: [orders.id] }),
 }));
 
 export const garmentsRelations = relations(garments, ({ one, many }) => ({
@@ -963,6 +1003,7 @@ export type NewCustomer = InferInsertModel<typeof customers>;
 
 export type BaseOrder = InferSelectModel<typeof orders>;
 export type WorkOrder = InferSelectModel<typeof workOrders>;
+export type AlterationOrder = InferSelectModel<typeof alterationOrders>;
 
 /**
  * Unified Order type combining core transaction data and work order tailoring extension.
@@ -975,10 +1016,12 @@ export type Order = BaseOrder & Partial<WorkOrder> & {
     shelf_items?: OrderShelfItem[];
     child_orders?: BaseOrder[];
     payment_transactions?: PaymentTransaction[];
+    alteration_order?: AlterationOrder;
 };
 
 export type NewOrder = InferInsertModel<typeof orders>;
 export type NewWorkOrder = InferInsertModel<typeof workOrders>;
+export type NewAlterationOrder = InferInsertModel<typeof alterationOrders>;
 
 export type Garment = InferSelectModel<typeof garments>;
 export type NewGarment = InferInsertModel<typeof garments>;

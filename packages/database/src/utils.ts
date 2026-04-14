@@ -8,71 +8,98 @@ export type MeasurementParts = {
   numerator: number;
   denominator: number;
   negative: boolean;
+  hasDegree: boolean;
 };
 
 /**
- * Parses a decimal measurement into whole + fraction parts.
- * e.g. 12.5 → { whole: 12, numerator: 1, denominator: 2, negative: false }
- * Returns null for null/zero/non-numeric values.
+ * Parses a decimal measurement into whole + quarter-fraction parts, snapping
+ * to the nearest 1/8 ("eighth"). Fractions are restricted to 0, 1/4, 1/2, 3/4.
+ * A value that lands on the upper half of an eighth sets hasDegree=true,
+ * rendered as a trailing ° mark (e.g. 10.375 → "10 1/4°").
+ *
+ * e.g. 12.5 → 12 1/2, 10.3 → 10 1/4, 10.99 → 11, 10.125 → 10°.
+ * Returns null for null/non-numeric values or values that snap to zero.
  */
 export function parseMeasurementParts(raw: unknown, degree = 0): MeasurementParts | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n === 0) return null;
+  if (!Number.isFinite(n)) return null;
   const adjusted = degree ? n - degree : n;
   const negative = adjusted < 0;
   const abs = Math.abs(adjusted);
-  const whole = Math.floor(abs);
-  const frac = abs - whole;
 
-  if (frac < 0.001) return { whole, numerator: 0, denominator: 1, negative };
+  const eighths = Math.round(abs * 8);
+  if (eighths === 0) return null;
 
-  const gcd = (a: number, b: number): number => (b < 0.0001 ? a : gcd(b, a % b));
-  const precision = 1000000;
-  const num = Math.round(frac * precision);
-  const divisor = gcd(num, precision);
-  return {
-    whole,
-    numerator: Math.round(num / divisor),
-    denominator: Math.round(precision / divisor),
-    negative,
-  };
+  const whole = Math.floor(eighths / 8);
+  const rem = eighths - whole * 8;
+  const hasDegree = rem % 2 === 1;
+  const quarters = (rem - (hasDegree ? 1 : 0)) / 2;
+
+  let numerator = 0;
+  let denominator = 1;
+  if (quarters === 1) { numerator = 1; denominator = 4; }
+  else if (quarters === 2) { numerator = 1; denominator = 2; }
+  else if (quarters === 3) { numerator = 3; denominator = 4; }
+
+  return { whole, numerator, denominator, negative, hasDegree };
 }
 
 /**
  * Formats a decimal measurement as a plain text fraction string.
- * e.g. 12.5 → "12 1/2". Falls back to this when React rendering isn't available.
+ * e.g. 12.5 → "12 1/2", 10.375 → "10 1/4°". Falls back to this when React
+ * rendering isn't available.
  */
 export function formatMeasurement(raw: unknown, degree = 0): string {
   const p = parseMeasurementParts(raw, degree);
   if (!p) return "";
   const sign = p.negative ? "-" : "";
-  if (p.numerator === 0) return `${sign}${p.whole}`;
+  const deg = p.hasDegree ? "°" : "";
+  if (p.numerator === 0) return `${sign}${p.whole}${deg}`;
+  const frac = `${p.numerator}/${p.denominator}`;
   return p.whole > 0
-    ? `${sign}${p.whole} ${p.numerator}/${p.denominator}`
-    : `${sign}${p.numerator}/${p.denominator}`;
+    ? `${sign}${p.whole} ${frac}${deg}`
+    : `${sign}${frac}${deg}`;
 }
 
 /**
- * Determines if a garment is in "alteration" territory based on trip number and type.
- * - Brova: trip >= 4 (trip 1=initial, 2=after first trial, 3=brova changes, 4+=alteration)
- * - Final: trip >= 2 (no trial step, any return is alteration)
+ * Unified alteration rule: any return to workshop (trip >= 2) is an alteration,
+ * regardless of garment type. alt# = trip - 1.
+ *
+ * QC-fail rework within the same trip is a separate concept — see
+ * hasQcFailThisTrip()/getAltLabel(). It carries the "alt_p" label and does not
+ * increment trip_number.
  */
-export function isAlteration(tripNumber: number | null | undefined, garmentType: string | null | undefined): boolean {
+export function isAlteration(tripNumber: number | null | undefined, _garmentType?: string | null): boolean {
     const trip = tripNumber ?? 1;
-    if (garmentType === "final") return trip >= 2;
-    return trip >= 4; // brova
+    return trip >= 2;
 }
 
-/**
- * Returns the alteration number (1-based) or null if not an alteration.
- * - Brova: alt# = trip - 3 (trip 4 = Alt 1, trip 5 = Alt 2, ...)
- * - Final: alt# = trip - 1 (trip 2 = Alt 1, trip 3 = Alt 2, ...)
- */
-export function getAlterationNumber(tripNumber: number | null | undefined, garmentType: string | null | undefined): number | null {
+export function getAlterationNumber(tripNumber: number | null | undefined, _garmentType?: string | null): number | null {
     const trip = tripNumber ?? 1;
-    if (garmentType === "final") return trip >= 2 ? trip - 1 : null;
-    return trip >= 4 ? trip - 3 : null;
+    return trip >= 2 ? trip - 1 : null;
+}
+
+/** True when the current trip has a failed QC attempt (garment was bounced back
+ * to an earlier stage without a new trip). */
+export function hasQcFailThisTrip(garment: {
+    trip_number?: number | null;
+    trip_history?: Array<{ trip: number; qc_attempts?: Array<{ result: string }> | null }> | null;
+}): boolean {
+    const currentTrip = garment.trip_number ?? 1;
+    const entry = garment.trip_history?.find(t => t.trip === currentTrip);
+    return !!entry?.qc_attempts?.some(a => a.result === "fail");
+}
+
+/** Production-terminal style label for a garment's rework state.
+ *  "alt_p" = QC-fail rework this trip, "alt_N" = trip-based alteration, null = first-time. */
+export function getAltLabel(garment: {
+    trip_number?: number | null;
+    trip_history?: Array<{ trip: number; qc_attempts?: Array<{ result: string }> | null }> | null;
+}): string | null {
+    if (hasQcFailThisTrip(garment)) return "alt_p";
+    const n = getAlterationNumber(garment.trip_number);
+    return n === null ? null : `alt_${n}`;
 }
 
 // Style fields that define a garment's "style identity" for grouping.

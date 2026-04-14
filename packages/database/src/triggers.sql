@@ -37,6 +37,19 @@ DROP FUNCTION IF EXISTS assign_invoice_number();
 -- 1. Create a sequence for Invoices starting at 1
 CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1;
 
+-- 1b. Separate sequence for ALTERATION order invoices (independent counter)
+CREATE SEQUENCE IF NOT EXISTS alteration_invoice_seq START 1;
+
+-- 1c. RPC to fetch the next alteration invoice number (anon role cannot touch sequences directly)
+CREATE OR REPLACE FUNCTION next_alteration_invoice()
+RETURNS INT AS $$
+BEGIN
+  RETURN nextval('alteration_invoice_seq');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION next_alteration_invoice() TO authenticated, anon, service_role;
+
 -- 2. Transactional RPC for completing work order
 CREATE OR REPLACE FUNCTION complete_work_order(
   p_order_id INT,
@@ -3073,7 +3086,12 @@ SELECT
     ) AS only_parked_at_workshop,
     -- Location garment counts for overview summary
     COUNT(*) FILTER (WHERE g.location::text = 'shop')              AS shop_count,
-    COUNT(*) FILTER (WHERE g.location::text IN ('transit_to_shop','transit_to_workshop')) AS transit_count
+    COUNT(*) FILTER (WHERE g.location::text IN ('transit_to_shop','transit_to_workshop')) AS transit_count,
+    -- Garment type counts (appended at end for CREATE OR REPLACE VIEW compatibility)
+    COUNT(*) FILTER (WHERE g.garment_type::text = 'brova')         AS brova_count,
+    COUNT(*) FILTER (WHERE g.garment_type::text = 'final')         AS final_count,
+    -- Earliest per-garment delivery date (NULL if no garment has its own date set)
+    MIN(g.delivery_date)                                           AS earliest_garment_delivery
 FROM garments g
 GROUP BY g.order_id;
 
@@ -3349,6 +3367,9 @@ BEGIN
             c.phone                          AS customer_phone,
             c.country_code                   AS customer_country_code,
             agg.garments_count,
+            COALESCE(agg.brova_count, 0) AS brova_count,
+            COALESCE(agg.final_count, 0) AS final_count,
+            agg.earliest_garment_delivery,
             COALESCE(agg.any_express, false) AS any_express,
             COALESCE(agg.any_soaking, false) AS any_soaking,
             agg.any_returns,
@@ -3455,28 +3476,11 @@ BEGIN
                     COALESCE(p.finals_parked, false),
                     COALESCE(p.brovas_at_workshop, false)
                 ),
-                'garments', COALESCE((
-                    SELECT jsonb_agg(jsonb_build_object(
-                        'id',              g.id,
-                        'order_id',        g.order_id,
-                        'garment_id',      g.garment_id,
-                        'garment_type',    g.garment_type,
-                        'piece_stage',     g.piece_stage,
-                        'location',        g.location,
-                        'trip_number',     g.trip_number,
-                        'express',         g.express,
-                        'soaking',         g.soaking,
-                        'acceptance_status', g.acceptance_status,
-                        'feedback_status', g.feedback_status,
-                        'start_time',      g.start_time,
-                        'in_production',   g.in_production,
-                        'production_plan', g.production_plan,
-                        'worker_history',  g.worker_history,
-                        'style_name',      g.style
-                    ) ORDER BY g.garment_id NULLS LAST)
-                    FROM garments g
-                    WHERE g.order_id = p.order_id
-                ), '[]'::jsonb)
+                'has_brova',      COALESCE(p.has_any_brova, false),
+                'brova_count',    p.brova_count,
+                'final_count',    p.final_count,
+                'garments_count', COALESCE(p.garments_count, 0),
+                'earliest_garment_delivery', p.earliest_garment_delivery
             ) AS row_json
         FROM page p
     )
@@ -3520,7 +3524,7 @@ AS $$
     )
     SELECT jsonb_build_object(
         'receiving',     COUNT(*) FILTER (WHERE location::text IN ('transit_to_workshop','lost_in_transit')),
-        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production),
+        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production AND piece_stage::text <> 'waiting_for_acceptance'),
         'scheduler',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND in_production AND production_plan IS NULL AND piece_stage::text = 'waiting_cut'),
         'soaking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'soaking'),
         'cutting',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'cutting'),
@@ -3529,7 +3533,7 @@ AS $$
         'finishing',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'finishing'),
         'ironing',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ironing'),
         'quality_check', COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'quality_check'),
-        'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text IN ('ready_for_dispatch','brova_trialed'))
+        'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ready_for_dispatch')
     )
     FROM scoped;
 $$;

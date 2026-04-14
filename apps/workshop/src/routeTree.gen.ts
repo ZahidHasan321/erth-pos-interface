@@ -46,6 +46,7 @@ import { Route as mainStoreActiveDeliveriesRouteImport } from './routes/(main)/s
 import { Route as mainCompletedOrderIdRouteImport } from './routes/(main)/completed/$orderId'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
+import { Route as mainTerminalsStageHistoryRouteImport } from './routes/(main)/terminals/$stage.history'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
 import { Route as mainAssignedGarmentGarmentIdRouteImport } from './routes/(main)/assigned/garment.$garmentId'
 
@@ -241,6 +242,12 @@ const mainTerminalsGarmentGarmentIdRoute =
     path: '/terminals/garment/$garmentId',
     getParentRoute: () => mainRouteRoute,
   } as any)
+const mainTerminalsStageHistoryRoute =
+  mainTerminalsStageHistoryRouteImport.update({
+    id: '/terminals/$stage/history',
+    path: '/terminals/$stage/history',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainPerformanceWorkerWorkerNameRoute =
   mainPerformanceWorkerWorkerNameRouteImport.update({
     id: '/performance/worker/$workerName',
@@ -292,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/users/': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
+  '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRoutesByTo {
@@ -330,6 +338,7 @@ export interface FileRoutesByTo {
   '/users': typeof mainUsersIndexRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
+  '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRoutesById {
@@ -372,6 +381,7 @@ export interface FileRoutesById {
   '/(main)/users/': typeof mainUsersIndexRoute
   '/(main)/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/(main)/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
+  '/(main)/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/(main)/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
 }
 export interface FileRouteTypes {
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
     | '/users/'
     | '/assigned/garment/$garmentId'
     | '/performance/worker/$workerName'
+    | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -452,6 +463,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/assigned/garment/$garmentId'
     | '/performance/worker/$workerName'
+    | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
   id:
     | '__root__'
@@ -493,6 +505,7 @@ export interface FileRouteTypes {
     | '/(main)/users/'
     | '/(main)/assigned/garment/$garmentId'
     | '/(main)/performance/worker/$workerName'
+    | '/(main)/terminals/$stage/history'
     | '/(main)/terminals/garment/$garmentId'
   fileRoutesById: FileRoutesById
 }
@@ -763,6 +776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTerminalsGarmentGarmentIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/terminals/$stage/history': {
+      id: '/(main)/terminals/$stage/history'
+      path: '/terminals/$stage/history'
+      fullPath: '/terminals/$stage/history'
+      preLoaderRoute: typeof mainTerminalsStageHistoryRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/performance/worker/$workerName': {
       id: '/(main)/performance/worker/$workerName'
       path: '/performance/worker/$workerName'
@@ -839,6 +859,7 @@ interface mainRouteRouteChildren {
   mainPerformanceIndexRoute: typeof mainPerformanceIndexRoute
   mainUsersIndexRoute: typeof mainUsersIndexRoute
   mainPerformanceWorkerWorkerNameRoute: typeof mainPerformanceWorkerWorkerNameRoute
+  mainTerminalsStageHistoryRoute: typeof mainTerminalsStageHistoryRoute
   mainTerminalsGarmentGarmentIdRoute: typeof mainTerminalsGarmentGarmentIdRoute
 }
 
@@ -873,6 +894,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainPerformanceIndexRoute: mainPerformanceIndexRoute,
   mainUsersIndexRoute: mainUsersIndexRoute,
   mainPerformanceWorkerWorkerNameRoute: mainPerformanceWorkerWorkerNameRoute,
+  mainTerminalsStageHistoryRoute: mainTerminalsStageHistoryRoute,
   mainTerminalsGarmentGarmentIdRoute: mainTerminalsGarmentGarmentIdRoute,
 }
 

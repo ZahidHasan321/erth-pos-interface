@@ -12,16 +12,20 @@ export function MeasurementValue({ raw, degree = 0, className }: MeasurementValu
   if (!p) return null;
 
   return (
-    <span className={`inline-flex items-center gap-[3px] ${className ?? ""}`}>
+    <span
+      className={`inline-flex items-center gap-[3px] ${className ?? ""}`}
+      style={{ writingMode: "horizontal-tb" }}
+    >
       {p.negative && <span>-</span>}
-      {p.whole > 0 && <span>{p.whole}</span>}
+      {(p.whole > 0 || p.numerator === 0) && <span>{p.whole}</span>}
       {p.numerator > 0 && (
         <span className="inline-flex flex-col items-center leading-none">
           <span className="text-[0.8em]">{p.numerator}</span>
-          <span className="w-full border-t border-current" />
+          <span className="block h-px w-full bg-current" />
           <span className="text-[0.8em]">{p.denominator}</span>
         </span>
       )}
+      {p.hasDegree && <span>°</span>}
     </span>
   );
 }

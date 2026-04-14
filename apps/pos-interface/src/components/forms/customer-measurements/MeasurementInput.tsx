@@ -7,57 +7,26 @@ import {
   FormLabel,
 } from "@repo/ui/form";
 import { Input } from "@repo/ui/input";
+import { parseMeasurementParts } from "@repo/database";
 import { cn } from "@/lib/utils";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
 
-// Convert decimal to mixed fraction parts
-function decimalToFractionParts(decimal: number): { whole: number; numerator: number; denominator: number; isNegative: boolean } | null {
-  if (isNaN(decimal)) return null;
-
-  const isNegative = decimal < 0;
-  const absDecimal = Math.abs(decimal);
-
-  const whole = Math.floor(absDecimal);
-  const fractionalPart = absDecimal - whole;
-
-  if (fractionalPart < 0.001) {
-    // Whole number — return with zero fraction so the caller can still render it
-    return { whole, numerator: 0, denominator: 1, isNegative };
-  }
-
-  const gcd = (a: number, b: number): number =>
-    b < 0.0001 ? a : gcd(b, a % b);
-
-  const precision = 1000000;
-  const numerator = Math.round(fractionalPart * precision);
-  const denominator = precision;
-  const divisor = gcd(numerator, denominator);
-
-  return {
-    whole,
-    numerator: Math.round(numerator / divisor),
-    denominator: Math.round(denominator / divisor),
-    isNegative,
-  };
-}
-
 function StackedFraction({ value }: { value: number }) {
-  const parts = decimalToFractionParts(value);
+  const parts = parseMeasurementParts(value);
   if (!parts) return null;
-
-  const hasFraction = parts.numerator > 0;
 
   return (
     <span className="inline-flex items-center gap-1 text-lg font-semibold text-muted-foreground tabular-nums">
-      {parts.isNegative && <span>-</span>}
-      {parts.whole > 0 && <span>{parts.whole}</span>}
-      {hasFraction && (
+      {parts.negative && <span>-</span>}
+      {(parts.whole > 0 || parts.numerator === 0) && <span>{parts.whole}</span>}
+      {parts.numerator > 0 && (
         <span className="inline-flex flex-col items-center leading-none">
           <span className="text-sm">{parts.numerator}</span>
           <span className="w-full h-px bg-muted-foreground" />
           <span className="text-sm">{parts.denominator}</span>
         </span>
       )}
+      {parts.hasDegree && <span>°</span>}
     </span>
   );
 }

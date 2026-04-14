@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@repo/ui/sidebar";
-import { useSidebarCounts, useAttentionCount } from "@/hooks/useSidebarCounts";
+import { useSidebarCounts } from "@/hooks/useSidebarCounts";
 import { useTransferRequests } from "@/hooks/useTransfers";
 import { Link, useRouterState, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -46,7 +46,6 @@ import { isAdmin } from "@/lib/rbac";
 
 export function WorkshopSidebar() {
   const { data: counts } = useSidebarCounts();
-  const { data: attentionCount } = useAttentionCount();
   const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
   const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
   const { isMobile, setOpenMobile, state } = useSidebar();
@@ -71,7 +70,7 @@ export function WorkshopSidebar() {
     { label: "Parking",            icon: CirclePause,     href: "/parking",    count: counts?.parking,    badgeColor: "bg-amber-100 text-amber-700" },
     { label: "Scheduler",          icon: CalendarClock,   href: "/scheduler",  count: counts?.scheduler,  badgeColor: "bg-purple-100 text-purple-700" },
     { label: "Production Board",   icon: Columns3,        href: "/board" },
-    { label: "Production Tracker", icon: Activity,        href: "/assigned",  count: attentionCount,     badgeColor: attentionCount && attentionCount > 0 ? "bg-red-100 text-red-700" : undefined },
+    { label: "Production Tracker", icon: Activity,        href: "/assigned" },
   ];
 
   const peopleItems = [

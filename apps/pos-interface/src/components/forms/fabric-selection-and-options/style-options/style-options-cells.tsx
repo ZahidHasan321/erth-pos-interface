@@ -273,12 +273,13 @@ export const CollarCell = ({
               onCheckedChange={field.onChange}
               disabled={isFormDisabled}
             />
-            <label htmlFor={`small_tabaggi-${row.index}`}>
+            <label htmlFor={`small_tabaggi-${row.index}`} className="flex flex-col items-center">
               <img
                 src={smallTabaggiImage}
                 alt="Small Tabaggi"
                 className="min-w-8 h-8 object-contain"
               />
+              <span className="text-[9px] text-muted-foreground leading-tight">small tabbagi</span>
             </label>
           </div>
         )}

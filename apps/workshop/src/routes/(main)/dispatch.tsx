@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useWorkshopGarments, useOrderLocationBreakdown } from "@/hooks/useWorkshopGarments";
+import type { OrderLocationBreakdown } from "@/api/garments";
 import { useDispatchGarments } from "@/hooks/useGarmentMutations";
 import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge } from "@/components/shared/PageShell";
 import { StageBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
@@ -11,7 +12,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
-import { Truck, Package, History, Printer, ChevronDown, Hash, User } from "lucide-react";
+import { Truck, Package, History, Printer, ChevronDown, Hash, User, Loader2 } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
 import type { WorkshopGarment } from "@repo/database";
@@ -82,12 +83,14 @@ function groupReadyByOrder(garments: WorkshopGarment[]): ReadyOrderGroup[] {
 
 function ReadyOrderCard({
   group,
+  breakdown,
   onDispatchGroup,
-  isPending,
+  dispatchPendingIds,
 }: {
   group: ReadyOrderGroup;
+  breakdown?: OrderLocationBreakdown;
   onDispatchGroup: (ids: string[]) => void;
-  isPending: boolean;
+  dispatchPendingIds: Set<string>;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(
@@ -116,9 +119,9 @@ function ReadyOrderCard({
   };
 
   const hasExpress = group.garments.some((g) => g.express);
-  const urgency = deliveryUrgency(group.deliveryDate);
   const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
+  const isPending = groupIds.some((id) => dispatchPendingIds.has(id));
 
   return (
     <div className={cn(
@@ -160,19 +163,32 @@ function ReadyOrderCard({
             </div>
           </div>
 
-          {/* Counts + delivery */}
-          <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{groupIds.length} Pcs</Badge>
-              {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
-              {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
-              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
-              {group.deliveryDate && (
-                <span className={cn("text-[11px] font-medium rounded px-1.5 py-0.5", urgency.className)}>
-                  {formatDate(group.deliveryDate)}
-                  {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
+          {/* Counts */}
+          <div className="flex-[1.6] px-4 py-2.5 border-r border-border/40">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                {groupIds.length}/{breakdown?.total ?? groupIds.length} ready
+              </span>
+              {breakdown && breakdown.workshop > 0 && (
+                <span className="text-[11px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{breakdown.workshop} in production</span>
+              )}
+              {breakdown && breakdown.transit > 0 && (
+                <span className="text-[11px] font-black bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded">{breakdown.transit} in transit</span>
+              )}
+              {breakdown && breakdown.shop > 0 && (
+                <span className="text-[11px] font-black bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{breakdown.shop} at shop</span>
+              )}
+              {breakdown && breakdown.done > 0 && (
+                <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{breakdown.done} done</span>
+              )}
+              {(brovaCount > 0 || finalCount > 0) && (
+                <span className="text-[11px] font-black">
+                  {brovaCount > 0 && <span className="text-blue-700">{brovaCount}B</span>}
+                  {brovaCount > 0 && finalCount > 0 && <span className="mx-0.5 text-muted-foreground">·</span>}
+                  {finalCount > 0 && <span className="text-emerald-700">{finalCount}F</span>}
                 </span>
               )}
+              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
             </div>
           </div>
 
@@ -183,7 +199,11 @@ function ReadyOrderCard({
               onClick={handleDispatch}
               disabled={isPending || selected.size === 0}
             >
-              <Truck className="w-3.5 h-3.5 mr-1" />
+              {isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+              ) : (
+                <Truck className="w-3.5 h-3.5 mr-1" />
+              )}
               Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
             </Button>
             <button
@@ -221,23 +241,25 @@ function ReadyOrderCard({
             </button>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {group.customerMobile && <span className="text-[11px] text-muted-foreground">{group.customerMobile}</span>}
-              <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{groupIds.length} Pcs</Badge>
+              <span className="text-[10px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                {groupIds.length}/{breakdown?.total ?? groupIds.length} ready
+              </span>
+              {breakdown && breakdown.workshop > 0 && <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{breakdown.workshop}P</span>}
+              {breakdown && breakdown.transit > 0 && <span className="text-[10px] font-black bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded">{breakdown.transit}T</span>}
+              {breakdown && breakdown.shop > 0 && <span className="text-[10px] font-black bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{breakdown.shop}S</span>}
+              {breakdown && breakdown.done > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{breakdown.done}D</span>}
               {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
               {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
               {hasExpress && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
-              {group.deliveryDate && (
-                <span className={cn("text-[10px] font-medium rounded px-1", urgency.className)}>
-                  {formatDate(group.deliveryDate)}{urgency.label && ` ${urgency.label}`}
-                </span>
-              )}
             </div>
             <Button
               className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0"
               onClick={handleDispatch}
               disabled={isPending || selected.size === 0}
             >
+              {isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
               Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
             </Button>
           </div>
@@ -621,17 +643,23 @@ function DispatchHistoryTab() {
 function DispatchPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const dispatchMut = useDispatchGarments();
-  // Ready garments at workshop — ready_for_dispatch (passed QC) or brova_trialed (accepted, returning with order)
-  const DISPATCH_STAGES = new Set(["ready_for_dispatch", "brova_trialed"]);
+  // Ready garments at workshop — post-QC garments pending shipment to shop.
+  // (brova_trialed lives at shop under unified flow; receiving resets any stray
+  // brova_trialed returning to the workshop back to waiting_cut.)
   const readyGarments = useMemo(
     () => allGarments.filter(
-      (g) => g.location === "workshop" && DISPATCH_STAGES.has(g.piece_stage ?? ""),
+      (g) => g.location === "workshop" && g.piece_stage === "ready_for_dispatch",
     ),
     [allGarments],
   );
 
   // Group by order for partial-dispatch UI (mirrors POS dispatch page).
   const readyGroups = useMemo(() => groupReadyByOrder(readyGarments), [readyGarments]);
+
+  // Per-order breakdown so each card can show where the rest of the order's
+  // garments currently sit (workshop / transit / shop / done).
+  const readyOrderIds = useMemo(() => readyGroups.map((g) => g.orderId), [readyGroups]);
+  const { data: breakdowns = {} } = useOrderLocationBreakdown(readyOrderIds);
 
   // In transit garments
   const inTransitGarments = useMemo(
@@ -644,6 +672,14 @@ function DispatchPage() {
     if (ids.length === 0) return;
     await dispatchMut.mutateAsync(ids);
   };
+
+  const dispatchPendingIds = useMemo(
+    () =>
+      dispatchMut.isPending && dispatchMut.variables
+        ? new Set(dispatchMut.variables)
+        : new Set<string>(),
+    [dispatchMut.isPending, dispatchMut.variables],
+  );
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28">
@@ -685,8 +721,9 @@ function DispatchPage() {
                 <ReadyOrderCard
                   key={group.orderId}
                   group={group}
+                  breakdown={breakdowns[group.orderId]}
                   onDispatchGroup={handleDispatchGroup}
-                  isPending={dispatchMut.isPending}
+                  dispatchPendingIds={dispatchPendingIds}
                 />
               ))}
             </div>

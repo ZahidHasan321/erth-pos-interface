@@ -37,62 +37,38 @@ function final_(overrides: Record<string, unknown> = {}) {
 // Group 1: isAlteration + getAlterationNumber
 // ---------------------------------------------------------------------------
 
-describe("isAlteration", () => {
-  it("brova trip 1 is not an alteration", () => {
+describe("isAlteration (unified: trip >= 2 for all types)", () => {
+  it("trip 1 is not an alteration (brova or final)", () => {
     expect(isAlteration(1, "brova")).toBe(false);
-  });
-
-  it("brova trip 3 (last non-alt) is not an alteration", () => {
-    expect(isAlteration(3, "brova")).toBe(false);
-  });
-
-  it("brova trip 4 is the first alteration", () => {
-    expect(isAlteration(4, "brova")).toBe(true);
-  });
-
-  it("brova trip 6 is an alteration", () => {
-    expect(isAlteration(6, "brova")).toBe(true);
-  });
-
-  it("final trip 1 is not an alteration", () => {
     expect(isAlteration(1, "final")).toBe(false);
   });
 
-  it("final trip 2 is the first alteration", () => {
+  it("trip 2 is the first alteration for both types", () => {
+    expect(isAlteration(2, "brova")).toBe(true);
     expect(isAlteration(2, "final")).toBe(true);
   });
 
-  it("null trip defaults to 1 (not alteration)", () => {
-    expect(isAlteration(null, "brova")).toBe(false);
-    expect(isAlteration(null, "final")).toBe(false);
+  it("trip 4+ still alteration", () => {
+    expect(isAlteration(4, "brova")).toBe(true);
+    expect(isAlteration(6, "final")).toBe(true);
   });
 
-  it("undefined trip defaults to 1 (not alteration)", () => {
-    expect(isAlteration(undefined, "brova")).toBe(false);
+  it("null/undefined trip defaults to 1 (not alteration)", () => {
+    expect(isAlteration(null, "brova")).toBe(false);
     expect(isAlteration(undefined, "final")).toBe(false);
   });
 });
 
-describe("getAlterationNumber", () => {
-  it("brova trip 1-3 returns null", () => {
+describe("getAlterationNumber (unified: trip - 1)", () => {
+  it("trip 1 returns null", () => {
     expect(getAlterationNumber(1, "brova")).toBeNull();
-    expect(getAlterationNumber(2, "brova")).toBeNull();
-    expect(getAlterationNumber(3, "brova")).toBeNull();
-  });
-
-  it("brova trip 4 = Alt 1, trip 5 = Alt 2, trip 6 = Alt 3", () => {
-    expect(getAlterationNumber(4, "brova")).toBe(1);
-    expect(getAlterationNumber(5, "brova")).toBe(2);
-    expect(getAlterationNumber(6, "brova")).toBe(3);
-  });
-
-  it("final trip 1 returns null", () => {
     expect(getAlterationNumber(1, "final")).toBeNull();
   });
 
-  it("final trip 2 = Alt 1, trip 3 = Alt 2", () => {
-    expect(getAlterationNumber(2, "final")).toBe(1);
+  it("trip 2 = Alt 1, trip 3 = Alt 2, ...", () => {
+    expect(getAlterationNumber(2, "brova")).toBe(1);
     expect(getAlterationNumber(3, "final")).toBe(2);
+    expect(getAlterationNumber(6, "brova")).toBe(5);
   });
 
   it("null/undefined trip returns null", () => {
