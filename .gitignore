@@ -39,3 +39,6 @@ yarn-error.log*
 
 # Local reference repos
 .temp-ref/
+
+# Local data
+*.xlsx
