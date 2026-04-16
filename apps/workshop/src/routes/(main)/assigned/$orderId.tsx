@@ -1,21 +1,25 @@
 import { useState } from "react";
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { PlanDialog } from "@/components/shared/PlanDialog";
+import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import {
   StageBadge,
   BrandBadge,
   ExpressBadge,
-  TrialBadge,
   AlterationInBadge,
   QcFixBadge,
   AlterationBadge,
 } from "@/components/shared/StageBadge";
 import { MetadataChip } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
-import { cn, formatDate } from "@/lib/utils";
+import { Label } from "@repo/ui/label";
+import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
+import { useUpdateOrderDeliveryDate } from "@/hooks/useGarmentMutations";
+import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
 import { getGarmentEditability } from "@/lib/editability";
 import {
   ArrowLeft,
@@ -31,6 +35,7 @@ import {
   Phone,
   Play,
 } from "lucide-react";
+import { getAlterationNumber } from "@repo/database";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/$orderId")({
@@ -292,7 +297,7 @@ function OrderHeader({
   const readyDispatch = garments.filter(
     (g) => g.piece_stage === "ready_for_dispatch",
   );
-  const brovasNeedRepair = brovas.filter(
+  const needsRepairAtShop = garments.filter(
     (g) =>
       g.location === "shop" &&
       (g.feedback_status === "needs_repair" ||
@@ -303,6 +308,7 @@ function OrderHeader({
     (g) => g.acceptance_status === true || g.piece_stage === "completed",
   );
   const maxTrip = Math.max(...garments.map((g) => g.trip_number ?? 1));
+  const maxAltNumber = getAlterationNumber(maxTrip);
   const urgency = getDeliveryUrgency(first.delivery_date_order);
 
   const statusLabel = (() => {
@@ -316,15 +322,12 @@ function OrderHeader({
         text: "Ready for dispatch",
         cls: "bg-emerald-100 text-emerald-800",
       };
-    // Alteration (In) only for trip 3+ (went back twice already)
-    if (brovasNeedRepair.length > 0 && maxTrip >= 3)
-      return { text: "Alteration (In)", cls: "bg-orange-100 text-orange-800" };
-    // Trip 2 at shop needing repair = brova return
-    if (brovasNeedRepair.length > 0 && maxTrip === 2)
-      return { text: "Brova Return", cls: "bg-amber-100 text-amber-800" };
-    // Trip 1 at shop needing repair = needs changes after 1st trial
-    if (brovasNeedRepair.length > 0)
-      return { text: "Needs Changes", cls: "bg-amber-100 text-amber-800" };
+    // Unified alteration model: any garment at shop with needs_repair/needs_redo = alteration in.
+    // Number shown = max trip across returning garments (the next alt cycle when sent back).
+    if (needsRepairAtShop.length > 0) {
+      const incomingAlt = Math.max(...needsRepairAtShop.map((g) => g.trip_number ?? 1));
+      return { text: `Alt ${incomingAlt} (In)`, cls: "bg-orange-100 text-orange-800" };
+    }
     if (
       brovas.length > 0 &&
       brovasAtShop.length === brovas.length &&
@@ -351,12 +354,9 @@ function OrderHeader({
     }
     if (brovas.length > 0 && finals.length === 0)
       return {
-        text:
-          maxTrip >= 3
-            ? `Alt #${maxTrip - 1} in production`
-            : maxTrip === 2
-              ? "Brova return in production"
-              : "Brova in production",
+        text: maxAltNumber !== null
+          ? `Alt ${maxAltNumber} in production`
+          : "Brova in production",
         cls: "bg-purple-100 text-purple-800",
       };
     if (
@@ -432,34 +432,59 @@ function OrderHeader({
           </div>
         </div>
 
-        {/* Delivery date — read-only */}
-        {first.delivery_date_order && (
-          <div className="shrink-0 text-right">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-1 rounded-md",
-                urgency.days !== null &&
-                  urgency.days < 0 &&
-                  "bg-red-100 text-red-800",
-                urgency.days !== null &&
-                  urgency.days >= 0 &&
-                  urgency.days <= 2 &&
-                  "bg-amber-100 text-amber-800",
-                (urgency.days === null || urgency.days > 2) &&
-                  "bg-muted text-foreground",
-              )}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              {formatDate(first.delivery_date_order)}
-            </span>
-            {daysLabel && (
-              <p className={cn("text-xs font-bold mt-0.5", urgency.className)}>
-                {daysLabel}
-              </p>
-            )}
-          </div>
-        )}
+        {/* Order-level delivery date — editable (cascades to shared garments) */}
+        <OrderDeliveryDateEditor
+          orderId={orderId}
+          value={first.delivery_date_order ?? null}
+          urgencyClassName={cn(
+            urgency.days !== null && urgency.days < 0 && "bg-red-100 text-red-800",
+            urgency.days !== null && urgency.days >= 0 && urgency.days <= 2 && "bg-amber-100 text-amber-800",
+            (urgency.days === null || urgency.days > 2) && "bg-muted text-foreground",
+          )}
+          daysLabel={daysLabel}
+          daysLabelClassName={urgency.className}
+        />
       </div>
+    </div>
+  );
+}
+
+function OrderDeliveryDateEditor({
+  orderId,
+  value,
+  urgencyClassName,
+  daysLabel,
+  daysLabelClassName,
+}: {
+  orderId: number;
+  value: string | null;
+  urgencyClassName: string;
+  daysLabel: string | null;
+  daysLabelClassName: string;
+}) {
+  const mut = useUpdateOrderDeliveryDate();
+  return (
+    <div className="shrink-0 text-right space-y-1">
+      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1 justify-end">
+        <Clock className="w-3 h-3" /> Delivery Date
+      </Label>
+      <div className={cn("inline-flex rounded-md p-0.5", urgencyClassName)}>
+        <ConfirmedDatePicker
+          value={value}
+          onConfirm={async (d) => {
+            const ds = toLocalDateStr(d);
+            if (!ds) return;
+            await mut.mutateAsync({ orderId, date: ds });
+          }}
+          label="order delivery date"
+          extraDescription="Garments sharing this date will also be updated; garments with custom dates (e.g. express) stay unchanged."
+          className="h-8 text-sm font-semibold bg-transparent border-0"
+          displayFormat="PPP"
+        />
+      </div>
+      {daysLabel && (
+        <p className={cn("text-xs font-bold", daysLabelClassName)}>{daysLabel}</p>
+      )}
     </div>
   );
 }
@@ -480,7 +505,19 @@ function SharedPlanSection({
   const [planOpen, setPlanOpen] = useState(false);
   const hasSoaking = garments.some((g) => g.soaking);
   const anyStarted = garments.some((g) => g.start_time);
-  const anyCanEdit = garments.some((g) => getGarmentEditability(g).canEditPlan);
+  const editableGarments = garments.filter((g) => getGarmentEditability(g).canEditPlan);
+  const skippedCount = garments.length - editableGarments.length;
+  const anyCanEdit = editableGarments.length > 0;
+  const allReturns = editableGarments.length > 0 && editableGarments.every((g) => (g.trip_number ?? 1) >= 2);
+  const planLabel = allReturns ? "Alteration Plan" : "Production Plan";
+  // Bulk lock = union of per-garment locks (if any editable garment has stage X done, no bulk edit for X).
+  const sharedLockedSteps = (() => {
+    const union = new Set<string>();
+    for (const g of editableGarments) {
+      for (const k of getGarmentEditability(g).lockedPlanSteps) union.add(k);
+    }
+    return union;
+  })();
 
   const visibleSteps = PLAN_STEPS.filter(
     (s) => s.key !== "soaker" || hasSoaking,
@@ -490,9 +527,11 @@ function SharedPlanSection({
     newPlan: Record<string, string>,
     newDate: string,
   ) => {
-    // Apply to all planned garments
+    // Only apply to garments whose plan is still editable (not started, not done).
+    // Started/done garments are protected by updateGarmentDetails anyway, but
+    // skipping them here makes the skipped count in the UI accurate.
     await Promise.all(
-      garments.map((g) =>
+      editableGarments.map((g) =>
         updateMut.mutateAsync({
           id: g.id,
           updates: {
@@ -502,20 +541,27 @@ function SharedPlanSection({
         }),
       ),
     );
+    if (skippedCount > 0) {
+      toast.info(
+        `Updated ${editableGarments.length} garment${editableGarments.length !== 1 ? "s" : ""} — ${skippedCount} in production skipped`,
+      );
+    }
   };
 
   return (
     <div className="mt-3 bg-card border rounded-xl p-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Production Plan
+          {planLabel}
         </h3>
         {anyCanEdit ? (
           <button
             onClick={() => setPlanOpen(true)}
             className="text-xs text-primary hover:underline cursor-pointer font-medium"
           >
-            Edit plan for all
+            {skippedCount > 0
+              ? `Edit plan for ${editableGarments.length} of ${garments.length}`
+              : "Edit plan for all"}
           </button>
         ) : anyStarted ? (
           <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -546,12 +592,13 @@ function SharedPlanSection({
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
-          garmentCount={garments.length}
+          garmentCount={editableGarments.length}
           defaultDate={date}
           defaultPlan={plan}
-          title="Edit Production Plan (All Garments)"
-          confirmLabel="Save for All"
-          hasSoaking={hasSoaking}
+          title={`Edit ${planLabel}`}
+          confirmLabel={skippedCount > 0 ? `Save for ${editableGarments.length}` : "Save for All"}
+          hasSoaking={editableGarments.some((g) => g.soaking)}
+          lockedSteps={sharedLockedSteps}
         />
       )}
     </div>
@@ -602,24 +649,34 @@ function GarmentPlanCard({
   );
 
   const contextMessage = (() => {
+    const altN = getAlterationNumber(tripNum);
+    const altPrefix = altN !== null ? `Alt ${altN} — ` : "";
     // Done states
+    if (garment.piece_stage === "discarded")
+      return { text: "Discarded (redo)", cls: "text-red-700" };
     if (garment.piece_stage === "completed")
       return { text: "Completed", cls: "text-green-700" };
     if (garment.piece_stage === "ready_for_dispatch")
       return {
-        text: "Production complete — ready for dispatch",
+        text: `${altPrefix}Production complete — ready for dispatch`,
         cls: "text-emerald-700",
       };
     // Transit
     if (garment.location === "transit_to_shop")
-      return { text: "In transit to shop", cls: "text-cyan-700" };
+      return { text: `${altPrefix}In transit to shop`, cls: "text-cyan-700" };
     if (garment.location === "transit_to_workshop")
-      return { text: "In transit to workshop", cls: "text-orange-700" };
+      return { text: `${altPrefix}In transit to workshop`, cls: "text-orange-700" };
     // Shop states
-    if (isAlterationIn)
-      return { text: "Needs to return for alteration", cls: "text-orange-700" };
+    if (isAlterationIn) {
+      // Next alt cycle = current trip (will become trip+1 on return).
+      const nextAlt = (tripNum ?? 1);
+      return { text: `Needs to return for Alt ${nextAlt}`, cls: "text-orange-700" };
+    }
     if (garment.piece_stage === "awaiting_trial" && garment.location === "shop")
-      return { text: "At shop — awaiting trial", cls: "text-green-700" };
+      return {
+        text: altN !== null ? `At shop — Alt ${altN} trial` : "At shop — awaiting trial",
+        cls: "text-green-700",
+      };
     if (garment.piece_stage === "ready_for_pickup")
       return { text: "Ready for pickup", cls: "text-green-700" };
     if (isAtShopPostProduction)
@@ -637,10 +694,10 @@ function GarmentPlanCard({
       };
     }
     if (garment.location === "workshop" && hasStarted)
-      return { text: "In production", cls: "text-blue-700" };
+      return { text: `${altPrefix}In production`, cls: "text-blue-700" };
     if (garment.location === "workshop" && !hasStarted && garment.in_production)
       return {
-        text: "Scheduled — waiting to start",
+        text: `${altPrefix}Scheduled — waiting to start`,
         cls: "text-muted-foreground",
       };
     if (
@@ -649,7 +706,7 @@ function GarmentPlanCard({
       !garment.in_production
     )
       return {
-        text: "Received — not yet started",
+        text: `${altPrefix}Received — not yet started`,
         cls: "text-muted-foreground",
       };
     return null;
@@ -680,6 +737,8 @@ function GarmentPlanCard({
       className={cn(
         "bg-card border rounded-xl p-3 shadow-sm",
         garment.express && "border-orange-200",
+        isReturn && "border-l-4 border-l-orange-400",
+        isAlterationIn && "bg-orange-50/40 border-orange-200",
         garment.piece_stage === "waiting_for_acceptance" &&
           !anyBrovaAccepted &&
           "opacity-50 bg-zinc-50",
@@ -706,7 +765,6 @@ function GarmentPlanCard({
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </Link>
           {garment.express && <ExpressBadge />}
-          {tripNum > 1 && <TrialBadge tripNumber={garment.trip_number} />}
           <AlterationBadge
             tripNumber={garment.trip_number}
             garmentType={garment.garment_type}
@@ -717,7 +775,7 @@ function GarmentPlanCard({
               tripHistory={garment.trip_history}
             />
           )}
-          {isAlterationIn && <AlterationInBadge />}
+          {isAlterationIn && <AlterationInBadge tripNumber={tripNum} />}
           <StageBadge
             stage={garment.piece_stage}
             garmentType={garment.garment_type}
@@ -838,6 +896,21 @@ function GarmentPlanCard({
             >
               <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
+          ) : editability.canEditDeliveryDate ? (
+            <div className="w-36" title="Change delivery date">
+              <ConfirmedDatePicker
+                value={garment.delivery_date ?? ""}
+                onConfirm={async (d) => {
+                  await updateMut.mutateAsync({
+                    id: garment.id,
+                    updates: { delivery_date: toLocalDateStr(d) },
+                  });
+                }}
+                label="garment delivery date"
+                displayFormat="dd MMM"
+                className="h-7 text-[11px] px-2"
+              />
+            </div>
           ) : editability.readOnlyReason ? (
             <span
               className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5"
@@ -881,6 +954,26 @@ function GarmentPlanCard({
         <p className="mt-2 text-xs text-muted-foreground italic">
           {contextMessage ? contextMessage.text : "Not yet scheduled"}
         </p>
+      )}
+
+      {/* Discarded → replacement CTA */}
+      {garment.piece_stage === "discarded" && (
+        <div className="mt-2">
+          {(garment as typeof garment & { replaced_by_garment_id: string | null }).replaced_by_garment_id ? (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs font-semibold text-muted-foreground">
+              Replacement created
+            </span>
+          ) : (
+            <Link
+              to="/assigned/$orderId/add-garment"
+              params={{ orderId: String(garment.order_id) }}
+              search={{ replaces: garment.id }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+            >
+              Create replacement →
+            </Link>
+          )}
+        </div>
       )}
 
       {/* Worker summary — only show if different from shared plan, or no shared plan */}
@@ -979,8 +1072,25 @@ function GarmentPlanCard({
         />
       )}
 
-      {/* PlanDialog for editing — includes delivery date + reentry for returns */}
-      {canEdit && (
+      {/* Plan dialog — ReturnPlanDialog for trip 2+ (matches scheduler), PlanDialog otherwise */}
+      {canEdit && isReturn && (
+        <ReturnPlanDialog
+          open={planOpen}
+          onOpenChange={setPlanOpen}
+          onConfirm={handlePlanConfirm}
+          garmentCount={1}
+          defaultDate={garment.assigned_date ?? undefined}
+          workerHistory={garment.worker_history as Record<string, string> | null}
+          feedbackStatus={garment.feedback_status}
+          tripNumber={garment.trip_number}
+          feedbackNotes={garment.notes}
+          garmentId={garment.id}
+          tripHistory={garment.trip_history as TripHistoryEntry[] | string | null | undefined}
+          title={`Edit Plan — ${garment.garment_id}`}
+          lockedSteps={editability.lockedPlanSteps}
+        />
+      )}
+      {canEdit && !isReturn && (
         <PlanDialog
           open={planOpen}
           onOpenChange={setPlanOpen}
@@ -996,11 +1106,11 @@ function GarmentPlanCard({
           title={`Edit Plan — ${garment.garment_id}`}
           confirmLabel="Save Changes"
           hasSoaking={hasSoaking}
-          isAlteration={isReturn}
           showDeliveryDate
           defaultDeliveryDate={
             garment.delivery_date ? String(garment.delivery_date) : undefined
           }
+          lockedSteps={editability.lockedPlanSteps}
         />
       )}
     </div>

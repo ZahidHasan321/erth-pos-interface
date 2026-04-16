@@ -48,9 +48,13 @@ interface PlanDialogProps {
   showDeliveryDate?: boolean;
   defaultDeliveryDate?: string;
   isPending?: boolean;
+  /** Plan step keys that cannot be reassigned (already done / in progress).
+   *  These rows render as read-only with the current worker. */
+  lockedSteps?: Set<string>;
 }
 
-export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate, isPending }: PlanDialogProps) {
+export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaultDate, isAlteration, defaultPlan, title, confirmLabel, hasSoaking, showDeliveryDate, defaultDeliveryDate, isPending, lockedSteps }: PlanDialogProps) {
+  const locked = lockedSteps ?? new Set<string>();
   const { data: resources = [] } = useResources();
   const workload = useStepWorkload(PLAN_STEPS);
 
@@ -116,6 +120,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
   };
 
   const handleStageToggle = (key: string) => {
+    if (locked.has(key)) return;
     setSelectedStages((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -149,7 +154,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
 
   const allRequiredFilled = visibleSteps
     .filter((s) => s.required)
-    .every((s) => !!plan[s.key]);
+    .every((s) => locked.has(s.key) || !!plan[s.key]);
 
   const filledCount = visibleSteps.filter((s) => !!plan[s.key]).length;
   const hasAtLeastOneStage = !isAlteration || selectedStages.size > 0;
@@ -209,6 +214,7 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                 steps={SELECTABLE_STEPS}
                 selectedStages={selectedStages}
                 onToggle={handleStageToggle}
+                lockedKeys={locked}
               />
               {!hasAtLeastOneStage && (
                 <p className="text-xs text-red-500 mt-1">Select at least one stage</p>
@@ -246,6 +252,8 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
             const isFilled = !!selectedWorker;
             const noUnit = units.length > 1 && !unitSelections[step.key];
 
+            const isLocked = locked.has(step.key);
+
             return (
               <div key={step.key} className="relative">
                 {/* Connector line */}
@@ -255,31 +263,36 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
 
                 <div className={cn(
                   "border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow]",
-                  isFilled
-                    ? "border-zinc-300 bg-card"
-                    : !step.required
-                      ? "border-dashed border-zinc-200 bg-zinc-50/50"
-                      : "border-zinc-200 bg-card",
+                  isLocked
+                    ? "border-zinc-200 bg-zinc-50 opacity-75"
+                    : isFilled
+                      ? "border-zinc-300 bg-card"
+                      : !step.required
+                        ? "border-dashed border-zinc-200 bg-zinc-50/50"
+                        : "border-zinc-200 bg-card",
                 )}>
                   {/* Step header */}
                   <div className="mb-2.5">
                     <PipelineStepHeader
                       step={step}
-                      isFilled={isFilled}
+                      isFilled={isFilled || isLocked}
                       workerName={selectedWorker}
                       unitName={unitSelections[step.key]}
-                      onClear={isFilled ? () => setPlan((prev) => ({ ...prev, [step.key]: "" })) : undefined}
+                      onClear={isFilled && !isLocked ? () => setPlan((prev) => ({ ...prev, [step.key]: "" })) : undefined}
                     />
-                    {!isFilled && !step.required && (
+                    {isLocked && (
+                      <span className="text-xs text-muted-foreground font-medium ml-9.5">(locked — already in production)</span>
+                    )}
+                    {!isLocked && !isFilled && !step.required && (
                       <span className="text-xs text-muted-foreground font-medium ml-9.5">(skip)</span>
                     )}
-                    {!isFilled && step.required && (
+                    {!isLocked && !isFilled && step.required && (
                       <span className="text-red-400 text-xs ml-9.5">*</span>
                     )}
                   </div>
 
-                  {/* Selection area — hidden when filled */}
-                  {!isFilled && (
+                  {/* Selection area — hidden when filled or locked */}
+                  {!isFilled && !isLocked && (
                     <div className="space-y-2.5">
                       {/* Unit picker (only if multiple units) */}
                       {units.length > 1 && (

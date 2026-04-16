@@ -12,19 +12,13 @@ import {
   useQcFail,
 } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
+import { WorkerHistoryChips, type PlanStep } from "@/components/shared/plan-dialog-shared";
 import { HISTORY_KEY_MAP } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +43,9 @@ import {
   AlertTriangle,
   RotateCcw,
   Loader2,
+  Scissors,
 } from "lucide-react";
+import { IconNeedle, IconIroning1, IconStack2, IconSparkles } from "@tabler/icons-react";
 import type {
   WorkshopGarment,
   PieceStage,
@@ -72,12 +68,21 @@ const QC_CATEGORIES = [
   { key: "appearance", label: "Overall Appearance" },
 ];
 
-const FAIL_RETURN_STAGES: { value: PieceStage; label: string }[] = [
-  { value: "cutting", label: "Back to Cutting" },
-  { value: "post_cutting", label: "Back to Post-Cutting" },
-  { value: "sewing", label: "Back to Sewing" },
-  { value: "finishing", label: "Back to Finishing" },
-  { value: "ironing", label: "Back to Ironing" },
+const FAIL_RETURN_STAGES: { value: PieceStage; historyKey: string; label: string; icon: React.ComponentType<{ className?: string }>; color: string; accent: string }[] = [
+  { value: "cutting",      historyKey: "cutter",      label: "Cutting",      icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
+  { value: "post_cutting",  historyKey: "post_cutter", label: "Post-Cutting",  icon: IconStack2,  color: "text-orange-600",  accent: "bg-orange-500" },
+  { value: "sewing",        historyKey: "sewer",       label: "Sewing",        icon: IconNeedle,  color: "text-purple-600",  accent: "bg-purple-500" },
+  { value: "finishing",      historyKey: "finisher",    label: "Finishing",      icon: IconSparkles, color: "text-emerald-600", accent: "bg-emerald-500" },
+  { value: "ironing",        historyKey: "ironer",      label: "Ironing",        icon: IconIroning1, color: "text-red-600",     accent: "bg-red-500" },
+];
+
+/** Steps for WorkerHistoryChips display in QC fail mode */
+const WORKER_HISTORY_STEPS: (PlanStep & { historyKey: string })[] = [
+  { key: "cutter",      historyKey: "cutting",      label: "Cut",      responsibility: "cutting",      icon: Scissors,     color: "text-amber-600",   accent: "bg-amber-500" },
+  { key: "post_cutter", historyKey: "post_cutting",  label: "Post-Cut",  responsibility: "post_cutting",  icon: IconStack2,   color: "text-orange-600",  accent: "bg-orange-500" },
+  { key: "sewer",       historyKey: "sewing",        label: "Sew",       responsibility: "sewing",        icon: IconNeedle,   color: "text-purple-600",  accent: "bg-purple-500" },
+  { key: "finisher",    historyKey: "finishing",      label: "Finish",    responsibility: "finishing",     icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
+  { key: "ironer",      historyKey: "ironing",        label: "Iron",      responsibility: "ironing",       icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },
 ];
 
 // ── Star Rating ────────────────────────────────────────────────
@@ -651,29 +656,51 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Worker history — who worked on each stage */}
+          <WorkerHistoryChips
+            steps={WORKER_HISTORY_STEPS}
+            workerHistory={garment.worker_history as Record<string, string> | null}
+          />
+
+          {/* Return stage — visual single-select chips */}
           <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              Return to Stage
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Send back to
             </label>
-            <Select
-              value={returnStage}
-              onValueChange={(v) => setReturnStage(v as PieceStage)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FAIL_RETURN_STAGES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-2 gap-1.5">
+              {FAIL_RETURN_STAGES.map((s) => {
+                const Icon = s.icon;
+                const isSelected = returnStage === s.value;
+                const previousWorker = (garment.worker_history as Record<string, string> | null)?.[s.historyKey];
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setReturnStage(s.value)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all",
+                      isSelected
+                        ? "border-red-300 bg-red-50 shadow-sm"
+                        : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100",
+                    )}
+                  >
+                    <Icon className={cn("w-4 h-4 shrink-0", isSelected ? s.color : "text-muted-foreground")} />
+                    <div className="min-w-0">
+                      <p className={cn("text-sm font-medium", isSelected ? "text-foreground" : "text-muted-foreground")}>
+                        {s.label}
+                      </p>
+                      {previousWorker && (
+                        <p className="text-xs text-muted-foreground truncate">{previousWorker}</p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Reason</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Reason</label>
             <Input
               placeholder="Describe the issue…"
               value={reason}

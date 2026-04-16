@@ -386,20 +386,110 @@ export function useReleaseFinalsWithPlan() {
 
 // ── Detail updates ─────────────────────────────────────────────────────────
 
+type GarmentDetailUpdates = {
+  assigned_date?: string | null;
+  delivery_date?: string | null;
+  production_plan?: Record<string, string> | null;
+  piece_stage?: string | null;
+};
+
+/** Best-effort date equality — both sides may be full ISO or YYYY-MM-DD. */
+function sameDay(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return String(a).slice(0, 10) === String(b).slice(0, 10);
+}
+
 export function useUpdateGarmentDetails() {
-  return useMut(
-    (args: { id: string; updates: { assigned_date?: string | null; delivery_date?: string | null; production_plan?: Record<string, string> | null; piece_stage?: string | null } }) =>
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; updates: GarmentDetailUpdates }) =>
       updateGarmentDetails(args.id, args.updates),
-    'Failed to update garment details',
-  );
+    onMutate: ({ id, updates }) => {
+      const patch = updates as Partial<WorkshopGarment>;
+      const snapshots: Array<() => void> = [];
+
+      // Single-garment cache
+      const prevSingle = qc.getQueryData<WorkshopGarment>(['garment', id]);
+      if (prevSingle) {
+        qc.setQueryData<WorkshopGarment>(['garment', id], { ...prevSingle, ...patch });
+        snapshots.push(() => qc.setQueryData(['garment', id], prevSingle));
+      }
+
+      // All WorkshopGarment[] caches that contain this garment
+      const lists = qc.getQueriesData<WorkshopGarment[]>({
+        predicate: (q) => Array.isArray(q.state.data),
+      });
+      for (const [key, data] of lists) {
+        if (!Array.isArray(data) || !data.some((g) => g?.id === id)) continue;
+        const next = data.map((g) => (g.id === id ? { ...g, ...patch } : g));
+        qc.setQueryData<WorkshopGarment[]>(key as readonly unknown[], next);
+        snapshots.push(() => qc.setQueryData(key as readonly unknown[], data));
+      }
+
+      return () => snapshots.forEach((fn) => fn());
+    },
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to update garment details: ${errorMsg(err)}`);
+    },
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useUpdateOrderDeliveryDate() {
-  return useMut(
-    (args: { orderId: number; date: string }) =>
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { orderId: number; date: string }) =>
       updateOrderDeliveryDate(args.orderId, args.date),
-    'Failed to update delivery date',
-  );
+    onMutate: ({ orderId, date }) => {
+      // Determine the old order-level date from any cached garment for this order.
+      const caches = qc.getQueriesData<WorkshopGarment[]>({
+        predicate: (q) => Array.isArray(q.state.data),
+      });
+
+      let oldOrderDate: string | null = null;
+      for (const [, data] of caches) {
+        if (!Array.isArray(data)) continue;
+        const g = data.find((x) => x?.order_id === orderId && x?.delivery_date_order);
+        if (g) { oldOrderDate = g.delivery_date_order ?? null; break; }
+      }
+
+      const patchOne = (g: WorkshopGarment): WorkshopGarment => {
+        if (g.order_id !== orderId) return g;
+        const next: WorkshopGarment = { ...g, delivery_date_order: date };
+        const gd = g.delivery_date == null ? null : (typeof g.delivery_date === 'string' ? g.delivery_date : (g.delivery_date as Date).toISOString());
+        if (sameDay(gd, oldOrderDate)) {
+          next.delivery_date = date as unknown as WorkshopGarment['delivery_date'];
+        }
+        return next;
+      };
+
+      const snapshots: Array<() => void> = [];
+      for (const [key, data] of caches) {
+        if (!Array.isArray(data) || !data.some((g) => g?.order_id === orderId)) continue;
+        qc.setQueryData<WorkshopGarment[]>(key as readonly unknown[], data.map(patchOne));
+        snapshots.push(() => qc.setQueryData(key as readonly unknown[], data));
+      }
+
+      // Single-garment caches for this order
+      const singles = qc.getQueriesData<WorkshopGarment>({
+        predicate: (q) => q.queryKey[0] === 'garment' && !Array.isArray(q.state.data),
+      });
+      for (const [key, g] of singles) {
+        if (!g || (g as WorkshopGarment).order_id !== orderId) continue;
+        const next = patchOne(g as WorkshopGarment);
+        qc.setQueryData(key as readonly unknown[], next);
+        snapshots.push(() => qc.setQueryData(key as readonly unknown[], g));
+      }
+
+      return () => snapshots.forEach((fn) => fn());
+    },
+    onError: (err, _args, rollback) => {
+      rollback?.();
+      toast.error(`Failed to update delivery date: ${errorMsg(err)}`);
+    },
+    onSettled: () => invalidateAll(qc),
+  });
 }
 
 export function useUpdateOrderAssignedDate() {

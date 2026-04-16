@@ -24,9 +24,10 @@ export const updateGarment = async (
   return { status: 'success', data: data as any };
 };
 
-// Repoint every brova garment in an order that currently points to `oldMeasurementId`
-// over to `newMeasurementId`. Used by feedback page when a new measurements row is
-// created from customer-requested changes — siblings sharing the same old id inherit it.
+// Repoint every garment in an order that currently points to `oldMeasurementId`
+// over to `newMeasurementId` — brovas AND finals. Used by feedback page when a
+// new measurements row is created from customer-requested changes; any garment
+// sharing the same old id (typically the matching finals) inherits the update.
 export const bulkRepointMeasurement = async (
   orderId: number,
   oldMeasurementId: string,
@@ -37,7 +38,6 @@ export const bulkRepointMeasurement = async (
     .update({ measurement_id: newMeasurementId })
     .eq('order_id', orderId)
     .eq('measurement_id', oldMeasurementId)
-    .eq('garment_type', 'brova')
     .select();
 
   if (error) {
@@ -47,8 +47,10 @@ export const bulkRepointMeasurement = async (
   return { status: 'success', data: data as any };
 };
 
-// Overwrite style-related fields on every brova garment in an order that shares the
-// same per-order `style_id` group. `style_id` itself stays fixed so grouping holds.
+// Overwrite style-related fields on every garment in an order that shares the
+// same per-order `style_id` group — brovas AND finals. `style_id` itself stays
+// fixed so grouping holds. When customer rejects a brova's style on trial, the
+// matching finals inherit the new style so workshop produces them correctly.
 export const bulkUpdateStyleFields = async (
   orderId: number,
   styleId: number,
@@ -59,7 +61,6 @@ export const bulkUpdateStyleFields = async (
     .update(fields)
     .eq('order_id', orderId)
     .eq('style_id', styleId)
-    .eq('garment_type', 'brova')
     .select();
 
   if (error) {

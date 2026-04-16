@@ -7,7 +7,6 @@ import {
 } from "@/hooks/useWorkshopGarments";
 import {
   useSendToScheduler,
-  useReleaseFinals,
 } from "@/hooks/useGarmentMutations";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { PageHeader, GarmentTypeBadge } from "@/components/shared/PageShell";
@@ -39,6 +38,7 @@ import {
   Zap,
   Search,
   Loader2,
+  X,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -524,10 +524,10 @@ function ParkingPage() {
   const sortedCustomerApprovedLocked = groupByOrderSorted(
     customerApprovedLockedFinals,
   );
-  const sortedCustomerApprovedSchedulable = groupByOrderSorted(
-    customerApprovedSchedulableGarments,
-  );
-  const sortedDirectFinals = groupByOrderSorted(directFinalsGarments);
+  const sortedAllSchedulableFinals = groupByOrderSorted([
+    ...directFinalsGarments,
+    ...customerApprovedSchedulableGarments,
+  ]);
 
   // ── Search ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -564,7 +564,6 @@ function ParkingPage() {
 
   // ── Scheduler selection (all schedulable sections) ────────────────────────
   const sendToSchedulerMut = useSendToScheduler();
-  const releaseFinalsMut = useReleaseFinals();
   const [sel, setSel] = useState<Set<string>>(new Set());
   const toggle = (id: string, checked: boolean) =>
     setSel((prev) => {
@@ -583,11 +582,6 @@ function ParkingPage() {
     await sendToSchedulerMut.mutateAsync(ids);
     removeFromSelection(ids);
   };
-  const handleReleaseFinals = async (ids: string[]) => {
-    if (ids.length === 0) return;
-    await releaseFinalsMut.mutateAsync(ids);
-    removeFromSelection(ids);
-  };
   const schedulePendingIds = useMemo(
     () =>
       sendToSchedulerMut.isPending && sendToSchedulerMut.variables
@@ -595,15 +589,7 @@ function ParkingPage() {
         : new Set<string>(),
     [sendToSchedulerMut.isPending, sendToSchedulerMut.variables],
   );
-  const releasePendingIds = useMemo(
-    () =>
-      releaseFinalsMut.isPending && releaseFinalsMut.variables
-        ? new Set(releaseFinalsMut.variables)
-        : new Set<string>(),
-    [releaseFinalsMut.isPending, releaseFinalsMut.variables],
-  );
   const isSchedulePending = (id: string) => schedulePendingIds.has(id);
-  const isReleasePending = (id: string) => releasePendingIds.has(id);
 
   // ── Select all (schedulable + releasable rows) ────────────────────────────
   const searchedExpress = applySearch(sortedExpress);
@@ -612,40 +598,18 @@ function ParkingPage() {
   const searchedCustomerApprovedLocked = applySearch(
     sortedCustomerApprovedLocked,
   );
-  const searchedCustomerApprovedSchedulable = applySearch(
-    sortedCustomerApprovedSchedulable,
-  );
-  const searchedDirectFinals = applySearch(sortedDirectFinals);
-  const schedulable = [
+  const searchedAllSchedulableFinals = applySearch(sortedAllSchedulableFinals);
+  const allSelectable = [
     ...searchedExpress,
     ...searchedBrova,
     ...filteredReturns,
-    ...searchedDirectFinals,
-    ...searchedCustomerApprovedSchedulable,
+    ...searchedAllSchedulableFinals,
+    ...searchedCustomerApprovedLocked,
   ];
-  const releasable = searchedCustomerApprovedLocked;
-  const allSelectable = [...schedulable, ...releasable];
   const allSelected =
     allSelectable.length > 0 && allSelectable.every((g) => sel.has(g.id));
   const selectAll = () => setSel(new Set(allSelectable.map((g) => g.id)));
   const clearAll = () => setSel(new Set());
-
-  const schedulableIdSet = useMemo(
-    () => new Set(schedulable.map((g) => g.id)),
-    [schedulable],
-  );
-  const releasableIdSet = useMemo(
-    () => new Set(releasable.map((g) => g.id)),
-    [releasable],
-  );
-  const selectedSchedulableIds = useMemo(
-    () => [...sel].filter((id) => schedulableIdSet.has(id)),
-    [sel, schedulableIdSet],
-  );
-  const selectedReleasableIds = useMemo(
-    () => [...sel].filter((id) => releasableIdSet.has(id)),
-    [sel, releasableIdSet],
-  );
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-8">
@@ -662,8 +626,17 @@ function ParkingPage() {
             placeholder="Customer, order #, invoice, phone…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 pr-8"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         {allSelectable.length > 0 && (
           <Button
@@ -889,9 +862,56 @@ function ParkingPage() {
             )}
           </Section>
 
-          {/* ── FINALS (not yet approved) ── */}
+          {/* ── FINALS (schedulable — direct + approved released) ── */}
           <Section
-            title="Finals (Not Yet Approved)"
+            title="Finals"
+            icon={Package}
+            count={searchedAllSchedulableFinals.length}
+            accent="bg-blue-100 text-blue-700"
+          >
+            {searchedAllSchedulableFinals.length === 0 ? (
+              <EmptyState icon={Package} message="No finals ready to schedule" />
+            ) : (
+              <ParkingGarmentTable
+                garments={searchedAllSchedulableFinals}
+                selectedIds={sel}
+                onToggle={toggle}
+                onAction={(g) => handleSendToScheduler([g.id])}
+                actionLabel="Schedule"
+                getActionVariant={() => "green"}
+                isActionPending={isSchedulePending}
+              />
+            )}
+          </Section>
+
+          {/* ── CUSTOMER APPROVED (brova accepted, finals ready to schedule) ── */}
+          <Section
+            title="Customer Approved"
+            icon={Unlock}
+            count={searchedCustomerApprovedLocked.length}
+            accent="bg-emerald-100 text-emerald-700"
+          >
+            {searchedCustomerApprovedLocked.length === 0 ? (
+              <EmptyState
+                icon={Unlock}
+                message="No customer approved finals in parking"
+              />
+            ) : (
+              <ParkingGarmentTable
+                garments={searchedCustomerApprovedLocked}
+                selectedIds={sel}
+                onToggle={toggle}
+                onAction={(g) => handleSendToScheduler([g.id])}
+                actionLabel="Schedule"
+                getActionVariant={() => "green"}
+                isActionPending={isSchedulePending}
+              />
+            )}
+          </Section>
+
+          {/* ── FINALS NOT YET APPROVED (brova not done, read-only) ── */}
+          <Section
+            title="Finals Not Yet Approved"
             icon={Clock}
             count={searchedFinalsNotYetApproved.length}
             accent="bg-amber-100 text-amber-700"
@@ -909,115 +929,23 @@ function ParkingPage() {
               />
             )}
           </Section>
-
-          {/* ── FINALS (direct — no brova in order) ── */}
-          {searchedDirectFinals.length > 0 && (
-            <Section
-              title="Finals"
-              icon={Package}
-              count={searchedDirectFinals.length}
-              accent="bg-blue-100 text-blue-700"
-            >
-              <ParkingGarmentTable
-                garments={searchedDirectFinals}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-              />
-            </Section>
-          )}
-
-          {/* ── CUSTOMER APPROVED (finals whose brova is accepted) ── */}
-          <Section
-            title="Customer Approved"
-            icon={Unlock}
-            count={
-              searchedCustomerApprovedLocked.length +
-              searchedCustomerApprovedSchedulable.length
-            }
-            accent="bg-emerald-100 text-emerald-700"
-          >
-            {searchedCustomerApprovedLocked.length +
-              searchedCustomerApprovedSchedulable.length ===
-            0 ? (
-              <EmptyState
-                icon={Unlock}
-                message="No customer approved finals in parking"
-              />
-            ) : (
-              <div className="space-y-4">
-                {searchedCustomerApprovedLocked.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Ready to Release
-                    </p>
-                    <ParkingGarmentTable
-                      garments={searchedCustomerApprovedLocked}
-                      selectedIds={sel}
-                      onToggle={toggle}
-                      onAction={(g) => handleReleaseFinals([g.id])}
-                      actionLabel="Release"
-                      getActionVariant={() => "amber"}
-                      isActionPending={isReleasePending}
-                    />
-                  </div>
-                )}
-                {searchedCustomerApprovedSchedulable.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Released Finals
-                    </p>
-                    <ParkingGarmentTable
-                      garments={searchedCustomerApprovedSchedulable}
-                      selectedIds={sel}
-                      onToggle={toggle}
-                      onAction={(g) => handleSendToScheduler([g.id])}
-                      actionLabel="Schedule"
-                      getActionVariant={() => "green"}
-                      isActionPending={isSchedulePending}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </Section>
         </>
       )}
 
       <BatchActionBar count={sel.size} onClear={() => setSel(new Set())}>
-        {selectedReleasableIds.length > 0 && (
-          <Button
-            size="sm"
-            className="bg-amber-600 hover:bg-amber-700"
-            onClick={() => handleReleaseFinals(selectedReleasableIds)}
-            disabled={releaseFinalsMut.isPending}
-          >
-            {releaseFinalsMut.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-            ) : (
-              <Unlock className="w-3.5 h-3.5 mr-1" />
-            )}
-            Release Finals
-          </Button>
-        )}
-        {selectedSchedulableIds.length > 0 && (
-          <Button
-            size="sm"
-            className="bg-green-600 hover:bg-green-700"
-            onClick={() => handleSendToScheduler(selectedSchedulableIds)}
-            disabled={sendToSchedulerMut.isPending}
-          >
-            {sendToSchedulerMut.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-            ) : (
-              <Unlock className="w-3.5 h-3.5 mr-1" />
-            )}
-            Send to Scheduler
-          </Button>
-        )}
+        <Button
+          size="sm"
+          className="bg-green-600 hover:bg-green-700"
+          onClick={() => handleSendToScheduler([...sel])}
+          disabled={sendToSchedulerMut.isPending}
+        >
+          {sendToSchedulerMut.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+          ) : (
+            <Unlock className="w-3.5 h-3.5 mr-1" />
+          )}
+          Send to Scheduler
+        </Button>
       </BatchActionBar>
     </div>
   );

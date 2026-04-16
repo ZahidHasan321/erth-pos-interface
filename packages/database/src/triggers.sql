@@ -3447,6 +3447,39 @@ BEGIN
         LIMIT v_page_size
         OFFSET v_offset
     ),
+    -- Pre-compute garment summaries for all page orders in one scan
+    page_garment_summaries AS (
+        SELECT
+            g.order_id,
+            jsonb_agg(jsonb_build_object(
+                'type',     g.garment_type::text,
+                'stage',    g.piece_stage::text,
+                'loc',      g.location::text,
+                'fb',       g.feedback_status::text,
+                'acc',      g.acceptance_status,
+                'trip',     COALESCE(g.trip_number, 1),
+                'gid',      g.garment_id,
+                'in_prod',  COALESCE(g.in_production, false),
+                'has_plan', g.production_plan IS NOT NULL,
+                'started',  g.start_time IS NOT NULL,
+                'express',  COALESCE(g.express, false),
+                'del',      g.delivery_date,
+                'qc_fail',  COALESCE((
+                    SELECT bool_or((qca->>'result') = 'fail')
+                    FROM jsonb_array_elements(g.trip_history) AS th
+                    CROSS JOIN LATERAL jsonb_array_elements(
+                        CASE WHEN th ? 'qc_attempts' THEN th->'qc_attempts' ELSE '[]'::jsonb END
+                    ) AS qca
+                    WHERE (th->>'trip')::int = COALESCE(g.trip_number, 1)
+                ), false)
+            ) ORDER BY
+                CASE g.garment_type::text WHEN 'brova' THEN 0 ELSE 1 END,
+                g.garment_id NULLS LAST
+            ) AS summaries
+        FROM garments g
+        WHERE g.order_id IN (SELECT order_id FROM page)
+        GROUP BY g.order_id
+    ),
     page_rows AS (
         SELECT
             p.rn,
@@ -3480,9 +3513,11 @@ BEGIN
                 'brova_count',    p.brova_count,
                 'final_count',    p.final_count,
                 'garments_count', COALESCE(p.garments_count, 0),
-                'earliest_garment_delivery', p.earliest_garment_delivery
+                'earliest_garment_delivery', p.earliest_garment_delivery,
+                'garment_summaries', COALESCE(pgs.summaries, '[]'::jsonb)
             ) AS row_json
         FROM page p
+        LEFT JOIN page_garment_summaries pgs ON pgs.order_id = p.order_id
     )
     SELECT jsonb_build_object(
         'data',        COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),

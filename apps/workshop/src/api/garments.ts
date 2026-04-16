@@ -438,11 +438,27 @@ export interface AssignedPageGarment {
   style_image_url: string | null;
 }
 
+/** Compact per-garment info returned by get_assigned_orders_page for at-a-glance status. */
+export interface GarmentSummary {
+  type: "brova" | "final";
+  stage: string;
+  loc: string;
+  fb: string | null;
+  acc: boolean | null;
+  trip: number;
+  gid: string | null;
+  in_prod: boolean;
+  has_plan: boolean;
+  started: boolean;
+  express: boolean;
+  del: string | null;   // per-garment delivery_date (may differ from order)
+  qc_fail: boolean;
+}
+
 /**
  * Row returned by get_assigned_orders_page. Status label is pre-computed
- * server-side (see assigned_order_status_label in triggers.sql). Per-garment
- * detail lives on the order detail page (useOrderGarments), so the list RPC
- * only returns row-level aggregates — keeps the list payload light.
+ * server-side (see assigned_order_status_label in triggers.sql).
+ * garment_summaries provides per-garment status for at-a-glance breakdown.
  */
 export interface AssignedOrderRow {
   order_id: number;
@@ -463,6 +479,8 @@ export interface AssignedOrderRow {
   garments_count: number;
   /** Earliest per-garment delivery_date across all garments in this order. NULL when no garment has its own date. */
   earliest_garment_delivery: string | null;
+  /** Per-garment compact status data for list-level breakdown. */
+  garment_summaries: GarmentSummary[];
 }
 
 export interface AssignedPage {
@@ -723,11 +741,20 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
-  const { error } = await db
+  // Mark all as in_production
+  const { error: err1 } = await db
     .from('garments')
     .update({ in_production: true })
     .in('id', ids);
-  if (error) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${error.message}`);
+  if (err1) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${err1.message}`);
+
+  // Release any finals still at waiting_for_acceptance (customer approved → straight to scheduler)
+  const { error: err2 } = await db
+    .from('garments')
+    .update({ piece_stage: 'waiting_cut' as PieceStage })
+    .in('id', ids)
+    .eq('piece_stage', 'waiting_for_acceptance');
+  if (err2) throw new Error(`sendToScheduler: failed to release waiting_for_acceptance finals: ${err2.message}`);
 };
 
 export const sendReturnToProduction = async (id: string, _reentryStage: PieceStage): Promise<void> => {
@@ -1132,7 +1159,7 @@ export const updateGarmentDetails = async (
   // Fetch current garment state for validation
   const { data: current, error: fetchErr } = await db
     .from('garments')
-    .select('location, piece_stage, start_time')
+    .select('location, piece_stage, start_time, production_plan')
     .eq('id', id)
     .single();
 
@@ -1142,13 +1169,51 @@ export const updateGarmentDetails = async (
   const location = current.location ?? '';
   const stage = current.piece_stage ?? '';
   const hasStarted = !!current.start_time;
+  const existingPlan = (current.production_plan ?? {}) as Record<string, string>;
 
   const DONE_STAGES = ['completed', 'ready_for_pickup'];
   const NO_PLAN_STAGES = ['completed', 'ready_for_pickup', 'ready_for_dispatch', 'waiting_for_acceptance'];
 
-  // Determine what's allowed
+  // Stage → plan-step-key map and order. Must mirror lib/editability.ts PLAN_STEP_ORDER.
+  const STAGE_TO_KEY: Record<string, string> = {
+    soaking: 'soaker', cutting: 'cutter', post_cutting: 'post_cutter',
+    sewing: 'sewer', finishing: 'finisher', ironing: 'ironer',
+    quality_check: 'quality_checker',
+  };
+  const PLAN_KEY_ORDER = ['soaker', 'cutter', 'post_cutter', 'sewer', 'finisher', 'ironer', 'quality_checker'];
+
+  // Compute locked plan-step keys for this garment (matches getLockedPlanSteps)
+  const computeLockedSteps = (): Set<string> => {
+    const locked = new Set<string>();
+    if (!stage || stage === 'waiting_cut' || stage === 'waiting_for_acceptance') return locked;
+    if (
+      stage === 'completed' || stage === 'ready_for_pickup' ||
+      stage === 'ready_for_dispatch' || stage === 'brova_trialed' || stage === 'awaiting_trial'
+    ) {
+      for (const k of PLAN_KEY_ORDER) locked.add(k);
+      return locked;
+    }
+    const currentKey = STAGE_TO_KEY[stage];
+    if (!currentKey) {
+      for (const k of PLAN_KEY_ORDER) locked.add(k);
+      return locked;
+    }
+    for (const k of PLAN_KEY_ORDER) {
+      if (k === currentKey) {
+        if (hasStarted) locked.add(k);
+        return locked;
+      }
+      locked.add(k);
+    }
+    return locked;
+  };
+
   const isAtWorkshop = location === 'workshop';
-  const canEditPlan = isAtWorkshop && !hasStarted && !NO_PLAN_STAGES.includes(stage);
+  const allStepsLocked = (() => {
+    const l = computeLockedSteps();
+    return l.size === PLAN_KEY_ORDER.length;
+  })();
+  const canEditPlan = isAtWorkshop && !NO_PLAN_STAGES.includes(stage) && !allStepsLocked;
   const canEditDeliveryDate = isAtWorkshop && !DONE_STAGES.includes(stage)
     || location === 'transit_to_workshop';
 
@@ -1158,6 +1223,16 @@ export const updateGarmentDetails = async (
     delete filtered.production_plan;
     delete filtered.assigned_date;
     delete filtered.piece_stage;
+  } else if (filtered.production_plan) {
+    // Merge: preserve locked-step values from the existing plan.
+    const locked = computeLockedSteps();
+    const incoming = filtered.production_plan;
+    const merged: Record<string, string> = { ...incoming };
+    for (const k of locked) {
+      if (existingPlan[k]) merged[k] = existingPlan[k];
+      else delete merged[k];
+    }
+    filtered.production_plan = merged;
   }
   if (!canEditDeliveryDate) {
     delete filtered.delivery_date;
@@ -1173,20 +1248,36 @@ export const updateGarmentDetails = async (
   if (error) throw new Error(`updateGarmentDetails: failed to update garment details: ${error.message}`);
 };
 
-/** Bulk update delivery_date for all garments in an order */
+/**
+ * Update an order's delivery date. Cascades to every garment whose
+ * delivery_date matches the previous order-level date (treating them as a
+ * group); garments with a divergent date (e.g. express) are left alone.
+ */
 export const updateOrderDeliveryDate = async (orderId: number, date: string): Promise<void> => {
-  // Update delivery_date on the work_orders table
-  const { data: wo } = await db
+  const { data: wo, error: woErr } = await db
     .from('work_orders')
-    .select('id')
+    .select('order_id, delivery_date')
     .eq('order_id', orderId)
     .single();
-  if (wo) {
-    const { error } = await db
-      .from('work_orders')
+  if (woErr) throw new Error(`updateOrderDeliveryDate: failed to load work order ${orderId}: ${woErr.message}`);
+  if (!wo) throw new Error(`updateOrderDeliveryDate: no work_order found for order ${orderId}`);
+
+  const oldDate = wo.delivery_date as string | null;
+
+  const { error: orderErr } = await db
+    .from('work_orders')
+    .update({ delivery_date: date })
+    .eq('order_id', orderId);
+  if (orderErr) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${orderErr.message}`);
+
+  // Cascade to garments that currently share the old order date.
+  if (oldDate) {
+    const { error: gErr } = await db
+      .from('garments')
       .update({ delivery_date: date })
-      .eq('id', wo.id);
-    if (error) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${error.message}`);
+      .eq('order_id', orderId)
+      .eq('delivery_date', oldDate);
+    if (gErr) throw new Error(`updateOrderDeliveryDate: failed to cascade to garments: ${gErr.message}`);
   }
 };
 
@@ -1313,4 +1404,146 @@ export const updateOrderAssignedDate = async (orderId: number, date: string): Pr
     .eq('order_id', orderId)
     .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null');
   if (error) throw new Error(`updateOrderAssignedDate: failed to update order assigned date: ${error.message}`);
+};
+
+// ── Add Garment (workshop-initiated) ─────────────────────────────────────
+// Workshop creates a new garment row on an existing order. Two entry modes:
+//   - plain: add-another piece to an in-progress order (future use)
+//   - replacement: redo outcome discarded the original, workshop makes a new
+//     one in its place. Caller passes replacesGarmentId; we wire the self-FK
+//     after the new row exists.
+//
+// Garment starts at workshop (waiting_cut, in_production:false, trip:1) so it
+// flows through the normal scheduler → terminal → dispatch pipeline.
+
+export interface CreateGarmentInput {
+  order_id: number;
+  measurement_id: string;
+  garment_type: 'brova' | 'final';
+  fabric_id?: number | null;
+  fabric_source: 'IN' | 'OUT';
+  color?: string | null;
+  shop_name?: string | null;
+  fabric_length?: number | null;
+  style?: string;
+  style_id?: number | null;
+  collar_type?: string | null;
+  collar_button?: string | null;
+  cuffs_type?: string | null;
+  cuffs_thickness?: string | null;
+  front_pocket_type?: string | null;
+  front_pocket_thickness?: string | null;
+  wallet_pocket?: boolean;
+  pen_holder?: boolean;
+  mobile_pocket?: boolean;
+  small_tabaggi?: boolean;
+  jabzour_1?: string | null;
+  jabzour_2?: string | null;
+  jabzour_thickness?: string | null;
+  lines?: number;
+  soaking?: boolean;
+  express?: boolean;
+  delivery_date: string;
+  notes?: string | null;
+  quantity?: number;
+}
+
+/** Compute next garment_id suffix for an order. Format: `${orderId}-${n}`. */
+async function nextGarmentIdForOrder(orderId: number): Promise<string> {
+  const { data, error } = await db
+    .from('garments')
+    .select('garment_id')
+    .eq('order_id', orderId);
+  if (error) throw new Error(`nextGarmentIdForOrder: failed to list siblings for order ${orderId}: ${error.message}`);
+  const prefix = `${orderId}-`;
+  const used = (data ?? [])
+    .map((r: { garment_id: string | null }) => r.garment_id)
+    .filter((id): id is string => !!id && id.startsWith(prefix))
+    .map((id) => Number(id.slice(prefix.length)))
+    .filter((n) => Number.isFinite(n));
+  const next = used.length === 0 ? 1 : Math.max(...used) + 1;
+  return `${orderId}-${next}`;
+}
+
+export const createGarmentForOrder = async (
+  input: CreateGarmentInput,
+  replacesGarmentId?: string,
+): Promise<{ id: string; garment_id: string }> => {
+  // Block double-replacement at the API layer. DB unique index is the backstop;
+  // checking here lets us return a descriptive error instead of a raw 23505.
+  if (replacesGarmentId) {
+    const { data: original, error: fetchErr } = await db
+      .from('garments')
+      .select('id, order_id, piece_stage, replaced_by_garment_id')
+      .eq('id', replacesGarmentId)
+      .single();
+    if (fetchErr) throw new Error(`createGarmentForOrder: failed to fetch original garment ${replacesGarmentId}: ${fetchErr.message}`);
+    if (!original) throw new Error(`createGarmentForOrder: original garment ${replacesGarmentId} not found`);
+    if (original.replaced_by_garment_id) {
+      throw new Error('createGarmentForOrder: original garment already has a replacement');
+    }
+    if (original.order_id !== input.order_id) {
+      throw new Error('createGarmentForOrder: replacement must belong to the same order as the original');
+    }
+  }
+
+  const garment_id = await nextGarmentIdForOrder(input.order_id);
+
+  const row = {
+    order_id: input.order_id,
+    garment_id,
+    measurement_id: input.measurement_id,
+    garment_type: input.garment_type,
+    fabric_id: input.fabric_id ?? null,
+    fabric_source: input.fabric_source,
+    color: input.color ?? null,
+    shop_name: input.shop_name ?? null,
+    fabric_length: input.fabric_length ?? null,
+    style: input.style ?? 'kuwaiti',
+    style_id: input.style_id ?? null,
+    collar_type: input.collar_type ?? null,
+    collar_button: input.collar_button ?? null,
+    cuffs_type: input.cuffs_type ?? null,
+    cuffs_thickness: input.cuffs_thickness ?? null,
+    front_pocket_type: input.front_pocket_type ?? null,
+    front_pocket_thickness: input.front_pocket_thickness ?? null,
+    wallet_pocket: input.wallet_pocket ?? false,
+    pen_holder: input.pen_holder ?? false,
+    mobile_pocket: input.mobile_pocket ?? false,
+    small_tabaggi: input.small_tabaggi ?? false,
+    jabzour_1: input.jabzour_1 ?? null,
+    jabzour_2: input.jabzour_2 ?? null,
+    jabzour_thickness: input.jabzour_thickness ?? null,
+    lines: input.lines ?? 1,
+    soaking: input.soaking ?? false,
+    express: input.express ?? false,
+    delivery_date: input.delivery_date,
+    notes: input.notes ?? null,
+    quantity: input.quantity ?? 1,
+    piece_stage: 'waiting_cut' as PieceStage,
+    location: 'workshop' as const,
+    in_production: false,
+    trip_number: 1,
+  };
+
+  const { data: inserted, error: insertErr } = await db
+    .from('garments')
+    .insert(row)
+    .select('id, garment_id')
+    .single();
+  if (insertErr) throw new Error(`createGarmentForOrder: failed to insert garment: ${insertErr.message}`);
+  if (!inserted) throw new Error('createGarmentForOrder: insert returned no row');
+
+  if (replacesGarmentId) {
+    const { error: linkErr } = await db
+      .from('garments')
+      .update({ replaced_by_garment_id: inserted.id })
+      .eq('id', replacesGarmentId)
+      .is('replaced_by_garment_id', null);
+    if (linkErr) {
+      throw new Error(`createGarmentForOrder: failed to link replacement on original: ${linkErr.message}`);
+    }
+  }
+
+  return inserted as { id: string; garment_id: string };
 };

@@ -21,10 +21,10 @@ import { cn, formatDate, getLocalDateStr, toLocalDateStr, getKuwaitMidnight, get
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, Home, User, RotateCcw,
-  Calendar, BarChart3, Droplets, Zap, Search, Loader2,
+  Calendar, BarChart3, Droplets, Zap, Search, Loader2, X,
 } from "lucide-react";
 import { getAlterationNumber } from "@repo/database";
-import type { WorkshopGarment } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/scheduler")({
@@ -546,14 +546,11 @@ function SchedulerPage() {
   const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
 
   // ── Selection state ───────────────────────────────────────────────────────
-  // Express + Brova: garment-level, freely mixable with each other
+  // New garments (Express + Brova + Direct Finals): no prior plan, cross-order, one shared pool
   // Approved Finals: garment-level, locked to a single order (shares brova plan)
-  // Direct Finals: garment-level, cross-order OK (manual plan)
   // Returns: garment-level, independent
-  const [selExpress, setSelExpress] = useState<Set<string>>(new Set());
-  const [selBrova, setSelBrova] = useState<Set<string>>(new Set());
+  const [selNew, setSelNew] = useState<Set<string>>(new Set());
   const [selFinals, setSelFinals] = useState<Set<string>>(new Set());
-  const [selDirectFinals, setSelDirectFinals] = useState<Set<string>>(new Set());
   const [selReturns, setSelReturns] = useState<Set<string>>(new Set());
 
   const toggleGarment =
@@ -561,35 +558,25 @@ function SchedulerPage() {
     (id: string, checked: boolean) =>
       setFn((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
 
-  const toggleReturn = (id: string, checked: boolean) =>
-    setSelReturns((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; });
-
   // Sections are disabled when another group has an active selection
-  const expressBrovaActive = selExpress.size > 0 || selBrova.size > 0;
+  const newActive = selNew.size > 0;
   const finalsActive = selFinals.size > 0;
-  const directFinalsActive = selDirectFinals.size > 0;
   const returnsActive = selReturns.size > 0;
 
-  const expressBrovaDisabled = finalsActive || directFinalsActive || returnsActive;
-  const finalsDisabled = expressBrovaActive || directFinalsActive || returnsActive;
-  const directFinalsDisabled = expressBrovaActive || finalsActive || returnsActive;
-  const returnsDisabled = expressBrovaActive || finalsActive || directFinalsActive;
+  const newDisabled = finalsActive || returnsActive;
+  const finalsDisabled = newActive || returnsActive;
+  const returnsDisabled = newActive || finalsActive;
 
   const clearAll = () => {
-    setSelExpress(new Set());
-    setSelBrova(new Set());
+    setSelNew(new Set());
     setSelFinals(new Set());
-    setSelDirectFinals(new Set());
     setSelReturns(new Set());
   };
 
-  const totalSelected =
-    selExpress.size + selBrova.size + selFinals.size + selDirectFinals.size + selReturns.size;
+  const totalSelected = selNew.size + selFinals.size + selReturns.size;
 
   const getSelectedGarments = (): WorkshopGarment[] => {
-    const ids = new Set([
-      ...selExpress, ...selBrova, ...selFinals, ...selDirectFinals, ...selReturns,
-    ]);
+    const ids = new Set([...selNew, ...selFinals, ...selReturns]);
     return schedulable.filter((g) => ids.has(g.id));
   };
 
@@ -616,6 +603,21 @@ function SchedulerPage() {
     }
     return null;
   };
+
+  const returnContext = useMemo(() => {
+    for (const id of selReturns) {
+      const g = returnsGarments.find((g) => g.id === id);
+      if (!g) continue;
+      return {
+        feedbackStatus: g.feedback_status as string | null,
+        tripNumber: g.trip_number as number | null,
+        notes: g.notes as string | null,
+        garmentId: g.id as string,
+        tripHistory: g.trip_history as unknown,
+      };
+    }
+    return { feedbackStatus: null, tripNumber: null, notes: null, garmentId: null, tripHistory: null };
+  }, [selReturns, returnsGarments]);
 
   // ── Calendar / workload ───────────────────────────────────────────────────
   const scheduledDates = useMemo(() => {
@@ -763,8 +765,17 @@ function SchedulerPage() {
               placeholder="Customer, order #, invoice, phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-8"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {isLoading ? (
@@ -778,11 +789,11 @@ function SchedulerPage() {
                 ) : (
                   <SchedulerSectionTable
                     garments={sortedExpress}
-                    selectedIds={selExpress}
-                    onToggle={toggleGarment(setSelExpress)}
+                    selectedIds={selNew}
+                    onToggle={toggleGarment(setSelNew)}
                     showType
                     hideExpress
-                    disabled={expressBrovaDisabled}
+                    disabled={newDisabled}
                   />
                 )}
               </Section>
@@ -794,9 +805,9 @@ function SchedulerPage() {
                 ) : (
                   <SchedulerSectionTable
                     garments={sortedBrova}
-                    selectedIds={selBrova}
-                    onToggle={toggleGarment(setSelBrova)}
-                    disabled={expressBrovaDisabled}
+                    selectedIds={selNew}
+                    onToggle={toggleGarment(setSelNew)}
+                    disabled={newDisabled}
                   />
                 )}
               </Section>
@@ -806,9 +817,9 @@ function SchedulerPage() {
                 <Section title="Finals" icon={Package} count={sortedDirectFinals.length} accent="bg-blue-100 text-blue-700">
                   <SchedulerSectionTable
                     garments={sortedDirectFinals}
-                    selectedIds={selDirectFinals}
-                    onToggle={toggleGarment(setSelDirectFinals)}
-                    disabled={directFinalsDisabled}
+                    selectedIds={selNew}
+                    onToggle={toggleGarment(setSelNew)}
+                    disabled={newDisabled}
                   />
                 </Section>
               )}
@@ -836,7 +847,7 @@ function SchedulerPage() {
                   <SchedulerSectionTable
                     garments={sortedReturns}
                     selectedIds={selReturns}
-                    onToggle={toggleReturn}
+                    onToggle={toggleGarment(setSelReturns)}
                     showType
                     showAlt
                     showFeedback
@@ -929,6 +940,11 @@ function SchedulerPage() {
         garmentCount={getSelectedGarmentIds().length}
         defaultDate={selectedDate}
         workerHistory={getReturnWorkerHistory()}
+        feedbackStatus={returnContext.feedbackStatus}
+        tripNumber={returnContext.tripNumber}
+        feedbackNotes={returnContext.notes}
+        garmentId={selReturns.size === 1 ? returnContext.garmentId : null}
+        tripHistory={selReturns.size === 1 ? (returnContext.tripHistory as TripHistoryEntry[] | string | null) : null}
         isPending={scheduleMut.isPending}
       />
     </div>

@@ -224,14 +224,20 @@ export function TrialBadge({
   );
 }
 
-/** Badge for garments at shop with needs_repair/needs_redo — incoming for alteration */
-export function AlterationInBadge() {
+/** Badge for garments at shop with needs_repair/needs_redo — incoming for alteration.
+ *  Number = the alt cycle this will become when sent back (current trip). */
+export function AlterationInBadge({
+  tripNumber,
+}: {
+  tripNumber?: number | null | undefined;
+} = {}) {
+  const nextAlt = tripNumber ?? 1;
   return (
     <Badge
       variant="outline"
       className="border-0 bg-orange-600 text-white font-bold text-xs uppercase tracking-wide ring-2 ring-orange-300 ring-offset-1"
     >
-      Alteration (In)
+      Alt {nextAlt} (In)
     </Badge>
   );
 }

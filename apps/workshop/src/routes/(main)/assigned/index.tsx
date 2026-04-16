@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAssignedOrdersPage } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -5,8 +6,10 @@ import { BrandBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import { PageHeader } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
+import { Input } from "@repo/ui/input";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
+import { getGarmentStatusLabel } from "@/lib/garment-status";
 import type { AssignedOrderRow } from "@/api/garments";
 import {
   ClipboardList,
@@ -19,6 +22,8 @@ import {
   ArrowRight,
   Shirt,
   Layers,
+  Search,
+  X,
 } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/assigned/")({
@@ -50,27 +55,19 @@ function statusLabelColor(label: string): PillColor {
  * a second "Piece:" line so staff see the tighter per-garment deadline.
  */
 function DeliveryDisplay({ row, align = "center" }: { row: AssignedOrderRow; align?: "center" | "start" }) {
-  const orderDateStr = toLocalDateStr(row.delivery_date);
-  const earliestStr = toLocalDateStr(row.earliest_garment_delivery);
-  const showPiece = !!earliestStr && earliestStr !== orderDateStr;
-
-  if (!row.delivery_date && !row.earliest_garment_delivery) {
+  if (!row.delivery_date) {
     return <span className="text-muted-foreground">—</span>;
   }
 
   return (
-    <div className={cn("flex flex-col gap-0.5 text-xs", align === "center" ? "items-center" : "items-start")}>
-      {row.delivery_date && (
-        <span className="flex items-center gap-1 whitespace-nowrap text-muted-foreground">
-          <Clock className="w-3 h-3" />
-          <span className="text-[10px] font-bold uppercase tracking-wide">Order</span>
-          <span>{formatDate(row.delivery_date)}</span>
-        </span>
-      )}
-      {showPiece && (
-        <span className="flex items-center gap-1 whitespace-nowrap text-amber-700">
-          <span className="text-[10px] font-bold uppercase tracking-wide">Piece</span>
-          <span className="font-semibold">{formatDate(row.earliest_garment_delivery!)}</span>
+    <div className={cn("flex flex-col gap-1 text-sm", align === "center" ? "items-center" : "items-start")}>
+      <span className="flex items-center gap-1 whitespace-nowrap text-muted-foreground">
+        <Clock className="w-3.5 h-3.5" />
+        <span>{formatDate(row.delivery_date)}</span>
+      </span>
+      {row.home_delivery && (
+        <span className="inline-flex items-center gap-1 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+          <Home className="w-3 h-3" /> Home
         </span>
       )}
     </div>
@@ -106,6 +103,125 @@ function OrderIndicators({ group }: { group: AssignedOrderRow }) {
     </span>
   );
 }
+
+// ── Garment Breakdown ───────────────────────────────────────
+
+type GarmentStatusLabel = ReturnType<typeof getGarmentStatusLabel>;
+
+interface GarmentGroup {
+  key: string;
+  type: string;
+  label: GarmentStatusLabel;
+  gids: string[];
+  count: number;
+  hasExpress: boolean;
+  /** Per-garment delivery date (only when it differs from order date). */
+  garmentDelivery: string | null;
+}
+
+function buildGarmentGroups(row: AssignedOrderRow): GarmentGroup[] {
+  const summaries = row.garment_summaries ?? [];
+  if (summaries.length === 0) return [];
+
+  const anyBrovaAccepted = summaries.some(
+    (g) => g.type === "brova" && g.acc === true,
+  );
+
+  const orderDate = row.delivery_date ? toLocalDateStr(row.delivery_date) : null;
+
+  const groups: GarmentGroup[] = [];
+  for (const g of summaries) {
+    const status = getGarmentStatusLabel(g, anyBrovaAccepted);
+    const gDel = g.del ? toLocalDateStr(g.del) : null;
+    const showDel = gDel && gDel !== orderDate ? gDel : null;
+    const key = `${g.type}::${status.text}::${showDel ?? ""}`;
+    const existing = groups.find((grp) => grp.key === key);
+    if (existing) {
+      existing.count++;
+      if (g.gid) existing.gids.push(g.gid);
+      if (g.express) existing.hasExpress = true;
+    } else {
+      groups.push({
+        key,
+        type: g.type,
+        label: status,
+        gids: g.gid ? [g.gid] : [],
+        count: 1,
+        hasExpress: g.express,
+        garmentDelivery: showDel,
+      });
+    }
+  }
+  return groups;
+}
+
+/** Compact vertical list — one line per garment group. Reads top-to-bottom. */
+function GarmentBreakdown({ row }: { row: AssignedOrderRow }) {
+  const groups = buildGarmentGroups(row);
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1 min-w-0">
+      {groups.map((grp) => (
+        <div
+          key={grp.key}
+          className="flex items-center gap-2 text-sm leading-snug min-w-0"
+        >
+          {/* Type + count + optional garment ID */}
+          <span className={cn(
+            "shrink-0 font-black text-xs uppercase",
+            grp.type === "brova" ? "text-purple-600" : "text-blue-600",
+          )}>
+            {grp.count > 1
+              ? `${grp.count}${grp.type === "brova" ? "B" : "F"}`
+              : grp.type === "brova" ? "B" : "F"}
+          </span>
+          {grp.count === 1 && grp.gids[0] && (
+            <span className="font-mono text-xs text-muted-foreground shrink-0">
+              {grp.gids[0]}
+            </span>
+          )}
+
+          {/* Status dot + label */}
+          <span className={cn(
+            "w-2 h-2 rounded-full shrink-0",
+            STATUS_DOT[grp.label.color] ?? "bg-zinc-400",
+          )} />
+          <span className={cn(
+            "font-semibold truncate",
+            STATUS_TEXT[grp.label.color] ?? "text-zinc-700",
+          )}>
+            {grp.label.text}
+          </span>
+
+          {grp.hasExpress && <Zap className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />}
+
+          {/* Per-garment delivery date (only shown when different from order) */}
+          {grp.garmentDelivery && (
+            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-800 bg-amber-100 rounded px-1.5 py-0.5 shrink-0">
+              <Clock className="w-3 h-3" />
+              {formatDate(grp.garmentDelivery)}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const STATUS_DOT: Record<PillColor, string> = {
+  green: "bg-green-500", emerald: "bg-emerald-500", sky: "bg-sky-500",
+  blue: "bg-blue-500", violet: "bg-violet-500", teal: "bg-teal-500",
+  purple: "bg-purple-500", amber: "bg-amber-500", orange: "bg-orange-500",
+  red: "bg-red-500", zinc: "bg-zinc-400",
+};
+
+const STATUS_TEXT: Record<PillColor, string> = {
+  green: "text-green-700", emerald: "text-emerald-700", sky: "text-sky-700",
+  blue: "text-blue-700", violet: "text-violet-700", teal: "text-teal-700",
+  purple: "text-purple-700", amber: "text-amber-700", orange: "text-orange-700",
+  red: "text-red-700", zinc: "text-zinc-600",
+};
 
 // ── Order Card (mobile) ──────────────────────────────────────
 
@@ -157,9 +273,15 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
           )}
         </div>
 
-        {(group.delivery_date || group.earliest_garment_delivery) && (
+        {group.delivery_date && (
           <div className="mt-1">
             <DeliveryDisplay row={group} align="start" />
+          </div>
+        )}
+
+        {group.garment_summaries?.length > 0 && (
+          <div className="mt-1.5">
+            <GarmentBreakdown row={group} />
           </div>
         )}
       </div>
@@ -171,16 +293,15 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
 
 function OrdersTable({ orders, navigate }: { orders: AssignedOrderRow[]; navigate: (id: number) => void }) {
   return (
-    <Table className="min-w-[900px]">
+    <Table className="w-full">
       <TableHeader>
         <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[90px]">Order</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[180px]">Customer</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[80px]">Brand</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[140px] text-center">Garments</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[190px]">Status</TableHead>
-          <TableHead className="font-semibold text-foreground h-8 text-xs uppercase tracking-wider px-2 w-[120px] text-center">Delivery</TableHead>
-          <TableHead className="w-[90px] h-8 px-2" />
+          <TableHead className="font-semibold text-foreground h-10 text-xs uppercase tracking-wider px-3">Order</TableHead>
+          <TableHead className="font-semibold text-foreground h-10 text-xs uppercase tracking-wider px-3">Customer</TableHead>
+          <TableHead className="font-semibold text-foreground h-10 text-xs uppercase tracking-wider px-3">Brand</TableHead>
+          <TableHead className="font-semibold text-foreground h-10 text-xs uppercase tracking-wider px-3">Garments</TableHead>
+          <TableHead className="font-semibold text-foreground h-10 text-xs uppercase tracking-wider px-3 text-center">Delivery</TableHead>
+          <TableHead className="w-[70px] h-10 px-3" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -190,66 +311,43 @@ function OrdersTable({ orders, navigate }: { orders: AssignedOrderRow[]; navigat
             onClick={() => navigate(group.order_id)}
             className="hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors"
           >
-            <TableCell className="py-2.5 px-2.5 text-xs">
+            <TableCell className="py-3 px-3">
               <div className="flex items-center">
-                <span className="font-mono font-bold">#{group.order_id}</span>
+                <span className="font-mono font-bold text-sm">#{group.order_id}</span>
                 <OrderIndicators group={group} />
               </div>
               {group.invoice_number && (
-                <span className="text-[10px] text-muted-foreground">INV-{group.invoice_number}</span>
+                <span className="text-xs text-muted-foreground">INV-{group.invoice_number}</span>
               )}
             </TableCell>
-            <TableCell className="py-2.5 px-2.5 text-xs">
+            <TableCell className="py-3 px-3">
               <div className="flex flex-col gap-0.5">
-                <span className="font-semibold max-w-[160px] truncate">{group.customer_name ?? "—"}</span>
+                <span className="font-semibold text-sm">{group.customer_name ?? "—"}</span>
                 {group.customer_mobile && (
-                  <span className="font-mono text-muted-foreground">{group.customer_mobile}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{group.customer_mobile}</span>
                 )}
               </div>
             </TableCell>
-            <TableCell className="py-2.5 px-2.5">
+            <TableCell className="py-3 px-3">
               <div className="flex items-center gap-1">
                 {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
               </div>
             </TableCell>
-            <TableCell className="py-2.5 px-2.5 text-xs align-middle text-center">
-              <div className="flex flex-col gap-1 items-center">
-                <span className="inline-flex items-center gap-1 font-semibold text-foreground">
-                  <Package className="w-3 h-3 text-muted-foreground" />
-                  {group.garments_count}
-                  <span className="text-muted-foreground font-normal">
-                    garment{group.garments_count !== 1 ? "s" : ""}
-                  </span>
-                </span>
-                <div className="flex items-center gap-1">
-                  {group.brova_count > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                      {group.brova_count} Brova
-                    </span>
-                  )}
-                  {group.final_count > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                      {group.final_count} Final{group.final_count !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-              </div>
+            <TableCell className="py-3 px-3 align-top">
+              <GarmentBreakdown row={group} />
             </TableCell>
-            <TableCell className="py-2.5 px-2.5">
-              <StatusPill color={statusLabelColor(group.status_label)}>{group.status_label}</StatusPill>
-            </TableCell>
-            <TableCell className="py-2.5 px-2.5 align-middle text-center">
+            <TableCell className="py-3 px-3 align-middle text-center">
               <DeliveryDisplay row={group} align="center" />
             </TableCell>
-            <TableCell className="py-2.5 px-2.5">
+            <TableCell className="py-3 px-3">
               <Link
                 to="/assigned/$orderId"
                 params={{ orderId: String(group.order_id) }}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline whitespace-nowrap"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline whitespace-nowrap"
                 onClick={(e) => e.stopPropagation()}
               >
                 Details
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </TableCell>
           </TableRow>
@@ -303,7 +401,7 @@ function OrdersSection({
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-border shadow-sm overflow-x-auto bg-card py-0 gap-0">
+        <div className="rounded-xl border border-border shadow-sm overflow-hidden bg-card py-0 gap-0">
           <OrdersTable orders={orders} navigate={onNavigate} />
         </div>
       )}
@@ -331,10 +429,24 @@ function AssignedPage() {
   const rows = pageQuery.data?.rows ?? [];
   const isLoading = pageQuery.isLoading;
 
+  // ── Search ──────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        (r.customer_name ?? "").toLowerCase().includes(q) ||
+        String(r.order_id).includes(q) ||
+        (r.invoice_number != null && String(r.invoice_number).includes(q)) ||
+        (r.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")),
+    );
+  }, [rows, search]);
+
   const express: AssignedOrderRow[] = [];
   const brova: AssignedOrderRow[] = [];
   const rest: AssignedOrderRow[] = [];
-  for (const row of rows) {
+  for (const row of filteredRows) {
     if (row.express) express.push(row);
     else if (row.has_brova) brova.push(row);
     else rest.push(row);
@@ -343,12 +455,31 @@ function AssignedPage() {
   const subtitle = `${rows.length} order${rows.length !== 1 ? "s" : ""} in production`;
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 pb-10">
       <PageHeader
         icon={ClipboardList}
         title="Production Tracker"
         subtitle={isLoading ? "Loading…" : subtitle}
       />
+
+      <div className="relative max-w-sm mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder="Customer, order #, invoice, phone…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 pr-8"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="space-y-2">
