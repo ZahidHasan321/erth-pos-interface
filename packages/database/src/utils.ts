@@ -1,6 +1,6 @@
 import type { PieceStage, OrderPhase, GarmentType, Location } from "./schema";
 
-const TERMINAL: PieceStage[] = ["completed"];
+const TERMINAL: PieceStage[] = ["completed", "discarded"];
 const PRE_DISPATCH: PieceStage[] = ["waiting_for_acceptance", "waiting_cut"];
 
 export type MeasurementParts = {
@@ -232,9 +232,9 @@ export function getOrderSummary(garments: GarmentInfo[]): OrderSummary {
     const allAtShop = garments.length > 0 &&
         garments.every(g => SHOP.includes(g.piece_stage as PieceStage));
     const allCompleted = garments.length > 0 &&
-        garments.every(g => g.piece_stage === "completed");
-    const someCompleted = garments.some(g => g.piece_stage === "completed") &&
-        garments.some(g => g.piece_stage !== "completed");
+        garments.every(g => TERMINAL.includes(g.piece_stage as PieceStage));
+    const someCompleted = garments.some(g => TERMINAL.includes(g.piece_stage as PieceStage)) &&
+        garments.some(g => !TERMINAL.includes(g.piece_stage as PieceStage));
 
     return {
         totalGarments: garments.length,
@@ -308,8 +308,8 @@ export function evaluateBrovaFeedback(
 
     const { feedbackStatus, accepted: acceptanceStatus } = mapping[feedback];
 
-    // All brovas now go to brova_trialed
-    const newStage: PieceStage = "brova_trialed";
+    // needs_redo discards the original (terminal); all other outcomes land at brova_trialed
+    const newStage: PieceStage = feedback === "needs_redo" ? "discarded" : "brova_trialed";
 
     // Simulate: what would brova states look like AFTER this feedback?
     const simulatedBrovas = allBrovas.map(b =>
@@ -324,7 +324,8 @@ export function evaluateBrovaFeedback(
         b.piece_stage === "completed"
     );
 
-    const brovaGoesBack = feedback === "needs_repair_rejected" || feedback === "needs_redo";
+    // needs_redo: original is discarded (dead), workshop creates replacement — no return trip
+    const brovaGoesBack = feedback === "needs_repair_rejected";
     // needs_repair_accepted: brova stays at shop, staff sends back later
 
     let message = "";
@@ -342,8 +343,8 @@ export function evaluateBrovaFeedback(
             : "Brova rejected — needs repair.";
     } else if (feedback === "needs_redo") {
         message = releaseFinals
-            ? "Brova rejected (full redo). But another brova was accepted, so finals can start."
-            : "Brova rejected — full redo needed.";
+            ? "Brova discarded. Workshop must create a replacement. Another brova was accepted, so finals can start."
+            : "Brova discarded. Workshop must create a replacement garment.";
     }
 
     return { newStage, feedbackStatus, acceptanceStatus, releaseFinals, brovaGoesBack, message };
@@ -373,9 +374,9 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
     // as "partial_ready" when their shop-side garments are pre-dispatch.
     const shopItems = garments.filter(g =>
         g.location === 'shop'
-        && g.piece_stage !== 'completed'
+        && !TERMINAL.includes(g.piece_stage as PieceStage)
         && (g.trip_number ?? 0) > 0);
-    const allNonCompleted = garments.filter(g => g.piece_stage !== 'completed');
+    const allNonCompleted = garments.filter(g => !TERMINAL.includes(g.piece_stage as PieceStage));
 
     // Check if finals are in transit to shop (shop needs to know even if no items at shop yet)
     const finalsInTransit = allNonCompleted.some(g =>

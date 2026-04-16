@@ -59,8 +59,7 @@ import { getOrderById } from "@/api/orders";
 import { getMeasurementById, createMeasurement } from "@/api/measurements";
 import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/api/garments";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
-// Storage helpers ready but not active — enable when Supabase Storage bucket is set up
-// import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
+import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
 import { evaluateBrovaFeedback } from "@repo/database";
 
@@ -495,11 +494,28 @@ function UnifiedFeedbackInterface() {
       if (res.status === 'success' && res.data) {
         const fb = res.data;
         const satLevel = SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level);
+
+        // Rehydrate attachments from storage URLs
+        const parseJsonArray = (raw: unknown): unknown[] => {
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          if (typeof raw !== "string") return [];
+          try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
+        };
+        const photoEntries = parseJsonArray(fb.photo_urls)
+          .map((p: any) => (typeof p === "string" ? { type: "photo" as const, url: p } : p))
+          .filter((p: any) => p && typeof p.url === "string");
+        const voiceEntries = parseJsonArray(fb.voice_note_urls).filter(
+          (v): v is string => typeof v === "string",
+        );
+
         updateGarmentState(selectedGarmentId, {
           feedbackAction: fb.action || null,
           satisfaction: satLevel?.value || null,
           notes: fb.notes || "",
           customerSignature: fb.customer_signature || null,
+          sharedPhotos: photoEntries as any,
+          sharedVoiceNotes: voiceEntries,
           existingFeedbackId: fb.id,
           isEditing: true,
           submitted: true,
@@ -598,13 +614,53 @@ function UnifiedFeedbackInterface() {
     });
   };
 
-  // TODO: When storage is set up, replace blob URLs with real uploads via storage.ts
-  const handleAddPhoto = (file: File | null) => {
+  const handleAddPhoto = async (file: File | null) => {
     if (!file) return;
-    const url = URL.createObjectURL(file);
+    if (!activeGarment || !activeOrder) {
+      toast.error("Cannot upload photo: order or garment not loaded");
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    // Optimistic preview; will be replaced with public URL after upload
     updateGarmentState(selectedGarmentId, {
-      sharedPhotos: [...currentState.sharedPhotos, { type: "photo", url }],
+      sharedPhotos: [...currentState.sharedPhotos, { type: "photo", url: previewUrl }],
     });
+    try {
+      const { url } = await uploadFeedbackPhoto(
+        file,
+        activeOrder.id,
+        activeGarment.id,
+        activeGarment.trip_number || 1,
+      );
+      // Replace preview with uploaded URL
+      setGarmentStates(prev => {
+        const st = prev[selectedGarmentId!];
+        if (!st) return prev;
+        return {
+          ...prev,
+          [selectedGarmentId!]: {
+            ...st,
+            sharedPhotos: st.sharedPhotos.map(p => (p.url === previewUrl ? { ...p, url } : p)),
+          },
+        };
+      });
+      URL.revokeObjectURL(previewUrl);
+    } catch (err) {
+      toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
+      // Roll back preview entry
+      setGarmentStates(prev => {
+        const st = prev[selectedGarmentId!];
+        if (!st) return prev;
+        return {
+          ...prev,
+          [selectedGarmentId!]: {
+            ...st,
+            sharedPhotos: st.sharedPhotos.filter(p => p.url !== previewUrl),
+          },
+        };
+      });
+      URL.revokeObjectURL(previewUrl);
+    }
   };
 
   const handleRemovePhoto = (idx: number) => {
@@ -624,15 +680,55 @@ function UnifiedFeedbackInterface() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      // TODO: When storage is set up, upload blob via uploadFeedbackVoiceNote() from storage.ts
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        const url = URL.createObjectURL(blob);
-        updateGarmentState(selectedGarmentId, {
-          sharedVoiceNotes: [...currentState.sharedVoiceNotes, url],
-        });
         stream.getTracks().forEach(t => t.stop());
         setRecordingOptionId(null);
+
+        if (!activeGarment || !activeOrder) {
+          toast.error("Cannot upload voice note: order or garment not loaded");
+          return;
+        }
+
+        const previewUrl = URL.createObjectURL(blob);
+        // Optimistic entry; replaced after upload succeeds
+        updateGarmentState(selectedGarmentId, {
+          sharedVoiceNotes: [...currentState.sharedVoiceNotes, previewUrl],
+        });
+        try {
+          const { url } = await uploadFeedbackVoiceNote(
+            blob,
+            activeOrder.id,
+            activeGarment.id,
+            activeGarment.trip_number || 1,
+          );
+          setGarmentStates(prev => {
+            const st = prev[selectedGarmentId!];
+            if (!st) return prev;
+            return {
+              ...prev,
+              [selectedGarmentId!]: {
+                ...st,
+                sharedVoiceNotes: st.sharedVoiceNotes.map(v => (v === previewUrl ? url : v)),
+              },
+            };
+          });
+          URL.revokeObjectURL(previewUrl);
+        } catch (err) {
+          toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
+          setGarmentStates(prev => {
+            const st = prev[selectedGarmentId!];
+            if (!st) return prev;
+            return {
+              ...prev,
+              [selectedGarmentId!]: {
+                ...st,
+                sharedVoiceNotes: st.sharedVoiceNotes.filter(v => v !== previewUrl),
+              },
+            };
+          });
+          URL.revokeObjectURL(previewUrl);
+        }
       };
 
       mediaRecorder.start();
@@ -697,6 +793,11 @@ function UnifiedFeedbackInterface() {
                 updatePayload.fulfillment_type = isHomeDelivery ? "delivered" : "collected";
                 updatePayload.acceptance_status = true;
                 updatePayload.feedback_status = "accepted";
+            } else if (state.feedbackAction === "needs_redo") {
+                // Redo = discard original. Workshop creates a replacement garment.
+                updatePayload.piece_stage = "discarded";
+                updatePayload.feedback_status = "needs_redo";
+                updatePayload.acceptance_status = false;
             } else {
                 updatePayload.piece_stage = "brova_trialed";
                 updatePayload.feedback_status = state.feedbackAction;
@@ -765,9 +866,11 @@ function UnifiedFeedbackInterface() {
           }
         }
 
-        // --- Style propagation (brova only) ---
-        // Main style rejection → overwrite style fields on sibling brovas sharing same style_id.
-        // style_id itself stays fixed so grouping holds.
+        // --- Style propagation (brova rejection → brovas + finals sharing style_id) ---
+        // Triggered only on brova trial: rejecting a style here overwrites style
+        // fields on every garment in the order with the same style_id — including
+        // finals — so workshop produces the corrected style. style_id stays fixed
+        // so grouping holds.
         if (activeGarment.garment_type === "brova" && activeGarment.style_id != null) {
           const styleFieldUpdates: Partial<Garment> = {};
           const hashwaFieldUpdates: Partial<Garment> = {};
@@ -830,7 +933,27 @@ function UnifiedFeedbackInterface() {
         // Determine feedback type
         const feedbackType = activeGarment.garment_type === "brova" ? "brova_trial" : "final_collection";
 
-        // TODO: When storage is set up, upload signature via uploadFeedbackSignature() from storage.ts
+        // Upload signature to Supabase Storage if it's a fresh data URL (not an existing public URL)
+        let signatureUrl: string | null = state.customerSignature || null;
+        if (signatureUrl && signatureUrl.startsWith("data:")) {
+          try {
+            const { url } = await uploadFeedbackSignature(
+              signatureUrl,
+              activeOrder.id,
+              activeGarment.id,
+              activeGarment.trip_number || 1,
+            );
+            signatureUrl = url;
+            updateGarmentState(selectedGarmentId, { customerSignature: url });
+          } catch (err) {
+            toast.error(`Failed to upload signature: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+          }
+        }
+
+        // Only persist photos that already uploaded (skip unresolved blob: previews)
+        const persistedPhotos = state.sharedPhotos.filter(p => !p.url.startsWith("blob:"));
+        const persistedVoiceNotes = state.sharedVoiceNotes.filter(u => !u.startsWith("blob:"));
 
         const feedbackPayload = {
           garment_id: activeGarment.id,
@@ -844,12 +967,12 @@ function UnifiedFeedbackInterface() {
           satisfaction_level: satLevel?.numericValue || null,
           measurement_diffs: measurementDiffs.length > 0 ? JSON.stringify(measurementDiffs) : null,
           options_checklist: optionsChecklist.length > 0 ? JSON.stringify(optionsChecklist) : null,
-          customer_signature: state.customerSignature || null,
-          photo_urls: state.sharedPhotos.length > 0
-            ? JSON.stringify(state.sharedPhotos.map(p => p.url))
+          customer_signature: signatureUrl,
+          photo_urls: persistedPhotos.length > 0
+            ? JSON.stringify(persistedPhotos.map(p => p.url))
             : null,
-          voice_note_urls: state.sharedVoiceNotes.length > 0
-            ? JSON.stringify(state.sharedVoiceNotes)
+          voice_note_urls: persistedVoiceNotes.length > 0
+            ? JSON.stringify(persistedVoiceNotes)
             : null,
           notes: state.notes || null,
           difference_reasons: Object.keys(state.differenceReasons).length > 0
@@ -1535,14 +1658,18 @@ function UnifiedFeedbackInterface() {
                                                             )}
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {pickerList.map((o) => (
-                                                                <SelectItem key={o.value} value={o.value}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                        <span className="text-xs font-bold">{o.displayText}</span>
-                                                                    </div>
-                                                                </SelectItem>
-                                                            ))}
+                                                            {pickerList.map((o) => {
+                                                                const isCurrent = o.value === opt.mainValue || o.displayText === opt.mainValue;
+                                                                return (
+                                                                    <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
+                                                                            <span className="text-xs font-bold">{o.displayText}</span>
+                                                                            {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                );
+                                                            })}
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
@@ -1567,14 +1694,19 @@ function UnifiedFeedbackInterface() {
                                                                     )}
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    {secondaryList.map((o) => (
-                                                                        <SelectItem key={o.value} value={o.value}>
-                                                                            <div className="flex items-center gap-2">
-                                                                                {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                                <span className="text-xs font-bold">{o.displayText}</span>
-                                                                            </div>
-                                                                        </SelectItem>
-                                                                    ))}
+                                                                    {secondaryList.map((o) => {
+                                                                        const currentSecondary = activeGarment?.jabzour_2 ?? null;
+                                                                        const isCurrent = !!currentSecondary && (o.value === currentSecondary || o.displayText === currentSecondary);
+                                                                        return (
+                                                                            <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
+                                                                                    <span className="text-xs font-bold">{o.displayText}</span>
+                                                                                    {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                                </div>
+                                                                            </SelectItem>
+                                                                        );
+                                                                    })}
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
@@ -1625,11 +1757,15 @@ function UnifiedFeedbackInterface() {
                                                             <SelectValue placeholder="New thickness..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {thicknessOptions.map((t) => (
-                                                                <SelectItem key={t.value} value={t.value} className="text-xs font-bold">
-                                                                    {t.value === "NO HASHWA" ? "No Hashwa" : t.value.charAt(0) + t.value.slice(1).toLowerCase()}
-                                                                </SelectItem>
-                                                            ))}
+                                                            {thicknessOptions.map((t) => {
+                                                                const isCurrent = t.value === opt.hashwaValue;
+                                                                return (
+                                                                    <SelectItem key={t.value} value={t.value} disabled={isCurrent} className="text-xs font-bold">
+                                                                        {t.value === "NO HASHWA" ? "No Hashwa" : t.value.charAt(0) + t.value.slice(1).toLowerCase()}
+                                                                        {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                    </SelectItem>
+                                                                );
+                                                            })}
                                                         </SelectContent>
                                                     </Select>
                                                 )}

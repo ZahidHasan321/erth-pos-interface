@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey, check } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, uuid, uniqueIndex, index, customType, date, jsonb, primaryKey, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 
 // --- CUSTOM TYPES ---
@@ -66,6 +66,7 @@ export const pieceStageEnum = pgEnum("piece_stage", [
 
     // --- Terminal ---
     "completed",                 // Done (fulfillment_type says collected vs delivered)
+    "discarded",                 // Terminal: redo outcome. Original garment dead, replaced by a new garment row (see replaced_by_garment_id).
 ]);
 export type PieceStage = (typeof pieceStageEnum.enumValues)[number];
 
@@ -241,6 +242,7 @@ export const customers = pgTable("customers", {
     arabic_nickname: text("arabic_nickname"),
 
     // Contact
+    alternative_country_code: text("alternative_country_code"),
     alternate_mobile: text("alternate_mobile"),
     whatsapp: boolean("whatsapp").default(false),
     whatsapp_alt: boolean("whatsapp_alt").default(false),
@@ -299,6 +301,8 @@ export const fabrics = pgTable("fabrics", {
     shop_stock: numeric("shop_stock", { precision: 10, scale: 2 }).default(0),
     workshop_stock: numeric("workshop_stock", { precision: 10, scale: 2 }).default(0),
     price_per_meter: numeric("price_per_meter", { precision: 10, scale: 3 }),
+    supplier: text("supplier"),
+    season: fabricTypeEnum("season"),
 });
 
 export const shelf = pgTable("shelf", {
@@ -619,9 +623,14 @@ export const garments = pgTable("garments", {
     custom_price: numeric("custom_price", { precision: 10, scale: 3 }),
     // BU/F/EXT code on the physical garment (written by customer)
     bufi_ext: text("bufi_ext"),
+
+    // Set on a discarded garment (piece_stage='discarded') to point at its replacement row.
+    // Unique: one discarded original can be replaced at most once. Null for all other garments.
+    replaced_by_garment_id: uuid("replaced_by_garment_id").references((): AnyPgColumn => garments.id, { onDelete: 'set null' }),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
     orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
+    replacedByUnique: uniqueIndex("garments_replaced_by_unique").on(t.replaced_by_garment_id),
 }));
 
 // --- 6.25 DISPATCH LOG (append-only audit of shop↔workshop dispatches) ---
