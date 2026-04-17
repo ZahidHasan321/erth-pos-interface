@@ -66,25 +66,60 @@ async function main() {
       RETURNING id, (xmax = 0) AS created
     `;
 
+    // Pick a unit for this seeded worker. Sewing is multi-unit by policy
+    // (Unit 1 / Unit 2) — reuse its earliest-created unit instead of
+    // inventing a "Default". Every other stage uses a single "Default"
+    // unit, created on demand. PlanDialog auto-filters by unit, so a NULL
+    // unit would hide the seeded worker from the picker.
+    const [unit] = u.stage === "sewing"
+      ? await sql<{ id: string }[]>`
+          SELECT id FROM units
+          WHERE stage = 'sewing'::production_stage
+          ORDER BY created_at ASC
+          LIMIT 1
+        `
+      : await sql<{ id: string }[]>`
+          WITH ins AS (
+            INSERT INTO units (stage, name, notes)
+            SELECT ${u.stage}::production_stage, 'Default', 'Auto-created by seed-terminal-users'
+            WHERE NOT EXISTS (
+              SELECT 1 FROM units WHERE stage = ${u.stage}::production_stage AND name = 'Default'
+            )
+            RETURNING id
+          )
+          SELECT id FROM ins
+          UNION ALL
+          SELECT id FROM units WHERE stage = ${u.stage}::production_stage AND name = 'Default'
+          LIMIT 1
+        `;
+    if (!unit) {
+      throw new Error(`No unit available for stage ${u.stage} — create one via the Team page first.`);
+    }
+
     // Ensure a resources row exists for this user so they show up in
     // PlanDialog worker pickers. Keyed on user_id + responsibility to stay
     // idempotent without a DB-level unique constraint.
     await sql`
-      INSERT INTO resources (user_id, resource_name, responsibility, resource_type)
-      SELECT ${user.id}::uuid, ${u.name}, ${u.stage}, 'worker'
+      INSERT INTO resources (user_id, resource_name, responsibility, resource_type, unit_id)
+      SELECT ${user.id}::uuid, ${u.name}, ${u.stage}, 'worker', ${unit.id}::uuid
       WHERE NOT EXISTS (
         SELECT 1 FROM resources
         WHERE user_id = ${user.id}::uuid AND responsibility = ${u.stage}
       )
     `;
 
-    // Refresh resource_name if the user's name was updated this run.
+    // Refresh resource_name + unit if the user's name was updated this run,
+    // or if the row was seeded before unit assignment was added.
     await sql`
       UPDATE resources
-      SET resource_name = ${u.name}
+      SET resource_name = ${u.name},
+          unit_id = COALESCE(unit_id, ${unit.id}::uuid)
       WHERE user_id = ${user.id}::uuid
         AND responsibility = ${u.stage}
-        AND resource_name IS DISTINCT FROM ${u.name}
+        AND (
+          resource_name IS DISTINCT FROM ${u.name}
+          OR unit_id IS NULL
+        )
     `;
 
     console.log(

@@ -625,7 +625,7 @@ function SchedulerPage() {
   const scheduledDates = useMemo(() => {
     const map: Record<string, number> = {};
     for (const g of allGarments) {
-      if (!g.assigned_date || !g.in_production) continue;
+      if (!g.assigned_date) continue;
       const dateStr = toLocalDateStr(g.assigned_date);
       if (dateStr) map[dateStr] = (map[dateStr] ?? 0) + 1;
     }
@@ -647,13 +647,13 @@ function SchedulerPage() {
 
   const workload = useMemo(() => {
     const roleToStage: Record<string, string> = {
-      cutter: "cutting", post_cutter: "post_cutting", sewer: "sewing",
+      soaker: "soaking", cutter: "cutting", post_cutter: "post_cutting", sewer: "sewing",
       finisher: "finishing", ironer: "ironing", quality_checker: "quality_check",
     };
 
     const workerCounts: Record<string, { assigned: number; target: number | null; stage: string; unit: string }> = {};
     for (const g of allGarments) {
-      if (!g.assigned_date || !g.in_production || !g.production_plan) continue;
+      if (!g.assigned_date || !g.production_plan) continue;
       const dateStr = toLocalDateStr(g.assigned_date);
       if (dateStr !== selectedDate) continue;
       const plan = g.production_plan as Record<string, string>;
