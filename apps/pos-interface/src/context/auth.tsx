@@ -1,17 +1,8 @@
 import { db } from '@/lib/db'
 import * as React from 'react'
+import type { AuthUser } from '@/lib/rbac'
 
-export interface AuthUser {
-  id: string
-  username: string
-  name: string
-  brands: string[]
-  role: string | null
-  department: string | null
-  email: string | null
-  phone: string | null
-  employee_id: string | null
-}
+export type { AuthUser }
 
 export interface AuthContext {
   isAuthenticated: boolean
@@ -23,12 +14,10 @@ export interface AuthContext {
 
 const AuthContext = React.createContext<AuthContext | null>(null)
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data, error } = await db
     .from('users')
-    .select('id, username, name, brands, role, department, email, phone, employee_id')
+    .select('id, username, name, brands, role, department, job_function, is_active, email, phone, employee_id')
     .eq('id', userId)
     .single()
 
@@ -37,16 +26,21 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   }
   if (!data) return null
 
+  // Deactivated account — caller forces logout (matches workshop pattern).
+  if (data.is_active === false) return null
+
   return {
     id: data.id,
     username: data.username,
     name: data.name,
-    brands: data.brands ?? [],
-    role: data.role,
-    department: data.department,
-    email: data.email,
-    phone: data.phone,
-    employee_id: data.employee_id,
+    brands: data.brands ?? null,
+    role: data.role ?? 'staff',
+    department: data.department ?? null,
+    job_function: data.job_function ?? null,
+    is_active: data.is_active ?? true,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
+    employee_id: data.employee_id ?? null,
   }
 }
 
@@ -80,7 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user?.app_metadata?.user_id) {
           try {
             const restored = await fetchUserFromSession(session.user.app_metadata.user_id)
-            if (!cancelled) setUser(restored)
+            if (cancelled) return
+            if (restored) {
+              setUser(restored)
+            } else {
+              // Deactivated or deleted mid-session — terminate the JWT.
+              await db.auth.signOut().catch(() => {})
+            }
           } catch {
             // JWT may be expired — token refresh will fire SIGNED_IN/TOKEN_REFRESHED
             // and the onAuthStateChange handler below will retry. Don't block loading.
@@ -148,17 +148,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: { username: string; pin: string }) => {
     loginInProgress.current = true
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: credentials.username, pin: credentials.pin }),
+      const { data: result, error: fnError } = await db.functions.invoke<{
+        session: { access_token: string; refresh_token: string } | null
+        user: { id: string }
+      }>('auth-login', {
+        body: { username: credentials.username, pin: credentials.pin },
       })
 
-      const result = await res.json()
-
-      if (!res.ok) {
-        throw new Error(result.error || 'Login failed')
+      if (fnError) {
+        // FunctionsHttpError exposes the raw Response on .context — parse the
+        // server's {error: "..."} body so the user sees the real reason
+        // (e.g. "Invalid PIN", "Account locked") instead of "non-2xx".
+        let serverMsg: string | null = null
+        const ctx = (fnError as { context?: Response }).context
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json()
+            serverMsg = body?.error ?? null
+          } catch { /* ignore */ }
+        }
+        throw new Error(serverMsg || fnError.message || 'Login failed')
       }
+      if (!result) throw new Error('Login failed: empty response')
 
       // Set the Supabase session so all subsequent db calls carry the JWT
       if (result.session) {
@@ -175,7 +186,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const fullUser = await fetchUserFromSession(result.user.id)
-      if (!fullUser) throw new Error('Failed to load user profile')
+      if (!fullUser) {
+        // Deactivated or profile missing — scrub the just-set JWT.
+        await db.auth.signOut().catch(() => {})
+        throw new Error('Account is not active or user profile not found')
+      }
       setUser(fullUser)
     } finally {
       loginInProgress.current = false

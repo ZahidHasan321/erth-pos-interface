@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
 
 /** Admin client — uses service role key, bypasses RLS */
 export function createAdminClient() {

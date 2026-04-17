@@ -1,22 +1,22 @@
 import { db } from "@/lib/db";
 import type { User, NewUser } from "@repo/database";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
-/** Helper to call admin Edge Function with the current session token */
+/** Helper to call admin Edge Function. supabase-js auto-sends apikey + the
+ *  current session bearer, so RLS and JWT checks both see the caller. */
 async function callAuthAdmin(body: Record<string, unknown>) {
-  const { data: { session } } = await db.auth.getSession();
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-admin`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  const result = await res.json();
-  if (!res.ok) throw new Error(`callAuthAdmin (action=${body.action}): ${result.error || "request failed with no message"}`);
-  return result;
+  const { data, error } = await db.functions.invoke("auth-admin", { body });
+  if (error) {
+    let serverMsg: string | null = null;
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const parsed = await ctx.json();
+        serverMsg = parsed?.error ?? null;
+      } catch { /* ignore */ }
+    }
+    throw new Error(`callAuthAdmin (action=${body.action}): ${serverMsg || error.message || "request failed with no message"}`);
+  }
+  return data;
 }
 
 export const getUsers = async (): Promise<User[]> => {

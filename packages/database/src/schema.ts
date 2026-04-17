@@ -25,6 +25,33 @@ export type Role = (typeof roleEnum.enumValues)[number];
 export const departmentEnum = pgEnum("department", ["workshop", "shop"]);
 export type Department = (typeof departmentEnum.enumValues)[number];
 
+// Terminal specialisation for workshop staff. Null = office user (role+department
+// drive access). Non-null = terminal-locked user who only sees their own terminal.
+export const jobFunctionEnum = pgEnum("job_function", [
+    "soaker",
+    "cutter",
+    "post_cutter",
+    "sewer",
+    "finisher",
+    "ironer",
+    "qc",
+]);
+export type JobFunction = (typeof jobFunctionEnum.enumValues)[number];
+
+// Production stage — verb-noun form matching scheduler keys (soaking/cutting/…)
+// distinct from job_function's person-noun form (soaker/cutter/…). Units live
+// at this stage level; resources hang off units.
+export const productionStageEnum = pgEnum("production_stage", [
+    "soaking",
+    "cutting",
+    "post_cutting",
+    "sewing",
+    "finishing",
+    "ironing",
+    "quality_check",
+]);
+export type ProductionStage = (typeof productionStageEnum.enumValues)[number];
+
 // "OrderStatus" from Airtable (Drafting vs Completed)
 export const checkoutStatusEnum = pgEnum("checkout_status", [
     "draft",       // Was "Pending" - Customer is building order
@@ -206,6 +233,7 @@ export const users = pgTable("users", {
     phone: text("phone"),
     role: roleEnum("role").default("staff"),
     department: departmentEnum("department"),
+    job_function: jobFunctionEnum("job_function"),
     brands: text("brands").array(),
     is_active: boolean("is_active").default(true).notNull(),
     pin: text("pin"),
@@ -712,7 +740,21 @@ export const garmentFeedback = pgTable("garment_feedback", {
     typeIdx: index("feedback_type_idx").on(t.feedback_type),
 }));
 
-// --- 6.6 RESOURCES (Workshop Workers & Units) ---
+// --- 6.6 UNITS (Workshop Groupings under each Stage) ---
+// A unit is a physical grouping (e.g. "Sewing 1", "Cutting A") within a stage.
+// Resources (workers) belong to a unit. Name is unique per stage.
+export const units = pgTable("units", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stage: productionStageEnum("stage").notNull(),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// --- 6.7 RESOURCES (Workshop Workers) ---
+// `unit_id` is the source of truth; `unit` text is auto-mirrored via trigger
+// so legacy readers (scheduler / PlanDialog / performance) keep working.
 export const resources = pgTable("resources", {
     id: uuid("id").defaultRandom().primaryKey(),
     user_id: uuid("user_id").references(() => users.id),
@@ -720,6 +762,7 @@ export const resources = pgTable("resources", {
     responsibility: text("responsibility"),
     resource_name: text("resource_name").notNull(),
     unit: text("unit"),
+    unit_id: uuid("unit_id").references(() => units.id, { onDelete: "set null" }),
     resource_type: text("resource_type"),
     rating: integer("rating"),
     daily_target: integer("daily_target"),
@@ -1067,6 +1110,9 @@ export type NewPaymentTransaction = InferInsertModel<typeof paymentTransactions>
 
 export type Resource = InferSelectModel<typeof resources>;
 export type NewResource = InferInsertModel<typeof resources>;
+
+export type Unit = InferSelectModel<typeof units>;
+export type NewUnit = InferInsertModel<typeof units>;
 
 export type Appointment = InferSelectModel<typeof appointments>;
 export type NewAppointment = InferInsertModel<typeof appointments>;

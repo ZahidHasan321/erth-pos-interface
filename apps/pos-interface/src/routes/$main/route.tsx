@@ -77,6 +77,17 @@ export const Route = createFileRoute("/$main")<{
         search: { redirect: location.href } as any,
       });
     }
+    // Workshop terminal users (sewer, cutter, etc.) must not enter POS.
+    // They're locked to the workshop app. Force logout — returning them to
+    // their own terminal means keeping them on the wrong domain; safer to
+    // scrub the session and let them sign back in via the workshop login.
+    const user = (context.auth as any).user;
+    if (user && user.role === "staff" && user.job_function) {
+      throw redirect({
+        to: `/${params.main}/login` as any,
+        search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
+      });
+    }
   },
   notFoundComponent: NotFoundPage,
   head: ({ params }) => ({

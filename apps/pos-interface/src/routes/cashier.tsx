@@ -19,6 +19,14 @@ export const Route = createFileRoute("/cashier")({
                 search: { redirect: location.href },
             });
         }
+        // Deny terminal-locked workshop staff (sewer, cutter, etc.).
+        const user = (context.auth as any).user;
+        if (user && user.role === "staff" && user.job_function) {
+            throw redirect({
+                to: "/login",
+                search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
+            });
+        }
     },
     head: () => ({
         meta: [{ title: "Cashier Terminal" }],

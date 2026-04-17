@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as mainRouteRouteImport } from './routes/(main)/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as mainTeamRouteImport } from './routes/(main)/team'
@@ -28,7 +29,7 @@ import { Route as mainUsersIndexRouteImport } from './routes/(main)/users/index'
 import { Route as mainPerformanceIndexRouteImport } from './routes/(main)/performance/index'
 import { Route as mainCompletedIndexRouteImport } from './routes/(main)/completed/index'
 import { Route as mainAssignedIndexRouteImport } from './routes/(main)/assigned/index'
-import { Route as mainUsersUserIdRouteImport } from './routes/(main)/users/$userId'
+import { Route as mainUsersNewRouteImport } from './routes/(main)/users/new'
 import { Route as mainTerminalsSoakingRouteImport } from './routes/(main)/terminals/soaking'
 import { Route as mainTerminalsSewingRouteImport } from './routes/(main)/terminals/sewing'
 import { Route as mainTerminalsQualityCheckRouteImport } from './routes/(main)/terminals/quality-check'
@@ -45,12 +46,19 @@ import { Route as mainStoreApproveRequestsRouteImport } from './routes/(main)/st
 import { Route as mainStoreActiveDeliveriesRouteImport } from './routes/(main)/store/active-deliveries'
 import { Route as mainCompletedOrderIdRouteImport } from './routes/(main)/completed/$orderId'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
+import { Route as mainUsersUserIdIndexRouteImport } from './routes/(main)/users/$userId.index'
+import { Route as mainUsersUserIdEditRouteImport } from './routes/(main)/users/$userId.edit'
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
 import { Route as mainTerminalsStageHistoryRouteImport } from './routes/(main)/terminals/$stage.history'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
 import { Route as mainAssignedGarmentGarmentIdRouteImport } from './routes/(main)/assigned/garment.$garmentId'
 import { Route as mainAssignedOrderIdAddGarmentRouteImport } from './routes/(main)/assigned/$orderId.add-garment'
 
+const AccessDeniedRoute = AccessDeniedRouteImport.update({
+  id: '/access-denied',
+  path: '/access-denied',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const mainRouteRoute = mainRouteRouteImport.update({
   id: '/(main)',
   getParentRoute: () => rootRouteImport,
@@ -145,9 +153,9 @@ const mainAssignedIndexRoute = mainAssignedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => mainAssignedRouteRoute,
 } as any)
-const mainUsersUserIdRoute = mainUsersUserIdRouteImport.update({
-  id: '/users/$userId',
-  path: '/users/$userId',
+const mainUsersNewRoute = mainUsersNewRouteImport.update({
+  id: '/users/new',
+  path: '/users/new',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainTerminalsSoakingRoute = mainTerminalsSoakingRouteImport.update({
@@ -237,6 +245,16 @@ const mainAssignedOrderIdRoute = mainAssignedOrderIdRouteImport.update({
   path: '/$orderId',
   getParentRoute: () => mainAssignedRouteRoute,
 } as any)
+const mainUsersUserIdIndexRoute = mainUsersUserIdIndexRouteImport.update({
+  id: '/users/$userId/',
+  path: '/users/$userId/',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainUsersUserIdEditRoute = mainUsersUserIdEditRouteImport.update({
+  id: '/users/$userId/edit',
+  path: '/users/$userId/edit',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainTerminalsGarmentGarmentIdRoute =
   mainTerminalsGarmentGarmentIdRouteImport.update({
     id: '/terminals/garment/$garmentId',
@@ -270,6 +288,7 @@ const mainAssignedOrderIdAddGarmentRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/assigned': typeof mainAssignedRouteRouteWithChildren
   '/completed': typeof mainCompletedRouteRouteWithChildren
   '/login': typeof authLoginRoute
@@ -299,7 +318,7 @@ export interface FileRoutesByFullPath {
   '/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/terminals/sewing': typeof mainTerminalsSewingRoute
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
-  '/users/$userId': typeof mainUsersUserIdRoute
+  '/users/new': typeof mainUsersNewRoute
   '/assigned/': typeof mainAssignedIndexRoute
   '/completed/': typeof mainCompletedIndexRoute
   '/performance/': typeof mainPerformanceIndexRoute
@@ -309,9 +328,12 @@ export interface FileRoutesByFullPath {
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
+  '/users/$userId/edit': typeof mainUsersUserIdEditRoute
+  '/users/$userId/': typeof mainUsersUserIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/login': typeof authLoginRoute
   '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
@@ -339,7 +361,7 @@ export interface FileRoutesByTo {
   '/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/terminals/sewing': typeof mainTerminalsSewingRoute
   '/terminals/soaking': typeof mainTerminalsSoakingRoute
-  '/users/$userId': typeof mainUsersUserIdRoute
+  '/users/new': typeof mainUsersNewRoute
   '/assigned': typeof mainAssignedIndexRoute
   '/completed': typeof mainCompletedIndexRoute
   '/performance': typeof mainPerformanceIndexRoute
@@ -349,11 +371,14 @@ export interface FileRoutesByTo {
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
+  '/users/$userId/edit': typeof mainUsersUserIdEditRoute
+  '/users/$userId': typeof mainUsersUserIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/(main)': typeof mainRouteRouteWithChildren
+  '/access-denied': typeof AccessDeniedRoute
   '/(main)/assigned': typeof mainAssignedRouteRouteWithChildren
   '/(main)/completed': typeof mainCompletedRouteRouteWithChildren
   '/(auth)/login': typeof authLoginRoute
@@ -383,7 +408,7 @@ export interface FileRoutesById {
   '/(main)/terminals/quality-check': typeof mainTerminalsQualityCheckRoute
   '/(main)/terminals/sewing': typeof mainTerminalsSewingRoute
   '/(main)/terminals/soaking': typeof mainTerminalsSoakingRoute
-  '/(main)/users/$userId': typeof mainUsersUserIdRoute
+  '/(main)/users/new': typeof mainUsersNewRoute
   '/(main)/assigned/': typeof mainAssignedIndexRoute
   '/(main)/completed/': typeof mainCompletedIndexRoute
   '/(main)/performance/': typeof mainPerformanceIndexRoute
@@ -393,11 +418,14 @@ export interface FileRoutesById {
   '/(main)/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/(main)/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/(main)/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
+  '/(main)/users/$userId/edit': typeof mainUsersUserIdEditRoute
+  '/(main)/users/$userId/': typeof mainUsersUserIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access-denied'
     | '/assigned'
     | '/completed'
     | '/login'
@@ -427,7 +455,7 @@ export interface FileRouteTypes {
     | '/terminals/quality-check'
     | '/terminals/sewing'
     | '/terminals/soaking'
-    | '/users/$userId'
+    | '/users/new'
     | '/assigned/'
     | '/completed/'
     | '/performance/'
@@ -437,9 +465,12 @@ export interface FileRouteTypes {
     | '/performance/worker/$workerName'
     | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
+    | '/users/$userId/edit'
+    | '/users/$userId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/access-denied'
     | '/login'
     | '/board'
     | '/dashboard'
@@ -467,7 +498,7 @@ export interface FileRouteTypes {
     | '/terminals/quality-check'
     | '/terminals/sewing'
     | '/terminals/soaking'
-    | '/users/$userId'
+    | '/users/new'
     | '/assigned'
     | '/completed'
     | '/performance'
@@ -477,10 +508,13 @@ export interface FileRouteTypes {
     | '/performance/worker/$workerName'
     | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
+    | '/users/$userId/edit'
+    | '/users/$userId'
   id:
     | '__root__'
     | '/'
     | '/(main)'
+    | '/access-denied'
     | '/(main)/assigned'
     | '/(main)/completed'
     | '/(auth)/login'
@@ -510,7 +544,7 @@ export interface FileRouteTypes {
     | '/(main)/terminals/quality-check'
     | '/(main)/terminals/sewing'
     | '/(main)/terminals/soaking'
-    | '/(main)/users/$userId'
+    | '/(main)/users/new'
     | '/(main)/assigned/'
     | '/(main)/completed/'
     | '/(main)/performance/'
@@ -520,16 +554,26 @@ export interface FileRouteTypes {
     | '/(main)/performance/worker/$workerName'
     | '/(main)/terminals/$stage/history'
     | '/(main)/terminals/garment/$garmentId'
+    | '/(main)/users/$userId/edit'
+    | '/(main)/users/$userId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   mainRouteRoute: typeof mainRouteRouteWithChildren
+  AccessDeniedRoute: typeof AccessDeniedRoute
   authLoginRoute: typeof authLoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/access-denied': {
+      id: '/access-denied'
+      path: '/access-denied'
+      fullPath: '/access-denied'
+      preLoaderRoute: typeof AccessDeniedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(main)': {
       id: '/(main)'
       path: ''
@@ -663,11 +707,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainAssignedIndexRouteImport
       parentRoute: typeof mainAssignedRouteRoute
     }
-    '/(main)/users/$userId': {
-      id: '/(main)/users/$userId'
-      path: '/users/$userId'
-      fullPath: '/users/$userId'
-      preLoaderRoute: typeof mainUsersUserIdRouteImport
+    '/(main)/users/new': {
+      id: '/(main)/users/new'
+      path: '/users/new'
+      fullPath: '/users/new'
+      preLoaderRoute: typeof mainUsersNewRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/terminals/soaking': {
@@ -782,6 +826,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainAssignedOrderIdRouteImport
       parentRoute: typeof mainAssignedRouteRoute
     }
+    '/(main)/users/$userId/': {
+      id: '/(main)/users/$userId/'
+      path: '/users/$userId'
+      fullPath: '/users/$userId/'
+      preLoaderRoute: typeof mainUsersUserIdIndexRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/users/$userId/edit': {
+      id: '/(main)/users/$userId/edit'
+      path: '/users/$userId/edit'
+      fullPath: '/users/$userId/edit'
+      preLoaderRoute: typeof mainUsersUserIdEditRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/terminals/garment/$garmentId': {
       id: '/(main)/terminals/garment/$garmentId'
       path: '/terminals/garment/$garmentId'
@@ -886,12 +944,14 @@ interface mainRouteRouteChildren {
   mainTerminalsQualityCheckRoute: typeof mainTerminalsQualityCheckRoute
   mainTerminalsSewingRoute: typeof mainTerminalsSewingRoute
   mainTerminalsSoakingRoute: typeof mainTerminalsSoakingRoute
-  mainUsersUserIdRoute: typeof mainUsersUserIdRoute
+  mainUsersNewRoute: typeof mainUsersNewRoute
   mainPerformanceIndexRoute: typeof mainPerformanceIndexRoute
   mainUsersIndexRoute: typeof mainUsersIndexRoute
   mainPerformanceWorkerWorkerNameRoute: typeof mainPerformanceWorkerWorkerNameRoute
   mainTerminalsStageHistoryRoute: typeof mainTerminalsStageHistoryRoute
   mainTerminalsGarmentGarmentIdRoute: typeof mainTerminalsGarmentGarmentIdRoute
+  mainUsersUserIdEditRoute: typeof mainUsersUserIdEditRoute
+  mainUsersUserIdIndexRoute: typeof mainUsersUserIdIndexRoute
 }
 
 const mainRouteRouteChildren: mainRouteRouteChildren = {
@@ -921,12 +981,14 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainTerminalsQualityCheckRoute: mainTerminalsQualityCheckRoute,
   mainTerminalsSewingRoute: mainTerminalsSewingRoute,
   mainTerminalsSoakingRoute: mainTerminalsSoakingRoute,
-  mainUsersUserIdRoute: mainUsersUserIdRoute,
+  mainUsersNewRoute: mainUsersNewRoute,
   mainPerformanceIndexRoute: mainPerformanceIndexRoute,
   mainUsersIndexRoute: mainUsersIndexRoute,
   mainPerformanceWorkerWorkerNameRoute: mainPerformanceWorkerWorkerNameRoute,
   mainTerminalsStageHistoryRoute: mainTerminalsStageHistoryRoute,
   mainTerminalsGarmentGarmentIdRoute: mainTerminalsGarmentGarmentIdRoute,
+  mainUsersUserIdEditRoute: mainUsersUserIdEditRoute,
+  mainUsersUserIdIndexRoute: mainUsersUserIdIndexRoute,
 }
 
 const mainRouteRouteWithChildren = mainRouteRoute._addFileChildren(
@@ -936,6 +998,7 @@ const mainRouteRouteWithChildren = mainRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   mainRouteRoute: mainRouteRouteWithChildren,
+  AccessDeniedRoute: AccessDeniedRoute,
   authLoginRoute: authLoginRoute,
 }
 export const routeTree = rootRouteImport

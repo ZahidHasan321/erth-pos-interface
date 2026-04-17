@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
+import { useAuth } from "@/context/auth";
+import { isTerminalUser } from "@/lib/rbac";
 import {
   PageHeader,
   EmptyState,
@@ -61,6 +63,19 @@ interface ProductionTerminalProps {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// Map the user's job_function to the matching key inside production_plan.
+// Keys in ProductionPlan are verb/trade nouns (except "quality_checker"), while
+// job_function uses person nouns — mostly identical. Only "qc" needs remapping.
+const JOB_FUNCTION_TO_PLAN_KEY: Record<string, keyof ProductionPlan> = {
+  soaker: "soaker",
+  cutter: "cutter",
+  post_cutter: "post_cutter",
+  sewer: "sewer",
+  finisher: "finisher",
+  ironer: "ironer",
+  qc: "quality_checker",
+};
 
 function hasQcFailThisTrip(g: WorkshopGarment): boolean {
   const trip = g.trip_number ?? 1;
@@ -490,8 +505,25 @@ export function ProductionTerminal({
 }: ProductionTerminalProps) {
   const { data: stageGarments = [], isLoading } =
     useTerminalGarments(terminalStage);
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+
+  // Terminal-locked users see only the garments the scheduler assigned to
+  // them in production_plan. Office users (admin/manager/staff without
+  // job_function) still see every garment at this stage, which is how the
+  // sidebar view has always worked.
+  const scopedGarments = useMemo(() => {
+    if (!isTerminalUser(user) || !user?.job_function || !user?.name) {
+      return stageGarments;
+    }
+    const planKey = JOB_FUNCTION_TO_PLAN_KEY[user.job_function];
+    if (!planKey) return stageGarments;
+    return stageGarments.filter((g) => {
+      const plan = g.production_plan as ProductionPlan | null;
+      return plan?.[planKey] === user.name;
+    });
+  }, [stageGarments, user]);
 
   const stageLabel =
     PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ??
@@ -521,7 +553,7 @@ export function ProductionTerminal({
       alterations: [],
       assigned: [],
     };
-    for (const g of stageGarments) {
+    for (const g of scopedGarments) {
       if (searchFilter && !searchFilter(g)) continue;
       base[classify(g, variant)].push(g);
     }
@@ -529,7 +561,7 @@ export function ProductionTerminal({
       base[k] = groupByOrderSorted(base[k]);
     }
     return base;
-  }, [stageGarments, searchFilter, variant]);
+  }, [scopedGarments, searchFilter, variant]);
 
   const handleClick = (g: WorkshopGarment) => {
     navigate({
@@ -538,7 +570,7 @@ export function ProductionTerminal({
     });
   };
 
-  const total = stageGarments.length;
+  const total = scopedGarments.length;
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10 space-y-8">

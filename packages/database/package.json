@@ -11,6 +11,7 @@
     "db:add-alteration-orders": "tsx scripts/add-alteration-orders.ts",
     "db:test": "tsx scripts/test-queries.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
+    "db:seed-terminal-users": "tsx scripts/seed-terminal-users.ts",
     "db:migrate-styles-pricing": "tsx scripts/migrate-styles-pricing.ts",
     "check-types": "tsc --noEmit",
     "test": "vitest run"

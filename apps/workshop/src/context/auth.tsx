@@ -16,12 +16,10 @@ export interface AuthContext {
 
 const AuthContext = React.createContext<AuthContext | null>(null);
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data, error } = await db
     .from('users')
-    .select('id, username, name, role, department, email, phone, employee_id')
+    .select('id, username, name, role, department, job_function, brands, is_active, email, phone, employee_id')
     .eq('id', userId)
     .single();
 
@@ -30,12 +28,19 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   }
   if (!data) return null;
 
+  // Deactivated account — caller forces logout. Returning null here keeps the
+  // pattern consistent with "user not found".
+  if (data.is_active === false) return null;
+
   return {
     id: data.id,
     username: data.username,
     name: data.name,
     role: data.role ?? 'staff',
     department: data.department ?? null,
+    job_function: data.job_function ?? null,
+    brands: data.brands ?? null,
+    is_active: data.is_active ?? true,
     email: data.email ?? null,
     phone: data.phone ?? null,
     employee_id: data.employee_id ?? null,
@@ -72,7 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user?.app_metadata?.user_id) {
           try {
             const restored = await fetchUserFromSession(session.user.app_metadata.user_id);
-            if (!cancelled) setUser(restored);
+            if (cancelled) return;
+            if (restored) {
+              setUser(restored);
+            } else {
+              // Deactivated or deleted mid-session — terminate.
+              await db.auth.signOut().catch(() => {});
+            }
           } catch {
             console.warn('[Auth] Session restore failed — waiting for token refresh');
           }
@@ -139,17 +150,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: { username: string; pin: string }) => {
     loginInProgress.current = true;
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: credentials.username, pin: credentials.pin }),
+      const { data: result, error: fnError } = await db.functions.invoke<{
+        session: { access_token: string; refresh_token: string } | null;
+        user: { id: string };
+      }>('auth-login', {
+        body: { username: credentials.username, pin: credentials.pin },
       });
 
-      const result = await res.json();
-
-      if (!res.ok) {
-        throw new Error(`Login failed: ${result.error || 'no error message from server'}`);
+      if (fnError) {
+        // FunctionsHttpError exposes the raw Response on .context — parse the
+        // server's {error: "..."} body so the user sees the real reason
+        // (e.g. "Invalid PIN", "Account locked") instead of "non-2xx".
+        let serverMsg: string | null = null;
+        const ctx = (fnError as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            serverMsg = body?.error ?? null;
+          } catch { /* ignore */ }
+        }
+        throw new Error(`Login failed: ${serverMsg || fnError.message || 'no error message from server'}`);
       }
+      if (!result) throw new Error('Login failed: empty response');
 
       if (result.session) {
         await db.auth.setSession({
@@ -162,7 +184,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const fullUser = await fetchUserFromSession(result.user.id);
-      if (!fullUser) throw new Error('Failed to load user profile: no matching user row found');
+      if (!fullUser) {
+        // fetchUserFromSession returns null for deactivated accounts OR missing
+        // rows. Either way we can't proceed — scrub the just-set session so the
+        // user isn't stuck with a JWT that has no matching profile.
+        await db.auth.signOut().catch(() => {});
+        throw new Error('Account is not active or user profile not found');
+      }
       setUser(fullUser);
     } finally {
       loginInProgress.current = false;

@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
 
 // deno-lint-ignore no-explicit-any
 async function handleCreateUser(supabase: any, params: any) {
-  const { username, name, pin, role, department, ...rest } = params;
+  const { username, name, pin, role, department, job_function, ...rest } = params;
 
   if (!username || !name || !pin || !role || !department) {
     return new Response(
@@ -96,7 +96,7 @@ async function handleCreateUser(supabase: any, params: any) {
     email: internalEmail,
     password: internalPassword,
     email_confirm: true,
-    app_metadata: { role, department },
+    app_metadata: { role, department, job_function: job_function ?? null },
   });
 
   if (authError) {
@@ -115,6 +115,7 @@ async function handleCreateUser(supabase: any, params: any) {
       auth_id: authUser.user.id,
       role,
       department,
+      job_function: job_function ?? null,
       email: rest.email || null,
       country_code: rest.country_code || "+965",
       phone: rest.phone || null,

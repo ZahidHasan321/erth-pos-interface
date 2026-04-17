@@ -1178,7 +1178,7 @@ DECLARE
   v_lockout_minutes INT := 15;
 BEGIN
   -- Look up user (case-insensitive)
-  SELECT id, username, name, role, department, pin, brands,
+  SELECT id, username, name, role, department, job_function, pin, brands,
          failed_login_attempts, locked_until, is_active
   INTO v_user
   FROM users
@@ -1221,6 +1221,7 @@ BEGIN
       'name', v_user.name,
       'role', v_user.role,
       'department', v_user.department,
+      'job_function', v_user.job_function,
       'brands', v_user.brands
     );
   ELSE
@@ -1279,6 +1280,7 @@ RETURNS JSONB AS $$
       'name', name,
       'role', role,
       'department', department,
+      'job_function', job_function,
       'brands', brands
     ) ORDER BY name
   ), '[]'::jsonb)
@@ -1300,6 +1302,12 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 CREATE OR REPLACE FUNCTION get_my_department()
 RETURNS TEXT AS $$
   SELECT department::text FROM users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Get the current user's job_function (null = office user, not terminal-locked)
+CREATE OR REPLACE FUNCTION get_my_job_function()
+RETURNS TEXT AS $$
+  SELECT job_function::text FROM users WHERE auth_id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Get the current user's id (users.id, NOT auth.uid()) from auth.uid() → users.auth_id
@@ -1489,8 +1497,17 @@ CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (
 -- ── Garments ────────────────────────────────────────────────────────
 ALTER TABLE garments ENABLE ROW LEVEL SECURITY;
 
+-- Garments are scoped by department (shop + workshop both need reads) AND by
+-- the brand of the parent order. Closes the prior USING (auth.uid() IS NOT NULL)
+-- gap where shop users in one brand could read garments from another brand.
 DROP POLICY IF EXISTS "garments_select" ON garments;
-CREATE POLICY "garments_select" ON garments FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "garments_select" ON garments FOR SELECT USING (
+  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = garments.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 DROP POLICY IF EXISTS "garments_insert" ON garments;
 CREATE POLICY "garments_insert" ON garments FOR INSERT WITH CHECK (
@@ -1513,8 +1530,16 @@ CREATE POLICY "garments_update" ON garments FOR UPDATE USING (
 -- ── Garment Feedback ────────────────────────────────────────────────
 ALTER TABLE garment_feedback ENABLE ROW LEVEL SECURITY;
 
+-- Feedback inherits garment scoping. Join via garment → order → brand.
 DROP POLICY IF EXISTS "feedback_select" ON garment_feedback;
-CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (
+  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
+  AND EXISTS (
+    SELECT 1 FROM garments g
+    JOIN orders o ON o.id = g.order_id
+    WHERE g.id = garment_feedback.garment_id AND can_access_brand(o.brand::text)
+  )
+);
 
 DROP POLICY IF EXISTS "feedback_insert" ON garment_feedback;
 CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);

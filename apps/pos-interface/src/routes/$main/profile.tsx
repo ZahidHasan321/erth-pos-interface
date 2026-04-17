@@ -114,7 +114,7 @@ function ProfilePage() {
             </div>
             <div className="px-6 py-5">
               <div className="flex flex-wrap gap-2">
-                {user.brands.length > 0 ? (
+                {user.brands && user.brands.length > 0 ? (
                   user.brands.map((brand) => (
                     <Badge
                       key={brand}

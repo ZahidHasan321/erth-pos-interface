@@ -3,11 +3,24 @@ import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { toast } from "sonner";
 import { db } from "@/lib/db";
+import { getTerminalPath, isTerminalUser, JOB_FUNCTION_LABELS, type AuthUser } from "@/lib/rbac";
+import type { JobFunction } from "@repo/database";
+
+// Post-login destination. Terminal-locked users go straight to their terminal;
+// everyone else lands on Receiving (the ops default).
+function getPostLoginPath(user: AuthUser | null): string {
+  if (isTerminalUser(user)) {
+    const terminal = getTerminalPath(user);
+    if (terminal) return terminal;
+  }
+  return "/receiving";
+}
 
 export const Route = createFileRoute("/(auth)/login")({
   beforeLoad: ({ context }) => {
     if (context.auth.isAuthenticated) {
-      throw redirect({ to: "/receiving", search: { tab: undefined } });
+      const dest = getPostLoginPath((context.auth as any).user ?? null);
+      throw redirect({ to: dest as any });
     }
   },
   component: LoginPage,
@@ -26,7 +39,17 @@ type WorkshopUser = {
   name: string;
   role: string | null;
   department: string | null;
+  job_function: string | null;
 };
+
+function pillSubtitle(u: WorkshopUser): string {
+  if (u.job_function && u.job_function in JOB_FUNCTION_LABELS) {
+    return JOB_FUNCTION_LABELS[u.job_function as JobFunction];
+  }
+  if (u.role === "super_admin") return "Super Admin";
+  if (u.role) return u.role.charAt(0).toUpperCase() + u.role.slice(1);
+  return "";
+}
 
 function LoginPage() {
   const auth = useAuth();
@@ -55,11 +78,12 @@ function LoginPage() {
 
   useEffect(() => {
     if (auth.isAuthenticated) {
+      const dest = getPostLoginPath(auth.user);
       router.invalidate().then(() => {
-        router.navigate({ to: "/receiving", search: { tab: undefined } });
+        router.navigate({ to: dest as any });
       });
     }
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, auth.user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,7 +474,7 @@ function LoginPage() {
                       <span style={{
                         fontFamily: "'Montserrat', sans-serif",
                         fontSize: 8, color: "rgba(240,235,225,0.45)",
-                      }}>{u.role === "super_admin" ? "Super Admin" : u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : ""}</span>
+                      }}>{pillSubtitle(u)}</span>
                     </button>
                   ))}
                 </div>
