@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck } from "lucide-react";
+import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, AlertTriangle } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@repo/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
@@ -14,7 +14,10 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   garment_awaiting_trial: Eye,
   transfer_requested: ArrowRightLeft,
   transfer_status_changed: ArrowRightLeft,
+  garment_redo_requested: AlertTriangle,
 };
+
+const URGENT_TYPES = new Set(["garment_redo_requested"]);
 
 type NotificationLink = { to: string; search?: Record<string, string> };
 
@@ -26,6 +29,13 @@ function getNotificationLink(notification: NotificationItem): NotificationLink |
       return { to: "/store/approve-requests", search: { tab: "pending" } };
     case "transfer_status_changed":
       return { to: "/store/approve-requests", search: { tab: "approved" } };
+    case "garment_redo_requested": {
+      const orderId = notification.metadata?.order_id;
+      if (typeof orderId === "number" || typeof orderId === "string") {
+        return { to: `/assigned/${orderId}` };
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -62,6 +72,7 @@ function NotificationRow({
 }) {
   const Icon = TYPE_ICONS[notification.type] ?? Bell;
   const link = getNotificationLink(notification);
+  const urgent = URGENT_TYPES.has(notification.type) && !notification.is_read;
 
   return (
     <button
@@ -70,19 +81,21 @@ function NotificationRow({
         if (!notification.is_read) onRead(notification.id);
         if (link) onNavigate(link);
       }}
-      className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 border-b last:border-b-0 ${
-        notification.is_read ? "opacity-60" : ""
-      }`}
+      className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors border-b last:border-b-0 ${
+        urgent
+          ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60 border-l-4 border-l-red-600"
+          : "hover:bg-muted/50"
+      } ${notification.is_read ? "opacity-60" : ""}`}
     >
       <div className="mt-0.5 shrink-0">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <Icon className={`h-4 w-4 ${urgent ? "text-red-600" : "text-muted-foreground"}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {!notification.is_read && (
-            <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+            <span className={`h-2 w-2 rounded-full shrink-0 ${urgent ? "bg-red-600" : "bg-primary"}`} />
           )}
-          <p className="text-sm font-medium truncate">{notification.title}</p>
+          <p className={`text-sm truncate ${urgent ? "font-black uppercase tracking-wide text-red-700 dark:text-red-300" : "font-medium"}`}>{notification.title}</p>
         </div>
         {notification.body && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">

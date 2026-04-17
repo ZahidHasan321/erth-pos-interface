@@ -1,38 +1,89 @@
 import { useFormContext, Controller } from "react-hook-form";
 import { Label } from "@repo/ui/label";
 import { Input } from "@repo/ui/input";
-import { Checkbox } from "@repo/ui/checkbox";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@repo/ui/select";
+import { Check } from "lucide-react";
 import {
   collarTypes, collarButtons, jabzourTypes, topPocketTypes, cuffTypes,
-  thicknessOptions, type BaseOption,
+  thicknessOptions, smallTabaggiImage, penIcon, phoneIcon, walletIcon,
+  type BaseOption,
 } from "./constants";
 import type { AddGarmentFormValues } from "./schema";
+import { cn } from "@/lib/utils";
 
-function OptionSelect({
-  value, onChange, options, placeholder = "Select…", allowNone = false,
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      <header className="px-4 py-2.5 border-b bg-muted/30">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </h3>
+      </header>
+      <div className="p-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function ImageOptionGrid({
+  options, value, onChange, allowClear = false, cols = "auto",
 }: {
+  options: BaseOption[];
   value: string | null;
   onChange: (v: string | null) => void;
-  options: BaseOption[];
-  placeholder?: string;
-  allowNone?: boolean;
+  allowClear?: boolean;
+  cols?: "auto" | "tight";
 }) {
   return (
-    <Select
-      value={value ?? ""}
-      onValueChange={(v) => onChange(v === "__none" ? null : v)}
+    <div
+      className={cn(
+        "grid gap-2",
+        cols === "auto"
+          ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
+      )}
     >
-      <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
-      <SelectContent>
-        {allowNone && <SelectItem value="__none">— none —</SelectItem>}
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>{o.displayText}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      {options.map((o) => {
+        const selected = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(allowClear && selected ? null : o.value)}
+            className={cn(
+              "group relative flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 bg-background transition-all",
+              "hover:border-primary/60 hover:shadow-sm",
+              selected
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border",
+            )}
+          >
+            {selected && (
+              <span className="absolute top-1 right-1 rounded-full bg-primary text-primary-foreground p-0.5 shadow">
+                <Check className="w-3 h-3" />
+              </span>
+            )}
+            {o.image ? (
+              <img
+                src={o.image}
+                alt={o.alt ?? o.displayText}
+                className="h-14 w-14 object-contain"
+              />
+            ) : (
+              <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center text-[10px] text-muted-foreground font-semibold uppercase">
+                None
+              </div>
+            )}
+            <span
+              className={cn(
+                "text-[11px] font-medium text-center leading-tight",
+                selected ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {o.displayText}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -40,21 +91,63 @@ function ThicknessPicker({
   value, onChange,
 }: { value: string | null; onChange: (v: string) => void }) {
   return (
-    <div className="flex gap-1">
-      {thicknessOptions.map((t) => (
-        <button
-          key={t.value}
-          type="button"
-          onClick={() => onChange(t.value)}
-          className={`px-2 py-1 rounded text-xs font-semibold border transition-colors
-            ${value === t.value
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background hover:bg-muted border-border"}`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="inline-flex rounded-lg border bg-background p-0.5">
+      {thicknessOptions.map((t) => {
+        const selected = value === t.value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => onChange(t.value)}
+            title={t.full}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-bold transition-colors min-w-[36px]",
+              selected
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            )}
+          >
+            {t.label}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function IconToggle({
+  checked, onChange, icon, label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  icon: string;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 bg-background transition-all min-w-[72px]",
+        "hover:border-primary/60",
+        checked ? "border-primary bg-primary/5" : "border-border",
+      )}
+    >
+      {checked && (
+        <span className="absolute top-1 right-1 rounded-full bg-primary text-primary-foreground p-0.5">
+          <Check className="w-3 h-3" />
+        </span>
+      )}
+      <img src={icon} alt={label} className="h-8 w-8 object-contain" />
+      <span
+        className={cn(
+          "text-[10px] font-medium",
+          checked ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -62,88 +155,122 @@ export function StyleFields() {
   const { control, register, watch, formState: { errors } } =
     useFormContext<AddGarmentFormValues>();
   const jab1 = watch("jabzour_1");
+  const showJab2 = jab1 === "JAB_SHAAB";
 
   return (
-    <section className="space-y-4 bg-card border rounded-xl p-4">
-      <h2 className="text-sm font-bold uppercase tracking-wider">Style</h2>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="style">Style</Label>
-          <Input id="style" {...register("style")} />
+    <div className="space-y-4">
+      <SectionCard title="General">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="style">Style</Label>
+            <Input id="style" {...register("style")} placeholder="kuwaiti" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Lines</Label>
+            <Controller
+              control={control}
+              name="lines"
+              render={({ field }) => (
+                <div className="inline-flex rounded-lg border bg-background p-0.5">
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => field.onChange(n)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
+                        field.value === n
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="lines">Lines</Label>
-          <Input
-            id="lines"
-            type="number"
-            min="1"
-            max="3"
-            {...register("lines", { valueAsNumber: true })}
+      </SectionCard>
+
+      <SectionCard title="Collar">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Controller
+            control={control}
+            name="collar_type"
+            render={({ field }) => (
+              <ImageOptionGrid
+                options={collarTypes}
+                value={field.value}
+                onChange={field.onChange}
+                allowClear
+              />
+            )}
           />
         </div>
-      </div>
-
-      {/* Collar */}
-      <div className="border-t pt-3 space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Collar</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Controller
-              control={control}
-              name="collar_type"
-              render={({ field }) => (
-                <OptionSelect value={field.value} onChange={field.onChange} options={collarTypes} />
-              )}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Button</Label>
-            <Controller
-              control={control}
-              name="collar_button"
-              render={({ field }) => (
-                <OptionSelect value={field.value} onChange={field.onChange} options={collarButtons} />
-              )}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Button</Label>
+          <Controller
+            control={control}
+            name="collar_button"
+            render={({ field }) => (
+              <ImageOptionGrid
+                options={collarButtons}
+                value={field.value}
+                onChange={field.onChange}
+                allowClear
+              />
+            )}
+          />
         </div>
-        <label className="flex items-center gap-2 text-sm">
+        <div>
           <Controller
             control={control}
             name="small_tabaggi"
             render={({ field }) => (
-              <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} />
+              <IconToggle
+                checked={!!field.value}
+                onChange={field.onChange}
+                icon={smallTabaggiImage}
+                label="Small Tabaggi"
+              />
             )}
           />
-          Small tabaggi
-        </label>
-      </div>
+        </div>
+      </SectionCard>
 
-      {/* Jabzour */}
-      <div className="border-t pt-3 space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Jabzour</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Jabzour 1</Label>
-            <Controller
-              control={control}
-              name="jabzour_1"
-              render={({ field }) => (
-                <OptionSelect value={field.value} onChange={field.onChange} options={jabzourTypes} />
-              )}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Jabzour 2 {jab1 === "JAB_SHAAB" && <span className="text-red-600">*</span>}</Label>
+      <SectionCard title="Jabzour">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Controller
+            control={control}
+            name="jabzour_1"
+            render={({ field }) => (
+              <ImageOptionGrid
+                options={jabzourTypes}
+                value={field.value}
+                onChange={field.onChange}
+                allowClear
+              />
+            )}
+          />
+        </div>
+        {showJab2 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Jabzour 2 <span className="text-red-600">*</span>
+            </Label>
             <Controller
               control={control}
               name="jabzour_2"
               render={({ field }) => (
-                <OptionSelect
-                  value={field.value} onChange={field.onChange}
-                  options={jabzourTypes} allowNone
+                <ImageOptionGrid
+                  options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                  value={field.value}
+                  onChange={field.onChange}
+                  allowClear
                 />
               )}
             />
@@ -151,9 +278,9 @@ export function StyleFields() {
               <p className="text-xs text-red-600">{errors.jabzour_2.message as string}</p>
             )}
           </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Thickness</Label>
+        )}
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Thickness</Label>
           <Controller
             control={control}
             name="jabzour_thickness"
@@ -162,77 +289,104 @@ export function StyleFields() {
             )}
           />
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Front pocket */}
-      <div className="border-t pt-3 space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Front pocket</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Controller
-              control={control}
-              name="front_pocket_type"
-              render={({ field }) => (
-                <OptionSelect value={field.value} onChange={field.onChange} options={topPocketTypes} />
-              )}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Thickness</Label>
-            <Controller
-              control={control}
-              name="front_pocket_thickness"
-              render={({ field }) => (
-                <ThicknessPicker value={field.value} onChange={field.onChange} />
-              )}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-4">
-          {(["wallet_pocket", "pen_holder", "mobile_pocket"] as const).map((key) => (
-            <label key={key} className="flex items-center gap-2 text-sm">
-              <Controller
-                control={control}
-                name={key}
-                render={({ field }) => (
-                  <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} />
-                )}
+      <SectionCard title="Front pocket">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Controller
+            control={control}
+            name="front_pocket_type"
+            render={({ field }) => (
+              <ImageOptionGrid
+                options={topPocketTypes}
+                value={field.value}
+                onChange={field.onChange}
+                allowClear
               />
-              {key === "wallet_pocket" ? "Wallet pocket"
-                : key === "pen_holder" ? "Pen holder"
-                : "Mobile pocket"}
-            </label>
-          ))}
+            )}
+          />
         </div>
-      </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Thickness</Label>
+          <Controller
+            control={control}
+            name="front_pocket_thickness"
+            render={({ field }) => (
+              <ThicknessPicker value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Accessories</Label>
+          <div className="flex flex-wrap gap-2">
+            <Controller
+              control={control}
+              name="wallet_pocket"
+              render={({ field }) => (
+                <IconToggle
+                  checked={!!field.value}
+                  onChange={field.onChange}
+                  icon={walletIcon}
+                  label="Wallet"
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="pen_holder"
+              render={({ field }) => (
+                <IconToggle
+                  checked={!!field.value}
+                  onChange={field.onChange}
+                  icon={penIcon}
+                  label="Pen"
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="mobile_pocket"
+              render={({ field }) => (
+                <IconToggle
+                  checked={!!field.value}
+                  onChange={field.onChange}
+                  icon={phoneIcon}
+                  label="Mobile"
+                />
+              )}
+            />
+          </div>
+        </div>
+      </SectionCard>
 
-      {/* Cuffs */}
-      <div className="border-t pt-3 space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cuffs</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Controller
-              control={control}
-              name="cuffs_type"
-              render={({ field }) => (
-                <OptionSelect value={field.value} onChange={field.onChange} options={cuffTypes} />
-              )}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Thickness</Label>
-            <Controller
-              control={control}
-              name="cuffs_thickness"
-              render={({ field }) => (
-                <ThicknessPicker value={field.value} onChange={field.onChange} />
-              )}
-            />
-          </div>
+      <SectionCard title="Cuffs">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Controller
+            control={control}
+            name="cuffs_type"
+            render={({ field }) => (
+              <ImageOptionGrid
+                options={cuffTypes}
+                value={field.value}
+                onChange={field.onChange}
+                allowClear
+              />
+            )}
+          />
         </div>
-      </div>
-    </section>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Thickness</Label>
+          <Controller
+            control={control}
+            name="cuffs_thickness"
+            render={({ field }) => (
+              <ThicknessPicker value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </div>
+      </SectionCard>
+    </div>
   );
 }

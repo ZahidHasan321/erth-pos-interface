@@ -125,7 +125,7 @@ function AssignedOrderDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 max-w-5xl mx-auto space-y-3">
+      <div className="p-4 space-y-3">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-32 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
@@ -135,7 +135,7 @@ function AssignedOrderDetailPage() {
 
   if (garments.length === 0) {
     return (
-      <div className="p-4 max-w-5xl mx-auto">
+      <div className="p-4">
         <button
           onClick={() => router.history.back()}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors mb-4"
@@ -191,7 +191,7 @@ function AssignedOrderDetailPage() {
   })();
 
   return (
-    <div className="p-3 sm:p-4 max-w-5xl mx-auto pb-8">
+    <div className="p-3 sm:p-4 pb-8">
       <button
         onClick={() => router.history.back()}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors mb-3"

@@ -52,7 +52,7 @@ import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(mai
 import { Route as mainTerminalsStageHistoryRouteImport } from './routes/(main)/terminals/$stage.history'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
 import { Route as mainAssignedGarmentGarmentIdRouteImport } from './routes/(main)/assigned/garment.$garmentId'
-import { Route as mainAssignedOrderIdAddGarmentRouteImport } from './routes/(main)/assigned/$orderId.add-garment'
+import { Route as mainAssignedOrderIdAddGarmentRouteImport } from './routes/(main)/assigned/$orderId_.add-garment'
 
 const AccessDeniedRoute = AccessDeniedRouteImport.update({
   id: '/access-denied',
@@ -281,9 +281,9 @@ const mainAssignedGarmentGarmentIdRoute =
   } as any)
 const mainAssignedOrderIdAddGarmentRoute =
   mainAssignedOrderIdAddGarmentRouteImport.update({
-    id: '/add-garment',
-    path: '/add-garment',
-    getParentRoute: () => mainAssignedOrderIdRoute,
+    id: '/$orderId_/add-garment',
+    path: '/$orderId/add-garment',
+    getParentRoute: () => mainAssignedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -302,7 +302,7 @@ export interface FileRoutesByFullPath {
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
-  '/assigned/$orderId': typeof mainAssignedOrderIdRouteWithChildren
+  '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
@@ -345,7 +345,7 @@ export interface FileRoutesByTo {
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
-  '/assigned/$orderId': typeof mainAssignedOrderIdRouteWithChildren
+  '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/store/approve-requests': typeof mainStoreApproveRequestsRoute
@@ -392,7 +392,7 @@ export interface FileRoutesById {
   '/(main)/receiving': typeof mainReceivingRoute
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
-  '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRouteWithChildren
+  '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/(main)/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/(main)/store/active-deliveries': typeof mainStoreActiveDeliveriesRoute
   '/(main)/store/approve-requests': typeof mainStoreApproveRequestsRoute
@@ -413,7 +413,7 @@ export interface FileRoutesById {
   '/(main)/completed/': typeof mainCompletedIndexRoute
   '/(main)/performance/': typeof mainPerformanceIndexRoute
   '/(main)/users/': typeof mainUsersIndexRoute
-  '/(main)/assigned/$orderId/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
+  '/(main)/assigned/$orderId_/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
   '/(main)/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/(main)/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
   '/(main)/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
@@ -549,7 +549,7 @@ export interface FileRouteTypes {
     | '/(main)/completed/'
     | '/(main)/performance/'
     | '/(main)/users/'
-    | '/(main)/assigned/$orderId/add-garment'
+    | '/(main)/assigned/$orderId_/add-garment'
     | '/(main)/assigned/garment/$garmentId'
     | '/(main)/performance/worker/$workerName'
     | '/(main)/terminals/$stage/history'
@@ -868,36 +868,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainAssignedGarmentGarmentIdRouteImport
       parentRoute: typeof mainAssignedRouteRoute
     }
-    '/(main)/assigned/$orderId/add-garment': {
-      id: '/(main)/assigned/$orderId/add-garment'
-      path: '/add-garment'
+    '/(main)/assigned/$orderId_/add-garment': {
+      id: '/(main)/assigned/$orderId_/add-garment'
+      path: '/$orderId/add-garment'
       fullPath: '/assigned/$orderId/add-garment'
       preLoaderRoute: typeof mainAssignedOrderIdAddGarmentRouteImport
-      parentRoute: typeof mainAssignedOrderIdRoute
+      parentRoute: typeof mainAssignedRouteRoute
     }
   }
 }
 
-interface mainAssignedOrderIdRouteChildren {
-  mainAssignedOrderIdAddGarmentRoute: typeof mainAssignedOrderIdAddGarmentRoute
-}
-
-const mainAssignedOrderIdRouteChildren: mainAssignedOrderIdRouteChildren = {
-  mainAssignedOrderIdAddGarmentRoute: mainAssignedOrderIdAddGarmentRoute,
-}
-
-const mainAssignedOrderIdRouteWithChildren =
-  mainAssignedOrderIdRoute._addFileChildren(mainAssignedOrderIdRouteChildren)
-
 interface mainAssignedRouteRouteChildren {
-  mainAssignedOrderIdRoute: typeof mainAssignedOrderIdRouteWithChildren
+  mainAssignedOrderIdRoute: typeof mainAssignedOrderIdRoute
   mainAssignedIndexRoute: typeof mainAssignedIndexRoute
+  mainAssignedOrderIdAddGarmentRoute: typeof mainAssignedOrderIdAddGarmentRoute
   mainAssignedGarmentGarmentIdRoute: typeof mainAssignedGarmentGarmentIdRoute
 }
 
 const mainAssignedRouteRouteChildren: mainAssignedRouteRouteChildren = {
-  mainAssignedOrderIdRoute: mainAssignedOrderIdRouteWithChildren,
+  mainAssignedOrderIdRoute: mainAssignedOrderIdRoute,
   mainAssignedIndexRoute: mainAssignedIndexRoute,
+  mainAssignedOrderIdAddGarmentRoute: mainAssignedOrderIdAddGarmentRoute,
   mainAssignedGarmentGarmentIdRoute: mainAssignedGarmentGarmentIdRoute,
 }
 

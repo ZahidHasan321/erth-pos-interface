@@ -4,6 +4,7 @@
 import qallabi from "@/assets/collar-assets/collar-types/Qallabi.png";
 import downCollar from "@/assets/collar-assets/collar-types/Down Collar.png";
 import japanese from "@/assets/collar-assets/collar-types/Japanese.png";
+import straitCollar from "@/assets/collar-assets/collar-types/Strait Collar.png";
 
 import araviZarrar from "@/assets/collar-assets/collar-buttons/Aravi Zarrar.png";
 import zarrarTabbagi from "@/assets/collar-assets/collar-buttons/Zarrar + Tabbagi.png";
@@ -37,6 +38,7 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
   COL_QALLABI: { image: qallabi, label: "Qallabi" },
   COL_DOWN_COLLAR: { image: downCollar, label: "Round" },
   COL_JAPANESE: { image: japanese, label: "Japanese" },
+  COL_STRAIT_COLLAR: { image: straitCollar, label: "Strait" },
 
   // Collar buttons
   COL_ARAVI_ZARRAR: { image: araviZarrar, label: "Aravi Zarrar" },
@@ -70,8 +72,8 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
 export const ACCESSORY_ICONS = { wallet: walletIcon, pen: penIcon, phone: phoneIcon, smallTabaggi: smallTabaggiIcon };
 
 export const THICKNESS_LABELS: Record<string, string> = {
-  SINGLE: "S",
-  DOUBLE: "D",
-  TRIPLE: "T",
-  "NO HASHWA": "N",
+  SINGLE: "Single",
+  DOUBLE: "Double",
+  TRIPLE: "Triple",
+  "NO HASHWA": "No Hashwa",
 };

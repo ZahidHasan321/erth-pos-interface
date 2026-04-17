@@ -88,6 +88,19 @@ export function getGarmentEditability(garment: WorkshopGarment): GarmentEditabil
   const location = garment.location ?? "";
   const hasStarted = !!garment.start_time;
 
+  // Discarded — terminal (redo outcome). The row stays for history; the
+  // replacement garment owns all future edits. Lock everything.
+  if (stage === "discarded") {
+    return {
+      canEditPlan: false,
+      canEditDeliveryDate: false,
+      canStart: false,
+      canComplete: false,
+      lockedPlanSteps: new Set(PLAN_STEP_ORDER.map((s) => s.key)),
+      readOnlyReason: "Garment discarded — kept for history",
+    };
+  }
+
   // Done — nothing editable (delivery date only editable pre-completion)
   if (DONE_STAGES.has(stage)) {
     return {

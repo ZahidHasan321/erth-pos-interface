@@ -22,6 +22,7 @@ import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, Home, User, RotateCcw,
   Calendar, BarChart3, Droplets, Zap, Search, Loader2, X,
+  Scissors, Ruler, Shirt, Sparkles, Flame, ShieldCheck,
 } from "lucide-react";
 import { getAlterationNumber } from "@repo/database";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
@@ -359,9 +360,14 @@ function HeatCalendar({
 
 // ── Workload Summary ──────────────────────────────────────────────────────────
 
-const STAGE_ICONS: Record<string, string> = {
-  soaking: "💧", cutting: "✂️", post_cutting: "📐",
-  sewing: "🧵", finishing: "✨", ironing: "♨️", quality_check: "✅",
+const STAGE_ICONS: Record<string, { icon: LucideIcon; color: string }> = {
+  soaking: { icon: Droplets, color: "text-blue-500" },
+  cutting: { icon: Scissors, color: "text-rose-500" },
+  post_cutting: { icon: Ruler, color: "text-orange-500" },
+  sewing: { icon: Shirt, color: "text-indigo-500" },
+  finishing: { icon: Sparkles, color: "text-amber-500" },
+  ironing: { icon: Flame, color: "text-red-500" },
+  quality_check: { icon: ShieldCheck, color: "text-emerald-500" },
 };
 
 function WorkloadSummary({
@@ -392,10 +398,10 @@ function WorkloadSummary({
 
         const allWorkers = Object.entries(units).flatMap(([unit, workers]) => workers.map((w) => ({ ...w, unit })));
         const totalAssigned = allWorkers.reduce((s, w) => s + w.assigned, 0);
-        const totalTarget = allWorkers.reduce((s, w) => s + (w.target ?? 0), 0);
-        const isOver = totalTarget > 0 && totalAssigned > totalTarget;
         const isExpanded = expandedStage === stage;
         const showUnits = multiUnitStages.has(stage);
+        const stageIcon = STAGE_ICONS[stage];
+        const StageIcon = stageIcon?.icon;
 
         return (
           <div key={stage}>
@@ -403,11 +409,9 @@ function WorkloadSummary({
               onClick={() => setExpandedStage(isExpanded ? null : stage)}
               className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors", isExpanded ? "bg-muted/60" : "hover:bg-muted/30")}
             >
-              <span className="text-sm shrink-0">{STAGE_ICONS[stage] ?? "⚙️"}</span>
+              {StageIcon && <StageIcon className={cn("w-4 h-4 shrink-0", stageIcon.color)} />}
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1 truncate">{stage.replace(/_/g, " ")}</span>
-              <span className={cn("text-xs font-bold tabular-nums shrink-0", isOver ? "text-red-600" : "text-muted-foreground")}>
-                {totalAssigned}/{totalTarget || "—"}
-              </span>
+              <span className="text-xs font-bold tabular-nums shrink-0 text-muted-foreground">{totalAssigned}</span>
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground/30 transition-transform shrink-0", isExpanded && "rotate-180")} />
             </button>
 
@@ -718,25 +722,13 @@ function SchedulerPage() {
         subtitle={`${schedulable.length} garment${schedulable.length !== 1 ? "s" : ""} awaiting production plans`}
       />
 
-      {/* ── Tablet/phone: calendar + workload on top ── */}
+      {/* ── Tablet/phone: calendar on top, workload below ── */}
       <div className="lg:hidden mb-3">
         <div className="bg-card border rounded-xl shadow-sm p-3">
-          <div className="flex gap-3">
-            <div className="w-[280px] shrink-0">
-              <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
-            </div>
-            <div className="hidden sm:block flex-1 min-w-0 border-l pl-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-bold">{selectedDateLabel}</span>
-                {totalForDate > 0 && <span className="text-xs text-muted-foreground tabular-nums ml-auto">{totalForDate}</span>}
-              </div>
-              <div className="max-h-[220px] overflow-y-auto">
-                <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
-              </div>
-            </div>
+          <div className="max-w-[320px] mx-auto sm:mx-0">
+            <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
           </div>
-          <div className="sm:hidden border-t mt-2 pt-2">
+          <div className="border-t mt-3 pt-3">
             <button onClick={() => setShowMobilePanel(!showMobilePanel)} className="w-full flex items-center justify-between text-left touch-manipulation">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5 text-primary" />
@@ -746,7 +738,7 @@ function SchedulerPage() {
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground/50 transition-transform", showMobilePanel && "rotate-180")} />
             </button>
             {showMobilePanel && (
-              <div className="mt-2 animate-fade-in">
+              <div className="mt-2 animate-fade-in max-h-[280px] overflow-y-auto">
                 <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
               </div>
             )}
@@ -755,7 +747,7 @@ function SchedulerPage() {
       </div>
 
       {/* ── Layout: single col (tablet/phone) | 2col desktop ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_560px] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 items-start">
 
         {/* ── Col 1: Sections ── */}
         <div className="space-y-8 min-w-0">
@@ -864,26 +856,24 @@ function SchedulerPage() {
 
         {/* ── Col 2: Calendar + workload (desktop only) ── */}
         <div className="hidden lg:block lg:sticky lg:top-4">
-          <div className="bg-card border rounded-xl shadow-sm p-3 xl:p-4">
-            <div className="flex flex-col xl:flex-row xl:gap-4">
-              <div className="xl:w-[300px] xl:shrink-0 max-w-[320px]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
-                </div>
-                <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
+          <div className="bg-card border rounded-xl shadow-sm p-3">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
               </div>
-              <div className="border-t xl:border-t-0 xl:border-l mt-3 pt-3 xl:mt-0 xl:pt-0 xl:pl-4 xl:flex-1 xl:min-w-[180px]">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-xs font-bold">{selectedDateLabel}</span>
-                  </div>
-                  {totalForDate > 0 && <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>}
+              <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
+            </div>
+            <div className="border-t mt-3 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-bold">{selectedDateLabel}</span>
                 </div>
-                <div className="max-h-[260px] overflow-y-auto">
-                  <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
-                </div>
+                {totalForDate > 0 && <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>}
+              </div>
+              <div className="max-h-[320px] overflow-y-auto">
+                <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
               </div>
             </div>
 

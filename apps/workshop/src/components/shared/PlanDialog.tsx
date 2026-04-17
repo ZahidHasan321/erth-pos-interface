@@ -286,9 +286,6 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                     {!isLocked && !isFilled && !step.required && (
                       <span className="text-xs text-muted-foreground font-medium ml-9.5">(skip)</span>
                     )}
-                    {!isLocked && !isFilled && step.required && (
-                      <span className="text-red-400 text-xs ml-9.5">*</span>
-                    )}
                   </div>
 
                   {/* Selection area — hidden when filled or locked */}

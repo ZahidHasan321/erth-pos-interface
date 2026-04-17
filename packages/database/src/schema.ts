@@ -182,6 +182,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
     "garment_awaiting_trial",
     "transfer_requested",
     "transfer_status_changed",
+    "garment_redo_requested",
 ]);
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 

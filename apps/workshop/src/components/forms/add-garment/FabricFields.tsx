@@ -19,12 +19,12 @@ export function FabricFields() {
   });
 
   return (
-    <section className="space-y-4 bg-card border rounded-xl p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wider">Fabric</h2>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
+    <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      <header className="px-4 py-2.5 border-b bg-muted/30">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Fabric</h3>
+      </header>
+      <div className="p-4 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="space-y-1.5">
           <Label>Source</Label>
           <Controller
@@ -132,6 +132,7 @@ export function FabricFields() {
           />
           Express
         </label>
+      </div>
       </div>
     </section>
   );

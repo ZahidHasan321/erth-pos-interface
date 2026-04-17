@@ -526,13 +526,16 @@ function UnifiedFeedbackInterface() {
 
   // Auto-set distribution when feedbackAction changes
   useEffect(() => {
-    if (!currentState.feedbackAction) return;
-    const isPositive = currentState.feedbackAction === "accepted";
-    if (!isPositive) {
-      // Repair/redo → must go to workshop
+    const action = currentState.feedbackAction;
+    if (!action) return;
+    // Rejects needing rework → force workshop.
+    // Redo → dead garment, customer rejected; pickup invalid, clear if set.
+    if (action === "needs_repair" || action === "needs_repair_rejected" || action === "needs_repair_accepted") {
       updateGarmentState(selectedGarmentId, { distributionAction: "workshop" });
+    } else if (action === "needs_redo" && currentState.distributionAction === "pickup") {
+      updateGarmentState(selectedGarmentId, { distributionAction: null });
     }
-  }, [currentState.feedbackAction, selectedGarmentId, updateGarmentState]);
+  }, [currentState.feedbackAction, currentState.distributionAction, selectedGarmentId, updateGarmentState]);
 
   // 2. Measurement Query
   const measurementId = activeGarment?.measurement_id;
@@ -1966,7 +1969,7 @@ function UnifiedFeedbackInterface() {
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Overall Satisfaction</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Overall Satisfaction <span className="text-red-600">*</span></Label>
                       <RadioGroup
                           value={currentState.satisfaction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { satisfaction: val })}
@@ -2047,7 +2050,7 @@ function UnifiedFeedbackInterface() {
               <CardContent className="p-4 space-y-4">
                   {/* Status */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Status</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Status <span className="text-red-600">*</span></Label>
                       <RadioGroup
                           value={currentState.feedbackAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { feedbackAction: val })}
@@ -2088,7 +2091,7 @@ function UnifiedFeedbackInterface() {
 
                   {/* Distribution */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Distribution</Label>
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Distribution <span className="text-red-600">*</span></Label>
                       <RadioGroup
                           value={currentState.distributionAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { distributionAction: val })}
@@ -2099,7 +2102,14 @@ function UnifiedFeedbackInterface() {
                             { value: "workshop", label: "To Workshop", icon: RefreshCw },
                             { value: "shop", label: "Stay at Shop", icon: Clock },
                           ].map((opt) => {
-                              const isDisabled = !!(currentState.feedbackAction && currentState.feedbackAction !== "accepted" && opt.value !== "workshop");
+                              const action = currentState.feedbackAction;
+                              const forceWorkshop =
+                                action === "needs_repair" ||
+                                action === "needs_repair_rejected" ||
+                                action === "needs_repair_accepted";
+                              const isDisabled =
+                                (forceWorkshop && opt.value !== "workshop") ||
+                                (action === "needs_redo" && opt.value === "pickup");
                               return (
                                   <div key={opt.value}>
                                       <RadioGroupItem
@@ -2132,14 +2142,30 @@ function UnifiedFeedbackInterface() {
                           value={currentState.notes}
                           onChange={(e) => updateGarmentState(selectedGarmentId, { notes: e.target.value })}
                       />
-                      <Button
-                          onClick={onConfirmClick}
-                          disabled={!currentState.satisfaction || !currentState.feedbackAction || !currentState.distributionAction || isSubmitting || (currentState.submitted && !currentState.isEditing)}
-                          className="w-full h-11 font-black uppercase tracking-widest shadow-md text-sm rounded-xl"
-                      >
-                          {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : currentState.submitted && !currentState.isEditing ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                          {currentState.existingFeedbackId ? "Update Feedback" : "Submit Feedback"}
-                      </Button>
+                      {(() => {
+                        const missing: string[] = [];
+                        if (!currentState.satisfaction) missing.push("Overall Satisfaction");
+                        if (!currentState.feedbackAction) missing.push("Status");
+                        if (!currentState.distributionAction) missing.push("Distribution");
+                        const lockedDone = currentState.submitted && !currentState.isEditing;
+                        return (
+                          <>
+                            <Button
+                                onClick={onConfirmClick}
+                                disabled={missing.length > 0 || isSubmitting || lockedDone}
+                                className="w-full h-11 font-black uppercase tracking-widest shadow-md text-sm rounded-xl"
+                            >
+                                {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : lockedDone ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                {currentState.existingFeedbackId ? "Update Feedback" : "Submit Feedback"}
+                            </Button>
+                            {missing.length > 0 && !lockedDone && (
+                              <p className="text-xs font-bold text-red-600 text-center">
+                                Required: {missing.join(", ")}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                   </div>
               </CardContent>
           </Card>

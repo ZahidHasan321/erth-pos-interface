@@ -1,5 +1,5 @@
-import { parseMeasurementParts } from "@repo/database";
 import type { Measurement } from "@repo/database";
+import { MeasurementValue } from "./MeasurementValue";
 
 const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fields: { key: keyof Measurement; label: string }[] }[] = [
   {
@@ -21,7 +21,6 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
       { key: "chest_upper", label: "Upper" },
       { key: "chest_front", label: "Front" },
       { key: "chest_back", label: "Back" },
-      { key: "chest_provision", label: "Provision" },
     ],
   },
   {
@@ -34,7 +33,6 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
       { key: "elbow", label: "Elbow" },
       { key: "armhole", label: "Armhole" },
       { key: "armhole_front", label: "AH Front" },
-      { key: "armhole_provision", label: "AH Prov" },
     ],
   },
   {
@@ -45,7 +43,6 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
       { key: "waist_full", label: "Full" },
       { key: "waist_front", label: "Front" },
       { key: "waist_back", label: "Back" },
-      { key: "waist_provision", label: "Provision" },
       { key: "length_front", label: "L Front" },
       { key: "length_back", label: "L Back" },
       { key: "bottom", label: "Bottom" },
@@ -65,12 +62,6 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
     ],
   },
 ];
-
-const UNICODE_FRAC: Record<string, string> = {
-  "1/4": "¼",
-  "1/2": "½",
-  "3/4": "¾",
-};
 
 interface MeasurementGridProps {
   measurement: Measurement | null | undefined;
@@ -95,23 +86,16 @@ export function MeasurementGrid({ measurement }: MeasurementGridProps) {
               {group.title}
             </p>
             <div className="grid grid-cols-3 gap-1.5">
-              {filled.map(({ key, label }) => {
-                const parts = parseMeasurementParts(measurement[key], degree);
-                if (!parts) return null;
-                const fracKey = parts.numerator > 0 ? `${parts.numerator}/${parts.denominator}` : "";
-                const frac = fracKey ? UNICODE_FRAC[fracKey] ?? fracKey : "";
-                return (
-                  <div key={key} className={`flex items-baseline justify-between rounded-lg px-2.5 py-1.5 ${group.cellColor}`}>
-                    <span className="text-xs text-muted-foreground">{label}</span>
-                    <span className="text-sm font-bold tabular-nums">
-                      {parts.negative && "-"}
-                      {parts.whole}
-                      {frac && <span className="text-xs font-semibold text-muted-foreground">({frac})</span>}
-                      {parts.hasDegree && <span className="text-xs text-muted-foreground font-normal">°</span>}
-                    </span>
-                  </div>
-                );
-              })}
+              {filled.map(({ key, label }) => (
+                <div key={key} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${group.cellColor}`}>
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <MeasurementValue
+                    raw={measurement[key]}
+                    degree={degree}
+                    className="text-sm font-bold tabular-nums"
+                  />
+                </div>
+              ))}
             </div>
           </div>
         );

@@ -2406,6 +2406,51 @@ CREATE TRIGGER garment_location_notification
   FOR EACH ROW
   EXECUTE FUNCTION notify_garment_location_change();
 
+-- 1b. Garment marked for REDO → URGENT workshop notification
+-- Fires when feedback_status flips to 'needs_redo'. Original garment is discarded;
+-- workshop must spin a replacement immediately, so this is a requireInteraction-style
+-- red alert on the workshop side.
+CREATE OR REPLACE FUNCTION notify_garment_redo_requested()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_brand brand;
+  v_order_display TEXT;
+BEGIN
+  IF NEW.feedback_status = 'needs_redo'
+     AND (OLD.feedback_status IS DISTINCT FROM NEW.feedback_status) THEN
+
+    SELECT o.brand, COALESCE(wo.invoice_number::text, NEW.order_id::text)
+      INTO v_brand, v_order_display
+      FROM orders o
+      LEFT JOIN work_orders wo ON wo.order_id = o.id
+     WHERE o.id = NEW.order_id;
+
+    INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
+    VALUES (
+      'workshop',
+      v_brand,
+      'garment_redo_requested',
+      'URGENT: Redo required',
+      format('Garment %s (Order #%s) needs a full redo — create replacement now', NEW.garment_id, v_order_display),
+      jsonb_build_object(
+        'order_id', NEW.order_id,
+        'garment_id', NEW.id,
+        'garment_display_id', NEW.garment_id,
+        'urgent', true
+      ),
+      NOW() + INTERVAL '7 days'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS garment_redo_notification ON garments;
+CREATE TRIGGER garment_redo_notification
+  AFTER UPDATE OF feedback_status ON garments
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_garment_redo_requested();
+
 -- (Removed) Garment stage change notifications:
 -- Previously fired a shop notification when piece_stage became 'ready_for_pickup' or
 -- 'awaiting_trial'. Both of those transitions happen on the receiving-brova-final page

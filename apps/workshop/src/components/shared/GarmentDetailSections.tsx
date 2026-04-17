@@ -279,6 +279,7 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
           const isBool = field.type === "boolean";
           const boolIcon = isBool && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
             : isBool && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
+            : isBool && field.key === "small_tabaggi" ? ACCESSORY_ICONS.smallTabaggi
             : null;
 
           return (
@@ -669,7 +670,7 @@ function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
     ? (voiceRaw as unknown[]).filter((v): v is string => typeof v === "string")
     : [];
   const failedOptions = checklist.filter(
-    (c) => c.actual_correct === false || c.rejected === true || c.hashwa_rejected === true,
+    (c) => c.rejected === true || c.hashwa_rejected === true,
   );
 
   return (
@@ -765,8 +766,25 @@ function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
             {failedOptions.map((o, i) => {
               const rawName = o.option_name ?? "";
               const label = OPTION_NAME_LABELS[rawName] ?? rawName.replace(/_/g, " ");
-              const mainChanged = (o.actual_correct === false || o.rejected === true);
+              const mainChanged = o.rejected === true;
               const hashwaChanged = o.hashwa_rejected === true;
+              // Non-style-key options (boolean toggles / accessories) render as text, not images.
+              const isToggleOption =
+                rawName === "smallTabaggi" ||
+                rawName === "walletPocket" ||
+                rawName === "penHolder";
+              const toggleLabels: Record<string, { yes: string; no: string }> = {
+                smallTabaggi: { yes: "Button", no: "No Button" },
+                walletPocket: { yes: "Wallet Pocket", no: "No Wallet Pocket" },
+                penHolder: { yes: "Pen Holder", no: "No Pen Holder" },
+              };
+              const toggleText = (v: string | null | undefined) => {
+                const t = toggleLabels[rawName];
+                if (!t) return v ?? "—";
+                return v === "Yes" ? t.yes : v === "No" ? t.no : (v ?? "—");
+              };
+              const flippedFromExpected = (v: string | null | undefined) =>
+                v === "Yes" ? "No" : v === "No" ? "Yes" : null;
               return (
                 <div
                   key={i}
@@ -778,12 +796,24 @@ function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
                   </div>
                   {mainChanged && (
                     <div className="flex items-center gap-2 flex-wrap pl-4">
-                      <StyleOptionValue styleKey={o.expected_value} />
-                      <ArrowRight className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                      {o.new_value ? (
-                        <StyleOptionValue styleKey={o.new_value} />
+                      {isToggleOption ? (
+                        <>
+                          <span className="font-medium">{toggleText(o.expected_value)}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <span className="font-medium">
+                            {toggleText(o.new_value ?? flippedFromExpected(o.expected_value))}
+                          </span>
+                        </>
                       ) : (
-                        <span className="italic text-red-600/80">customer to decide</span>
+                        <>
+                          <StyleOptionValue styleKey={o.expected_value} />
+                          <ArrowRight className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          {o.new_value ? (
+                            <StyleOptionValue styleKey={o.new_value} />
+                          ) : (
+                            <span className="italic text-red-600/80">customer to decide</span>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

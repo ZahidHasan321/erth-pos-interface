@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { useNotificationsPaginated, useMarkRead, useMarkAllRead, useUnreadCount } from "@/hooks/useNotifications";
@@ -70,6 +70,14 @@ const TYPE_CONFIG: Record<string, {
     iconColorUnread: "text-violet-600 dark:text-violet-400",
     accentBorder: "border-l-violet-500",
   },
+  garment_redo_requested: {
+    icon: AlertTriangle,
+    label: "URGENT: Redo",
+    badgeClass: "bg-red-600 text-white border-red-700 dark:bg-red-700 dark:border-red-800",
+    iconBgUnread: "bg-red-600",
+    iconColorUnread: "text-white",
+    accentBorder: "border-l-red-600",
+  },
 };
 
 const DEFAULT_CONFIG = {
@@ -91,6 +99,13 @@ function getNotificationLink(notification: NotificationItem): NotificationLink |
       return { to: "/store/approve-requests", search: { tab: "pending" } };
     case "transfer_status_changed":
       return { to: "/store/approve-requests", search: { tab: "approved" } };
+    case "garment_redo_requested": {
+      const orderId = notification.metadata?.order_id;
+      if (typeof orderId === "number" || typeof orderId === "string") {
+        return { to: `/assigned/${orderId}` };
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -133,6 +148,7 @@ const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
   { value: "garment_awaiting_trial", label: "Awaiting Trial" },
   { value: "transfer_requested", label: "Transfer Requested" },
   { value: "transfer_status_changed", label: "Transfer Updated" },
+  { value: "garment_redo_requested", label: "URGENT: Redo" },
 ];
 
 function NotificationsPage() {
