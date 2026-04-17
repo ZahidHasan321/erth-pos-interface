@@ -17,7 +17,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Input } from "@repo/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PRODUCTION_STAGES } from "@/lib/constants";
-import { cn, formatDate, getLocalDateStr, toLocalDateStr, getKuwaitMidnight, getDeliveryUrgency } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, toLocalDateStr, getDeliveryUrgency, TIMEZONE } from "@/lib/utils";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, Home, User, RotateCcw,
@@ -253,11 +253,10 @@ function HeatCalendar({
   scheduledDates: Record<string, number>;
   maxPerDay: number;
 }) {
-  const todayObj = getKuwaitMidnight();
-  const [viewDate, setViewDate] = useState(() => new Date(todayObj));
-
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
+  const todayStr = getLocalDateStr();
+  const [todayY, todayM] = todayStr.split("-").map(Number) as [number, number, number];
+  const [viewYM, setViewYM] = useState<{ year: number; month: number }>({ year: todayY, month: todayM - 1 });
+  const { year, month } = viewYM;
 
   const firstDayOfWeek = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -266,13 +265,17 @@ function HeatCalendar({
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const monthLabel = viewDate.toLocaleString("default", { month: "long", year: "numeric" });
-  const selectedObj = selected ? new Date(selected + "T00:00:00") : null;
+  const monthLabel = new Date(Date.UTC(year, month, 1, 12)).toLocaleString("default", { timeZone: TIMEZONE, month: "long", year: "numeric" });
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month + delta, 1);
+    setViewYM({ year: d.getFullYear(), month: d.getMonth() });
+  };
 
   const handleDay = (day: number) => {
-    const d = new Date(year, month, day);
-    if (d < todayObj) return;
-    onSelect(toIsoDate(year, month, day));
+    const dateStr = toIsoDate(year, month, day);
+    if (dateStr < todayStr) return;
+    onSelect(dateStr);
   };
 
   const heatLevel = (count: number) => {
@@ -289,11 +292,11 @@ function HeatCalendar({
   return (
     <div className="select-none">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => setViewDate(new Date(year, month - 1, 1))} aria-label="Previous month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+        <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
           <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="font-bold text-sm tracking-tight">{monthLabel}</span>
-        <button onClick={() => setViewDate(new Date(year, month + 1, 1))} aria-label="Next month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+        <button onClick={() => shiftMonth(1)} aria-label="Next month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -307,11 +310,10 @@ function HeatCalendar({
       <div className="grid grid-cols-7 gap-0.5">
         {cells.map((day, i) => {
           if (!day) return <div key={`e-${i}`} />;
-          const d = new Date(year, month, day);
           const dateStr = toIsoDate(year, month, day);
-          const isPast = d < todayObj;
-          const isToday = d.getTime() === todayObj.getTime();
-          const isSelected = selectedObj && d.getTime() === selectedObj.getTime();
+          const isPast = dateStr < todayStr;
+          const isToday = dateStr === todayStr;
+          const isSelected = selected === dateStr;
           const count = scheduledDates[dateStr] ?? 0;
           const heat = heatLevel(count);
 
@@ -697,7 +699,7 @@ function SchedulerPage() {
   }, [resources]);
 
   const selectedDateLabel = selectedDate
-    ? new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric" })
+    ? new Date(selectedDate + "T12:00:00+03:00").toLocaleDateString("default", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" })
     : "—";
 
   const handleSchedule = async (plan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {

@@ -1,12 +1,12 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import type { EodReportSummary, EodTransaction } from "@/api/cashier";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
-const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false });
+const dateFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short", year: "numeric" });
 
 export interface PrintEodReportParams {
     summary: EodReportSummary;
@@ -110,10 +110,10 @@ function TableRow({ widths, cells, isLast }: { widths: string[]; cells: string[]
 // ── Document ──────────────────────────────────────────────────────────────────
 
 function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEodReportParams) {
-    const fromLabel = dateFmt.format(new Date(dateFrom + "T00:00:00"));
-    const toLabel = dateFmt.format(new Date(dateTo + "T00:00:00"));
+    const fromLabel = dateFmt.format(new Date(dateFrom + "T12:00:00+03:00"));
+    const toLabel = dateFmt.format(new Date(dateTo + "T12:00:00+03:00"));
     const dateLabel = dateFrom === dateTo ? fromLabel : `${fromLabel} – ${toLabel}`;
-    const now = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const now = new Date().toLocaleString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
     const totalCollected = Number(summary.total_collected) || 0;
     const paymentLabel = (type: string) => PAYMENT_TYPE_LABELS[type as keyof typeof PAYMENT_TYPE_LABELS] || type;

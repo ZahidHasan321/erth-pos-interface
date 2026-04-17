@@ -35,7 +35,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import { useTransferRequests, useCancelTransfer } from "@/hooks/useTransfers";
 import { TransferStatusBadge, ItemTypeBadge } from "./transfer-status-badge";
@@ -141,6 +141,7 @@ function ActiveRequestRow({
           <span className="text-sm">
             {request.created_at
               ? parseUtcTimestamp(request.created_at).toLocaleDateString(undefined, {
+                  timeZone: TIMEZONE,
                   day: "numeric",
                   month: "short",
                 })

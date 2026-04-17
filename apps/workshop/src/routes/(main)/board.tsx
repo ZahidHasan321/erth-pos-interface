@@ -11,7 +11,7 @@ import { PageHeader, EmptyState, GarmentTypeBadgeCompact } from "@/components/sh
 import { useBoardGarments } from "@/hooks/useWorkshopGarments";
 import { BOARD_STAGES } from "@/api/garments";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { cn, getLocalDateStr, getDeliveryUrgency, formatDate } from "@/lib/utils";
+import { cn, getLocalDateStr, getDeliveryUrgency, formatDate, TIMEZONE } from "@/lib/utils";
 import type { WorkshopGarment, ProductionPlan } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/board")({
@@ -41,15 +41,12 @@ const STAGE_ACCENT: Record<string, string> = {
 };
 
 function parseLocalDate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y!, m! - 1, d!);
+  // Noon Kuwait — unambiguous instant so Kuwait-tz formatters always land on the right date.
+  return new Date(dateStr + "T12:00:00+03:00");
 }
 
 function dateToStr(d: Date): string {
-  const yy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
+  return getLocalDateStr(d);
 }
 
 function addDays(dateStr: string, delta: number): string {
@@ -67,10 +64,11 @@ function formatBoardDate(dateStr: string): string {
   const today = getLocalDateStr();
   const yesterday = addDays(today, -1);
   const tomorrow = addDays(today, 1);
-  if (dateStr === today) return `Today · ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`;
-  if (dateStr === yesterday) return `Yesterday · ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`;
-  if (dateStr === tomorrow) return `Tomorrow · ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`;
-  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const shortOpts = { timeZone: TIMEZONE, weekday: "short", day: "numeric", month: "short" } as const;
+  if (dateStr === today) return `Today · ${d.toLocaleDateString("en-GB", shortOpts)}`;
+  if (dateStr === yesterday) return `Yesterday · ${d.toLocaleDateString("en-GB", shortOpts)}`;
+  if (dateStr === tomorrow) return `Tomorrow · ${d.toLocaleDateString("en-GB", shortOpts)}`;
+  return d.toLocaleDateString("en-GB", { ...shortOpts, year: "numeric" });
 }
 
 type BoardMode = "live" | "scheduled";

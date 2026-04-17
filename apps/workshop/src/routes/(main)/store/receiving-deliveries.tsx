@@ -37,7 +37,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useTransferRequests, useReceiveTransfer } from "@/hooks/useTransfers";
 import { ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import type { TransferRequestWithItems } from "@/api/transfers";
@@ -152,7 +152,7 @@ function TransferRow({
             {transfer.dispatched_at
               ? parseUtcTimestamp(transfer.dispatched_at).toLocaleDateString(
                   undefined,
-                  { day: "numeric", month: "short" },
+                  { timeZone: TIMEZONE, day: "numeric", month: "short" },
                 )
               : "N/A"}
           </span>

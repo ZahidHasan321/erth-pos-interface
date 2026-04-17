@@ -21,7 +21,7 @@ import {
 } from "@repo/ui/table";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, getNextPlanStage } from "@/lib/constants";
-import { cn, clickableProps } from "@/lib/utils";
+import { cn, clickableProps, TIMEZONE } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   useStartGarment,
@@ -564,6 +564,7 @@ export function ProductionTerminal({
           <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground bg-card border px-2.5 py-1 rounded-md">
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
             {new Date().toLocaleDateString("default", {
+              timeZone: TIMEZONE,
               weekday: "short",
               day: "numeric",
               month: "short",

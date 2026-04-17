@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { usePerformanceData, getWorkerDailyBreakdown } from "@/hooks/usePerformance";
 import { PageHeader } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
-import { cn, getLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, getKuwaitDayRange, TIMEZONE } from "@/lib/utils";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as RechartsTooltip, ReferenceLine,
@@ -40,26 +40,20 @@ export const Route = createFileRoute("/(main)/performance/worker/$workerName")({
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date();
   const todayStr = getLocalDateStr(today);
+  const end = getKuwaitDayRange(todayStr).end;
+
+  const rangeFrom = (daysBack: number) => {
+    const start = new Date(today);
+    start.setDate(start.getDate() - daysBack);
+    return getKuwaitDayRange(getLocalDateStr(start)).start;
+  };
+
   switch (preset) {
-    case "today":
-      return { from: todayStr + "T00:00:00", to: todayStr + "T23:59:59" };
-    case "week": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 6);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    case "month": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 29);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    case "quarter": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 89);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    default:
-      return { from: todayStr + "T00:00:00", to: todayStr + "T23:59:59" };
+    case "today":   return { from: getKuwaitDayRange(todayStr).start, to: end };
+    case "week":    return { from: rangeFrom(6),  to: end };
+    case "month":   return { from: rangeFrom(29), to: end };
+    case "quarter": return { from: rangeFrom(89), to: end };
+    default:        return { from: getKuwaitDayRange(todayStr).start, to: end };
   }
 }
 
@@ -224,7 +218,7 @@ function WorkerDetailPage() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Best Day</p>
             <p className="text-lg font-black tabular-nums">{bestDay.completed}</p>
             <p className="text-[10px] text-muted-foreground">
-              {new Date(bestDay.date + "T12:00:00").toLocaleDateString("en-GB", { month: "short", day: "numeric" })}
+              {new Date(bestDay.date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" })}
             </p>
           </div>
         )}
@@ -267,16 +261,16 @@ function WorkerDetailPage() {
                 dataKey="date"
                 tick={{ fontSize: 10 }}
                 tickFormatter={(v) => {
-                  const d = new Date(v + "T12:00:00");
-                  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+                  const d = new Date(v + "T12:00:00+03:00");
+                  return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" });
                 }}
               />
               <YAxis tick={{ fontSize: 10 }} width={35} />
               <RechartsTooltip
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                 labelFormatter={(v) => {
-                  const d = new Date(v + "T12:00:00");
-                  return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
+                  const d = new Date(v + "T12:00:00+03:00");
+                  return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
                 }}
               />
               {worker.dailyTarget > 0 && (
@@ -309,7 +303,7 @@ function WorkerDetailPage() {
           <div className="text-center py-12">
             <p className="text-3xl font-black tabular-nums">{dailyData[0].completed}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {new Date(dailyData[0].date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", month: "long", day: "numeric" })}
+              {new Date(dailyData[0].date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
         ) : (
@@ -332,16 +326,16 @@ function WorkerDetailPage() {
                   dataKey="date"
                   tick={{ fontSize: 9 }}
                   tickFormatter={(v) => {
-                    const d = new Date(v + "T12:00:00");
-                    return d.toLocaleDateString("en-GB", { day: "numeric" });
+                    const d = new Date(v + "T12:00:00+03:00");
+                    return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric" });
                   }}
                 />
                 <YAxis tick={{ fontSize: 10 }} width={30} />
                 <RechartsTooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                   labelFormatter={(v) => {
-                    const d = new Date(v + "T12:00:00");
-                    return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
+                    const d = new Date(v + "T12:00:00+03:00");
+                    return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
                   }}
                 />
                 {worker.dailyTarget > 0 && (
@@ -364,7 +358,7 @@ function WorkerDetailPage() {
                 return (
                   <div key={d.date} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/5">
                     <span className="text-xs text-muted-foreground">
-                      {new Date(d.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" })}
+                      {new Date(d.date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" })}
                     </span>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold tabular-nums">{d.completed}</span>

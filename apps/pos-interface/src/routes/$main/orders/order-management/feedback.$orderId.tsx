@@ -49,7 +49,7 @@ import {
 import { Label } from "@repo/ui/label";
 import { Checkbox } from "@repo/ui/checkbox";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { SignaturePad } from "@/components/forms/signature-pad";
@@ -1928,7 +1928,7 @@ function UnifiedFeedbackInterface() {
                                                 </Badge>
                                             </div>
                                             <span className="text-xs font-bold text-muted-foreground">
-                                                {fb.created_at ? new Date(fb.created_at).toLocaleDateString("en-GB") : ""}
+                                                {fb.created_at ? parseUtcTimestamp(fb.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : ""}
                                             </span>
                                         </div>
                                         {fb.satisfaction_level && (

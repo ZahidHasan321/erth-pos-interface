@@ -14,6 +14,7 @@ import { mapCustomerToFormValues } from "@/components/forms/customer-demographic
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { ErrorBoundary } from "@/components/global/error-boundary";
+import { TIMEZONE, parseUtcTimestamp } from "@/lib/utils";
 import { DatePicker } from "@repo/ui/date-picker";
 import { SvgFormOverlay } from "@/components/alteration/svg-form-overlay";
 import { AlterationCheckboxMatrix } from "@/components/alteration/alteration-checkbox-matrix";
@@ -66,7 +67,7 @@ const BUFI_OPTIONS = ["Brova", "Final", "External"] as const;
 
 const dateToIso = (d: Date | null) => (d ? d.toISOString() : null);
 
-const formatDateGB = (d: Date | null) => (d ? d.toLocaleDateString("en-GB") : "");
+const formatDateGB = (d: Date | null) => (d ? d.toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "");
 
 function NewAlterationOrder() {
     const navigate = useNavigate();
@@ -201,7 +202,7 @@ function NewAlterationOrder() {
                 customerPhone: `${customer.country_code ?? ""}${customer.phone ?? ""}`,
                 bufiExt: g.bufi_ext ?? "",
                 receivedDate: formatDateGB(receivedDate),
-                requestedDate: g.delivery_date ? new Date(g.delivery_date).toLocaleDateString("en-GB") : "",
+                requestedDate: g.delivery_date ? parseUtcTimestamp(g.delivery_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "",
                 comments: g.notes ?? comments ?? "",
             };
 
@@ -331,7 +332,7 @@ function NewAlterationOrder() {
                                 )}
                                 {g.delivery_date && (
                                     <span className="ml-2 text-[10px] opacity-60">
-                                        {g.delivery_date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                        {g.delivery_date.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" })}
                                     </span>
                                 )}
                             </button>

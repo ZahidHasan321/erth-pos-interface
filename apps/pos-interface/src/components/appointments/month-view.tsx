@@ -6,12 +6,9 @@ import {
   endOfWeek,
   addDays,
   isSameMonth,
-  isToday,
   format,
-  isBefore,
-  startOfDay,
 } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr } from "@/lib/utils";
 import { getEmployeeColor } from "@/lib/constants";
 import { formatTime24to12 } from "./time-picker";
 import type { AppointmentWithRelations } from "@/api/appointments";
@@ -61,7 +58,7 @@ export function MonthView({
     return map;
   }, [appointments]);
 
-  const today = startOfDay(new Date());
+  const todayStr = getLocalDateStr();
 
   return (
     <div className="flex flex-col h-full border rounded-lg bg-muted overflow-hidden relative shadow-md">
@@ -94,8 +91,8 @@ export function MonthView({
               const dateKey = format(day, "yyyy-MM-dd");
               const dayAppts = appointmentsByDate.get(dateKey) ?? [];
               const inMonth = isSameMonth(day, currentMonth);
-              const isPast = isBefore(day, today) && !isToday(day);
-              const todayFlag = isToday(day);
+              const isPast = dateKey < todayStr;
+              const todayFlag = dateKey === todayStr;
 
               return (
                 <button

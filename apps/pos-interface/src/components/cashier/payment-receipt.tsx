@@ -2,6 +2,7 @@ import * as React from "react";
 import ErthLogo from "@/assets/erth-light.svg";
 import SakkbaLogo from "@/assets/Sakkba.png";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export interface ReceiptGarment {
     garment_type: string;
@@ -119,7 +120,8 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
         const isErth = document.documentElement.classList.contains("erth");
         const brandName = isErth ? "ERTH" : "Sakkba";
 
-        const formattedDate = new Date(data.timestamp).toLocaleDateString("ar-KW", {
+        const formattedDate = parseUtcTimestamp(data.timestamp).toLocaleDateString("ar-KW", {
+            timeZone: TIMEZONE,
             year: "numeric",
             month: "long",
             day: "numeric",

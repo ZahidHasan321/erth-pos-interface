@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
 import { PageHeader } from "@/components/shared/PageShell";
-import { cn, getLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, getKuwaitDayRange, TIMEZONE } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   Cell, LineChart, Line, CartesianGrid, ReferenceLine,
@@ -37,27 +37,20 @@ const STAGE_ORDER = ["soaking", "cutting", "post_cutting", "sewing", "finishing"
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date();
   const todayStr = getLocalDateStr(today);
+  const end = getKuwaitDayRange(todayStr).end;
+
+  const rangeFrom = (daysBack: number) => {
+    const start = new Date(today);
+    start.setDate(start.getDate() - daysBack);
+    return getKuwaitDayRange(getLocalDateStr(start)).start;
+  };
 
   switch (preset) {
-    case "today":
-      return { from: todayStr + "T00:00:00", to: todayStr + "T23:59:59" };
-    case "week": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 6);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    case "month": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 29);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    case "quarter": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 89);
-      return { from: getLocalDateStr(start) + "T00:00:00", to: todayStr + "T23:59:59" };
-    }
-    default:
-      return { from: todayStr + "T00:00:00", to: todayStr + "T23:59:59" };
+    case "today":   return { from: getKuwaitDayRange(todayStr).start, to: end };
+    case "week":    return { from: rangeFrom(6),  to: end };
+    case "month":   return { from: rangeFrom(29), to: end };
+    case "quarter": return { from: rangeFrom(89), to: end };
+    default:        return { from: getKuwaitDayRange(todayStr).start, to: end };
   }
 }
 
@@ -517,16 +510,16 @@ function PerformancePage() {
                       dataKey="date"
                       tick={{ fontSize: 10 }}
                       tickFormatter={(v) => {
-                        const d = new Date(v + "T12:00:00");
-                        return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+                        const d = new Date(v + "T12:00:00+03:00");
+                        return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" });
                       }}
                     />
                     <YAxis tick={{ fontSize: 10 }} width={35} />
                     <RechartsTooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
                       labelFormatter={(v) => {
-                        const d = new Date(v + "T12:00:00");
-                        return d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
+                        const d = new Date(v + "T12:00:00+03:00");
+                        return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
                       }}
                     />
                     {summary.dailyTarget > 0 && (

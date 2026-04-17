@@ -23,7 +23,7 @@ import { useTransferRequests } from "@/hooks/useTransfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import { TransferDetailDialog } from "@/components/store/transfer-detail-dialog";
 import { TRANSFER_STATUS_LABELS, TRANSFER_DIRECTION_LABELS } from "@/components/store/transfer-constants";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, getKuwaitDayRange, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import type { TransferRequestWithItems } from "@/api/transfers";
 
 const ALL_STATUSES = ["requested", "approved", "rejected", "dispatched", "received", "partially_received"] as const;
@@ -42,25 +42,29 @@ interface HistorySearch {
 }
 
 function getToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return getLocalDateStr();
 }
 
 function getWeekStart(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); // Saturday
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = getLocalDateStr();
+  const [y, m, d] = today.split("-").map(Number) as [number, number, number];
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sun
+  const offset = (weekday + 1) % 7; // Saturday = 0
+  const ms = Date.UTC(y, m - 1, d) - offset * 86_400_000;
+  const dt = new Date(ms);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
 
 function getMonthStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  const [y, m] = getLocalDateStr().split("-") as [string, string];
+  return `${y}-${m}-01`;
 }
 
 function defaultFromDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  const today = getLocalDateStr();
+  const [y, m, d] = today.split("-").map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d) - 30 * 86_400_000);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
 
 function defaultToDate(): string {
@@ -139,7 +143,7 @@ function lastUpdatedAt(t: TransferRequestWithItems): Date | null {
 function formatShortDate(value: Date | string | null | undefined): string {
   if (!value) return "—";
   const d = value instanceof Date ? value : parseUtcTimestamp(value);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+  return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short", year: "2-digit" });
 }
 
 function TransferHistoryPage() {
@@ -163,14 +167,9 @@ function TransferHistoryPage() {
   }, [search.status]);
   const isAllStatuses = selectedStatuses.size === 0;
 
-  // Build date bounds (inclusive): from 00:00 to end-of-day 23:59:59.999
-  const startIso = useMemo(() => new Date(`${from}T00:00:00.000Z`).toISOString(), [from]);
-  const endIso = useMemo(() => {
-    const d = new Date(`${to}T00:00:00.000Z`);
-    d.setUTCDate(d.getUTCDate() + 1);
-    d.setUTCMilliseconds(d.getUTCMilliseconds() - 1);
-    return d.toISOString();
-  }, [to]);
+  // Inclusive Kuwait-day bounds: from Kuwait 00:00 → to Kuwait 23:59:59.999
+  const startIso = useMemo(() => getKuwaitDayRange(from).start, [from]);
+  const endIso = useMemo(() => getKuwaitDayRange(to).end, [to]);
 
   const { data: allRequests = [], isLoading, isError, refetch } = useTransferRequests({
     direction: search.dir,

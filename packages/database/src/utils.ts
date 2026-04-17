@@ -1,5 +1,12 @@
 import type { PieceStage, OrderPhase, GarmentType, Location } from "./schema";
 
+/**
+ * Single source of truth for the business timezone.
+ * All display/filter code should read from this; DB writes stay UTC.
+ * Change here to change it everywhere.
+ */
+export const TIMEZONE = "Asia/Kuwait";
+
 const TERMINAL: PieceStage[] = ["completed", "discarded"];
 const PRE_DISPATCH: PieceStage[] = ["waiting_for_acceptance", "waiting_cut"];
 

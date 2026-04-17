@@ -856,7 +856,7 @@ function GarmentPlanCard({
             {garment.assigned_date &&
               (() => {
                 const days = Math.ceil(
-                  (new Date(garment.assigned_date + "T23:59:59").getTime() -
+                  (new Date(garment.assigned_date + "T23:59:59+03:00").getTime() -
                     Date.now()) /
                     86400000,
                 );

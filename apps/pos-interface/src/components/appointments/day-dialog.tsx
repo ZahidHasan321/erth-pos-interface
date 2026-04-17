@@ -1,11 +1,11 @@
-import { format, isBefore, startOfDay } from "date-fns";
 import {
   Dialog,
   DialogContent,
 } from "@repo/ui/dialog";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr, toLocalDateStr, TIMEZONE } from "@/lib/utils";
+
 import { getEmployeeColor, APPOINTMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatTime24to12 } from "./time-picker";
 import type { AppointmentWithRelations } from "@/api/appointments";
@@ -50,7 +50,8 @@ export function DayDialog({
 
   if (!date) return null;
 
-  const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+  const dayStr = toLocalDateStr(date);
+  const isPast = dayStr !== null && dayStr < getLocalDateStr();
 
   const sorted = [...appointments].sort((a, b) =>
     a.start_time.localeCompare(b.start_time),
@@ -66,7 +67,7 @@ export function DayDialog({
         <div className="flex items-center justify-between px-5 py-3.5 border-b bg-muted/30">
           <div>
             <h2 className="text-sm font-semibold">
-              {format(date, "EEEE, d MMMM yyyy")}
+              {date.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {appointments.length} appointment{appointments.length !== 1 ? "s" : ""}

@@ -39,7 +39,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import {
   useTransferRequests,
@@ -326,7 +326,7 @@ function ReadOnlyRow({
         <TableCell className="py-3.5">
           <span className="text-sm">
             {dateField
-              ? parseUtcTimestamp(dateField).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+              ? parseUtcTimestamp(dateField).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short" })
               : "N/A"}
           </span>
         </TableCell>
@@ -486,7 +486,7 @@ function PendingRow({
         <TableCell className="py-3.5">
           <span className="text-sm">
             {request.created_at
-              ? parseUtcTimestamp(request.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+              ? parseUtcTimestamp(request.created_at).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short" })
               : "N/A"}
           </span>
         </TableCell>

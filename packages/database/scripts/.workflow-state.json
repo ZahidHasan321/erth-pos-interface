@@ -1,11 +1,18 @@
 {
   "staffUserId": "b5169963-dd9e-4a5d-8963-b1f86fffd7aa",
-  "customerId": 14,
+  "customerId": 49,
   "fabricIds": [
-    11,
-    12
+    35,
+    36
   ],
-  "styleId": 1,
+  "styleId": 115,
+  "prices": {
+    "STITCHING_ADULT": 9,
+    "STITCHING_CHILD": 7,
+    "EXPRESS_SURCHARGE": 3,
+    "SOAKING_CHARGE": 1.5,
+    "HOME_DELIVERY": 2
+  },
   "resourceIds": [
     "db856ab9-6db2-4bd1-a265-e2f8e953a0d7",
     "b31df0be-4e92-4836-90bc-1b18705889ea",
@@ -15,13 +22,19 @@
     "141d1d30-3cad-4436-aee9-eb88da3ad201",
     "d70a27b6-f277-4fed-aa81-1e30fe2f1e2e"
   ],
-  "measurementId": "fe6985b0-8879-4dc6-9ec2-a9d915a55f2e",
-  "orderId": 28,
-  "garmentIds": [
-    "75156f6a-b704-41c1-9948-0a7562b26187",
-    "3a619b82-ce4a-47a5-b462-d4d71792435c",
-    "7c706726-04bc-43a2-81eb-c7158f901bd1",
-    "133367f3-fade-4382-8957-edd5842fb5cb"
-  ],
-  "invoiceNumber": 5010
+  "measurementId": "583eaa8a-ff2d-43bf-965c-45eb0c20c199",
+  "workOrderId": 83,
+  "workInvoice": 36,
+  "brova1Id": "bbf17c72-beaa-4899-ae49-f0ad1afd68c9",
+  "brova2Id": "a8c6605d-f595-452d-abaf-f6d5d9f9af91",
+  "final1Id": "8ecc65f8-9df7-46f4-8552-7780b62bcc6a",
+  "final2Id": "f91bb510-4065-4e8d-9d25-7211de388003",
+  "brova1ReplacementId": "f5e09f8f-8a3f-4bf0-92f0-e557fc1e6bb4",
+  "altInvoice": 1,
+  "altOrderId": 84,
+  "altGarmentIds": [
+    "ffbcdaa1-a908-4e71-94cc-a0c86a922bd3",
+    "eba4a4c8-ab68-4a8a-ab4e-4de84826eb5e",
+    "ff38de6d-f777-4a0b-a993-509316259b43"
+  ]
 }

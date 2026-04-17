@@ -33,7 +33,7 @@ import { Textarea } from "@repo/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
 import { Combobox } from "@repo/ui/combobox";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { getEmployees } from "@/api/employees";
 import { OrderInvoice, SalesInvoice, type InvoiceData } from "@/components/invoice";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
@@ -390,7 +390,7 @@ export function OrderSummaryAndPaymentForm({
                           )}
                           {g.delivery_date && (
                             <span className="text-[9px] px-1 py-px rounded-full bg-muted text-muted-foreground">
-                              {new Date(g.delivery_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                              {parseUtcTimestamp(g.delivery_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short" })}
                             </span>
                           )}
                         </div>
@@ -432,7 +432,7 @@ export function OrderSummaryAndPaymentForm({
                       <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
                       <span className="text-muted-foreground">Delivery</span>
                       <span className="font-semibold ml-auto tabular-nums">
-                        {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {parseUtcTimestamp(deliveryDate).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short", year: "numeric" })}
                       </span>
                     </div>
                   )}
@@ -1063,7 +1063,7 @@ export function OrderSummaryAndPaymentForm({
                     <CalendarDays className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium text-muted-foreground">Delivery Date:</span>
                     <span className="text-sm font-semibold text-foreground">
-                      {new Date(deliveryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {parseUtcTimestamp(deliveryDate).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short", year: "numeric" })}
                     </span>
                   </div>
                 )}

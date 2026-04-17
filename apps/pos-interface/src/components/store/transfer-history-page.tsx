@@ -40,8 +40,7 @@ import {
   TRANSFER_STATUS_LABELS,
   TRANSFER_DIRECTION_LABELS,
 } from "./transfer-constants";
-import { parseUtcTimestamp } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE, cn } from "@/lib/utils";
 import type { TransferRequestWithItems } from "@/api/transfers";
 
 const ALL_STATUSES = [
@@ -175,6 +174,7 @@ function formatShortDate(value: Date | string | null | undefined): string {
   if (!value) return "—";
   const d = value instanceof Date ? value : parseUtcTimestamp(value);
   return d.toLocaleDateString("en-GB", {
+    timeZone: TIMEZONE,
     day: "2-digit",
     month: "short",
     year: "2-digit",

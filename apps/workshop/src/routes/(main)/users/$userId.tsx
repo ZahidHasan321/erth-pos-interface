@@ -10,7 +10,7 @@ import { Switch } from "@repo/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Skeleton } from "@repo/ui/skeleton";
 
-import { cn } from "@/lib/utils";
+import { cn, TIMEZONE } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft, UserCog, Shield, Building2,
@@ -418,7 +418,7 @@ function UserDetailPage() {
             <div className="grid grid-cols-2 gap-6">
               <Field label="Employee ID" value={user.employee_id} icon={Briefcase} />
               <Field label="Nationality" value={user.nationality} icon={Globe} />
-              <Field label="Hire Date" value={user.hire_date ? new Date(user.hire_date + "T12:00:00").toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null} icon={CalendarDays} />
+              <Field label="Hire Date" value={user.hire_date ? new Date(user.hire_date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, year: "numeric", month: "long", day: "numeric" }) : null} icon={CalendarDays} />
               <Field label="PIN" value={user.pin ? "****" : null} icon={Hash} />
             </div>
             {user.notes && (
@@ -431,8 +431,8 @@ function UserDetailPage() {
 
           {/* Meta */}
           <div className="text-xs text-muted-foreground">
-            Created {user.created_at ? new Date(user.created_at).toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : "unknown"}
-            {user.updated_at && ` · Updated ${new Date(user.updated_at).toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" })}`}
+            Created {user.created_at ? new Date(user.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE, year: "numeric", month: "long", day: "numeric" }) : "unknown"}
+            {user.updated_at && ` · Updated ${new Date(user.updated_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE, year: "numeric", month: "long", day: "numeric" })}`}
           </div>
         </div>
       )}

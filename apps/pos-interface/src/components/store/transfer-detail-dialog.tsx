@@ -2,8 +2,7 @@ import { useState } from "react";
 import { ChevronDown, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
-import { parseUtcTimestamp } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE, cn } from "@/lib/utils";
 import { TransferStatusBadge, ItemTypeBadge } from "./transfer-status-badge";
 import { TRANSFER_DIRECTION_LABELS } from "./transfer-constants";
 import type { TransferRequestWithItems } from "@/api/transfers";
@@ -17,6 +16,7 @@ function formatDateTime(value: Date | string | null | undefined): string {
   if (!value) return "";
   const d = value instanceof Date ? value : parseUtcTimestamp(value);
   return d.toLocaleString("en-GB", {
+    timeZone: TIMEZONE,
     day: "2-digit",
     month: "short",
     year: "numeric",

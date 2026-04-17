@@ -1,6 +1,5 @@
 import * as React from "react";
-import { format, isBefore, startOfDay } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
 import { getEmployeeColor, APPOINTMENT_STATUS_LABELS } from "@/lib/constants";
@@ -31,7 +30,7 @@ export function ListView({
 }: ListViewProps) {
   const [search, setSearch] = React.useState("");
 
-  const today = startOfDay(new Date());
+  const todayStr = getLocalDateStr();
 
   const filtered = React.useMemo(() => {
     const sorted = [...appointments].sort((a, b) =>
@@ -98,8 +97,8 @@ export function ListView({
             <tbody className="divide-y">
               {filtered.map((apt) => {
                 const color = getEmployeeColor(apt.assigned_to);
-                const date = new Date(apt.appointment_date + "T00:00:00");
-                const isPast = isBefore(startOfDay(date), today);
+                const date = new Date(apt.appointment_date + "T12:00:00+03:00");
+                const isPast = apt.appointment_date < todayStr;
                 const isOverdue = isPast && apt.status === "scheduled";
 
                 return (
@@ -113,7 +112,7 @@ export function ListView({
                     )}
                   >
                     <td className="px-3 py-2.5 whitespace-nowrap font-bold">
-                      {format(date, "EEE d MMM")}
+                      {date.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", day: "numeric", month: "short" })}
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap font-bold">
                       {formatTime24to12(apt.start_time)} – {formatTime24to12(apt.end_time)}

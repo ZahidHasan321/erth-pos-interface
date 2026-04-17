@@ -22,7 +22,7 @@ import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
 import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 import { updateGarment } from "@/api/garments";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
@@ -194,7 +194,7 @@ function OrderCard({
     const lostCount = dispatchedGarments.filter((g) => g.location === "lost_in_transit").length;
     const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
-    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB") : "No Date";
+    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
     return (
         <Card className={cn(

@@ -12,6 +12,7 @@ import { ChipToggle } from "@repo/ui/chip-toggle";
 import { Separator } from "@repo/ui/separator";
 import { Alert, AlertDescription } from "@repo/ui/alert";
 import { Skeleton } from "@repo/ui/skeleton";
+import { TIMEZONE } from "@/lib/utils";
 import {
     useCashierOrderSearch,
     usePaymentTransactions,
@@ -202,7 +203,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
 }) {
     const [unpaidVisible, setUnpaidVisible] = useState(UNPAID_PAGE_SIZE);
     const now = new Date();
-    const monthName = now.toLocaleDateString("en-GB", { month: "long" });
+    const monthName = now.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "long" });
 
     const todayCount = Number(summary.today_count);
     const todayBilled = Number(summary.today_billed);

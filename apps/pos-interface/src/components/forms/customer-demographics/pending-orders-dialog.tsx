@@ -14,7 +14,7 @@ import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import type { Order } from "@repo/database";
 import { Calendar, Package, Loader2, Truck, Scissors, XCircle } from "lucide-react";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { updateOrder } from "@/api/orders";
 import { toast } from "sonner";
 
@@ -220,8 +220,9 @@ export function PendingOrdersDialog({
     const formatDate = React.useCallback((dateString?: string) => {
         if (!dateString) return "No date";
         try {
-            const date = new Date(dateString);
+            const date = parseUtcTimestamp(dateString);
             return date.toLocaleDateString("en-GB", {
+                timeZone: TIMEZONE,
                 year: "numeric",
                 month: "short",
                 day: "numeric",

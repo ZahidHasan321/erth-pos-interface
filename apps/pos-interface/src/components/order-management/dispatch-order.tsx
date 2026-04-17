@@ -35,7 +35,7 @@ import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getD
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
-import { cn, clickableProps } from "@/lib/utils";
+import { cn, clickableProps, getKuwaitMidnight, getLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 interface GarmentWithFabric extends Garment {
     fabric?: { name: string } | null;
@@ -91,7 +91,7 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
     }
   };
 
-  const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString("en-GB") : "No Date";
+  const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
   return (
     <Card className={cn(
@@ -571,7 +571,7 @@ function InTransitToWorkshopTab() {
         const garments = order.garments || [];
         const lostCount = garments.filter(g => g.location === "lost_in_transit").length;
         const transitCount = garments.filter(g => g.location === "transit_to_workshop").length;
-        const orderDate = order.order_date ? new Date(order.order_date).toLocaleDateString("en-GB") : "No Date";
+        const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
         return (
           <Card key={order.id} className={cn(
@@ -696,29 +696,35 @@ function InTransitToWorkshopTab() {
 
 type HistoryPeriod = 'today' | 'week' | 'month';
 
-// Compute [from, to) bounds for a given period, in local time.
+// Compute [from, to) bounds for a given period, in Kuwait time.
 // Week starts Sunday (matches Kuwait workweek — Fri/Sat weekend).
 function getPeriodRange(period: HistoryPeriod): { from: Date; to: Date; label: string } {
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfTomorrow = new Date(startOfDay); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const [ky, km, kd] = getLocalDateStr().split("-").map(Number) as [number, number, number];
+  const startOfDay = getKuwaitMidnight();
+  const startOfTomorrow = new Date(startOfDay.getTime() + 86_400_000);
+  const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
+    d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, ...opts });
 
   if (period === 'today') {
-    return { from: startOfDay, to: startOfTomorrow, label: startOfDay.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) };
+    return { from: startOfDay, to: startOfTomorrow, label: fmt(startOfDay, { weekday: 'long', day: 'numeric', month: 'long' }) };
   }
 
   if (period === 'week') {
-    // Sunday = 0
-    const dayOfWeek = startOfDay.getDay();
-    const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
-    const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(endOfWeek.getDate() + 7);
-    const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-    return { from: startOfWeek, to: endOfWeek, label: `${fmt(startOfWeek)} – ${fmt(new Date(endOfWeek.getTime() - 1))}` };
+    const kuwaitWeekday = new Date(Date.UTC(ky, km - 1, kd)).getUTCDay();
+    const startOfWeek = new Date(startOfDay.getTime() - kuwaitWeekday * 86_400_000);
+    const endOfWeek = new Date(startOfWeek.getTime() + 7 * 86_400_000);
+    return {
+      from: startOfWeek,
+      to: endOfWeek,
+      label: `${fmt(startOfWeek, { day: 'numeric', month: 'short' })} – ${fmt(new Date(endOfWeek.getTime() - 1), { day: 'numeric', month: 'short' })}`,
+    };
   }
 
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { from: startOfMonth, to: startOfNextMonth, label: startOfMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' }) };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const startOfMonth = new Date(`${ky}-${pad(km)}-01T00:00:00+03:00`);
+  const next = km === 12 ? { y: ky + 1, m: 1 } : { y: ky, m: km + 1 };
+  const startOfNextMonth = new Date(`${next.y}-${pad(next.m)}-01T00:00:00+03:00`);
+  return { from: startOfMonth, to: startOfNextMonth, label: startOfMonth.toLocaleString("en-GB", { timeZone: TIMEZONE, month: 'long', year: 'numeric' }) };
 }
 
 const HISTORY_PERIODS: readonly HistoryPeriod[] = ['today', 'week', 'month'] as const;
@@ -857,8 +863,8 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
           </div>
         </td>
         <td className="py-2.5 px-4 whitespace-nowrap">
-          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString("en-GB")}</div>
-          <div className="text-[10px] text-muted-foreground">{lastDispatch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
+          <div className="text-[10px] text-muted-foreground">{lastDispatch.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}</div>
         </td>
       </tr>
 
@@ -906,7 +912,7 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-muted-foreground text-xs uppercase font-bold">Time</span>
-                            <span className="font-bold text-xs">{d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="font-bold text-xs">{d.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </div>
                       </div>
@@ -1050,9 +1056,9 @@ function DispatchHistoryTab() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const d = new Date(r.dispatched_at);
-                  const dateStr = d.toLocaleDateString("en-GB");
-                  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const d = parseUtcTimestamp(r.dispatched_at);
+                  const dateStr = d.toLocaleDateString("en-GB", { timeZone: TIMEZONE });
+                  const timeStr = d.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' });
                   return (
                     <tr key={r.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
                       <td className="py-2 px-4 whitespace-nowrap">

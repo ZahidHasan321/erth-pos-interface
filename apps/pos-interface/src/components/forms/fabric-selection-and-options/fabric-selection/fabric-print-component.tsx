@@ -6,6 +6,7 @@ import { BRAND_NAMES } from '@/lib/constants';
 import { useParams } from '@tanstack/react-router';
 import erthLogo from '@/assets/erth-light.svg';
 import sakkbaLogo from '@/assets/Sakkba.png';
+import { parseUtcTimestamp, TIMEZONE } from '@/lib/utils';
 
 interface FabricLabelProps {
   fabricData: {
@@ -50,8 +51,8 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
 
     const formatDate = (date: Date | string | null | undefined) => {
       if (!date) return "N/A";
-      const d = new Date(date);
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+      const d = typeof date === "string" ? parseUtcTimestamp(date) : date;
+      return d.toLocaleDateString('en-GB', { timeZone: TIMEZONE, day: '2-digit', month: 'short', year: '2-digit' });
     };
 
     return (

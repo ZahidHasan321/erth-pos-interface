@@ -5,7 +5,7 @@ import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { useNotificationsPaginated, useMarkRead, useMarkAllRead, useUnreadCount } from "@/hooks/useNotifications";
 import type { NotificationItem } from "@/api/notifications";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export const Route = createFileRoute("/(main)/notifications")({
   component: NotificationsPage,
@@ -99,7 +99,7 @@ function getNotificationLink(notification: NotificationItem): NotificationLink |
 function formatDate(dateStr: string): string {
   const date = parseUtcTimestamp(dateStr);
   return date.toLocaleDateString("en-GB", {
-    timeZone: "Asia/Kuwait",
+    timeZone: TIMEZONE,
     day: "numeric",
     month: "short",
     year: "numeric",

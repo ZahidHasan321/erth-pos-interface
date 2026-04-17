@@ -12,7 +12,7 @@ import {
     TableRow,
 } from "@repo/ui/table";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { PaymentReceipt, type PaymentReceiptData, type ReceiptGarment, type ReceiptShelfItem } from "./payment-receipt";
 
 interface PaymentHistoryProps {
@@ -134,6 +134,7 @@ export function PaymentHistory({
                                     >
                                         <TableCell className="text-xs">
                                             {parseUtcTimestamp(tx.created_at).toLocaleDateString("en-GB", {
+                                                timeZone: TIMEZONE,
                                                 day: "2-digit",
                                                 month: "short",
                                                 year: "numeric",

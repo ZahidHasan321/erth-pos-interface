@@ -39,7 +39,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import {
   useTransferRequests,
   useApproveTransfer,
@@ -260,7 +260,7 @@ function ReadOnlyRow({
         </TableCell>
         <TableCell>
           <span className="text-sm">
-            {dateField ? parseUtcTimestamp(dateField).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "N/A"}
+            {dateField ? parseUtcTimestamp(dateField).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short" }) : "N/A"}
           </span>
         </TableCell>
         <TableCell><span className="text-sm">{request.requested_by_user?.name ?? "—"}</span></TableCell>
@@ -360,7 +360,7 @@ function PendingRow({
           <span className="text-muted-foreground ml-1 text-xs">item{request.items.length !== 1 ? "s" : ""}</span>
         </TableCell>
         <TableCell>
-          <span className="text-sm">{parseUtcTimestamp(request.created_at!).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
+          <span className="text-sm">{parseUtcTimestamp(request.created_at!).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short" })}</span>
         </TableCell>
         <TableCell><span className="text-sm">{request.requested_by_user?.name ?? "—"}</span></TableCell>
         <TableCell className="text-right">

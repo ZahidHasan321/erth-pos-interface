@@ -10,7 +10,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps } from "@/lib/utils";
+import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps, TIMEZONE } from "@/lib/utils";
 import type { WorkshopGarment, StageTimings, StageTimingEntry, TripHistoryEntry, QcAttempt } from "@repo/database";
 import { ArrowLeft, History, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -73,26 +73,21 @@ function extractQcRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
 function formatTime(iso: string): string {
   try {
     const d = parseUtcTimestamp(iso);
-    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleTimeString(undefined, { timeZone: TIMEZONE, hour: "numeric", minute: "2-digit" });
   } catch {
     return "—";
   }
 }
 
 function shiftDateStr(dateStr: string, days: number): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y!, (m ?? 1) - 1, d ?? 1);
-  date.setDate(date.getDate() + days);
-  const yy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
+  const [y, m, d] = dateStr.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d) + days * 86_400_000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function formatDateLong(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y!, (m ?? 1) - 1, d ?? 1);
-  return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const date = new Date(dateStr + "T12:00:00+03:00");
+  return date.toLocaleDateString(undefined, { timeZone: TIMEZONE, weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
 // ── skeleton row ─────────────────────────────────────────────────────────────

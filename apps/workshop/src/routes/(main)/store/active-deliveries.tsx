@@ -35,7 +35,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useTransferRequests, useCancelTransfer } from "@/hooks/useTransfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import type { TransferRequestWithItems } from "@/api/transfers";
@@ -114,7 +114,7 @@ function ActiveDeliveryRow({
         </TableCell>
         <TableCell className="py-3.5">
           <span className="text-sm">
-            {request.created_at ? parseUtcTimestamp(request.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "N/A"}
+            {request.created_at ? parseUtcTimestamp(request.created_at).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short" }) : "N/A"}
           </span>
         </TableCell>
         <TableCell className="py-3.5"><span className="text-sm">{request.requested_by_user?.name ?? "—"}</span></TableCell>

@@ -5,7 +5,7 @@ import { Button } from "@repo/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
 import type { NotificationItem } from "@/api/notifications";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 const TYPE_ICONS: Record<string, typeof Bell> = {
   garment_dispatched_to_shop: Truck,
@@ -42,7 +42,7 @@ function formatTimeAgo(dateStr: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString("en-GB", {
-    timeZone: "Asia/Kuwait",
+    timeZone: TIMEZONE,
     day: "numeric",
     month: "short",
     hour: "2-digit",

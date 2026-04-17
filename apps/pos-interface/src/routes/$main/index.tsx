@@ -14,14 +14,14 @@ import {
   Eye,
   ArrowRight,
 } from "lucide-react";
-import { format, addDays, startOfDay, endOfDay, isToday, isTomorrow } from "date-fns";
+import { addDays } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
 import { Skeleton } from "@repo/ui/skeleton";
 import { getDashboardOrders } from "@/api/orders";
 import { getCustomerCount } from "@/api/customers";
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, getKuwaitMidnight, getKuwaitEndOfDay, getLocalDateStr, toLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { ORDER_PHASE_LABELS, ORDER_PHASE_COLORS } from "@/lib/constants";
 import { ANIMATION_CLASSES } from "@/lib/constants/animations";
 import { getShowroomStatus } from "@repo/database";
@@ -52,8 +52,9 @@ function DashboardPage() {
 
   const orders = ordersRes?.data || [];
 
-  const today = startOfDay(new Date());
-  const sevenDaysFromNow = endOfDay(addDays(new Date(), 7));
+  const today = getKuwaitMidnight();
+  const endOfToday = getKuwaitEndOfDay();
+  const sevenDaysFromNow = getKuwaitEndOfDay(addDays(new Date(), 7));
 
   // All orders from getDashboardOrders are already checkout_status='confirmed'
   const stats = {
@@ -69,7 +70,7 @@ function DashboardPage() {
     todayDeliveries: orders.filter(o => {
       if (!o.delivery_date || o.order_phase === 'completed') return false;
       const deliveryDate = parseUtcTimestamp(o.delivery_date);
-      return deliveryDate >= today && deliveryDate <= endOfDay(today);
+      return deliveryDate >= today && deliveryDate <= endOfToday;
     }),
     readyForPickup: orders.filter(o => {
       return getShowroomStatus(o.garments || []).label === "ready_for_pickup";
@@ -102,10 +103,13 @@ function DashboardPage() {
   }
 
   function formatDeliveryDate(dateStr: string | Date) {
-    const date = new Date(dateStr);
-    if (isToday(date)) return "Today";
-    if (isTomorrow(date)) return "Tomorrow";
-    return format(date, "d MMM");
+    const date = parseUtcTimestamp(dateStr);
+    const dayStr = toLocalDateStr(date);
+    const todayStr = getLocalDateStr();
+    const tomorrowStr = getLocalDateStr(addDays(new Date(), 1));
+    if (dayStr === todayStr) return "Today";
+    if (dayStr === tomorrowStr) return "Tomorrow";
+    return date.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short" });
   }
 
   return (
@@ -117,7 +121,7 @@ function DashboardPage() {
             Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {format(new Date(), "EEEE, d MMMM yyyy")}
+            {new Date().toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
         {stats.todayDeliveries.length > 0 && (
@@ -192,9 +196,9 @@ function DashboardPage() {
               <div className="divide-y divide-border/50">
                 {stats.upcomingDeliveries
                   .slice(0, 7)
-                  .sort((a, b) => new Date(a.delivery_date!).getTime() - new Date(b.delivery_date!).getTime())
+                  .sort((a, b) => parseUtcTimestamp(a.delivery_date!).getTime() - parseUtcTimestamp(b.delivery_date!).getTime())
                   .map((order) => {
-                    const isDueToday = new Date(order.delivery_date!) <= endOfDay(today);
+                    const isDueToday = parseUtcTimestamp(order.delivery_date!) <= endOfToday;
                     return (
                       <Link
                         key={order.id}

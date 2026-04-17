@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Lock, RotateCcw, ChevronRight, Ruler, Shirt, Image as ImageIcon, Mic, Play, Pause, XCircle } from "lucide-react";
 import { IconRosette } from "@tabler/icons-react";
 import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { ProductionPlan, QcAttempt, TripHistoryEntry } from "@repo/database";
 
 // ── Shared types ────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ export function QcFailBanner({ tripHistory, currentTrip }: QcFailBannerProps) {
         )}
         {latest.date && (
           <span className="text-xs font-medium ml-auto text-red-500">
-            {new Date(latest.date).toLocaleDateString()}
+            {formatDate(latest.date)}
           </span>
         )}
       </div>

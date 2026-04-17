@@ -1,13 +1,14 @@
 import type React from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { WorkshopGarment } from "@repo/database";
+import { type WorkshopGarment, TIMEZONE } from "@repo/database";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const TZ = "Asia/Kuwait";
+const TZ = TIMEZONE;
+export { TIMEZONE };
 
 /** Get a date as YYYY-MM-DD in Kuwait timezone */
 export function getLocalDateStr(date?: Date): string {
@@ -42,6 +43,19 @@ export function toLocalDateStr(value: string | Date | null | undefined): string 
 /** Get Kuwait midnight as a UTC ISO string (for DB timestamp queries) */
 export function getLocalMidnightUtc(): string {
   return getKuwaitMidnight().toISOString();
+}
+
+/**
+ * UTC ISO bounds covering a Kuwait-local day.
+ * `dateStr` is YYYY-MM-DD in Kuwait tz (omit for today).
+ * Start = Kuwait 00:00, End = Kuwait 23:59:59.999 — both expressed as UTC ISO
+ * strings safe to pass to Supabase `gte/lte` filters on `timestamp` columns.
+ */
+export function getKuwaitDayRange(dateStr?: string): { start: string; end: string } {
+  const base = dateStr ?? getLocalDateStr();
+  const start = new Date(base + "T00:00:00.000+03:00");
+  const end = new Date(start.getTime() + 86_400_000 - 1);
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
 /** Format an ISO date/timestamp to a readable short date like "Mar 22" or "Mar 22, 2025" (if not current year) */

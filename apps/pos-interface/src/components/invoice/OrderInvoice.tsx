@@ -4,6 +4,7 @@ import type { FabricSelectionSchema } from "@/components/forms/fabric-selection-
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import type { ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import type { Fabric, Style } from "@repo/database";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export interface InvoiceData {
   orderId?: string | number;
@@ -114,7 +115,8 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
     const balance = finalAmount - paid;
 
     const formattedDate = orderDate
-      ? new Date(orderDate).toLocaleDateString("ar-KW", {
+      ? parseUtcTimestamp(orderDate).toLocaleDateString("ar-KW", {
+          timeZone: TIMEZONE,
           year: "numeric",
           month: "long",
           day: "numeric",

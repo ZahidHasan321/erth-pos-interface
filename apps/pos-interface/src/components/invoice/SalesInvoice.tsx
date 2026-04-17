@@ -1,6 +1,7 @@
 import * as React from "react";
 import ErthLogo from "@/assets/erth-light.svg";
 import { type InvoiceData } from "./OrderInvoice";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export interface SalesInvoiceProps {
   data: InvoiceData;
@@ -30,7 +31,8 @@ export const SalesInvoice = React.forwardRef<HTMLDivElement, SalesInvoiceProps>(
     const balance = finalAmount - paid;
 
     const formattedDate = orderDate
-      ? new Date(orderDate).toLocaleDateString("ar-KW", {
+      ? parseUtcTimestamp(orderDate).toLocaleDateString("ar-KW", {
+          timeZone: TIMEZONE,
           year: "numeric",
           month: "long",
           day: "numeric",

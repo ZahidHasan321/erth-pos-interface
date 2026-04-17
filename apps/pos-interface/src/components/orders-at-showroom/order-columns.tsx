@@ -1,5 +1,5 @@
 import { type ColumnDef } from "@tanstack/react-table";
-import { cn, getKuwaitMidnight } from "@/lib/utils";
+import { cn, getKuwaitMidnight, TIMEZONE } from "@/lib/utils";
 import { ChevronRight, Phone, AlertTriangle, MessageSquare, Truck, ClipboardCheck, Link as LinkIcon } from "lucide-react";
 import type { OrderRow } from "./types";
 import { Button } from "@repo/ui/button";
@@ -15,7 +15,7 @@ import {
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",
   month: "short",
-  timeZone: "Asia/Kuwait",
+  timeZone: TIMEZONE,
 });
 
 function formatDate(value?: string | null) {
