@@ -73,6 +73,11 @@ const PERMISSIONS: PermissionMatrix = {
   "/terminals/finishing":     { admin: "full", "manager:workshop": "full", "terminal:finisher":    "full", terminal: "none", "staff:workshop": "none" },
   "/terminals/ironing":       { admin: "full", "manager:workshop": "full", "terminal:ironer":      "full", terminal: "none", "staff:workshop": "none" },
   "/terminals/quality-check": { admin: "full", "manager:workshop": "full", "terminal:qc":          "full", terminal: "none", "staff:workshop": "none" },
+
+  // Garment detail page inside any terminal — reachable from every terminal
+  // view, so any terminal role is allowed (their own terminal already gates
+  // which garments they can see via data queries).
+  "/terminals/garment":       { admin: "full", "manager:workshop": "full", terminal: "full", "staff:workshop": "none", "staff:shop": "none" },
 };
 
 export function getPermission(user: AuthUser | null, page: string): Permission {
