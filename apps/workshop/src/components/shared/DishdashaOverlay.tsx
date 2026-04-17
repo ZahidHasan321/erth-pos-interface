@@ -260,7 +260,7 @@ export function DishdashaOverlay({
             return (
               <div
                 key={field.id}
-                className={`absolute flex items-center justify-center border-2 font-black leading-none ${tintClass}`}
+                className={`absolute flex items-center justify-center border font-black leading-none ${tintClass}`}
                 style={{
                   left: `${field.left}%`,
                   top: `${field.top}%`,
