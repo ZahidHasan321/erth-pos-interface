@@ -18,6 +18,9 @@ export function buildPrefillValues(
     base.delivery_date = source.delivery_date
       ? String(source.delivery_date).slice(0, 10)
       : "";
+    base.assigned_date = source.assigned_date
+      ? String(source.assigned_date).slice(0, 10)
+      : "";
     base.notes = ""; // intentionally blank — workshop can add fresh context
     base.fabric_source = (source.fabric_source as "IN" | "OUT") ?? "IN";
     base.fabric_id = source.fabric_id ?? null;

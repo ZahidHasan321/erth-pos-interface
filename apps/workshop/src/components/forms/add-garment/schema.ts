@@ -24,6 +24,7 @@ export const addGarmentSchema = z.object({
   // Meta
   garment_type: z.enum(["brova", "final"]),
   delivery_date: z.string().min(1, "Delivery date is required"),
+  assigned_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 
   // Fabric
@@ -89,6 +90,7 @@ export type AddGarmentFormValues = z.infer<typeof addGarmentSchema>;
 export const addGarmentDefaults: AddGarmentFormValues = {
   garment_type: "final",
   delivery_date: "",
+  assigned_date: "",
   notes: "",
   fabric_source: "IN",
   fabric_id: null,

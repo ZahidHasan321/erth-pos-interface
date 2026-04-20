@@ -15,7 +15,6 @@ import {
   ClipboardList,
   RotateCcw,
   Clock,
-  Package,
   Home,
   Zap,
   Droplets,
@@ -32,22 +31,6 @@ export const Route = createFileRoute("/(main)/assigned/")({
 });
 
 // ── Helpers ───────────────────────────────────────────────────
-
-const STATUS_LABEL_COLOR: Record<string, PillColor> = {
-  "At shop": "green",
-  "Ready for dispatch": "emerald",
-  "In transit to shop": "sky",
-  "Brovas in transit": "sky",
-  "Awaiting finals release": "violet",
-  "Awaiting brova trial": "teal",
-  "Finals in production": "blue",
-  "Brovas in production": "purple",
-  "In production": "zinc",
-};
-
-function statusLabelColor(label: string): PillColor {
-  return STATUS_LABEL_COLOR[label] ?? "zinc";
-}
 
 /**
  * Delivery date display. Shows the order-level delivery date always. When any
@@ -168,10 +151,7 @@ function GarmentBreakdown({ row }: { row: AssignedOrderRow }) {
           className="flex items-center gap-2 text-sm leading-snug min-w-0"
         >
           {/* Type + count + optional garment ID */}
-          <span className={cn(
-            "shrink-0 font-black text-xs uppercase",
-            grp.type === "brova" ? "text-purple-600" : "text-blue-600",
-          )}>
+          <span className="shrink-0 font-black text-xs uppercase text-muted-foreground">
             {grp.count > 1
               ? `${grp.count}${grp.type === "brova" ? "B" : "F"}`
               : grp.type === "brova" ? "B" : "F"}
@@ -237,7 +217,7 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
     >
       <div className="px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="font-mono font-bold text-sm">#{group.order_id}</span>
             <OrderIndicators group={group} />
             <span className="font-semibold text-sm truncate">{group.customer_name ?? "—"}</span>
@@ -245,45 +225,23 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <StatusPill color={statusLabelColor(group.status_label)}>{group.status_label}</StatusPill>
+            {group.invoice_number && (
+              <span className="font-mono text-[11px] text-muted-foreground">INV-{group.invoice_number}</span>
+            )}
             <ArrowRight className="w-4 h-4 text-muted-foreground/40" />
           </div>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2 mt-1.5">
-          <span className="flex items-center gap-1 text-xs font-semibold">
-            <Package className="w-3 h-3 text-muted-foreground" />
-            {group.garments_count}
-            <span className="text-muted-foreground font-normal">
-              garment{group.garments_count !== 1 ? "s" : ""}
-            </span>
-          </span>
-          {group.brova_count > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-              {group.brova_count} Brova
-            </span>
-          )}
-          {group.final_count > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
-              {group.final_count} Final{group.final_count !== 1 ? "s" : ""}
-            </span>
-          )}
-          {group.invoice_number && (
-            <span className="text-xs text-muted-foreground ml-auto">INV-{group.invoice_number}</span>
+        <div className="mt-1.5 flex items-end justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {group.garment_summaries?.length > 0 && <GarmentBreakdown row={group} />}
+          </div>
+          {group.delivery_date && (
+            <div className="shrink-0">
+              <DeliveryDisplay row={group} align="start" />
+            </div>
           )}
         </div>
-
-        {group.delivery_date && (
-          <div className="mt-1">
-            <DeliveryDisplay row={group} align="start" />
-          </div>
-        )}
-
-        {group.garment_summaries?.length > 0 && (
-          <div className="mt-1.5">
-            <GarmentBreakdown row={group} />
-          </div>
-        )}
       </div>
     </Link>
   );
@@ -518,8 +476,8 @@ function AssignedPage() {
           <OrdersSection
             title="With Brova"
             icon={Layers}
-            iconBg="bg-amber-50"
-            iconColor="text-amber-600"
+            iconBg="bg-muted"
+            iconColor="text-muted-foreground"
             orders={brova}
             isMobile={isMobile}
             emptyText="No brova orders in production"
@@ -528,8 +486,8 @@ function AssignedPage() {
           <OrdersSection
             title="Other Orders"
             icon={Shirt}
-            iconBg="bg-blue-50"
-            iconColor="text-blue-600"
+            iconBg="bg-muted"
+            iconColor="text-muted-foreground"
             orders={rest}
             isMobile={isMobile}
             emptyText="No other orders in production"

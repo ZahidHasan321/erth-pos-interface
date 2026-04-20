@@ -47,7 +47,7 @@ interface PaymentFormProps {
     refundTotal?: number;
 }
 
-export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, collectGarmentIds, onCollected, refundOnly, isRefund: controlledRefund, onRefundModeChange, refundItems, refundTotal }: PaymentFormProps) {
+export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, advance, collectGarmentIds, onCollected, refundOnly, isRefund: controlledRefund, onRefundModeChange, refundItems, refundTotal }: PaymentFormProps) {
     const [internalRefund, setInternalRefund] = useState(refundOnly ?? false);
     const isRefund = controlledRefund ?? internalRefund;
     const paymentMutation = usePaymentMutation();
@@ -96,15 +96,26 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
         else setInternalRefund(val);
     };
 
+    const overpayment = Math.max(0, totalPaid - orderTotal);
+
     const onSubmit = (values: PaymentFormValues) => {
         if (isRefund) {
             if (!values.refund_reason || values.refund_reason.trim() === "") {
                 form.setError("refund_reason", { message: "Refund reason is required" });
                 return;
             }
-            if (!refundItems || refundItems.length === 0) {
-                form.setError("amount", { message: "Select items to refund" });
-                return;
+            const hasItems = !!refundItems && refundItems.length > 0;
+            // Overpayment refund path: allow item-less refund capped at the overage.
+            // Picking items would wrongly flag them as refunded when the real refund is the excess cash.
+            if (!hasItems) {
+                if (overpayment <= 0.001) {
+                    form.setError("amount", { message: "Select items to refund" });
+                    return;
+                }
+                if (values.amount > overpayment + 0.001) {
+                    form.setError("amount", { message: `Without items, refund capped at overpayment (${overpayment.toFixed(3)} KWD)` });
+                    return;
+                }
             }
             if (values.amount > totalPaid) {
                 form.setError("amount", { message: `Cannot refund more than paid (${totalPaid.toFixed(3)})` });
@@ -187,19 +198,32 @@ export function PaymentForm({ orderId, remainingBalance, totalPaid, advance, col
                         className="w-28 text-right font-bold tabular-nums border-2 border-border"
                         readOnly={isRefund && !!refundItems && refundItems.length > 0}
                     />
-                    {!isRefund && totalPaid === 0 && advance != null && advance > 0 && (
-                        <button type="button" onClick={() => form.setValue("amount", Number(advance.toFixed(3)))}
-                            className="text-[10px] font-medium text-primary hover:text-primary/80 px-1.5 py-1 rounded border border-primary/20 bg-primary/5 cursor-pointer whitespace-nowrap">
-                            Advance {advance.toFixed(3)}
-                        </button>
-                    )}
+                    {(() => {
+                        // Cap advance at remaining balance — discount/near-paid orders shouldn't suggest paying more than what's owed
+                        const cappedAdvance = Math.min(advance ?? 0, Math.max(0, remainingBalance));
+                        return !isRefund && totalPaid === 0 && cappedAdvance > 0 && (
+                            <button type="button" onClick={() => form.setValue("amount", Number(cappedAdvance.toFixed(3)))}
+                                className="text-[10px] font-medium text-primary hover:text-primary/80 px-1.5 py-1 rounded border border-primary/20 bg-primary/5 cursor-pointer whitespace-nowrap">
+                                Advance {cappedAdvance.toFixed(3)}
+                            </button>
+                        );
+                    })()}
                     {!isRefund && remainingBalance > 0 && (
                         <button type="button" onClick={() => form.setValue("amount", Number(remainingBalance.toFixed(3)))}
                             className="text-[10px] font-medium text-primary hover:text-primary/80 px-1.5 py-1 rounded border border-primary/20 bg-primary/5 cursor-pointer whitespace-nowrap">
                             Full {remainingBalance.toFixed(3)}
                         </button>
                     )}
+                    {isRefund && (!refundItems || refundItems.length === 0) && overpayment > 0.001 && (
+                        <button type="button" onClick={() => form.setValue("amount", Number(overpayment.toFixed(3)))}
+                            className="text-[10px] font-medium text-red-600 hover:text-red-700 px-1.5 py-1 rounded border border-red-200 bg-red-50 cursor-pointer whitespace-nowrap">
+                            Overpaid {overpayment.toFixed(3)}
+                        </button>
+                    )}
                 </div>
+                {isRefund && (!refundItems || refundItems.length === 0) && overpayment > 0.001 && (
+                    <p className="text-[10px] text-muted-foreground">No items selected — refunding overpayment only. No garment will be flagged as refunded.</p>
+                )}
                 {form.formState.errors.amount && (
                     <p className="text-[10px] text-red-500">{form.formState.errors.amount.message}</p>
                 )}

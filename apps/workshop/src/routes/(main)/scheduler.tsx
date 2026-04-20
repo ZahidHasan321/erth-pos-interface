@@ -777,7 +777,7 @@ function SchedulerPage() {
           ) : (
             <>
               {/* ── EXPRESS ── */}
-              <Section title="Express" icon={Zap} count={sortedExpress.length} accent="bg-orange-100 text-orange-700">
+              <Section title="Express" icon={Zap} count={sortedExpress.length}>
                 {sortedExpress.length === 0 ? (
                   <EmptyState icon={Zap} message="No express garments to schedule" />
                 ) : (
@@ -793,7 +793,7 @@ function SchedulerPage() {
               </Section>
 
               {/* ── BROVA ── */}
-              <Section title="Brova" icon={Package} count={sortedBrova.length} accent="bg-amber-100 text-amber-700">
+              <Section title="Brova" icon={Package} count={sortedBrova.length}>
                 {sortedBrova.length === 0 ? (
                   <EmptyState icon={Package} message="No brova garments to schedule" />
                 ) : (
@@ -808,7 +808,7 @@ function SchedulerPage() {
 
               {/* ── FINALS (no brova — manual plan, cross-order OK) ── */}
               {sortedDirectFinals.length > 0 && (
-                <Section title="Finals" icon={Package} count={sortedDirectFinals.length} accent="bg-blue-100 text-blue-700">
+                <Section title="Finals" icon={Package} count={sortedDirectFinals.length}>
                   <SchedulerSectionTable
                     garments={sortedDirectFinals}
                     selectedIds={selNew}
@@ -819,7 +819,7 @@ function SchedulerPage() {
               )}
 
               {/* ── APPROVED FINALS (garment-level, locked to single order — shares brova plan) ── */}
-              <Section title="Approved Finals" icon={Package} count={sortedFinals.length} accent="bg-emerald-100 text-emerald-700">
+              <Section title="Approved Finals" icon={Package} count={sortedFinals.length}>
                 {sortedFinals.length === 0 ? (
                   <EmptyState icon={Package} message="No approved finals to schedule" />
                 ) : (
@@ -834,7 +834,7 @@ function SchedulerPage() {
               </Section>
 
               {/* ── RETURNS (garment-level) ── */}
-              <Section title="Returns" icon={RotateCcw} count={sortedReturns.length} accent="bg-purple-100 text-purple-700">
+              <Section title="Returns" icon={RotateCcw} count={sortedReturns.length}>
                 {sortedReturns.length === 0 ? (
                   <EmptyState icon={RotateCcw} message="No returns to schedule" />
                 ) : (

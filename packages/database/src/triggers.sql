@@ -702,7 +702,7 @@ BEGIN
     LOOP
       UPDATE garments
       SET
-        fulfillment_type = 'collected',
+        fulfillment_type = CASE WHEN home_delivery THEN 'delivered'::fulfillment_type ELSE 'collected'::fulfillment_type END,
         piece_stage = 'completed'
       WHERE id = v_garment_id
         AND order_id = p_order_id
@@ -737,8 +737,9 @@ BEGIN
         WHERE id = v_shelf_item_id
           AND order_id = p_order_id;
 
-        -- Restore shelf stock for refunded items
-        IF v_refund_qty > 0 THEN
+        -- Restore shelf stock only when restock=true (default true for backward compat).
+        -- Set restock=false for damaged/consumed returns that shouldn't re-enter inventory.
+        IF v_refund_qty > 0 AND COALESCE((v_refund_item->>'restock')::boolean, true) THEN
           UPDATE shelf
           SET stock = stock + v_refund_qty,
               shop_stock = shop_stock + v_refund_qty
@@ -843,7 +844,7 @@ BEGIN
   LOOP
     UPDATE garments
     SET
-      fulfillment_type = 'collected',
+      fulfillment_type = CASE WHEN home_delivery THEN 'delivered'::fulfillment_type ELSE 'collected'::fulfillment_type END,
       piece_stage = 'completed'
     WHERE id = v_garment_id
       AND order_id = p_order_id
@@ -869,7 +870,9 @@ CREATE OR REPLACE FUNCTION update_order_discount(
   p_discount_value DECIMAL,
   p_discount_percentage DECIMAL DEFAULT NULL,
   p_referral_code TEXT DEFAULT NULL,
-  p_new_order_total DECIMAL DEFAULT NULL
+  p_new_order_total DECIMAL DEFAULT NULL,
+  p_approved_by UUID DEFAULT NULL,
+  p_reason TEXT DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -877,6 +880,7 @@ DECLARE
   v_subtotal DECIMAL;
   v_final_total DECIMAL;
   v_current_paid DECIMAL;
+  v_is_clearing BOOLEAN;
 BEGIN
   -- Validate order exists
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
@@ -885,6 +889,17 @@ BEGIN
   END IF;
 
   v_current_paid := COALESCE(v_order.paid, 0);
+  v_is_clearing := COALESCE(p_discount_value, 0) = 0;
+
+  -- Require audit fields when applying a non-zero discount (clearing is exempt)
+  IF NOT v_is_clearing THEN
+    IF p_approved_by IS NULL THEN
+      RAISE EXCEPTION 'Discount approver is required';
+    END IF;
+    IF p_reason IS NULL OR btrim(p_reason) = '' THEN
+      RAISE EXCEPTION 'Discount reason is required';
+    END IF;
+  END IF;
 
   -- Compute subtotal (order_total + existing discount)
   v_subtotal := COALESCE(v_order.order_total, 0) + COALESCE(v_order.discount_value, 0);
@@ -912,6 +927,8 @@ BEGIN
     discount_value = COALESCE(p_discount_value, 0),
     discount_percentage = p_discount_percentage,
     referral_code = p_referral_code,
+    discount_approved_by = CASE WHEN v_is_clearing THEN NULL ELSE p_approved_by END,
+    discount_reason = CASE WHEN v_is_clearing THEN NULL ELSE p_reason END,
     order_total = v_final_total
   WHERE id = p_order_id;
 
@@ -1354,9 +1371,13 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "users_select" ON users;
 CREATE POLICY "users_select" ON users FOR SELECT USING (true);
 
--- Only admins can insert users (creation goes through Edge Function anyway)
+-- Admins can insert any user; managers can insert users in their own department
 DROP POLICY IF EXISTS "users_insert" ON users;
-CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (
+  is_admin() OR (
+    EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.role = 'manager' AND u.department = department)
+  )
+);
 
 -- Admins can update any user; others can update their own non-sensitive fields
 DROP POLICY IF EXISTS "users_update" ON users;

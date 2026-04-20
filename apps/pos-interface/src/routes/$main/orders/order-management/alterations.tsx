@@ -10,6 +10,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { Truck, Package, RotateCcw } from "lucide-react";
 import type { Garment, Order } from "@repo/database";
+import { getAlterationNumber } from "@repo/database";
 import { useState } from "react";
 import { SvgFormOverlay } from "@/components/alteration/svg-form-overlay";
 import { defaultTemplateFieldLayout } from "@/components/alteration/field-layout";
@@ -194,12 +195,7 @@ function AlterationsPage() {
                             {(g as any).feedback_status === "needs_repair" ? "Needs Repair" : "Needs Redo"}
                           </Badge>
                           {(() => {
-                            const trip = g.trip_number ?? 1;
-                            const altNum = g.garment_type === "final" && trip >= 2
-                              ? trip - 1
-                              : g.garment_type === "brova" && trip >= 4
-                                ? trip - 3
-                                : null;
+                            const altNum = getAlterationNumber(g.trip_number);
                             return altNum !== null ? (
                               <Badge variant="outline" className="text-xs font-bold uppercase border-purple-300 bg-purple-50 text-purple-700">
                                 <RotateCcw className="w-2.5 h-2.5 mr-1" />

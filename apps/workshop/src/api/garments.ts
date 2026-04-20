@@ -90,6 +90,7 @@ const WORKSHOP_QUERY = `
     id,
     brand,
     checkout_status,
+    order_date,
     workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
     customer:customers!customer_id(name, phone, country_code)
   ),
@@ -107,6 +108,7 @@ const WORKSHOP_QUERY_LIGHT = `
     id,
     brand,
     checkout_status,
+    order_date,
     workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
     customer:customers!customer_id(name, phone, country_code)
   ),
@@ -121,6 +123,7 @@ function flattenGarment(raw: any): WorkshopGarment {
   return {
     ...garment,
     order_brand: order?.brand,
+    order_date: order?.order_date ?? undefined,
     invoice_number: wo?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
@@ -148,6 +151,7 @@ function flattenLightGarment(raw: any): WorkshopGarment {
   return {
     ...garment,
     order_brand: order?.brand,
+    order_date: order?.order_date ?? undefined,
     invoice_number: wo?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
@@ -1446,6 +1450,12 @@ export interface CreateGarmentInput {
   delivery_date: string;
   notes?: string | null;
   quantity?: number;
+  // Replacement inheritance: carry plan + schedule from the original garment
+  // so the replacement picks up where it was scheduled without re-planning.
+  production_plan?: Record<string, string> | null;
+  assigned_date?: string | null;
+  assigned_unit?: string | null;
+  assigned_person?: string | null;
 }
 
 /** Compute next garment_id suffix for an order. Format: `${orderId}-${n}`. */
@@ -1524,6 +1534,10 @@ export const createGarmentForOrder = async (
     location: 'workshop' as const,
     in_production: false,
     trip_number: 1,
+    production_plan: input.production_plan ?? null,
+    assigned_date: input.assigned_date ?? null,
+    assigned_unit: input.assigned_unit ?? null,
+    assigned_person: input.assigned_person ?? null,
   };
 
   const { data: inserted, error: insertErr } = await db

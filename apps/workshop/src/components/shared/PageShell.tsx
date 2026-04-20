@@ -132,7 +132,7 @@ export function MetadataChip({ icon: Icon, children, variant = "muted", classNam
 
 // ── Garment Type Badge ──────────────────────────────────────────────────────
 
-export function GarmentTypeBadge({ type }: { type: string }) {
+export function GarmentTypeBadge({ type }: { type: string | null | undefined }) {
   return (
     <span
       className={cn(

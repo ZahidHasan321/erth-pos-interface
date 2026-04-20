@@ -12,7 +12,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
-import { Truck, Package, History, Printer, ChevronDown, Hash, User, Loader2 } from "lucide-react";
+import { Truck, Package, History, Printer, ChevronDown, Loader2 } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
 import type { WorkshopGarment } from "@repo/database";
@@ -124,160 +124,80 @@ function ReadyOrderCard({
   const isPending = groupIds.some((id) => dispatchPendingIds.has(id));
 
   return (
-    <div className={cn(
-      "rounded-xl border bg-card overflow-hidden transition-all duration-300 border-l-4",
-      expanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30",
-      hasExpress && "border-l-orange-500",
-    )}>
-      <div className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        {/* Desktop (lg+): single row */}
-        <div className="hidden lg:flex items-center min-h-[64px]">
-          {/* Order ID + Invoice */}
-          <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[200px]">
-            <div className="flex items-center gap-2.5 mb-0.5">
-              <Checkbox
-                checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                onCheckedChange={(checked) => toggleAll(!!checked)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div className="p-1 rounded-md bg-primary/10 text-primary">
-                <Hash className="w-3 h-3" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">Order {group.orderId}</h3>
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      {/* Header */}
+      <div
+        className="px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? "indeterminate" : false}
+              onCheckedChange={(checked) => toggleAll(!!checked)}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="font-semibold text-sm">Order {group.orderId}</span>
                 {group.invoiceNumber != null && (
-                  <span className="text-[11px] text-primary/80 font-medium">Inv {group.invoiceNumber}</span>
+                  <span className="text-xs text-muted-foreground">· Inv {group.invoiceNumber}</span>
                 )}
+                {hasExpress && <ExpressBadge />}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/80">{group.customerName ?? "Unknown"}</span>
+                {group.customerMobile && <span>{group.customerMobile}</span>}
+                <span className="w-px h-3 bg-border/60 shrink-0" />
+                <span>{groupIds.length} pcs</span>
+                {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
+                {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
+                {breakdown && breakdown.workshop > 0 && <span>{breakdown.workshop} in prod</span>}
+                {breakdown && breakdown.transit > 0 && <span>{breakdown.transit} in transit</span>}
+                {breakdown && breakdown.shop > 0 && <span>{breakdown.shop} at shop</span>}
+                {breakdown && breakdown.done > 0 && <span>{breakdown.done} done</span>}
               </div>
             </div>
           </div>
 
-          {/* Customer */}
-          <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
-              {group.customerMobile && (
-                <span className="text-xs text-muted-foreground font-medium shrink-0">{group.customerMobile}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Counts */}
-          <div className="flex-[1.6] px-4 py-2.5 border-r border-border/40">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                {groupIds.length}/{breakdown?.total ?? groupIds.length} ready
-              </span>
-              {breakdown && breakdown.workshop > 0 && (
-                <span className="text-[11px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{breakdown.workshop} in production</span>
-              )}
-              {breakdown && breakdown.transit > 0 && (
-                <span className="text-[11px] font-black bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded">{breakdown.transit} in transit</span>
-              )}
-              {breakdown && breakdown.shop > 0 && (
-                <span className="text-[11px] font-black bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{breakdown.shop} at shop</span>
-              )}
-              {breakdown && breakdown.done > 0 && (
-                <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{breakdown.done} done</span>
-              )}
-              {(brovaCount > 0 || finalCount > 0) && (
-                <span className="text-[11px] font-black">
-                  {brovaCount > 0 && <span className="text-blue-700">{brovaCount}B</span>}
-                  {brovaCount > 0 && finalCount > 0 && <span className="mx-0.5 text-muted-foreground">·</span>}
-                  {finalCount > 0 && <span className="text-emerald-700">{finalCount}F</span>}
-                </span>
-              )}
-              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="w-[210px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
-              className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm"
+              size="sm"
+              className="h-8 text-xs font-semibold"
               onClick={handleDispatch}
               disabled={isPending || selected.size === 0}
             >
               {isPending ? (
-                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
               ) : (
-                <Truck className="w-3.5 h-3.5 mr-1" />
+                <Truck className="w-3 h-3 mr-1.5" />
               )}
               Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
             </Button>
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+              className="p-1.5 hover:bg-muted rounded-md transition-colors"
             >
-              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")} />
             </button>
-          </div>
-        </div>
-
-        {/* Mobile/tablet (<lg): compact 2-row */}
-        <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <Checkbox
-                checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                onCheckedChange={(checked) => toggleAll(!!checked)}
-                onClick={(e) => e.stopPropagation()}
-                className="shrink-0"
-              />
-              <span className="text-sm font-bold shrink-0">#{group.orderId}</span>
-              {group.invoiceNumber != null && (
-                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {group.invoiceNumber}</span>
-              )}
-              <div className="w-px h-3.5 bg-border/40 shrink-0" />
-              <User className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
-            >
-              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {group.customerMobile && <span className="text-[11px] text-muted-foreground">{group.customerMobile}</span>}
-              <span className="text-[10px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                {groupIds.length}/{breakdown?.total ?? groupIds.length} ready
-              </span>
-              {breakdown && breakdown.workshop > 0 && <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{breakdown.workshop}P</span>}
-              {breakdown && breakdown.transit > 0 && <span className="text-[10px] font-black bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded">{breakdown.transit}T</span>}
-              {breakdown && breakdown.shop > 0 && <span className="text-[10px] font-black bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{breakdown.shop}S</span>}
-              {breakdown && breakdown.done > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{breakdown.done}D</span>}
-              {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
-              {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
-              {hasExpress && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
-            </div>
-            <Button
-              className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0"
-              onClick={handleDispatch}
-              disabled={isPending || selected.size === 0}
-            >
-              {isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-              Dispatch{selected.size > 0 && selected.size < groupIds.length ? ` (${selected.size})` : ""}
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Expanded garment list with slide animation */}
+      {/* Expanded garment list */}
       <div className={cn(
         "grid transition-[grid-template-rows] duration-300 ease-in-out",
         expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
       )}>
-        <div className={cn("overflow-hidden", expanded && "border-t-2 border-border/40 bg-muted/5")}>
+        <div className={cn("overflow-hidden", expanded && "border-t border-border/60 bg-muted/5")}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                <th className="text-left py-2.5 px-4">Garment</th>
-                <th className="text-left py-2.5 px-4">Type</th>
-                <th className="text-left py-2.5 px-4">Stage</th>
+              <tr className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/40">
+                <th className="text-left py-2 px-4 w-8" />
+                <th className="text-left py-2 px-4">Garment</th>
+                <th className="text-left py-2 px-4">Type</th>
+                <th className="text-left py-2 px-4">Stage</th>
               </tr>
             </thead>
             <tbody>
@@ -287,12 +207,19 @@ function ReadyOrderCard({
                   <tr
                     key={g.id}
                     className={cn(
-                      "border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer",
-                      !isSelected && "opacity-50",
+                      "border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer",
+                      !isSelected && "opacity-40",
                     )}
                     onClick={() => toggleOne(g.id, !isSelected)}
                   >
-                    <td className="py-2.5 px-4 font-mono font-bold">
+                    <td className="py-2.5 px-4">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => toggleOne(g.id, !!checked)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="py-2.5 px-4 font-mono font-bold text-sm">
                       <div className="flex items-center gap-1.5">
                         {g.garment_id}
                         <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
@@ -300,12 +227,7 @@ function ReadyOrderCard({
                       </div>
                     </td>
                     <td className="py-2.5 px-4">
-                      <span className={cn(
-                        "text-xs font-black uppercase px-1.5 py-0.5 rounded",
-                        g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
-                      )}>
-                        {g.garment_type}
-                      </span>
+                      <GarmentTypeBadge type={g.garment_type} />
                     </td>
                     <td className="py-2.5 px-4">
                       <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
@@ -358,106 +280,64 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
 
   return (
-    <div className={cn(
-      "rounded-xl border bg-card overflow-hidden transition-all duration-300 border-l-4",
-      expanded ? "border-l-blue-400 shadow-md" : "border-l-transparent hover:border-l-blue-300 hover:bg-muted/30",
-      hasExpress && "border-l-orange-500",
-    )}>
-      <div className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        {/* Desktop (lg+): single row */}
-        <div className="hidden lg:flex items-center min-h-[64px]">
-          <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[180px]">
-            <div className="flex items-center gap-2.5 mb-0.5">
-              <div className="p-1 rounded-md bg-blue-100 text-blue-600">
-                <Hash className="w-3 h-3" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">Order {group.orderId}</h3>
-                {group.invoiceNumber != null && (
-                  <span className="text-[11px] text-primary/80 font-medium">Inv {group.invoiceNumber}</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
-              {group.customerMobile && (
-                <span className="text-xs text-muted-foreground font-medium shrink-0">{group.customerMobile}</span>
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      {/* Header */}
+      <div
+        className="px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="font-semibold text-sm">Order {group.orderId}</span>
+              {group.invoiceNumber != null && (
+                <span className="text-xs text-muted-foreground">· Inv {group.invoiceNumber}</span>
               )}
+              {hasExpress && <ExpressBadge />}
             </div>
-          </div>
-          <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{group.garments.length} Pcs</Badge>
-              {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
-              {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
-              {hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
+            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+              <span className="font-medium text-foreground/80">{group.customerName ?? "Unknown"}</span>
+              {group.customerMobile && <span>{group.customerMobile}</span>}
+              <span className="w-px h-3 bg-border/60 shrink-0" />
+              <span>{group.garments.length} pcs</span>
+              {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
+              {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
               {group.deliveryDate && (
-                <span className={cn("text-[11px] font-medium rounded px-1.5 py-0.5", urgency.className)}>
+                <span className={cn("font-medium rounded", urgency.className)}>
                   {formatDate(group.deliveryDate)}
                   {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
                 </span>
               )}
             </div>
           </div>
-          <div className="w-[60px] px-4 py-2.5 flex items-center justify-center bg-muted/5">
-            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors">
-              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
-            </button>
-          </div>
-        </div>
 
-        {/* Mobile/tablet (<lg): compact 2-row */}
-        <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-bold shrink-0">#{group.orderId}</span>
-              {group.invoiceNumber != null && (
-                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {group.invoiceNumber}</span>
-              )}
-              <div className="w-px h-3.5 bg-border/40 shrink-0" />
-              <User className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="text-sm font-bold truncate">{group.customerName ?? "Unknown"}</span>
-            </div>
-            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
-              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", expanded && "rotate-180")} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {group.customerMobile && <span className="text-[11px] text-muted-foreground">{group.customerMobile}</span>}
-            <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{group.garments.length} Pcs</Badge>
-            {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
-            {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
-            {hasExpress && <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Exp</span>}
-            {group.deliveryDate && (
-              <span className={cn("text-[10px] font-medium rounded px-1", urgency.className)}>
-                {formatDate(group.deliveryDate)}{urgency.label && ` ${urgency.label}`}
-              </span>
-            )}
-          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+          >
+            <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")} />
+          </button>
         </div>
       </div>
 
-      {/* Expanded garment list with slide animation */}
+      {/* Expanded garment list */}
       <div className={cn(
         "grid transition-[grid-template-rows] duration-300 ease-in-out",
         expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
       )}>
-        <div className={cn("overflow-hidden", expanded && "border-t-2 border-border/40 bg-muted/5")}>
+        <div className={cn("overflow-hidden", expanded && "border-t border-border/60 bg-muted/5")}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                <th className="text-left py-2.5 px-4">Garment</th>
-                <th className="text-left py-2.5 px-4">Type</th>
-                <th className="text-left py-2.5 px-4">Stage</th>
+              <tr className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/40">
+                <th className="text-left py-2 px-4">Garment</th>
+                <th className="text-left py-2 px-4">Type</th>
+                <th className="text-left py-2 px-4">Stage</th>
               </tr>
             </thead>
             <tbody>
               {group.garments.map((g) => (
-                <tr key={g.id} className="border-b border-border/20 last:border-b-0">
-                  <td className="py-2.5 px-4 font-mono font-bold">
+                <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors">
+                  <td className="py-2.5 px-4 font-mono font-bold text-sm">
                     <div className="flex items-center gap-1.5">
                       {g.garment_id}
                       <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
@@ -465,12 +345,7 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
                     </div>
                   </td>
                   <td className="py-2.5 px-4">
-                    <span className={cn(
-                      "text-xs font-black uppercase px-1.5 py-0.5 rounded",
-                      g.garment_type === "brova" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
-                    )}>
-                      {g.garment_type}
-                    </span>
+                    <GarmentTypeBadge type={g.garment_type} />
                   </td>
                   <td className="py-2.5 px-4">
                     <StageBadge stage={g.piece_stage} garmentType={g.garment_type} inProduction={g.in_production} location={g.location} />
@@ -551,7 +426,7 @@ function DispatchHistoryTab() {
           {periodLabel}
         </span>
 
-        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs font-bold">
+        <Badge variant="secondary" className="text-xs font-bold">
           {rows.length} dispatched → Shop
         </Badge>
 
@@ -701,13 +576,13 @@ function DispatchPage() {
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="ready">
             Ready{" "}
-            <Badge variant="secondary" className="ml-1 text-xs bg-green-100 text-green-700">
+            <Badge variant="secondary" className="ml-1 text-xs">
               {readyGarments.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="transit">
             In Transit{" "}
-            <Badge variant="secondary" className="ml-1 text-xs bg-blue-100 text-blue-700">
+            <Badge variant="secondary" className="ml-1 text-xs">
               {inTransitGarments.length}
             </Badge>
           </TabsTrigger>

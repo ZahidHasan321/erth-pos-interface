@@ -142,6 +142,12 @@ function AddGarmentPage() {
         delivery_date: new Date(values.delivery_date).toISOString(),
         notes: values.notes ?? null,
         quantity: 1,
+        // Replacement carries schedule + plan from the original so it drops
+        // into production at the same slot. Blank-add stays unscheduled.
+        production_plan: replacesId ? (original?.production_plan as Record<string, string> | null ?? null) : null,
+        assigned_date: values.assigned_date || null,
+        assigned_unit: replacesId ? (original?.assigned_unit ?? null) : null,
+        assigned_person: replacesId ? (original?.assigned_person ?? null) : null,
       };
       return createGarmentForOrder(input, replacesId);
     },
@@ -291,6 +297,19 @@ function AddGarmentPage() {
                       </p>
                     )}
                   </div>
+                  {mode === "replace" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="assigned_date">Assigned date</Label>
+                      <Input
+                        id="assigned_date"
+                        type="date"
+                        {...form.register("assigned_date")}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Inherits the original garment's production plan. Set a new workshop date.
+                      </p>
+                    </div>
+                  )}
                   <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
                     <Label htmlFor="notes">Notes</Label>
                     <Input id="notes" {...form.register("notes")} placeholder="Optional" />

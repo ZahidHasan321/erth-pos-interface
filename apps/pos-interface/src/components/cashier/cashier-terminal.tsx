@@ -571,6 +571,8 @@ function CashierTerminalContent() {
     const isCancelled = order?.checkout_status === "cancelled";
     const isOrderCompleted = order?.order_phase === "completed";
     const isFullyPaid = remainingBalance <= 0;
+    // Cancelled orders with prior payments need a refund path; cancelled-and-unpaid stays blocked
+    const cancelledWithPayments = isCancelled && totalPaid > 0;
     const serverHomeDelivery = !!(order as any)?.home_delivery;
     const [optimisticDelivery, setOptimisticDelivery] = useState<boolean | null>(null);
     const isHomeDelivery = optimisticDelivery ?? serverHomeDelivery;
@@ -586,6 +588,15 @@ function CashierTerminalContent() {
     const [isRefundMode, setIsRefundMode] = useState(false);
     const [refundItems, setRefundItems] = useState<import("@/api/cashier").RefundItem[]>([]);
     const [refundTotal, setRefundTotal] = useState(0);
+
+    // Reset all order-specific UI state when switching orders
+    useEffect(() => {
+        setOptimisticDelivery(null);
+        setCollectGarmentIds(new Set());
+        setIsRefundMode(false);
+        setRefundItems([]);
+        setRefundTotal(0);
+    }, [selectedOrderId]);
 
     const handleRefundModeChange = (val: boolean) => {
         setIsRefundMode(val);
@@ -706,7 +717,7 @@ function CashierTerminalContent() {
                                 />
                             )}
 
-                            {(hasGarments || hasShelfItems) && !isRefundMode && (
+                            {(hasGarments || hasShelfItems) && !isRefundMode && !(isFullyPaid && allGarmentsCompleted) && (
                                 <div className={`grid grid-cols-1 ${hasGarments && hasShelfItems ? "xl:grid-cols-2" : ""} gap-4`}>
                                     {hasGarments && (
                                         <Card className="p-3">
@@ -740,8 +751,8 @@ function CashierTerminalContent() {
                                 </div>
                             )}
 
-                            {/* Refund item selector — replaces collection UI when in refund mode */}
-                            {(hasGarments || hasShelfItems) && isRefundMode && (
+                            {/* Refund item selector — replaces collection UI when in refund mode, refund-only (fully paid + collected), or cancelled order with prior payments */}
+                            {(hasGarments || hasShelfItems) && (isRefundMode || (isFullyPaid && allGarmentsCompleted) || cancelledWithPayments) && (
                                 <Card className="p-3 border-red-200 bg-red-50/30">
                                     <h3 className="font-semibold flex items-center gap-2 text-sm mb-2"><Shirt className="h-4 w-4 text-red-600" />Select Items to Refund</h3>
                                     <RefundItemSelector
@@ -781,7 +792,7 @@ function CashierTerminalContent() {
                                 <Card className={`p-3 ${discountValue > 0 ? "bg-green-50 border-green-300" : ""}`}>
                                     <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><Tag className="h-4 w-4" />Discount</h3>
                                     <DiscountControls orderId={order.id} currentDiscountType={(order as any).discount_type} currentDiscountValue={discountValue}
-                                        currentDiscountPercentage={Number((order as any).discount_percentage) || 0} currentReferralCode={(order as any).referral_code} orderTotal={orderTotal} />
+                                        currentDiscountPercentage={Number((order as any).discount_percentage) || 0} currentReferralCode={(order as any).referral_code} orderTotal={orderTotal} totalPaid={totalPaid} />
                                 </Card>
                             )}
                             {/* Collect Only — when garments are selected, allow collection without payment */}
@@ -809,7 +820,13 @@ function CashierTerminalContent() {
                                     </Button>
                                 </Card>
                             )}
-                            {isCancelled ? (
+                            {cancelledWithPayments ? (
+                                <Card className="p-3 bg-red-50 border-red-300">
+                                    <h3 className="font-semibold flex items-center gap-2 mb-1 text-sm"><CreditCard className="h-4 w-4" />Refund Cancelled Order</h3>
+                                    <Alert variant="destructive" className="mb-2"><XCircle className="h-4 w-4" /><AlertDescription className="text-xs">Order cancelled with {fmtK(totalPaid)} paid. Refund customer to close it out.</AlertDescription></Alert>
+                                    <PaymentForm orderId={order.id} remainingBalance={remainingBalance} orderTotal={orderTotal} totalPaid={totalPaid} advance={advance} refundOnly isRefund={true} onRefundModeChange={() => {}} refundItems={refundItems} refundTotal={refundTotal} />
+                                </Card>
+                            ) : isCancelled ? (
                                 <Card className="p-3"><Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>Cancelled. No payments allowed.</AlertDescription></Alert></Card>
                             ) : isFullyPaid && allGarmentsCompleted ? (
                                 <Card className="p-3 bg-green-50 border-green-300">

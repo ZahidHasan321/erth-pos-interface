@@ -44,7 +44,7 @@ export {
 // Remove later when operations are stable (see task comment at end of file).
 const PERMISSIONS: PermissionMatrix = {
   // Office pages (unchanged from prior advisory matrix)
-  "/users":       { admin: "full", "manager:workshop": "view", "manager:shop": "view", "staff:workshop": "none", "staff:shop": "none" },
+  "/users":       { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "none", "staff:shop": "none" },
   "/team":        { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
   "/performance": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
   "/receiving":   { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },

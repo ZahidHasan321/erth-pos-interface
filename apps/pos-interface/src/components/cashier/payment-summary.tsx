@@ -33,8 +33,11 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
 
     const subtotal = orderTotal + discountValue;
 
-    // Advance = 50% stitching + 100% everything else
-    const advance = (stitchingCharge * 0.5) + fabricCharge + styleCharge + deliveryCharge + expressCharge + soakingCharge + shelfCharge;
+    // Advance = 50% stitching + 100% everything else, capped at remaining balance
+    // (so a 100% discount or near-paid order doesn't demand a phantom advance)
+    const advanceRaw = (stitchingCharge * 0.5) + fabricCharge + styleCharge + deliveryCharge + expressCharge + soakingCharge + shelfCharge;
+    const advance = Math.min(advanceRaw, Math.max(0, remainingBalance));
+    const isOverpaid = remainingBalance < -0.001;
 
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
@@ -124,9 +127,9 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
 
             <Separator />
 
-            <div className={`flex justify-between font-bold text-base ${remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                <span>{remainingBalance <= 0 ? "Fully Paid" : "Remaining"}</span>
-                <span className="tabular-nums">{fmt(Math.max(0, remainingBalance))} KD</span>
+            <div className={`flex justify-between font-bold text-base ${isOverpaid ? "text-amber-600" : remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
+                <span>{isOverpaid ? "Overpaid" : remainingBalance <= 0 ? "Fully Paid" : "Remaining"}</span>
+                <span className="tabular-nums">{isOverpaid ? `+${fmt(Math.abs(remainingBalance))}` : fmt(Math.max(0, remainingBalance))} KD</span>
             </div>
 
             {/* Advance reference — only when not yet covered */}

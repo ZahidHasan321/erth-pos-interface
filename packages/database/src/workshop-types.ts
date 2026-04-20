@@ -43,6 +43,7 @@ export type WorkshopGarment = Omit<Garment, 'production_plan' | 'worker_history'
     invoice_number?: number;
     measurement?: Measurement | null;
     order_brand?: string;
+    order_date?: string;
     delivery_date_order?: string;
     home_delivery_order?: boolean;
     order_phase?: string;

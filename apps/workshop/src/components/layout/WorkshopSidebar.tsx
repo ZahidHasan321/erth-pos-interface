@@ -42,7 +42,7 @@ import {
 import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, isManager } from "@/lib/rbac";
 
 export function WorkshopSidebar() {
   const { data: counts } = useSidebarCounts();
@@ -76,7 +76,7 @@ export function WorkshopSidebar() {
   const peopleItems = [
     { label: "Team",        icon: Users,       href: "/team" },
     { label: "Performance", icon: TrendingUp,  href: "/performance" },
-    ...(isAdmin(authUser) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
+    ...((isAdmin(authUser) || isManager(authUser)) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
   ];
 
   const postProductionItems = [

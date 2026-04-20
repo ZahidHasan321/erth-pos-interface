@@ -439,6 +439,8 @@ export const orders = pgTable("orders", {
     discount_type: discountTypeEnum("discount_type"),
     discount_value: numeric("discount_value", { precision: 10, scale: 3 }),
     discount_percentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
+    discount_approved_by: uuid("discount_approved_by").references(() => users.id),
+    discount_reason: text("discount_reason"),
     referral_code: text("referral_code"),
     paid: numeric("paid", { precision: 10, scale: 3 }),
 

@@ -474,7 +474,7 @@ function ReceivingPage() {
       ) : (
         <>
           {/* ── EXPRESS ── */}
-          <Section title="Express" icon={Zap} count={sortedExpress.length} accent="bg-orange-100 text-orange-700">
+          <Section title="Express" icon={Zap} count={sortedExpress.length}>
             {sortedExpress.length === 0 ? (
               <EmptyState icon={Zap} message="No express garments in transit" />
             ) : (
@@ -522,7 +522,7 @@ function ReceivingPage() {
           </Section>
 
           {/* ── BROVA ── */}
-          <Section title="Brova" icon={Package} count={sortedBrova.length} accent="bg-amber-100 text-amber-700">
+          <Section title="Brova" icon={Package} count={sortedBrova.length}>
             {sortedBrova.length === 0 ? (
               <EmptyState icon={Package} message="No brova garments in transit" />
             ) : (
@@ -554,7 +554,7 @@ function ReceivingPage() {
           </Section>
 
           {/* ── FINALS ── */}
-          <Section title="Finals" icon={Package} count={sortedFinals.length} accent="bg-emerald-100 text-emerald-700">
+          <Section title="Finals" icon={Package} count={sortedFinals.length}>
             {sortedFinals.length === 0 ? (
               <EmptyState icon={Package} message="No final garments in transit" />
             ) : (
@@ -596,7 +596,7 @@ function ReceivingPage() {
           </Section>
 
           {/* ── ALTERATIONS ── */}
-          <Section title="Alterations" icon={Package} count={sortedAlterations.length} accent="bg-purple-100 text-purple-700">
+          <Section title="Alterations" icon={Package} count={sortedAlterations.length}>
             {sortedAlterations.length === 0 ? (
               <EmptyState icon={Package} message="No alterations in transit" />
             ) : (

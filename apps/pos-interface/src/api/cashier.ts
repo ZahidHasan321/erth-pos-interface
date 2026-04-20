@@ -11,6 +11,7 @@ const CASHIER_ORDER_QUERY = `
     *,
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, stitching_charge, fabric_charge, style_charge, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
+    discount_approver:users!discount_approved_by(id, name),
     garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type, brand)),
     payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
@@ -322,6 +323,8 @@ export interface RefundItem {
     soaking?: boolean;
     shelf_item_id?: number;
     quantity?: number;
+    /** Shelf refund only: whether to return units to stock. Defaults to true on the RPC side. */
+    restock?: boolean;
     amount: number;
 }
 
@@ -364,6 +367,8 @@ export const updateOrderDiscount = async (params: {
     discountPercentage?: number;
     referralCode?: string;
     newOrderTotal?: number;
+    approvedBy?: string;
+    reason?: string;
 }) => {
     const { data, error } = await db.rpc('update_order_discount', {
         p_order_id: params.orderId,
@@ -372,6 +377,8 @@ export const updateOrderDiscount = async (params: {
         p_discount_percentage: params.discountPercentage || null,
         p_referral_code: params.referralCode || null,
         p_new_order_total: params.newOrderTotal || null,
+        p_approved_by: params.approvedBy || null,
+        p_reason: params.reason || null,
     });
 
     if (error) {

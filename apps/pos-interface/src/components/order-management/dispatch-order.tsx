@@ -95,8 +95,8 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
 
   return (
     <Card className={cn(
-      "relative overflow-hidden transition-all duration-300 border-l-4 py-0 gap-0",
-      isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
+      "relative overflow-hidden transition-all duration-200 py-0 gap-0",
+      isExpanded ? "shadow-sm" : "hover:bg-muted/30"
     )}>
       <CardContent className="p-0">
         <div
@@ -398,7 +398,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
   return (
     <div className="space-y-4">
       {orderGroups.map((group) => (
-        <Card key={group.orderId} className="overflow-hidden border-l-4 border-l-amber-500 py-0 gap-0">
+        <Card key={group.orderId} className="overflow-hidden py-0 gap-0">
           <CardContent className="p-0">
             {/* Order header */}
             <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-muted/20 border-b border-border/40">
@@ -574,10 +574,7 @@ function InTransitToWorkshopTab() {
         const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
         return (
-          <Card key={order.id} className={cn(
-            "overflow-hidden border-l-4 py-0 gap-0",
-            lostCount > 0 ? "border-l-red-500" : "border-l-cyan-500"
-          )}>
+          <Card key={order.id} className="overflow-hidden py-0 gap-0">
             <CardContent className="p-0">
               {/* Order header */}
               <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-muted/20 border-b border-border/40">

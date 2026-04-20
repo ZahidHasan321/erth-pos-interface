@@ -61,7 +61,7 @@ import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
-import { evaluateBrovaFeedback } from "@repo/database";
+import { evaluateBrovaFeedback, isAlteration, getAlterationNumber } from "@repo/database";
 
 // Assets & Constants
 import {
@@ -1355,19 +1355,19 @@ function UnifiedFeedbackInterface() {
                                     <Badge
                                         className={cn(
                                             "h-3 px-1 text-[7px] font-black uppercase border-none",
-                                            (garment.garment_type === 'brova' && (garment.trip_number || 1) >= 4) ||
-                                            (garment.garment_type === 'final' && (garment.trip_number || 1) >= 2)
+                                            isAlteration(garment.trip_number)
                                                 ? "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
                                                 : garment.garment_type === 'brova'
                                                     ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white"
                                                     : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
                                         )}
                                     >
-                                        {garment.garment_type === 'brova' && (garment.trip_number || 1) >= 4
-                                            ? `Alt ${(garment.trip_number || 1) - 3}`
-                                            : garment.garment_type === 'final' && (garment.trip_number || 1) >= 2
-                                                ? `Alt ${(garment.trip_number || 1) - 1}`
-                                                : garment.garment_type === 'brova' ? "Brova" : "Final"}
+                                        {(() => {
+                                            const altNum = getAlterationNumber(garment.trip_number);
+                                            return altNum !== null
+                                                ? `Alt ${altNum}`
+                                                : garment.garment_type === 'brova' ? "Brova" : "Final";
+                                        })()}
                                     </Badge>
                                 </div>
                             </div>

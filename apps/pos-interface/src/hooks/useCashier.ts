@@ -92,6 +92,7 @@ export function usePaymentMutation() {
                 toast.error(`Payment failed: ${response.message}`);
                 return;
             }
+            toast.success(variables.transactionType === "refund" ? "Refund recorded" : "Payment recorded");
             invalidateCashierQueries(queryClient, variables.orderId);
         },
         onError: (error) => {

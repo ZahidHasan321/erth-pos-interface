@@ -20,6 +20,7 @@ import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
+import { Checkbox } from "@repo/ui/checkbox";
 import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
@@ -64,13 +65,21 @@ function ReceivingInterface() {
             if (error) throw new Error(`Could not receive garments: ${error.message}`);
             return { count: garments.length, orderId };
         },
-        onMutate: async ({ orderId }) => {
+        onMutate: async ({ garments, orderId }) => {
             await queryClient.cancelQueries({ queryKey: ["dispatched-orders"] });
             const prev = queryClient.getQueryData<Order[]>(["dispatched-orders"]);
             if (prev) {
+                const receivedIds = new Set(garments.map((g) => g.id));
                 queryClient.setQueryData<Order[]>(
                     ["dispatched-orders"],
-                    prev.filter((o) => o.id !== orderId),
+                    prev
+                        .map((o) => {
+                            if (o.id !== orderId) return o;
+                            const remaining = o.garments?.filter((g) => !receivedIds.has(g.id)) ?? [];
+                            if (remaining.length === 0) return null;
+                            return { ...o, garments: remaining };
+                        })
+                        .filter(Boolean) as Order[],
                 );
             }
             return { prev };
@@ -170,6 +179,10 @@ function ReceivingInterface() {
     );
 }
 
+function tripLabel(trip: number) {
+    return trip >= 2 ? `Alt ${trip - 1}` : "1st";
+}
+
 function OrderCard({
     order,
     onReceive,
@@ -181,20 +194,66 @@ function OrderCard({
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const dispatchedGarments = useMemo(
-        () => order.garments?.filter((g) => g.location === "transit_to_shop" || g.location === "lost_in_transit") || [],
+    const receivableGarments = useMemo(
+        () => order.garments?.filter((g) => g.location === "transit_to_shop") ?? [],
         [order.garments]
     );
 
-    const receivableGarments = useMemo(
-        () => dispatchedGarments.filter((g) => g.location === "transit_to_shop"),
-        [dispatchedGarments]
+    const lostGarments = useMemo(
+        () => order.garments?.filter((g) => g.location === "lost_in_transit") ?? [],
+        [order.garments]
     );
 
-    const lostCount = dispatchedGarments.filter((g) => g.location === "lost_in_transit").length;
-    const brovaCount = dispatchedGarments.filter((g) => g.garment_type === "brova").length;
-    const finalCount = dispatchedGarments.filter((g) => g.garment_type === "final").length;
+    const allGarments = useMemo(
+        () => order.garments ?? [],
+        [order.garments]
+    );
+
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(
+        () => new Set(receivableGarments.map((g) => g.id))
+    );
+
+    // Keep selectedIds in sync if order.garments changes (e.g. after optimistic update)
+    const receivableIds = useMemo(
+        () => new Set(receivableGarments.map((g) => g.id)),
+        [receivableGarments]
+    );
+
+    const selectedReceivable = receivableGarments.filter((g) => selectedIds.has(g.id));
+    const allReceivableSelected = receivableGarments.length > 0 && selectedReceivable.length === receivableGarments.length;
+    const someReceivableSelected = selectedReceivable.length > 0 && !allReceivableSelected;
+
+    const brovaCount = allGarments.filter((g) => g.garment_type === "brova").length;
+    const finalCount = allGarments.filter((g) => g.garment_type === "final").length;
+    const lostCount = lostGarments.length;
     const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
+
+    function toggleSelectAll() {
+        if (allReceivableSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(receivableGarments.map((g) => g.id)));
+        }
+    }
+
+    function toggleGarment(id: string) {
+        if (!receivableIds.has(id)) return;
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    function handleReceive(e: React.MouseEvent) {
+        e.stopPropagation();
+        onReceive(selectedReceivable);
+    }
+
+    const receiveLabel = selectedReceivable.length === receivableGarments.length
+        ? "Receive All"
+        : `Receive (${selectedReceivable.length})`;
 
     return (
         <Card className={cn(
@@ -235,7 +294,7 @@ function OrderCard({
                         </div>
                         <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{dispatchedGarments.length} Pcs</Badge>
+                                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{allGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
                                 {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
                                 {lostCount > 0 && <span className="text-[11px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
@@ -244,11 +303,21 @@ function OrderCard({
                                 )}
                             </div>
                         </div>
-                        <div className="w-[170px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
-                            <Button className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm" onClick={(e) => { e.stopPropagation(); onReceive(receivableGarments); }} disabled={isSubmitting || receivableGarments.length === 0}>
-                                {isSubmitting ? <RefreshCw className="size-3.5 animate-spin" /> : <><CheckCircle2 className="size-3.5 mr-1.5" />Receive</>}
+                        <div className="w-[190px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
+                            <Button
+                                className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm"
+                                onClick={handleReceive}
+                                disabled={isSubmitting || selectedReceivable.length === 0}
+                            >
+                                {isSubmitting
+                                    ? <RefreshCw className="size-3.5 animate-spin" />
+                                    : <><CheckCircle2 className="size-3.5 mr-1.5" />{receiveLabel}</>
+                                }
                             </Button>
-                            <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                                className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+                            >
                                 <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
                             </button>
                         </div>
@@ -269,7 +338,10 @@ function OrderCard({
                                 <User className="size-3 text-muted-foreground shrink-0" />
                                 <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown"}</span>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                                className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
+                            >
                                 <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
                             </button>
                         </div>
@@ -277,14 +349,18 @@ function OrderCard({
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[11px] text-muted-foreground">{orderDate}</span>
                                 {order.customer?.phone && <span className="text-[11px] text-muted-foreground font-medium">{order.customer.phone}</span>}
-                                <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{dispatchedGarments.length} Pcs</Badge>
+                                <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{allGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
                                 {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
                                 {lostCount > 0 && <span className="text-[10px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
                                 {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>}
                             </div>
-                            <Button className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0" onClick={(e) => { e.stopPropagation(); onReceive(receivableGarments); }} disabled={isSubmitting || receivableGarments.length === 0}>
-                                {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : "Receive"}
+                            <Button
+                                className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0"
+                                onClick={handleReceive}
+                                disabled={isSubmitting || selectedReceivable.length === 0}
+                            >
+                                {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : receiveLabel}
                             </Button>
                         </div>
                     </div>
@@ -296,74 +372,97 @@ function OrderCard({
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                                    <th className="text-left py-2.5 px-5">Garment</th>
-                                    <th className="text-left py-2.5 px-5">Type</th>
-                                    <th className="text-left py-2.5 px-5">Style</th>
-                                    <th className="text-left py-2.5 px-5">Fabric</th>
-                                    <th className="text-left py-2.5 px-5">Trip</th>
-                                    <th className="text-left py-2.5 px-5">Location</th>
+                                    <th className="py-2.5 px-5 w-10">
+                                        <Checkbox
+                                            checked={allReceivableSelected ? true : someReceivableSelected ? "indeterminate" : false}
+                                            onCheckedChange={toggleSelectAll}
+                                            disabled={receivableGarments.length === 0}
+                                        />
+                                    </th>
+                                    <th className="text-left py-2.5 px-3">Garment</th>
+                                    <th className="text-left py-2.5 px-3">Type</th>
+                                    <th className="text-left py-2.5 px-3">Style</th>
+                                    <th className="text-left py-2.5 px-3">Fabric</th>
+                                    <th className="text-left py-2.5 px-3">Trip</th>
+                                    <th className="text-left py-2.5 px-3">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {dispatchedGarments.map((g) => (
-                                    <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/30 transition-colors">
-                                        <td className="py-2.5 px-5 font-bold">{g.garment_id}</td>
-                                        <td className="py-2.5 px-5">
-                                            <span className={cn(
-                                                "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
-                                                g.garment_type === "brova"
-                                                    ? "bg-blue-50 text-blue-700"
-                                                    : "bg-emerald-50 text-emerald-700"
-                                            )}>
-                                                {g.garment_type}
-                                            </span>
-                                        </td>
-                                        <td className="py-2.5 px-5 text-muted-foreground">{g.style || "Kuwaiti"}</td>
-                                        <td className="py-2.5 px-5">
-                                            {(g as any).fabric ? (
-                                                <div className="flex items-center gap-2">
-                                                    {(g as any).fabric.color && (
-                                                        <span
-                                                            className="size-3.5 rounded-full border border-border/60 shrink-0"
-                                                            style={{ backgroundColor: (g as any).fabric.color }}
-                                                        />
-                                                    )}
-                                                    <span className="font-medium truncate max-w-[150px]">{(g as any).fabric.name}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-muted-foreground/40">—</span>
+                                {allGarments.map((g) => {
+                                    const isLost = g.location === "lost_in_transit";
+                                    const isReceivable = g.location === "transit_to_shop";
+                                    const isSelected = selectedIds.has(g.id);
+
+                                    return (
+                                        <tr
+                                            key={g.id}
+                                            className={cn(
+                                                "border-b border-border/20 last:border-b-0 transition-colors",
+                                                isReceivable && "cursor-pointer hover:bg-muted/30",
+                                                isSelected && isReceivable && "bg-primary/5",
+                                                isLost && "opacity-60",
                                             )}
-                                        </td>
-                                        <td className="py-2.5 px-5 font-mono text-muted-foreground">
-                                            {(() => {
-                                                const trip = g.trip_number ?? 1;
-                                                const altNum = g.garment_type === "final" && trip >= 2
-                                                    ? trip - 1
-                                                    : g.garment_type === "brova" && trip >= 4
-                                                        ? trip - 3
-                                                        : null;
-                                                return altNum !== null ? `Alt ${altNum}` : "1st";
-                                            })()}
-                                        </td>
-                                        <td className="py-2.5 px-5">
-                                            {g.location === "lost_in_transit" ? (
-                                                <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                                                    Lost in Transit
+                                            onClick={() => toggleGarment(g.id)}
+                                        >
+                                            <td className="py-2.5 px-5">
+                                                {isReceivable && (
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => toggleGarment(g.id)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                )}
+                                            </td>
+                                            <td className="py-2.5 px-3 font-bold">{g.garment_id}</td>
+                                            <td className="py-2.5 px-3">
+                                                <span className={cn(
+                                                    "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
+                                                    g.garment_type === "brova"
+                                                        ? "bg-blue-50 text-blue-700"
+                                                        : "bg-emerald-50 text-emerald-700"
+                                                )}>
+                                                    {g.garment_type}
                                                 </span>
-                                            ) : (
-                                                <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
-                                                    In Transit to Shop
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-muted-foreground">{g.style || "Kuwaiti"}</td>
+                                            <td className="py-2.5 px-3">
+                                                {(g as any).fabric ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {(g as any).fabric.color && (
+                                                            <span
+                                                                className="size-3.5 rounded-full border border-border/60 shrink-0"
+                                                                style={{ backgroundColor: (g as any).fabric.color }}
+                                                            />
+                                                        )}
+                                                        <span className="font-medium truncate max-w-[150px]">{(g as any).fabric.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground/40">—</span>
+                                                )}
+                                            </td>
+                                            <td className="py-2.5 px-3 font-mono text-muted-foreground text-xs">
+                                                {tripLabel(g.trip_number ?? 1)}
+                                            </td>
+                                            <td className="py-2.5 px-3">
+                                                {isLost ? (
+                                                    <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                                                        Lost in Transit
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
+                                                        In Transit
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
 
                         <div className="px-5 py-3 flex justify-between items-center border-t border-border/40">
                             <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                                Verify items before marking received
+                                {selectedReceivable.length} of {receivableGarments.length} selected
                             </span>
                             <Link
                                 to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
@@ -371,7 +470,7 @@ function OrderCard({
                                 className="text-xs font-bold text-primary/60 hover:text-primary transition-colors flex items-center gap-1.5"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                View Full Details
+                                View Order Details
                                 <ExternalLink className="size-3" />
                             </Link>
                         </div>

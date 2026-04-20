@@ -34,6 +34,7 @@ import {
   Edit3,
   Phone,
   Play,
+  Zap,
 } from "lucide-react";
 import { getAlterationNumber } from "@repo/database";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
@@ -300,6 +301,7 @@ function OrderHeader({
   const needsRepairAtShop = garments.filter(
     (g) =>
       g.location === "shop" &&
+      g.piece_stage !== "discarded" &&
       (g.feedback_status === "needs_repair" ||
         g.feedback_status === "needs_redo"),
   );
@@ -322,11 +324,11 @@ function OrderHeader({
         text: "Ready for dispatch",
         cls: "bg-emerald-100 text-emerald-800",
       };
-    // Unified alteration model: any garment at shop with needs_repair/needs_redo = alteration in.
-    // Number shown = max trip across returning garments (the next alt cycle when sent back).
+    // At shop needing fix: pending return to workshop. "(In)" is reserved for
+    // garments actively being fixed in production.
     if (needsRepairAtShop.length > 0) {
-      const incomingAlt = Math.max(...needsRepairAtShop.map((g) => g.trip_number ?? 1));
-      return { text: `Alt ${incomingAlt} (In)`, cls: "bg-orange-100 text-orange-800" };
+      const nextAlt = Math.max(...needsRepairAtShop.map((g) => g.trip_number ?? 1));
+      return { text: `Pending return — Alt ${nextAlt}`, cls: "bg-orange-100 text-orange-800" };
     }
     if (
       brovas.length > 0 &&
@@ -427,6 +429,11 @@ function OrderHeader({
             {first.customer_mobile && (
               <span className="flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5" /> {first.customer_mobile}
+              </span>
+            )}
+            {first.order_date && (
+              <span className="flex items-center gap-1" title="Ordered on">
+                <Clock className="w-3.5 h-3.5" /> Ordered {formatDate(first.order_date)}
               </span>
             )}
           </div>
@@ -625,10 +632,16 @@ function GarmentPlanCard({
   const tripNum = garment.trip_number ?? 1;
   const needsRepairAtShop =
     garment.location === "shop" &&
+    garment.piece_stage !== "discarded" &&
     (garment.feedback_status === "needs_repair" ||
       garment.feedback_status === "needs_redo");
-  // Unified: any garment at shop with needs_repair/needs_redo is "Alteration (In)".
-  const isAlterationIn = needsRepairAtShop;
+  // "(In)" = in production going through fix. Any trip >= 2 currently in the
+  // workshop pipeline (workshop/transit), except discarded. At-shop rejected
+  // garments are a separate pending-return state, not alt-in.
+  const isAlterationIn =
+    garment.piece_stage !== "discarded" &&
+    tripNum >= 2 &&
+    garment.location !== "shop";
   const isAtShopPostProduction =
     garment.location === "shop" && !needsRepairAtShop;
   const hasStarted = !!garment.start_time;
@@ -667,9 +680,9 @@ function GarmentPlanCard({
     if (garment.location === "transit_to_workshop")
       return { text: `${altPrefix}In transit to workshop`, cls: "text-orange-700" };
     // Shop states
-    if (isAlterationIn) {
+    if (needsRepairAtShop) {
       // Next alt cycle = current trip (will become trip+1 on return).
-      const nextAlt = (tripNum ?? 1);
+      const nextAlt = tripNum ?? 1;
       return { text: `Needs to return for Alt ${nextAlt}`, cls: "text-orange-700" };
     }
     if (garment.piece_stage === "awaiting_trial" && garment.location === "shop")
@@ -679,8 +692,7 @@ function GarmentPlanCard({
       };
     if (garment.piece_stage === "ready_for_pickup")
       return { text: "Ready for pickup", cls: "text-green-700" };
-    if (isAtShopPostProduction)
-      return { text: "At shop", cls: "text-green-700" };
+    if (isAtShopPostProduction) return null;
     // Workshop states
     if (garment.piece_stage === "waiting_for_acceptance") {
       if (anyBrovaAccepted)
@@ -732,6 +744,11 @@ function GarmentPlanCard({
     await updateMut.mutateAsync({ id: garment.id, updates });
   };
 
+  const isDiscarded = garment.piece_stage === "discarded";
+  const replacedByGarmentId = (garment as typeof garment & {
+    replaced_by_garment_id: string | null;
+  }).replaced_by_garment_id;
+
   return (
     <div
       className={cn(
@@ -742,197 +759,235 @@ function GarmentPlanCard({
         garment.piece_stage === "waiting_for_acceptance" &&
           !anyBrovaAccepted &&
           "opacity-50 bg-zinc-50",
+        isDiscarded && "bg-red-50/40 border-red-200 opacity-75",
       )}
     >
       {/* Garment header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <span
-            className={cn(
-              "text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
-              garment.garment_type === "brova"
-                ? "bg-purple-100 text-purple-800 border-purple-200"
-                : "bg-blue-100 text-blue-800 border-blue-200",
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          {/* Identity row */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={cn(
+                "text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
+                garment.garment_type === "brova"
+                  ? "bg-purple-100 text-purple-800 border-purple-200"
+                  : "bg-blue-100 text-blue-800 border-blue-200",
+              )}
+            >
+              {garment.garment_type}
+            </span>
+            <Link
+              to="/assigned/garment/$garmentId"
+              params={{ garmentId: garment.id }}
+              className="font-mono font-bold text-sm text-primary hover:underline"
+            >
+              {garment.garment_id ?? garment.id.slice(0, 8)}
+            </Link>
+            {garment.express && (
+              <Zap
+                className="w-3.5 h-3.5 text-red-600 fill-red-600"
+                aria-label="Express"
+              />
             )}
-          >
-            {garment.garment_type}
-          </span>
-          <Link
-            to="/assigned/garment/$garmentId"
-            params={{ garmentId: garment.id }}
-            className="font-mono font-bold text-sm text-primary hover:underline"
-          >
-            {garment.garment_id ?? garment.id.slice(0, 8)}
-          </Link>
-          {garment.express && <ExpressBadge />}
-          <AlterationBadge
-            tripNumber={garment.trip_number}
-            garmentType={garment.garment_type}
-          />
-          {hasQcFailThisTrip && (
-            <QcFixBadge
-              tripNumber={garment.trip_number}
-              tripHistory={garment.trip_history}
+            {garment.home_delivery_order && (
+              <Home
+                className="w-3.5 h-3.5 text-indigo-600"
+                aria-label="Home delivery"
+              />
+            )}
+          </div>
+
+          {/* Status row — stage + location + alt/qc chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <StageBadge
+              stage={garment.piece_stage}
+              garmentType={garment.garment_type}
+              inProduction={garment.in_production}
+              location={garment.location}
+              finalApprovalState={
+                garment.garment_type === "final" &&
+                garment.piece_stage === "waiting_for_acceptance"
+                  ? anyBrovaAccepted
+                    ? "approved"
+                    : "pending"
+                  : undefined
+              }
             />
-          )}
-          {isAlterationIn && <AlterationInBadge tripNumber={tripNum} />}
-          <StageBadge
-            stage={garment.piece_stage}
-            garmentType={garment.garment_type}
-            inProduction={garment.in_production}
-            location={garment.location}
-            finalApprovalState={
-              garment.garment_type === "final" &&
-              garment.piece_stage === "waiting_for_acceptance"
-                ? anyBrovaAccepted
-                  ? "approved"
-                  : "pending"
-                : undefined
-            }
-          />
-          <span
-            className={cn(
-              "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
-              garment.location === "shop"
-                ? "bg-green-100 text-green-800"
+            <span
+              className={cn(
+                "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
+                garment.location === "shop"
+                  ? "bg-green-100 text-green-800"
+                  : garment.location === "workshop"
+                    ? "bg-blue-100 text-blue-800"
+                    : garment.location === "transit_to_shop"
+                      ? "bg-cyan-100 text-cyan-800"
+                      : garment.location === "transit_to_workshop"
+                        ? "bg-orange-100 text-orange-800"
+                        : "bg-zinc-100 text-zinc-800",
+              )}
+            >
+              {garment.location === "shop"
+                ? "At Shop"
                 : garment.location === "workshop"
-                  ? "bg-blue-100 text-blue-800"
+                  ? "Workshop"
                   : garment.location === "transit_to_shop"
-                    ? "bg-cyan-100 text-cyan-800"
+                    ? "Transit to Shop"
                     : garment.location === "transit_to_workshop"
-                      ? "bg-orange-100 text-orange-800"
-                      : "bg-zinc-100 text-zinc-800",
+                      ? "Transit to Workshop"
+                      : garment.location}
+            </span>
+            {garment.piece_stage !== "discarded" && !isAlterationIn && (
+              <AlterationBadge
+                tripNumber={garment.trip_number}
+                garmentType={garment.garment_type}
+              />
             )}
-          >
-            {garment.location === "shop"
-              ? "At Shop"
-              : garment.location === "workshop"
-                ? "Workshop"
-                : garment.location === "transit_to_shop"
-                  ? "Transit to Shop"
-                  : garment.location === "transit_to_workshop"
-                    ? "Transit to Workshop"
-                    : garment.location}
-          </span>
+            {garment.piece_stage !== "discarded" && isAlterationIn && (
+              <AlterationInBadge tripNumber={tripNum} />
+            )}
+            {garment.piece_stage !== "discarded" && hasQcFailThisTrip && (
+              <QcFixBadge
+                tripNumber={garment.trip_number}
+                tripHistory={garment.trip_history}
+              />
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right text-[11px] tabular-nums leading-tight">
-            {garment.delivery_date &&
-              (() => {
-                const days = Math.ceil(
-                  (new Date(garment.delivery_date).getTime() - Date.now()) /
-                    86400000,
-                );
-                const isDone =
-                  garment.piece_stage === "completed" ||
-                  garment.piece_stage === "ready_for_pickup";
-                const daysText =
-                  days < 0
-                    ? `${Math.abs(days)}d late`
-                    : days === 0
-                      ? "today"
-                      : `${days}d`;
-                return (
-                  <div
-                    className={cn(
-                      isDone
-                        ? "text-muted-foreground"
-                        : days < 0
-                          ? "text-red-700"
-                          : days <= 2
-                            ? "text-amber-700"
-                            : "text-muted-foreground",
-                    )}
-                  >
-                    Due{" "}
-                    <span className="font-semibold">
-                      {formatDate(String(garment.delivery_date))}
-                    </span>
-                    <span className="ml-0.5">({daysText})</span>
-                  </div>
-                );
-              })()}
-            {garment.assigned_date &&
-              (() => {
-                const days = Math.ceil(
-                  (new Date(garment.assigned_date + "T23:59:59+03:00").getTime() -
-                    Date.now()) /
-                    86400000,
-                );
-                const isPast = days < 0;
-                const isDone =
-                  garment.piece_stage === "ready_for_dispatch" ||
-                  garment.piece_stage === "completed" ||
-                  garment.piece_stage === "ready_for_pickup";
-                const daysText =
-                  days < 0
-                    ? `${Math.abs(days)}d over`
-                    : days === 0
-                      ? "today"
-                      : `${days}d`;
-                return (
-                  <div
-                    className={cn(
-                      isPast && !isDone
-                        ? "text-red-600"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    Assigned{" "}
-                    <span className="font-semibold">
-                      {formatDate(garment.assigned_date)}
-                    </span>
-                    <span className="ml-0.5">({daysText})</span>
-                  </div>
-                );
-              })()}
+        <div className="shrink-0 text-right space-y-1 text-[11px] tabular-nums leading-tight">
+          {garment.delivery_date &&
+            (() => {
+              const days = Math.ceil(
+                (new Date(garment.delivery_date).getTime() - Date.now()) /
+                  86400000,
+              );
+              const isDone =
+                garment.piece_stage === "completed" ||
+                garment.piece_stage === "ready_for_pickup";
+              const daysText =
+                days < 0
+                  ? `${Math.abs(days)}d late`
+                  : days === 0
+                    ? "today"
+                    : `${days}d`;
+              return (
+                <div
+                  className={cn(
+                    "flex items-center justify-end gap-1",
+                    isDone
+                      ? "text-muted-foreground"
+                      : days < 0
+                        ? "text-red-700"
+                        : days <= 2
+                          ? "text-amber-700"
+                          : "text-muted-foreground",
+                  )}
+                >
+                  <span>Due</span>
+                  <span className="font-semibold">
+                    {formatDate(String(garment.delivery_date))}
+                  </span>
+                  <span>({daysText})</span>
+                </div>
+              );
+            })()}
+          {garment.assigned_date &&
+            (() => {
+              const days = Math.ceil(
+                (new Date(garment.assigned_date + "T23:59:59+03:00").getTime() -
+                  Date.now()) /
+                  86400000,
+              );
+              const isPast = days < 0;
+              const isDone =
+                garment.piece_stage === "ready_for_dispatch" ||
+                garment.piece_stage === "completed" ||
+                garment.piece_stage === "ready_for_pickup";
+              const daysText =
+                days < 0
+                  ? `${Math.abs(days)}d over`
+                  : days === 0
+                    ? "today"
+                    : `${days}d`;
+              return (
+                <div
+                  className={cn(
+                    isPast && !isDone ? "text-red-600" : "text-muted-foreground",
+                  )}
+                >
+                  Assigned{" "}
+                  <span className="font-semibold">
+                    {formatDate(garment.assigned_date)}
+                  </span>
+                  <span className="ml-0.5">({daysText})</span>
+                </div>
+              );
+            })()}
+          <div className="flex items-center justify-end gap-1 pt-0.5">
+            {isDiscarded ? (
+              replacedByGarmentId ? (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+                  Replacement created
+                </span>
+              ) : (
+                <Link
+                  to="/assigned/$orderId/add-garment"
+                  params={{ orderId: String(garment.order_id) }}
+                  search={{ replaces: garment.id }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 whitespace-nowrap"
+                >
+                  Create replacement
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              )
+            ) : canEdit ? (
+              <button
+                onClick={() => setPlanOpen(true)}
+                className="p-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors"
+                title="Edit production plan"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            ) : editability.canEditDeliveryDate ? (
+              <div className="w-32" title="Change delivery date">
+                <ConfirmedDatePicker
+                  value={garment.delivery_date ?? ""}
+                  onConfirm={async (d) => {
+                    await updateMut.mutateAsync({
+                      id: garment.id,
+                      updates: { delivery_date: toLocalDateStr(d) },
+                    });
+                  }}
+                  label="garment delivery date"
+                  displayFormat="dd MMM"
+                  className="h-7 text-[11px] px-2"
+                />
+              </div>
+            ) : editability.readOnlyReason ? (
+              <span
+                className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5"
+                title={editability.readOnlyReason}
+              >
+                <Lock className="w-3 h-3" />
+              </span>
+            ) : null}
+            <Link
+              to="/assigned/garment/$garmentId"
+              params={{ garmentId: garment.id }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-xs font-semibold text-primary hover:bg-muted/50 transition-colors whitespace-nowrap"
+              title="Open garment details"
+            >
+              Details
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
-          {canEdit ? (
-            <button
-              onClick={() => setPlanOpen(true)}
-              className="p-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors"
-              title="Edit production plan"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-          ) : editability.canEditDeliveryDate ? (
-            <div className="w-36" title="Change delivery date">
-              <ConfirmedDatePicker
-                value={garment.delivery_date ?? ""}
-                onConfirm={async (d) => {
-                  await updateMut.mutateAsync({
-                    id: garment.id,
-                    updates: { delivery_date: toLocalDateStr(d) },
-                  });
-                }}
-                label="garment delivery date"
-                displayFormat="dd MMM"
-                className="h-7 text-[11px] px-2"
-              />
-            </div>
-          ) : editability.readOnlyReason ? (
-            <span
-              className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5"
-              title={editability.readOnlyReason}
-            >
-              <Lock className="w-3 h-3" />
-            </span>
-          ) : null}
-          <Link
-            to="/assigned/garment/$garmentId"
-            params={{ garmentId: garment.id }}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-xs font-semibold text-primary hover:bg-muted/50 transition-colors whitespace-nowrap"
-            title="Open garment details"
-          >
-            Details
-            <ArrowRight className="w-3 h-3" />
-          </Link>
         </div>
       </div>
 
-      {/* Pipeline */}
-      {garment.production_plan && (
+      {/* Pipeline — hidden for discarded garments (dead, no pipeline state) */}
+      {!isDiscarded && garment.production_plan && (
         <div className="mt-2">
           <ProductionPipeline
             currentStage={garment.piece_stage}
@@ -949,35 +1004,16 @@ function GarmentPlanCard({
         </div>
       )}
 
-      {/* No plan yet */}
-      {!garment.production_plan && (
+      {/* No plan yet (non-discarded) */}
+      {!isDiscarded && !garment.production_plan && (
         <p className="mt-2 text-xs text-muted-foreground italic">
           {contextMessage ? contextMessage.text : "Not yet scheduled"}
         </p>
       )}
 
-      {/* Discarded → replacement CTA */}
-      {garment.piece_stage === "discarded" && (
-        <div className="mt-2">
-          {(garment as typeof garment & { replaced_by_garment_id: string | null }).replaced_by_garment_id ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs font-semibold text-muted-foreground">
-              Replacement created
-            </span>
-          ) : (
-            <Link
-              to="/assigned/$orderId/add-garment"
-              params={{ orderId: String(garment.order_id) }}
-              search={{ replaces: garment.id }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
-            >
-              Create replacement →
-            </Link>
-          )}
-        </div>
-      )}
-
-      {/* Worker summary — only show if different from shared plan, or no shared plan */}
-      {garment.production_plan &&
+      {/* Worker summary — hidden for discarded (stale) */}
+      {!isDiscarded &&
+        garment.production_plan &&
         (() => {
           // Find differences from shared plan
           const diffs = sharedPlan
@@ -1059,7 +1095,7 @@ function GarmentPlanCard({
           );
         })()}
 
-      {/* Compact trip history for returning garments */}
+      {/* Compact trip history for returning garments — excludes current trip */}
       {isReturn && (
         <CompactTripHistory
           tripHistory={
@@ -1069,6 +1105,7 @@ function GarmentPlanCard({
               | null
               | undefined
           }
+          currentTrip={tripNum}
         />
       )}
 
@@ -1129,20 +1166,64 @@ const WORKER_LABELS: Record<string, string> = {
   quality_checker: "QC",
 };
 
+// Worker-key order aligned with PLAN_STEPS / STAGE_ORDER.
+const WORKER_KEYS_ORDERED = [
+  "soaker",
+  "cutter",
+  "post_cutter",
+  "sewer",
+  "finisher",
+  "ironer",
+  "quality_checker",
+] as const;
+
+// Map reentry piece_stage → starting worker key for that trip.
+const REENTRY_TO_WORKER: Record<string, string> = {
+  waiting_cut: "soaker",
+  soaking: "soaker",
+  cutting: "cutter",
+  post_cutting: "post_cutter",
+  sewing: "sewer",
+  finishing: "finisher",
+  ironing: "ironer",
+  quality_check: "quality_checker",
+};
+
+/**
+ * Trip entries store the garment's *cumulative* worker_history, not just the
+ * stages touched on that trip. Alterations normally start mid-pipeline
+ * (reentry_stage), so filter the display to stages from that point onward.
+ */
+function filterWorkersForTrip(
+  workers: Record<string, string>,
+  reentryStage: string | null | undefined,
+  trip: number,
+): [string, string][] {
+  const startKey = reentryStage ? REENTRY_TO_WORKER[reentryStage] : null;
+  const startIdx =
+    trip > 1 && startKey ? WORKER_KEYS_ORDERED.indexOf(startKey as never) : 0;
+  return WORKER_KEYS_ORDERED.slice(Math.max(0, startIdx))
+    .filter((k) => workers[k])
+    .map((k) => [k, workers[k]]);
+}
+
 function CompactTripHistory({
   tripHistory: raw,
+  currentTrip,
 }: {
   tripHistory: TripHistoryEntry[] | string | null | undefined;
+  currentTrip: number;
 }) {
   const [open, setOpen] = useState(false);
 
-  const entries: TripHistoryEntry[] = !raw
+  const allEntries: TripHistoryEntry[] = !raw
     ? []
     : typeof raw === "string"
       ? JSON.parse(raw)
       : Array.isArray(raw)
         ? raw
         : [];
+  const entries = allEntries.filter((e) => e.trip < currentTrip);
 
   if (entries.length === 0) return null;
 
@@ -1200,24 +1281,31 @@ function CompactTripHistory({
                     </span>
                   )}
                 </div>
-                {entry.worker_history &&
-                  Object.keys(entry.worker_history).length > 0 && (
+                {(() => {
+                  const workers = entry.worker_history
+                    ? filterWorkersForTrip(
+                        entry.worker_history,
+                        entry.reentry_stage,
+                        entry.trip,
+                      )
+                    : [];
+                  if (workers.length === 0) return null;
+                  return (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {Object.entries(entry.worker_history).map(
-                        ([key, name]) => (
-                          <span
-                            key={key}
-                            className="inline-flex items-center gap-0.5 text-[11px] bg-background px-1.5 py-0.5 rounded"
-                          >
-                            <span className="text-muted-foreground">
-                              {WORKER_LABELS[key] ?? key}:
-                            </span>
-                            <span className="font-semibold">{name}</span>
+                      {workers.map(([key, name]) => (
+                        <span
+                          key={key}
+                          className="inline-flex items-center gap-0.5 text-[11px] bg-background px-1.5 py-0.5 rounded"
+                        >
+                          <span className="text-muted-foreground">
+                            {WORKER_LABELS[key] ?? key}:
                           </span>
-                        ),
-                      )}
+                          <span className="font-semibold">{name}</span>
+                        </span>
+                      ))}
                     </div>
-                  )}
+                  );
+                })()}
               </div>
             ))}
           </div>

@@ -36,16 +36,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check caller is admin via their app_metadata or users table
+    // Check caller is admin or manager via users table
     const { data: callerData } = await supabase
       .from("users")
-      .select("role")
+      .select("role, department")
       .eq("auth_id", caller.id)
       .single();
 
-    if (!callerData || !["admin", "super_admin"].includes(callerData.role)) {
+    const isAdmin = callerData && ["admin", "super_admin"].includes(callerData.role);
+    const isManager = callerData && callerData.role === "manager";
+
+    if (!isAdmin && !isManager) {
       return new Response(
-        JSON.stringify({ error: "Admin access required" }),
+        JSON.stringify({ error: "Admin or manager access required" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -55,13 +58,13 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case "create-user":
-        return await handleCreateUser(supabase, params);
+        return await handleCreateUser(supabase, params, isAdmin ? null : callerData.department);
       case "deactivate-user":
-        return await handleDeactivateUser(supabase, params);
+        return await handleDeactivateUser(supabase, params, isAdmin ? null : callerData.department);
       case "activate-user":
-        return await handleActivateUser(supabase, params);
+        return await handleActivateUser(supabase, params, isAdmin ? null : callerData.department);
       case "set-pin":
-        return await handleSetPin(supabase, params);
+        return await handleSetPin(supabase, params, isAdmin ? null : callerData.department);
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
@@ -78,13 +81,20 @@ Deno.serve(async (req) => {
 });
 
 // deno-lint-ignore no-explicit-any
-async function handleCreateUser(supabase: any, params: any) {
+async function handleCreateUser(supabase: any, params: any, callerDepartment: string | null) {
   const { username, name, pin, role, department, job_function, ...rest } = params;
 
   if (!username || !name || !pin || !role || !department) {
     return new Response(
       JSON.stringify({ error: "username, name, pin, role, and department are required" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  if (callerDepartment && department !== callerDepartment) {
+    return new Response(
+      JSON.stringify({ error: "Managers can only create users in their own department" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -158,7 +168,7 @@ async function handleCreateUser(supabase: any, params: any) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleDeactivateUser(supabase: any, params: any) {
+async function handleDeactivateUser(supabase: any, params: any, callerDepartment: string | null) {
   const { user_id } = params;
   if (!user_id) {
     return new Response(
@@ -167,12 +177,19 @@ async function handleDeactivateUser(supabase: any, params: any) {
     );
   }
 
-  // Get auth_id
+  // Get auth_id and department for scope check
   const { data: user } = await supabase
     .from("users")
-    .select("auth_id")
+    .select("auth_id, department")
     .eq("id", user_id)
     .single();
+
+  if (callerDepartment && user?.department !== callerDepartment) {
+    return new Response(
+      JSON.stringify({ error: "Managers can only manage users in their own department" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   // Deactivate in users table
   await supabase
@@ -194,7 +211,7 @@ async function handleDeactivateUser(supabase: any, params: any) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleActivateUser(supabase: any, params: any) {
+async function handleActivateUser(supabase: any, params: any, callerDepartment: string | null) {
   const { user_id } = params;
   if (!user_id) {
     return new Response(
@@ -205,9 +222,16 @@ async function handleActivateUser(supabase: any, params: any) {
 
   const { data: user } = await supabase
     .from("users")
-    .select("auth_id")
+    .select("auth_id, department")
     .eq("id", user_id)
     .single();
+
+  if (callerDepartment && user?.department !== callerDepartment) {
+    return new Response(
+      JSON.stringify({ error: "Managers can only manage users in their own department" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   await supabase
     .from("users")
@@ -228,13 +252,27 @@ async function handleActivateUser(supabase: any, params: any) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleSetPin(supabase: any, params: any) {
+async function handleSetPin(supabase: any, params: any, callerDepartment: string | null) {
   const { user_id, pin } = params;
   if (!user_id || !pin) {
     return new Response(
       JSON.stringify({ error: "user_id and pin are required" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  }
+
+  if (callerDepartment) {
+    const { data: target } = await supabase
+      .from("users")
+      .select("department")
+      .eq("id", user_id)
+      .single();
+    if (target?.department !== callerDepartment) {
+      return new Response(
+        JSON.stringify({ error: "Managers can only manage users in their own department" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   }
 
   const { error } = await supabase.rpc("set_user_pin", {

@@ -337,21 +337,13 @@ export function evaluateBrovaFeedback(
 
     let message = "";
     if (feedback === "accepted") {
-        message = releaseFinals
-            ? "Brova accepted. Finals can be released to production."
-            : "Brova accepted.";
+        message = "Brova accepted.";
     } else if (feedback === "needs_repair_accepted") {
-        message = releaseFinals
-            ? "Brova accepted with minor fix needed. Finals can be released. Send brova back when ready."
-            : "Brova accepted with fix needed.";
+        message = "Brova accepted with fix needed. Send back to workshop when ready.";
     } else if (feedback === "needs_repair_rejected") {
-        message = releaseFinals
-            ? "Brova rejected. But another brova was accepted, so finals can start."
-            : "Brova rejected — needs repair.";
+        message = "Brova rejected — needs repair.";
     } else if (feedback === "needs_redo") {
-        message = releaseFinals
-            ? "Brova discarded. Workshop must create a replacement. Another brova was accepted, so finals can start."
-            : "Brova discarded. Workshop must create a replacement garment.";
+        message = "Brova discarded. Workshop must create a replacement garment.";
     }
 
     return { newStage, feedbackStatus, acceptanceStatus, releaseFinals, brovaGoesBack, message };

@@ -19,8 +19,14 @@ interface DiscountControlsProps {
     currentDiscountValue?: number;
     currentDiscountPercentage?: number;
     currentReferralCode?: string | null;
+    currentApprovedBy?: string | null;
+    currentApproverName?: string | null;
+    currentReason?: string | null;
     orderTotal: number;
+    totalPaid?: number;
 }
+
+const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
 export function DiscountControls({
     orderId,
@@ -29,6 +35,7 @@ export function DiscountControls({
     currentDiscountPercentage = 0,
     currentReferralCode,
     orderTotal,
+    totalPaid = 0,
 }: DiscountControlsProps) {
     const subtotal = orderTotal + currentDiscountValue;
 
@@ -65,6 +72,12 @@ export function DiscountControls({
         discountVal !== (currentDiscountValue || 0) ||
         pctVal !== (currentDiscountPercentage || 0) ||
         referralCode !== (currentReferralCode || "");
+
+    // RPC rejects if new total would drop below already-paid amount.
+    // Surface this client-side so the user sees the exact refund they need first.
+    const prospectiveTotal = Math.max(0, subtotal - discountVal);
+    const refundNeededFirst = totalPaid > prospectiveTotal ? totalPaid - prospectiveTotal : 0;
+    const blocksBelowPaid = refundNeededFirst > 0.001;
 
     const handleApply = () => {
         if (!discountType) return;
@@ -138,9 +151,17 @@ export function DiscountControls({
                                         <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">%</Label>
                                         <Input
                                             type="number"
+                                            min="0"
+                                            max="100"
                                             placeholder="0"
                                             value={percentage}
-                                            onChange={(e) => setPercentage(e.target.value)}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                if (v === "") { setPercentage(""); return; }
+                                                const n = Number(v);
+                                                if (isNaN(n)) return;
+                                                setPercentage(String(Math.max(0, Math.min(100, n))));
+                                            }}
                                             onFocus={(e) => e.target.select()}
                                             className="h-8 text-sm"
                                         />
@@ -155,9 +176,17 @@ export function DiscountControls({
                                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Value (KWD)</Label>
                                     <Input
                                         type="number"
+                                        min="0"
+                                        max={subtotal}
                                         placeholder="0.000"
                                         value={kwdValue}
-                                        onChange={(e) => setKwdValue(e.target.value)}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (v === "") { setKwdValue(""); return; }
+                                            const n = Number(v);
+                                            if (isNaN(n)) return;
+                                            setKwdValue(String(Math.max(0, Math.min(subtotal, n))));
+                                        }}
                                         onFocus={(e) => e.target.select()}
                                         className="h-8 text-sm"
                                     />
@@ -177,13 +206,20 @@ export function DiscountControls({
                             </div>
                         )}
 
+                        {blocksBelowPaid && (
+                            <div className="rounded-md bg-red-50 border border-red-200 px-2 py-1.5 text-[11px] text-red-700">
+                                Discount leaves total ({fmt(prospectiveTotal)} KWD) below already-paid ({fmt(totalPaid)} KWD).
+                                Refund <span className="font-bold">{fmt(refundNeededFirst)} KWD</span> first.
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-1.5">
                             {isDirty && (
                                 <Button
                                     size="sm"
                                     className="h-7 text-xs px-3"
                                     onClick={handleApply}
-                                    disabled={discountMutation.isPending || discountVal === 0}
+                                    disabled={discountMutation.isPending || discountVal === 0 || blocksBelowPaid}
                                 >
                                     {discountMutation.isPending ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Saving...</> : "Apply"}
                                 </Button>
