@@ -13,4 +13,5 @@ export default {
   dbCredentials: {
     connectionString: process.env.DATABASE_URL,
   },
+  tablesFilter: ["!assigned_order_agg"],
 } satisfies Config;

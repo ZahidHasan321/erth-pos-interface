@@ -35,9 +35,16 @@ export {
 // dedicated cashier role comes later).
 const PERMISSIONS: PermissionMatrix = {
   // Office pages — full access for shop staff and managers.
-  "/home":     { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
-  "/profile":  { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "/cashier":  { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "/home":            { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
+  "/profile":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "/cashier":         { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "/store/inventory": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+
+  // Inventory type permissions — controls create/edit visibility within the inventory page.
+  // Shop manages fabrics; accessories + shelf are owned by the workshop.
+  "inventory:fabrics":     { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
+  "inventory:accessories": { admin: "full", "manager:shop": "view", "staff:shop": "view" },
+  "inventory:shelf":       { admin: "full", "manager:shop": "view", "staff:shop": "view" },
 };
 
 export function getPermission(user: AuthUser | null, page: string): Permission {

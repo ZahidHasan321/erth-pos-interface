@@ -1,17 +1,16 @@
 import { useState, useEffect } from "react";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, Outlet } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { useAuth } from "@/context/auth";
 import { getBrand } from "@/api/orders";
 import { router } from "@/router";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
-import { CashierBody } from "@/components/cashier/cashier-terminal";
 import ErthLogo from "@/assets/erth-light.svg";
 import SakhtbaLogo from "@/assets/Sakkba.png";
 
 export const Route = createFileRoute("/cashier")({
-    component: CashierTerminal,
+    component: CashierLayout,
     beforeLoad: ({ context, location }) => {
         if (!context.auth.isAuthenticated) {
             throw redirect({
@@ -19,7 +18,6 @@ export const Route = createFileRoute("/cashier")({
                 search: { redirect: location.href },
             });
         }
-        // Deny terminal-locked workshop staff (sewer, cutter, etc.).
         const user = (context.auth as any).user;
         if (user && user.role === "staff" && user.job_function) {
             throw redirect({
@@ -33,7 +31,7 @@ export const Route = createFileRoute("/cashier")({
     }),
 });
 
-function CashierTerminal() {
+function CashierLayout() {
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
     const auth = useAuth();
     const navigate = useNavigate();
@@ -59,7 +57,6 @@ function CashierTerminal() {
 
     return (
         <div className="h-screen flex flex-col bg-background">
-            {/* Standalone header with logo + logout */}
             <header className="flex items-center gap-3 px-4 py-2 border-b bg-card shrink-0">
                 <div className="flex items-center gap-2">
                     <img src={brandLogo} alt="Logo" className="h-7 w-7 object-contain" />
@@ -73,9 +70,8 @@ function CashierTerminal() {
                 </div>
             </header>
 
-            {/* Shared cashier body */}
             <div className="flex-1 min-h-0">
-                <CashierBody />
+                <Outlet />
             </div>
 
             <ConfirmationDialog

@@ -633,7 +633,8 @@ CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_refund_reason TEXT DEFAULT NULL,
   p_collect_garment_ids UUID[] DEFAULT NULL,
   p_refund_items JSONB DEFAULT NULL,
-  p_local_date DATE DEFAULT CURRENT_DATE
+  p_local_date DATE DEFAULT CURRENT_DATE,
+  p_fulfillment_overrides JSONB DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -702,7 +703,12 @@ BEGIN
     LOOP
       UPDATE garments
       SET
-        fulfillment_type = CASE WHEN home_delivery THEN 'delivered'::fulfillment_type ELSE 'collected'::fulfillment_type END,
+        fulfillment_type = CASE
+          WHEN p_fulfillment_overrides IS NOT NULL AND (p_fulfillment_overrides->>v_garment_id::text) IS NOT NULL
+            THEN (p_fulfillment_overrides->>v_garment_id::text)::fulfillment_type
+          WHEN home_delivery THEN 'delivered'::fulfillment_type
+          ELSE 'collected'::fulfillment_type
+        END,
         piece_stage = 'completed'
       WHERE id = v_garment_id
         AND order_id = p_order_id
@@ -824,7 +830,8 @@ $$ LANGUAGE plpgsql;
 -- 11b. RPC: Collect garments without payment (for already-paid orders)
 CREATE OR REPLACE FUNCTION collect_garments(
   p_order_id INT,
-  p_garment_ids UUID[]
+  p_garment_ids UUID[],
+  p_fulfillment_overrides JSONB DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -844,7 +851,12 @@ BEGIN
   LOOP
     UPDATE garments
     SET
-      fulfillment_type = CASE WHEN home_delivery THEN 'delivered'::fulfillment_type ELSE 'collected'::fulfillment_type END,
+      fulfillment_type = CASE
+        WHEN p_fulfillment_overrides IS NOT NULL AND (p_fulfillment_overrides->>v_garment_id::text) IS NOT NULL
+          THEN (p_fulfillment_overrides->>v_garment_id::text)::fulfillment_type
+        WHEN home_delivery THEN 'delivered'::fulfillment_type
+        ELSE 'collected'::fulfillment_type
+      END,
       piece_stage = 'completed'
     WHERE id = v_garment_id
       AND order_id = p_order_id
@@ -891,15 +903,6 @@ BEGIN
   v_current_paid := COALESCE(v_order.paid, 0);
   v_is_clearing := COALESCE(p_discount_value, 0) = 0;
 
-  -- Require audit fields when applying a non-zero discount (clearing is exempt)
-  IF NOT v_is_clearing THEN
-    IF p_approved_by IS NULL THEN
-      RAISE EXCEPTION 'Discount approver is required';
-    END IF;
-    IF p_reason IS NULL OR btrim(p_reason) = '' THEN
-      RAISE EXCEPTION 'Discount reason is required';
-    END IF;
-  END IF;
 
   -- Compute subtotal (order_total + existing discount)
   v_subtotal := COALESCE(v_order.order_total, 0) + COALESCE(v_order.discount_value, 0);
@@ -3750,3 +3753,43 @@ CREATE POLICY "accessories_insert" ON accessories
 DROP POLICY IF EXISTS "accessories_update" ON accessories;
 CREATE POLICY "accessories_update" ON accessories
     FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+-- ── Update delivery charge ────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION update_delivery_charge(
+  p_order_id INT,
+  p_delivery_charge DECIMAL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_order RECORD;
+  v_new_total DECIMAL;
+BEGIN
+  SELECT order_total, delivery_charge, paid INTO v_order
+  FROM orders WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  IF p_delivery_charge < 0 THEN
+    RAISE EXCEPTION 'Delivery charge cannot be negative';
+  END IF;
+
+  v_new_total := COALESCE(v_order.order_total, 0) - COALESCE(v_order.delivery_charge, 0) + p_delivery_charge;
+
+  IF v_new_total < COALESCE(v_order.paid, 0) THEN
+    RAISE EXCEPTION 'New delivery charge would reduce order total (%) below amount already paid (%). Refund the excess first.', v_new_total, COALESCE(v_order.paid, 0);
+  END IF;
+
+  UPDATE orders
+  SET delivery_charge = p_delivery_charge,
+      order_total = v_new_total
+  WHERE id = p_order_id;
+
+  RETURN jsonb_build_object(
+    'status', 'success',
+    'order_id', p_order_id,
+    'delivery_charge', p_delivery_charge,
+    'order_total', v_new_total
+  );
+END;
+$$ LANGUAGE plpgsql;

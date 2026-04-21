@@ -6,6 +6,7 @@ import {
     recordPaymentTransaction,
     updateOrderDiscount,
     toggleHomeDelivery,
+    updateDeliveryCharge,
     collectGarments,
     getRecentCashierOrders,
     searchCashierOrderList,
@@ -248,5 +249,21 @@ export function useToggleHomeDeliveryMutation() {
         onError: (error) => {
             toast.error(`Delivery toggle error: ${error.message}`);
         },
+    });
+}
+
+export function useUpdateDeliveryChargeMutation() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: updateDeliveryCharge,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Failed to update delivery charge: ${response.message}`);
+                return;
+            }
+            invalidateCashierQueries(queryClient);
+        },
+        onError: (error) => toast.error(`Delivery charge error: ${error.message}`),
     });
 }

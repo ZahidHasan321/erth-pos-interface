@@ -338,6 +338,7 @@ export const recordPaymentTransaction = async (params: {
     transactionType: 'payment' | 'refund';
     refundReason?: string;
     collectGarmentIds?: string[];
+    collectFulfillmentOverrides?: Record<string, "collected" | "delivered">;
     refundItems?: RefundItem[];
 }) => {
     const { data, error } = await db.rpc('record_payment_transaction', {
@@ -352,6 +353,7 @@ export const recordPaymentTransaction = async (params: {
         p_collect_garment_ids: params.collectGarmentIds || null,
         p_refund_items: params.refundItems || null,
         p_local_date: getLocalDateStr(),
+        p_fulfillment_overrides: params.collectFulfillmentOverrides ?? null,
     });
 
     if (error) {
@@ -402,13 +404,30 @@ export const toggleHomeDelivery = async (params: {
     return { status: 'success' as const, data };
 };
 
+export const updateDeliveryCharge = async (params: {
+    orderId: number;
+    deliveryCharge: number;
+}) => {
+    const { data, error } = await db.rpc('update_delivery_charge', {
+        p_order_id: params.orderId,
+        p_delivery_charge: params.deliveryCharge,
+    });
+
+    if (error) {
+        return { status: 'error' as const, message: error.message };
+    }
+    return { status: 'success' as const, data };
+};
+
 export const collectGarments = async (params: {
     orderId: number;
     garmentIds: string[];
+    fulfillmentOverrides?: Record<string, "collected" | "delivered">;
 }) => {
     const { data, error } = await db.rpc('collect_garments', {
         p_order_id: params.orderId,
         p_garment_ids: params.garmentIds,
+        p_fulfillment_overrides: params.fulfillmentOverrides ?? null,
     });
 
     if (error) {

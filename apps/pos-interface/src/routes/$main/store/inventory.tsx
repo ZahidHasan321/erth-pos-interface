@@ -39,28 +39,23 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
 import { getFabrics, createFabric, updateFabric } from "@/api/fabrics";
-import { getShelf, createShelfItem, updateShelfItem } from "@/api/shelf";
-import {
-  getAccessories,
-  createAccessory,
-  updateAccessory,
-} from "@/api/accessories";
-import { PageHeader, EmptyState } from "@/components/shared/PageShell";
+import { getShelf, createShelfItem, updateShelf } from "@/api/shelf";
+import { getAccessories, createAccessory, updateAccessory } from "@/api/accessories";
 import {
   ACCESSORY_CATEGORY_LABELS,
   UNIT_OF_MEASURE_LABELS,
 } from "@/components/store/transfer-constants";
 import type { Fabric, Shelf, Accessory } from "@repo/database";
 
-export const Route = createFileRoute("/(main)/store/inventory")({
+export const Route = createFileRoute("/$main/store/inventory")({
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory Management" }] }),
 });
 
 const LOW_STOCK = { fabric: 5, shelf: 3, accessory: 10 };
 
-function isLowStock(type: "fabric" | "shelf" | "accessory", workshopStock: number) {
-  return workshopStock > 0 && workshopStock < LOW_STOCK[type];
+function isLowStock(type: "fabric" | "shelf" | "accessory", shopStock: number) {
+  return shopStock > 0 && shopStock < LOW_STOCK[type];
 }
 
 function InventoryPage() {
@@ -82,9 +77,9 @@ function InventoryPage() {
 
   const lowStockCount = useMemo(() => {
     let count = 0;
-    for (const f of fabrics) if (isLowStock("fabric", Number(f.workshop_stock ?? 0))) count++;
-    for (const s of shelfItems) if (isLowStock("shelf", Number(s.workshop_stock ?? 0))) count++;
-    for (const a of accessories) if (isLowStock("accessory", Number(a.workshop_stock ?? 0))) count++;
+    for (const f of fabrics) if (isLowStock("fabric", Number(f.shop_stock ?? 0))) count++;
+    for (const s of shelfItems) if (isLowStock("shelf", Number(s.shop_stock ?? 0))) count++;
+    for (const a of accessories) if (isLowStock("accessory", Number(a.shop_stock ?? 0))) count++;
     return count;
   }, [fabrics, shelfItems, accessories]);
 
@@ -97,9 +92,11 @@ function InventoryPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
-      <PageHeader icon={Package} title="Inventory Management" subtitle="Create and manage fabrics, shelf items, and accessories" />
+      <div className="mb-5">
+        <h1 className="text-xl font-bold tracking-tight">Inventory Management</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Create and manage fabrics, shelf items, and accessories</p>
+      </div>
 
-      {/* Stat Cards */}
       {isLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
@@ -122,7 +119,6 @@ function InventoryPage() {
         </div>
       )}
 
-      {/* Low Stock Alert */}
       {!isLoading && lowStockCount > 0 && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
           <div className="flex items-center gap-2.5">
@@ -132,7 +128,7 @@ function InventoryPage() {
             </p>
           </div>
           <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 hover:border-amber-300 shrink-0" asChild>
-            <Link to="/store/request-delivery">
+            <Link to="/$main/store/request-delivery" params={(p: Record<string, string>) => p}>
               Request Delivery
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -140,22 +136,18 @@ function InventoryPage() {
         </div>
       )}
 
-      {/* Error State */}
       {isError && !isLoading && (
         <Card className="shadow-none rounded-xl border border-destructive/20 mb-5">
           <CardContent className="py-10 text-center">
             <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
             <p className="font-medium text-sm">Failed to load stock data</p>
-            <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
             <Button variant="outline" size="sm" onClick={refetchAll} className="mt-4">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Retry
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Search */}
       <div className="relative max-w-xl mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -172,7 +164,6 @@ function InventoryPage() {
           <TabsTrigger value="shelf">Shelf Items</TabsTrigger>
           <TabsTrigger value="accessory">Accessories</TabsTrigger>
         </TabsList>
-
         <TabsContent value="fabric">
           <FabricsTab search={search} canEdit={canEditFabrics} />
         </TabsContent>
@@ -187,7 +178,7 @@ function InventoryPage() {
   );
 }
 
-// ─── Shared Components ───────────────────────────────────────────────
+// ─── Shared ──────────────────────────────────────────────────────────────
 
 function LowStockBadge() {
   return (
@@ -209,18 +200,14 @@ function TableSkeleton({ cols }: { cols: number }) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
-                {Array.from({ length: cols }).map((_, i) => (
-                  <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>
-                ))}
+                {Array.from({ length: cols }).map((_, i) => <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>)}
               </TableRow>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
                   {Array.from({ length: cols }).map((_, j) => (
-                    <TableCell key={j}>
-                      <Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} />
-                    </TableCell>
+                    <TableCell key={j}><Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} /></TableCell>
                   ))}
                 </TableRow>
               ))}
@@ -238,7 +225,6 @@ function QueryErrorState({ onRetry }: { onRetry: () => void }) {
       <CardContent className="py-10 text-center">
         <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
         <p className="font-medium text-sm">Failed to load data</p>
-        <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
         <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
         </Button>
@@ -247,15 +233,11 @@ function QueryErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-// ─── Fabrics ───────────────────────────────────────────────────────────
+// ─── Fabrics ─────────────────────────────────────────────────────────────
 
 function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   const qc = useQueryClient();
-  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["fabrics"],
-    queryFn: getFabrics,
-    staleTime: 60_000,
-  });
+  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: 60_000 });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fabric | null>(null);
 
@@ -286,19 +268,16 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
     const color = (fd.get("color") as string).trim() || undefined;
     const color_hex = (fd.get("color_hex") as string).trim() || undefined;
     const price_per_meter = fd.get("price_per_meter") ? Number(fd.get("price_per_meter")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
-
+    const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!name) { toast.error("Name is required"); return; }
-
     if (editing) {
-      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, workshop_stock: workshop_stock ?? 0 });
+      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, shop_stock: shop_stock ?? 0 });
     } else {
-      createMut.mutate({ name, color, color_hex, price_per_meter, workshop_stock });
+      createMut.mutate({ name, color, color_hex, price_per_meter, shop_stock });
     }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-
   if (isLoading) return <TableSkeleton cols={6} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
@@ -317,7 +296,6 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
               </Button>
             )}
           </div>
-
           <TableContainer>
             <Table>
               <TableHeader>
@@ -325,15 +303,15 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                   <TableHead>Name</TableHead>
                   <TableHead>Color Code</TableHead>
                   <TableHead className="text-right">Price/m</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((f) => {
-                  const ws = Number(f.workshop_stock ?? 0);
-                  const low = isLowStock("fabric", ws);
+                  const shop = Number(f.shop_stock ?? 0);
+                  const low = isLowStock("fabric", shop);
                   return (
                     <TableRow key={f.id} className={low ? "bg-red-50/40" : ""}>
                       <TableCell className="font-medium">
@@ -345,8 +323,8 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                       </TableCell>
                       <TableCell>{f.color ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{f.shop_stock ?? 0}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{shop}</TableCell>
+                      <TableCell className="text-right tabular-nums">{f.workshop_stock ?? 0}</TableCell>
                       <TableCell>
                         {canEdit && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(f)}>
@@ -358,7 +336,7 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No fabrics match your search" : "No fabrics yet"} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">{search ? "No fabrics match your search" : "No fabrics yet"}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -393,8 +371,8 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                 <Input id="fab-price" name="price_per_meter" type="number" step="0.001" min={0} defaultValue={editing?.price_per_meter ?? ""} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fab-stock">Workshop Stock (m)</Label>
-                <Input id="fab-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} />
+                <Label htmlFor="fab-stock">Shop Stock (m)</Label>
+                <Input id="fab-stock" name="shop_stock" type="number" step="0.5" min={0} defaultValue={editing?.shop_stock ?? 0} />
               </div>
             </div>
             <DialogFooter>
@@ -411,7 +389,7 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   );
 }
 
-// ─── Shelf Items ──────────────────────────────────────────────────────
+// ─── Shelf Items ──────────────────────────────────────────────────────────
 
 function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   const qc = useQueryClient();
@@ -424,8 +402,16 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
     return items.filter((s) => !q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q));
   }, [items, search]);
 
-  const createMut = useMutation({ mutationFn: createShelfItem, onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`) });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelfItem(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`) });
+  const createMut = useMutation({
+    mutationFn: createShelfItem,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); },
+    onError: (err: any) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`),
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelf(String(id), data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); },
+    onError: (err: any) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`),
+  });
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (s: Shelf) => { setEditing(s); setDialogOpen(true); };
@@ -436,10 +422,10 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
     const type = (fd.get("type") as string).trim();
     const brand = (fd.get("brand") as string).trim() || undefined;
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
+    const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!type) { toast.error("Type is required"); return; }
-    if (editing) { updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
-    else { createMut.mutate({ type, brand, price, workshop_stock }); }
+    if (editing) { updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null, shop_stock: shop_stock ?? 0 }); }
+    else { createMut.mutate({ type, brand, price, shop_stock }); }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
@@ -464,15 +450,15 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                   <TableHead>Type</TableHead>
                   <TableHead>Brand</TableHead>
                   <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((s) => {
-                  const ws = Number(s.workshop_stock ?? 0);
-                  const low = isLowStock("shelf", ws);
+                  const shop = Number(s.shop_stock ?? 0);
+                  const low = isLowStock("shelf", shop);
                   return (
                     <TableRow key={s.id} className={low ? "bg-red-50/40" : ""}>
                       <TableCell className="font-medium">
@@ -480,14 +466,14 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
                       </TableCell>
                       <TableCell>{s.brand ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.shop_stock ?? 0}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{shop}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.workshop_stock ?? 0}</TableCell>
                       <TableCell>{canEdit && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>}</TableCell>
                     </TableRow>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No shelf items match your search" : "No shelf items yet"} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">{search ? "No shelf items match your search" : "No shelf items yet"}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -503,7 +489,7 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
               <div className="space-y-2"><Label htmlFor="shelf-brand">Brand</Label><Input id="shelf-brand" name="brand" defaultValue={editing?.brand ?? ""} /></div>
               <div className="space-y-2"><Label htmlFor="shelf-price">Price</Label><Input id="shelf-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="shelf-stock">Workshop Stock</Label><Input id="shelf-stock" name="workshop_stock" type="number" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
+            <div className="space-y-2"><Label htmlFor="shelf-stock">Shop Stock</Label><Input id="shelf-stock" name="shop_stock" type="number" min={0} defaultValue={editing?.shop_stock ?? 0} /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
               <Button type="submit" disabled={isPending}>{isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}{editing ? "Save" : "Create"}</Button>
@@ -515,7 +501,7 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   );
 }
 
-// ─── Accessories ──────────────────────────────────────────────────────
+// ─── Accessories ──────────────────────────────────────────────────────────
 
 const CATEGORIES = ["buttons", "zippers", "thread", "lining", "elastic", "interlining", "other"] as const;
 const UNITS = ["pieces", "meters", "rolls", "kg"] as const;
@@ -531,8 +517,16 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
     return items.filter((a) => !q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q));
   }, [items, search]);
 
-  const createMut = useMutation({ mutationFn: createAccessory, onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`) });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`) });
+  const createMut = useMutation({
+    mutationFn: createAccessory,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); },
+    onError: (err: any) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`),
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); },
+    onError: (err: any) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`),
+  });
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (a: Accessory) => { setEditing(a); setDialogOpen(true); };
@@ -544,10 +538,13 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
     const category = fd.get("category") as string;
     const unit_of_measure = fd.get("unit_of_measure") as string;
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
+    const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!name || !category) { toast.error("Name and category are required"); return; }
-    if (editing) { updateMut.mutate({ id: editing.id, name, category: category as Accessory["category"], unit_of_measure: unit_of_measure as Accessory["unit_of_measure"], price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
-    else { createMut.mutate({ name, category: category as Accessory["category"], unit_of_measure: (unit_of_measure || "pieces") as Accessory["unit_of_measure"], price, workshop_stock } as any); }
+    if (editing) {
+      updateMut.mutate({ id: editing.id, name, category: category as Accessory["category"], unit_of_measure: unit_of_measure as Accessory["unit_of_measure"], price: price ?? null, shop_stock: shop_stock ?? 0 });
+    } else {
+      createMut.mutate({ name, category: category as Accessory["category"], unit_of_measure: (unit_of_measure || "pieces") as Accessory["unit_of_measure"], price, shop_stock } as any);
+    }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
@@ -573,15 +570,15 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
                   <TableHead>Category</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="text-right">Shop Stock</TableHead>
+                  <TableHead className="text-right">Workshop Stock</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((a) => {
-                  const ws = Number(a.workshop_stock ?? 0);
-                  const low = isLowStock("accessory", ws);
+                  const shop = Number(a.shop_stock ?? 0);
+                  const low = isLowStock("accessory", shop);
                   return (
                     <TableRow key={a.id} className={low ? "bg-red-50/40" : ""}>
                       <TableCell className="font-medium">
@@ -590,14 +587,14 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
                       <TableCell>{ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}</TableCell>
                       <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
                       <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.shop_stock ?? 0}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{shop}</TableCell>
+                      <TableCell className="text-right tabular-nums">{a.workshop_stock ?? 0}</TableCell>
                       <TableCell>{canEdit && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>}</TableCell>
                     </TableRow>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="py-8"><EmptyState icon={Package} message={search ? "No accessories match your search" : "No accessories yet"} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">{search ? "No accessories match your search" : "No accessories yet"}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -627,7 +624,7 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2"><Label htmlFor="acc-price">Price</Label><Input id="acc-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
-              <div className="space-y-2"><Label htmlFor="acc-stock">Workshop Stock</Label><Input id="acc-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
+              <div className="space-y-2"><Label htmlFor="acc-stock">Shop Stock</Label><Input id="acc-stock" name="shop_stock" type="number" step="0.5" min={0} defaultValue={editing?.shop_stock ?? 0} /></div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>

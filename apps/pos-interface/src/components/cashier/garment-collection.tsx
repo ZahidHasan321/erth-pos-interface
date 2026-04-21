@@ -7,6 +7,9 @@ interface GarmentCollectionProps {
     selectedIds: Set<string>;
     onToggle: (id: string) => void;
     onToggleAll: () => void;
+    fulfillmentModes: Map<string, "collected" | "delivered">;
+    onFulfillmentModeChange: (id: string, mode: "collected" | "delivered") => void;
+    isHomeDelivery?: boolean;
 }
 
 function isEligibleForCollection(g: Garment): boolean {
@@ -28,7 +31,7 @@ function getCashierStatus(g: Garment): { label: string; color: string } {
     return { label: "In Production", color: "bg-amber-100 text-amber-700" };
 }
 
-export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll }: GarmentCollectionProps) {
+export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll, fulfillmentModes, onFulfillmentModeChange, isHomeDelivery }: GarmentCollectionProps) {
     const eligibleGarments = garments.filter(isEligibleForCollection);
     const hasEligible = eligibleGarments.length > 0;
 
@@ -39,6 +42,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
         const status = getCashierStatus(g);
         const fabricData = (g as any).fabric;
         const isSelected = selectedIds.has(g.id);
+        const fulfillmentMode = fulfillmentModes.get(g.id);
 
         return (
             <div
@@ -100,8 +104,8 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         )}
                     </div>
                     {isCompleted && g.fulfillment_type ? (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 bg-slate-100 text-slate-600">
-                            Collected
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${g.fulfillment_type === "delivered" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                            {g.fulfillment_type === "delivered" ? "Delivered" : "Collected"}
                         </span>
                     ) : (
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${status.color}`}>
@@ -109,6 +113,40 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         </span>
                     )}
                 </div>
+                {eligible && (
+                    <div className="mt-2 ml-6 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!isSelected) onToggle(g.id);
+                                onFulfillmentModeChange(g.id, "collected");
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                                isSelected && fulfillmentMode === "collected"
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-white text-foreground border-slate-400 hover:border-primary"
+                            }`}
+                        >
+                            Collect
+                        </button>
+                        {isHomeDelivery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isSelected) onToggle(g.id);
+                                    onFulfillmentModeChange(g.id, "delivered");
+                                }}
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                                    isSelected && fulfillmentMode === "delivered"
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-white text-foreground border-slate-400 hover:border-primary"
+                                }`}
+                            >
+                                Deliver
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };

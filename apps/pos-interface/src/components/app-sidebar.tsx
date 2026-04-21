@@ -22,6 +22,7 @@ import {
   Banknote,
   CalendarDays,
   ListChecks,
+  Package,
 } from "lucide-react";
 
 import {
@@ -158,6 +159,11 @@ const data = {
           title: "Transfer History",
           url: "store/transfer-history",
           icon: History,
+        },
+        {
+          title: "Inventory",
+          url: "store/inventory",
+          icon: Package,
         },
         {
           title: "Stock Report",

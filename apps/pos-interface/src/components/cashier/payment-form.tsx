@@ -39,15 +39,18 @@ interface PaymentFormProps {
     totalPaid: number;
     advance?: number;
     collectGarmentIds?: Set<string>;
+    collectFulfillmentOverrides?: Record<string, "collected" | "delivered">;
+    collectActionLabel?: string;
     onCollected?: () => void;
     refundOnly?: boolean;
     isRefund?: boolean;
     onRefundModeChange?: (isRefund: boolean) => void;
     refundItems?: RefundItem[];
     refundTotal?: number;
+    onBeforeSubmit?: () => Promise<void>;
 }
 
-export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, advance, collectGarmentIds, onCollected, refundOnly, isRefund: controlledRefund, onRefundModeChange, refundItems, refundTotal }: PaymentFormProps) {
+export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, advance, collectGarmentIds, collectFulfillmentOverrides, collectActionLabel = "Collect", onCollected, refundOnly, isRefund: controlledRefund, onRefundModeChange, refundItems, refundTotal, onBeforeSubmit }: PaymentFormProps) {
     const [internalRefund, setInternalRefund] = useState(refundOnly ?? false);
     const isRefund = controlledRefund ?? internalRefund;
     const paymentMutation = usePaymentMutation();
@@ -98,7 +101,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
 
     const overpayment = Math.max(0, totalPaid - orderTotal);
 
-    const onSubmit = (values: PaymentFormValues) => {
+    const onSubmit = async (values: PaymentFormValues) => {
         if (isRefund) {
             if (!values.refund_reason || values.refund_reason.trim() === "") {
                 form.setError("refund_reason", { message: "Refund reason is required" });
@@ -128,6 +131,10 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
             return;
         }
 
+        if (onBeforeSubmit) {
+            try { await onBeforeSubmit(); } catch { return; }
+        }
+
         const garmentIds = !isRefund && collectGarmentIds && collectGarmentIds.size > 0
             ? Array.from(collectGarmentIds)
             : undefined;
@@ -143,6 +150,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                 transactionType: isRefund ? "refund" : "payment",
                 refundReason: isRefund ? values.refund_reason : undefined,
                 collectGarmentIds: garmentIds,
+                collectFulfillmentOverrides: garmentIds ? collectFulfillmentOverrides : undefined,
                 refundItems: isRefund && refundItems && refundItems.length > 0 ? refundItems : undefined,
             },
             {
@@ -301,7 +309,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
             {!isRefund && collectGarmentIds && collectGarmentIds.size > 0 && (
                 <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-medium">
                     <Package className="h-3 w-3" />
-                    {collectGarmentIds.size} garment{collectGarmentIds.size !== 1 ? "s" : ""} collected with payment
+                    {collectGarmentIds.size} garment{collectGarmentIds.size !== 1 ? "s" : ""} {collectActionLabel.toLowerCase()}ed with payment
                 </div>
             )}
 
@@ -317,7 +325,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                     : isRefund
                       ? "Record Refund"
                       : collectGarmentIds && collectGarmentIds.size > 0
-                        ? `Pay & Collect ${collectGarmentIds.size}`
+                        ? `Pay & ${collectActionLabel} ${collectGarmentIds.size}`
                         : "Record Payment"}
             </Button>
         </form>

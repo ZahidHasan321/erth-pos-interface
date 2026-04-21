@@ -57,6 +57,12 @@ const PERMISSIONS: PermissionMatrix = {
   "/dashboard":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/completed":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/store":       { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+
+  // Inventory type permissions — controls create/edit visibility within the inventory page.
+  // Workshop manages accessories + shelf; fabrics are owned by the shop.
+  "inventory:fabrics":     { admin: "full", "manager:workshop": "view", "staff:workshop": "view" },
+  "inventory:accessories": { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "inventory:shelf":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
   "/profile":     { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
   "/notifications": { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
 
