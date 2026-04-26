@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { pdf } from "@react-pdf/renderer";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -14,116 +14,161 @@ import { mapCustomerToFormValues } from "@/components/forms/customer-demographic
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { TIMEZONE, parseUtcTimestamp } from "@/lib/utils";
+import { TIMEZONE } from "@/lib/utils";
 import { DatePicker } from "@repo/ui/date-picker";
-import { SvgFormOverlay } from "@/components/alteration/svg-form-overlay";
-import { AlterationCheckboxMatrix } from "@/components/alteration/alteration-checkbox-matrix";
-import {
-    createInitialAlterationIssueMatrixValues,
-    type AlterationIssueMatrixValues,
-} from "@/components/alteration/alteration-checkbox-matrix-config";
-import { AlterationPdfDocument } from "@/components/alteration/alteration-pdf-document";
-import { defaultTemplateFieldLayout } from "@/components/alteration/field-layout";
-import { useAlterationOrderMutations } from "@/hooks/useAlterationOrderMutations";
-import { useAuth } from "@/context/auth";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
-import type { Customer } from "@repo/database";
+import { Switch } from "@repo/ui/switch";
+import { Textarea } from "@repo/ui/textarea";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@repo/ui/select";
+import {
+    AlterationGarmentForm,
+} from "@/components/forms/alteration/alteration-garment-form";
+import {
+    createEmptyAlterationGarment,
+    alterationOrderSchema,
+    type AlterationGarmentSchema,
+    type AlterationOrderSchema,
+} from "@/components/forms/alteration/alteration-form.schema";
+import { useAlterationOrderMutations } from "@/hooks/useAlterationOrderMutations";
+import { useAuth } from "@/context/auth";
+import { getMeasurementsByCustomerId } from "@/api/measurements";
+import { getAlterationOrderById } from "@/api/alteration-orders";
+import type { Customer, Garment, Measurement } from "@repo/database";
+
+type AlterationOrderSearch = { orderId?: number };
 
 export const Route = createFileRoute("/$main/orders/new-alteration-order")({
-    component: NewAlterationOrder,
-    head: () => ({
-        meta: [{ title: "New Alteration Order" }],
+    validateSearch: (search: Record<string, unknown>): AlterationOrderSearch => ({
+        orderId: search.orderId ? Number(search.orderId) : undefined,
     }),
+    component: NewAlterationOrder,
+    head: () => ({ meta: [{ title: "New Alteration Order" }] }),
 });
-
-type GarmentDraft = {
-    key: string;
-    bufi_ext: string;
-    custom_price: string;
-    delivery_date: Date | null;
-    notes: string;
-    measurements: Record<string, string>;
-    issues: AlterationIssueMatrixValues;
-};
-
-const createEmptyGarment = (): GarmentDraft => ({
-    key: crypto.randomUUID(),
-    bufi_ext: "",
-    custom_price: "",
-    delivery_date: null,
-    notes: "",
-    measurements: Object.fromEntries(defaultTemplateFieldLayout.map((f) => [f.id, ""])),
-    issues: createInitialAlterationIssueMatrixValues(),
-});
-
-const parsePrice = (s: string) => {
-    const n = parseFloat(s);
-    return Number.isFinite(n) ? n : 0;
-};
-
-const BUFI_OPTIONS = ["Brova", "Final", "External"] as const;
-
-const dateToIso = (d: Date | null) => (d ? d.toISOString() : null);
-
-const formatDateGB = (d: Date | null) => (d ? d.toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "");
 
 function NewAlterationOrder() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { createAlterationOrder, isCreating } = useAlterationOrderMutations();
+    const { orderId } = Route.useSearch();
+    const isViewMode = orderId != null;
 
-    const demographicsForm = useForm<CustomerDemographicsSchema, any, any>({
-        resolver: zodResolver(customerDemographicsSchema) as any,
+    const demographicsForm = useForm<CustomerDemographicsSchema>({
+        resolver: zodResolver(customerDemographicsSchema) as never,
         defaultValues: customerDemographicsDefaults,
     });
 
     const [selectedCustomer, setSelectedCustomer] = React.useState<Customer | null>(null);
-    const [garments, setGarments] = React.useState<GarmentDraft[]>(() => [createEmptyGarment()]);
-    const [receivedDate, setReceivedDate] = React.useState<Date | null>(() => new Date());
-    const [comments, setComments] = React.useState<string>("");
-    const [activeTab, setActiveTab] = React.useState<number>(0);
+    const [garments, setGarments] = React.useState<AlterationGarmentSchema[]>(() => [createEmptyAlterationGarment()]);
+    const [activeTab, setActiveTab] = React.useState(0);
+    const [requestedDeliveryDate, setRequestedDeliveryDate] = React.useState<Date | null>(null);
+    const [comments, setComments] = React.useState("");
+    const [homeDelivery, setHomeDelivery] = React.useState(false);
+    const [orderTotalRaw, setOrderTotalRaw] = React.useState("");
+    const [masterMeasurementId, setMasterMeasurementId] = React.useState<string | null>(null);
+
+    const { data: existingOrderRes } = useQuery({
+        queryKey: ["alteration-order", orderId],
+        queryFn: () => (orderId ? getAlterationOrderById(orderId) : Promise.resolve(null)),
+        enabled: !!orderId,
+        staleTime: 30_000,
+    });
+
+    const existingOrder = existingOrderRes?.status === "success" ? existingOrderRes.data : null;
+    const hydratedOrderIdRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        if (!existingOrder || hydratedOrderIdRef.current === existingOrder.id) return;
+        hydratedOrderIdRef.current = existingOrder.id;
+
+        const order = existingOrder as typeof existingOrder & {
+            customer: Customer | null;
+            garments: Garment[] | null;
+            comments: string | null;
+        };
+
+        if (order.customer) {
+            setSelectedCustomer(order.customer);
+            demographicsForm.reset(mapCustomerToFormValues(order.customer));
+        }
+
+        const rows = order.garments ?? [];
+        if (rows.length > 0) {
+            setGarments(rows.map((g) => ({
+                key: g.id,
+                mode: g.full_measurement_set_id ? "full_set" : "changes_only",
+                full_measurement_set_id: g.full_measurement_set_id,
+                original_garment_id: g.original_garment_id,
+                bufi_ext: g.bufi_ext,
+                delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
+                notes: g.notes,
+                alteration_measurements: (g.alteration_measurements ?? {}) as Record<string, number>,
+                alteration_styles: (g.alteration_styles ?? {}) as Record<string, string | boolean | number>,
+            })));
+            setActiveTab(0);
+
+            const firstDate = rows[0]?.delivery_date;
+            setRequestedDeliveryDate(firstDate ? new Date(firstDate) : null);
+            setHomeDelivery(!!rows[0]?.home_delivery);
+
+            const fullSetGarment = rows.find((g) => g.full_measurement_set_id);
+            if (fullSetGarment?.full_measurement_set_id) {
+                setMasterMeasurementId(fullSetGarment.full_measurement_set_id);
+            }
+        }
+
+        setComments(order.comments ?? "");
+        const total = (order as { order_total?: number | null }).order_total;
+        setOrderTotalRaw(total != null ? String(total) : "");
+    }, [existingOrder, demographicsForm]);
+
+    const customerId = selectedCustomer?.id ?? null;
+
+    const { data: measurementsRes } = useQuery({
+        queryKey: ["measurements", customerId],
+        queryFn: () => (customerId ? getMeasurementsByCustomerId(customerId) : Promise.resolve(null)),
+        enabled: !!customerId,
+        staleTime: Infinity,
+    });
+    const customerMeasurements = React.useMemo(() => measurementsRes?.data ?? [], [measurementsRes]);
+
+    React.useEffect(() => {
+        if (!masterMeasurementId && customerMeasurements.length > 0) {
+            setMasterMeasurementId(customerMeasurements[0]!.id);
+        }
+    }, [customerMeasurements, masterMeasurementId]);
+
+    const masterMeasurement: Measurement | null = React.useMemo(() => {
+        if (!masterMeasurementId) return null;
+        return customerMeasurements.find((m) => m.id === masterMeasurementId) ?? null;
+    }, [customerMeasurements, masterMeasurementId]);
 
     const handleCustomerFound = React.useCallback((customer: Customer) => {
         setSelectedCustomer(customer);
         demographicsForm.reset(mapCustomerToFormValues(customer));
+        setMasterMeasurementId(null);
     }, [demographicsForm]);
 
     const handleCustomerClear = React.useCallback(() => {
         setSelectedCustomer(null);
         demographicsForm.reset(customerDemographicsDefaults);
+        setMasterMeasurementId(null);
     }, [demographicsForm]);
 
-    const updateGarment = <K extends keyof GarmentDraft>(idx: number, field: K, value: GarmentDraft[K]) => {
-        setGarments((current) => current.map((g, i) => (i === idx ? { ...g, [field]: value } : g)));
-    };
-
-    const updateMeasurement = (idx: number, fieldId: string, value: string) => {
-        setGarments((current) =>
-            current.map((g, i) => (i === idx ? { ...g, measurements: { ...g.measurements, [fieldId]: value } } : g)),
-        );
-    };
-
-    const updateIssue = (idx: number, rowId: string, columnId: string, checked: boolean) => {
-        setGarments((current) =>
-            current.map((g, i) =>
-                i === idx
-                    ? {
-                          ...g,
-                          issues: {
-                              ...g.issues,
-                              [rowId]: { ...(g.issues[rowId] ?? {}), [columnId]: checked },
-                          },
-                      }
-                    : g,
-            ),
-        );
+    const updateGarment = (idx: number, next: AlterationGarmentSchema) => {
+        setGarments((cur) => cur.map((g, i) => (i === idx ? next : g)));
     };
 
     const addGarment = () => {
-        setGarments((current) => {
-            const next = [...current, createEmptyGarment()];
+        setGarments((cur) => {
+            const next = [...cur, createEmptyAlterationGarment()];
             setActiveTab(next.length - 1);
             return next;
         });
@@ -131,191 +176,201 @@ function NewAlterationOrder() {
 
     const removeGarment = (idx: number) => {
         if (garments.length === 1) return;
-        setGarments((current) => current.filter((_, i) => i !== idx));
+        setGarments((cur) => cur.filter((_, i) => i !== idx));
         setActiveTab((t) => Math.max(0, Math.min(t, garments.length - 2)));
     };
 
-    const total = garments.reduce((sum, g) => sum + parsePrice(g.custom_price), 0);
+    const orderTotal = React.useMemo(() => {
+        const n = parseFloat(orderTotalRaw);
+        return Number.isFinite(n) ? n : 0;
+    }, [orderTotalRaw]);
 
-    const validate = (): string | null => {
-        if (!selectedCustomer) return "Select or create a customer first";
-        if (garments.length === 0) return "Add at least one garment";
-        for (let i = 0; i < garments.length; i++) {
-            const g = garments[i]!;
-            if (parsePrice(g.custom_price) < 0) return `Garment ${i + 1}: price cannot be negative`;
-        }
-        return null;
-    };
-
-    const handleSave = async (opts: { andPrint: boolean }) => {
-        const err = validate();
-        if (err) {
-            toast.error(err);
-            return;
-        }
-
-        // Snapshot the customer so it can't go null between save and print
-        const customer = selectedCustomer;
-        if (!customer) {
+    const handleSave = async () => {
+        if (!selectedCustomer) {
             toast.error("Select or create a customer first");
             return;
         }
+        if (!requestedDeliveryDate) {
+            toast.error("Pick a requested delivery date");
+            return;
+        }
+
+        const deliveryIso = requestedDeliveryDate.toISOString();
+        const garmentsWithDelivery = garments.map((g) => ({ ...g, delivery_date: deliveryIso }));
+
+        const parsed = alterationOrderSchema.safeParse({
+            customer_id: selectedCustomer.id,
+            received_date: new Date().toISOString(),
+            comments: comments || null,
+            home_delivery: homeDelivery,
+            order_total: orderTotal,
+            garments: garmentsWithDelivery,
+        });
+
+        if (!parsed.success) {
+            const first = parsed.error.issues[0];
+            toast.error(first?.message ?? "Invalid alteration order");
+            return;
+        }
+
+        const data: AlterationOrderSchema = parsed.data;
 
         try {
             const order = await createAlterationOrder({
-                customer_id: customer.id,
-                received_date: dateToIso(receivedDate),
-                comments: comments || null,
+                customer_id: data.customer_id,
+                received_date: data.received_date,
+                comments: data.comments,
+                home_delivery: data.home_delivery,
+                order_total: data.order_total,
                 order_taker_id: user?.id ?? null,
-                garments: garments.map((g) => ({
-                    quantity: 1,
-                    bufi_ext: g.bufi_ext || null,
-                    custom_price: parsePrice(g.custom_price),
-                    alteration_measurements: g.measurements,
-                    alteration_issues: g.issues as Record<string, Record<string, boolean>>,
-                    delivery_date: dateToIso(g.delivery_date),
-                    notes: g.notes || null,
+                master_measurement_id: null,
+                master_measurement_updates: null,
+                garments: data.garments.map((g) => ({
+                    mode: g.mode,
+                    full_measurement_set_id: g.full_measurement_set_id,
+                    original_garment_id: g.original_garment_id,
+                    bufi_ext: g.bufi_ext,
+                    delivery_date: g.delivery_date,
+                    notes: g.notes,
+                    alteration_measurements: g.alteration_measurements,
+                    alteration_styles: g.alteration_styles,
                 })),
             });
 
-            if (opts.andPrint) {
-                await openPrintForOrder(order, customer);
-            }
-
-            navigate({ to: "/$main/orders/order-history", params: (prev: any) => prev });
+            navigate({
+                to: "/$main/orders/order-history",
+                params: (prev: Record<string, string>) => prev,
+            });
+            void order;
         } catch {
             // toast already shown in hook
         }
     };
 
-    const openPrintForOrder = async (order: any, customer: Customer) => {
-        const invoiceNumber = order.invoice_number ?? order.alteration_order?.invoice_number ?? "";
-        const orderGarments: any[] = order.garments ?? [];
-        const total = orderGarments.length;
-
-        for (let idx = 0; idx < orderGarments.length; idx++) {
-            const g = orderGarments[idx]!;
-            const meta = {
-                nFat: String(invoiceNumber),
-                qty: `${idx + 1}/${total}`,
-                customerName: customer.name ?? "",
-                customerPhone: `${customer.country_code ?? ""}${customer.phone ?? ""}`,
-                bufiExt: g.bufi_ext ?? "",
-                receivedDate: formatDateGB(receivedDate),
-                requestedDate: g.delivery_date ? parseUtcTimestamp(g.delivery_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "",
-                comments: g.notes ?? comments ?? "",
-            };
-
-            const blob = await pdf(
-                <AlterationPdfDocument
-                    measurementValues={(g.alteration_measurements ?? {}) as Record<string, string>}
-                    reasonValues={(g.alteration_issues ?? {}) as AlterationIssueMatrixValues}
-                    meta={meta}
-                />,
-            ).toBlob();
-
-            const url = URL.createObjectURL(blob);
-            const w = window.open(url, "_blank");
-            if (w) {
-                w.addEventListener("load", () => w.print(), { once: true });
-            }
-        }
-    };
-
     const active = garments[activeTab] ?? garments[0]!;
+
+    const customerLabel = selectedCustomer
+        ? `${selectedCustomer.name ?? "—"}`
+        : "No customer selected";
 
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#e9eef7_58%,#dce4f2_100%)] px-4 py-6">
             <div className="mx-auto w-full max-w-[1320px] space-y-4">
                 <header className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-semibold text-slate-900">New Alteration Order</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-semibold text-slate-900">
+                                {isViewMode ? "Alteration Order" : "New Alteration Order"}
+                            </h1>
+                            {isViewMode && existingOrder && (
+                                <>
+                                    <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-purple-800">
+                                        #{(existingOrder as { invoice_number?: number | null }).invoice_number ?? existingOrder.id}
+                                    </span>
+                                    {(existingOrder as { order_phase?: string | null }).order_phase && (
+                                        <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                                            {(existingOrder as { order_phase?: string | null }).order_phase}
+                                        </span>
+                                    )}
+                                    <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                                        Read only
+                                    </span>
+                                </>
+                            )}
+                        </div>
                         <p className="text-sm text-slate-600">
-                            Customer-brought garments from outside. Cashier-invisible.
+                            {isViewMode
+                                ? "Existing alteration order details."
+                                : "Customer-brought garments. Per-garment changes or full new measurement set."}
                         </p>
                     </div>
                     <div className="text-right">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-                        <p className="text-2xl font-bold text-slate-900">{total.toFixed(3)} KWD</p>
+                        <p className="text-2xl font-bold text-slate-900">{orderTotal.toFixed(3)} KWD</p>
                     </div>
                 </header>
 
-                {/* Customer search */}
-                <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-                    <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
-                        <SearchCustomer
-                            onCustomerFound={handleCustomerFound}
-                            onHandleClear={handleCustomerClear}
-                        />
-                    </ErrorBoundary>
-                </section>
+                {!isViewMode && (
+                    <section className="relative z-30 rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm">
+                        <ErrorBoundary fallback={<div>Search Customer crashed</div>}>
+                            <SearchCustomer
+                                onCustomerFound={handleCustomerFound}
+                                onHandleClear={handleCustomerClear}
+                            />
+                        </ErrorBoundary>
+                    </section>
+                )}
 
-                {/* Full customer demographics */}
+                <fieldset disabled={isViewMode} className="contents">
                 <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
                     <CustomerDemographicsForm
                         form={demographicsForm}
                         onCustomerChange={handleCustomerFound}
                         header="Customer Details"
-                        subheader="Full demographics — required before saving the alteration order"
+                        subheader={isViewMode ? "Customer on file" : "Required before saving"}
                         proceedButtonText="Confirm Customer"
                     />
                 </section>
+                </fieldset>
 
-                {/* Order meta */}
                 <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-800">Order Details</h2>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="received-date">Received Date</Label>
-                            <DatePicker
-                                value={receivedDate}
-                                onChange={setReceivedDate}
-                                clearable
-                                displayFormat="dd/MM/yyyy"
-                                placeholder="Received date"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="comments">Comments</Label>
-                            <Input
-                                id="comments"
-                                value={comments}
-                                onChange={(e) => setComments(e.target.value)}
-                                placeholder="Order-level notes"
-                            />
-                        </div>
+                    <div className="mb-3 flex items-center gap-3">
+                        <h2 className="text-sm font-semibold text-slate-800">Master Measurement Record</h2>
+                        <Select
+                            value={masterMeasurementId ?? ""}
+                            onValueChange={(v) => setMasterMeasurementId(v || null)}
+                            disabled={isViewMode || !customerId || customerMeasurements.length === 0}
+                        >
+                            <SelectTrigger className="ml-auto w-80 bg-background">
+                                <SelectValue placeholder={
+                                    !customerId
+                                        ? "Select customer first"
+                                        : customerMeasurements.length === 0
+                                            ? "No measurement records — create one in Measurements"
+                                            : "Pick reference record"
+                                } />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {customerMeasurements.map((m) => (
+                                    <SelectItem key={m.id} value={m.id}>
+                                        {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "—"} · {m.reference ?? "—"}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                        Each garment gets its own requested delivery date below.
+                    <p className="text-xs text-slate-500">
+                        Reference record used to seed full-set picker and show baseline values for changes-only fields.
                     </p>
                 </section>
 
-                {/* Garment tabs */}
                 <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <h2 className="text-sm font-semibold text-slate-800">Garments</h2>
-                        <div className="ml-auto flex gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={addGarment}>
-                                + Add Garment
-                            </Button>
-                            {garments.length > 1 && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removeGarment(activeTab)}
-                                >
-                                    Remove Garment {activeTab + 1}
+                        {!isViewMode && (
+                            <div className="ml-auto flex gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={addGarment}>
+                                    + Add Garment
                                 </Button>
-                            )}
-                        </div>
+                                {garments.length > 1 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => removeGarment(activeTab)}
+                                    >
+                                        Remove Garment {activeTab + 1}
+                                    </Button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-4 flex flex-wrap gap-2">
                         {garments.map((g, idx) => (
                             <button
-                                type="button"
                                 key={g.key}
+                                type="button"
                                 onClick={() => setActiveTab(idx)}
                                 className={
                                     "rounded-md border px-3 py-1 text-sm transition " +
@@ -325,130 +380,228 @@ function NewAlterationOrder() {
                                 }
                             >
                                 Garment {idx + 1}/{garments.length}
-                                {parsePrice(g.custom_price) > 0 && (
-                                    <span className="ml-2 text-xs opacity-75">
-                                        {parsePrice(g.custom_price).toFixed(3)}
-                                    </span>
-                                )}
-                                {g.delivery_date && (
-                                    <span className="ml-2 text-[10px] opacity-60">
-                                        {g.delivery_date.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" })}
-                                    </span>
-                                )}
+                                <span className="ml-2 text-[10px] opacity-70">
+                                    {g.mode === "changes_only" ? "Changes" : "Full"}
+                                </span>
                             </button>
                         ))}
                     </div>
 
-                    {/* Garment header */}
-                    <div className="mb-4 grid gap-4 sm:grid-cols-4">
-                        <div className="space-y-1.5">
-                            <Label>Serial</Label>
-                            <div className="flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900">
-                                {activeTab + 1}/{garments.length}
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Type</Label>
-                            <div className="flex h-9 overflow-hidden rounded-md border border-slate-300">
-                                {BUFI_OPTIONS.map((opt) => {
-                                    const selected = active.bufi_ext === opt;
-                                    return (
-                                        <button
-                                            key={opt}
-                                            type="button"
-                                            onClick={() =>
-                                                updateGarment(activeTab, "bufi_ext", selected ? "" : opt)
-                                            }
-                                            className={
-                                                "flex-1 text-xs font-semibold transition border-r border-slate-300 last:border-r-0 " +
-                                                (selected
-                                                    ? "bg-slate-900 text-white"
-                                                    : "bg-white text-slate-700 hover:bg-slate-50")
-                                            }
-                                        >
-                                            {opt}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor={`price-${activeTab}`}>Price (KWD)</Label>
-                            <Input
-                                id={`price-${activeTab}`}
-                                type="number"
-                                inputMode="decimal"
-                                min={0}
-                                step="0.001"
-                                value={active.custom_price}
-                                onChange={(e) => updateGarment(activeTab, "custom_price", e.target.value)}
-                                placeholder="0.000"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Requested delivery</Label>
-                            <DatePicker
-                                value={active.delivery_date}
-                                onChange={(d) => updateGarment(activeTab, "delivery_date", d)}
-                                clearable
-                                displayFormat="dd/MM/yyyy"
-                                placeholder="Pick date"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,27rem)]">
-                        <SvgFormOverlay
-                            className="mx-0 max-w-[620px]"
-                            values={active.measurements}
-                            onValueChange={(fieldId, value) => updateMeasurement(activeTab, fieldId, value)}
+                    <fieldset disabled={isViewMode} className="contents">
+                        <AlterationGarmentForm
+                            index={activeTab}
+                            customerId={customerId}
+                            value={active}
+                            onChange={(next) => updateGarment(activeTab, next)}
+                            masterMeasurement={masterMeasurement}
                         />
-
-                        <AlterationCheckboxMatrix
-                            className="mx-0 max-w-none"
-                            values={active.issues}
-                            onValueChange={(rowId, columnId, checked) =>
-                                updateIssue(activeTab, rowId, columnId, checked)
-                            }
-                        />
-                    </div>
-
-                    <div className="mt-4 space-y-1.5">
-                        <Label htmlFor={`notes-${activeTab}`}>Garment notes</Label>
-                        <Input
-                            id={`notes-${activeTab}`}
-                            value={active.notes}
-                            onChange={(e) => updateGarment(activeTab, "notes", e.target.value)}
-                            placeholder="Per-garment comments"
-                        />
-                    </div>
+                    </fieldset>
                 </section>
 
-                {/* Actions */}
-                <section className="sticky bottom-0 flex items-center justify-end gap-2 rounded-xl border border-slate-300/80 bg-white/95 p-3 shadow-lg backdrop-blur">
+                {/* Order summary + payment / delivery */}
+                <fieldset disabled={isViewMode} className="contents">
+                <section className="rounded-xl border border-slate-300/80 bg-white p-5 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
+                        <div>
+                            <h2 className="text-base font-semibold text-slate-900">Order Summary</h2>
+                            <p className="text-xs text-slate-500">Review details before confirming.</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Customer</p>
+                            <p className="text-sm font-medium text-slate-800">{customerLabel}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+                        {/* Garments breakdown */}
+                        <div>
+                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Garments ({garments.length})
+                            </h3>
+                            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-slate-50/40">
+                                {garments.map((g, idx) => (
+                                    <GarmentSummaryRow
+                                        key={g.key}
+                                        index={idx}
+                                        garment={g}
+                                        onClick={() => setActiveTab(idx)}
+                                    />
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Order details + payment */}
+                        <div className="space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label>
+                                        Requested Delivery <span className="text-red-500">*</span>
+                                    </Label>
+                                    <DatePicker
+                                        value={requestedDeliveryDate}
+                                        onChange={setRequestedDeliveryDate}
+                                        clearable
+                                        displayFormat="dd/MM/yyyy"
+                                        placeholder="Pick delivery date"
+                                    />
+                                    <p className="text-[11px] text-slate-500">
+                                        Applies to all garments in this order.
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="alt-total">Order Total (KWD)</Label>
+                                    <Input
+                                        id="alt-total"
+                                        type="number"
+                                        inputMode="decimal"
+                                        min={0}
+                                        step="0.001"
+                                        value={orderTotalRaw}
+                                        onChange={(e) => setOrderTotalRaw(e.target.value)}
+                                        placeholder="0.000"
+                                        className="text-right font-semibold"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <div>
+                                    <Label htmlFor="alt-home-delivery" className="cursor-pointer text-sm font-medium text-slate-800">
+                                        Home delivery
+                                    </Label>
+                                    <p className="text-[11px] text-slate-500">Toggle if customer wants delivery to address.</p>
+                                </div>
+                                <Switch
+                                    id="alt-home-delivery"
+                                    checked={homeDelivery}
+                                    onCheckedChange={setHomeDelivery}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="alt-comments">Order Notes</Label>
+                                <Textarea
+                                    id="alt-comments"
+                                    value={comments}
+                                    onChange={(e) => setComments(e.target.value)}
+                                    placeholder="Order-level notes (optional)"
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="rounded-lg border border-slate-300 bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white shadow-inner">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs uppercase tracking-wide text-slate-300">
+                                        Total Payable
+                                    </span>
+                                    <span className="text-2xl font-bold">{orderTotal.toFixed(3)} <span className="text-sm opacity-80">KWD</span></span>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-300">
+                                    <span>{garments.length} garment(s)</span>
+                                    <span>{homeDelivery ? "Home delivery" : "Pickup"}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                </fieldset>
+
+                <section className="sticky bottom-0 flex items-center justify-end gap-3 rounded-xl border border-slate-300/80 bg-white/95 p-3 shadow-lg backdrop-blur">
                     <div className="mr-auto text-sm text-slate-700">
                         <span className="font-semibold">{garments.length}</span> garment(s) ·{" "}
-                        <span className="font-semibold">{total.toFixed(3)} KWD</span>
+                        <span className="font-semibold">{orderTotal.toFixed(3)} KWD</span>
+                        {requestedDeliveryDate && (
+                            <span className="ml-3 text-xs text-slate-500">
+                                delivery {requestedDeliveryDate.toLocaleDateString("en-GB", {
+                                    timeZone: TIMEZONE,
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "2-digit",
+                                })}
+                            </span>
+                        )}
+                        {!isViewMode && !selectedCustomer && (
+                            <span className="ml-3 text-xs text-amber-600">Select a customer first</span>
+                        )}
+                        {!isViewMode && selectedCustomer && !requestedDeliveryDate && (
+                            <span className="ml-3 text-xs text-amber-600">Pick a delivery date</span>
+                        )}
                     </div>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleSave({ andPrint: false })}
-                        disabled={isCreating || !selectedCustomer}
-                        title={!selectedCustomer ? "Select a customer first" : undefined}
-                    >
-                        {isCreating ? "Confirming…" : "Confirm Order"}
-                    </Button>
-                    <Button
-                        type="button"
-                        onClick={() => handleSave({ andPrint: true })}
-                        disabled={isCreating || !selectedCustomer}
-                        title={!selectedCustomer ? "Select a customer first" : undefined}
-                    >
-                        {isCreating ? "Confirming…" : "Confirm & Print"}
-                    </Button>
+                    {isViewMode ? (
+                        <Button
+                            type="button"
+                            size="lg"
+                            variant="outline"
+                            onClick={() => navigate({ to: "/$main/orders/order-history", params: (prev: Record<string, string>) => prev })}
+                        >
+                            Back to History
+                        </Button>
+                    ) : (
+                        <Button
+                            type="button"
+                            size="lg"
+                            onClick={handleSave}
+                            disabled={isCreating || !selectedCustomer || !requestedDeliveryDate}
+                            title={
+                                !selectedCustomer
+                                    ? "Select a customer first"
+                                    : !requestedDeliveryDate
+                                        ? "Pick a delivery date"
+                                        : undefined
+                            }
+                        >
+                            {isCreating ? "Confirming…" : "Confirm Order"}
+                        </Button>
+                    )}
                 </section>
             </div>
         </div>
+    );
+}
+
+function GarmentSummaryRow({
+    index,
+    garment,
+    onClick,
+}: {
+    index: number;
+    garment: AlterationGarmentSchema;
+    onClick: () => void;
+}) {
+    const measurementCount = Object.keys(garment.alteration_measurements ?? {}).length;
+    const styleCount = Object.entries(garment.alteration_styles ?? {}).filter(
+        ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+    ).length;
+
+    return (
+        <li>
+            <button
+                type="button"
+                onClick={onClick}
+                className="group flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-white"
+            >
+                <div className="flex size-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
+                    {index + 1}
+                </div>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800">
+                            {garment.bufi_ext ?? "Garment"}
+                        </span>
+                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
+                            {garment.mode === "changes_only" ? "Changes" : "Full set"}
+                        </span>
+                        {garment.original_garment_id && (
+                            <span className="text-[10px] text-slate-500">linked</span>
+                        )}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap gap-3 text-[11px] text-slate-500">
+                        <span>{measurementCount} measurement change{measurementCount === 1 ? "" : "s"}</span>
+                        <span>{styleCount} style change{styleCount === 1 ? "" : "s"}</span>
+                    </div>
+                </div>
+                <span className="text-xs text-slate-400 group-hover:text-slate-700">Edit →</span>
+            </button>
+        </li>
     );
 }

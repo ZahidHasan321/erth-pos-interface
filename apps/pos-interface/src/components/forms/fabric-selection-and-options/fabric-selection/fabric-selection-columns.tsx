@@ -77,7 +77,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "soaking",
     header: "Soak",
-    size: 50,
+    size: 70,
     cell: FabricCells.SoakingCell,
   },
   {
@@ -166,6 +166,7 @@ function ActionCell({ row, table }: { row: any; table: any }) {
       garment_type: data.garment_type || 'final',
       express: data.express || false,
       soaking: data.soaking || false,
+      soaking_hours: (data.soaking_hours === 8 || data.soaking_hours === 24) ? data.soaking_hours : null,
       deliveryDate: data.delivery_date ? new Date(data.delivery_date) : null,
       notes: data.notes || "",
     };

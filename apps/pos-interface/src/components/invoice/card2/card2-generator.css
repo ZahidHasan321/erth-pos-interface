@@ -1,0 +1,1466 @@
+@font-face {
+  font-family: 'JF Flat';
+  src: url('./assets/JF Flat Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.card2-generator {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.card2-generator__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card2-generator__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #1f5472;
+  background: #1f5472;
+  color: #f2fafc;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1;
+  min-height: 2.3rem;
+  padding: 0.2rem 1rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms ease-in-out;
+}
+
+.card2-generator__download:hover {
+  background: #173f55;
+}
+
+.card2-generator__viewer {
+  min-height: 74vh;
+  border-radius: 18px;
+  border: 1px solid #bfd2d8;
+  overflow: auto;
+  background: #f2f8f7;
+  padding: 1rem;
+}
+
+.card2-generator__blob-status {
+  font-size: 0.9rem;
+  color: #3e5f70;
+}
+
+.card2-html-sheet {
+  --card2-information-width: 74mm;
+  --card2-logo-width: 14mm;
+
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 8.5mm;
+  color: #000;
+  background: #fff;
+  font-family: 'JF Flat', Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.35;
+  box-shadow: 0 12px 36px rgba(25, 52, 68, 0.14);
+}
+
+.card2-html-sheet--guides {
+  outline: 1px dashed #ce6b6b;
+}
+
+.card2-html-header {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 22mm;
+  margin-bottom: 2.4mm;
+}
+
+.card2-html-header__information {
+  width: var(--card2-information-width);
+  height: auto;
+  object-fit: contain;
+}
+
+.card2-html-header__logo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--card2-logo-width);
+  height: auto;
+  object-fit: contain;
+}
+
+.card2-html-section {
+  margin-bottom: 4.1mm;
+}
+
+.card2-html-section-title {
+  margin: 0 0 1.6mm;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.card2-html-row {
+  display: flex;
+  gap: 1.4mm;
+  margin-bottom: 1.1mm;
+}
+
+.card2-html-field {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card2-html-field--underlined {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2mm;
+}
+
+.card2-html-field__label {
+  font-size: 8.5pt;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.card2-html-field__value {
+  flex: 1;
+  min-height: 4.7mm;
+  border-bottom: 0.6px solid #9f8a74;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0.45mm 0.35mm;
+  font-size: 7.1pt;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.card2-order-brova {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.35mm;
+  flex-wrap: wrap;
+}
+
+.card2-order-brova__label {
+  font-size: 8.3pt;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.card2-order-brova__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6mm;
+  font-size: 7.2pt;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.card2-order-brova__icon {
+  width: 2.85mm;
+  height: 2.85mm;
+  object-fit: contain;
+  display: inline-block;
+}
+
+.card2-style-matrix-wrapper {
+  overflow: hidden;
+}
+
+.card2-style-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 7.2pt;
+}
+
+.card2-style-matrix thead th {
+  background: #fff;
+}
+
+.card2-style-matrix th,
+.card2-style-matrix td {
+  border: 0.6px solid #000;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0.8mm 0.45mm;
+  overflow: hidden;
+}
+
+.card2-style-matrix th {
+  font-size: 6.4pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.card2-style-matrix__group-header {
+  padding: 0.45mm;
+  background: #fff;
+}
+
+.card2-style-matrix__option-header {
+  padding: 0.25mm;
+  min-width: 3.6mm;
+}
+
+.card2-style-matrix__style-cell {
+  min-width: 3.6mm;
+}
+
+.card2-style-matrix__icon {
+  width: 7.8mm;
+  max-width: 100%;
+  max-height: 7.8mm;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.card2-style-matrix__option-fallback {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 6pt;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.card2-style-matrix__checkbox-icon {
+  width: 2.85mm;
+  height: 2.85mm;
+  object-fit: contain;
+  display: inline-block;
+}
+
+.card2-style-matrix__meta-row td {
+  background: #fff;
+  padding: 0.2mm 0.25mm;
+}
+
+.card2-style-matrix__meta-leading {
+  padding: 0 !important;
+}
+
+.card2-style-matrix__meta-cell {
+  text-align: center !important;
+}
+
+.card2-style-matrix__meta-detail-list {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0.2mm;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.card2-style-matrix__meta-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 0.5px solid #8d8d8d;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.08mm 0.55mm;
+  font-size: 4.2pt;
+  line-height: 1;
+  white-space: nowrap;
+  color: #202020;
+}
+
+.card2-style-matrix__meta-empty {
+  display: inline-block;
+  font-size: 4.9pt;
+  line-height: 1;
+  color: #666;
+}
+
+.card2-pricing-strip {
+  --card2-pricing-price-start: 0%;
+
+  margin-top: 2.2mm;
+  display: grid;
+  gap: 1.15mm;
+}
+
+.card2-pricing-strip__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2mm;
+}
+
+.card2-pricing-strip__anchor {
+  margin-left: var(--card2-pricing-price-start);
+  display: flex;
+  align-items: stretch;
+  gap: 1mm;
+  min-width: 0;
+}
+
+.card2-pricing-strip__edge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.card2-pricing-strip__totals {
+  display: flex;
+  align-items: stretch;
+  gap: 1mm;
+}
+
+.card2-pricing-strip__row--methods {
+  justify-content: flex-end;
+}
+
+.card2-pricing-strip__field {
+  border: 0.6px solid #000;
+  min-width: 20mm;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.card2-pricing-strip__field--fabric-total {
+  min-width: 29mm;
+}
+
+.card2-pricing-strip__label {
+  padding: 0.35mm 0.9mm;
+  border-bottom: 0.6px solid #000;
+  font-size: 5.45pt;
+  font-weight: 700;
+  line-height: 1.12;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.card2-pricing-strip__value {
+  min-height: 4.05mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7pt;
+  font-weight: 700;
+  line-height: 1.05;
+  padding: 0.32mm 0.9mm;
+}
+
+.card2-pricing-strip__methods {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2.05mm;
+  flex-wrap: wrap;
+}
+
+.card2-pricing-strip__method {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7mm;
+  font-size: 6.6pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.card2-pricing-strip__method-icon {
+  width: 2.85mm;
+  height: 2.85mm;
+  object-fit: contain;
+  display: inline-block;
+}
+
+.card2-customer-copy {
+  border: 0.6px solid #9f8a74;
+  border-radius: 3.8mm;
+  padding: 2.4mm 2.6mm;
+  display: grid;
+  gap: 1.8mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.card2-customer-copy__header {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 13mm;
+}
+
+.card2-customer-copy__header-strip {
+  width: 96mm;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  margin-top: -2.4mm;
+}
+
+.card2-customer-copy__logo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14mm;
+  height: auto;
+  object-fit: contain;
+}
+
+.card2-customer-copy__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 2mm;
+  flex-wrap: wrap;
+}
+
+.card2-customer-copy__row--number {
+  min-height: 5.2mm;
+}
+
+.card2-customer-copy__line-field {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2mm;
+  flex: 1;
+}
+
+.card2-customer-copy__line-field--number {
+  flex: 0 0 28mm;
+}
+
+.card2-customer-copy__line-field--name {
+  flex: 2;
+}
+
+.card2-customer-copy__line-field--mobile {
+  flex: 1;
+}
+
+.card2-customer-copy__line-field--total-quantity {
+  min-width: 34mm;
+  flex: 1;
+}
+
+.card2-customer-copy__line-label {
+  font-size: 8.5pt;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.card2-customer-copy__line-value {
+  flex: 1;
+  min-height: 4.7mm;
+  border-bottom: 0.6px solid #9f8a74;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0.45mm 0.35mm;
+  font-size: 7.1pt;
+  line-height: 1.15;
+}
+
+.card2-customer-copy__brova {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.35mm;
+}
+
+.card2-customer-copy__brova-label {
+  font-size: 8.3pt;
+  white-space: nowrap;
+}
+
+.card2-customer-copy__check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6mm;
+  font-size: 7.2pt;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.card2-customer-copy__check-icon {
+  width: 2.85mm;
+  height: 2.85mm;
+  object-fit: contain;
+  display: inline-block;
+}
+
+.card2-customer-copy__lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 30%);
+  gap: 3.2mm;
+  align-items: start;
+}
+
+.card2-customer-copy__main {
+  min-width: 0;
+  display: grid;
+  gap: 1.7mm;
+}
+
+.card2-customer-copy__fabric-signature-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 36%);
+  gap: 2.4mm;
+  align-items: end;
+}
+
+.card2-customer-copy__fabric-row {
+  display: flex;
+  align-items: center;
+  gap: 1.6mm;
+  flex-wrap: wrap;
+}
+
+.card2-customer-copy__fabric-label {
+  font-size: 8.3pt;
+  line-height: 1.1;
+}
+
+.card2-customer-copy__employee-signature {
+  min-width: 0;
+  display: grid;
+  gap: 0.65mm;
+}
+
+.card2-customer-copy__employee-signature-label {
+  font-size: 8.3pt;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card2-customer-copy__employee-signature-box {
+  min-height: 9.3mm;
+  border: 0.6px solid #9f8a74;
+  border-radius: 2.8mm;
+  display: flex;
+  align-items: center;
+  padding: 0.7mm 2.1mm;
+  font-size: 7pt;
+  line-height: 1.15;
+}
+
+.card2-customer-copy__totals-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2mm;
+  flex-wrap: wrap;
+}
+
+.card2-customer-copy__amount-field {
+  border: 0.6px solid #9f8a74;
+  border-radius: 2mm;
+  min-width: 15.8mm;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.card2-customer-copy__amount-value {
+  min-height: 4.6mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25mm 0.85mm;
+  font-size: 7pt;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.card2-customer-copy__amount-label {
+  border-top: 0.6px solid #9f8a74;
+  padding: 0.24mm 0.8mm;
+  text-align: center;
+  font-size: 5.6pt;
+  line-height: 1;
+}
+
+.card2-customer-copy__payment-methods {
+  display: flex;
+  align-items: center;
+  gap: 1.8mm;
+  margin-left: 0.8mm;
+  flex-wrap: wrap;
+}
+
+.card2-customer-copy__remarks {
+  min-width: 0;
+  display: grid;
+  gap: 0.65mm;
+}
+
+.card2-customer-copy__remarks-title {
+  font-size: 8.3pt;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card2-customer-copy__remarks-text {
+  margin: 0;
+  min-height: 3.9mm;
+  font-size: 7pt;
+  line-height: 1.2;
+}
+
+.card2-customer-copy__remarks-lines {
+  display: grid;
+  gap: 3.7mm;
+}
+
+.card2-customer-copy__remarks-lines span {
+  display: block;
+  height: 0;
+  border-bottom: 0.6px solid #9f8a74;
+}
+
+.card2-customer-copy__terms {
+  min-width: 0;
+  align-self: end;
+}
+
+.card2-customer-copy__terms-title {
+  margin: 0 0 0.75mm;
+  font-size: 8.2pt;
+  font-weight: 700;
+  text-align: right;
+}
+
+.card2-customer-copy__terms-list {
+  margin: 0;
+  padding-inline-start: 4.8mm;
+  list-style-position: outside;
+  font-size: 5.8pt;
+  line-height: 1.35;
+  display: grid;
+  gap: 0.4mm;
+}
+
+.card2-customer-copy__terms-list li {
+  text-align: right;
+}
+
+.card2-measurements-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 88mm) minmax(0, 1fr);
+  gap: 4.2mm;
+  align-items: start;
+}
+
+.card2-measure-side {
+  min-width: 0;
+  display: grid;
+  gap: 2.8mm;
+}
+
+.card2-measure-side__special-title {
+  margin: 0;
+  font-size: 10.2pt;
+  font-weight: 700;
+}
+
+.card2-measure-side__special-text {
+  margin: 0.7mm 0 0;
+  min-height: 5.2mm;
+  font-size: 7.5pt;
+  line-height: 1.28;
+}
+
+.card2-measure-side__special-lines {
+  margin-top: 0.6mm;
+  display: grid;
+  gap: 4.3mm;
+}
+
+.card2-measure-side__special-lines span {
+  display: block;
+  height: 0;
+  border-bottom: 0.6px solid #9f8a74;
+}
+
+.card2-measure-side__lower {
+  display: grid;
+  grid-template-columns: minmax(0, 39%) minmax(0, 61%);
+  gap: 3.8mm;
+  align-items: start;
+}
+
+.card2-measure-side__signatures {
+  display: grid;
+  gap: 1.8mm;
+}
+
+.card2-measure-side__signature {
+  min-width: 0;
+}
+
+.card2-measure-side__signature-label {
+  margin: 0 0 0.65mm;
+  font-size: 5.9pt;
+  font-weight: 700;
+}
+
+.card2-measure-side__signature-box {
+  min-height: 9.2mm;
+  border: 0.6px solid #9f8a74;
+  border-radius: 3.2mm;
+  padding: 0.7mm 2.1mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7pt;
+  line-height: 1.15;
+  overflow: hidden;
+}
+
+.card2-measure-side__signature-image {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.card2-measure-side__terms {
+  min-width: 0;
+}
+
+.card2-measure-side__terms-title {
+  margin: 0 0 0.8mm;
+  font-size: 8.2pt;
+  font-weight: 700;
+  text-align: right;
+}
+
+.card2-measure-side__terms-list {
+  margin: 0;
+  padding-inline-start: 4.8mm;
+  list-style-position: outside;
+  font-size: 5.8pt;
+  line-height: 1.35;
+  display: grid;
+  gap: 0.45mm;
+}
+
+.card2-measure-side__terms-list li {
+  text-align: right;
+}
+
+.card2-measurements-html {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.card2-measurements-html__canvas {
+  position: relative;
+  width: 100%;
+  max-width: 85mm;
+}
+
+.card2-measurements-html__image {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.card2-measurements-html__value {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 6.8pt;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #1f2933;
+}
+
+.card2-html-dual-column-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2.4mm;
+}
+
+.card2-html-column {
+  min-width: 0;
+}
+
+.card2-html-footer {
+  margin-top: 0.4mm;
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact,
+.card2-html-sheet--max-compact {
+  font-size: 8.4pt;
+  line-height: 1.26;
+}
+
+.card2-html-sheet--compact .card2-html-section,
+.card2-html-sheet--max-compact .card2-html-section {
+  margin-bottom: 2.7mm;
+}
+
+.card2-html-sheet--compact .card2-html-header,
+.card2-html-sheet--max-compact .card2-html-header {
+  min-height: 18mm;
+  margin-bottom: 1.5mm;
+}
+
+.card2-html-sheet--compact .card2-html-header__information,
+.card2-html-sheet--max-compact .card2-html-header__information {
+  width: 66mm;
+}
+
+.card2-html-sheet--compact .card2-html-header__logo,
+.card2-html-sheet--max-compact .card2-html-header__logo {
+  width: 12mm;
+}
+
+.card2-html-sheet--compact .card2-html-row,
+.card2-html-sheet--max-compact .card2-html-row {
+  gap: 1mm;
+  margin-bottom: 0.65mm;
+}
+
+.card2-html-sheet--compact .card2-html-field__label,
+.card2-html-sheet--max-compact .card2-html-field__label {
+  font-size: 7.4pt;
+}
+
+.card2-html-sheet--compact .card2-html-field__value,
+.card2-html-sheet--max-compact .card2-html-field__value {
+  min-height: 3.7mm;
+  padding: 0 0.3mm 0.2mm;
+  font-size: 6.2pt;
+}
+
+.card2-html-sheet--compact .card2-order-brova,
+.card2-html-sheet--max-compact .card2-order-brova {
+  gap: 0.95mm;
+}
+
+.card2-html-sheet--compact .card2-order-brova__label,
+.card2-html-sheet--max-compact .card2-order-brova__label {
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact .card2-order-brova__option,
+.card2-html-sheet--max-compact .card2-order-brova__option {
+  font-size: 6pt;
+  gap: 0.4mm;
+}
+
+.card2-html-sheet--compact .card2-order-brova__icon,
+.card2-html-sheet--max-compact .card2-order-brova__icon {
+  width: 2.3mm;
+  height: 2.3mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix,
+.card2-html-sheet--max-compact .card2-style-matrix {
+  font-size: 6.3pt;
+}
+
+.card2-html-sheet--compact .card2-style-matrix th,
+.card2-html-sheet--compact .card2-style-matrix td,
+.card2-html-sheet--max-compact .card2-style-matrix th,
+.card2-html-sheet--max-compact .card2-style-matrix td {
+  padding: 0.45mm 0.28mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix th,
+.card2-html-sheet--max-compact .card2-style-matrix th {
+  font-size: 5.4pt;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__group-header,
+.card2-html-sheet--max-compact .card2-style-matrix__group-header {
+  padding: 0.24mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__option-header,
+.card2-html-sheet--compact .card2-style-matrix__style-cell,
+.card2-html-sheet--max-compact .card2-style-matrix__option-header,
+.card2-html-sheet--max-compact .card2-style-matrix__style-cell {
+  min-width: 3.15mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__icon,
+.card2-html-sheet--max-compact .card2-style-matrix__icon {
+  width: 6.1mm;
+  max-height: 6.1mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__checkbox-icon,
+.card2-html-sheet--max-compact .card2-style-matrix__checkbox-icon {
+  width: 2.2mm;
+  height: 2.2mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__meta-row td,
+.card2-html-sheet--max-compact .card2-style-matrix__meta-row td {
+  padding: 0.08mm 0.16mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__meta-detail-list,
+.card2-html-sheet--max-compact .card2-style-matrix__meta-detail-list {
+  gap: 0.15mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__meta-chip,
+.card2-html-sheet--max-compact .card2-style-matrix__meta-chip {
+  font-size: 3.6pt;
+  padding: 0.02mm 0.35mm;
+}
+
+.card2-html-sheet--compact .card2-style-matrix__meta-empty,
+.card2-html-sheet--max-compact .card2-style-matrix__meta-empty {
+  font-size: 4pt;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip,
+.card2-html-sheet--max-compact .card2-pricing-strip {
+  margin-top: 1.3mm;
+  gap: 0.7mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__row,
+.card2-html-sheet--max-compact .card2-pricing-strip__row {
+  gap: 1.2mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__field,
+.card2-html-sheet--max-compact .card2-pricing-strip__field {
+  min-width: 16.5mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__field--fabric-total,
+.card2-html-sheet--max-compact .card2-pricing-strip__field--fabric-total {
+  min-width: 24mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__label,
+.card2-html-sheet--max-compact .card2-pricing-strip__label {
+  font-size: 4.6pt;
+  padding: 0.22mm 0.6mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__value,
+.card2-html-sheet--max-compact .card2-pricing-strip__value {
+  min-height: 3.2mm;
+  font-size: 6pt;
+  padding: 0.2mm 0.6mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__methods,
+.card2-html-sheet--max-compact .card2-pricing-strip__methods {
+  gap: 1.2mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__method,
+.card2-html-sheet--max-compact .card2-pricing-strip__method {
+  font-size: 5.8pt;
+  gap: 0.45mm;
+}
+
+.card2-html-sheet--compact .card2-pricing-strip__method-icon,
+.card2-html-sheet--max-compact .card2-pricing-strip__method-icon {
+  width: 2.3mm;
+  height: 2.3mm;
+}
+
+.card2-html-sheet--compact .card2-measurements-layout,
+.card2-html-sheet--max-compact .card2-measurements-layout {
+  grid-template-columns: minmax(0, 80mm) minmax(0, 1fr);
+  gap: 2.2mm;
+}
+
+.card2-html-sheet--compact .card2-measurements-html__canvas,
+.card2-html-sheet--max-compact .card2-measurements-html__canvas {
+  max-width: 80mm;
+}
+
+.card2-html-sheet--compact .card2-measurements-html__value,
+.card2-html-sheet--max-compact .card2-measurements-html__value {
+  font-size: 6pt;
+}
+
+.card2-html-sheet--compact .card2-measure-side,
+.card2-html-sheet--max-compact .card2-measure-side {
+  gap: 1.8mm;
+}
+
+.card2-html-sheet--compact .card2-measure-side__special-title,
+.card2-html-sheet--max-compact .card2-measure-side__special-title {
+  font-size: 8.6pt;
+}
+
+.card2-html-sheet--compact .card2-measure-side__special-text,
+.card2-html-sheet--max-compact .card2-measure-side__special-text {
+  margin-top: 0.3mm;
+  min-height: 3.5mm;
+  font-size: 6.2pt;
+  line-height: 1.18;
+}
+
+.card2-html-sheet--compact .card2-measure-side__special-lines,
+.card2-html-sheet--max-compact .card2-measure-side__special-lines {
+  margin-top: 0.3mm;
+  gap: 2.4mm;
+}
+
+.card2-html-sheet--compact .card2-measure-side__special-lines span:nth-child(n + 5),
+.card2-html-sheet--max-compact .card2-measure-side__special-lines span:nth-child(n + 5) {
+  display: none;
+}
+
+.card2-html-sheet--compact .card2-measure-side__lower,
+.card2-html-sheet--max-compact .card2-measure-side__lower {
+  gap: 2.2mm;
+}
+
+.card2-html-sheet--compact .card2-measure-side__signatures,
+.card2-html-sheet--max-compact .card2-measure-side__signatures {
+  gap: 1.1mm;
+}
+
+.card2-html-sheet--compact .card2-measure-side__signature-label,
+.card2-html-sheet--max-compact .card2-measure-side__signature-label {
+  margin-bottom: 0.3mm;
+  font-size: 5pt;
+}
+
+.card2-html-sheet--compact .card2-measure-side__signature-box,
+.card2-html-sheet--max-compact .card2-measure-side__signature-box {
+  min-height: 6.6mm;
+  border-radius: 2.2mm;
+  padding: 0.35mm 1.4mm;
+  font-size: 5.9pt;
+}
+
+.card2-html-sheet--compact .card2-measure-side__terms-title,
+.card2-html-sheet--max-compact .card2-measure-side__terms-title {
+  margin-bottom: 0.45mm;
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact .card2-measure-side__terms-list,
+.card2-html-sheet--max-compact .card2-measure-side__terms-list {
+  font-size: 5pt;
+  line-height: 1.18;
+  gap: 0.18mm;
+  padding-inline-start: 3.9mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy,
+.card2-html-sheet--max-compact .card2-customer-copy {
+  padding: 1.4mm 1.8mm;
+  border-radius: 3.2mm;
+  gap: 1.2mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__header,
+.card2-html-sheet--max-compact .card2-customer-copy__header {
+  min-height: 9mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__header-strip,
+.card2-html-sheet--max-compact .card2-customer-copy__header-strip {
+  width: 82mm;
+  margin-top: -1.8mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__logo,
+.card2-html-sheet--max-compact .card2-customer-copy__logo {
+  width: 11mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__row,
+.card2-html-sheet--max-compact .card2-customer-copy__row {
+  gap: 1.2mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__line-label,
+.card2-html-sheet--max-compact .card2-customer-copy__line-label {
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__line-value,
+.card2-html-sheet--max-compact .card2-customer-copy__line-value {
+  min-height: 3.3mm;
+  padding: 0 0.3mm 0.2mm;
+  font-size: 5.8pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__check-item,
+.card2-html-sheet--max-compact .card2-customer-copy__check-item {
+  font-size: 6pt;
+  gap: 0.45mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__check-icon,
+.card2-html-sheet--max-compact .card2-customer-copy__check-icon {
+  width: 2.3mm;
+  height: 2.3mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__lower,
+.card2-html-sheet--max-compact .card2-customer-copy__lower {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 28%);
+  gap: 2mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__main,
+.card2-html-sheet--max-compact .card2-customer-copy__main {
+  gap: 1mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__fabric-signature-row,
+.card2-html-sheet--max-compact .card2-customer-copy__fabric-signature-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 33%);
+  gap: 1.4mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__employee-signature-label,
+.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-label {
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__employee-signature-box,
+.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-box {
+  min-height: 6.8mm;
+  border-radius: 2mm;
+  padding: 0.35mm 1.4mm;
+  font-size: 5.8pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__totals-row,
+.card2-html-sheet--max-compact .card2-customer-copy__totals-row {
+  gap: 0.8mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__amount-field,
+.card2-html-sheet--max-compact .card2-customer-copy__amount-field {
+  min-width: 13.2mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__amount-value,
+.card2-html-sheet--max-compact .card2-customer-copy__amount-value {
+  min-height: 3.3mm;
+  padding: 0.15mm 0.5mm;
+  font-size: 5.8pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__amount-label,
+.card2-html-sheet--max-compact .card2-customer-copy__amount-label {
+  padding: 0.14mm 0.4mm;
+  font-size: 4.6pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__payment-methods,
+.card2-html-sheet--max-compact .card2-customer-copy__payment-methods {
+  gap: 1.1mm;
+  margin-left: 0.4mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__remarks,
+.card2-html-sheet--max-compact .card2-customer-copy__remarks {
+  gap: 0.35mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__remarks-title,
+.card2-html-sheet--max-compact .card2-customer-copy__remarks-title {
+  font-size: 7pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__remarks-text,
+.card2-html-sheet--max-compact .card2-customer-copy__remarks-text {
+  min-height: 2.9mm;
+  font-size: 5.8pt;
+  line-height: 1.12;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__remarks-lines,
+.card2-html-sheet--max-compact .card2-customer-copy__remarks-lines {
+  gap: 2.2mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__remarks-lines span:nth-child(n + 3),
+.card2-html-sheet--max-compact .card2-customer-copy__remarks-lines span:nth-child(n + 3) {
+  display: none;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__terms-title,
+.card2-html-sheet--max-compact .card2-customer-copy__terms-title {
+  margin-bottom: 0.35mm;
+  font-size: 6.6pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__terms-list,
+.card2-html-sheet--max-compact .card2-customer-copy__terms-list {
+  font-size: 4.8pt;
+  line-height: 1.14;
+  gap: 0.14mm;
+  padding-inline-start: 3.7mm;
+}
+
+.card2-html-sheet--max-compact {
+  font-size: 8pt;
+  line-height: 1.2;
+}
+
+.card2-html-sheet--max-compact .card2-html-section {
+  margin-bottom: 1.7mm;
+}
+
+.card2-html-sheet--max-compact .card2-html-header {
+  min-height: 14mm;
+  margin-bottom: 1mm;
+}
+
+.card2-html-sheet--max-compact .card2-html-header__information {
+  width: 58mm;
+}
+
+.card2-html-sheet--max-compact .card2-html-header__logo {
+  width: 10.5mm;
+}
+
+.card2-html-sheet--max-compact .card2-style-matrix th,
+.card2-html-sheet--max-compact .card2-style-matrix td {
+  padding: 0.32mm 0.2mm;
+}
+
+.card2-html-sheet--max-compact .card2-style-matrix th {
+  font-size: 5pt;
+}
+
+.card2-html-sheet--max-compact .card2-style-matrix__icon {
+  width: 5.4mm;
+  max-height: 5.4mm;
+}
+
+.card2-html-sheet--max-compact .card2-style-matrix__checkbox-icon {
+  width: 2mm;
+  height: 2mm;
+}
+
+.card2-html-sheet--max-compact .card2-style-matrix__meta-chip {
+  font-size: 3.2pt;
+  padding: 0.01mm 0.25mm;
+}
+
+.card2-html-sheet--max-compact .card2-pricing-strip {
+  margin-top: 1mm;
+  gap: 0.55mm;
+}
+
+.card2-html-sheet--max-compact .card2-measurements-layout {
+  grid-template-columns: minmax(0, 76mm) minmax(0, 1fr);
+  gap: 1.8mm;
+}
+
+.card2-html-sheet--max-compact .card2-measurements-html__canvas {
+  max-width: 76mm;
+}
+
+.card2-html-sheet--max-compact .card2-measure-side__special-lines span:nth-child(n + 4) {
+  display: none;
+}
+
+.card2-html-sheet--max-compact .card2-measure-side__signature-box {
+  min-height: 5.8mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy {
+  padding: 1.15mm 1.5mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__header {
+  min-height: 8mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__header-strip {
+  width: 76mm;
+  margin-top: -1.4mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__logo {
+  width: 10mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__line-value {
+  min-height: 2.9mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-box {
+  min-height: 5.9mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__amount-field {
+  min-width: 12.3mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__amount-value {
+  min-height: 3mm;
+}
+
+.card2-html-sheet--max-compact .card2-customer-copy__terms-list {
+  font-size: 4.4pt;
+}
+
+@media screen and (max-width: 1200px) {
+  .card2-generator__viewer {
+    min-height: auto;
+    padding: 0.7rem;
+  }
+
+  .card2-html-sheet {
+    width: 100%;
+    min-height: auto;
+    padding: 12mm;
+  }
+
+  .card2-html-header {
+    min-height: 18mm;
+  }
+
+  .card2-measurements-html__canvas {
+    max-width: 100%;
+  }
+
+  .card2-measurements-layout {
+    grid-template-columns: 1fr;
+    gap: 4.5mm;
+  }
+
+  .card2-measure-side__lower {
+    grid-template-columns: 1fr;
+    gap: 3.2mm;
+  }
+
+  .card2-customer-copy__header {
+    min-height: 11mm;
+  }
+
+  .card2-customer-copy__logo {
+    width: 12mm;
+  }
+
+  .card2-customer-copy__lower {
+    grid-template-columns: 1fr;
+    gap: 3mm;
+  }
+
+  .card2-customer-copy__fabric-signature-row {
+    grid-template-columns: 1fr;
+    gap: 1.9mm;
+  }
+
+  .card2-customer-copy__brova {
+    margin-left: 0;
+  }
+
+  .card2-pricing-strip__field {
+    min-width: 24mm;
+  }
+
+  .card2-pricing-strip__totals {
+    gap: 0.8mm;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body {
+    margin: 0;
+    background: #fff;
+  }
+
+  #root,
+  .app-shell,
+  .card2-generator,
+  .card2-generator__viewer {
+    margin: 0;
+    padding: 0;
+    width: auto;
+    background: transparent;
+    border: 0;
+    min-height: auto;
+    box-shadow: none;
+  }
+
+  .app-header,
+  .card2-generator__actions {
+    display: none !important;
+  }
+
+  .card2-html-sheet {
+    margin: 0;
+    box-shadow: none;
+    border: 0;
+    page-break-after: always;
+  }
+
+  .card2-html-sheet .card2-measurements-layout {
+    grid-template-columns: minmax(0, 88mm) minmax(0, 1fr) !important;
+  }
+
+  .card2-html-sheet--compact .card2-measurements-layout {
+    grid-template-columns: minmax(0, 80mm) minmax(0, 1fr) !important;
+  }
+
+  .card2-html-sheet--max-compact .card2-measurements-layout {
+    grid-template-columns: minmax(0, 76mm) minmax(0, 1fr) !important;
+  }
+
+  .card2-html-sheet .card2-measure-side__lower {
+    grid-template-columns: minmax(0, 39%) minmax(0, 61%) !important;
+  }
+
+  .card2-html-sheet .card2-customer-copy__lower {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30%) !important;
+  }
+
+  .card2-html-sheet--compact .card2-customer-copy__lower,
+  .card2-html-sheet--max-compact .card2-customer-copy__lower {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 28%) !important;
+  }
+
+  .card2-html-sheet .card2-customer-copy__fabric-signature-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 36%) !important;
+  }
+
+  .card2-html-sheet--compact .card2-customer-copy__fabric-signature-row,
+  .card2-html-sheet--max-compact .card2-customer-copy__fabric-signature-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 33%) !important;
+  }
+
+  .card2-html-sheet .card2-customer-copy__brova {
+    margin-left: auto !important;
+  }
+
+  .card2-measurements-html__canvas {
+    max-width: 85mm;
+  }
+}

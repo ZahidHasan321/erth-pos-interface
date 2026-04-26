@@ -227,7 +227,7 @@ function ReceivingDeliveriesPage() {
   const { data: transfers = [], isLoading, isError, refetch } = useTransferRequests(filters);
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10 space-y-4">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10 space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">

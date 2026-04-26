@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -57,7 +58,10 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
     // The server will compute the real expected cash including transaction data.
 
     const onSubmit = (values: FormValues) => {
-        if (!user) return;
+        if (!user) {
+            toast.error("Not signed in. Please sign in again before closing the register.");
+            return;
+        }
         mutation.mutate(
             {
                 sessionId: session.id,
@@ -76,6 +80,15 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
         );
     };
 
+    // Surface validation failures (RHF blocks submit silently otherwise; an
+    // invalid counted_cash with no visible scroll-to-error left the dialog
+    // looking unresponsive).
+    const onInvalid = () => {
+        const err = form.formState.errors.counted_cash?.message
+            || "Enter the counted cash amount before confirming.";
+        toast.error(err);
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
@@ -83,7 +96,7 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
                     <DialogTitle>Close Register</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                     {/* Cash drawer info */}
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5 text-sm">
                         <div className="flex justify-between">
@@ -115,8 +128,8 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
                             step="0.001"
                             min="0"
                             {...form.register("counted_cash")}
-                            placeholder="Count the physical cash"
-                            className="text-right font-bold tabular-nums text-lg h-12"
+                            placeholder="0.000"
+                            className="text-right font-bold tabular-nums text-lg h-12 placeholder:font-normal placeholder:text-muted-foreground/50"
                             autoFocus
                         />
                         {form.formState.errors.counted_cash && (

@@ -293,7 +293,7 @@ export default function TransferHistoryPage({ search, onSearchChange, onClear }:
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
       {/* Header */}
       <div className="mb-5 flex items-start gap-3">
         <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">

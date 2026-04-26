@@ -19,9 +19,10 @@ interface FabricLabelProps {
     fabricId: number | string | null;
     fabricLength: number | string;
     measurementId: string;
-    garment_type: 'brova' | 'final';
+    garment_type: 'brova' | 'final' | 'alteration';
     express: boolean;
     soaking: boolean;
+    soaking_hours?: 8 | 24 | null;
     deliveryDate: Date | null;
     notes?: string;
     invoiceNumber?: string;
@@ -124,7 +125,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
                 letterSpacing: '1px',
                 textTransform: 'uppercase',
               }}>
-                Soaking
+                {fabricData.soaking ? `Soak ${fabricData.soaking_hours ?? ''}h` : 'Soaking'}
               </span>
             </div>
           </div>

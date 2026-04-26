@@ -34,9 +34,10 @@ async function getAlterationGarments(): Promise<AlterationGarment[]> {
     .select(`
       *,
       order:orders!order_id(
-        id, customer_id,
+        id, customer_id, order_type,
         customer:customers!customer_id(name, phone),
-        workOrder:work_orders!order_id(invoice_number)
+        workOrder:work_orders!order_id(invoice_number),
+        alterationOrder:alteration_orders!order_id(invoice_number)
       )
     `)
     .in("feedback_status", ["needs_repair", "needs_redo"])
@@ -50,8 +51,13 @@ async function getAlterationGarments(): Promise<AlterationGarment[]> {
     .filter((g: any) => g.order?.brand === brand || true) // brand filtered by join
     .map((g: any) => {
       const wo = Array.isArray(g.order?.workOrder) ? g.order.workOrder[0] : g.order?.workOrder;
+      const ao = Array.isArray(g.order?.alterationOrder) ? g.order.alterationOrder[0] : g.order?.alterationOrder;
       const cust = Array.isArray(g.order?.customer) ? g.order.customer[0] : g.order?.customer;
-      return { ...g, order: { ...g.order, customer: cust }, invoice_number: wo?.invoice_number };
+      return {
+        ...g,
+        order: { ...g.order, customer: cust },
+        invoice_number: wo?.invoice_number ?? ao?.invoice_number,
+      };
     });
 }
 
@@ -203,6 +209,11 @@ function AlterationsPage() {
                               </Badge>
                             ) : null;
                           })()}
+                          {g.garment_type === "alteration" && (
+                            <Badge variant="outline" className="text-xs font-bold uppercase border-purple-400 bg-purple-100 text-purple-800">
+                              Alteration Out
+                            </Badge>
+                          )}
                         </div>
                         {g.notes && (
                           <p className="text-xs text-muted-foreground max-w-xs truncate">{g.notes}</p>

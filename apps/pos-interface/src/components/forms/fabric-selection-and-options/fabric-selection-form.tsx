@@ -523,7 +523,7 @@ export function FabricSelectionForm({
         const fieldsToCopy = [
             "fabric_source", "fabric_id", "shop_name", "color",
             "fabric_length", "fabric_amount", "measurement_id",
-            "garment_type", "soaking", "express", "notes",
+            "garment_type", "soaking", "soaking_hours", "express", "notes",
         ] as const;
 
         for (let i = 1; i < garments.length; i++) {
@@ -796,6 +796,7 @@ export function FabricSelectionForm({
                                         garment_type: currentRowData.garment_type ?? 'final',
                                         express: currentRowData.express ?? false,
                                         soaking: currentRowData.soaking ?? false,
+                                        soaking_hours: (currentRowData.soaking_hours === 8 || currentRowData.soaking_hours === 24) ? currentRowData.soaking_hours : null,
                                         deliveryDate: currentRowData.delivery_date ? new Date(currentRowData.delivery_date) : null,
                                         notes: currentRowData.notes || "",
                                     };

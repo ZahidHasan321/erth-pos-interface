@@ -91,7 +91,7 @@ function InventoryPage() {
   ];
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
       <div className="mb-5">
         <h1 className="text-xl font-bold tracking-tight">Inventory Management</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Create and manage fabrics, shelf items, and accessories</p>
@@ -191,7 +191,7 @@ function LowStockBadge() {
 function TableSkeleton({ cols }: { cols: number }) {
   return (
     <Card>
-      <CardContent className="pt-4">
+      <CardContent className="py-4">
         <div className="flex items-center justify-between mb-4">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-8 w-28" />
@@ -270,6 +270,8 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
     const price_per_meter = fd.get("price_per_meter") ? Number(fd.get("price_per_meter")) : undefined;
     const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!name) { toast.error("Name is required"); return; }
+    if (price_per_meter !== undefined && (!Number.isFinite(price_per_meter) || price_per_meter < 0)) { toast.error("Price must be ≥ 0"); return; }
+    if (shop_stock !== undefined && (!Number.isFinite(shop_stock) || shop_stock < 0)) { toast.error("Shop stock must be ≥ 0"); return; }
     if (editing) {
       updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, shop_stock: shop_stock ?? 0 });
     } else {
@@ -284,7 +286,7 @@ function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   return (
     <>
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="py-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               {filtered.length} fabric(s){search && fabrics.length !== filtered.length && ` of ${fabrics.length}`}
@@ -424,6 +426,8 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
     const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!type) { toast.error("Type is required"); return; }
+    if (price !== undefined && (!Number.isFinite(price) || price < 0)) { toast.error("Price must be ≥ 0"); return; }
+    if (shop_stock !== undefined && (!Number.isFinite(shop_stock) || shop_stock < 0)) { toast.error("Shop stock must be ≥ 0"); return; }
     if (editing) { updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null, shop_stock: shop_stock ?? 0 }); }
     else { createMut.mutate({ type, brand, price, shop_stock }); }
   };
@@ -435,7 +439,7 @@ function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
   return (
     <>
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="py-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               {filtered.length} shelf item(s){search && items.length !== filtered.length && ` of ${items.length}`}
@@ -540,6 +544,8 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
     const shop_stock = fd.get("shop_stock") ? Number(fd.get("shop_stock")) : undefined;
     if (!name || !category) { toast.error("Name and category are required"); return; }
+    if (price !== undefined && (!Number.isFinite(price) || price < 0)) { toast.error("Price must be ≥ 0"); return; }
+    if (shop_stock !== undefined && (!Number.isFinite(shop_stock) || shop_stock < 0)) { toast.error("Shop stock must be ≥ 0"); return; }
     if (editing) {
       updateMut.mutate({ id: editing.id, name, category: category as Accessory["category"], unit_of_measure: unit_of_measure as Accessory["unit_of_measure"], price: price ?? null, shop_stock: shop_stock ?? 0 });
     } else {
@@ -554,7 +560,7 @@ function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean 
   return (
     <>
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="py-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               {filtered.length} accessory(ies){search && items.length !== filtered.length && ` of ${items.length}`}

@@ -27,18 +27,20 @@ function flattenOrder(data: any): any {
     if (!data) return null;
     if (Array.isArray(data)) return data.map(flattenOrder);
 
-    const { workOrder, customer, taker, ...core } = data;
-    
+    const { workOrder, alterationOrder, customer, taker, ...core } = data;
+
     // Flatten relations that might be returned as single-item arrays
     const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
+    const altData = Array.isArray(alterationOrder) ? alterationOrder[0] : alterationOrder;
     const customerData = Array.isArray(customer) ? customer[0] : customer;
     const takerData = Array.isArray(taker) ? taker[0] : taker;
-    
+
     return {
         ...core,
         ...workData,
+        ...(altData ?? {}),
         customer: customerData,
-        taker: takerData
+        taker: takerData,
     };
 }
 
@@ -200,13 +202,15 @@ export const getInTransitToWorkshopOrders = async (): Promise<ApiResponse<Order[
         .from(TABLE_NAME)
         .select(`
             *,
-            workOrder:work_orders!order_id!inner(*),
+            workOrder:work_orders!order_id(*),
+            alterationOrder:alteration_orders!order_id(*),
             customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name, color))
             `, { count: 'exact' })
             .in('garments.location', ['transit_to_workshop', 'lost_in_transit'])
             .eq('brand', getBrand())
             .eq('checkout_status', 'confirmed')
+            .in('order_type', ['WORK', 'ALTERATION'])
             .limit(500);
 
     if (error) {
@@ -221,13 +225,15 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
         .from(TABLE_NAME)
         .select(`
             *,
-            workOrder:work_orders!order_id!inner(*),
+            workOrder:work_orders!order_id(*),
+            alterationOrder:alteration_orders!order_id(*),
             customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name, color))
             `, { count: 'exact' })
             .in('garments.location', ['transit_to_shop', 'lost_in_transit'])
             .eq('brand', getBrand())
             .eq('checkout_status', 'confirmed')
+            .in('order_type', ['WORK', 'ALTERATION'])
             .limit(500);
 
     if (error) {
@@ -574,13 +580,14 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         .from(TABLE_NAME)
         .select(`
             *,
-            workOrder:work_orders!order_id!inner(*),
+            workOrder:work_orders!order_id(*),
+            alterationOrder:alteration_orders!order_id(*),
             customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name))
         `)
         .eq('brand', getBrand())
         .eq('checkout_status', 'confirmed')
-        .eq('order_type', 'WORK')
+        .in('order_type', ['WORK', 'ALTERATION'])
         .eq('garments.trip_number', 0)
         .limit(2000);
 

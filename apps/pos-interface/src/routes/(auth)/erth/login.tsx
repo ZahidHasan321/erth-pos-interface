@@ -170,6 +170,12 @@ function ErthLoginPage() {
           .el-form-panel { padding: 32px 24px; }
         }
 
+        /* Mobile-only brand strip (hidden on desktop where left brand panel shows) */
+        .el-mobile-strip { display: none; }
+        @media (max-width: 719px) {
+          .el-mobile-strip { display: flex; }
+        }
+
         /* Staggered item reveals */
         .el-item {
           opacity: 0;
@@ -368,12 +374,9 @@ function ErthLoginPage() {
           <div className="el-form-panel">
 
             {/* Mobile brand strip */}
-            <div className="el-item" style={{
-              display: "none",
-              alignItems: "center", gap: 8, marginBottom: 28,
-            }}
-              // @ts-ignore
-              style_mobile="display:flex"
+            <div
+              className="el-item el-mobile-strip"
+              style={{ alignItems: "center", gap: 8, marginBottom: 28 }}
             >
               <img src={ErthLogo} alt="Erth" style={{ height: 22, filter: "var(--primary)" }} />
               <span style={{

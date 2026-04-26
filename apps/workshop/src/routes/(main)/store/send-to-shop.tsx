@@ -186,7 +186,7 @@ function SendToShopPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
       <PageHeader icon={Send} title="Send to Shop" subtitle="Proactively dispatch items from the workshop to the shop" />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">

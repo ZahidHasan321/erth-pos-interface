@@ -48,6 +48,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         jabzour_thickness: g.jabzour_thickness,
         notes: g.notes,
         soaking: g.soaking === true,
+        soaking_hours: (g.soaking_hours === 8 || g.soaking_hours === 24) ? g.soaking_hours : null,
         express: g.express === true,
         garment_type: g.garment_type || 'final',
         piece_stage: g.piece_stage as any,

@@ -43,6 +43,15 @@ export function mapMeasurementToFormValues(measurement: Measurement): CustomerMe
     side_pocket_opening: measurement.side_pocket_opening ?? 0,
     jabzour_length: measurement.jabzour_length ?? 0,
     jabzour_width: measurement.jabzour_width ?? 0,
+    collar_length: measurement.collar_length ?? 0,
+    second_button_distance: measurement.second_button_distance ?? null,
+    basma_length: measurement.basma_length ?? 0,
+    basma_width: measurement.basma_width ?? 0,
+    basma_sleeve_length: measurement.basma_sleeve_length ?? 0,
+    sleeve_hemming: measurement.sleeve_hemming ?? 0,
+    bottom_hemming: measurement.bottom_hemming ?? 0,
+    pen_pocket_length: measurement.pen_pocket_length ?? 0,
+    pen_pocket_width: measurement.pen_pocket_width ?? 0,
   };
 }
 
@@ -88,5 +97,14 @@ export function mapFormValuesToMeasurement(formValues: CustomerMeasurementsSchem
     side_pocket_opening: formValues.side_pocket_opening,
     jabzour_length: formValues.jabzour_length,
     jabzour_width: formValues.jabzour_width,
+    collar_length: formValues.collar_length,
+    second_button_distance: formValues.second_button_distance ?? null,
+    basma_length: formValues.basma_length,
+    basma_width: formValues.basma_width,
+    basma_sleeve_length: formValues.basma_sleeve_length,
+    sleeve_hemming: formValues.sleeve_hemming,
+    bottom_hemming: formValues.bottom_hemming,
+    pen_pocket_length: formValues.pen_pocket_length,
+    pen_pocket_width: formValues.pen_pocket_width,
   };
 }

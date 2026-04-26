@@ -20,6 +20,12 @@ export function useAlterationOrderMutations() {
             queryClient.invalidateQueries({ queryKey: ["alteration-orders"], refetchType: "active" });
             queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
             queryClient.invalidateQueries({ queryKey: ["dispatchOrders"], refetchType: "active" });
+            if (variables.master_measurement_id) {
+                queryClient.invalidateQueries({
+                    queryKey: ["measurements", variables.customer_id],
+                    refetchType: "active",
+                });
+            }
             if (variables.customer_id) {
                 queryClient.invalidateQueries({
                     queryKey: ["customer-orders", variables.customer_id],

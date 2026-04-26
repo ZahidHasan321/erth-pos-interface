@@ -11,6 +11,7 @@ interface GarmentData {
     garment_type?: string;
     express?: boolean;
     soaking?: boolean;
+    soaking_hours?: number | null;
     fabric_price_snapshot?: string | number | null;
     stitching_price_snapshot?: string | number | null;
     style_price_snapshot?: string | number | null;
@@ -50,7 +51,8 @@ interface RefundItemSelectorProps {
     garments: GarmentData[];
     shelfItems: ShelfItemData[];
     expressSurcharge: number;
-    soakingPrice: number;
+    soaking8hPrice: number;
+    soaking24hPrice: number;
     totalPaid?: number;
     onRefundItemsChange: (items: RefundItem[], total: number) => void;
 }
@@ -58,7 +60,7 @@ interface RefundItemSelectorProps {
 const num = (v: string | number | null | undefined): number => Number(v) || 0;
 const fmt = (n: number): string => Number(n.toFixed(3)).toString();
 
-export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soakingPrice, totalPaid, onRefundItemsChange }: RefundItemSelectorProps) {
+export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soaking8hPrice, soaking24hPrice, totalPaid, onRefundItemsChange }: RefundItemSelectorProps) {
     const [garmentSelections, setGarmentSelections] = useState<Record<string, GarmentRefundSelection>>({});
     const [shelfSelections, setShelfSelections] = useState<Record<number, ShelfRefundSelection>>({});
 
@@ -70,9 +72,11 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
             case "stitching": return num(g.stitching_price_snapshot);
             case "style": return num(g.style_price_snapshot);
             case "express": return g.express ? expressSurcharge : 0;
-            case "soaking": return g.soaking ? soakingPrice : 0;
+            case "soaking":
+                if (!g.soaking) return 0;
+                return g.soaking_hours === 24 ? soaking24hPrice : soaking8hPrice;
         }
-    }, [expressSurcharge, soakingPrice]);
+    }, [expressSurcharge, soaking8hPrice, soaking24hPrice]);
 
 
     const isComponentRefunded = useCallback((g: GarmentData, component: Component): boolean => {
@@ -311,7 +315,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                             ["stitching", "Stitching", getGarmentPrice(g, "stitching"), isComponentRefunded(g, "stitching")],
                                             ["style", "Style", getGarmentPrice(g, "style"), isComponentRefunded(g, "style")],
                                             ...(g.express ? [["express", "Express", getGarmentPrice(g, "express"), isComponentRefunded(g, "express")] as const] : []),
-                                            ...(g.soaking ? [["soaking", "Soaking", getGarmentPrice(g, "soaking"), isComponentRefunded(g, "soaking")] as const] : []),
+                                            ...(g.soaking ? [["soaking", `Soaking ${g.soaking_hours ?? 8}h`, getGarmentPrice(g, "soaking"), isComponentRefunded(g, "soaking")] as const] : []),
                                         ] as const).map(([key, label, price, alreadyRefunded]) => (
                                             <button
                                                 key={key}

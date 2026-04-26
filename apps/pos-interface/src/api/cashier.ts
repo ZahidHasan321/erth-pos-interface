@@ -12,7 +12,7 @@ const CASHIER_ORDER_QUERY = `
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, stitching_charge, fabric_charge, style_charge, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
     discount_approver:users!discount_approved_by(id, name),
-    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
+    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type, brand)),
     payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
 `;
@@ -340,6 +340,10 @@ export const recordPaymentTransaction = async (params: {
     collectGarmentIds?: string[];
     collectFulfillmentOverrides?: Record<string, "collected" | "delivered">;
     refundItems?: RefundItem[];
+    /** Client-generated UUID per submit attempt. Lets the RPC return the original
+     *  transaction on retry instead of inserting a duplicate (network glitch,
+     *  double-click, etc.). Omit to opt out of dedupe. */
+    idempotencyKey?: string;
 }) => {
     const { data, error } = await db.rpc('record_payment_transaction', {
         p_order_id: params.orderId,
@@ -354,6 +358,7 @@ export const recordPaymentTransaction = async (params: {
         p_refund_items: params.refundItems || null,
         p_local_date: getLocalDateStr(),
         p_fulfillment_overrides: params.collectFulfillmentOverrides ?? null,
+        p_idempotency_key: params.idempotencyKey || null,
     });
 
     if (error) {
@@ -616,6 +621,11 @@ export interface RegisterSessionData {
     expected_cash: number | null;
     variance: number | null;
     closing_notes: string | null;
+    /** Set when a closed session was reopened. Stays populated through subsequent
+     *  closes so reconciliation can flag sessions that were reopened. */
+    reopened_by: string | null;
+    reopened_by_name: string | null;
+    reopened_at: string | null;
     cash_movements: CashMovementData[];
 }
 

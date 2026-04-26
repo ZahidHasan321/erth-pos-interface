@@ -36,6 +36,7 @@ import type {
   StageTimings,
   ProductionPlan,
 } from "@repo/database";
+import { getGarmentAltLabel } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
@@ -84,16 +85,12 @@ function hasQcFailThisTrip(g: WorkshopGarment): boolean {
   return !!entry?.qc_attempts?.some((a) => a.result === "fail");
 }
 
-/** Alt label for a returning garment. Priority: QC-fail (alt_p) > trip-based (alt_N). */
-function getAltLabel(g: WorkshopGarment): string | null {
-  if (hasQcFailThisTrip(g)) return "alt_p";
-  const trip = g.trip_number ?? 1;
-  if (trip >= 2) return `alt_${trip - 1}`;
-  return null;
-}
-
 function isAlterationRow(g: WorkshopGarment): boolean {
-  return (g.trip_number ?? 1) >= 2 || hasQcFailThisTrip(g);
+  return (
+    (g.trip_number ?? 1) >= 2 ||
+    g.garment_type === "alteration" ||
+    hasQcFailThisTrip(g)
+  );
 }
 
 /** "Currently working" = user has clicked Start at this terminal.
@@ -122,14 +119,18 @@ type SectionKey =
   | "express"
   | "brova"
   | "final"
-  | "alterations"
+  | "alterations_in"
+  | "alterations_out"
   | "assigned";
 
-/** Exclusive assignment: each garment lands in one section. Currently working wins. */
+/** Exclusive assignment: each garment lands in one section. Currently working wins.
+ *  Alterations split: "out" = customer-brought alteration_orders (garment_type='alteration');
+ *  "in" = work-order returns (trip>=2) and QC-fail rework. */
 function classify(g: WorkshopGarment, variant: "full" | "simple"): SectionKey {
   if (isWorking(g)) return "working";
   if (variant === "simple") return "assigned";
-  if (isAlterationRow(g)) return "alterations";
+  if (g.garment_type === "alteration") return "alterations_out";
+  if (isAlterationRow(g)) return "alterations_in";
   if (g.express) return "express";
   return g.garment_type === "brova" ? "brova" : "final";
 }
@@ -161,11 +162,12 @@ function ElapsedTimer({ since }: { since: string }) {
 
 function AltBadge({ label }: { label: string }) {
   const isQc = label === "alt_p";
+  const isOut = label.startsWith("alt_out");
   return (
     <Badge
       className={cn(
         "font-semibold text-xs uppercase tracking-wide border-0 text-white",
-        isQc ? "bg-red-600" : "bg-orange-500",
+        isQc ? "bg-red-600" : isOut ? "bg-amber-600" : "bg-orange-500",
       )}
     >
       {label}
@@ -298,7 +300,7 @@ function GarmentRow({
   showExpressFlag?: boolean;
   showActions?: boolean;
 }) {
-  const altLabel = showAlt ? getAltLabel(garment) : null;
+  const altLabel = showAlt ? getGarmentAltLabel(garment) : null;
   const working = isWorking(garment);
   const sessionStart = working ? getCurrentSessionStart(garment, stage) : null;
 
@@ -319,7 +321,7 @@ function GarmentRow({
             {showExpressFlag && garment.express && <ExpressBadge />}
             {garment.soaking && (
               <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
-                <Droplets className="w-3 h-3" /> Soak
+                <Droplets className="w-3 h-3" /> Soak{(garment as any).soaking_hours ? ` ${(garment as any).soaking_hours}h` : ""}
               </span>
             )}
             {sessionStart && <ElapsedTimer since={sessionStart} />}
@@ -550,7 +552,8 @@ export function ProductionTerminal({
       express: [],
       brova: [],
       final: [],
-      alterations: [],
+      alterations_in: [],
+      alterations_out: [],
       assigned: [],
     };
     for (const g of scopedGarments) {
@@ -728,18 +731,38 @@ export function ProductionTerminal({
                 )}
               </Section>
 
-              {/* ── Alterations ── */}
+              {/* ── Alterations In (work-order returns + QC-fail rework) ── */}
               <Section
-                title="Alterations"
+                title="Alterations In"
                 icon={Wrench}
-                count={sections.alterations.length}
+                count={sections.alterations_in.length}
                 accent="bg-purple-100 text-purple-700"
               >
-                {sections.alterations.length === 0 ? (
-                  <EmptyState icon={Wrench} message="No alterations waiting" />
+                {sections.alterations_in.length === 0 ? (
+                  <EmptyState icon={Wrench} message="No alterations in waiting" />
                 ) : (
                   <SectionTable
-                    garments={sections.alterations}
+                    garments={sections.alterations_in}
+                    stage={terminalStage}
+                    onRowClick={handleClick}
+                    showAlt
+                    showExpressFlag
+                  />
+                )}
+              </Section>
+
+              {/* ── Alterations Out (customer-brought alteration_orders) ── */}
+              <Section
+                title="Alterations Out"
+                icon={Wrench}
+                count={sections.alterations_out.length}
+                accent="bg-amber-100 text-amber-700"
+              >
+                {sections.alterations_out.length === 0 ? (
+                  <EmptyState icon={Wrench} message="No alterations out waiting" />
+                ) : (
+                  <SectionTable
+                    garments={sections.alterations_out}
                     stage={terminalStage}
                     onRowClick={handleClick}
                     showAlt

@@ -455,13 +455,23 @@ function SchedulerPage() {
   // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
   // in_production=true, production_plan=null. So here we only split by trip /
   // garment_type / express / whether the order had a brova.
-  const trip1 = useMemo(
-    () => schedulable.filter((g) => (g.trip_number ?? 1) === 1),
+  // Alteration-order garments (garment_type='alteration') get their own tab
+  // regardless of trip — they don't share the brova/final/returns flow.
+  const alterationOutGarments = useMemo(
+    () => schedulable.filter((g) => g.garment_type === "alteration"),
     [schedulable],
   );
-  const returnsGarments = useMemo(
-    () => schedulable.filter((g) => (g.trip_number ?? 1) >= 2),
+  const workOrderSchedulable = useMemo(
+    () => schedulable.filter((g) => g.garment_type !== "alteration"),
     [schedulable],
+  );
+  const trip1 = useMemo(
+    () => workOrderSchedulable.filter((g) => (g.trip_number ?? 1) === 1),
+    [workOrderSchedulable],
+  );
+  const returnsGarments = useMemo(
+    () => workOrderSchedulable.filter((g) => (g.trip_number ?? 1) >= 2),
+    [workOrderSchedulable],
   );
   const brovaGarments = useMemo(
     () => trip1.filter((g) => !g.express && g.garment_type === "brova"),
@@ -550,6 +560,7 @@ function SchedulerPage() {
   const sortedFinals = applySearch(groupByOrderSorted(finalsGarments));
   const sortedDirectFinals = applySearch(groupByOrderSorted(directFinalsGarments));
   const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
+  const sortedAlterationOut = applySearch(groupByOrderSorted(alterationOutGarments));
 
   // ── Selection state ───────────────────────────────────────────────────────
   // New garments (Express + Brova + Direct Finals): no prior plan, cross-order, one shared pool
@@ -829,6 +840,22 @@ function SchedulerPage() {
                     onToggle={toggleGarment(setSelFinals)}
                     disabled={finalsDisabled}
                     lockToOrder
+                  />
+                )}
+              </Section>
+
+              {/* ── ALTERATION ORDERS (OUT) — independent, cross-order, no plan inheritance ── */}
+              <Section title="Alteration Orders (Out)" icon={Scissors} count={sortedAlterationOut.length}>
+                {sortedAlterationOut.length === 0 ? (
+                  <EmptyState icon={Scissors} message="No alteration orders to schedule" />
+                ) : (
+                  <SchedulerSectionTable
+                    garments={sortedAlterationOut}
+                    selectedIds={selNew}
+                    onToggle={toggleGarment(setSelNew)}
+                    showType
+                    showAlt
+                    disabled={newDisabled}
                   />
                 )}
               </Section>

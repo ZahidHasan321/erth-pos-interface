@@ -3,7 +3,11 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useGarment } from "@/hooks/useWorkshopGarments";
 import { getFeedbackByGarmentAndTrip } from "@/api/feedback";
-import { buildAlterationFilter } from "@/lib/alteration-filter";
+import {
+  buildAlterationFilter,
+  buildAltOutFilter,
+  getAltOutEffectiveMeasurement,
+} from "@/lib/alteration-filter";
 import {
   useCompleteAndAdvance,
   useStartGarment,
@@ -26,6 +30,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@repo/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -44,6 +57,8 @@ import {
   RotateCcw,
   Loader2,
   Scissors,
+  Plus,
+  Ruler,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconStack2, IconSparkles } from "@tabler/icons-react";
 import type {
@@ -51,6 +66,8 @@ import type {
   PieceStage,
   ProductionPlan,
   TripHistoryEntry,
+  MeasurementIssue,
+  Measurement,
 } from "@repo/database";
 import { isAlteration, getAlterationNumber } from "@repo/database";
 
@@ -61,12 +78,70 @@ export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
 // ── Constants ──────────────────────────────────────────────────
 
 const QC_CATEGORIES = [
-  { key: "stitching", label: "Stitching Quality" },
-  { key: "measurement", label: "Measurement Accuracy" },
-  { key: "fabric", label: "Fabric Condition" },
-  { key: "finishing", label: "Finishing Quality" },
-  { key: "appearance", label: "Overall Appearance" },
+  { key: "seam", label: "Seam" },
+  { key: "ironing", label: "Ironing" },
+  { key: "front_pocket", label: "Front Pocket" },
+  { key: "collar", label: "Collar" },
+  { key: "jabzour", label: "Jabzour" },
+  { key: "hemming", label: "Hemming" },
 ];
+
+/** Flat list of measurement fields the QC inspector can flag, grouped for the picker. */
+const QC_MEASUREMENT_FIELDS: { group: string; fields: { key: keyof Measurement; label: string }[] }[] = [
+  {
+    group: "Collar & Shoulder",
+    fields: [
+      { key: "collar_width", label: "Collar Width" },
+      { key: "collar_height", label: "Collar Height" },
+      { key: "shoulder", label: "Shoulder" },
+    ],
+  },
+  {
+    group: "Chest",
+    fields: [
+      { key: "chest_full", label: "Chest Full" },
+      { key: "chest_upper", label: "Chest Upper" },
+      { key: "chest_front", label: "Chest Front" },
+      { key: "chest_back", label: "Chest Back" },
+    ],
+  },
+  {
+    group: "Sleeve & Armhole",
+    fields: [
+      { key: "sleeve_length", label: "Sleeve Length" },
+      { key: "sleeve_width", label: "Sleeve Width" },
+      { key: "elbow", label: "Elbow" },
+      { key: "armhole", label: "Armhole" },
+      { key: "armhole_front", label: "Armhole Front" },
+    ],
+  },
+  {
+    group: "Waist & Length",
+    fields: [
+      { key: "waist_full", label: "Waist Full" },
+      { key: "waist_front", label: "Waist Front" },
+      { key: "waist_back", label: "Waist Back" },
+      { key: "length_front", label: "Length Front" },
+      { key: "length_back", label: "Length Back" },
+      { key: "bottom", label: "Bottom" },
+    ],
+  },
+  {
+    group: "Pockets & Jabzour",
+    fields: [
+      { key: "top_pocket_length", label: "Top Pocket Length" },
+      { key: "top_pocket_width", label: "Top Pocket Width" },
+      { key: "side_pocket_length", label: "Side Pocket Length" },
+      { key: "side_pocket_width", label: "Side Pocket Width" },
+      { key: "jabzour_length", label: "Jabzour Length" },
+      { key: "jabzour_width", label: "Jabzour Width" },
+    ],
+  },
+];
+
+const QC_MEASUREMENT_FIELD_LABELS: Record<string, string> = Object.fromEntries(
+  QC_MEASUREMENT_FIELDS.flatMap((g) => g.fields.map((f) => [f.key as string, f.label])),
+);
 
 const FAIL_RETURN_STAGES: { value: PieceStage; historyKey: string; label: string; icon: React.ComponentType<{ className?: string }>; color: string; accent: string }[] = [
   { value: "cutting",      historyKey: "cutter",      label: "Cutting",      icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
@@ -125,12 +200,13 @@ function TerminalGarmentPage() {
   }, []);
 
   const currentTrip = garment?.trip_number ?? 1;
-  const isAlt = garment ? isAlteration(currentTrip, garment.garment_type) : false;
-  const priorTrip = isAlt ? currentTrip - 1 : 0;
+  const isAltOut = garment?.garment_type === "alteration";
+  const isAltIn = garment ? isAlteration(currentTrip, garment.garment_type) && !isAltOut : false;
+  const priorTrip = isAltIn ? currentTrip - 1 : 0;
   const { data: priorFeedback } = useQuery({
     queryKey: ["garment-feedback", garment?.id, priorTrip],
     queryFn: () => getFeedbackByGarmentAndTrip(garment!.id, priorTrip),
-    enabled: !!garment && isAlt && priorTrip >= 1,
+    enabled: !!garment && isAltIn && priorTrip >= 1,
     staleTime: 60_000,
   });
 
@@ -173,9 +249,18 @@ function TerminalGarmentPage() {
   const hasQcFail = !!tripEntry?.qc_attempts?.some((a) => a.result === "fail");
   const lastQcFail = tripEntry?.qc_attempts?.filter((a) => a.result === "fail").at(-1);
   const altNum = getAlterationNumber(currentTrip, garment.garment_type);
-  const isRepair = hasQcFail || isAlt;
+  const isRepair = hasQcFail || isAltIn || isAltOut;
 
-  const alterationFilter = isAlt ? buildAlterationFilter(priorFeedback) : null;
+  const altOutHasBaseline = isAltOut
+    && (!!garment.full_measurement_set || !!garment.original_garment_measurement);
+  const alterationFilter = isAltIn
+    ? buildAlterationFilter(priorFeedback)
+    : isAltOut
+      ? buildAltOutFilter(garment, altOutHasBaseline)
+      : null;
+  const effectiveMeasurement = isAltOut
+    ? getAltOutEffectiveMeasurement(garment)
+    : garment.measurement;
 
   const handlePrint = () => {
     const className = "terminal-printing";
@@ -215,7 +300,9 @@ function TerminalGarmentPage() {
             "mb-3 flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5",
             hasQcFail
               ? "bg-red-50 border-red-200 text-red-800"
-              : "bg-orange-50 border-orange-200 text-orange-800",
+              : isAltOut
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-orange-50 border-orange-200 text-orange-800",
           )}>
             {hasQcFail ? (
               <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -224,8 +311,16 @@ function TerminalGarmentPage() {
             )}
             <div className="min-w-0">
               <p className="text-sm font-bold">
-                {hasQcFail ? "QC Fix (alt_p)" : `Alteration ${altNum}`}
-                {" "}<span className="font-normal">— partial re-entry, not standard production</span>
+                {hasQcFail
+                  ? "QC Fix (alt_p)"
+                  : isAltOut
+                    ? `Alteration Out${altNum && altNum >= 1 ? ` ${altNum}` : ""}`
+                    : `Alteration ${altNum}`}
+                {" "}<span className="font-normal">
+                  {isAltOut
+                    ? "— customer-brought garment, only flagged cells need work"
+                    : "— partial re-entry, not standard production"}
+                </span>
               </p>
               {hasQcFail && lastQcFail?.fail_reason && (
                 <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
@@ -234,7 +329,7 @@ function TerminalGarmentPage() {
           </div>
         )}
 
-        {isAlt && alterationFilter && alterationFilter.fieldReasons.size > 0 && (
+        {(isAltIn || isAltOut) && alterationFilter && alterationFilter.fieldReasons.size > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs">
             <span className="font-semibold text-zinc-700">Cell colors:</span>
             <span className="inline-flex items-center gap-1.5">
@@ -254,14 +349,14 @@ function TerminalGarmentPage() {
 
         <DishdashaOverlay
           garment={garment}
-          measurement={garment.measurement}
+          measurement={effectiveMeasurement}
           alterationFilter={alterationFilter}
           notes={garment.notes}
         />
 
         <div className="mt-4">
           {isQC ? (
-            <QCActions garment={garment} />
+            <QCActions garment={garment} measurement={effectiveMeasurement} />
           ) : isProductionStage ? (
             <TerminalActions garment={garment} />
           ) : null}
@@ -269,7 +364,11 @@ function TerminalGarmentPage() {
       </div>
 
       <div className="terminal-print-only hidden" aria-hidden="true">
-        <TerminalQualityTemplatePrint garment={garment} alterationFilter={alterationFilter} />
+        <TerminalQualityTemplatePrint
+          garment={garment}
+          alterationFilter={alterationFilter}
+          measurement={effectiveMeasurement}
+        />
       </div>
     </div>
   );
@@ -525,7 +624,13 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
 
 // ── QC Actions ─────────────────────────────────────────────────
 
-function QCActions({ garment }: { garment: WorkshopGarment }) {
+function QCActions({
+  garment,
+  measurement,
+}: {
+  garment: WorkshopGarment;
+  measurement: Measurement | null | undefined;
+}) {
   const router = useRouter();
   const passMut = useQcPass();
   const failMut = useQcFail();
@@ -539,6 +644,7 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [returnStage, setReturnStage] = useState<PieceStage>("sewing");
   const [reason, setReason] = useState("");
+  const [issues, setIssues] = useState<MeasurementIssue[]>([]);
 
   const allRated = QC_CATEGORIES.every((cat) => (ratings[cat.key] ?? 0) > 0);
   const canPass = !!worker && allRated;
@@ -546,7 +652,12 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
 
   const handlePass = async () => {
     if (!canPass) return;
-    await passMut.mutateAsync({ id: garment.id, worker, ratings });
+    await passMut.mutateAsync({
+      id: garment.id,
+      worker,
+      ratings,
+      measurementIssues: issues.length > 0 ? issues : null,
+    });
     router.history.back();
   };
 
@@ -635,6 +746,12 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             ))}
           </div>
 
+          <MeasurementIssuesEditor
+            measurement={measurement}
+            issues={issues}
+            onChange={setIssues}
+          />
+
           <Button
             className="w-full h-10 text-sm font-bold bg-emerald-600 hover:bg-emerald-700"
             onClick={handlePass}
@@ -650,7 +767,7 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
 
           {!allRated && worker && (
             <p className="text-xs text-muted-foreground text-center">
-              Rate all 5 categories to pass
+              Rate all {QC_CATEGORIES.length} categories to pass
             </p>
           )}
         </div>
@@ -721,6 +838,217 @@ function QCActions({ garment }: { garment: WorkshopGarment }) {
             )}
             Send Back
           </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Measurement Issues Editor (workshop mistake flagging) ───────
+
+function MeasurementIssuesEditor({
+  measurement,
+  issues,
+  onChange,
+}: {
+  measurement: Measurement | null | undefined;
+  issues: MeasurementIssue[];
+  onChange: (next: MeasurementIssue[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [field, setField] = useState<string>("");
+  const [corrected, setCorrected] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+
+  const flaggedKeys = new Set(issues.map((i) => i.field));
+  const canSubmit = !!field && corrected.trim() !== "" && !Number.isNaN(Number(corrected));
+
+  const reset = () => {
+    setField("");
+    setCorrected("");
+    setNote("");
+    setAdding(false);
+  };
+
+  const handleAdd = () => {
+    if (!canSubmit) return;
+    const rawOrig = measurement ? (measurement as Record<string, unknown>)[field] : null;
+    const origNum = rawOrig == null || rawOrig === "" ? NaN : Number(rawOrig);
+    onChange([
+      ...issues,
+      {
+        field,
+        original: Number.isFinite(origNum) ? origNum : null,
+        corrected: Number(corrected),
+        note: note.trim() || undefined,
+      },
+    ]);
+    reset();
+  };
+
+  const handleRemove = (idx: number) => {
+    onChange(issues.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Ruler className="w-3.5 h-3.5 text-amber-700" />
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+            Workshop Mistakes
+          </span>
+          {issues.length > 0 && (
+            <span className="rounded-full bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5">
+              {issues.length}
+            </span>
+          )}
+        </div>
+        {!adding && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-amber-800 hover:bg-amber-100"
+            onClick={() => setAdding(true)}
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Flag
+          </Button>
+        )}
+      </div>
+
+      {issues.length === 0 && !adding && (
+        <p className="text-xs text-amber-700/70 italic">
+          Flag any measurement the workshop produced wrong.
+        </p>
+      )}
+
+      {issues.length > 0 && (
+        <ul className="space-y-1.5 mb-2">
+          {issues.map((iss, idx) => (
+            <li
+              key={`${iss.field}-${idx}`}
+              className="flex items-start gap-2 rounded-md bg-white border border-amber-200 px-2.5 py-1.5"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-zinc-900">
+                    {QC_MEASUREMENT_FIELD_LABELS[iss.field] ?? iss.field}
+                  </span>
+                  <span className="text-xs text-zinc-500 line-through tabular-nums">
+                    {iss.original ?? "—"}
+                  </span>
+                  <span className="text-xs text-zinc-400">→</span>
+                  <span className="text-xs font-bold text-red-600 tabular-nums">
+                    {iss.corrected}
+                  </span>
+                </div>
+                {iss.note && (
+                  <p className="text-[11px] text-zinc-600 mt-0.5">{iss.note}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRemove(idx)}
+                className="text-zinc-400 hover:text-red-600 shrink-0"
+                aria-label="Remove"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding && (
+        <div className="space-y-2 rounded-md bg-white border border-amber-200 p-2.5">
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+              Measurement
+            </label>
+            <Select value={field} onValueChange={setField}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Pick measurement…" />
+              </SelectTrigger>
+              <SelectContent>
+                {QC_MEASUREMENT_FIELDS.map((g) => (
+                  <SelectGroup key={g.group}>
+                    <SelectLabel>{g.group}</SelectLabel>
+                    {g.fields.map((f) => (
+                      <SelectItem
+                        key={f.key as string}
+                        value={f.key as string}
+                        disabled={flaggedKeys.has(f.key as string)}
+                      >
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                Original
+              </label>
+              <div className="h-9 flex items-center px-2.5 rounded-md border border-zinc-200 bg-zinc-50 text-sm tabular-nums text-zinc-600">
+                {field && measurement
+                  ? String((measurement as Record<string, unknown>)[field] ?? "—")
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                Actual (workshop)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={corrected}
+                onChange={(e) => setCorrected(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+              Note (optional)
+            </label>
+            <Input
+              placeholder="Why / what happened…"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8"
+              onClick={reset}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="flex-1 h-8 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleAdd}
+              disabled={!canSubmit}
+            >
+              Add
+            </Button>
+          </div>
         </div>
       )}
     </div>

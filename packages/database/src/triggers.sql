@@ -64,6 +64,7 @@ DECLARE
   v_work_order_row RECORD;
   v_inv INT;
   v_paid DECIMAL;
+  v_session_id INT;
 BEGIN
   -- 1. Get or Generate Invoice Number
   SELECT invoice_number INTO v_inv FROM work_orders WHERE order_id = p_order_id;
@@ -161,8 +162,22 @@ BEGIN
   END LOOP;
 
   -- 6. Record initial payment transaction (if paid > 0)
+  --    STRICT: any cash/electronic advance requires the brand's register to be open
+  --    so the transaction can be attributed to a session and reconciled at close.
+  --    Zero-paid confirmations are allowed (no money flow → no register dependency).
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
-    INSERT INTO payment_transactions (order_id, amount, payment_type, payment_ref_no, payment_note, cashier_id, transaction_type)
+    SELECT id INTO v_session_id FROM register_sessions
+    WHERE brand = v_order_row.brand AND status = 'open'
+    LIMIT 1;
+
+    IF v_session_id IS NULL THEN
+      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_order_row.brand;
+    END IF;
+
+    INSERT INTO payment_transactions (
+      order_id, amount, payment_type, payment_ref_no, payment_note,
+      cashier_id, transaction_type, register_session_id
+    )
     VALUES (
       p_order_id,
       v_paid,
@@ -170,7 +185,8 @@ BEGIN
       (p_checkout_details->>'paymentRefNo'),
       (p_checkout_details->>'paymentNote'),
       (p_checkout_details->>'orderTaker')::uuid,
-      'payment'
+      'payment',
+      v_session_id
     );
   END IF;
 
@@ -190,6 +206,7 @@ DECLARE
   v_item JSONB;
   v_order_row orders%ROWTYPE;
   v_paid DECIMAL;
+  v_session_id INT;
 BEGIN
   v_paid := (p_checkout_details->>'paid')::decimal;
 
@@ -239,8 +256,20 @@ BEGIN
   END LOOP;
 
   -- 4. Record initial payment transaction (if paid > 0)
+  --    STRICT: requires open register for the order's brand (see complete_work_order).
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
-    INSERT INTO payment_transactions (order_id, amount, payment_type, payment_ref_no, payment_note, cashier_id, transaction_type)
+    SELECT id INTO v_session_id FROM register_sessions
+    WHERE brand = v_order_row.brand AND status = 'open'
+    LIMIT 1;
+
+    IF v_session_id IS NULL THEN
+      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_order_row.brand;
+    END IF;
+
+    INSERT INTO payment_transactions (
+      order_id, amount, payment_type, payment_ref_no, payment_note,
+      cashier_id, transaction_type, register_session_id
+    )
     VALUES (
       p_order_id,
       v_paid,
@@ -248,7 +277,8 @@ BEGIN
       (p_checkout_details->>'paymentRefNo'),
       (p_checkout_details->>'paymentNote'),
       (p_checkout_details->>'orderTaker')::uuid,
-      'payment'
+      'payment',
+      v_session_id
     );
   END IF;
 
@@ -268,8 +298,11 @@ DECLARE
   v_order_id INT;
   v_order_row orders%ROWTYPE;
   v_paid DECIMAL;
+  v_session_id INT;
+  v_brand brand;
 BEGIN
   v_paid := (p_checkout_details->>'paid')::decimal;
+  v_brand := (p_checkout_details->>'brand')::brand;
 
   -- 1. Insert into orders
   INSERT INTO orders (
@@ -309,7 +342,7 @@ BEGIN
     (p_checkout_details->>'total')::decimal,
     (p_checkout_details->>'shelfCharge')::decimal,
     (p_checkout_details->>'deliveryCharge')::decimal,
-    (p_checkout_details->>'brand')::brand
+    v_brand
   ) RETURNING id INTO v_order_id;
 
   -- 2. Deduct Shelf Stock & Record Items
@@ -330,8 +363,20 @@ BEGIN
   END LOOP;
 
   -- 3. Record initial payment transaction (if paid > 0)
+  --    STRICT: requires open register for the brand (see complete_work_order).
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
-    INSERT INTO payment_transactions (order_id, amount, payment_type, payment_ref_no, payment_note, cashier_id, transaction_type)
+    SELECT id INTO v_session_id FROM register_sessions
+    WHERE brand = v_brand AND status = 'open'
+    LIMIT 1;
+
+    IF v_session_id IS NULL THEN
+      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_brand;
+    END IF;
+
+    INSERT INTO payment_transactions (
+      order_id, amount, payment_type, payment_ref_no, payment_note,
+      cashier_id, transaction_type, register_session_id
+    )
     VALUES (
       v_order_id,
       v_paid,
@@ -339,7 +384,8 @@ BEGIN
       (p_checkout_details->>'paymentRefNo'),
       (p_checkout_details->>'paymentNote'),
       (p_checkout_details->>'orderTaker')::uuid,
-      'payment'
+      'payment',
+      v_session_id
     );
   END IF;
 
@@ -429,7 +475,7 @@ BEGIN
       front_pocket_type, front_pocket_thickness,
       wallet_pocket, pen_holder, small_tabaggi,
       jabzour_1, jabzour_2, jabzour_thickness,
-      lines, notes, soaking, express, garment_type,
+      lines, notes, soaking, soaking_hours, express, garment_type,
       delivery_date, style, shop_name, home_delivery, color,
       -- Initial workflow state (only meaningful on first INSERT)
       piece_stage, location, trip_number,
@@ -461,6 +507,11 @@ BEGIN
       COALESCE((v_garment->>'lines')::INT, 1),
       v_garment->>'notes',
       COALESCE((v_garment->>'soaking')::BOOLEAN, false),
+      CASE
+        WHEN (v_garment->>'soaking')::BOOLEAN AND (v_garment->>'soaking_hours')::INT IN (8, 24)
+          THEN (v_garment->>'soaking_hours')::INT
+        ELSE NULL
+      END,
       COALESCE((v_garment->>'express')::BOOLEAN, false),
       COALESCE(v_garment->>'garment_type', 'final')::garment_type,
       (v_garment->>'delivery_date')::TIMESTAMP,
@@ -501,6 +552,7 @@ BEGIN
       lines                    = EXCLUDED.lines,
       notes                    = EXCLUDED.notes,
       soaking                  = EXCLUDED.soaking,
+      soaking_hours            = EXCLUDED.soaking_hours,
       express                  = EXCLUDED.express,
       garment_type             = EXCLUDED.garment_type,
       delivery_date            = EXCLUDED.delivery_date,
@@ -622,6 +674,8 @@ EXECUTE FUNCTION sync_order_paid_from_transactions();
 
 -- 9. RPC: Record a payment transaction + optionally collect garments
 -- Collection only happens at payment time. Garments are marked collected AND completed together.
+-- Drop the pre-idempotency overload so PostgREST has a single candidate after deploy.
+DROP FUNCTION IF EXISTS record_payment_transaction(INT, DECIMAL, TEXT, TEXT, TEXT, UUID, TEXT, TEXT, UUID[], JSONB, DATE, JSONB);
 CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_order_id INT,
   p_amount DECIMAL,
@@ -634,32 +688,73 @@ CREATE OR REPLACE FUNCTION record_payment_transaction(
   p_collect_garment_ids UUID[] DEFAULT NULL,
   p_refund_items JSONB DEFAULT NULL,
   p_local_date DATE DEFAULT CURRENT_DATE,
-  p_fulfillment_overrides JSONB DEFAULT NULL
+  p_fulfillment_overrides JSONB DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
   v_order RECORD;
   v_current_paid DECIMAL;
   v_transaction RECORD;
+  v_existing RECORD;
   v_garment_id UUID;
   v_collected_count INT := 0;
   v_refund_item JSONB;
   v_shelf_item_id INT;
   v_refund_qty INT;
+  v_session_id INT;
+  v_overpayment DECIMAL;
+  v_has_items BOOLEAN;
+  v_my_user_id UUID;
+  v_items_total DECIMAL;
 BEGIN
+  -- Block disabled users immediately — their JWT may still be valid even
+  -- after an admin flipped is_active = false.
+  PERFORM assert_active_user();
+
+  -- Validate caller. p_cashier_id is the user being credited with the
+  -- transaction. Non-managers can only attribute transactions to themselves;
+  -- managers/admins may override (e.g. recording on behalf of staff).
+  v_my_user_id := get_my_user_id();
+  IF p_cashier_id IS NOT NULL
+     AND p_cashier_id <> v_my_user_id
+     AND NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'Cashier mismatch: cannot record transaction under another user';
+  END IF;
+  IF p_cashier_id IS NULL THEN
+    p_cashier_id := v_my_user_id;
+  END IF;
+
+  -- Idempotency short-circuit: if the client retried with the same key, return the
+  -- previously-recorded transaction instead of inserting a duplicate.
+  IF p_idempotency_key IS NOT NULL THEN
+    SELECT * INTO v_existing FROM payment_transactions
+    WHERE idempotency_key = p_idempotency_key;
+    IF FOUND THEN
+      RETURN jsonb_build_object(
+        'transaction', to_jsonb(v_existing),
+        'order_paid', (SELECT paid FROM orders WHERE id = v_existing.order_id),
+        'order_total', (SELECT order_total FROM orders WHERE id = v_existing.order_id),
+        'collected_count', 0,
+        'idempotent_replay', true
+      );
+    END IF;
+  END IF;
+
   -- Validate order exists
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
 
-  -- Block payments/refunds when register is closed
-  -- Check for any open session for the brand — not date-scoped — so sessions that
-  -- started before midnight and haven't been closed yet remain valid past midnight.
-  IF NOT EXISTS (
-    SELECT 1 FROM register_sessions
-    WHERE brand = v_order.brand AND status = 'open'
-  ) THEN
+  -- Block payments/refunds when register is closed.
+  -- Capture the open session id so we can attach the transaction to it for clean
+  -- per-session reconciliation in close_register.
+  SELECT id INTO v_session_id FROM register_sessions
+  WHERE brand = v_order.brand AND status = 'open'
+  LIMIT 1;
+
+  IF v_session_id IS NULL THEN
     RAISE EXCEPTION 'Register is not open. Open the register before recording transactions.';
   END IF;
 
@@ -673,6 +768,29 @@ BEGIN
     IF v_current_paid - ABS(p_amount) < 0 THEN
       RAISE EXCEPTION 'Refund amount (%) exceeds total paid (%)', ABS(p_amount), v_current_paid;
     END IF;
+
+    -- Without selected items, the refund must not exceed the overpayment cap.
+    -- Otherwise cashiers could refund cash without flagging anything as refunded,
+    -- leaving the order books inconsistent.
+    v_has_items := p_refund_items IS NOT NULL AND jsonb_array_length(p_refund_items) > 0;
+    IF NOT v_has_items THEN
+      v_overpayment := GREATEST(v_current_paid - COALESCE(v_order.order_total, 0), 0);
+      IF ABS(p_amount) > v_overpayment + 0.001 THEN
+        RAISE EXCEPTION 'Refund without selected items is capped at overpayment (% KWD). Select items to refund the remaining amount.', v_overpayment;
+      END IF;
+    ELSE
+      -- With items, the refund amount must not exceed the sum of selected
+      -- items' amounts (plus any overpayment cushion). Otherwise a cashier
+      -- could flag a single cheap item and refund the entire paid amount.
+      SELECT COALESCE(SUM((elem->>'amount')::DECIMAL), 0)
+      INTO v_items_total
+      FROM jsonb_array_elements(p_refund_items) AS elem;
+
+      v_overpayment := GREATEST(v_current_paid - COALESCE(v_order.order_total, 0), 0);
+      IF ABS(p_amount) > v_items_total + v_overpayment + 0.001 THEN
+        RAISE EXCEPTION 'Refund (% KWD) exceeds selected items total (% KWD) plus overpayment (% KWD).', ABS(p_amount), v_items_total, v_overpayment;
+      END IF;
+    END IF;
   END IF;
 
   -- Bump invoice revision on every payment/refund recording
@@ -683,7 +801,8 @@ BEGIN
   -- Insert the transaction (trigger will sync orders.paid)
   INSERT INTO payment_transactions (
     order_id, amount, payment_type, payment_ref_no, payment_note,
-    cashier_id, transaction_type, refund_reason, refund_items
+    cashier_id, transaction_type, refund_reason, refund_items,
+    register_session_id, idempotency_key
   ) VALUES (
     p_order_id,
     CASE WHEN p_transaction_type = 'refund' THEN -ABS(p_amount) ELSE ABS(p_amount) END,
@@ -693,7 +812,9 @@ BEGIN
     p_cashier_id,
     p_transaction_type::transaction_type,
     p_refund_reason,
-    p_refund_items
+    p_refund_items,
+    v_session_id,
+    p_idempotency_key
   )
   RETURNING * INTO v_transaction;
 
@@ -1336,6 +1457,24 @@ RETURNS UUID AS $$
   SELECT id FROM users WHERE auth_id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
+-- Raise if the calling user is not active. Use at the top of state-mutating
+-- RPCs so that disabling a user (is_active = false) takes effect for live
+-- sessions without waiting for their JWT to expire.
+CREATE OR REPLACE FUNCTION assert_active_user()
+RETURNS VOID AS $$
+DECLARE
+  v_active BOOLEAN;
+BEGIN
+  SELECT is_active INTO v_active FROM users WHERE auth_id = auth.uid();
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found for active session';
+  END IF;
+  IF NOT v_active THEN
+    RAISE EXCEPTION 'Your account has been disabled. Please contact a manager.';
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
 -- Check if current user is admin
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
@@ -1613,8 +1752,17 @@ CREATE POLICY "shelf_items_update" ON order_shelf_items FOR UPDATE USING (
 -- ── Payment Transactions ────────────────────────────────────────────
 ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
 
+-- Brand-scoped: a logged-in user may only read transactions for orders whose
+-- brand they're allowed to access. Without this, a SAKKBA/QASS user could
+-- query ERTH transactions directly via the SDK and bypass the RPC's p_brand
+-- filter. RLS is the load-bearing check; the RPC param is a UX hint.
 DROP POLICY IF EXISTS "payments_select" ON payment_transactions;
-CREATE POLICY "payments_select" ON payment_transactions FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "payments_select" ON payment_transactions FOR SELECT USING (
+  auth.uid() IS NOT NULL AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = payment_transactions.order_id AND can_access_brand(o.brand::text)
+  )
+);
 
 DROP POLICY IF EXISTS "payments_insert" ON payment_transactions;
 CREATE POLICY "payments_insert" ON payment_transactions FOR INSERT WITH CHECK (
@@ -1627,6 +1775,48 @@ CREATE POLICY "payments_insert" ON payment_transactions FOR INSERT WITH CHECK (
 
 DROP POLICY IF EXISTS "payments_update" ON payment_transactions;
 CREATE POLICY "payments_update" ON payment_transactions FOR UPDATE USING (is_admin());
+
+-- ── Register Sessions ───────────────────────────────────────────────
+-- Brand-scoped; writes go through open/close/reopen RPCs which already
+-- enforce brand + role checks. RLS here is the second line of defense.
+ALTER TABLE register_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "register_sessions_select" ON register_sessions;
+CREATE POLICY "register_sessions_select" ON register_sessions FOR SELECT USING (
+  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "register_sessions_insert" ON register_sessions;
+CREATE POLICY "register_sessions_insert" ON register_sessions FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop') AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "register_sessions_update" ON register_sessions;
+CREATE POLICY "register_sessions_update" ON register_sessions FOR UPDATE USING (
+  (is_manager_or_above() OR get_my_department() = 'shop') AND can_access_brand(brand::text)
+);
+
+-- ── Register Cash Movements ─────────────────────────────────────────
+ALTER TABLE register_cash_movements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "register_cash_movements_select" ON register_cash_movements;
+CREATE POLICY "register_cash_movements_select" ON register_cash_movements FOR SELECT USING (
+  auth.uid() IS NOT NULL AND EXISTS (
+    SELECT 1 FROM register_sessions s
+    WHERE s.id = register_cash_movements.register_session_id
+      AND can_access_brand(s.brand::text)
+  )
+);
+
+DROP POLICY IF EXISTS "register_cash_movements_insert" ON register_cash_movements;
+CREATE POLICY "register_cash_movements_insert" ON register_cash_movements FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM register_sessions s
+    WHERE s.id = register_cash_movements.register_session_id
+      AND can_access_brand(s.brand::text)
+  )
+);
 
 -- ── Transfer Requests ───────────────────────────────────────────────
 -- RLS is required here not for access control (policies are permissive) but
@@ -1841,6 +2031,9 @@ BEGIN
     'expected_cash', rs.expected_cash,
     'variance', rs.variance,
     'closing_notes', rs.closing_notes,
+    'reopened_by', rs.reopened_by,
+    'reopened_by_name', ru.name,
+    'reopened_at', rs.reopened_at,
     'cash_movements', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', cm.id, 'type', cm.type, 'amount', cm.amount,
@@ -1854,6 +2047,7 @@ BEGIN
   FROM register_sessions rs
   LEFT JOIN users ou ON ou.id = rs.opened_by
   LEFT JOIN users cu ON cu.id = rs.closed_by
+  LEFT JOIN users ru ON ru.id = rs.reopened_by
   WHERE rs.brand = p_brand::brand
     AND (
       rs.date = p_date
@@ -1873,7 +2067,21 @@ CREATE OR REPLACE FUNCTION open_register(p_brand TEXT, p_date DATE, p_user_id UU
 RETURNS JSONB AS $$
 DECLARE
   v_id INT;
+  v_my_user_id UUID;
 BEGIN
+  PERFORM assert_active_user();
+
+  -- Brand isolation: caller must have access to the brand they're opening.
+  IF NOT can_access_brand(p_brand) THEN
+    RAISE EXCEPTION 'You do not have access to brand %', p_brand;
+  END IF;
+
+  -- Caller may only open under their own user id (managers/admins may impersonate).
+  v_my_user_id := get_my_user_id();
+  IF p_user_id IS DISTINCT FROM v_my_user_id AND NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'Cannot open register under another user';
+  END IF;
+
   IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND date = p_date) THEN
     RAISE EXCEPTION 'Register already opened for % on %', p_brand, p_date;
   END IF;
@@ -1890,13 +2098,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Close register — computes expected cash server-side
+-- Close register — computes expected cash server-side.
+-- Uses register_session_id on payment_transactions for exact attribution
+-- (replaces the old time-window approach that mis-handled cross-midnight sessions).
+-- p_tz_offset_minutes is retained for client API compatibility but unused.
 CREATE OR REPLACE FUNCTION close_register(
   p_session_id INT,
   p_user_id UUID,
   p_counted_cash DECIMAL,
   p_notes TEXT DEFAULT NULL,
-  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
+  p_tz_offset_minutes INT DEFAULT 180
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1907,30 +2118,27 @@ DECLARE
   v_cash_out DECIMAL;
   v_expected DECIMAL;
   v_variance DECIMAL;
-  v_day_start TIMESTAMP;
-  v_day_end TIMESTAMP;
 BEGIN
+  PERFORM assert_active_user();
+
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or already closed';
   END IF;
 
-  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
-  -- e.g. Kuwait 2026-04-04 00:00 local = 2026-04-03 21:00 UTC (offset -180 min)
-  v_day_start := (v_session.date)::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
-  v_day_end := (v_session.date + INTERVAL '1 day')::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+  -- Brand isolation: caller must have access to the session's brand.
+  IF NOT can_access_brand(v_session.brand::text) THEN
+    RAISE EXCEPTION 'You do not have access to this register session';
+  END IF;
 
-  -- Sum cash payments/refunds for the day using timezone-corrected boundaries
+  -- Sum cash payments/refunds attached to THIS session (exact attribution).
   SELECT
-    COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
-    COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0)
+    COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'payment'), 0),
+    COALESCE(SUM(ABS(amount)) FILTER (WHERE transaction_type = 'refund'), 0)
   INTO v_cash_payments, v_cash_refunds
-  FROM payment_transactions pt
-  JOIN orders o ON o.id = pt.order_id
-  WHERE o.brand = v_session.brand
-    AND pt.payment_type = 'cash'
-    AND pt.created_at >= v_day_start
-    AND pt.created_at < v_day_end;
+  FROM payment_transactions
+  WHERE register_session_id = p_session_id
+    AND payment_type = 'cash';
 
   -- Sum cash movements
   SELECT
@@ -1967,14 +2175,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Add a cash movement (cash in or cash out)
+-- Add a cash movement (cash in or cash out).
+-- Uses register_session_id on payment_transactions for exact attribution.
+-- p_tz_offset_minutes is retained for client API compatibility but unused.
 CREATE OR REPLACE FUNCTION add_cash_movement(
   p_session_id INT,
   p_type TEXT,
   p_amount DECIMAL,
   p_reason TEXT,
   p_user_id UUID,
-  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
+  p_tz_offset_minutes INT DEFAULT 180
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1985,30 +2195,28 @@ DECLARE
   v_cash_in DECIMAL;
   v_cash_out DECIMAL;
   v_drawer_balance DECIMAL;
-  v_day_start TIMESTAMP;
-  v_day_end TIMESTAMP;
 BEGIN
+  PERFORM assert_active_user();
+
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or not open';
   END IF;
 
-  -- For cash_out, verify sufficient drawer balance
-  IF p_type = 'cash_out' THEN
-    -- Convert local date boundaries to UTC for timestamp comparison
-    v_day_start := (v_session.date)::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
-    v_day_end := (v_session.date + INTERVAL '1 day')::timestamp - (p_tz_offset_minutes || ' minutes')::interval;
+  -- Brand isolation: caller must have access to the session's brand.
+  IF NOT can_access_brand(v_session.brand::text) THEN
+    RAISE EXCEPTION 'You do not have access to this register session';
+  END IF;
 
+  -- For cash_out, verify sufficient drawer balance.
+  IF p_type = 'cash_out' THEN
     SELECT
-      COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
-      COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0)
+      COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'payment'), 0),
+      COALESCE(SUM(ABS(amount)) FILTER (WHERE transaction_type = 'refund'), 0)
     INTO v_cash_payments, v_cash_refunds
-    FROM payment_transactions pt
-    JOIN orders o ON o.id = pt.order_id
-    WHERE o.brand = v_session.brand
-      AND pt.payment_type = 'cash'
-      AND pt.created_at >= v_day_start
-      AND pt.created_at < v_day_end;
+    FROM payment_transactions
+    WHERE register_session_id = p_session_id
+      AND payment_type = 'cash';
 
     SELECT
       COALESCE(SUM(amount) FILTER (WHERE type = 'cash_in'), 0),
@@ -2032,29 +2240,44 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Reopen a closed register session
+-- Reopen a closed register session.
+-- Preserves the original close audit (closed_by/closed_at/expected_cash/variance/etc.)
+-- and records who reopened it. The next close will overwrite the close fields with
+-- fresh values; reopened_by/at remain as evidence the session was reopened.
 CREATE OR REPLACE FUNCTION reopen_register(p_session_id INT, p_user_id UUID)
 RETURNS JSONB AS $$
 DECLARE
   v_session RECORD;
 BEGIN
+  PERFORM assert_active_user();
+
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found';
+  END IF;
+
+  -- Brand isolation + role gate: reopening a closed session is sensitive
+  -- (resets variance, lets new transactions backdate), so restrict to
+  -- managers/admins of the session's brand.
+  IF NOT can_access_brand(v_session.brand::text) THEN
+    RAISE EXCEPTION 'You do not have access to this register session';
+  END IF;
+  IF NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'Only managers can reopen a closed register session';
   END IF;
 
   IF v_session.status = 'open' THEN
     RAISE EXCEPTION 'Register is already open';
   END IF;
 
+  -- A different brand may have an open session — that's fine, sessions are
+  -- per-brand. But same-brand open conflict should be impossible given the
+  -- unique (brand, date) index.
+
   UPDATE register_sessions SET
     status = 'open',
-    closed_by = NULL,
-    closed_at = NULL,
-    closing_counted_cash = NULL,
-    expected_cash = NULL,
-    variance = NULL,
-    closing_notes = NULL
+    reopened_by = p_user_id,
+    reopened_at = NOW()
   WHERE id = p_session_id;
 
   RETURN jsonb_build_object('id', p_session_id, 'status', 'open');
@@ -2395,11 +2618,15 @@ $$ LANGUAGE plpgsql;
 -- 1. Garment location change → notify destination department
 CREATE OR REPLACE FUNCTION notify_garment_location_change()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_brand brand;
 BEGIN
   IF NEW.location = 'transit_to_workshop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_workshop') THEN
-    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
+    SELECT o.brand INTO v_brand FROM orders o WHERE o.id = NEW.order_id;
+    INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
     VALUES (
       'workshop',
+      v_brand,
       'garment_dispatched_to_workshop',
       'Garments dispatched to workshop',
       format('Garment %s (Order #%s) dispatched to workshop', NEW.garment_id, NEW.order_id),
@@ -2409,9 +2636,11 @@ BEGIN
   END IF;
 
   IF NEW.location = 'transit_to_shop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_shop') THEN
-    INSERT INTO notifications (department, type, title, body, metadata, expires_at)
+    SELECT o.brand INTO v_brand FROM orders o WHERE o.id = NEW.order_id;
+    INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
     VALUES (
       'shop',
+      v_brand,
       'garment_dispatched_to_shop',
       'Garments dispatched to shop',
       format('Garment %s (Order #%s) dispatched to shop', NEW.garment_id, NEW.order_id),
@@ -2753,14 +2982,14 @@ BEGIN
             o.express_charge,
             o.soaking_charge,
             o.shelf_charge,
-            wo.invoice_number,
-            wo.delivery_date,
-            wo.home_delivery,
+            COALESCE(wo.invoice_number, ao.invoice_number) AS invoice_number,
+            COALESCE(wo.delivery_date, alt_meta.delivery_date) AS delivery_date,
+            COALESCE(wo.home_delivery, alt_meta.home_delivery) AS home_delivery,
             wo.advance,
             wo.fabric_charge,
             wo.stitching_charge,
             wo.style_charge,
-            wo.order_phase::text AS order_phase,
+            COALESCE(wo.order_phase::text, ao.order_phase::text) AS order_phase,
             wo.linked_order_id,
             wo.r1_date, wo.r1_notes,
             wo.r2_date, wo.r2_notes,
@@ -2780,8 +3009,16 @@ BEGIN
             ) AS customer_json,
             agg.showroom_label
         FROM orders o
-        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN alteration_orders ao ON ao.order_id = o.id
         LEFT JOIN customers c ON c.id = o.customer_id
+        LEFT JOIN LATERAL (
+            SELECT
+                MIN(g.delivery_date) AS delivery_date,
+                bool_or(COALESCE(g.home_delivery, FALSE)) AS home_delivery
+            FROM garments g
+            WHERE g.order_id = o.id
+        ) alt_meta ON o.order_type::text = 'ALTERATION'
         CROSS JOIN LATERAL (
             SELECT
                 CASE
@@ -2836,11 +3073,12 @@ BEGIN
                         g2.acceptance_status,
                         g2.feedback_status,
                         (g2.garment_type::text = 'final' AND COALESCE(g2.trip_number, 1) >= 2)
-                            OR (g2.garment_type::text = 'brova' AND COALESCE(g2.trip_number, 1) >= 4) AS is_alteration,
+                            OR (g2.garment_type::text = 'brova' AND COALESCE(g2.trip_number, 1) >= 4)
+                            OR (g2.garment_type::text = 'alteration' AND COALESCE(g2.trip_number, 1) >= 2) AS is_alteration,
                         (
                             g2.acceptance_status = TRUE
                             OR (
-                                g2.garment_type::text = 'final'
+                                g2.garment_type::text IN ('final', 'alteration')
                                 AND g2.piece_stage::text = 'ready_for_pickup'
                                 AND g2.feedback_status IS DISTINCT FROM 'needs_repair'
                                 AND g2.feedback_status IS DISTINCT FROM 'needs_redo'
@@ -2853,8 +3091,8 @@ BEGIN
         ) agg
         WHERE o.brand::text = p_brand
           AND o.checkout_status::text = 'confirmed'
-          AND o.order_type::text = 'WORK'
-          AND wo.order_phase::text = 'in_progress'
+          AND o.order_type::text IN ('WORK', 'ALTERATION')
+          AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
           AND (agg.has_shop_items OR agg.finals_in_transit)
     ),
     pre_stage AS (
@@ -3185,11 +3423,20 @@ SELECT
     COUNT(*) FILTER (WHERE g.garment_type::text = 'brova')         AS brova_count,
     COUNT(*) FILTER (WHERE g.garment_type::text = 'final')         AS final_count,
     -- Earliest per-garment delivery date (NULL if no garment has its own date set)
-    MIN(g.delivery_date)                                           AS earliest_garment_delivery
+    MIN(g.delivery_date)                                           AS earliest_garment_delivery,
+    -- Alteration-order support (Phase 4): customer-brought garments use
+    -- garment_type='alteration'. Alteration orders carry no order-level
+    -- delivery_date or home_delivery — both live uniformly on the garments.
+    bool_or(g.garment_type::text = 'alteration')                   AS has_alteration,
+    COUNT(*) FILTER (WHERE g.garment_type::text = 'alteration')    AS alteration_count,
+    bool_or(COALESCE(g.home_delivery, FALSE))                      AS any_home_delivery
 FROM garments g
 GROUP BY g.order_id;
 
 -- Status-label CASE matching getOrderStatusLabel(). Returns the label text.
+DROP FUNCTION IF EXISTS assigned_order_status_label(
+    BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN, BOOLEAN
+);
 CREATE OR REPLACE FUNCTION assigned_order_status_label(
     p_all_at_shop BOOLEAN,
     p_has_workshop_garment BOOLEAN,
@@ -3202,7 +3449,8 @@ CREATE OR REPLACE FUNCTION assigned_order_status_label(
     p_has_any_brova BOOLEAN,
     p_any_brova_accepted BOOLEAN,
     p_finals_parked BOOLEAN,
-    p_brovas_at_workshop BOOLEAN
+    p_brovas_at_workshop BOOLEAN,
+    p_has_alteration BOOLEAN
 ) RETURNS TEXT
 LANGUAGE SQL
 IMMUTABLE
@@ -3226,6 +3474,8 @@ AS $$
             THEN 'Finals in production'
         WHEN p_brovas_at_workshop
             THEN 'Brovas in production'
+        WHEN p_has_alteration
+            THEN 'Alteration in production'
         ELSE 'In production'
     END;
 $$;
@@ -3243,9 +3493,10 @@ BEGIN
         SELECT
             o.id                           AS order_id,
             o.brand::text                  AS brand,
-            wo.invoice_number,
-            wo.delivery_date,
-            wo.home_delivery,
+            o.order_type::text             AS order_type,
+            COALESCE(wo.invoice_number, ao.invoice_number)         AS invoice_number,
+            COALESCE(wo.delivery_date, agg.earliest_garment_delivery) AS delivery_date,
+            COALESCE(wo.home_delivery, agg.any_home_delivery)      AS home_delivery,
             c.name                         AS customer_name,
             c.phone                        AS customer_phone,
             c.country_code                 AS customer_country_code,
@@ -3258,16 +3509,19 @@ BEGIN
             agg.all_workshop_ready,
             agg.shop_count,
             agg.transit_count,
+            COALESCE(agg.has_alteration, false) AS has_alteration,
             -- Days to delivery (integer). NULL when no delivery_date.
-            CASE WHEN wo.delivery_date IS NULL THEN NULL
-                 ELSE CEIL(EXTRACT(EPOCH FROM (wo.delivery_date - NOW())) / 86400.0)::INT
+            CASE WHEN COALESCE(wo.delivery_date, agg.earliest_garment_delivery) IS NULL THEN NULL
+                 ELSE CEIL(EXTRACT(EPOCH FROM (COALESCE(wo.delivery_date, agg.earliest_garment_delivery) - NOW())) / 86400.0)::INT
             END AS days_to_delivery
         FROM orders o
-        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN alteration_orders ao ON ao.order_id = o.id
         LEFT JOIN customers c ON c.id = o.customer_id
         LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
         WHERE o.checkout_status::text = 'confirmed'
-          AND wo.order_phase::text = 'in_progress'
+          AND o.order_type::text IN ('WORK', 'ALTERATION')
+          AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
     ),
     classified AS (
         SELECT
@@ -3398,10 +3652,13 @@ BEGIN
                 ) AS row_json
             FROM garments g
             INNER JOIN orders o2 ON o2.id = g.order_id AND o2.checkout_status::text = 'confirmed'
-            INNER JOIN work_orders wo2 ON wo2.order_id = o2.id AND wo2.order_phase::text = 'in_progress'
+              AND o2.order_type::text IN ('WORK', 'ALTERATION')
+            LEFT JOIN work_orders wo2 ON wo2.order_id = o2.id
+            LEFT JOIN alteration_orders ao2 ON ao2.order_id = o2.id
             LEFT JOIN customers cc ON cc.id = o2.customer_id
             LEFT JOIN styles st ON st.id = g.style_id
-            WHERE g.location::text = 'workshop'
+            WHERE COALESCE(wo2.order_phase::text, ao2.order_phase::text) = 'in_progress'
+              AND g.location::text = 'workshop'
               AND g.piece_stage::text IN ('soaking','cutting','post_cutting','sewing','finishing','ironing','quality_check','ready_for_dispatch','waiting_cut')
         ) s
     )
@@ -3454,15 +3711,17 @@ BEGIN
         SELECT
             o.id                             AS order_id,
             o.brand::text                    AS brand,
-            wo.invoice_number,
-            wo.delivery_date,
-            wo.home_delivery,
+            o.order_type::text               AS order_type,
+            COALESCE(wo.invoice_number, ao.invoice_number)         AS invoice_number,
+            COALESCE(wo.delivery_date, agg.earliest_garment_delivery) AS delivery_date,
+            COALESCE(wo.home_delivery, agg.any_home_delivery)      AS home_delivery,
             c.name                           AS customer_name,
             c.phone                          AS customer_phone,
             c.country_code                   AS customer_country_code,
             agg.garments_count,
             COALESCE(agg.brova_count, 0) AS brova_count,
             COALESCE(agg.final_count, 0) AS final_count,
+            COALESCE(agg.alteration_count, 0) AS alteration_count,
             agg.earliest_garment_delivery,
             COALESCE(agg.any_express, false) AS any_express,
             COALESCE(agg.any_soaking, false) AS any_soaking,
@@ -3481,15 +3740,18 @@ BEGIN
             agg.any_brova_accepted,
             agg.finals_parked,
             agg.brovas_at_workshop,
-            CASE WHEN wo.delivery_date IS NULL THEN NULL
-                 ELSE CEIL(EXTRACT(EPOCH FROM (wo.delivery_date - NOW())) / 86400.0)::INT
+            COALESCE(agg.has_alteration, false) AS has_alteration,
+            CASE WHEN COALESCE(wo.delivery_date, agg.earliest_garment_delivery) IS NULL THEN NULL
+                 ELSE CEIL(EXTRACT(EPOCH FROM (COALESCE(wo.delivery_date, agg.earliest_garment_delivery) - NOW())) / 86400.0)::INT
             END AS days_to_delivery
         FROM orders o
-        INNER JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN work_orders wo ON wo.order_id = o.id
+        LEFT JOIN alteration_orders ao ON ao.order_id = o.id
         LEFT JOIN customers c ON c.id = o.customer_id
         LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
         WHERE o.checkout_status::text = 'confirmed'
-          AND wo.order_phase::text = 'in_progress'
+          AND o.order_type::text IN ('WORK', 'ALTERATION')
+          AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
     ),
     classified AS (
         SELECT
@@ -3567,7 +3829,12 @@ BEGIN
                     WHERE (th->>'trip')::int = COALESCE(g.trip_number, 1)
                 ), false)
             ) ORDER BY
-                CASE g.garment_type::text WHEN 'brova' THEN 0 ELSE 1 END,
+                CASE g.garment_type::text
+                    WHEN 'brova' THEN 0
+                    WHEN 'final' THEN 1
+                    WHEN 'alteration' THEN 2
+                    ELSE 3
+                END,
                 g.garment_id NULLS LAST
             ) AS summaries
         FROM garments g
@@ -3579,6 +3846,7 @@ BEGIN
             p.rn,
             jsonb_build_object(
                 'order_id',        p.order_id,
+                'order_type',      p.order_type,
                 'invoice_number',  p.invoice_number,
                 'customer_name',   p.customer_name,
                 'customer_mobile', NULLIF(TRIM(BOTH FROM COALESCE(p.customer_country_code, '') || ' ' || COALESCE(p.customer_phone, '')), ''),
@@ -3601,12 +3869,15 @@ BEGIN
                     COALESCE(p.has_any_brova, false),
                     COALESCE(p.any_brova_accepted, false),
                     COALESCE(p.finals_parked, false),
-                    COALESCE(p.brovas_at_workshop, false)
+                    COALESCE(p.brovas_at_workshop, false),
+                    COALESCE(p.has_alteration, false)
                 ),
-                'has_brova',      COALESCE(p.has_any_brova, false),
-                'brova_count',    p.brova_count,
-                'final_count',    p.final_count,
-                'garments_count', COALESCE(p.garments_count, 0),
+                'has_brova',         COALESCE(p.has_any_brova, false),
+                'has_alteration',    COALESCE(p.has_alteration, false),
+                'brova_count',       p.brova_count,
+                'final_count',       p.final_count,
+                'alteration_count',  p.alteration_count,
+                'garments_count',    COALESCE(p.garments_count, 0),
                 'earliest_garment_delivery', p.earliest_garment_delivery,
                 'garment_summaries', COALESCE(pgs.summaries, '[]'::jsonb)
             ) AS row_json
@@ -3748,11 +4019,11 @@ CREATE POLICY "accessories_select" ON accessories
 
 DROP POLICY IF EXISTS "accessories_insert" ON accessories;
 CREATE POLICY "accessories_insert" ON accessories
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_manager_or_above());
 
 DROP POLICY IF EXISTS "accessories_update" ON accessories;
 CREATE POLICY "accessories_update" ON accessories
-    FOR UPDATE USING (auth.uid() IS NOT NULL);
+    FOR UPDATE USING (is_manager_or_above());
 
 -- ── Update delivery charge ────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_delivery_charge(

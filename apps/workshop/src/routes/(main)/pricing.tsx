@@ -76,7 +76,8 @@ const PRICE_META: Record<string, {
   STITCHING_CHILD:   { label: "Child Stitching",   unit: "per garment",         icon: IconScissors,     color: "text-cyan-700",    bg: "bg-cyan-500/10"    },
   HOME_DELIVERY:     { label: "Home Delivery",     unit: "per order",           icon: IconHome,         color: "text-emerald-700", bg: "bg-emerald-500/10" },
   EXPRESS_SURCHARGE: { label: "Express Surcharge", unit: "per express garment", icon: IconBolt,         color: "text-amber-700",   bg: "bg-amber-500/10"   },
-  SOAKING_CHARGE:    { label: "Soaking Charge",    unit: "per soaking garment", icon: IconDroplet,      color: "text-sky-700",     bg: "bg-sky-500/10"     },
+  SOAKING_8H_CHARGE: { label: "Soaking 8h",        unit: "per soaking garment (8h)",  icon: IconDroplet,      color: "text-sky-700",     bg: "bg-sky-500/10"     },
+  SOAKING_24H_CHARGE:{ label: "Soaking 24h",       unit: "per soaking garment (24h)", icon: IconDroplet,      color: "text-sky-900",     bg: "bg-sky-700/10"     },
 };
 
 interface SubGroupConfig {
@@ -183,7 +184,7 @@ function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
   const [editing, setEditing] = useState<string | null>(null);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5">
+    <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5">
       {prices.map((price) => {
         const meta = PRICE_META[price.key];
         if (!meta) return null;

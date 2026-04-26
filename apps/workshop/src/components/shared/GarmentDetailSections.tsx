@@ -1,6 +1,7 @@
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { MeasurementGrid } from "@/components/shared/MeasurementGrid";
 import { MeasurementValue } from "@/components/shared/MeasurementValue";
+import { getMeasurementCorrections } from "@/lib/qc-corrections";
 import { StageBadge, AlterationBadge, ExpressBadge, QcFixBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
@@ -418,7 +419,10 @@ export function MeasurementsSection({ garment }: { garment: WorkshopGarment }) {
       <h3 className="text-sm font-bold uppercase tracking-wider text-sky-700 mb-2">
         Measurements
       </h3>
-      <MeasurementGrid measurement={garment.measurement} />
+      <MeasurementGrid
+        measurement={garment.measurement}
+        corrections={getMeasurementCorrections(garment.trip_history)}
+      />
     </div>
   );
 }

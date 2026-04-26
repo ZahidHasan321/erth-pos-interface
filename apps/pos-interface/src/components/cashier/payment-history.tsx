@@ -66,8 +66,16 @@ export function PaymentHistory({
     }, [pendingPrint, receiptData, handlePrint]);
 
     const printTransaction = useCallback((tx: any) => {
+        // Same-millisecond ties: tiebreak by id so two transactions stamped at the
+        // same instant don't both count toward the earlier one's prior-paid total.
+        const txTs = parseUtcTimestamp(tx.created_at).getTime();
         const paid = transactions
-            .filter((t) => parseUtcTimestamp(t.created_at) <= parseUtcTimestamp(tx.created_at))
+            .filter((t) => {
+                const ts = parseUtcTimestamp(t.created_at).getTime();
+                if (ts < txTs) return true;
+                if (ts > txTs) return false;
+                return t.id <= tx.id;
+            })
             .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
         const invoiceDisplay = invoiceNumber ? `${invoiceNumber}${invoiceRevision ? `-R${invoiceRevision}` : ""}` : undefined;
@@ -203,7 +211,7 @@ export function PaymentHistory({
                                                                     item.stitching && "Stitching",
                                                                     item.style && "Style",
                                                                     item.express && "Express",
-                                                                    item.soaking && "Soaking",
+                                                                    item.soaking && (item.soaking_hours ? `Soaking ${item.soaking_hours}h` : "Soaking"),
                                                                 ].filter(Boolean);
                                                                 return (
                                                                     <div key={i} className="flex items-center gap-1.5 text-xs text-red-700">

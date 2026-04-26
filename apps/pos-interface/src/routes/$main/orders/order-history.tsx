@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/useOrderHistory";
 import { Badge } from "@repo/ui/badge";
+import { OrderTypeBadge } from "@repo/ui/order-type-badge";
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import {
@@ -300,9 +301,7 @@ const PhaseBadge = ({ phase }: { phase: string }) => (
     </Badge>
 );
 
-const TypeBadge = ({ type }: { type: string }) => type === "SALES"
-    ? <span className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider leading-none">SALES</span>
-    : <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider leading-none">WORK</span>;
+const TypeBadge = ({ type }: { type: string }) => <OrderTypeBadge type={type} />;
 
 const DeliveryBadge = ({ homeDelivery }: { homeDelivery: boolean }) => (
     <span className={cn(
@@ -347,14 +346,20 @@ const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrd
 
 function OrderCard({ order }: { order: OrderHistoryItem }) {
     const isWorkOrder = order.order_type === "WORK";
-    const route = isWorkOrder ? "/$main/orders/new-work-order" : "/$main/orders/new-sales-order";
-    const itemCount = isWorkOrder ? order.fabric_count : order.shelf_item_count;
+    const isAlterationOrder = order.order_type === "ALTERATION";
+    const isGarmentOrder = isWorkOrder || isAlterationOrder;
+    const route = isWorkOrder
+        ? "/$main/orders/new-work-order"
+        : isAlterationOrder
+            ? "/$main/orders/new-alteration-order"
+            : "/$main/orders/new-sales-order";
+    const itemCount = isGarmentOrder ? order.fabric_count : order.shelf_item_count;
     const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
 
     return (
         <Link to={route} search={{ orderId: order.id }} className="group block">
             <Card className="overflow-hidden border border-border/50 group-hover:border-primary/40 group-hover:shadow-md transition-all bg-card/50 relative py-0 gap-0 shadow-sm rounded-xl">
-                <div className={cn("absolute left-0 top-0 bottom-0 w-1", isWorkOrder ? "bg-primary" : "bg-amber-500")} />
+                <div className={cn("absolute left-0 top-0 bottom-0 w-1", isAlterationOrder ? "bg-purple-500" : isWorkOrder ? "bg-primary" : "bg-amber-500")} />
 
                 <CardContent className="pl-4 pr-3 py-2.5 sm:pl-5 sm:pr-4 space-y-1.5">
                     {/* ===== DESKTOP (lg+): 2-row layout ===== */}
@@ -382,20 +387,20 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />{orderDate}
                             </span>
-                            {isWorkOrder && order.delivery_date && (
+                            {isGarmentOrder && order.delivery_date && (
                                 <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
                                     <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
-                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
-                            <ItemCount isWork={isWorkOrder} count={itemCount} />
+                            {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                            <ItemCount isWork={isGarmentOrder} count={itemCount} />
                             {isWorkOrder && order.charges.discount > 0 && (
                                 <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded leading-none">
                                     -{order.charges.discount.toFixed(2)} disc
                                 </span>
                             )}
                             <div className="flex-1" />
-                            <Financials order={order} isWorkOrder={isWorkOrder} />
+                            <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>
                     </div>
 
@@ -419,15 +424,15 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />{orderDate}
                             </span>
-                            {isWorkOrder && order.delivery_date && (
+                            {isGarmentOrder && order.delivery_date && (
                                 <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
                                     <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
-                            {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
-                            <ItemCount isWork={isWorkOrder} count={itemCount} />
+                            {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                            <ItemCount isWork={isGarmentOrder} count={itemCount} />
                             <div className="flex-1" />
-                            <Financials order={order} isWorkOrder={isWorkOrder} />
+                            <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>
                     </div>
 
@@ -449,7 +454,7 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                                 <span className="font-semibold text-sm truncate">{order.customer_name}</span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                                {isWorkOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
+                                {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
                                 <span className="text-[11px] text-muted-foreground font-mono tabular-nums">{order.customer_phone}</span>
                             </div>
                         </div>
@@ -458,11 +463,11 @@ function OrderCard({ order }: { order: OrderHistoryItem }) {
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <StatusBadge status={order.checkout_status} />
                                 {order.order_phase && <PhaseBadge phase={order.order_phase} />}
-                                <ItemCount isWork={isWorkOrder} count={itemCount} />
+                                <ItemCount isWork={isGarmentOrder} count={itemCount} />
                             </div>
-                            <Financials order={order} isWorkOrder={isWorkOrder} />
+                            <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>
-                        {isWorkOrder && order.delivery_date && (
+                        {isGarmentOrder && order.delivery_date && (
                             <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
                                 <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                             </div>

@@ -283,7 +283,8 @@ async function seed() {
     ["STITCHING_ADULT", 9,   "Adult stitching rate"],
     ["STITCHING_CHILD", 7,   "Child stitching rate"],
     ["EXPRESS_SURCHARGE", 3, "Express surcharge"],
-    ["SOAKING_CHARGE", 1.5,  "Soaking charge"],
+    ["SOAKING_8H_CHARGE", 0.5,  "Soaking 8h charge"],
+    ["SOAKING_24H_CHARGE", 1.0, "Soaking 24h charge"],
     ["HOME_DELIVERY", 2,     "Home delivery"],
   ];
   for (const [key, value, description] of priceRows) {
@@ -367,7 +368,8 @@ type GarmentSpec = {
 function computeGarmentCharges(specs: GarmentSpec[], prices: Record<string, number>) {
   const stitchPerItem = prices.STITCHING_ADULT;
   const expressSurcharge = prices.EXPRESS_SURCHARGE;
-  const soakingCharge = prices.SOAKING_CHARGE;
+  const soaking8h = prices.SOAKING_8H_CHARGE;
+  const soaking24h = prices.SOAKING_24H_CHARGE;
 
   let fabricCharge = 0, stitchingCharge = 0, expressCharge = 0, soakCharge = 0;
   const snapshots = specs.map(g => {
@@ -375,7 +377,7 @@ function computeGarmentCharges(specs: GarmentSpec[], prices: Record<string, numb
     fabricCharge += fabric;
     stitchingCharge += stitchPerItem;
     if (g.express) expressCharge += expressSurcharge;
-    if (g.soaking) soakCharge  += soakingCharge;
+    if (g.soaking) soakCharge  += ((g as any).soaking_hours === 24 ? soaking24h : soaking8h);
     return {
       fabric_price_snapshot: fabric,
       stitching_price_snapshot: stitchPerItem,

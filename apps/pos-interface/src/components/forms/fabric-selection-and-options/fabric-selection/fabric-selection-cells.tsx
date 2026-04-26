@@ -518,25 +518,46 @@ export const SoakingCell = ({
     row,
     table,
 }: CellContext<GarmentSchema, unknown>) => {
-    const { control } = useFormContext();
+    const { control, setValue } = useFormContext();
     const meta = table.options.meta as {
         isFormDisabled?: boolean;
     };
     const isFormDisabled = meta?.isFormDisabled || false;
 
+    const setHours = (hours: 8 | 24, checked: boolean) => {
+        if (checked) {
+            setValue(`garments.${row.index}.soaking`, true, { shouldDirty: true, shouldValidate: true });
+            setValue(`garments.${row.index}.soaking_hours`, hours, { shouldDirty: true, shouldValidate: true });
+        } else {
+            setValue(`garments.${row.index}.soaking`, false, { shouldDirty: true, shouldValidate: true });
+            setValue(`garments.${row.index}.soaking_hours`, null, { shouldDirty: true, shouldValidate: true });
+        }
+    };
+
     return (
-        <div className="w-full flex flex-col justify-center items-center min-w-20">
+        <div className="w-full flex flex-col justify-center items-center min-w-24 gap-1">
             <Controller
-                name={`garments.${row.index}.soaking`}
+                name={`garments.${row.index}.soaking_hours`}
                 control={control}
                 render={({ field }) => (
-                    <div className="flex flex-col gap-1 items-center">
-                        <Checkbox
-                            checked={field.value || false}
-                            onCheckedChange={field.onChange}
-                            disabled={isFormDisabled}
-                        />
-                    </div>
+                    <>
+                        <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
+                            <Checkbox
+                                checked={field.value === 8}
+                                onCheckedChange={(c) => setHours(8, !!c)}
+                                disabled={isFormDisabled}
+                            />
+                            <span>8h</span>
+                        </label>
+                        <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
+                            <Checkbox
+                                checked={field.value === 24}
+                                onCheckedChange={(c) => setHours(24, !!c)}
+                                disabled={isFormDisabled}
+                            />
+                            <span>24h</span>
+                        </label>
+                    </>
                 )}
             />
         </div>

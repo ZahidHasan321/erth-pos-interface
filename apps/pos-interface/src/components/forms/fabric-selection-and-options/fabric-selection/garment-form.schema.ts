@@ -24,7 +24,7 @@ export const garmentSchema = z.object({
     message: "Fabric length must be a number"
   })
     .nullish()
-    .refine((val) => val !== null && val !== undefined && val > 0, {
+    .refine((val) => val !== null && val !== undefined && Number.isFinite(val) && val > 0, {
       message: "Fabric length is required and must be greater than 0"
     }),
   quantity: z.number().default(1),
@@ -47,8 +47,9 @@ export const garmentSchema = z.object({
   lines: z.number().default(1),
 
   soaking: z.boolean().default(false),
+  soaking_hours: z.union([z.literal(8), z.literal(24)]).nullable().optional(),
   express: z.boolean().default(false),
-  garment_type: z.enum(['brova', 'final']).default('final'),
+  garment_type: z.enum(['brova', 'final', 'alteration']).default('final'),
   piece_stage: z.string().optional().nullable(),
   location: z.string().optional().default('shop'),
   acceptance_status: z.boolean().optional().nullable(),
@@ -108,6 +109,7 @@ export const garmentDefaults: GarmentSchema = {
   jabzour_thickness: 'SINGLE',
   lines: 1,
   soaking: false,
+  soaking_hours: null,
   fabric_amount: 0,
   stitching_price_snapshot: 0,
   style_price_snapshot: 0,

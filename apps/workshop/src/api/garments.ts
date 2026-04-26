@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
-import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
+import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, MeasurementIssue } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
 /** Map piece_stage → worker_history key (role-based) */
@@ -444,7 +444,7 @@ export interface AssignedPageGarment {
 
 /** Compact per-garment info returned by get_assigned_orders_page for at-a-glance status. */
 export interface GarmentSummary {
-  type: "brova" | "final";
+  type: "brova" | "final" | "alteration";
   stage: string;
   loc: string;
   fb: string | null;
@@ -466,6 +466,8 @@ export interface GarmentSummary {
  */
 export interface AssignedOrderRow {
   order_id: number;
+  /** 'WORK' or 'ALTERATION'. Production tracker now surfaces both. */
+  order_type: string | null;
   invoice_number: number | null;
   customer_name: string | null;
   customer_mobile: string | null;
@@ -478,8 +480,10 @@ export interface AssignedOrderRow {
   max_trip: number | null;
   status_label: string;
   has_brova: boolean;
+  has_alteration: boolean;
   brova_count: number;
   final_count: number;
+  alteration_count: number;
   garments_count: number;
   /** Earliest per-garment delivery_date across all garments in this order. NULL when no garment has its own date. */
   earliest_garment_delivery: string | null;
@@ -560,7 +564,7 @@ export const getAssignedOrdersPage = async (args: {
 export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment[]> => {
   const { data, error } = await db
     .from('garments')
-    .select(WORKSHOP_QUERY)
+    .select(GARMENT_DETAIL_QUERY)
     .eq('order_id', orderId)
     .eq('order.checkout_status', 'confirmed');
 
@@ -568,16 +572,41 @@ export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment
     console.error('getOrderGarments error:', error);
     return [];
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenDetailGarment);
 };
 
 /**
- * Fetch a single garment by ID — no location filter.
+ * Detail query — single garment + alteration-order context (only used when
+ * the garment is alteration_type). Adds full_measurement_set, original
+ * garment's measurement, and alteration_orders extension. Heavier than
+ * WORKSHOP_QUERY; only call from the detail page.
+ */
+const GARMENT_DETAIL_QUERY = `
+  *,
+  order:orders!order_id(
+    id,
+    brand,
+    order_type,
+    checkout_status,
+    order_date,
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
+    alterationOrder:alteration_orders!order_id(invoice_number, received_date, order_phase),
+    customer:customers!customer_id(name, phone, country_code)
+  ),
+  measurement:measurements!measurement_id(*),
+  full_measurement_set:measurements!full_measurement_set_id(*),
+  original_garment:garments!original_garment_id(measurement:measurements!measurement_id(*)),
+  fabric_ref:fabrics!fabric_id(name, color)
+`;
+
+/**
+ * Fetch a single garment by ID — no location filter. Uses GARMENT_DETAIL_QUERY
+ * so alt-out garments come back with linked baseline measurement + invoice.
  */
 export const getGarmentById = async (id: string): Promise<WorkshopGarment | null> => {
   const { data, error } = await db
     .from('garments')
-    .select(WORKSHOP_QUERY)
+    .select(GARMENT_DETAIL_QUERY)
     .eq('id', id)
     .single();
 
@@ -585,8 +614,43 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
     console.error('getGarmentById error:', error);
     return null;
   }
-  return flattenGarment(data);
+  return flattenDetailGarment(data);
 };
+
+/** Flatten helper for GARMENT_DETAIL_QUERY rows. Mirrors flattenGarment but
+ *  also pulls alteration-context fields (full_measurement_set, original
+ *  garment's measurement, alteration_orders invoice/dates). */
+function flattenDetailGarment(raw: any): WorkshopGarment {
+  const { order, measurement, full_measurement_set, original_garment, fabric_ref, ...garment } = raw;
+  const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
+  const ao = Array.isArray(order?.alterationOrder) ? order.alterationOrder[0] : order?.alterationOrder;
+  const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
+  const origMeas = original_garment?.measurement
+    ? (Array.isArray(original_garment.measurement) ? original_garment.measurement[0] : original_garment.measurement)
+    : null;
+
+  return {
+    ...garment,
+    order_brand: order?.brand,
+    order_date: order?.order_date ?? undefined,
+    invoice_number: wo?.invoice_number ?? ao?.invoice_number ?? undefined,
+    delivery_date_order: wo?.delivery_date ?? undefined,
+    home_delivery_order: wo?.home_delivery ?? false,
+    order_phase: wo?.order_phase ?? ao?.order_phase ?? undefined,
+    customer_name: cust?.name ?? undefined,
+    customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
+    measurement: measurement ?? null,
+    full_measurement_set: full_measurement_set ?? null,
+    original_garment_measurement: origMeas,
+    production_plan: garment.production_plan ?? null,
+    worker_history: garment.worker_history ?? null,
+    quality_check_ratings: garment.quality_check_ratings ?? null,
+    style_name: garment.style ?? undefined,
+    style_image_url: undefined,
+    fabric_name: fabric_ref?.name ?? undefined,
+    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
+  };
+}
 
 /**
  * Slim garment shape returned by get_completed_orders_page. The completed
@@ -938,6 +1002,7 @@ export const qcPass = async (
   id: string,
   worker: string,
   ratings: Record<string, number>,
+  measurementIssues: MeasurementIssue[] | null = null,
 ): Promise<void> => {
   const { data: existing, error: fetchErr } = await db
     .from('garments')
@@ -964,6 +1029,7 @@ export const qcPass = async (
       fail_reason: null,
       return_stage: null,
       date: getLocalDateStr(),
+      measurement_issues: measurementIssues && measurementIssues.length > 0 ? measurementIssues : null,
     });
   }
 

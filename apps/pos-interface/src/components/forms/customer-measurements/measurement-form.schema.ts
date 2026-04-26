@@ -56,6 +56,25 @@ export const customerMeasurementsSchema = z.object({
   // Jabzour
   jabzour_length: decimalField,
   jabzour_width: decimalField,
+
+  // Collar / Gallabiya
+  collar_length: decimalField,
+
+  // Buttons
+  second_button_distance: decimalField.optional().nullable(),
+
+  // Basma
+  basma_length: decimalField,
+  basma_width: decimalField,
+  basma_sleeve_length: decimalField,
+
+  // Hemming
+  sleeve_hemming: decimalField,
+  bottom_hemming: decimalField,
+
+  // Pen pocket
+  pen_pocket_length: decimalField,
+  pen_pocket_width: decimalField,
 });
 
 export type CustomerMeasurementsSchema = z.infer<typeof customerMeasurementsSchema>;
@@ -96,5 +115,14 @@ export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   length_back: undefined as any,
   bottom: undefined as any,
   jabzour_length: undefined as any,
-  jabzour_width: undefined as any,
+  jabzour_width: 1.5,
+  collar_length: undefined as any,
+  second_button_distance: null,
+  basma_length: undefined as any,
+  basma_width: undefined as any,
+  basma_sleeve_length: undefined as any,
+  sleeve_hemming: undefined as any,
+  bottom_hemming: undefined as any,
+  pen_pocket_length: undefined as any,
+  pen_pocket_width: undefined as any,
 };

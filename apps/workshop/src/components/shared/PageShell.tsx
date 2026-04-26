@@ -139,7 +139,9 @@ export function GarmentTypeBadge({ type }: { type: string | null | undefined }) 
         "text-xs font-black uppercase tracking-wide px-2 py-0.5 rounded-md border",
         type === "brova"
           ? "bg-purple-50 text-purple-800 border-purple-200"
-          : "bg-blue-50 text-blue-800 border-blue-200",
+          : type === "alteration"
+            ? "bg-amber-50 text-amber-800 border-amber-200"
+            : "bg-blue-50 text-blue-800 border-blue-200",
       )}
     >
       {type}
@@ -154,10 +156,12 @@ export function GarmentTypeBadgeCompact({ type }: { type: string }) {
         "px-2 py-0.5 rounded-md text-xs font-black uppercase",
         type === "brova"
           ? "bg-purple-100 text-purple-800"
-          : "bg-blue-100 text-blue-800",
+          : type === "alteration"
+            ? "bg-amber-100 text-amber-800"
+            : "bg-blue-100 text-blue-800",
       )}
     >
-      {type === "brova" ? "B" : "F"}
+      {type === "brova" ? "B" : type === "alteration" ? "A" : "F"}
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import type { Measurement } from "@repo/database";
+import type { Measurement, MeasurementIssue } from "@repo/database";
 import { MeasurementValue } from "./MeasurementValue";
 
 const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fields: { key: keyof Measurement; label: string }[] }[] = [
@@ -65,9 +65,10 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
 
 interface MeasurementGridProps {
   measurement: Measurement | null | undefined;
+  corrections?: Map<string, MeasurementIssue> | null;
 }
 
-export function MeasurementGrid({ measurement }: MeasurementGridProps) {
+export function MeasurementGrid({ measurement, corrections }: MeasurementGridProps) {
   if (!measurement) {
     return <p className="text-sm text-muted-foreground italic">No measurements recorded</p>;
   }
@@ -78,7 +79,7 @@ export function MeasurementGrid({ measurement }: MeasurementGridProps) {
     <div className="space-y-3">
 
       {MEASUREMENT_GROUPS.map((group) => {
-        const filled = group.fields.filter((f) => measurement[f.key]);
+        const filled = group.fields.filter((f) => measurement[f.key] || corrections?.has(f.key as string));
         if (filled.length === 0) return null;
         return (
           <div key={group.title}>
@@ -86,16 +87,25 @@ export function MeasurementGrid({ measurement }: MeasurementGridProps) {
               {group.title}
             </p>
             <div className="grid grid-cols-3 gap-1.5">
-              {filled.map(({ key, label }) => (
-                <div key={key} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${group.cellColor}`}>
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  <MeasurementValue
-                    raw={measurement[key]}
-                    degree={degree}
-                    className="text-sm font-bold tabular-nums"
-                  />
-                </div>
-              ))}
+              {filled.map(({ key, label }) => {
+                const correction = corrections?.get(key as string) ?? null;
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${
+                      correction ? "bg-red-50 ring-1 ring-red-300" : group.cellColor
+                    }`}
+                  >
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <MeasurementValue
+                      raw={measurement[key]}
+                      degree={degree}
+                      className="text-sm font-bold tabular-nums"
+                      correction={correction}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

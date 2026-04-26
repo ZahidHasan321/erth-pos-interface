@@ -121,6 +121,7 @@ function ReadyOrderCard({
   const hasExpress = group.garments.some((g) => g.express);
   const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
+  const alterationCount = group.garments.filter((g) => g.garment_type === "alteration").length;
   const isPending = groupIds.some((id) => dispatchPendingIds.has(id));
 
   return (
@@ -153,6 +154,7 @@ function ReadyOrderCard({
                 <span>{groupIds.length} pcs</span>
                 {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
                 {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
+                {alterationCount > 0 && <span className="font-semibold">{alterationCount}A</span>}
                 {breakdown && breakdown.workshop > 0 && <span>{breakdown.workshop} in prod</span>}
                 {breakdown && breakdown.transit > 0 && <span>{breakdown.transit} in transit</span>}
                 {breakdown && breakdown.shop > 0 && <span>{breakdown.shop} at shop</span>}
@@ -278,6 +280,7 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
   const urgency = deliveryUrgency(group.deliveryDate);
   const brovaCount = group.garments.filter((g) => g.garment_type === "brova").length;
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
+  const alterationCount = group.garments.filter((g) => g.garment_type === "alteration").length;
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -302,6 +305,7 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
               <span>{group.garments.length} pcs</span>
               {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
               {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
+              {alterationCount > 0 && <span className="font-semibold">{alterationCount}A</span>}
               {group.deliveryDate && (
                 <span className={cn("font-medium rounded", urgency.className)}>
                   {formatDate(group.deliveryDate)}

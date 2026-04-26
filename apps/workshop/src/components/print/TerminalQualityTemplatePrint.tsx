@@ -126,13 +126,18 @@ function ThicknessBadge({ value }: { value: string | null | undefined }) {
 export function TerminalQualityTemplatePrint({
   garment,
   alterationFilter,
+  measurement: measurementProp,
 }: {
   garment: WorkshopGarment;
   alterationFilter?: AlterationFilter | null;
+  /** Optional measurement override — used by alt-out garments where
+   *  `garment.measurement` is null and the effective set is computed from
+   *  full_measurement_set or original_garment + sparse changes. */
+  measurement?: Measurement | null;
 }) {
   const showSection = (key: "frontPocket" | "jabzour" | "sidePocket" | "cuffs" | "collar") =>
-    !alterationFilter || alterationFilter.visibleSections.has(key);
-  const measurement = garment.measurement ?? null;
+    !alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has(key);
+  const measurement = measurementProp ?? garment.measurement ?? null;
   const degree = measurement?.degree ? Number(measurement.degree) : 0;
 
   const styleLabel = String(garment.style ?? "kuwaiti").toUpperCase();
@@ -196,7 +201,7 @@ export function TerminalQualityTemplatePrint({
 
           {qualityCheckTemplateFields.map((field) => {
             const measurementKey = FIELD_MEASUREMENT_MAP[field.id];
-            if (alterationFilter && !alterationFilter.measurementKeys.has(measurementKey as string)) {
+            if (alterationFilter?.hideUnchanged && !alterationFilter.measurementKeys.has(measurementKey as string)) {
               return null;
             }
             const parts = measurement

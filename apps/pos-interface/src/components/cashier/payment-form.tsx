@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -55,6 +55,11 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
     const isRefund = controlledRefund ?? internalRefund;
     const paymentMutation = usePaymentMutation();
     const { user: currentUser } = useAuth();
+
+    // Idempotency key per submit attempt — same key across retries (so a
+    // network blip or double-click resolves to the same transaction), rotated
+    // after a successful submit so the next payment is a fresh request.
+    const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
     const { data: employeesRaw } = useQuery({
         queryKey: ["employees"],
@@ -152,12 +157,14 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                 collectGarmentIds: garmentIds,
                 collectFulfillmentOverrides: garmentIds ? collectFulfillmentOverrides : undefined,
                 refundItems: isRefund && refundItems && refundItems.length > 0 ? refundItems : undefined,
+                idempotencyKey: idempotencyKeyRef.current,
             },
             {
                 onSuccess: (response) => {
                     if (response.status === "success") {
                         form.reset();
                         setRefundMode(refundOnly ?? false);
+                        idempotencyKeyRef.current = crypto.randomUUID();
                         if (garmentIds && onCollected) onCollected();
                     }
                 },
@@ -318,9 +325,9 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                 type="submit"
                 size="sm"
                 className={`w-full h-9 text-sm font-semibold ${isRefund ? "bg-red-600 hover:bg-red-700" : ""}`}
-                disabled={paymentMutation.isPending}
+                disabled={paymentMutation.isPending || form.formState.isSubmitting}
             >
-                {paymentMutation.isPending
+                {paymentMutation.isPending || form.formState.isSubmitting
                     ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Processing...</>
                     : isRefund
                       ? "Record Refund"

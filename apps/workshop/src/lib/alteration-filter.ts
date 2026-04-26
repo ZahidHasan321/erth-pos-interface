@@ -19,6 +19,11 @@ export interface AlterationFilter {
   fieldReasons: Map<string, AlterationReason>;
   /** sidebar sections that should render (something changed in them) */
   visibleSections: Set<AlterationStyleSection>;
+  /** When true, hide unchanged measurement cells entirely (used when no
+   *  baseline measurement is available — only the sparse changes can be shown).
+   *  When false, render the full template and only color-flag the changed
+   *  cells. Default true preserves alt-in behavior. */
+  hideUnchanged?: boolean;
 }
 
 const REASON_LABELS: ReadonlySet<AlterationReason> = new Set([
@@ -116,7 +121,7 @@ export function buildAlterationFilter(
   }
 
   if (measurementKeys.size === 0 && visibleSections.size === 0) return null;
-  return { measurementKeys, fieldReasons, visibleSections };
+  return { measurementKeys, fieldReasons, visibleSections, hideUnchanged: true };
 }
 
 /** Tailwind classes for the measurement cell tint per fault category. */
@@ -125,3 +130,98 @@ export const ALTERATION_REASON_CELL_CLASS: Record<AlterationReason, string> = {
   "Workshop Error": "bg-red-100 border-red-500 text-red-900",
   "Shop Error": "bg-zinc-200 border-zinc-500 text-zinc-900",
 };
+
+// ── Alt-out (alteration-order garments brought from outside) ─────────────────
+
+/** Style key (alteration_styles JSON) → sections affected. Mirrors the keys
+ *  produced by the alteration-garment-form when toggling sparse style fields. */
+const STYLE_KEY_TO_SECTIONS: Record<string, AlterationStyleSection[]> = {
+  collar_type: ["collar"],
+  collar_button: ["collar"],
+  small_tabaggi: ["collar"],
+  cuffs_type: ["cuffs"],
+  cuffs_thickness: ["cuffs"],
+  front_pocket_type: ["frontPocket"],
+  front_pocket_thickness: ["frontPocket"],
+  wallet_pocket: ["frontPocket"],
+  pen_holder: ["frontPocket"],
+  mobile_pocket: ["frontPocket"],
+  jabzour_1: ["jabzour"],
+  jabzour_2: ["jabzour"],
+  jabzour_thickness: ["jabzour"],
+};
+
+/** Build the filter for an alteration_order garment (garment_type='alteration').
+ *  Source of changes: sparse `alteration_measurements` + `alteration_styles`.
+ *  All changed cells flagged "Customer Request". Returns null when nothing
+ *  changed (which means full_set mode — render the full table without flags).
+ *
+ *  `hasBaseline` controls whether unchanged cells are hidden (no baseline →
+ *  only sparse changes are renderable) or kept visible with just the changed
+ *  cells flagged (baseline present → full table with highlights). */
+export function buildAltOutFilter(garment: {
+  garment_type?: string | null;
+  alteration_measurements?: unknown;
+  alteration_styles?: unknown;
+}, hasBaseline: boolean): AlterationFilter | null {
+  if (garment.garment_type !== "alteration") return null;
+
+  const altMeas = parseJson<Record<string, unknown>>(garment.alteration_measurements) ?? {};
+  const altStyles = parseJson<Record<string, unknown>>(garment.alteration_styles) ?? {};
+
+  const measurementKeys = new Set<string>();
+  const fieldReasons = new Map<string, AlterationReason>();
+  for (const k of Object.keys(altMeas)) {
+    if (altMeas[k] == null || altMeas[k] === "") continue;
+    measurementKeys.add(k);
+    fieldReasons.set(k, "Customer Request");
+  }
+
+  const visibleSections = new Set<AlterationStyleSection>();
+  for (const key of measurementKeys) {
+    const sec = MEASUREMENT_TO_SECTION[key];
+    if (sec) visibleSections.add(sec);
+  }
+  for (const k of Object.keys(altStyles)) {
+    if (altStyles[k] == null || altStyles[k] === "") continue;
+    for (const sec of STYLE_KEY_TO_SECTIONS[k] ?? []) {
+      visibleSections.add(sec);
+    }
+  }
+
+  if (measurementKeys.size === 0 && visibleSections.size === 0) return null;
+  return { measurementKeys, fieldReasons, visibleSections, hideUnchanged: !hasBaseline };
+}
+
+/**
+ * Resolve the measurement record to display for an alt-out garment.
+ *  - full_set mode (`full_measurement_set` populated) → that record, as-is.
+ *  - changes_only with `original_garment_measurement` → original overlaid with
+ *    sparse `alteration_measurements` (changes win).
+ *  - changes_only with no link → only sparse fields populated; rest blank.
+ *
+ * Returns null for non-alteration garments — caller should fall back to
+ * `garment.measurement`.
+ */
+export function getAltOutEffectiveMeasurement<T extends Record<string, unknown>>(garment: {
+  garment_type?: string | null;
+  alteration_measurements?: unknown;
+  full_measurement_set?: T | null;
+  original_garment_measurement?: T | null;
+}): T | null {
+  if (garment.garment_type !== "alteration") return null;
+  if (garment.full_measurement_set) return garment.full_measurement_set;
+
+  const altMeas = parseJson<Record<string, unknown>>(garment.alteration_measurements) ?? {};
+  const hasOriginal = !!garment.original_garment_measurement;
+  const base: Record<string, unknown> = hasOriginal
+    ? { ...(garment.original_garment_measurement as Record<string, unknown>) }
+    : {};
+  let touched = hasOriginal;
+  for (const k of Object.keys(altMeas)) {
+    if (altMeas[k] == null || altMeas[k] === "") continue;
+    base[k] = altMeas[k];
+    touched = true;
+  }
+  return touched ? (base as T) : null;
+}

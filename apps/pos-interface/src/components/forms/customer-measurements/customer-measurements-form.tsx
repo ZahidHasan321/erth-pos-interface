@@ -47,6 +47,8 @@ import { toast } from "sonner";
 import type { Measurement } from "@repo/database";
 import { Pencil, X, Save, Plus, ArrowRight, RotateCcw } from "lucide-react";
 
+const JABZOUR_SIDEPOCKET_OPTIONS = [1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875, 2];
+
 // ---------------------------------------
 // Type definitions
 // ---------------------------------------
@@ -680,13 +682,31 @@ export function CustomerMeasurementsForm({
             columns={[
               { name: "armhole", label: "Armhole Full" },
               { name: "waist_full", label: "Waist Full" },
-              { name: "jabzour_width", label: "Jabzour W" },
+              { name: "jabzour_width", label: "Jabzour W", options: JABZOUR_SIDEPOCKET_OPTIONS },
               { name: "top_pocket_length", label: "Top Pkt Len" },
               { name: "top_pocket_width", label: "Top Pkt W" },
-              { name: "side_pocket_length", label: "Side Pkt Len" },
-              { name: "side_pocket_width", label: "Side Pkt W" },
+              { name: "side_pocket_length", label: "Side Pkt Len", options: JABZOUR_SIDEPOCKET_OPTIONS },
+              { name: "side_pocket_width", label: "Side Pkt W", options: JABZOUR_SIDEPOCKET_OPTIONS },
               { name: "side_pocket_distance", label: "Side Pkt Dist" },
               { name: "side_pocket_opening", label: "Side Pkt Open" },
+            ]}
+            getFieldRef={getFieldRef}
+            getEnterHandler={getEnterHandler}
+          />
+          <MeasurementTable
+            form={form}
+            title="Gallabiya, Basma, Hemming & Pen Pocket"
+            isDisabled={!isEditing}
+            columns={[
+              { name: "collar_length", label: "Gallabiya Len" },
+              { name: "second_button_distance", label: "2nd Button Dist" },
+              { name: "basma_length", label: "Basma Len" },
+              { name: "basma_width", label: "Basma W" },
+              { name: "basma_sleeve_length", label: "Basma Sleeve L" },
+              { name: "sleeve_hemming", label: "Sleeve Hem" },
+              { name: "bottom_hemming", label: "Bottom Hem" },
+              { name: "pen_pocket_length", label: "Pen Pkt Len" },
+              { name: "pen_pocket_width", label: "Pen Pkt W" },
             ]}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}

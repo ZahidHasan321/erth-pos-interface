@@ -9,6 +9,8 @@ import {
 import { AlterationBadge, ExpressBadge, BrandBadge } from "./StageBadge";
 import { GarmentTypeBadge } from "./PageShell";
 import { MeasurementGrid } from "./MeasurementGrid";
+import { getAltOutEffectiveMeasurement } from "@/lib/alteration-filter";
+import { getMeasurementCorrections } from "@/lib/qc-corrections";
 import { useOrderGarments, useGarment } from "@/hooks/useWorkshopGarments";
 import { cn, formatDate } from "@/lib/utils";
 import { Skeleton } from "@repo/ui/skeleton";
@@ -235,9 +237,13 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
           )}
 
           {/* Measurements */}
-          {garment.measurement && (
-            <MeasurementGrid measurement={garment.measurement} />
-          )}
+          {(() => {
+            const effective = garment.garment_type === "alteration"
+              ? getAltOutEffectiveMeasurement(garment)
+              : garment.measurement;
+            const corrections = getMeasurementCorrections(garment.trip_history);
+            return effective ? <MeasurementGrid measurement={effective} corrections={corrections} /> : null;
+          })()}
         </div>
       )}
     </div>
@@ -371,12 +377,18 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
         )}
 
         {/* Measurements */}
-        {garment.measurement && (
-          <div>
-            <SectionLabel>Measurements</SectionLabel>
-            <MeasurementGrid measurement={garment.measurement} />
-          </div>
-        )}
+        {(() => {
+          const effective = garment.garment_type === "alteration"
+            ? getAltOutEffectiveMeasurement(garment)
+            : garment.measurement;
+          const corrections = getMeasurementCorrections(garment.trip_history);
+          return effective ? (
+            <div>
+              <SectionLabel>Measurements</SectionLabel>
+              <MeasurementGrid measurement={effective} corrections={corrections} />
+            </div>
+          ) : null;
+        })()}
       </div>
     </>
   );

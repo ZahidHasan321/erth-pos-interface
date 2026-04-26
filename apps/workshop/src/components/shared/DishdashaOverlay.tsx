@@ -10,6 +10,7 @@ import type { WorkshopGarment, Measurement } from "@repo/database";
 import { MeasurementValue } from "./MeasurementValue";
 import type { AlterationFilter } from "@/lib/alteration-filter";
 import { ALTERATION_REASON_CELL_CLASS } from "@/lib/alteration-filter";
+import { getMeasurementCorrections } from "@/lib/qc-corrections";
 
 // ── Measurement helpers ──────────────────────────────────────────
 
@@ -196,11 +197,19 @@ export function DishdashaOverlay({
   const m = measurement;
   const degree = m?.degree ? Number(m.degree) : 0;
 
+  const corrections = getMeasurementCorrections(garment.trip_history);
+
   // Sidebar style measurements (pocket sizes, jabzour, collar dims) are absolute
   // style dimensions — degree is a body-posture offset that applies only to the
   // main body measurements shown on the SVG template, not to these.
   const measureVal = (key: keyof Measurement) =>
-    m ? <MeasurementValue raw={m[key]} degree={0} /> : null;
+    m ? (
+      <MeasurementValue
+        raw={m[key]}
+        degree={0}
+        correction={corrections.get(key as string) ?? null}
+      />
+    ) : null;
 
   const styleLabel = String(g.style ?? "kuwaiti").toUpperCase();
   const lineCount = String(g.lines ?? 1);
@@ -246,17 +255,22 @@ export function DishdashaOverlay({
 
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
-            if (alterationFilter && !alterationFilter.measurementKeys.has(key as string)) {
+            const isChanged = alterationFilter?.measurementKeys.has(key as string) ?? false;
+            if (alterationFilter?.hideUnchanged && !isChanged) {
               return null;
             }
-            const parts = m ? parseMeasurementParts(m[key], degree) : null;
+            const correction = corrections.get(key as string) ?? null;
+            const effectiveRaw = correction ? correction.corrected : (m ? m[key] : null);
+            const parts = parseMeasurementParts(effectiveRaw, correction ? 0 : degree);
             if (!parts) return null;
             const isVertical =
               "orientation" in field && field.orientation === "vertical";
             const reason = alterationFilter?.fieldReasons.get(key as string);
-            const tintClass = reason
-              ? ALTERATION_REASON_CELL_CLASS[reason]
-              : "bg-white/95 border-zinc-500 text-zinc-900";
+            const tintClass = correction
+              ? "bg-red-50 border-red-500 text-red-700"
+              : reason
+                ? ALTERATION_REASON_CELL_CLASS[reason]
+                : "bg-white/95 border-zinc-500 text-zinc-900";
             return (
               <div
                 key={field.id}
@@ -271,7 +285,11 @@ export function DishdashaOverlay({
                   borderRadius: "1.5px",
                 }}
               >
-                <MeasurementValue raw={m![key]} degree={degree} />
+                <MeasurementValue
+                  raw={m ? m[key] : null}
+                  degree={degree}
+                  correction={correction}
+                />
               </div>
             );
           })}
@@ -307,7 +325,7 @@ export function DishdashaOverlay({
           {/* Sections */}
           <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min">
             {/* Front Pocket */}
-            {(!alterationFilter || alterationFilter.visibleSections.has("frontPocket")) && (
+            {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("frontPocket")) && (
             <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness}>
               <MeasureLayout
                 image={frontPocket?.image}
@@ -325,7 +343,7 @@ export function DishdashaOverlay({
             )}
 
             {/* Jabzour */}
-            {(!alterationFilter || alterationFilter.visibleSections.has("jabzour")) && (
+            {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("jabzour")) && (
             <StyleSection title="Jabzour" thickness={g.jabzour_thickness}>
               <MeasureLayout
                 image={jabzourPrimary?.image}
@@ -350,7 +368,7 @@ export function DishdashaOverlay({
             )}
 
             {/* Side Pocket */}
-            {(!alterationFilter || alterationFilter.visibleSections.has("sidePocket")) && (
+            {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("sidePocket")) && (
             <StyleSection title="Side Pocket">
               <MeasureLayout
                 image={sidePocket?.image}
@@ -371,7 +389,7 @@ export function DishdashaOverlay({
             )}
 
             {/* Cuffs */}
-            {(!alterationFilter || alterationFilter.visibleSections.has("cuffs")) && (
+            {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("cuffs")) && (
             <StyleSection title="Cuffs" thickness={g.cuffs_thickness}>
               <div className="w-24">
                 <StyleImage
@@ -384,7 +402,7 @@ export function DishdashaOverlay({
             )}
 
             {/* Collar */}
-            {(!alterationFilter || alterationFilter.visibleSections.has("collar")) && (
+            {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("collar")) && (
             <StyleSection title="Collar" thickness={g.collar_thickness}>
               <MeasureLayout
                 image={collarType?.image}

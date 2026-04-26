@@ -87,6 +87,15 @@ export function getAlterationNumber(tripNumber: number | null | undefined, _garm
     return trip >= 2 ? trip - 1 : null;
 }
 
+/**
+ * True when an order is an "alteration order" — customer brought an outside
+ * garment for alteration. Distinct from a work-order garment that's been
+ * returned for fix (which is detected by trip_number >= 2 + the helpers above).
+ */
+export function isAlterationOrder(orderType: string | null | undefined): boolean {
+    return orderType === "ALTERATION";
+}
+
 /** True when the current trip has a failed QC attempt (garment was bounced back
  * to an earlier stage without a new trip). */
 export function hasQcFailThisTrip(garment: {
@@ -107,6 +116,23 @@ export function getAltLabel(garment: {
     if (hasQcFailThisTrip(garment)) return "alt_p";
     const n = getAlterationNumber(garment.trip_number);
     return n === null ? null : `alt_${n}`;
+}
+
+/** Label variant aware of order type. Alteration-order garments
+ *  (garment_type='alteration') use "alt_out" / "alt_out_N" rather than "alt_N",
+ *  so production terminals can distinguish customer-brought alterations from
+ *  work-order rework. QC-fail still wins (alt_p). */
+export function getGarmentAltLabel(garment: {
+    garment_type?: string | null;
+    trip_number?: number | null;
+    trip_history?: Array<{ trip: number; qc_attempts?: Array<{ result: string }> | null }> | null;
+}): string | null {
+    if (hasQcFailThisTrip(garment)) return "alt_p";
+    const trip = garment.trip_number ?? 1;
+    if (garment.garment_type === "alteration") {
+        return trip >= 2 ? `alt_out_${trip - 1}` : "alt_out";
+    }
+    return trip >= 2 ? `alt_${trip - 1}` : null;
 }
 
 // Style fields that define a garment's "style identity" for grouping.
@@ -410,7 +436,8 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
     const shopBrovas = shopItems.filter(g => g.garment_type === 'brova');
     const allShopItemsDone = shopItems.every(g =>
         g.acceptance_status === true ||
-        (g.garment_type === 'final' && g.piece_stage === 'ready_for_pickup' &&
+        ((g.garment_type === 'final' || g.garment_type === 'alteration') &&
+         g.piece_stage === 'ready_for_pickup' &&
          g.feedback_status !== 'needs_repair' && g.feedback_status !== 'needs_redo'));
 
     // Priority: alteration > brova trial > needs action > awaiting finals > partial ready > ready

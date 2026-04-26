@@ -2,6 +2,13 @@ import { type UseFormReturn, type Path, useWatch } from "react-hook-form";
 import { forwardRef } from "react";
 import { FormControl, FormField } from "@repo/ui/form";
 import { Input } from "@repo/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import { parseMeasurementParts } from "@repo/database";
 import { cn } from "@/lib/utils";
 import type { CustomerMeasurementsSchema } from "./measurement-form.schema";
@@ -30,6 +37,7 @@ export interface MeasurementColumn {
   name: string;
   label: string;
   isComputed?: boolean;
+  options?: number[]; // If present, render as dropdown with stacked-fraction labels
 }
 
 interface MeasurementTableProps {
@@ -61,6 +69,78 @@ function FractionCell({
     <div className="flex justify-center h-5">
       <StackedFraction value={value} />
     </div>
+  );
+}
+
+// --- Cell dropdown (for enumerated decimal options) ---
+function CellDropdown({
+  form,
+  name,
+  options,
+  isDisabled,
+}: {
+  form: UseFormReturn<CustomerMeasurementsSchema>;
+  name: Path<CustomerMeasurementsSchema>;
+  options: number[];
+  isDisabled: boolean;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => {
+        const hasError = !!fieldState.error;
+        const value =
+          typeof field.value === "number" ? String(field.value) : "";
+        return (
+          <FormControl>
+            <Select
+              value={value}
+              onValueChange={(v) => field.onChange(v === "" ? undefined : parseFloat(v))}
+              disabled={isDisabled}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-9 w-full bg-transparent border-0 shadow-none px-1 justify-center text-sm font-semibold",
+                  hasError && "ring-1 ring-red-500",
+                  "focus:ring-1 focus:ring-primary",
+                )}
+              >
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((opt) => {
+                  const parts = parseMeasurementParts(opt);
+                  return (
+                    <SelectItem key={opt} value={String(opt)}>
+                      <span className="inline-flex items-center gap-1 tabular-nums">
+                        {parts ? (
+                          <>
+                            {(parts.whole > 0 || parts.numerator === 0) && (
+                              <span>{parts.whole}</span>
+                            )}
+                            {parts.numerator > 0 && (
+                              <span className="inline-flex flex-col items-center leading-none">
+                                <span className="text-[10px]">{parts.numerator}</span>
+                                <span className="w-full h-px bg-muted-foreground/60" />
+                                <span className="text-[10px]">{parts.denominator}</span>
+                              </span>
+                            )}
+                            {parts.hasDegree && <span>°</span>}
+                          </>
+                        ) : (
+                          <span>{opt}</span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </FormControl>
+        );
+      }}
+    />
   );
 }
 
@@ -167,14 +247,23 @@ export function MeasurementTable({
               const fieldPath = col.name as Path<CustomerMeasurementsSchema>;
               return (
                 <td key={col.name} className="border border-border px-1.5 py-1.5">
-                  <CellInput
-                    ref={getFieldRef?.(fieldPath)}
-                    form={form}
-                    name={fieldPath}
-                    isDisabled={isDisabled || (col.isComputed ?? false)}
-                    isComputed={col.isComputed}
-                    onEnterPress={getEnterHandler?.(fieldPath)}
-                  />
+                  {col.options ? (
+                    <CellDropdown
+                      form={form}
+                      name={fieldPath}
+                      options={col.options}
+                      isDisabled={isDisabled}
+                    />
+                  ) : (
+                    <CellInput
+                      ref={getFieldRef?.(fieldPath)}
+                      form={form}
+                      name={fieldPath}
+                      isDisabled={isDisabled || (col.isComputed ?? false)}
+                      isComputed={col.isComputed}
+                      onEnterPress={getEnterHandler?.(fieldPath)}
+                    />
+                  )}
                 </td>
               );
             })}

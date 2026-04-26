@@ -257,7 +257,7 @@ function TransferHistoryPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto pb-10">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
       <PageHeader icon={History} title="Transfer History" subtitle="All past and in-flight store transfers with full audit trail" />
 
       {/* Filter bar */}

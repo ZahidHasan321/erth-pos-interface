@@ -51,4 +51,9 @@ export type WorkshopGarment = Omit<Garment, 'production_plan' | 'worker_history'
     style_image_url?: string;
     fabric_name?: string;
     fabric_color?: string;
+    // Alteration-order joined fields (only populated for garment_type='alteration'
+    // when fetched via the detail query). Used by terminal/detail pages to render
+    // baseline measurements + diff highlighting.
+    full_measurement_set?: Measurement | null;
+    original_garment_measurement?: Measurement | null;
 };

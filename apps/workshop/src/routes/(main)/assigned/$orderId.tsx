@@ -19,7 +19,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Label } from "@repo/ui/label";
 import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
 import { useUpdateOrderDeliveryDate } from "@/hooks/useGarmentMutations";
-import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
+import { cn, formatDate, toLocalDateStr, parseUtcTimestamp, getKuwaitDayRange } from "@/lib/utils";
 import { getGarmentEditability } from "@/lib/editability";
 import {
   ArrowLeft,
@@ -860,7 +860,7 @@ function GarmentPlanCard({
           {garment.delivery_date &&
             (() => {
               const days = Math.ceil(
-                (new Date(garment.delivery_date).getTime() - Date.now()) /
+                (parseUtcTimestamp(garment.delivery_date).getTime() - Date.now()) /
                   86400000,
               );
               const isDone =
@@ -896,7 +896,7 @@ function GarmentPlanCard({
           {garment.assigned_date &&
             (() => {
               const days = Math.ceil(
-                (new Date(garment.assigned_date + "T23:59:59+03:00").getTime() -
+                (new Date(getKuwaitDayRange(garment.assigned_date).end).getTime() -
                   Date.now()) /
                   86400000,
               );

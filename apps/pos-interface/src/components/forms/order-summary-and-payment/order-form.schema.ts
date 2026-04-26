@@ -72,8 +72,9 @@ export const orderSchema = z.object({
       });
     }
 
-    // Overpayment validation
-    if (typeof data.paid === 'number' && typeof data.order_total === 'number' && data.order_total > 0) {
+    // Overpayment validation. Don't gate on order_total > 0 — a fully-discounted
+    // order has total=0, and a non-zero payment against it is still overpayment.
+    if (typeof data.paid === 'number' && typeof data.order_total === 'number') {
       if (data.paid > data.order_total) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

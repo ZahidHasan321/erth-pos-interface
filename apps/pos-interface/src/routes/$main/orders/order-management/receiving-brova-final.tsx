@@ -225,6 +225,7 @@ function OrderCard({
 
     const brovaCount = allGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = allGarments.filter((g) => g.garment_type === "final").length;
+    const alterationCount = allGarments.filter((g) => g.garment_type === "alteration").length;
     const lostCount = lostGarments.length;
     const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
@@ -297,6 +298,7 @@ function OrderCard({
                                 <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{allGarments.length} Pcs</Badge>
                                 {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
                                 {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
+                                {alterationCount > 0 && <span className="text-[11px] font-black bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{alterationCount} Alteration</span>}
                                 {lostCount > 0 && <span className="text-[11px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
                                 {order.delivery_date && (
                                     <span className="text-[11px] text-muted-foreground font-medium">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>
@@ -419,7 +421,9 @@ function OrderCard({
                                                     "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
                                                     g.garment_type === "brova"
                                                         ? "bg-blue-50 text-blue-700"
-                                                        : "bg-emerald-50 text-emerald-700"
+                                                        : g.garment_type === "alteration"
+                                                            ? "bg-purple-50 text-purple-700"
+                                                            : "bg-emerald-50 text-emerald-700"
                                                 )}>
                                                     {g.garment_type}
                                                 </span>
@@ -465,7 +469,7 @@ function OrderCard({
                                 {selectedReceivable.length} of {receivableGarments.length} selected
                             </span>
                             <Link
-                                to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                                to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : order.order_type === "ALTERATION" ? "/$main/orders/new-alteration-order" : "/$main/orders/new-work-order"}
                                 search={{ orderId: order.id }}
                                 className="text-xs font-bold text-primary/60 hover:text-primary transition-colors flex items-center gap-1.5"
                                 onClick={(e) => e.stopPropagation()}

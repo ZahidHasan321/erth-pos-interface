@@ -92,7 +92,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         )}
                         {g.soaking && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-cyan-50 text-cyan-700 border-cyan-300">
-                                Soaking
+                                Soaking{(g as any).soaking_hours ? ` ${(g as any).soaking_hours}h` : ""}
                             </Badge>
                         )}
                         {fabricData?.name ? (

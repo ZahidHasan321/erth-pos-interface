@@ -68,6 +68,8 @@ import { FabricLabel } from "@/components/forms/fabric-selection-and-options/fab
 import { getAppointmentById, updateAppointment } from "@/api/appointments";
 import { getCustomerById } from "@/api/customers";
 import type { AppointmentWithRelations } from "@/api/appointments";
+import { getMeasurementById } from "@/api/measurements";
+import { Card2HtmlDocument, mapToCard2Data } from "@/components/invoice/card2";
 
 /** Aggregate fabric usage already committed to an order (fabric_id → meters). */
 function computeSavedFabricUsage(garments: GarmentSchema[]): Map<number, number> {
@@ -208,6 +210,13 @@ function NewWorkOrder() {
         }
       }
     `,
+    });
+
+    // Card2 print ref
+    const printCard2Ref = React.useRef<HTMLDivElement>(null);
+    const handlePrintCard2 = useReactToPrint({
+        contentRef: printCard2Ref,
+        documentTitle: `Card2-Order-${orderId || "draft"}`,
     });
 
     // ============================================================================
@@ -971,6 +980,67 @@ function NewWorkOrder() {
         fabricsResponse,
     ]);
 
+    // ============================================================================
+    // CARD2 INVOICE DATA
+    // ============================================================================
+    const card2MeasurementId = React.useMemo(() => {
+        const found = fabricSelections.find((g) => g.measurement_id);
+        return found?.measurement_id ?? null;
+    }, [fabricSelections]);
+
+    const { data: card2MeasurementResponse } = useQuery({
+        queryKey: ["measurement", card2MeasurementId],
+        queryFn: () => getMeasurementById(card2MeasurementId as string),
+        enabled: !!card2MeasurementId && isOrderClosed,
+        staleTime: Infinity,
+    });
+
+    const card2Signature = useWatch({
+        control: fabricSelectionForm.control,
+        name: "signature",
+    });
+
+    const card2Data = React.useMemo(() => {
+        const orderData = OrderForm.getValues();
+        const orderTaker = employees.find((e) => e.id === orderData.order_taker_id);
+        return mapToCard2Data({
+            invoiceNumber: fatoura ?? orderId,
+            customer: {
+                name: customerDemographics.name,
+                phone: customerDemographics.phone,
+            },
+            orderDate: orderData.order_date ?? null,
+            deliveryDate: order.delivery_date ?? null,
+            garments: fabricSelections,
+            fabrics: fabricsResponse ?? [],
+            measurement: card2MeasurementResponse?.data ?? null,
+            charges: {
+                fabric: orderData.fabric_charge ?? 0,
+                stitching: orderData.stitching_charge ?? 0,
+                style: orderData.style_charge ?? 0,
+                delivery: orderData.delivery_charge ?? 0,
+                shelf: orderData.shelf_charge ?? 0,
+            },
+            orderTotal: orderData.order_total ?? 0,
+            paid: orderData.paid ?? 0,
+            paymentType: orderData.payment_type ?? null,
+            specialRequest: null,
+            orderTakerName: orderTaker?.name ?? null,
+            customerSignature: card2Signature || null,
+        });
+    }, [
+        OrderForm,
+        fatoura,
+        orderId,
+        customerDemographics,
+        order.delivery_date,
+        fabricSelections,
+        fabricsResponse,
+        card2MeasurementResponse,
+        employees,
+        card2Signature,
+    ]);
+
 
     // ============================================================================
     // RENDER
@@ -1049,6 +1119,13 @@ function NewWorkOrder() {
                         </div>
                     </div>
                 )}
+
+                {/* Hidden Card2 print container */}
+                <div style={{ display: "none" }}>
+                    <div ref={printCard2Ref}>
+                        <Card2HtmlDocument data={card2Data} />
+                    </div>
+                </div>
 
                 {/* Hidden print labels container */}
                 <div style={{ display: "none" }}>
@@ -1255,6 +1332,7 @@ function NewWorkOrder() {
                             deliveryDate={order.delivery_date}
                             orderType="WORK"
                             onPrintLabels={() => handlePrintLabels()}
+                            onPrintCard2={() => handlePrintCard2()}
                             cashierHandlesPayment={cashierHandlesPayment}
                             onConfirm={(data) => {
                                 if (cashierHandlesPayment) {

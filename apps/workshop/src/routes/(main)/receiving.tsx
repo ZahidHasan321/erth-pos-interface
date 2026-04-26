@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
   Inbox, Clock, Package, AlertTriangle, CircleX, Zap, Home,
-  Droplets, Search, Loader2,
+  Droplets, Search, Loader2, Scissors,
 } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/receiving")({
@@ -34,6 +34,14 @@ function AltBadge({ trip }: { trip: number }) {
   return (
     <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
       Alt {alt}
+    </Badge>
+  );
+}
+
+function AlterationOutBadge() {
+  return (
+    <Badge className="bg-amber-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+      Alteration Out
     </Badge>
   );
 }
@@ -55,6 +63,7 @@ function GarmentRow({
   actionVariant,
   showType,
   showAlt,
+  showAlterationOut,
   hideExpress,
 }: {
   garment: WorkshopGarment;
@@ -69,6 +78,7 @@ function GarmentRow({
   actionVariant: ActionVariant;
   showType?: boolean;
   showAlt?: boolean;
+  showAlterationOut?: boolean;
   hideExpress?: boolean;
 }) {
   const urgency = getDeliveryUrgency(garment.delivery_date_order);
@@ -101,7 +111,10 @@ function GarmentRow({
       </TableCell>
       {showAlt && (
         <TableCell className="px-3 py-3">
-          {(garment.trip_number ?? 1) >= 2 && <AltBadge trip={garment.trip_number ?? 1} />}
+          <div className="flex flex-col gap-1 items-start">
+            {showAlterationOut && <AlterationOutBadge />}
+            {(garment.trip_number ?? 1) >= 2 && <AltBadge trip={garment.trip_number ?? 1} />}
+          </div>
         </TableCell>
       )}
       {showType && (
@@ -219,6 +232,7 @@ function SectionTable({
   actionVariant,
   showType,
   showAlt,
+  showAlterationOut,
   hideExpress,
 }: {
   garments: WorkshopGarment[];
@@ -233,6 +247,7 @@ function SectionTable({
   actionVariant: ActionVariant | ((g: WorkshopGarment) => ActionVariant);
   showType?: boolean;
   showAlt?: boolean;
+  showAlterationOut?: boolean;
   hideExpress?: boolean;
 }) {
   const allSelected = garments.length > 0 && garments.every((g) => selectedIds.has(g.id));
@@ -278,6 +293,7 @@ function SectionTable({
               actionVariant={typeof actionVariant === "function" ? actionVariant(g) : actionVariant}
               showType={showType}
               showAlt={showAlt}
+              showAlterationOut={showAlterationOut}
               hideExpress={hideExpress}
             />
           ))}
@@ -359,14 +375,19 @@ function ReceivingPage() {
     .filter((g, i, arr) => arr.findIndex((x) => x.id === g.id) === i);
   const lostInTransit = allGarments.filter((g) => g.location === "lost_in_transit");
 
-  // Initial trip only (trip 1), split by express / brova / final
-  const initialTrip = inTransit.filter((g) => (g.trip_number ?? 1) === 1);
+  // Alteration-order garments live in their own section regardless of trip.
+  const alterationOut = inTransit.filter((g) => g.garment_type === "alteration");
+
+  // Work-order garments only (brova / final). Initial trip = trip 1; trip 2+
+  // returns go to the Work Order Alterations section below.
+  const workOrderGarments = inTransit.filter((g) => g.garment_type !== "alteration");
+  const initialTrip = workOrderGarments.filter((g) => (g.trip_number ?? 1) === 1);
   const expressGarments = initialTrip.filter((g) => g.express);
   const brovaInitial = initialTrip.filter((g) => !g.express && g.garment_type === "brova");
   const finalsInitial = initialTrip.filter((g) => !g.express && g.garment_type === "final");
 
-  // Alterations: any garment returning (trip >= 2)
-  const alterations = inTransit.filter((g) => (g.trip_number ?? 1) >= 2);
+  // Work order alterations: brova/final returning (trip >= 2).
+  const alterations = workOrderGarments.filter((g) => (g.trip_number ?? 1) >= 2);
 
   // Group garments by order, sort groups by delivery date, brovas before finals, flatten
   const groupByOrderSorted = (garments: WorkshopGarment[]): WorkshopGarment[] => {
@@ -396,12 +417,14 @@ function ReceivingPage() {
   const sortedBrova = applySearch(groupByOrderSorted(brovaInitial));
   const sortedFinals = applySearch(groupByOrderSorted(finalsInitial));
   const sortedAlterations = applySearch(groupByOrderSorted(alterations));
+  const sortedAlterationOut = applySearch(groupByOrderSorted(alterationOut));
 
   // ── Selection state per section ───────────────────────────────────────────
   const [selExpress, setSelExpress] = useState<Set<string>>(new Set());
   const [selBrova, setSelBrova] = useState<Set<string>>(new Set());
   const [selFinals, setSelFinals] = useState<Set<string>>(new Set());
   const [selAlterations, setSelAlterations] = useState<Set<string>>(new Set());
+  const [selAlterationOut, setSelAlterationOut] = useState<Set<string>>(new Set());
 
   const toggle =
     (setFn: React.Dispatch<React.SetStateAction<Set<string>>>) =>
@@ -412,8 +435,8 @@ function ReceivingPage() {
         return n;
       });
 
-  const allVisible = [...sortedExpress, ...sortedBrova, ...sortedFinals, ...sortedAlterations];
-  const totalSelected = selExpress.size + selBrova.size + selFinals.size + selAlterations.size;
+  const allVisible = [...sortedExpress, ...sortedBrova, ...sortedFinals, ...sortedAlterations, ...sortedAlterationOut];
+  const totalSelected = selExpress.size + selBrova.size + selFinals.size + selAlterations.size + selAlterationOut.size;
   const allSelected = allVisible.length > 0 && totalSelected === allVisible.length;
 
   const selectAll = () => {
@@ -421,12 +444,14 @@ function ReceivingPage() {
     setSelBrova(new Set(sortedBrova.map((g) => g.id)));
     setSelFinals(new Set(sortedFinals.map((g) => g.id)));
     setSelAlterations(new Set(sortedAlterations.map((g) => g.id)));
+    setSelAlterationOut(new Set(sortedAlterationOut.map((g) => g.id)));
   };
   const clearAll = () => {
     setSelExpress(new Set());
     setSelBrova(new Set());
     setSelFinals(new Set());
     setSelAlterations(new Set());
+    setSelAlterationOut(new Set());
   };
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -437,7 +462,7 @@ function ReceivingPage() {
     toast.warning("Garment marked as lost in transit");
   };
 
-  const totalIncoming = sortedExpress.length + sortedBrova.length + sortedFinals.length + sortedAlterations.length;
+  const totalIncoming = sortedExpress.length + sortedBrova.length + sortedFinals.length + sortedAlterations.length + sortedAlterationOut.length;
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-8">
@@ -595,8 +620,8 @@ function ReceivingPage() {
             )}
           </Section>
 
-          {/* ── ALTERATIONS ── */}
-          <Section title="Alterations" icon={Package} count={sortedAlterations.length}>
+          {/* ── WORK ORDER ALTERATIONS ── */}
+          <Section title="Work Order Alterations" icon={Package} count={sortedAlterations.length}>
             {sortedAlterations.length === 0 ? (
               <EmptyState icon={Package} message="No alterations in transit" />
             ) : (
@@ -628,6 +653,50 @@ function ReceivingPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => { lostMut.mutateAsync([...selAlterations]).then(() => { toast.warning(`${selAlterations.size} garment${selAlterations.size !== 1 ? "s" : ""} marked as lost`); setSelAlterations(new Set()); }); }}
+                    disabled={lostMut.isPending}
+                    className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    {lostMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                    Lost
+                  </Button>
+                </BatchActionBar>
+              </>
+            )}
+          </Section>
+
+          {/* ── ALTERATION ORDERS (OUT) ── */}
+          <Section title="Alteration Orders (Out)" icon={Scissors} count={sortedAlterationOut.length}>
+            {sortedAlterationOut.length === 0 ? (
+              <EmptyState icon={Scissors} message="No alteration orders in transit" />
+            ) : (
+              <>
+                <SectionTable
+                  garments={sortedAlterationOut}
+                  selectedIds={selAlterationOut}
+                  onToggle={toggle(setSelAlterationOut)}
+                  onReceive={(id) => receive([id])}
+                  onReceiveAndStart={(id) => receiveAndStart([id])}
+                  onLost={markLost}
+                  isReceivePending={isReceivePending}
+                  isReceiveStartPending={isReceiveStartPending}
+                  isLostPending={isLostPending}
+                  actionVariant="receive-start-lost"
+                  showAlt
+                  showAlterationOut
+                />
+                <BatchActionBar count={selAlterationOut.size} onClear={() => setSelAlterationOut(new Set())}>
+                  <Button size="sm" variant="secondary" onClick={() => { receive([...selAlterationOut]); setSelAlterationOut(new Set()); }} disabled={receiveMut.isPending}>
+                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                    Receive
+                  </Button>
+                  <Button size="sm" onClick={() => { receiveAndStart([...selAlterationOut]); setSelAlterationOut(new Set()); }} disabled={receiveStartMut.isPending}>
+                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                    Receive & Start
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { lostMut.mutateAsync([...selAlterationOut]).then(() => { toast.warning(`${selAlterationOut.size} garment${selAlterationOut.size !== 1 ? "s" : ""} marked as lost`); setSelAlterationOut(new Set()); }); }}
                     disabled={lostMut.isPending}
                     className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                   >

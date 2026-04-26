@@ -48,6 +48,7 @@ import {
 } from "@repo/ui/select";
 import { Label } from "@repo/ui/label";
 import { Checkbox } from "@repo/ui/checkbox";
+import { Switch } from "@repo/ui/switch";
 import { toast } from "sonner";
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -195,6 +196,10 @@ interface GarmentFeedbackState {
   submitted: boolean;
   existingFeedbackId: string | null;
   isEditing: boolean;
+  // When true, Customer Request measurement edits create a new measurement
+  // for THIS garment only, leaving siblings on their existing measurement.
+  // Default false → existing behavior (bulk repoint across all sharing garments).
+  measurementGarmentOnly: boolean;
 }
 
 const createEmptyGarmentState = (): GarmentFeedbackState => ({
@@ -216,6 +221,7 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   submitted: false,
   existingFeedbackId: null,
   isEditing: false,
+  measurementGarmentOnly: false,
 });
 
 interface OrderWithDetails extends Order {
@@ -509,13 +515,63 @@ function UnifiedFeedbackInterface() {
           (v): v is string => typeof v === "string",
         );
 
+        // Rebuild measurement state from measurement_diffs JSON
+        const feedbackMeasurements: Record<string, number | ""> = {};
+        const measurementNotes: Record<string, string> = {};
+        for (const row of parseJsonArray(fb.measurement_diffs)) {
+          const d = row as any;
+          if (!d || typeof d !== "object" || !d.field) continue;
+          if (d.actual_value !== null && d.actual_value !== undefined) {
+            feedbackMeasurements[d.field] = d.actual_value;
+          }
+          if (d.notes) measurementNotes[d.field] = d.notes;
+        }
+
+        // Rebuild option state from options_checklist JSON
+        const optionChecks: Record<string, boolean> = {};
+        const styleChanges: Record<string, string> = {};
+        const hashwaChanges: Record<string, string> = {};
+        const optionNotes: Record<string, string> = {};
+        for (const row of parseJsonArray(fb.options_checklist)) {
+          const o = row as any;
+          if (!o || typeof o !== "object" || !o.option_name) continue;
+          if (o.actual_correct === true) optionChecks[`${o.option_name}-main`] = true;
+          else if (o.rejected === true) optionChecks[`${o.option_name}-main`] = false;
+          if (o.hashwa_correct === true) optionChecks[`${o.option_name}-hashwa`] = true;
+          else if (o.hashwa_rejected === true) optionChecks[`${o.option_name}-hashwa`] = false;
+          if (o.new_value) styleChanges[o.option_name] = o.new_value;
+          if (o.hashwa_new_value) hashwaChanges[o.option_name] = o.hashwa_new_value;
+          if (o.notes) optionNotes[o.option_name] = o.notes;
+        }
+
+        // difference_reasons stored as plain {field: reason} object
+        let differenceReasons: Record<string, string> = {};
+        if (fb.difference_reasons) {
+          try {
+            const parsed = typeof fb.difference_reasons === "string"
+              ? JSON.parse(fb.difference_reasons)
+              : fb.difference_reasons;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              differenceReasons = parsed as Record<string, string>;
+            }
+          } catch { /* ignore */ }
+        }
+
         updateGarmentState(selectedGarmentId, {
           feedbackAction: fb.action || null,
+          distributionAction: fb.distribution || null,
           satisfaction: satLevel?.value || null,
           notes: fb.notes || "",
           customerSignature: fb.customer_signature || null,
           sharedPhotos: photoEntries as any,
           sharedVoiceNotes: voiceEntries,
+          feedbackMeasurements,
+          measurementNotes,
+          differenceReasons,
+          optionChecks,
+          styleChanges,
+          hashwaChanges,
+          optionNotes,
           existingFeedbackId: fb.id,
           isEditing: true,
           submitted: true,
@@ -758,6 +814,10 @@ function UnifiedFeedbackInterface() {
         toast.error("Please complete all feedback sections");
         return;
     }
+    if (measurementId && isMeasurementLoading) {
+        toast.error("Measurements still loading — please wait before submitting");
+        return;
+    }
     setIsConfirmDialogOpen(true);
   };
 
@@ -766,6 +826,22 @@ function UnifiedFeedbackInterface() {
 
     setIsConfirmDialogOpen(false);
     setIsSubmitting(true);
+
+    // Fields that bulk propagation (bulkRepointMeasurement / bulkUpdateStyleFields)
+    // may mutate on sibling garments. Snapshot them now so we can detect which
+    // siblings shifted under the user and reset their in-memory feedback state.
+    const SIBLING_TRACKED_FIELDS = [
+      "collar_type", "collar_button", "front_pocket_type", "cuffs_type",
+      "jabzour_1", "jabzour_2", "small_tabaggi",
+      "front_pocket_thickness", "cuffs_thickness", "jabzour_thickness",
+    ] as const;
+    const preSaveSnapshot: Record<string, { measurement_id: string | null; style: Record<string, unknown> }> = {};
+    for (const g of activeOrder.garments || []) {
+      preSaveSnapshot[g.id] = {
+        measurement_id: g.measurement_id ?? null,
+        style: Object.fromEntries(SIBLING_TRACKED_FIELDS.map(k => [k, (g as any)[k]])),
+      };
+    }
 
     try {
         const state = currentState;
@@ -789,15 +865,20 @@ function UnifiedFeedbackInterface() {
             }
         } else {
             const updatePayload: any = {};
+            const isAlterationGarment = activeGarment.garment_type === "alteration";
 
             if (state.feedbackAction === "accepted") {
-                const isHomeDelivery = (activeOrder as any).home_delivery;
+                const isHomeDelivery = isAlterationGarment
+                    ? !!(activeGarment as any).home_delivery
+                    : (activeOrder as any).home_delivery;
                 updatePayload.piece_stage = "completed";
                 updatePayload.fulfillment_type = isHomeDelivery ? "delivered" : "collected";
                 updatePayload.acceptance_status = true;
                 updatePayload.feedback_status = "accepted";
-            } else if (state.feedbackAction === "needs_redo") {
+            } else if (state.feedbackAction === "needs_redo" && !isAlterationGarment) {
                 // Redo = discard original. Workshop creates a replacement garment.
+                // Alteration orders skip this branch — the same physical garment goes
+                // back to workshop for another pass; we never discard customer property.
                 updatePayload.piece_stage = "discarded";
                 updatePayload.feedback_status = "needs_redo";
                 updatePayload.acceptance_status = false;
@@ -856,8 +937,14 @@ function UnifiedFeedbackInterface() {
           if (created.status === "success" && created.data) {
             newMeasurementId = created.data.id;
 
-            // Repoint: brovas only. Finals stay on their own measurement_id.
-            if (activeGarment.garment_type === "brova" && previousMeasurementId) {
+            // Default: brovas bulk-repoint all order garments sharing the
+            // measurement (so finals inherit the body correction). When the
+            // user toggled "this garment only", skip the bulk update.
+            if (
+              activeGarment.garment_type === "brova" &&
+              previousMeasurementId &&
+              !state.measurementGarmentOnly
+            ) {
               await bulkRepointMeasurement(
                 activeOrder.id,
                 previousMeasurementId,
@@ -978,9 +1065,15 @@ function UnifiedFeedbackInterface() {
             ? JSON.stringify(persistedVoiceNotes)
             : null,
           notes: state.notes || null,
-          difference_reasons: Object.keys(state.differenceReasons).length > 0
-            ? JSON.stringify(state.differenceReasons)
-            : null,
+          difference_reasons: (() => {
+            const filtered = Object.fromEntries(
+              Object.entries(state.differenceReasons).filter(([key]) => {
+                const v = state.feedbackMeasurements[key];
+                return v !== "" && v !== undefined;
+              })
+            );
+            return Object.keys(filtered).length > 0 ? JSON.stringify(filtered) : null;
+          })(),
         };
 
         // Upsert: update existing feedback or create new one
@@ -1000,6 +1093,40 @@ function UnifiedFeedbackInterface() {
         const refreshed = await getOrderById(activeOrder.id, true);
         if (refreshed.status === 'success' && refreshed.data) {
           setActiveOrder(refreshed.data);
+
+          // Detect siblings whose baseline shifted via bulk propagation and
+          // reset their in-memory state so the rehydration effect re-runs from
+          // the new baseline. Without this, the user's typed-in feedback for B
+          // would be silently anchored to a stale measurement/style.
+          const affectedNames: string[] = [];
+          const affectedIds = new Set<string>();
+          for (const g of refreshed.data.garments || []) {
+            if (g.id === activeGarment.id) continue;
+            const snap = preSaveSnapshot[g.id];
+            if (!snap) continue;
+            const measChanged = snap.measurement_id !== (g.measurement_id ?? null);
+            const styleChanged = SIBLING_TRACKED_FIELDS.some(
+              k => snap.style[k] !== (g as any)[k],
+            );
+            if (measChanged || styleChanged) {
+              affectedIds.add(g.id);
+              affectedNames.push(g.garment_id || g.id.slice(0, 8));
+            }
+          }
+          if (affectedIds.size > 0) {
+            setGarmentStates(prev => {
+              const next = { ...prev };
+              let mutated = false;
+              for (const id of affectedIds) {
+                if (next[id]) { delete next[id]; mutated = true; }
+              }
+              return mutated ? next : prev;
+            });
+            toast.warning(
+              `Baseline updated for ${affectedNames.join(", ")} — please re-verify before submitting.`,
+              { duration: 6000 },
+            );
+          }
         }
 
         // Invalidate dispatch queries so "Return to Workshop" tab is fresh
@@ -1011,7 +1138,8 @@ function UnifiedFeedbackInterface() {
         // Balance check for final collection
         const balance = (Number(activeOrder?.order_total) || 0) - (Number(activeOrder?.paid) || 0);
 
-        if (state.feedbackAction === "accepted" && activeGarment.garment_type === "final") {
+        if (state.feedbackAction === "accepted" &&
+            (activeGarment.garment_type === "final" || activeGarment.garment_type === "alteration")) {
              if (balance > 0) {
                  toast.info("Order has pending balance. Please collect payment.");
              }
@@ -1230,6 +1358,9 @@ function UnifiedFeedbackInterface() {
           {activeGarment?.garment_type === "final" && (
             <Badge variant="outline" className="text-xs font-black uppercase bg-emerald-50 text-emerald-700 border-emerald-200">Final / Pickup</Badge>
           )}
+          {activeGarment?.garment_type === "alteration" && (
+            <Badge variant="outline" className="text-xs font-black uppercase bg-purple-50 text-purple-700 border-purple-200">Alteration</Badge>
+          )}
           {currentState.isEditing && (
             <Badge variant="outline" className="text-xs font-black uppercase bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
           )}
@@ -1364,9 +1495,10 @@ function UnifiedFeedbackInterface() {
                                     >
                                         {(() => {
                                             const altNum = getAlterationNumber(garment.trip_number);
-                                            return altNum !== null
-                                                ? `Alt ${altNum}`
-                                                : garment.garment_type === 'brova' ? "Brova" : "Final";
+                                            if (altNum !== null) return `Alt ${altNum}`;
+                                            if (garment.garment_type === 'brova') return "Brova";
+                                            if (garment.garment_type === 'alteration') return "Alteration";
+                                            return "Final";
                                         })()}
                                     </Badge>
                                 </div>
@@ -1403,6 +1535,32 @@ function UnifiedFeedbackInterface() {
                             </div>
                         </div>
                     </CardHeader>
+
+                    {/* Scope toggle — only meaningful when bulk propagation would otherwise fire (brova) */}
+                    {activeGarment?.garment_type === "brova" && (
+                        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50/40 border-b border-amber-200/60">
+                            <div className="flex items-start gap-2 min-w-0">
+                                <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-black uppercase tracking-widest text-amber-800">
+                                        This garment only
+                                    </p>
+                                    <p className="text-[11px] font-medium text-amber-700/80 leading-snug">
+                                        {currentState.measurementGarmentOnly
+                                            ? "Customer Request edits will create a new measurement for THIS brova only. Siblings stay unchanged."
+                                            : "Customer Request edits will update every garment in this order sharing the same measurement."}
+                                    </p>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={currentState.measurementGarmentOnly}
+                                onCheckedChange={(v) =>
+                                    updateGarmentState(selectedGarmentId, { measurementGarmentOnly: v })
+                                }
+                                aria-label="Apply measurement changes to this garment only"
+                            />
+                        </div>
+                    )}
 
                     <div className="p-3 space-y-4">
                         {MEASUREMENT_GROUPS.map((group) => (
@@ -2152,7 +2310,7 @@ function UnifiedFeedbackInterface() {
                           <>
                             <Button
                                 onClick={onConfirmClick}
-                                disabled={missing.length > 0 || isSubmitting || lockedDone}
+                                disabled={missing.length > 0 || isSubmitting || lockedDone || (!!measurementId && isMeasurementLoading)}
                                 className="w-full h-11 font-black uppercase tracking-widest shadow-md text-sm rounded-xl"
                             >
                                 {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : lockedDone ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}

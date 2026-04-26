@@ -38,6 +38,9 @@ export function calculateGarmentStylePrice(
     // Designer style edge case: Use DB price (usually 6)
     if (garment.style === "design") return priceMap.get("STY_DESIGNER") || 6;
 
+    // Qallabi collar edge case: flat DB price (usually 5), ignore all other options
+    if (garment.collar_type === "COL_QALLABI") return priceMap.get("COL_QALLABI") || 5;
+
     let total = 0;
 
     // Lines
@@ -169,6 +172,9 @@ export function calculateStylePrice(
 
     // Designer style edge case: Use DB price (usually 6)
     if (styleOptions.style === "design") return priceMap.get("STY_DESIGNER") || 6;
+
+    // Qallabi collar edge case: flat DB price (usually 5), ignore all other options
+    if (styleOptions.collar?.collar_type === "COL_QALLABI") return priceMap.get("COL_QALLABI") || 5;
 
     let total = 0;
 

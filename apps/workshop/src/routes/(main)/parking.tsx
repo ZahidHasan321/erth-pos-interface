@@ -31,6 +31,7 @@ import {
   ParkingSquare,
   Clock,
   RotateCcw,
+  Scissors,
   Unlock,
   Package,
   Home,
@@ -46,6 +47,14 @@ function AltBadge({ trip }: { trip: number }) {
   return (
     <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
       Alt {trip - 1}
+    </Badge>
+  );
+}
+
+function AltOutBadge({ trip }: { trip: number }) {
+  return (
+    <Badge className="bg-amber-600 text-white font-semibold text-xs uppercase tracking-wide border-0">
+      {trip >= 2 ? `Alt Out ${trip - 1}` : "Alt Out"}
     </Badge>
   );
 }
@@ -68,6 +77,7 @@ function ParkingGarmentRow({
   actionVariant = "outline",
   actionPending,
   showType,
+  showAlt,
   readOnly,
   hideExpress,
 }: {
@@ -79,6 +89,7 @@ function ParkingGarmentRow({
   actionVariant?: ActionVariant;
   actionPending: boolean;
   showType?: boolean;
+  showAlt?: boolean;
   readOnly?: boolean;
   hideExpress?: boolean;
 }) {
@@ -115,6 +126,17 @@ function ParkingGarmentRow({
       {showType && (
         <TableCell className="px-3 py-3">
           <GarmentTypeBadge type={garment.garment_type ?? "final"} />
+        </TableCell>
+      )}
+      {showAlt && (
+        <TableCell className="px-3 py-3">
+          <div className="flex flex-col gap-1 items-start">
+            {garment.garment_type === "alteration" ? (
+              <AltOutBadge trip={garment.trip_number ?? 1} />
+            ) : (garment.trip_number ?? 1) >= 2 ? (
+              <AltBadge trip={garment.trip_number ?? 1} />
+            ) : null}
+          </div>
         </TableCell>
       )}
       <TableCell className="px-3 py-3 text-sm">
@@ -202,6 +224,7 @@ function ParkingGarmentTable({
   getActionVariant,
   isActionPending = () => false,
   showType,
+  showAlt,
   readOnly,
   hideExpress,
 }: {
@@ -213,6 +236,7 @@ function ParkingGarmentTable({
   getActionVariant?: (g: WorkshopGarment) => ActionVariant;
   isActionPending?: (id: string) => boolean;
   showType?: boolean;
+  showAlt?: boolean;
   readOnly?: boolean;
   hideExpress?: boolean;
 }) {
@@ -239,6 +263,7 @@ function ParkingGarmentTable({
             )}
             <TableHead className="w-[100px]">Garment</TableHead>
             {showType && <TableHead className="w-[80px]">Type</TableHead>}
+            {showAlt && <TableHead className="w-[100px]">Alt</TableHead>}
             <TableHead className="w-[170px]">Customer</TableHead>
             <TableHead className="w-[100px]">Order / Invoice</TableHead>
             <TableHead className="w-[80px]">Brand</TableHead>
@@ -264,6 +289,7 @@ function ParkingGarmentTable({
               actionVariant={getActionVariant ? getActionVariant(g) : "outline"}
               actionPending={isActionPending(g.id)}
               showType={showType}
+              showAlt={showAlt}
               readOnly={readOnly}
               hideExpress={hideExpress}
             />
@@ -384,16 +410,26 @@ function ParkingPage() {
       ),
     [allGarments],
   );
-  const trip1 = useMemo(
-    () => parked.filter((g) => (g.trip_number ?? 1) === 1),
+  // Alteration-order garments (garment_type='alteration') get their own section
+  // regardless of trip — they don't share the brova/final/returns flow.
+  const alterationOutGarments = useMemo(
+    () => parked.filter((g) => g.garment_type === "alteration"),
     [parked],
+  );
+  const workOrderParked = useMemo(
+    () => parked.filter((g) => g.garment_type !== "alteration"),
+    [parked],
+  );
+  const trip1 = useMemo(
+    () => workOrderParked.filter((g) => (g.trip_number ?? 1) === 1),
+    [workOrderParked],
   );
   const returnsGarments = useMemo(
     () =>
-      parked.filter(
+      workOrderParked.filter(
         (g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted",
       ),
-    [parked],
+    [workOrderParked],
   );
 
   // Finals still locked at waiting_for_acceptance (trip 1).
@@ -518,6 +554,7 @@ function ParkingPage() {
 
   const sortedExpress = groupByOrderSorted(expressGarments);
   const sortedBrova = groupByOrderSorted(brovaGarments);
+  const sortedAlterationOut = groupByOrderSorted(alterationOutGarments);
   const sortedFinalsNotYetApproved = groupByOrderSorted(
     finalsNotYetApprovedGarments,
   );
@@ -594,6 +631,7 @@ function ParkingPage() {
   // ── Select all (schedulable + releasable rows) ────────────────────────────
   const searchedExpress = applySearch(sortedExpress);
   const searchedBrova = applySearch(sortedBrova);
+  const searchedAlterationOut = applySearch(sortedAlterationOut);
   const searchedFinalsNotYetApproved = applySearch(sortedFinalsNotYetApproved);
   const searchedCustomerApprovedLocked = applySearch(
     sortedCustomerApprovedLocked,
@@ -602,6 +640,7 @@ function ParkingPage() {
   const allSelectable = [
     ...searchedExpress,
     ...searchedBrova,
+    ...searchedAlterationOut,
     ...filteredReturns,
     ...searchedAllSchedulableFinals,
     ...searchedCustomerApprovedLocked,
@@ -701,6 +740,32 @@ function ParkingPage() {
                 actionLabel="Schedule"
                 getActionVariant={() => "green"}
                 isActionPending={isSchedulePending}
+              />
+            )}
+          </Section>
+
+          {/* ── ALTERATION ORDERS (OUT) ── */}
+          <Section
+            title="Alteration Orders (Out)"
+            icon={Scissors}
+            count={searchedAlterationOut.length}
+          >
+            {searchedAlterationOut.length === 0 ? (
+              <EmptyState
+                icon={Scissors}
+                message="No alteration orders in parking"
+              />
+            ) : (
+              <ParkingGarmentTable
+                garments={searchedAlterationOut}
+                selectedIds={sel}
+                onToggle={toggle}
+                onAction={(g) => handleSendToScheduler([g.id])}
+                actionLabel="Schedule"
+                getActionVariant={() => "green"}
+                isActionPending={isSchedulePending}
+                showType
+                showAlt
               />
             )}
           </Section>

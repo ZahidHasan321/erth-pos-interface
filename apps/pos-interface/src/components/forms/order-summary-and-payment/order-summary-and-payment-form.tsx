@@ -105,6 +105,7 @@ interface OrderSummaryAndPaymentFormProps {
   /** When true, hides payment/discount controls and shows a confirmation-only summary (ERTH brand) */
   cashierHandlesPayment?: boolean;
   onPrintLabels?: () => void;
+  onPrintCard2?: () => void;
 }
 
 export function OrderSummaryAndPaymentForm({
@@ -123,6 +124,7 @@ export function OrderSummaryAndPaymentForm({
   deliveryDate,
   cashierHandlesPayment,
   onPrintLabels,
+  onPrintCard2,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice } = usePricing();
@@ -182,19 +184,27 @@ export function OrderSummaryAndPaymentForm({
     return fabricSelections.filter((fabric) => fabric.express).length;
   }, [fabricSelections]);
 
-  const soakingGarmentCount = React.useMemo(() => {
-    return fabricSelections.filter((fabric) => fabric.soaking).length;
+  const soaking8hCount = React.useMemo(() => {
+    return fabricSelections.filter((f) => f.soaking && f.soaking_hours === 8).length;
   }, [fabricSelections]);
+
+  const soaking24hCount = React.useMemo(() => {
+    return fabricSelections.filter((f) => f.soaking && f.soaking_hours === 24).length;
+  }, [fabricSelections]);
+
+  const soakingGarmentCount = soaking8hCount + soaking24hCount;
 
   React.useEffect(() => {
     const newDeliveryCharge = home_delivery ? (getPrice("HOME_DELIVERY") || 5) : 0;
     const newExpressCharge = expressGarmentCount * (getPrice("EXPRESS_SURCHARGE") || 2);
-    const newSoakingCharge = soakingGarmentCount * (getPrice("SOAKING_CHARGE") || 0);
+    const newSoakingCharge =
+      soaking8hCount * (getPrice("SOAKING_8H_CHARGE") || 0) +
+      soaking24hCount * (getPrice("SOAKING_24H_CHARGE") || 0);
 
     form.setValue("delivery_charge", newDeliveryCharge, { shouldDirty: false });
     form.setValue("express_charge", newExpressCharge, { shouldDirty: false });
     form.setValue("soaking_charge", newSoakingCharge, { shouldDirty: false });
-  }, [home_delivery, expressGarmentCount, soakingGarmentCount, form, getPrice]);
+  }, [home_delivery, expressGarmentCount, soaking8hCount, soaking24hCount, form, getPrice]);
 
   // Pricing logic
   const express_charge = useWatch({ control: form.control, name: "express_charge" });
@@ -547,6 +557,17 @@ export function OrderSummaryAndPaymentForm({
                     >
                       <Printer className="w-4 h-4 mr-2" />
                       Print Labels
+                    </Button>
+                  )}
+                  {onPrintCard2 && fabricSelections.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onPrintCard2}
+                      className="h-9 shrink-0"
+                    >
+                      <Printer className="w-4 h-4 mr-2" />
+                      Print Card
                     </Button>
                   )}
                 </div>
@@ -1210,6 +1231,18 @@ export function OrderSummaryAndPaymentForm({
                       >
                         <Printer className="w-4 h-4 mr-2" />
                         Print Labels
+                      </Button>
+                    )}
+
+                    {isOrderClosed && onPrintCard2 && fabricSelections.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onPrintCard2}
+                        className="h-10"
+                      >
+                        <Printer className="w-4 h-4 mr-2" />
+                        Print Card
                       </Button>
                     )}
 

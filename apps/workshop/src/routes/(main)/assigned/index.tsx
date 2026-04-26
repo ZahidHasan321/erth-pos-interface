@@ -7,6 +7,7 @@ import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import { PageHeader } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
+import { OrderTypeBadge } from "@repo/ui/order-type-badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
 import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
 import { getGarmentStatusLabel } from "@/lib/garment-status";
@@ -83,6 +84,9 @@ function OrderIndicators({ group }: { group: AssignedOrderRow }) {
           <RotateCcw className="w-3.5 h-3.5" />
         </span>
       )}
+      {group.order_type === "ALTERATION" && (
+        <OrderTypeBadge type="ALTERATION" className="ml-0.5" />
+      )}
     </span>
   );
 }
@@ -152,9 +156,10 @@ function GarmentBreakdown({ row }: { row: AssignedOrderRow }) {
         >
           {/* Type + count + optional garment ID */}
           <span className="shrink-0 font-black text-xs uppercase text-muted-foreground">
-            {grp.count > 1
-              ? `${grp.count}${grp.type === "brova" ? "B" : "F"}`
-              : grp.type === "brova" ? "B" : "F"}
+            {(() => {
+              const letter = grp.type === "brova" ? "B" : grp.type === "alteration" ? "A" : "F";
+              return grp.count > 1 ? `${grp.count}${letter}` : letter;
+            })()}
           </span>
           {grp.count === 1 && grp.gids[0] && (
             <span className="font-mono text-xs text-muted-foreground shrink-0">

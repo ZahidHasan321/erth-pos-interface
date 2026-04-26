@@ -136,7 +136,7 @@ export type MeasurementType = (typeof measurementTypeEnum.enumValues)[number];
 export const jabzourTypeEnum = pgEnum("jabzour_type", ["BUTTON", "ZIPPER"]);
 export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
 
-export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final"]);
+export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final", "alteration"]);
 export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
 export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refund"]);
@@ -413,6 +413,25 @@ export const measurements = pgTable("measurements", {
     chest_front: numeric("chest_front", { precision: 5, scale: 2 }),
     chest_back: numeric("chest_back", { precision: 5, scale: 2 }),
     armhole_front: numeric("armhole_front", { precision: 5, scale: 2 }),
+
+    // Collar / Gallabiya
+    collar_length: numeric("collar_length", { precision: 5, scale: 2 }),
+
+    // Buttons
+    second_button_distance: numeric("second_button_distance", { precision: 5, scale: 2 }),
+
+    // Basma
+    basma_length: numeric("basma_length", { precision: 5, scale: 2 }),
+    basma_width: numeric("basma_width", { precision: 5, scale: 2 }),
+    basma_sleeve_length: numeric("basma_sleeve_length", { precision: 5, scale: 2 }),
+
+    // Hemming
+    sleeve_hemming: numeric("sleeve_hemming", { precision: 5, scale: 2 }),
+    bottom_hemming: numeric("bottom_hemming", { precision: 5, scale: 2 }),
+
+    // Pen pocket
+    pen_pocket_length: numeric("pen_pocket_length", { precision: 5, scale: 2 }),
+    pen_pocket_width: numeric("pen_pocket_width", { precision: 5, scale: 2 }),
 }, (t) => ({
     customerIdx: index("measurements_customer_idx").on(t.customer_id),
 }));
@@ -531,6 +550,21 @@ export const alterationOrders = pgTable("alteration_orders", {
 }));
 
 // --- Trip History (stored as JSONB array on garments) ---
+
+/**
+ * Workshop-attributed measurement correction recorded by QC inspector.
+ * Used when QC catches that a garment was produced to a value that doesn't
+ * match the spec — i.e. a workshop mistake. `field` is the column name on
+ * the `measurements` table; `corrected` is the actual (wrong) value the
+ * garment was produced to.
+ */
+export interface MeasurementIssue {
+    field: string;
+    original: number | null;
+    corrected: number;
+    note?: string;
+}
+
 export interface QcAttempt {
     inspector: string;
     ratings: Record<string, number> | null;
@@ -538,6 +572,7 @@ export interface QcAttempt {
     fail_reason: string | null;
     return_stage: string | null;
     date: string;
+    measurement_issues?: MeasurementIssue[] | null;
 }
 
 export interface TripHistoryEntry {
@@ -609,6 +644,8 @@ export const garments = pgTable("garments", {
 
     notes: text("notes"),
     soaking: boolean("soaking").default(false),
+    // Soaking duration in hours. NULL when soaking=false. Currently 8 or 24.
+    soaking_hours: integer("soaking_hours"),
     express: boolean("express").default(false),
     garment_type: garmentTypeEnum("garment_type").default("final"),
     delivery_date: timestamp("delivery_date"),
@@ -646,10 +683,24 @@ export const garments = pgTable("garments", {
     refunded_soaking: boolean("refunded_soaking").default(false),
 
     // --- Alteration-only fields (populated when parent order.order_type = 'ALTERATION') ---
-    // SVG overlay measurement values (keys from field-layout.ts in the alteration form)
+    // Sparse measurement overrides for changes_only mode. JSON object keyed by
+    // measurements-table column name → absolute target value. Only changed
+    // fields filled, rest absent. Null when full_measurement_set_id is set.
     alteration_measurements: jsonb("alteration_measurements"),
-    // Checkbox matrix of issue reasons (row id → column id → boolean)
+    // Sparse style overrides. JSON object keyed by garments-table style column
+    // (collar_type, cuffs_type, …) → desired value. Only changed fields filled.
+    alteration_styles: jsonb("alteration_styles"),
+    // DEPRECATED: legacy SVG-overlay UX checkbox matrix. Retained for back-compat
+    // with rows created before the multi-step alteration flow. Not written by
+    // the new flow.
     alteration_issues: jsonb("alteration_issues"),
+    // FK to a measurements row when the cashier picks an existing full set for
+    // this garment (full_set mode). Null ⇒ changes_only mode (sparse fields above).
+    full_measurement_set_id: uuid("full_measurement_set_id").references(() => measurements.id),
+    // Optional FK back to the original garment being altered (when the cashier
+    // links a prior order's garment). Used to seed measurements/style on form
+    // load; not load-bearing afterward.
+    original_garment_id: uuid("original_garment_id").references((): AnyPgColumn => garments.id, { onDelete: 'set null' }),
     // Custom per-garment price for alteration work (not driven by fabric/style catalogs)
     custom_price: numeric("custom_price", { precision: 10, scale: 3 }),
     // BU/F/EXT code on the physical garment (written by customer)
@@ -797,10 +848,23 @@ export const paymentTransactions = pgTable("payment_transactions", {
     transaction_type: transactionTypeEnum("transaction_type").notNull(),
     refund_reason: text("refund_reason"),
     refund_items: jsonb("refund_items"),  // [{garment_id, fabric, stitching, style, amount}, {shelf_item_id, quantity, amount}]
+    // Links the transaction to the register session it was recorded against.
+    // Populated by record_payment_transaction and the checkout RPCs; allows
+    // close_register to reconcile cash by exact session attribution rather than
+    // by time window (which broke across midnight).
+    register_session_id: integer("register_session_id").references(() => registerSessions.id),
+    // Client-supplied UUID for idempotent retries. Unique when present so a
+    // duplicate submit (network retry, double-click) returns the original row
+    // instead of inserting a new one.
+    idempotency_key: uuid("idempotency_key"),
     created_at: timestamp("created_at").defaultNow(),
 }, (t) => ({
     orderIdx: index("payment_transactions_order_idx").on(t.order_id),
     createdAtIdx: index("payment_transactions_created_at_idx").on(t.created_at),
+    sessionIdx: index("payment_transactions_session_idx").on(t.register_session_id),
+    idempotencyIdx: uniqueIndex("payment_transactions_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 9. APPOINTMENTS (Home Visit Bookings — SAKKBA) ---
@@ -865,8 +929,16 @@ export const registerSessions = pgTable("register_sessions", {
     expected_cash: numeric("expected_cash", { precision: 10, scale: 3 }),
     variance: numeric("variance", { precision: 10, scale: 3 }),
     closing_notes: text("closing_notes"),
+    // Audit trail when a closed session is reopened. The original close fields
+    // (closed_by/closed_at/etc.) are preserved; the next close overwrites them
+    // with the new close values, and these reopened_* fields stand as evidence.
+    reopened_by: uuid("reopened_by").references(() => users.id),
+    reopened_at: timestamp("reopened_at"),
 }, (t) => ({
     brandDateIdx: uniqueIndex("register_sessions_brand_date_idx").on(t.brand, t.date),
+    openingFloatNonNeg: check("register_sessions_opening_float_nonneg", sql`${t.opening_float} >= 0`),
+    countedCashNonNeg: check("register_sessions_counted_cash_nonneg",
+        sql`${t.closing_counted_cash} IS NULL OR ${t.closing_counted_cash} >= 0`),
 }));
 
 // --- 11. REGISTER CASH MOVEMENTS ---
@@ -880,6 +952,7 @@ export const registerCashMovements = pgTable("register_cash_movements", {
     created_at: timestamp("created_at").defaultNow(),
 }, (t) => ({
     sessionIdx: index("cash_movements_session_idx").on(t.register_session_id),
+    amountPositive: check("register_cash_movements_amount_positive", sql`${t.amount} > 0`),
 }));
 
 // --- 12. TRANSFER REQUESTS ---

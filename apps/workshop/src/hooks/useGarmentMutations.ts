@@ -30,7 +30,7 @@ import {
   COMPLETED_VIEW_KEY,
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
-import type { WorkshopGarment } from '@repo/database';
+import type { WorkshopGarment, MeasurementIssue } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
 function errorMsg(err: unknown): string {
@@ -285,8 +285,8 @@ export function useCompleteAndAdvance() {
 export function useQcPass() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; worker: string; ratings: Record<string, number> }) =>
-      qcPass(args.id, args.worker, args.ratings),
+    mutationFn: (args: { id: string; worker: string; ratings: Record<string, number>; measurementIssues?: MeasurementIssue[] | null }) =>
+      qcPass(args.id, args.worker, args.ratings, args.measurementIssues ?? null),
     onMutate: (args) => optimisticPatch(qc, [args.id], {
       piece_stage: 'ready_for_dispatch' as PieceStage,
       start_time: null,
