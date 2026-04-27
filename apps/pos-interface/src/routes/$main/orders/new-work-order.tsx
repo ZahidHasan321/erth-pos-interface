@@ -69,7 +69,7 @@ import { getAppointmentById, updateAppointment } from "@/api/appointments";
 import { getCustomerById } from "@/api/customers";
 import type { AppointmentWithRelations } from "@/api/appointments";
 import { getMeasurementById } from "@/api/measurements";
-import { Card2HtmlDocument, mapToCard2Data } from "@/components/invoice/card2";
+import { mapToCard2Data, printCard2 } from "@/components/invoice/card2";
 
 /** Aggregate fabric usage already committed to an order (fabric_id → meters). */
 function computeSavedFabricUsage(garments: GarmentSchema[]): Map<number, number> {
@@ -212,12 +212,6 @@ function NewWorkOrder() {
     `,
     });
 
-    // Card2 print ref
-    const printCard2Ref = React.useRef<HTMLDivElement>(null);
-    const handlePrintCard2 = useReactToPrint({
-        contentRef: printCard2Ref,
-        documentTitle: `Card2-Order-${orderId || "draft"}`,
-    });
 
     // ============================================================================
     // FORMS SETUP
@@ -1041,6 +1035,12 @@ function NewWorkOrder() {
         card2Signature,
     ]);
 
+    const handlePrintCard2 = React.useCallback(() => {
+        void printCard2(
+            { data: card2Data },
+            { documentTitle: `Card2-Order-${orderId || "draft"}` },
+        );
+    }, [card2Data, orderId]);
 
     // ============================================================================
     // RENDER
@@ -1119,13 +1119,6 @@ function NewWorkOrder() {
                         </div>
                     </div>
                 )}
-
-                {/* Hidden Card2 print container */}
-                <div style={{ display: "none" }}>
-                    <div ref={printCard2Ref}>
-                        <Card2HtmlDocument data={card2Data} />
-                    </div>
-                </div>
 
                 {/* Hidden print labels container */}
                 <div style={{ display: "none" }}>

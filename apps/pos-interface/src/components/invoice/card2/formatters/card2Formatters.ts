@@ -229,9 +229,12 @@ export const formatLineItemStyleSummary = (
   }
 
   if (style.jabzoor) {
-    parts.push(
-      `${resolveStyleGroupLabel('jabzoor', locale)}: ${formatStyleSelection('jabzoor', style.jabzoor, locale)}`,
-    )
+    const primary = formatStyleSelection('jabzoor', style.jabzoor, locale)
+    const secondary = style.jabzoor2
+      ? formatStyleSelection('jabzoor', style.jabzoor2, locale)
+      : null
+    const value = secondary ? `${primary} + ${secondary}` : primary
+    parts.push(`${resolveStyleGroupLabel('jabzoor', locale)}: ${value}`)
   }
 
   if (style.sidePocket) {

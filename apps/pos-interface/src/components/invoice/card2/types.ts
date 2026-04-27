@@ -44,6 +44,7 @@ export interface Card2LineItemStyle {
   collarShape?: Card2StyleSelection
   button?: Card2StyleSelection
   jabzoor?: Card2StyleSelection<Card2JabzoorStyleProperties>
+  jabzoor2?: Card2StyleSelection<Card2JabzoorStyleProperties>
   sidePocket?: Card2StyleSelection<Card2SidePocketStyleProperties>
   topPocket?: Card2StyleSelection<Card2TopPocketStyleProperties>
   sleeveShape?: Card2StyleSelection<Card2SleeveShapeStyleProperties>

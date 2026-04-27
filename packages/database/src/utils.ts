@@ -384,6 +384,7 @@ export function evaluateBrovaFeedback(
  */
 export type ShowroomLabel =
     | "alteration_in"      // Alteration garment at shop needing trial/action
+    | "alteration_out"     // Alteration order — single label, no sub-classification
     | "brova_trial"        // Brovas at shop, customer needs to try them on
     | "needs_action"       // Garments rejected, need to be sent back to workshop
     | "awaiting_finals"    // Brovas done, waiting for finals from workshop
@@ -392,6 +393,21 @@ export type ShowroomLabel =
     | null;
 
 export function getShowroomStatus(garments: GarmentInfo[]) {
+    // Alteration orders (only contain garment_type='alteration') are their own
+    // category — single 'alteration_out' label. No brova/trial/partial logic.
+    // Trip-0 alteration garments at shop count as "at shop" since they have no
+    // pre-dispatch state (the order's whole flow is alteration-out).
+    const isAlterationOrder = garments.length > 0
+        && garments.every(g => g.garment_type === 'alteration');
+    if (isAlterationOrder) {
+        const altAtShop = garments.some(g =>
+            g.location === 'shop' && !TERMINAL.includes(g.piece_stage as PieceStage));
+        return {
+            label: (altAtShop ? "alteration_out" : null) as ShowroomLabel,
+            hasPhysicalItems: altAtShop,
+        };
+    }
+
     // Shop items that matter to the customer flow: dispatched at least once
     // (trip_number > 0). A trip-0 garment is physically at shop but still
     // awaiting its first dispatch — it has no customer-facing status yet.

@@ -44,7 +44,7 @@ export type OrderRow = {
 
   // Derived status info from @repo/database/utils
   showroomStatus: {
-    label: "alteration_in" | "brova_trial" | "needs_action" | "awaiting_finals" | "partial_ready" | "ready_for_pickup" | null;
+    label: "alteration_in" | "alteration_out" | "brova_trial" | "needs_action" | "awaiting_finals" | "partial_ready" | "ready_for_pickup" | null;
     hasPhysicalItems: boolean;
   };
 

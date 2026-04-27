@@ -1,26 +1,29 @@
 import { useMemo } from "react";
-import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
-  getGarmentById, getOrderGarments, createGarmentForOrder,
+  getGarmentById, getOrderCustomerId, createGarmentForOrder,
   type CreateGarmentInput,
 } from "@/api/garments";
 import {
   getMeasurementById, createMeasurement, getLatestMeasurementForCustomer,
 } from "@/api/measurements";
+import { getAllFeedbackForGarment } from "@/api/feedback";
 import { Button } from "@repo/ui/button";
 import { Label } from "@repo/ui/label";
 import { Input } from "@repo/ui/input";
 import { Skeleton } from "@repo/ui/skeleton";
-import { ArrowLeft, Save, Replace, PlusCircle } from "lucide-react";
+import { ArrowLeft, Save, Replace, PlusCircle, MessageSquare, ChevronDown } from "lucide-react";
 import { FabricFields } from "@/components/forms/add-garment/FabricFields";
 import { StyleFields } from "@/components/forms/add-garment/StyleFields";
 import { MeasurementFields } from "@/components/forms/add-garment/MeasurementFields";
 import { addGarmentSchema, type AddGarmentFormValues } from "@/components/forms/add-garment/schema";
 import { buildPrefillValues } from "@/components/forms/add-garment/prefill";
+import { CustomerFeedbackPanel } from "@/components/shared/GarmentDetailSections";
+import { canEdit } from "@/lib/rbac";
 import type { WorkshopGarment } from "@repo/database";
 
 interface AddGarmentSearch {
@@ -28,6 +31,20 @@ interface AddGarmentSearch {
 }
 
 export const Route = createFileRoute("/(main)/assigned/$orderId_/add-garment")({
+  // Parent /(main) already gates by canAccess on the /assigned matrix entry,
+  // which returns true for "view" — so view-only roles (manager:shop,
+  // staff:workshop) can reach this page through the matrix. Adding garments
+  // is an edit action, so re-check at this route with canEdit and bounce
+  // view-only users to the order detail page.
+  beforeLoad: ({ context, params }) => {
+    const user = (context.auth as any).user ?? null;
+    if (!canEdit(user, "/assigned")) {
+      throw redirect({
+        to: "/assigned/$orderId",
+        params: { orderId: params.orderId },
+      });
+    }
+  },
   component: AddGarmentPage,
   head: () => ({ meta: [{ title: "Add Garment" }] }),
   validateSearch: (search: Record<string, unknown>): AddGarmentSearch => ({
@@ -49,19 +66,17 @@ function AddGarmentPage() {
     enabled: !!replacesId,
   });
 
-  // Order context. Used to derive customer_id for blank-add mode (so we can
-  // pull the customer's latest measurements to prefill).
-  const orderGarmentsQuery = useQuery({
-    queryKey: ["orderGarments", orderIdNum],
-    queryFn: () => getOrderGarments(orderIdNum),
+  // Order context. We need customer_id to clone/create measurements and to
+  // fetch the customer's latest measurement in blank-add mode. Garment detail
+  // queries flatten `order` away, so read it directly from the orders row.
+  const orderCustomerQuery = useQuery({
+    queryKey: ["orderCustomerId", orderIdNum],
+    queryFn: () => getOrderCustomerId(orderIdNum),
     enabled: Number.isFinite(orderIdNum),
   });
 
   const original = (originalQuery.data ?? null) as WorkshopGarment | null;
-  const anyGarment = orderGarmentsQuery.data?.[0] ?? null;
-  const customerId = ((anyGarment as any)?.order?.customer?.id
-    ?? (original as any)?.order?.customer?.id
-    ?? null) as string | null;
+  const customerId = orderCustomerQuery.data != null ? String(orderCustomerQuery.data) : null;
 
   // Source measurement row: replacement → original's row, blank-add →
   // customer's latest. Null/undefined when not loaded yet.
@@ -77,10 +92,20 @@ function AddGarmentPage() {
     enabled: !!customerId && !replacesId,
   });
 
+  // Feedback history for the original garment — surfaces *why* this redo was
+  // triggered (rejection reason, measurement diffs, customer notes). Hidden by
+  // default; tailor opens the panel only if context is needed.
+  const feedbackQuery = useQuery({
+    queryKey: ["garmentFeedbackAll", replacesId],
+    queryFn: () => getAllFeedbackForGarment(replacesId!),
+    enabled: !!replacesId,
+  });
+  const feedbackHistory = feedbackQuery.data ?? [];
+
   const seedMeasurement = replacementMeasurementQuery.data ?? latestMeasurementQuery.data ?? null;
 
   const loading = (replacesId && (originalQuery.isLoading || replacementMeasurementQuery.isLoading))
-    || orderGarmentsQuery.isLoading
+    || orderCustomerQuery.isLoading
     || (!replacesId && !!customerId && latestMeasurementQuery.isLoading);
 
   // Prefill values — recomputed when sources change identity. Passed via
@@ -257,6 +282,29 @@ function AddGarmentPage() {
                     </p>
                   </div>
                 </div>
+              )}
+
+              {mode === "replace" && feedbackHistory.length > 0 && (
+                <details className="bg-card border border-border rounded-xl shadow-sm group">
+                  <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer list-none select-none hover:bg-muted/30 transition-colors">
+                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Feedback history
+                    </span>
+                    <span className="text-[11px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                      {feedbackHistory.length}
+                    </span>
+                    <span className="ml-auto text-[11px] text-muted-foreground group-open:hidden">
+                      Why this redo
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="px-4 pb-4 space-y-3">
+                    {feedbackHistory.map((fb) => (
+                      <CustomerFeedbackPanel key={fb.id} fb={fb} />
+                    ))}
+                  </div>
+                </details>
               )}
 
               {/* Meta */}

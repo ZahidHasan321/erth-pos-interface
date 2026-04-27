@@ -58,9 +58,9 @@ export function Card2MeasurementSidePanelHtml({
                     src={signatureField.value}
                     alt={signatureField.label}
                   />
-                ) : (
+                ) : signatureField.value ? (
                   formatValue(signatureField.value)
-                )}
+                ) : null}
               </div>
             </div>
           ))}

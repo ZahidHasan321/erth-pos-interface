@@ -40,7 +40,6 @@ import type { Measurement } from "@repo/database";
 const BUFI_OPTIONS = ["Brova", "Final", "External"] as const;
 
 interface AlterationGarmentFormProps {
-    index: number;
     customerId: number | null;
     value: AlterationGarmentSchema;
     onChange: (next: AlterationGarmentSchema) => void;
@@ -50,7 +49,6 @@ interface AlterationGarmentFormProps {
 type StyleVal = string | boolean | number;
 
 export function AlterationGarmentForm({
-    index,
     customerId,
     value,
     onChange,
@@ -145,12 +143,6 @@ export function AlterationGarmentForm({
     return (
         <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-1.5">
-                    <Label>Serial</Label>
-                    <div className="flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900">
-                        {index + 1}
-                    </div>
-                </div>
                 <div className="space-y-1.5">
                     <Label>Type</Label>
                     <div className="flex h-9 overflow-hidden rounded-md border border-slate-300">

@@ -6,27 +6,33 @@ dotenv.config();
 const client = postgres(process.env.DATABASE_URL!);
 
 async function main() {
-  console.log("⚠️  Clearing test data (keeping schema)...");
+  console.log("⚠️  Clearing transactional data (keeping catalogs: fabrics, accessories, styles, prices, users, campaigns, units, resources)...");
 
   await client.unsafe(`
-    TRUNCATE TABLE 
-      garment_feedback,
+    TRUNCATE TABLE
+      notification_reads,
+      notifications,
+      transfer_request_items,
+      transfer_requests,
+      register_cash_movements,
+      register_sessions,
+      appointments,
+      payment_transactions,
       order_shelf_items,
+      garment_feedback,
+      dispatch_log,
       garments,
+      alteration_orders,
       work_orders,
-      measurements,
       orders,
+      measurements,
       customers,
-      campaigns,
-      styles,
-      fabrics,
       shelf,
-      prices,
-      users
+      user_sessions
     RESTART IDENTITY CASCADE;
   `);
 
-  console.log("✅ Data cleared successfully!");
+  console.log("✅ Transactional data cleared.");
   process.exit(0);
 }
 

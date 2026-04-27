@@ -30,15 +30,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@repo/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -46,6 +37,7 @@ import {
   PRODUCTION_STAGES,
   getNextPlanStage,
 } from "@/lib/constants";
+import { STYLE_IMAGE_MAP, ACCESSORY_ICONS } from "@/lib/style-images";
 import {
   ArrowLeft,
   Play,
@@ -57,8 +49,8 @@ import {
   RotateCcw,
   Loader2,
   Scissors,
-  Plus,
   Ruler,
+  Shirt,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconStack2, IconSparkles } from "@tabler/icons-react";
 import type {
@@ -66,7 +58,7 @@ import type {
   PieceStage,
   ProductionPlan,
   TripHistoryEntry,
-  MeasurementIssue,
+  QCFlag,
   Measurement,
 } from "@repo/database";
 import { isAlteration, getAlterationNumber } from "@repo/database";
@@ -203,14 +195,14 @@ function TerminalGarmentPage() {
   const isAltOut = garment?.garment_type === "alteration";
   const isAltIn = garment ? isAlteration(currentTrip, garment.garment_type) && !isAltOut : false;
   const priorTrip = isAltIn ? currentTrip - 1 : 0;
-  const { data: priorFeedback } = useQuery({
+  const { data: priorFeedback, isLoading: priorFeedbackLoading } = useQuery({
     queryKey: ["garment-feedback", garment?.id, priorTrip],
     queryFn: () => getFeedbackByGarmentAndTrip(garment!.id, priorTrip),
     enabled: !!garment && isAltIn && priorTrip >= 1,
     staleTime: 60_000,
   });
 
-  if (isLoading) {
+  if (isLoading || priorFeedbackLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
@@ -316,11 +308,11 @@ function TerminalGarmentPage() {
                   : isAltOut
                     ? `Alteration Out${altNum && altNum >= 1 ? ` ${altNum}` : ""}`
                     : `Alteration ${altNum}`}
-                {" "}<span className="font-normal">
-                  {isAltOut
-                    ? "— customer-brought garment, only flagged cells need work"
-                    : "— partial re-entry, not standard production"}
-                </span>
+                {isAltOut && (
+                  <span className="font-normal">
+                    {" "}— customer-brought garment, only flagged cells need work
+                  </span>
+                )}
               </p>
               {hasQcFail && lastQcFail?.fail_reason && (
                 <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
@@ -409,7 +401,11 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
 
   const stage = garment.piece_stage ?? "";
   const plan = garment.production_plan as ProductionPlan | null;
-  const nextStage = getNextPlanStage(stage, plan as Record<string, string> | null);
+  const nextStage = getNextPlanStage(
+    stage,
+    plan as Record<string, string> | null,
+    garment.qc_rework_stages,
+  );
   const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
   const plannedWorker = (plan as any)?.[historyKey] ?? "";
 
@@ -642,13 +638,31 @@ function QCActions({
   const [worker, setWorker] = useState(plannedQC);
   const [workerOverride, setWorkerOverride] = useState(false);
   const [ratings, setRatings] = useState<Record<string, number>>({});
-  const [returnStage, setReturnStage] = useState<PieceStage>("sewing");
+  const [returnStages, setReturnStages] = useState<Set<PieceStage>>(new Set());
   const [reason, setReason] = useState("");
-  const [issues, setIssues] = useState<MeasurementIssue[]>([]);
+  const [flags, setFlags] = useState<QCFlag[]>([]);
 
   const allRated = QC_CATEGORIES.every((cat) => (ratings[cat.key] ?? 0) > 0);
   const canPass = !!worker && allRated;
-  const canFail = !!reason;
+  const canFail = !!reason && returnStages.size > 0;
+
+  // First stage in production order — the entry point after fail.
+  const firstReturnStage = (() => {
+    if (returnStages.size === 0) return null;
+    for (const s of FAIL_RETURN_STAGES) {
+      if (returnStages.has(s.value)) return s.value;
+    }
+    return null;
+  })();
+
+  const toggleReturnStage = (value: PieceStage) => {
+    setReturnStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
 
   const handlePass = async () => {
     if (!canPass) return;
@@ -656,17 +670,26 @@ function QCActions({
       id: garment.id,
       worker,
       ratings,
-      measurementIssues: issues.length > 0 ? issues : null,
+      measurementIssues: null,
     });
     router.history.back();
   };
 
   const handleFail = async () => {
-    if (!canFail) return;
-    await failMut.mutateAsync({ id: garment.id, returnStage, reason });
-    toast.warning(
-      `${garment.garment_id} returned to ${PIECE_STAGE_LABELS[returnStage as keyof typeof PIECE_STAGE_LABELS] ?? returnStage}`,
-    );
+    if (!canFail || !firstReturnStage) return;
+    const ordered = FAIL_RETURN_STAGES
+      .filter((s) => returnStages.has(s.value))
+      .map((s) => s.value);
+    await failMut.mutateAsync({
+      id: garment.id,
+      returnStages: ordered,
+      reason,
+      flags,
+    });
+    const stageNames = ordered
+      .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
+      .join(" → ");
+    toast.warning(`${garment.garment_id} returned to ${stageNames}`);
     router.history.back();
   };
 
@@ -746,12 +769,6 @@ function QCActions({
             ))}
           </div>
 
-          <MeasurementIssuesEditor
-            measurement={measurement}
-            issues={issues}
-            onChange={setIssues}
-          />
-
           <Button
             className="w-full h-10 text-sm font-bold bg-emerald-600 hover:bg-emerald-700"
             onClick={handlePass}
@@ -779,28 +796,46 @@ function QCActions({
             workerHistory={garment.worker_history as Record<string, string> | null}
           />
 
-          {/* Return stage — visual single-select chips */}
+          {/* Return stages — multi-select */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Send back to
-            </label>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Send back to
+              </label>
+              {firstReturnStage && (
+                <span className="text-[11px] text-muted-foreground">
+                  Re-runs in order →{" "}
+                  <span className="font-semibold text-foreground">
+                    {FAIL_RETURN_STAGES
+                      .filter((s) => returnStages.has(s.value))
+                      .map((s) => s.label)
+                      .join(" → ")}
+                  </span>
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {FAIL_RETURN_STAGES.map((s) => {
                 const Icon = s.icon;
-                const isSelected = returnStage === s.value;
+                const isSelected = returnStages.has(s.value);
                 const previousWorker = (garment.worker_history as Record<string, string> | null)?.[s.historyKey];
                 return (
                   <button
                     key={s.value}
                     type="button"
-                    onClick={() => setReturnStage(s.value)}
+                    onClick={() => toggleReturnStage(s.value)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all",
+                      "relative flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all",
                       isSelected
-                        ? "border-red-300 bg-red-50 shadow-sm"
+                        ? "border-red-400 bg-red-50 ring-1 ring-red-300 shadow-sm"
                         : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100",
                     )}
                   >
+                    {isSelected && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center">
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                      </span>
+                    )}
                     <Icon className={cn("w-4 h-4 shrink-0", isSelected ? s.color : "text-muted-foreground")} />
                     <div className="min-w-0">
                       <p className={cn("text-sm font-medium", isSelected ? "text-foreground" : "text-muted-foreground")}>
@@ -825,6 +860,13 @@ function QCActions({
             />
           </div>
 
+          <QCFlagsEditor
+            garment={garment}
+            measurement={measurement}
+            flags={flags}
+            onChange={setFlags}
+          />
+
           <Button
             variant="destructive"
             className="w-full h-10 text-sm font-bold"
@@ -836,7 +878,7 @@ function QCActions({
             ) : (
               <X className="w-4 h-4 mr-1.5" />
             )}
-            Send Back
+            {returnStages.size > 1 ? `Send Back (${returnStages.size} stages)` : "Send Back"}
           </Button>
         </div>
       )}
@@ -844,213 +886,339 @@ function QCActions({
   );
 }
 
-// ── Measurement Issues Editor (workshop mistake flagging) ───────
+// ── QC Flags Editor (measurement + style flagging on fail) ──────
 
-function MeasurementIssuesEditor({
+const STYLE_COMPONENT_FIELDS: { key: keyof WorkshopGarment; label: string }[] = [
+  { key: "collar_type", label: "Collar" },
+  { key: "collar_button", label: "Collar Button" },
+  { key: "cuffs_type", label: "Cuffs" },
+  { key: "front_pocket_type", label: "Front Pocket" },
+  { key: "jabzour_1", label: "Jabzour 1" },
+  { key: "jabzour_2", label: "Jabzour 2" },
+];
+
+const ACCESSORY_FLAGS: { key: keyof WorkshopGarment; label: string; iconKey: keyof typeof ACCESSORY_ICONS }[] = [
+  { key: "wallet_pocket", label: "Wallet Pocket", iconKey: "wallet" },
+  { key: "pen_holder", label: "Pen Holder", iconKey: "pen" },
+  { key: "mobile_pocket", label: "Mobile Pocket", iconKey: "phone" },
+  { key: "small_tabaggi", label: "Small Tabaggi", iconKey: "smallTabaggi" },
+];
+
+function QCFlagsEditor({
+  garment,
   measurement,
-  issues,
+  flags,
   onChange,
 }: {
+  garment: WorkshopGarment;
   measurement: Measurement | null | undefined;
-  issues: MeasurementIssue[];
-  onChange: (next: MeasurementIssue[]) => void;
+  flags: QCFlag[];
+  onChange: (next: QCFlag[]) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [field, setField] = useState<string>("");
-  const [corrected, setCorrected] = useState<string>("");
-  const [note, setNote] = useState<string>("");
+  const [tab, setTab] = useState<"measurement" | "style">("style");
 
-  const flaggedKeys = new Set(issues.map((i) => i.field));
-  const canSubmit = !!field && corrected.trim() !== "" && !Number.isNaN(Number(corrected));
+  const flaggedKeys = new Set(flags.map((f) => f.field));
 
-  const reset = () => {
-    setField("");
-    setCorrected("");
-    setNote("");
-    setAdding(false);
+  const toggle = (field: string, kind: "measurement" | "style") => {
+    if (flaggedKeys.has(field)) {
+      onChange(flags.filter((f) => f.field !== field));
+    } else {
+      onChange([...flags, { field, kind }]);
+    }
   };
 
-  const handleAdd = () => {
-    if (!canSubmit) return;
-    const rawOrig = measurement ? (measurement as Record<string, unknown>)[field] : null;
-    const origNum = rawOrig == null || rawOrig === "" ? NaN : Number(rawOrig);
-    onChange([
-      ...issues,
-      {
-        field,
-        original: Number.isFinite(origNum) ? origNum : null,
-        corrected: Number(corrected),
-        note: note.trim() || undefined,
-      },
-    ]);
-    reset();
-  };
-
-  const handleRemove = (idx: number) => {
-    onChange(issues.filter((_, i) => i !== idx));
+  const updateNote = (field: string, note: string) => {
+    onChange(
+      flags.map((f) =>
+        f.field === field ? { ...f, note: note.trim() || undefined } : f,
+      ),
+    );
   };
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-      <div className="flex items-center justify-between mb-2">
+    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-3">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Ruler className="w-3.5 h-3.5 text-amber-700" />
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
           <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
-            Workshop Mistakes
+            Flag what's wrong
           </span>
-          {issues.length > 0 && (
+          {flags.length > 0 && (
             <span className="rounded-full bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5">
-              {issues.length}
+              {flags.length}
             </span>
           )}
         </div>
-        {!adding && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-amber-800 hover:bg-amber-100"
-            onClick={() => setAdding(true)}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Flag
-          </Button>
-        )}
+        <span className="text-[11px] text-amber-700/70">Optional</span>
       </div>
 
-      {issues.length === 0 && !adding && (
-        <p className="text-xs text-amber-700/70 italic">
-          Flag any measurement the workshop produced wrong.
-        </p>
+      {/* Tab toggle */}
+      <div className="flex rounded-md bg-white/60 border border-amber-200 p-0.5">
+        <button
+          type="button"
+          onClick={() => setTab("style")}
+          className={cn(
+            "flex-1 py-1.5 rounded text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all",
+            tab === "style"
+              ? "bg-amber-600 text-white"
+              : "text-amber-800 hover:bg-amber-100",
+          )}
+        >
+          <Shirt className="w-3.5 h-3.5" /> Style
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("measurement")}
+          className={cn(
+            "flex-1 py-1.5 rounded text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all",
+            tab === "measurement"
+              ? "bg-amber-600 text-white"
+              : "text-amber-800 hover:bg-amber-100",
+          )}
+        >
+          <Ruler className="w-3.5 h-3.5" /> Measurement
+        </button>
+      </div>
+
+      {tab === "style" && (
+        <StyleFlagPicker
+          garment={garment}
+          flaggedKeys={flaggedKeys}
+          onToggle={(field) => toggle(field, "style")}
+        />
       )}
 
-      {issues.length > 0 && (
-        <ul className="space-y-1.5 mb-2">
-          {issues.map((iss, idx) => (
-            <li
-              key={`${iss.field}-${idx}`}
-              className="flex items-start gap-2 rounded-md bg-white border border-amber-200 px-2.5 py-1.5"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-zinc-900">
-                    {QC_MEASUREMENT_FIELD_LABELS[iss.field] ?? iss.field}
-                  </span>
-                  <span className="text-xs text-zinc-500 line-through tabular-nums">
-                    {iss.original ?? "—"}
-                  </span>
-                  <span className="text-xs text-zinc-400">→</span>
-                  <span className="text-xs font-bold text-red-600 tabular-nums">
-                    {iss.corrected}
-                  </span>
-                </div>
-                {iss.note && (
-                  <p className="text-[11px] text-zinc-600 mt-0.5">{iss.note}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemove(idx)}
-                className="text-zinc-400 hover:text-red-600 shrink-0"
-                aria-label="Remove"
+      {tab === "measurement" && (
+        <MeasurementFlagPicker
+          measurement={measurement}
+          flaggedKeys={flaggedKeys}
+          onToggle={(field) => toggle(field, "measurement")}
+        />
+      )}
+
+      {/* Selected flags list with optional note */}
+      {flags.length > 0 && (
+        <div className="space-y-1.5 pt-1 border-t border-amber-200">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+            Selected
+          </p>
+          <ul className="space-y-1.5">
+            {flags.map((f) => (
+              <li
+                key={f.field}
+                className="flex items-start gap-2 rounded-md bg-white border border-amber-200 px-2.5 py-1.5"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {adding && (
-        <div className="space-y-2 rounded-md bg-white border border-amber-200 p-2.5">
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              Measurement
-            </label>
-            <Select value={field} onValueChange={setField}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Pick measurement…" />
-              </SelectTrigger>
-              <SelectContent>
-                {QC_MEASUREMENT_FIELDS.map((g) => (
-                  <SelectGroup key={g.group}>
-                    <SelectLabel>{g.group}</SelectLabel>
-                    {g.fields.map((f) => (
-                      <SelectItem
-                        key={f.key as string}
-                        value={f.key as string}
-                        disabled={flaggedKeys.has(f.key as string)}
-                      >
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-                Original
-              </label>
-              <div className="h-9 flex items-center px-2.5 rounded-md border border-zinc-200 bg-zinc-50 text-sm tabular-nums text-zinc-600">
-                {field && measurement
-                  ? String((measurement as Record<string, unknown>)[field] ?? "—")
-                  : "—"}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-                Actual (workshop)
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={corrected}
-                onChange={(e) => setCorrected(e.target.value)}
-                className="h-9 text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              Note (optional)
-            </label>
-            <Input
-              placeholder="Why / what happened…"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="flex-1 h-8"
-              onClick={reset}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="flex-1 h-8 bg-amber-600 hover:bg-amber-700 text-white"
-              onClick={handleAdd}
-              disabled={!canSubmit}
-            >
-              Add
-            </Button>
-          </div>
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 mt-0.5",
+                    f.kind === "style"
+                      ? "bg-purple-100 text-purple-700"
+                      : "bg-blue-100 text-blue-700",
+                  )}
+                >
+                  {f.kind === "style" ? "Style" : "Meas"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-zinc-900">
+                    {flagFieldLabel(f.field)}
+                  </p>
+                  <Input
+                    placeholder="Note (optional) — what's wrong"
+                    value={f.note ?? ""}
+                    onChange={(e) => updateNote(f.field, e.target.value)}
+                    className="h-7 text-xs mt-1"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange(flags.filter((x) => x.field !== f.field))
+                  }
+                  className="text-zinc-400 hover:text-red-600 shrink-0 mt-0.5"
+                  aria-label="Remove"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function flagFieldLabel(field: string): string {
+  if (QC_MEASUREMENT_FIELD_LABELS[field]) return QC_MEASUREMENT_FIELD_LABELS[field];
+  const style = STYLE_COMPONENT_FIELDS.find((s) => s.key === field);
+  if (style) return style.label;
+  const acc = ACCESSORY_FLAGS.find((a) => a.key === field);
+  if (acc) return acc.label;
+  return field;
+}
+
+function StyleFlagPicker({
+  garment,
+  flaggedKeys,
+  onToggle,
+}: {
+  garment: WorkshopGarment;
+  flaggedKeys: Set<string>;
+  onToggle: (field: string) => void;
+}) {
+  // Style components — only show ones the garment actually has.
+  const components = STYLE_COMPONENT_FIELDS
+    .map((c) => {
+      const code = (garment as any)[c.key] as string | null | undefined;
+      if (!code) return null;
+      const img = STYLE_IMAGE_MAP[code];
+      return { ...c, code, image: img?.image, valueLabel: img?.label ?? code };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  // Booleans — only show ones that are true on the garment.
+  const accessories = ACCESSORY_FLAGS.filter(
+    (a) => !!(garment as any)[a.key],
+  );
+
+  if (components.length === 0 && accessories.length === 0) {
+    return (
+      <p className="text-xs text-amber-700/70 italic text-center py-3">
+        No style components on this garment.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {components.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5">
+          {components.map((c) => {
+            const isFlagged = flaggedKeys.has(c.key as string);
+            return (
+              <button
+                key={c.key as string}
+                type="button"
+                onClick={() => onToggle(c.key as string)}
+                className={cn(
+                  "relative rounded-lg border bg-white p-1.5 transition-all text-center",
+                  isFlagged
+                    ? "border-red-400 ring-2 ring-red-300 shadow-sm"
+                    : "border-zinc-200 hover:border-amber-300",
+                )}
+              >
+                {isFlagged && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center z-10">
+                    <Check className="w-3 h-3" strokeWidth={3} />
+                  </span>
+                )}
+                {c.image ? (
+                  <img
+                    src={c.image}
+                    alt={c.valueLabel}
+                    className="w-full h-14 object-contain"
+                  />
+                ) : (
+                  <div className="w-full h-14 flex items-center justify-center text-xs text-muted-foreground italic">
+                    no image
+                  </div>
+                )}
+                <p className="text-[10px] font-medium text-zinc-700 truncate mt-1">
+                  {c.label}
+                </p>
+                <p className="text-[9px] text-zinc-500 truncate">{c.valueLabel}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {accessories.length > 0 && (
+        <div className="grid grid-cols-4 gap-1.5">
+          {accessories.map((a) => {
+            const isFlagged = flaggedKeys.has(a.key as string);
+            return (
+              <button
+                key={a.key as string}
+                type="button"
+                onClick={() => onToggle(a.key as string)}
+                className={cn(
+                  "relative rounded-lg border bg-white p-1.5 transition-all text-center",
+                  isFlagged
+                    ? "border-red-400 ring-2 ring-red-300 shadow-sm"
+                    : "border-zinc-200 hover:border-amber-300",
+                )}
+              >
+                {isFlagged && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center z-10">
+                    <Check className="w-3 h-3" strokeWidth={3} />
+                  </span>
+                )}
+                <img
+                  src={ACCESSORY_ICONS[a.iconKey]}
+                  alt={a.label}
+                  className="w-full h-10 object-contain"
+                />
+                <p className="text-[10px] font-medium text-zinc-700 truncate mt-1">
+                  {a.label}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeasurementFlagPicker({
+  measurement,
+  flaggedKeys,
+  onToggle,
+}: {
+  measurement: Measurement | null | undefined;
+  flaggedKeys: Set<string>;
+  onToggle: (field: string) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      {QC_MEASUREMENT_FIELDS.map((g) => (
+        <div key={g.group}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">
+            {g.group}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {g.fields.map((f) => {
+              const fieldKey = f.key as string;
+              const isFlagged = flaggedKeys.has(fieldKey);
+              const value = measurement
+                ? (measurement as Record<string, unknown>)[fieldKey]
+                : null;
+              return (
+                <button
+                  key={fieldKey}
+                  type="button"
+                  onClick={() => onToggle(fieldKey)}
+                  className={cn(
+                    "relative inline-flex items-center gap-1 px-2 py-1.5 rounded-md border text-xs font-medium transition-all",
+                    isFlagged
+                      ? "border-red-400 bg-red-50 text-red-800 ring-1 ring-red-300"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-amber-300 hover:bg-amber-50/50",
+                  )}
+                >
+                  {isFlagged && <Check className="w-3 h-3" strokeWidth={3} />}
+                  <span>{f.label}</span>
+                  {value != null && value !== "" && (
+                    <span className="text-[10px] tabular-nums text-zinc-500 font-normal">
+                      {String(value)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

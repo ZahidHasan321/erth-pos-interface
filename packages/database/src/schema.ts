@@ -557,6 +557,8 @@ export const alterationOrders = pgTable("alteration_orders", {
  * match the spec — i.e. a workshop mistake. `field` is the column name on
  * the `measurements` table; `corrected` is the actual (wrong) value the
  * garment was produced to.
+ *
+ * Deprecated for new writes — see `QCFlag`. Kept for reading historical records.
  */
 export interface MeasurementIssue {
     field: string;
@@ -565,14 +567,43 @@ export interface MeasurementIssue {
     note?: string;
 }
 
+/**
+ * Lightweight flag attached to a QC fail. Tells the rework worker which
+ * measurement field or style component is wrong. No numeric correction —
+ * the worker uses the existing measurement spec / style image as-is.
+ */
+export interface QCFlag {
+    /** field key — measurement column name OR style key (e.g. "collar_type") */
+    field: string;
+    kind: "measurement" | "style";
+    note?: string;
+}
+
 export interface QcAttempt {
     inspector: string;
     ratings: Record<string, number> | null;
     result: "pass" | "fail";
     fail_reason: string | null;
-    return_stage: string | null;
+    /** New: array of stages garment must re-run before next QC. */
+    return_stages?: string[] | null;
+    /** Deprecated single-stage form. Read fallback for old records. */
+    return_stage?: string | null;
     date: string;
+    /** New: simple flags (no numeric values), used on fail attempts. */
+    flags?: QCFlag[] | null;
+    /** Deprecated. Old pass-mode mistake records. */
     measurement_issues?: MeasurementIssue[] | null;
+}
+
+/**
+ * Read helper: returns the QC attempt's return stages, falling back to the
+ * deprecated single-stage `return_stage` field when present on old records.
+ */
+export function getQcReturnStages(att: QcAttempt | null | undefined): string[] {
+    if (!att) return [];
+    if (att.return_stages && att.return_stages.length > 0) return att.return_stages;
+    if (att.return_stage) return [att.return_stage];
+    return [];
 }
 
 export interface TripHistoryEntry {
@@ -669,6 +700,8 @@ export const garments = pgTable("garments", {
     start_time: timestamp("start_time", { withTimezone: true }),
     completion_time: timestamp("completion_time", { withTimezone: true }),
     quality_check_ratings: jsonb("quality_check_ratings"),
+    /** When QC fails: stages the garment must re-run before next QC. Cleared on QC pass / new schedule. */
+    qc_rework_stages: text("qc_rework_stages").array(),
     trip_history: jsonb("trip_history").$type<TripHistoryEntry[]>(),
     // Per-stage timing log. Each stage key maps to an array of sessions so we
     // can track repeat visits (QC-fail → same stage re-entered). Mirrors

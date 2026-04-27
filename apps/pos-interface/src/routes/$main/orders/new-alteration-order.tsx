@@ -309,6 +309,7 @@ function NewAlterationOrder() {
                         header="Customer Details"
                         subheader={isViewMode ? "Customer on file" : "Required before saving"}
                         proceedButtonText="Confirm Customer"
+                        hideAddress
                     />
                 </section>
                 </fieldset>
@@ -389,7 +390,6 @@ function NewAlterationOrder() {
 
                     <fieldset disabled={isViewMode} className="contents">
                         <AlterationGarmentForm
-                            index={activeTab}
                             customerId={customerId}
                             value={active}
                             onChange={(next) => updateGarment(activeTab, next)}

@@ -28,7 +28,7 @@ import murabbaKabak from '@/assets/sleeves-assets/sleeves-types/Murabba Kabak.pn
 import musallasKabbak from '@/assets/sleeves-assets/sleeves-types/Musallas Kabbak.png'
 import mudawarKabbak from '@/assets/sleeves-assets/sleeves-types/Mudawar Kabbak.png'
 
-export type Card2StyleGroupId = keyof Card2LineItemStyle
+export type Card2StyleGroupId = Exclude<keyof Card2LineItemStyle, 'jabzoor2'>
 
 const styleIconUrlMapByGroup: Record<Card2StyleGroupId, Record<string, string>> = {
   collarShape: {

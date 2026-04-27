@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
-import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, MeasurementIssue } from '@repo/database';
+import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, MeasurementIssue, QCFlag } from '@repo/database';
+import { PRODUCTION_STAGES } from '@/lib/constants';
 import type { PieceStage } from '@repo/database';
 
 /** Map piece_stage → worker_history key (role-based) */
@@ -558,6 +559,25 @@ export const getAssignedOrdersPage = async (args: {
 };
 
 /**
+ * Fetch the customer_id for an order. Add-garment flow needs this to create a
+ * new measurement row keyed to the customer; the existing detail queries flatten
+ * `order` away and never project `customer.id`, so a small dedicated read is
+ * the cleanest path.
+ */
+export const getOrderCustomerId = async (orderId: number): Promise<number | null> => {
+  const { data, error } = await db
+    .from('orders')
+    .select('customer_id')
+    .eq('id', orderId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`getOrderCustomerId: failed to fetch customer for order ${orderId}: ${error.message}`);
+  }
+  return (data?.customer_id as number | null) ?? null;
+};
+
+/**
  * Fetch ALL garments for a specific order — no location or plan filter.
  * Used by the order detail page to show full order regardless of production status.
  */
@@ -854,6 +874,7 @@ export const scheduleGarments = async (
     production_plan: plan,
     assigned_date: assignedDate,
     in_production: true,
+    qc_rework_stages: null,
   };
 
   if (reentryStage) {
@@ -1018,20 +1039,31 @@ export const qcPass = async (
   const now = new Date().toISOString();
   const tripHistory = parseTripHistory(existing?.trip_history);
   const currentTrip = existing?.trip_number ?? 1;
-  const tripEntry = tripHistory.find((t) => t.trip === currentTrip);
-  if (tripEntry) {
-    tripEntry.worker_history = history;
-    tripEntry.completed_date = getLocalDateStr();
-    tripEntry.qc_attempts.push({
-      inspector: worker,
-      ratings,
-      result: "pass",
-      fail_reason: null,
-      return_stage: null,
-      date: getLocalDateStr(),
-      measurement_issues: measurementIssues && measurementIssues.length > 0 ? measurementIssues : null,
-    });
+  let tripEntry = tripHistory.find((t) => t.trip === currentTrip);
+  if (!tripEntry) {
+    tripEntry = {
+      trip: currentTrip,
+      reentry_stage: null,
+      production_plan: null,
+      worker_history: null,
+      assigned_date: null,
+      completed_date: null,
+      qc_attempts: [],
+    };
+    tripHistory.push(tripEntry);
   }
+  tripEntry.worker_history = history;
+  tripEntry.completed_date = getLocalDateStr();
+  if (!Array.isArray(tripEntry.qc_attempts)) tripEntry.qc_attempts = [];
+  tripEntry.qc_attempts.push({
+    inspector: worker,
+    ratings,
+    result: "pass",
+    fail_reason: null,
+    return_stages: null,
+    date: getLocalDateStr(),
+    measurement_issues: measurementIssues && measurementIssues.length > 0 ? measurementIssues : null,
+  });
 
   const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', worker, now);
 
@@ -1045,12 +1077,22 @@ export const qcPass = async (
       start_time: null,
       trip_history: tripHistory,
       stage_timings: nextTimings,
+      qc_rework_stages: null,
     })
     .eq('id', id);
   if (error) throw new Error(`qcPass: failed to record QC pass: ${error.message}`);
 };
 
-export const qcFail = async (id: string, returnStage: PieceStage, reason: string): Promise<void> => {
+export const qcFail = async (
+  id: string,
+  returnStages: PieceStage[],
+  reason: string,
+  flags: QCFlag[] = [],
+): Promise<void> => {
+  if (!returnStages.length) {
+    throw new Error("qcFail: returnStages must contain at least one stage");
+  }
+
   const { data: existing, error: fetchErr } = await db
     .from('garments')
     .select('notes, trip_history, trip_number, worker_history, stage_timings')
@@ -1061,27 +1103,55 @@ export const qcFail = async (id: string, returnStage: PieceStage, reason: string
 
   const notes = existing?.notes ? `${existing.notes}\nQC Fail: ${reason}` : `QC Fail: ${reason}`;
 
+  // Order rework stages by production sequence so we know which to enter first.
+  const orderedStages = [...returnStages].sort(
+    (a, b) => PRODUCTION_STAGES.indexOf(a as any) - PRODUCTION_STAGES.indexOf(b as any),
+  );
+  const firstStage = orderedStages[0]!;
+
   const tripHistory = parseTripHistory(existing?.trip_history);
   const currentTrip = existing?.trip_number ?? 1;
-  const tripEntry = tripHistory.find((t) => t.trip === currentTrip);
-  if (tripEntry) {
-    tripEntry.worker_history = (existing?.worker_history as Record<string, string>) ?? null;
-    tripEntry.qc_attempts.push({
-      inspector: "",
-      ratings: null,
-      result: "fail",
-      fail_reason: reason,
-      return_stage: returnStage,
-      date: getLocalDateStr(),
-    });
+  let tripEntry = tripHistory.find((t) => t.trip === currentTrip);
+  if (!tripEntry) {
+    // Defensive: garments scheduled before trip_history was tracked may have an
+    // empty array. Synthesize a minimal entry so the QC attempt + alt_p label
+    // detection still works.
+    tripEntry = {
+      trip: currentTrip,
+      reentry_stage: null,
+      production_plan: null,
+      worker_history: null,
+      assigned_date: null,
+      completed_date: null,
+      qc_attempts: [],
+    };
+    tripHistory.push(tripEntry);
   }
+  tripEntry.worker_history = (existing?.worker_history as Record<string, string>) ?? null;
+  if (!Array.isArray(tripEntry.qc_attempts)) tripEntry.qc_attempts = [];
+  tripEntry.qc_attempts.push({
+    inspector: "",
+    ratings: null,
+    result: "fail",
+    fail_reason: reason,
+    return_stages: orderedStages,
+    date: getLocalDateStr(),
+    flags: flags.length > 0 ? flags : null,
+  });
 
   // Close the QC session so its duration is recorded (fail is still a completed visit to QC).
   const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', null);
 
   const { error } = await db
     .from('garments')
-    .update({ piece_stage: returnStage, notes, start_time: null, trip_history: tripHistory, stage_timings: nextTimings })
+    .update({
+      piece_stage: firstStage,
+      notes,
+      start_time: null,
+      trip_history: tripHistory,
+      stage_timings: nextTimings,
+      qc_rework_stages: orderedStages,
+    })
     .eq('id', id);
   if (error) throw new Error(`qcFail: failed to record QC failure: ${error.message}`);
 };

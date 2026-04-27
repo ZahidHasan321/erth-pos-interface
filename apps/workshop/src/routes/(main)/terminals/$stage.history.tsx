@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCon
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps, TIMEZONE } from "@/lib/utils";
 import type { WorkshopGarment, StageTimings, StageTimingEntry, TripHistoryEntry, QcAttempt } from "@repo/database";
+import { getQcReturnStages } from "@repo/database";
 import { ArrowLeft, History, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/terminals/$stage/history")({
@@ -30,7 +31,7 @@ interface HistoryRow {
   worker: string | null;
   result?: "pass" | "fail";  // QC only
   failReason?: string | null;
-  returnStage?: string | null;
+  returnStages?: string[];
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ function extractQcRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
         worker: a.inspector || null,
         result: a.result,
         failReason: a.fail_reason,
-        returnStage: a.return_stage,
+        returnStages: getQcReturnStages(a),
       });
     });
   }

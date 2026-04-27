@@ -148,6 +148,7 @@ export function OrderFilters({
               <SelectItem value="partial_ready">Partial Ready</SelectItem>
               <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
               <SelectItem value="alteration_in">Alteration (In)</SelectItem>
+              <SelectItem value="alteration_out">Alteration (Out)</SelectItem>
             </SelectContent>
           </Select>
         </div>

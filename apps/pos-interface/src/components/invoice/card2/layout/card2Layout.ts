@@ -3,7 +3,7 @@ import type { Card2LineItemStyle } from '../types'
 import type { Card2FieldRowLayout, PdfPoint, PdfRect } from './types'
 import { mmToPt } from './units'
 
-type Card2LineItemStyleGroupId = keyof Card2LineItemStyle
+type Card2LineItemStyleGroupId = Exclude<keyof Card2LineItemStyle, 'jabzoor2'>
 
 interface Card2LineItemsFixedColumn {
   id: 'fabricType' | 'meters' | 'price' | 'fabricSource' | 'type' | 'line'

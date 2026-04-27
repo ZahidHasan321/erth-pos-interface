@@ -33,6 +33,10 @@ function final_(overrides: Record<string, unknown> = {}) {
   return garment({ garment_type: "final", ...overrides });
 }
 
+function alteration(overrides: Record<string, unknown> = {}) {
+  return garment({ garment_type: "alteration", trip_number: 0, ...overrides });
+}
+
 // ---------------------------------------------------------------------------
 // Group 1: isAlteration + getAlterationNumber
 // ---------------------------------------------------------------------------
@@ -457,6 +461,48 @@ describe("getShowroomStatus", () => {
       final_({ location: "workshop", piece_stage: "sewing" }),
     ];
     expect(getShowroomStatus(gs).label).not.toBe("alteration_in");
+  });
+
+  it("alteration order, fresh trip-0 at shop -> alteration_out", () => {
+    const gs = [
+      alteration({ location: "shop", piece_stage: "waiting_cut", trip_number: 0 }),
+    ];
+    const r = getShowroomStatus(gs);
+    expect(r.label).toBe("alteration_out");
+    expect(r.hasPhysicalItems).toBe(true);
+  });
+
+  it("alteration order, all garments at workshop -> null", () => {
+    const gs = [
+      alteration({ location: "workshop", piece_stage: "sewing", trip_number: 1 }),
+    ];
+    const r = getShowroomStatus(gs);
+    expect(r.label).toBeNull();
+    expect(r.hasPhysicalItems).toBe(false);
+  });
+
+  it("alteration order, returned to shop ready_for_pickup -> alteration_out", () => {
+    const gs = [
+      alteration({ location: "shop", piece_stage: "ready_for_pickup", trip_number: 1 }),
+    ];
+    expect(getShowroomStatus(gs).label).toBe("alteration_out");
+  });
+
+  it("alteration order, all completed -> null", () => {
+    const gs = [
+      alteration({ location: "shop", piece_stage: "completed", trip_number: 1 }),
+    ];
+    const r = getShowroomStatus(gs);
+    expect(r.label).toBeNull();
+    expect(r.hasPhysicalItems).toBe(false);
+  });
+
+  it("alteration order, mix of shop + transit -> alteration_out", () => {
+    const gs = [
+      alteration({ location: "shop", piece_stage: "waiting_cut", trip_number: 0 }),
+      alteration({ location: "transit_to_workshop", piece_stage: "waiting_cut", trip_number: 1 }),
+    ];
+    expect(getShowroomStatus(gs).label).toBe("alteration_out");
   });
 
   it("brova at shop awaiting_trial -> brova_trial", () => {

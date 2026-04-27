@@ -82,19 +82,40 @@ export const STAGE_TO_PLAN_KEY: Record<string, string> = {
 /**
  * Plan-aware next stage: skips stages that have no worker in the production plan.
  * Falls back to linear STAGE_NEXT when no plan is provided (first-time orders).
+ *
+ * `reworkStages` (from a QC fail) further restricts the path: only those
+ * stages — plus quality_check, which is always reachable — are visited.
+ * After the last rework stage runs, the garment must return to QC, never to
+ * ready_for_dispatch.
  */
-export function getNextPlanStage(currentStage: string, plan: Record<string, string> | null | undefined): string | null {
-  if (!plan) return STAGE_NEXT[currentStage] ?? null;
+export function getNextPlanStage(
+  currentStage: string,
+  plan: Record<string, string> | null | undefined,
+  reworkStages?: string[] | null,
+): string | null {
+  const reworkSet = reworkStages && reworkStages.length > 0 ? new Set(reworkStages) : null;
+
+  if (!plan && !reworkSet) return STAGE_NEXT[currentStage] ?? null;
 
   const currentIdx = PRODUCTION_STAGES.indexOf(currentStage as ProductionStage);
   if (currentIdx === -1) return null;
 
   for (let i = currentIdx + 1; i < PRODUCTION_STAGES.length; i++) {
     const stage = PRODUCTION_STAGES[i];
-    const planKey = STAGE_TO_PLAN_KEY[stage];
-    if (planKey && plan[planKey]) return stage;
+
+    // In rework mode: skip stages not flagged (but always allow quality_check).
+    if (reworkSet && stage !== "quality_check" && !reworkSet.has(stage)) continue;
+
+    // If a plan is supplied, also require the stage to have an assigned worker.
+    if (plan) {
+      const planKey = STAGE_TO_PLAN_KEY[stage];
+      if (planKey && !plan[planKey]) continue;
+    }
+
+    return stage;
   }
 
-  // Past all planned stages → ready_for_dispatch
+  // Rework mode must always return to QC; otherwise garment is ready to dispatch.
+  if (reworkSet) return "quality_check";
   return "ready_for_dispatch";
 }

@@ -29,6 +29,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { WorkshopGarment, ProductionPlan, WorkerHistory, TripHistoryEntry, GarmentFeedback } from "@repo/database";
+import { getQcReturnStages } from "@repo/database";
 
 // ── Customer feedback constants ────────────────────────────────
 
@@ -521,9 +522,12 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                 <div className="space-y-3 ml-3 border-l-2 border-muted pl-4">
                   {entry.qc_attempts.map((qc, j) => {
                     // Show the path this cycle took: re-entry/return stage → ... → QC
+                    const prevReturnStages = j === 0
+                      ? []
+                      : getQcReturnStages(entry.qc_attempts[j - 1]);
                     const cycleStart = j === 0
                       ? (entry.reentry_stage ?? "soaking")
-                      : entry.qc_attempts[j - 1]?.return_stage ?? "soaking";
+                      : prevReturnStages[0] ?? "soaking";
                     const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
 
                     return (
@@ -565,10 +569,15 @@ export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: T
                             {qc.result === "fail" && qc.fail_reason && (
                               <p className="text-sm text-red-700 mt-1">{qc.fail_reason}</p>
                             )}
-                            {qc.result === "fail" && qc.return_stage && (
+                            {qc.result === "fail" && getQcReturnStages(qc).length > 0 && (
                               <div className="flex items-center gap-1.5 mt-1 text-sm text-red-600">
                                 <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                                <span>Sent back to {PIECE_STAGE_LABELS[qc.return_stage as keyof typeof PIECE_STAGE_LABELS] ?? qc.return_stage}</span>
+                                <span>
+                                  Sent back to{" "}
+                                  {getQcReturnStages(qc)
+                                    .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
+                                    .join(" → ")}
+                                </span>
                               </div>
                             )}
                             {qc.result === "pass" && qc.ratings && (
@@ -660,7 +669,7 @@ function StyleOptionValue({ styleKey, fallback }: { styleKey: string | null | un
   );
 }
 
-function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
+export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
   const action = fb.action ? FEEDBACK_ACTION_STYLE[fb.action] : null;
   const sat = fb.satisfaction_level ? SATISFACTION_LEVELS[fb.satisfaction_level] : null;
   const diffs = parseJson<MeasurementDiffRow[]>(fb.measurement_diffs) ?? [];
@@ -993,9 +1002,12 @@ function TripCycleCard({
           </div>
           <div className="space-y-1.5">
             {qcAttempts.map((qc, j) => {
+              const prevReturnStages = j === 0
+                ? []
+                : getQcReturnStages(qcAttempts[j - 1]);
               const cycleStart = j === 0
                 ? (reentryStage ?? "soaking")
-                : qcAttempts[j - 1]?.return_stage ?? "soaking";
+                : prevReturnStages[0] ?? "soaking";
               const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
               return (
                 <div key={j}>
@@ -1031,10 +1043,13 @@ function TripCycleCard({
                       {qc.result === "fail" && qc.fail_reason && (
                         <p className="text-xs text-red-700 mt-0.5">{qc.fail_reason}</p>
                       )}
-                      {qc.result === "fail" && qc.return_stage && (
+                      {qc.result === "fail" && getQcReturnStages(qc).length > 0 && (
                         <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
                           <RotateCcw className="w-3 h-3" />
-                          Sent back to {PIECE_STAGE_LABELS[qc.return_stage as keyof typeof PIECE_STAGE_LABELS] ?? qc.return_stage}
+                          Sent back to{" "}
+                          {getQcReturnStages(qc)
+                            .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
+                            .join(" → ")}
                         </div>
                       )}
                       {qc.result === "pass" && qc.ratings && (

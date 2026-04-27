@@ -30,7 +30,7 @@ import {
   COMPLETED_VIEW_KEY,
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
-import type { WorkshopGarment, MeasurementIssue } from '@repo/database';
+import type { WorkshopGarment, MeasurementIssue, QCFlag } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 
 function errorMsg(err: unknown): string {
@@ -303,10 +303,11 @@ export function useQcPass() {
 export function useQcFail() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; returnStage: PieceStage; reason: string }) =>
-      qcFail(args.id, args.returnStage, args.reason),
+    mutationFn: (args: { id: string; returnStages: PieceStage[]; reason: string; flags?: QCFlag[] }) =>
+      qcFail(args.id, args.returnStages, args.reason, args.flags ?? []),
     onMutate: (args) => optimisticPatch(qc, [args.id], {
-      piece_stage: args.returnStage,
+      piece_stage: args.returnStages[0]!,
+      qc_rework_stages: args.returnStages,
       start_time: null,
     }),
     onError: (err, _args, rollback) => {

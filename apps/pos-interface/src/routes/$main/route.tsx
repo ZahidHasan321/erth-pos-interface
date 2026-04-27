@@ -290,7 +290,10 @@ function RouteComponent() {
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
+          <main
+            data-scroll-restoration-id="pos-main-scroll"
+            className="flex-1 overflow-y-auto overflow-x-hidden relative"
+          >
             <Outlet />
           </main>
         </SidebarInset>

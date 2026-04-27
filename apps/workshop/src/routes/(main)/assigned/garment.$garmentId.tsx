@@ -13,6 +13,8 @@ import {
   CollapsibleSpecsSection,
 } from "@/components/shared/GarmentDetailSections";
 import { getGarmentEditability } from "@/lib/editability";
+import { canEdit } from "@/lib/rbac";
+import { useAuth } from "@/context/auth";
 import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
@@ -177,7 +179,9 @@ function AssignedGarmentDetailPage() {
 // replacement and makes the wire-up visible.
 
 function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
+  const { user } = useAuth();
   if (garment.piece_stage !== "discarded") return null;
+  if (!canEdit(user, "/assigned")) return null;
   const replacedById = (garment as WorkshopGarment & { replaced_by_garment_id: string | null }).replaced_by_garment_id;
   if (replacedById) {
     return (

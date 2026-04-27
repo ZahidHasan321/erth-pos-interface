@@ -244,6 +244,19 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
 };
 
 export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
+    // 0. Look up order_type up front so we route the order_phase flip to the
+    //    correct extension table (work_orders vs alteration_orders) at the end.
+    //    If this fails we abort — falling through to updateOrder would write to
+    //    work_orders for an alteration order, creating a phantom row.
+    const { data: orderRow, error: typeErr } = await db
+        .from(TABLE_NAME)
+        .select('order_type')
+        .eq('id', orderId)
+        .single();
+    if (typeErr || !orderRow) {
+        return { status: 'error', message: `Could not load order ${orderId}: ${typeErr?.message ?? 'not found'}` };
+    }
+
     // 1. Update selected garments (or all if no IDs provided).
     //    Bumping trip_number from 0 → 1 is how we mark "first dispatch from shop"
     //    — the dispatch page filters by trip_number = 0, and workshop receiving
@@ -291,6 +304,20 @@ export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Pro
     // 2. Flip order_phase to "in_progress" on the first dispatch. Partial-dispatched
     //    orders remain on the dispatch page via the trip_number=0 filter on their
     //    remaining garments — we no longer keep the order artificially in "new".
+    //    order_phase lives on work_orders for WORK orders and alteration_orders
+    //    for ALTERATION orders. updateOrder() routes only to work_orders, so for
+    //    alteration orders we update the extension table directly.
+    if (orderRow.order_type === 'ALTERATION') {
+        const { error: phaseErr } = await db
+            .from('alteration_orders')
+            .update({ order_phase: 'in_progress' })
+            .eq('order_id', orderId);
+        if (phaseErr) {
+            console.error('Error updating alteration_orders.order_phase:', phaseErr);
+        }
+        return getOrderById(orderId);
+    }
+
     return updateOrder({ order_phase: "in_progress" }, orderId);
 };
 

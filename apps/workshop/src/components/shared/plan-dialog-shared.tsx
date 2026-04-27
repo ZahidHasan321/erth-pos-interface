@@ -4,6 +4,7 @@ import { IconRosette } from "@tabler/icons-react";
 import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { cn, formatDate } from "@/lib/utils";
 import type { ProductionPlan, QcAttempt, TripHistoryEntry } from "@repo/database";
+import { getQcReturnStages } from "@repo/database";
 
 // ── Shared types ────────────────────────────────────────────────────────────
 
@@ -327,11 +328,15 @@ export function QcFailBanner({ tripHistory, currentTrip }: QcFailBannerProps) {
             <span className="font-medium text-foreground">{latest.inspector}</span>
           </div>
         )}
-        {latest.return_stage && (
+        {getQcReturnStages(latest).length > 0 && (
           <div className="flex gap-1.5">
-            <span className="text-muted-foreground">Return stage:</span>
+            <span className="text-muted-foreground">
+              Return stage{getQcReturnStages(latest).length > 1 ? "s" : ""}:
+            </span>
             <span className="font-medium text-foreground">
-              {STAGE_LABELS[latest.return_stage] ?? latest.return_stage}
+              {getQcReturnStages(latest)
+                .map((s) => STAGE_LABELS[s] ?? s)
+                .join(" → ")}
             </span>
           </div>
         )}

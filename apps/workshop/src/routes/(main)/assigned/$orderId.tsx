@@ -102,7 +102,7 @@ function getCurrentTripEntry(
 function getDeliveryUrgency(date?: string) {
   if (!date) return { className: "", days: null };
   const diff = Math.ceil(
-    (new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    (parseUtcTimestamp(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   );
   if (diff < 0) return { className: "text-red-700", days: diff };
   if (diff <= 2) return { className: "text-orange-700", days: diff };

@@ -10,7 +10,7 @@ interface Card2StyleGroupCatalog {
   options: Readonly<Record<string, LocalizedLabel>>
 }
 
-export type Card2StyleGroupId = keyof Card2LineItemStyle
+export type Card2StyleGroupId = Exclude<keyof Card2LineItemStyle, 'jabzoor2'>
 
 const resolveLocalizedLabel = (
   label: LocalizedLabel,

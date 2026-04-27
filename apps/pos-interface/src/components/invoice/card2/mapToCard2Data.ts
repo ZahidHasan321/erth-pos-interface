@@ -95,6 +95,9 @@ const buildLineItem = (
       jabzoor: garment.jabzour_1
         ? { id: garment.jabzour_1, properties: { hashwa: toHashwa(garment.jabzour_thickness) } }
         : undefined,
+      jabzoor2: garment.jabzour_2
+        ? { id: garment.jabzour_2, properties: { hashwa: toHashwa(garment.jabzour_thickness) } }
+        : undefined,
       sidePocket: carryItems.length > 0
         ? { id: 'SID_MUDAWWAR_SIDE_POCKET', properties: { carryItems } }
         : undefined,

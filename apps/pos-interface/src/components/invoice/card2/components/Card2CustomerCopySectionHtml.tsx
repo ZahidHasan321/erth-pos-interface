@@ -174,7 +174,9 @@ export function Card2CustomerCopySectionHtml({
             <div className="card2-customer-copy__employee-signature">
               <span className="card2-customer-copy__employee-signature-label">Employee Signature</span>
               <div className="card2-customer-copy__employee-signature-box">
-                {formatValue(data.customerCopy?.employeeSignature)}
+                {data.customerCopy?.employeeSignature
+                  ? formatValue(data.customerCopy.employeeSignature)
+                  : null}
               </div>
             </div>
           </div>

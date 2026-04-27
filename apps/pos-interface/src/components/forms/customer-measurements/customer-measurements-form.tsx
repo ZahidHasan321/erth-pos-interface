@@ -167,15 +167,15 @@ export function CustomerMeasurementsForm({
   >(form.getValues("reference") ?? undefined);
   useAutoProvision(form);
 
-  // Track previous customerId to detect changes and reset internal state
-  // Only track non-null IDs so transient null (from store reset) doesn't cause a reset cycle
+  // Track previous customerId to detect changes and reset internal state.
+  // A null transition (e.g. after "+ New Order" clears the form) followed by
+  // re-selecting the same customer must still trigger a fresh populate, so we
+  // track null as a real previous state rather than ignoring it.
   const prevCustomerIdRef = React.useRef<number | null>(customerId);
   // Track what query data we've already processed to avoid re-running the populate effect
   const lastProcessedDataRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    // Ignore transient null — only reset when we get a genuinely different customer
-    if (customerId === null) return;
     if (customerId === prevCustomerIdRef.current) return;
 
     prevCustomerIdRef.current = customerId;

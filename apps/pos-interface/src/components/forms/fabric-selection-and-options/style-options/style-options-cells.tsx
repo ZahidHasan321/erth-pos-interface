@@ -560,20 +560,11 @@ export const AccessoriesCell = ({
   row,
   table,
 }: CellContext<GarmentSchema, unknown>) => {
-  const { control, setValue, getValues } = useFormContext();
+  const { control } = useFormContext();
   const meta = table.options.meta as {
     isFormDisabled?: boolean;
   };
   const isFormDisabled = meta?.isFormDisabled || false;
-
-  const handleAccessoryChange = (field: string, value: boolean) => {
-    if (row.index === 0) {
-      const allGarments = getValues("garments") as GarmentSchema[];
-      allGarments.forEach((_, index) => {
-        setValue(`garments.${index}.${field}` as any, value);
-      });
-    }
-  };
 
   return (
     <div className="flex flex-row space-x-3 items-center">
@@ -585,13 +576,7 @@ export const AccessoriesCell = ({
             <Checkbox
               id={`wallet-${row.index}`}
               checked={field.value || false}
-              onCheckedChange={(value) => {
-                if (row.index === 0) {
-                  handleAccessoryChange("wallet_pocket", value as boolean);
-                } else {
-                  field.onChange(value);
-                }
-              }}
+              onCheckedChange={(value) => field.onChange(value)}
               disabled={isFormDisabled}
             />
             <label htmlFor={`wallet-${row.index}`}>
@@ -612,13 +597,7 @@ export const AccessoriesCell = ({
             <Checkbox
               id={`pen_holder-${row.index}`}
               checked={field.value || false}
-              onCheckedChange={(value) => {
-                if (row.index === 0) {
-                  handleAccessoryChange("pen_holder", value as boolean);
-                } else {
-                  field.onChange(value);
-                }
-              }}
+              onCheckedChange={(value) => field.onChange(value)}
               disabled={isFormDisabled}
             />
             <label htmlFor={`pen_holder-${row.index}`}>
@@ -639,13 +618,7 @@ export const AccessoriesCell = ({
             <Checkbox
               id={`mobile_pocket-${row.index}`}
               checked={field.value || false}
-              onCheckedChange={(value) => {
-                if (row.index === 0) {
-                  handleAccessoryChange("mobile_pocket", value as boolean);
-                } else {
-                  field.onChange(value);
-                }
-              }}
+              onCheckedChange={(value) => field.onChange(value)}
               disabled={isFormDisabled}
             />
             <label htmlFor={`mobile_pocket-${row.index}`}>

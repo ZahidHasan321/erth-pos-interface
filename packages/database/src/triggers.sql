@@ -3022,6 +3022,8 @@ BEGIN
         CROSS JOIN LATERAL (
             SELECT
                 CASE
+                    WHEN o.order_type::text = 'ALTERATION' AND g.has_shop_items THEN 'alteration_out'
+                    WHEN o.order_type::text = 'ALTERATION' THEN NULL
                     WHEN NOT g.has_shop_items AND g.finals_in_transit THEN 'awaiting_finals'
                     WHEN NOT g.has_shop_items THEN NULL
                     WHEN g.has_alteration_needing_work THEN 'alteration_in'
@@ -3066,7 +3068,10 @@ BEGIN
                         g2.piece_stage::text <> 'completed' AS not_completed,
                         g2.location::text = 'shop'
                             AND g2.piece_stage::text <> 'completed'
-                            AND COALESCE(g2.trip_number, 0) > 0 AS shop_active,
+                            AND (
+                                COALESCE(g2.trip_number, 0) > 0
+                                OR g2.garment_type::text = 'alteration'
+                            ) AS shop_active,
                         g2.garment_type::text AS garment_type,
                         g2.piece_stage::text AS piece_stage,
                         g2.location::text AS location,
@@ -3092,7 +3097,10 @@ BEGIN
         WHERE o.brand::text = p_brand
           AND o.checkout_status::text = 'confirmed'
           AND o.order_type::text IN ('WORK', 'ALTERATION')
-          AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
+          AND (
+            o.order_type::text = 'ALTERATION'
+            OR COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
+          )
           AND (agg.has_shop_items OR agg.finals_in_transit)
     ),
     pre_stage AS (
@@ -3216,6 +3224,7 @@ BEGIN
                 'needs_action',    COUNT(*) FILTER (WHERE showroom_label = 'needs_action'),
                 'partial_ready',   COUNT(*) FILTER (WHERE showroom_label = 'partial_ready'),
                 'alteration_in',   COUNT(*) FILTER (WHERE showroom_label = 'alteration_in'),
+                'alteration_out',  COUNT(*) FILTER (WHERE showroom_label = 'alteration_out'),
                 'awaiting_finals', COUNT(*) FILTER (WHERE showroom_label = 'awaiting_finals')
             )
             FROM pre_stage

@@ -38,18 +38,30 @@ const resolveLineItemStyleSelection = (
     | { id?: string; properties?: Record<string, unknown> }
     | undefined
 
-const resolveLineItemSelectedStyleId = (
+const normalizeOptionId = (id: string | undefined): string | undefined => {
+  if (!id) return undefined
+  const trimmed = id.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+const resolveLineItemSelectedStyleIds = (
   lineItem: Card2LineItem,
   groupId: Card2StyleGroupId,
-): string | undefined => {
-  const selection = resolveLineItemStyleSelection(lineItem, groupId)
+): readonly string[] => {
+  const ids: string[] = []
+  const primary = normalizeOptionId(
+    resolveLineItemStyleSelection(lineItem, groupId)?.id,
+  )
+  if (primary) ids.push(primary)
 
-  if (!selection?.id) {
-    return undefined
+  if (groupId === 'jabzoor') {
+    const secondary = normalizeOptionId(
+      (lineItem.style?.jabzoor2 as { id?: string } | undefined)?.id,
+    )
+    if (secondary && secondary !== primary) ids.push(secondary)
   }
 
-  const normalizedId = selection.id.trim()
-  return normalizedId.length > 0 ? normalizedId : undefined
+  return ids
 }
 
 const resolveLineItemHashwa = (
@@ -157,11 +169,8 @@ const buildStyleGroupColumns = (
     const optionIdSet = new Set<string>()
 
     lineItems.forEach((lineItem) => {
-      const selectedId = resolveLineItemSelectedStyleId(lineItem, group.id)
-
-      if (selectedId) {
-        optionIdSet.add(selectedId)
-      }
+      const selectedIds = resolveLineItemSelectedStyleIds(lineItem, group.id)
+      selectedIds.forEach((selectedId) => optionIdSet.add(selectedId))
     })
 
     const optionIds = [...optionIdSet].sort((left, right) => left.localeCompare(right))
@@ -284,11 +293,11 @@ export function Card2LineItemStyleMatrixTableHtml({
                 ))}
 
                 {styleGroupColumns.flatMap((group) => {
-                  const selectedOptionId = resolveLineItemSelectedStyleId(lineItem, group.id)
+                  const selectedOptionIds = resolveLineItemSelectedStyleIds(lineItem, group.id)
 
                   return group.optionIds.map((optionId) => {
                     const isChecked =
-                      optionId !== EMPTY_STYLE_OPTION_ID && selectedOptionId === optionId
+                      optionId !== EMPTY_STYLE_OPTION_ID && selectedOptionIds.includes(optionId)
 
                     return (
                       <td

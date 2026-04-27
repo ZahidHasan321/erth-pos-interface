@@ -5,7 +5,7 @@ import {
   Store,
   CheckCircle,
   RefreshCw,
-  Package,
+  Scissors,
   User,
   CheckCircle2,
   AlertTriangle,
@@ -358,7 +358,10 @@ function OrderManagementConsole({
     }
 
     const order = selected.order;
-    const isReady = selected.showroomStatus.label === "ready_for_pickup";
+    const isAlteration = order.order_type === "ALTERATION";
+    const canCheckout =
+        selected.showroomStatus.label === "ready_for_pickup" ||
+        selected.showroomStatus.label === "alteration_out";
 
     const handleUpdate = async (fields: any) => {
         try {
@@ -383,61 +386,66 @@ function OrderManagementConsole({
             </div>
 
             <div className="p-3 flex flex-col gap-2 flex-1">
-                {/* Row 1: Reminders */}
-                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Reminders</span>
-                <div className="flex flex-wrap gap-2 -mt-1">
-                    {(['R1', 'R2', 'R3'] as const).map(type => {
-                        const prefix = type.toLowerCase();
-                        const dateKey = `${prefix}_date` as keyof typeof order;
-                        const notesKey = `${prefix}_notes` as keyof typeof order;
-                        const isDone = !!order[dateKey];
-                        return (
-                            <ReminderDialog
-                                key={type}
-                                type={type}
-                                date={order[dateKey] as string | null}
-                                notes={order[notesKey] as string | null}
-                                isDone={isDone}
+                {/* Reminders + follow-ups are work-order-only (fields live on
+                    work_orders). Hide for alteration orders to avoid creating
+                    phantom work_orders rows on save. */}
+                {!isAlteration && (
+                    <>
+                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Reminders</span>
+                        <div className="flex flex-wrap gap-2 -mt-1">
+                            {(['R1', 'R2', 'R3'] as const).map(type => {
+                                const prefix = type.toLowerCase();
+                                const dateKey = `${prefix}_date` as keyof typeof order;
+                                const notesKey = `${prefix}_notes` as keyof typeof order;
+                                const isDone = !!order[dateKey];
+                                return (
+                                    <ReminderDialog
+                                        key={type}
+                                        type={type}
+                                        date={order[dateKey] as string | null}
+                                        notes={order[notesKey] as string | null}
+                                        isDone={isDone}
+                                        isPending={updateOrder.isPending}
+                                        onSave={async (date, notes) => {
+                                            await handleUpdate({
+                                                [`${prefix}_date`]: date,
+                                                [`${prefix}_notes`]: notes,
+                                            });
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+
+                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Follow-ups</span>
+                        <div className="flex flex-wrap gap-2 -mt-1">
+                            <CallLogDialog
+                                date={order.call_reminder_date as string | null}
+                                status={order.call_status as string | null}
+                                notes={order.call_notes as string | null}
                                 isPending={updateOrder.isPending}
-                                onSave={async (date, notes) => {
+                                onSave={async (date, status, notes) => {
                                     await handleUpdate({
-                                        [`${prefix}_date`]: date,
-                                        [`${prefix}_notes`]: notes,
+                                        call_reminder_date: date,
+                                        call_status: status,
+                                        call_notes: notes,
                                     });
                                 }}
                             />
-                        );
-                    })}
-                </div>
-
-                {/* Row 2: Call & Escalation */}
-                <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Follow-ups</span>
-                <div className="flex flex-wrap gap-2 -mt-1">
-                    <CallLogDialog
-                        date={order.call_reminder_date as string | null}
-                        status={order.call_status as string | null}
-                        notes={order.call_notes as string | null}
-                        isPending={updateOrder.isPending}
-                        onSave={async (date, status, notes) => {
-                            await handleUpdate({
-                                call_reminder_date: date,
-                                call_status: status,
-                                call_notes: notes,
-                            });
-                        }}
-                    />
-                    <EscalationDialog
-                        date={order.escalation_date as string | null}
-                        notes={order.escalation_notes as string | null}
-                        isPending={updateOrder.isPending}
-                        onSave={async (date, notes) => {
-                            await handleUpdate({
-                                escalation_date: date,
-                                escalation_notes: notes,
-                            });
-                        }}
-                    />
-                </div>
+                            <EscalationDialog
+                                date={order.escalation_date as string | null}
+                                notes={order.escalation_notes as string | null}
+                                isPending={updateOrder.isPending}
+                                onSave={async (date, notes) => {
+                                    await handleUpdate({
+                                        escalation_date: date,
+                                        escalation_notes: notes,
+                                    });
+                                }}
+                            />
+                        </div>
+                    </>
+                )}
 
                 {/* Row 3: Actions */}
                 <div className="flex gap-2 mt-auto">
@@ -452,18 +460,28 @@ function OrderManagementConsole({
                         </Link>
                     </Button>
 
-                    <Button
-                        size="sm"
-                        disabled={!isReady}
-                        variant={isReady ? "default" : "secondary"}
-                        className={cn(
-                            "flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm",
-                            isReady && "bg-primary hover:bg-primary/90 text-primary-foreground"
-                        )}
-                    >
-                        <CheckCircle2 className="size-3.5 mr-1.5" />
-                        {isReady ? "Complete & Deliver" : "Not Ready"}
-                    </Button>
+                    {canCheckout ? (
+                        <Button
+                            asChild
+                            size="sm"
+                            className="flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground"
+                        >
+                            <Link to="/$main/cashier/$orderId" params={{ orderId: String(order.id) }}>
+                                <CheckCircle2 className="size-3.5 mr-1.5" />
+                                Complete & Deliver
+                            </Link>
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            disabled
+                            variant="secondary"
+                            className="flex-1 h-9 font-black uppercase tracking-wider text-xs rounded-lg shadow-sm"
+                        >
+                            <CheckCircle2 className="size-3.5 mr-1.5" />
+                            Not Ready
+                        </Button>
+                    )}
                 </div>
             </div>
         </Card>
@@ -551,6 +569,7 @@ function RouteComponent() {
       needsAction: rpcStats?.needs_action ?? 0,
       partialReady: rpcStats?.partial_ready ?? 0,
       alterationIn: rpcStats?.alteration_in ?? 0,
+      alterationOut: rpcStats?.alteration_out ?? 0,
     }),
     [rpcStats],
   );
@@ -592,7 +611,7 @@ function RouteComponent() {
           <CompactStat label="Total" value={stats.total} icon={Store} color="bg-slate-500" />
           <CompactStat label="Trial" value={stats.brovaTrial + stats.alterationIn} icon={RefreshCw} color="bg-amber-500" />
           <CompactStat label="Action" value={stats.needsAction} icon={AlertCircle} color="bg-red-500" />
-          <CompactStat label="Partial" value={stats.partialReady} icon={Package} color="bg-violet-500" />
+          <CompactStat label="Alteration" value={stats.alterationOut} icon={Scissors} color="bg-purple-500" />
           <CompactStat label="Ready" value={stats.ready} icon={CheckCircle} color="bg-primary" />
         </div>
       </div>

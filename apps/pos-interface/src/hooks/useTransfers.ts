@@ -59,6 +59,7 @@ export function useCreateTransfer() {
     }) => createTransferRequest({ ...data, requested_by: user!.id, brand: getBrand() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
     },
   });
 }
@@ -71,6 +72,7 @@ export function useApproveTransfer() {
       approveTransferRequest(id, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
     },
   });
 }
@@ -83,6 +85,7 @@ export function useRejectTransfer() {
       rejectTransferRequest(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
     },
   });
 }
@@ -105,6 +108,7 @@ export function useReviseTransfer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
     },
   });
 }
@@ -118,6 +122,7 @@ export function useDispatchTransfer() {
       dispatchTransfer(transferId, user!.id, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
       queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
@@ -132,6 +137,7 @@ export function useCancelTransfer() {
     mutationFn: (id: number) => deleteTransferRequest(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
     },
   });
 }
@@ -145,6 +151,7 @@ export function useReceiveTransfer() {
       receiveTransfer(transferId, user!.id, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
       queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });

@@ -119,6 +119,10 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           label = "Alteration (In)";
           colorClass = "bg-blue-100 text-blue-700 border-blue-200";
           break;
+        case "alteration_out":
+          label = "Alteration (Out)";
+          colorClass = "bg-purple-100 text-purple-700 border-purple-200";
+          break;
         case "brova_trial":
           label = "Brova Trial";
           colorClass = "bg-amber-100 text-amber-700 border-amber-200";

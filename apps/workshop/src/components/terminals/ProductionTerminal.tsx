@@ -192,6 +192,7 @@ function InlineActions({
   const nextStage = getNextPlanStage(
     stage,
     plan as Record<string, string> | null,
+    garment.qc_rework_stages,
   );
   const plannedWorker = (plan as any)?.soaker ?? "";
   const working = isWorking(garment);

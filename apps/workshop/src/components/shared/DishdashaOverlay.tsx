@@ -255,10 +255,6 @@ export function DishdashaOverlay({
 
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
-            const isChanged = alterationFilter?.measurementKeys.has(key as string) ?? false;
-            if (alterationFilter?.hideUnchanged && !isChanged) {
-              return null;
-            }
             const correction = corrections.get(key as string) ?? null;
             const effectiveRaw = correction ? correction.corrected : (m ? m[key] : null);
             const parts = parseMeasurementParts(effectiveRaw, correction ? 0 : degree);

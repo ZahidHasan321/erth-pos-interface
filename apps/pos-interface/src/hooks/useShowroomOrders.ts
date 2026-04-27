@@ -43,6 +43,7 @@ export type ShowroomStats = {
   needs_action: number;
   partial_ready: number;
   alteration_in: number;
+  alteration_out: number;
   awaiting_finals: number;
 };
 
@@ -71,6 +72,7 @@ const EMPTY_STATS: ShowroomStats = {
   needs_action: 0,
   partial_ready: 0,
   alteration_in: 0,
+  alteration_out: 0,
   awaiting_finals: 0,
 };
 

@@ -42,7 +42,10 @@ export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
           <span className="hidden sm:inline">Logout</span>
         </Button>
       </header>
-      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+      <main
+        data-scroll-restoration-id="terminal-main-scroll"
+        className="flex-1 overflow-y-auto overflow-x-hidden"
+      >
         <Outlet />
       </main>
     </div>
