@@ -503,46 +503,24 @@ function ReceivingPage() {
             {sortedExpress.length === 0 ? (
               <EmptyState icon={Zap} message="No express garments in transit" />
             ) : (
-              <>
-                <SectionTable
-                  garments={sortedExpress}
-                  selectedIds={selExpress}
-                  onToggle={toggle(setSelExpress)}
-                  onReceive={(id) => receive([id])}
-                  onReceiveAndStart={(id) => receiveAndStart([id])}
-                  onLost={markLost}
-                  isReceivePending={isReceivePending}
-                  isReceiveStartPending={isReceiveStartPending}
-                  isLostPending={isLostPending}
-                  actionVariant={(g) =>
-                    g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
-                      ? "receive-lost"
-                      : "receive-start-lost"
-                  }
-                  showType
-                  hideExpress
-                />
-                {(() => {
-                  const selectedGarments = sortedExpress.filter((g) => selExpress.has(g.id));
-                  const allBrovas = selectedGarments.every(
-                    (g) => g.garment_type === "brova" || !orderIdsWithBrova.has(g.order_id),
-                  );
-                  return (
-                    <BatchActionBar count={selExpress.size} onClear={() => setSelExpress(new Set())}>
-                      <Button size="sm" variant="secondary" onClick={() => { receive([...selExpress]); setSelExpress(new Set()); }} disabled={receiveMut.isPending}>
-                        {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                        Receive
-                      </Button>
-                      {allBrovas && (
-                        <Button size="sm" onClick={() => { receiveAndStart([...selExpress]); setSelExpress(new Set()); }} disabled={receiveStartMut.isPending}>
-                          {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                          Receive & Start
-                        </Button>
-                      )}
-                    </BatchActionBar>
-                  );
-                })()}
-              </>
+              <SectionTable
+                garments={sortedExpress}
+                selectedIds={selExpress}
+                onToggle={toggle(setSelExpress)}
+                onReceive={(id) => receive([id])}
+                onReceiveAndStart={(id) => receiveAndStart([id])}
+                onLost={markLost}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
+                actionVariant={(g) =>
+                  g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
+                    ? "receive-lost"
+                    : "receive-start-lost"
+                }
+                showType
+                hideExpress
+              />
             )}
           </Section>
 
@@ -551,30 +529,18 @@ function ReceivingPage() {
             {sortedBrova.length === 0 ? (
               <EmptyState icon={Package} message="No brova garments in transit" />
             ) : (
-              <>
-                <SectionTable
-                  garments={sortedBrova}
-                  selectedIds={selBrova}
-                  onToggle={toggle(setSelBrova)}
-                  onReceive={(id) => receive([id])}
-                  onReceiveAndStart={(id) => receiveAndStart([id])}
-                  onLost={markLost}
-                  isReceivePending={isReceivePending}
-                  isReceiveStartPending={isReceiveStartPending}
-                  isLostPending={isLostPending}
-                  actionVariant="receive-start-lost"
-                />
-                <BatchActionBar count={selBrova.size} onClear={() => setSelBrova(new Set())}>
-                  <Button size="sm" variant="secondary" onClick={() => { receive([...selBrova]); setSelBrova(new Set()); }} disabled={receiveMut.isPending}>
-                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive
-                  </Button>
-                  <Button size="sm" onClick={() => { receiveAndStart([...selBrova]); setSelBrova(new Set()); }} disabled={receiveStartMut.isPending}>
-                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive & Start
-                  </Button>
-                </BatchActionBar>
-              </>
+              <SectionTable
+                garments={sortedBrova}
+                selectedIds={selBrova}
+                onToggle={toggle(setSelBrova)}
+                onReceive={(id) => receive([id])}
+                onReceiveAndStart={(id) => receiveAndStart([id])}
+                onLost={markLost}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
+                actionVariant="receive-start-lost"
+              />
             )}
           </Section>
 
@@ -583,40 +549,20 @@ function ReceivingPage() {
             {sortedFinals.length === 0 ? (
               <EmptyState icon={Package} message="No final garments in transit" />
             ) : (
-              <>
-                <SectionTable
-                  garments={sortedFinals}
-                  selectedIds={selFinals}
-                  onToggle={toggle(setSelFinals)}
-                  onReceive={(id) => receive([id])}
-                  onReceiveAndStart={(id) => receiveAndStart([id])}
-                  onLost={markLost}
-                  isReceivePending={isReceivePending}
-                  isReceiveStartPending={isReceiveStartPending}
-                  isLostPending={isLostPending}
-                  actionVariant={(g) =>
-                    orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
-                  }
-                />
-                {(() => {
-                  const selectedGarments = sortedFinals.filter((g) => selFinals.has(g.id));
-                  const canStart = selectedGarments.every((g) => !orderIdsWithBrova.has(g.order_id));
-                  return (
-                    <BatchActionBar count={selFinals.size} onClear={() => setSelFinals(new Set())}>
-                      <Button size="sm" variant="secondary" onClick={() => { receive([...selFinals]); setSelFinals(new Set()); }} disabled={receiveMut.isPending}>
-                        {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                        Receive
-                      </Button>
-                      {canStart && (
-                        <Button size="sm" onClick={() => { receiveAndStart([...selFinals]); setSelFinals(new Set()); }} disabled={receiveStartMut.isPending}>
-                          {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                          Receive & Start
-                        </Button>
-                      )}
-                    </BatchActionBar>
-                  );
-                })()}
-              </>
+              <SectionTable
+                garments={sortedFinals}
+                selectedIds={selFinals}
+                onToggle={toggle(setSelFinals)}
+                onReceive={(id) => receive([id])}
+                onReceiveAndStart={(id) => receiveAndStart([id])}
+                onLost={markLost}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
+                actionVariant={(g) =>
+                  orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
+                }
+              />
             )}
           </Section>
 
@@ -625,42 +571,20 @@ function ReceivingPage() {
             {sortedAlterations.length === 0 ? (
               <EmptyState icon={Package} message="No alterations in transit" />
             ) : (
-              <>
-                <SectionTable
-                  garments={sortedAlterations}
-                  selectedIds={selAlterations}
-                  onToggle={toggle(setSelAlterations)}
-                  onReceive={(id) => receive([id])}
-                  onReceiveAndStart={(id) => receiveAndStart([id])}
-                  onLost={markLost}
-                  isReceivePending={isReceivePending}
-                  isReceiveStartPending={isReceiveStartPending}
-                  isLostPending={isLostPending}
-                  actionVariant="receive-start-lost"
-                  showAlt
-                  showType
-                />
-                <BatchActionBar count={selAlterations.size} onClear={() => setSelAlterations(new Set())}>
-                  <Button size="sm" variant="secondary" onClick={() => { receive([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveMut.isPending}>
-                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive
-                  </Button>
-                  <Button size="sm" onClick={() => { receiveAndStart([...selAlterations]); setSelAlterations(new Set()); }} disabled={receiveStartMut.isPending}>
-                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive & Start
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { lostMut.mutateAsync([...selAlterations]).then(() => { toast.warning(`${selAlterations.size} garment${selAlterations.size !== 1 ? "s" : ""} marked as lost`); setSelAlterations(new Set()); }); }}
-                    disabled={lostMut.isPending}
-                    className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    {lostMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-                    Lost
-                  </Button>
-                </BatchActionBar>
-              </>
+              <SectionTable
+                garments={sortedAlterations}
+                selectedIds={selAlterations}
+                onToggle={toggle(setSelAlterations)}
+                onReceive={(id) => receive([id])}
+                onReceiveAndStart={(id) => receiveAndStart([id])}
+                onLost={markLost}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
+                actionVariant="receive-start-lost"
+                showAlt
+                showType
+              />
             )}
           </Section>
 
@@ -669,44 +593,69 @@ function ReceivingPage() {
             {sortedAlterationOut.length === 0 ? (
               <EmptyState icon={Scissors} message="No alteration orders in transit" />
             ) : (
-              <>
-                <SectionTable
-                  garments={sortedAlterationOut}
-                  selectedIds={selAlterationOut}
-                  onToggle={toggle(setSelAlterationOut)}
-                  onReceive={(id) => receive([id])}
-                  onReceiveAndStart={(id) => receiveAndStart([id])}
-                  onLost={markLost}
-                  isReceivePending={isReceivePending}
-                  isReceiveStartPending={isReceiveStartPending}
-                  isLostPending={isLostPending}
-                  actionVariant="receive-start-lost"
-                  showAlt
-                  showAlterationOut
-                />
-                <BatchActionBar count={selAlterationOut.size} onClear={() => setSelAlterationOut(new Set())}>
-                  <Button size="sm" variant="secondary" onClick={() => { receive([...selAlterationOut]); setSelAlterationOut(new Set()); }} disabled={receiveMut.isPending}>
-                    {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive
-                  </Button>
-                  <Button size="sm" onClick={() => { receiveAndStart([...selAlterationOut]); setSelAlterationOut(new Set()); }} disabled={receiveStartMut.isPending}>
-                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive & Start
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { lostMut.mutateAsync([...selAlterationOut]).then(() => { toast.warning(`${selAlterationOut.size} garment${selAlterationOut.size !== 1 ? "s" : ""} marked as lost`); setSelAlterationOut(new Set()); }); }}
-                    disabled={lostMut.isPending}
-                    className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    {lostMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-                    Lost
-                  </Button>
-                </BatchActionBar>
-              </>
+              <SectionTable
+                garments={sortedAlterationOut}
+                selectedIds={selAlterationOut}
+                onToggle={toggle(setSelAlterationOut)}
+                onReceive={(id) => receive([id])}
+                onReceiveAndStart={(id) => receiveAndStart([id])}
+                onLost={markLost}
+                isReceivePending={isReceivePending}
+                isReceiveStartPending={isReceiveStartPending}
+                isLostPending={isLostPending}
+                actionVariant="receive-start-lost"
+                showAlt
+                showAlterationOut
+              />
             )}
           </Section>
+
+          {/* ── PAGE-LEVEL BATCH BAR ── */}
+          {(() => {
+            const allSelectedIds = [
+              ...selExpress, ...selBrova, ...selFinals, ...selAlterations, ...selAlterationOut,
+            ];
+            const clearAllSelections = () => {
+              setSelExpress(new Set()); setSelBrova(new Set()); setSelFinals(new Set());
+              setSelAlterations(new Set()); setSelAlterationOut(new Set());
+            };
+            return (
+              <BatchActionBar count={allSelectedIds.length} onClear={clearAllSelections}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { receive(allSelectedIds); clearAllSelections(); }}
+                  disabled={receiveMut.isPending}
+                >
+                  {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                  Receive
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => { receiveAndStart(allSelectedIds); clearAllSelections(); }}
+                  disabled={receiveStartMut.isPending}
+                >
+                  {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                  Receive & Start
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    lostMut.mutateAsync(allSelectedIds).then(() => {
+                      toast.warning(`${allSelectedIds.length} garment${allSelectedIds.length !== 1 ? "s" : ""} marked as lost`);
+                      clearAllSelections();
+                    });
+                  }}
+                  disabled={lostMut.isPending}
+                  className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  {lostMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                  Lost
+                </Button>
+              </BatchActionBar>
+            );
+          })()}
 
           {/* ── LOST IN TRANSIT ── */}
           <Section title="Lost in Transit" icon={CircleX} count={lostInTransit.length} accent={lostInTransit.length > 0 ? "bg-red-100 text-red-700" : undefined}>

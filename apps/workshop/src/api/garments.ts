@@ -795,16 +795,26 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
   if (eAccepted) throw new Error(`receiveAndStartGarments: failed to advance accepted brovas to ready_for_dispatch: ${eAccepted.message}`);
 
   // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
-  // (finals parked for brova trial must stay out of production)
-  // Note: .neq() excludes NULLs in PostgREST, so we use .or() to include
-  // garments where feedback_status is null (first-trip) or non-accepted (returns)
-  const { error: e2 } = await db
+  // (finals parked for brova trial must stay out of production).
+  // Filter in JS rather than chaining two .or() filters — PostgREST's behavior
+  // with multiple top-level or= params is finicky enough to be worth avoiding.
+  const { data: candidates, error: eFetch } = await db
     .from('garments')
-    .update({ in_production: true })
-    .in('id', ids)
-    .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null')
-    .or('feedback_status.neq.accepted,feedback_status.is.null');
-  if (e2) throw new Error(`receiveAndStartGarments: failed to start production on garments: ${e2.message}`);
+    .select('id, piece_stage, feedback_status')
+    .in('id', ids);
+  if (eFetch) throw new Error(`receiveAndStartGarments: failed to read garments for production gating: ${eFetch.message}`);
+
+  const startIds = (candidates ?? [])
+    .filter((g) => g.piece_stage !== 'waiting_for_acceptance' && g.feedback_status !== 'accepted')
+    .map((g) => g.id);
+
+  if (startIds.length > 0) {
+    const { error: e2 } = await db
+      .from('garments')
+      .update({ in_production: true })
+      .in('id', startIds);
+    if (e2) throw new Error(`receiveAndStartGarments: failed to start production on garments: ${e2.message}`);
+  }
 
   // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
   // so they appear in the scheduler
