@@ -1,8 +1,13 @@
 import { db } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
-import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, MeasurementIssue, QCFlag } from '@repo/database';
+import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, QcAttempt } from '@repo/database';
 import { PRODUCTION_STAGES } from '@/lib/constants';
 import type { PieceStage } from '@repo/database';
+import {
+  QC_OPTIONS,
+  evaluateQc,
+  type QcInputs,
+} from '@/lib/qc-spec';
 
 /** Map piece_stage → worker_history key (role-based) */
 const HISTORY_KEY_MAP: Record<string, string> = {
@@ -1029,22 +1034,51 @@ export const completeAndAdvance = async (
   if (error) throw new Error(`completeAndAdvance: failed to advance garment to next stage: ${error.message}`);
 };
 
-export const qcPass = async (
+/**
+ * Submit a structured 3-step QC attempt.
+ *
+ * Operator records measurements (compared vs garment's measurement snapshot
+ * within ±0.125"), options (compared vs garment columns), and 6 quality
+ * ratings (1-5; threshold 4). System computes pass/fail; operator does not
+ * choose the verdict.
+ *
+ * On rework attempts (a previous fail exists in the current trip), only
+ * `enabledKeys` are evaluated — the operator re-checks just the fields that
+ * failed last time. Caller is responsible for passing the correct enabled
+ * set; on the first attempt this is every key.
+ *
+ * On fail, caller passes `returnStages` chosen by operator from the failure
+ * report. Garment is moved to the first rework stage and `qc_rework_stages`
+ * drives plan-aware navigation back to QC.
+ */
+export const submitQc = async (
   id: string,
-  worker: string,
-  ratings: Record<string, number>,
-  measurementIssues: MeasurementIssue[] | null = null,
-): Promise<void> => {
+  inspector: string,
+  inputs: QcInputs,
+  enabledKeys: Set<string>,
+  returnStages: PieceStage[] | null,
+): Promise<{ result: "pass" | "fail" }> => {
   const { data: existing, error: fetchErr } = await db
     .from('garments')
-    .select('worker_history, trip_history, trip_number, stage_timings')
+    .select(`
+      worker_history, trip_history, trip_number, stage_timings,
+      ${QC_OPTIONS.map((o) => o.key).join(', ')},
+      measurement:measurements!measurement_id(*)
+    `)
     .eq('id', id)
     .single();
 
-  if (fetchErr) throw new Error(`qcPass: failed to fetch garment for QC pass: ${fetchErr.message}`);
+  if (fetchErr) throw new Error(`submitQc: failed to fetch garment for QC: ${fetchErr.message}`);
 
-  const history = (existing?.worker_history as Record<string, string>) ?? {};
-  history['quality_checker'] = worker;
+  const expectedMeasurements = (existing?.measurement ?? {}) as Record<string, unknown>;
+  const expectedOptions: Record<string, unknown> = {};
+  for (const o of QC_OPTIONS) expectedOptions[o.key] = (existing as any)?.[o.key];
+
+  const evalResult = evaluateQc(expectedMeasurements, expectedOptions, inputs, enabledKeys);
+
+  if (evalResult.result === 'fail' && (!returnStages || returnStages.length === 0)) {
+    throw new Error('submitQc: returnStages required when result is fail');
+  }
 
   const now = new Date().toISOString();
   const tripHistory = parseTripHistory(existing?.trip_history);
@@ -1062,108 +1096,74 @@ export const qcPass = async (
     };
     tripHistory.push(tripEntry);
   }
-  tripEntry.worker_history = history;
-  tripEntry.completed_date = getLocalDateStr();
   if (!Array.isArray(tripEntry.qc_attempts)) tripEntry.qc_attempts = [];
-  tripEntry.qc_attempts.push({
-    inspector: worker,
-    ratings,
-    result: "pass",
-    fail_reason: null,
-    return_stages: null,
+
+  const attemptNumber = tripEntry.qc_attempts.filter((a) => a.trip === currentTrip || a.trip == null).length + 1;
+
+  const orderedStages = returnStages
+    ? [...returnStages].sort(
+        (a, b) => PRODUCTION_STAGES.indexOf(a as any) - PRODUCTION_STAGES.indexOf(b as any),
+      )
+    : null;
+
+  const attempt: QcAttempt = {
+    inspector,
     date: getLocalDateStr(),
-    measurement_issues: measurementIssues && measurementIssues.length > 0 ? measurementIssues : null,
-  });
-
-  const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', worker, now);
-
-  const { error } = await db
-    .from('garments')
-    .update({
-      piece_stage: 'ready_for_dispatch' as PieceStage,
-      quality_check_ratings: ratings,
-      worker_history: history,
-      completion_time: now,
-      start_time: null,
-      trip_history: tripHistory,
-      stage_timings: nextTimings,
-      qc_rework_stages: null,
-    })
-    .eq('id', id);
-  if (error) throw new Error(`qcPass: failed to record QC pass: ${error.message}`);
-};
-
-export const qcFail = async (
-  id: string,
-  returnStages: PieceStage[],
-  reason: string,
-  flags: QCFlag[] = [],
-): Promise<void> => {
-  if (!returnStages.length) {
-    throw new Error("qcFail: returnStages must contain at least one stage");
-  }
-
-  const { data: existing, error: fetchErr } = await db
-    .from('garments')
-    .select('notes, trip_history, trip_number, worker_history, stage_timings')
-    .eq('id', id)
-    .single();
-
-  if (fetchErr) throw new Error(`qcFail: failed to fetch garment for QC fail: ${fetchErr.message}`);
-
-  const notes = existing?.notes ? `${existing.notes}\nQC Fail: ${reason}` : `QC Fail: ${reason}`;
-
-  // Order rework stages by production sequence so we know which to enter first.
-  const orderedStages = [...returnStages].sort(
-    (a, b) => PRODUCTION_STAGES.indexOf(a as any) - PRODUCTION_STAGES.indexOf(b as any),
-  );
-  const firstStage = orderedStages[0]!;
-
-  const tripHistory = parseTripHistory(existing?.trip_history);
-  const currentTrip = existing?.trip_number ?? 1;
-  let tripEntry = tripHistory.find((t) => t.trip === currentTrip);
-  if (!tripEntry) {
-    // Defensive: garments scheduled before trip_history was tracked may have an
-    // empty array. Synthesize a minimal entry so the QC attempt + alt_p label
-    // detection still works.
-    tripEntry = {
-      trip: currentTrip,
-      reentry_stage: null,
-      production_plan: null,
-      worker_history: null,
-      assigned_date: null,
-      completed_date: null,
-      qc_attempts: [],
-    };
-    tripHistory.push(tripEntry);
-  }
-  tripEntry.worker_history = (existing?.worker_history as Record<string, string>) ?? null;
-  if (!Array.isArray(tripEntry.qc_attempts)) tripEntry.qc_attempts = [];
-  tripEntry.qc_attempts.push({
-    inspector: "",
-    ratings: null,
-    result: "fail",
-    fail_reason: reason,
+    result: evalResult.result,
+    trip: currentTrip,
+    attempt_number: attemptNumber,
+    measurements: inputs.measurements,
+    options: inputs.options,
+    quality_ratings: inputs.quality_ratings,
+    failed_measurements: evalResult.failed_measurements,
+    failed_options: evalResult.failed_options,
+    failed_quality: evalResult.failed_quality,
     return_stages: orderedStages,
-    date: getLocalDateStr(),
-    flags: flags.length > 0 ? flags : null,
-  });
+  };
+  tripEntry.qc_attempts.push(attempt);
 
-  // Close the QC session so its duration is recorded (fail is still a completed visit to QC).
-  const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), 'quality_check', null);
+  const history = (existing?.worker_history as Record<string, string>) ?? {};
+  history['quality_checker'] = inspector;
+  tripEntry.worker_history = history;
 
-  const { error } = await db
-    .from('garments')
-    .update({
-      piece_stage: firstStage,
-      notes,
-      start_time: null,
-      trip_history: tripHistory,
-      stage_timings: nextTimings,
-      qc_rework_stages: orderedStages,
-    })
-    .eq('id', id);
-  if (error) throw new Error(`qcFail: failed to record QC failure: ${error.message}`);
+  const nextTimings = closeStageSession(
+    parseStageTimings(existing?.stage_timings),
+    'quality_check',
+    evalResult.result === 'pass' ? inspector : null,
+    now,
+  );
+
+  if (evalResult.result === 'pass') {
+    tripEntry.completed_date = getLocalDateStr();
+    const { error } = await db
+      .from('garments')
+      .update({
+        piece_stage: 'ready_for_dispatch' as PieceStage,
+        worker_history: history,
+        completion_time: now,
+        start_time: null,
+        trip_history: tripHistory,
+        stage_timings: nextTimings,
+        qc_rework_stages: null,
+      })
+      .eq('id', id);
+    if (error) throw new Error(`submitQc: failed to record QC pass: ${error.message}`);
+  } else {
+    const firstStage = orderedStages![0]!;
+    const { error } = await db
+      .from('garments')
+      .update({
+        piece_stage: firstStage,
+        start_time: null,
+        trip_history: tripHistory,
+        stage_timings: nextTimings,
+        qc_rework_stages: orderedStages,
+      })
+      .eq('id', id);
+    if (error) throw new Error(`submitQc: failed to record QC fail: ${error.message}`);
+  }
+
+  return { result: evalResult.result };
 };
 
 export const dispatchGarments = async (ids: string[]): Promise<void> => {

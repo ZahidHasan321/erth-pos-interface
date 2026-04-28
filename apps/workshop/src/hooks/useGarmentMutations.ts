@@ -10,8 +10,7 @@ import {
   startGarment,
   cancelStartGarment,
   completeAndAdvance,
-  qcPass,
-  qcFail,
+  submitQc,
   dispatchGarments,
   releaseFinals,
   releaseFinalsWithPlan,
@@ -30,8 +29,9 @@ import {
   COMPLETED_VIEW_KEY,
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
-import type { WorkshopGarment, MeasurementIssue, QCFlag } from '@repo/database';
+import type { WorkshopGarment } from '@repo/database';
 import type { PieceStage } from '@repo/database';
+import type { QcInputs } from '@/lib/qc-spec';
 
 function errorMsg(err: unknown): string {
   return err instanceof Error ? err.message : 'Unknown error';
@@ -282,37 +282,18 @@ export function useCompleteAndAdvance() {
   });
 }
 
-export function useQcPass() {
+export function useSubmitQc() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; worker: string; ratings: Record<string, number>; measurementIssues?: MeasurementIssue[] | null }) =>
-      qcPass(args.id, args.worker, args.ratings, args.measurementIssues ?? null),
-    onMutate: (args) => optimisticPatch(qc, [args.id], {
-      piece_stage: 'ready_for_dispatch' as PieceStage,
-      start_time: null,
-      quality_check_ratings: args.ratings,
-    }),
-    onError: (err, _args, rollback) => {
-      rollback?.();
-      toast.error(`QC pass failed: ${errorMsg(err)}`);
-    },
-    onSettled: () => invalidateAll(qc),
-  });
-}
-
-export function useQcFail() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { id: string; returnStages: PieceStage[]; reason: string; flags?: QCFlag[] }) =>
-      qcFail(args.id, args.returnStages, args.reason, args.flags ?? []),
-    onMutate: (args) => optimisticPatch(qc, [args.id], {
-      piece_stage: args.returnStages[0]!,
-      qc_rework_stages: args.returnStages,
-      start_time: null,
-    }),
-    onError: (err, _args, rollback) => {
-      rollback?.();
-      toast.error(`QC fail action failed: ${errorMsg(err)}`);
+    mutationFn: (args: {
+      id: string;
+      inspector: string;
+      inputs: QcInputs;
+      enabledKeys: Set<string>;
+      returnStages: PieceStage[] | null;
+    }) => submitQc(args.id, args.inspector, args.inputs, args.enabledKeys, args.returnStages),
+    onError: (err) => {
+      toast.error(`QC submit failed: ${errorMsg(err)}`);
     },
     onSettled: () => invalidateAll(qc),
   });

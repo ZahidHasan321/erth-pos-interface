@@ -1319,7 +1319,7 @@ DECLARE
   v_lockout_minutes INT := 15;
 BEGIN
   -- Look up user (case-insensitive)
-  SELECT id, username, name, role, department, job_function, pin, brands,
+  SELECT id, username, name, role, department, job_functions, pin, brands,
          failed_login_attempts, locked_until, is_active
   INTO v_user
   FROM users
@@ -1362,7 +1362,7 @@ BEGIN
       'name', v_user.name,
       'role', v_user.role,
       'department', v_user.department,
-      'job_function', v_user.job_function,
+      'job_functions', v_user.job_functions,
       'brands', v_user.brands
     );
   ELSE
@@ -1411,6 +1411,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ── PIN/Auth RPC access control ──
+-- These are SECURITY DEFINER and would otherwise be callable by anon/
+-- authenticated via PostgREST. set_user_pin and link_auth_id are
+-- account-takeover primitives if exposed; restrict to service_role
+-- (Edge Functions). verify_pin and get_login_users stay public — login
+-- needs them.
+REVOKE EXECUTE ON FUNCTION set_user_pin(UUID, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION link_auth_id(UUID, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION migrate_plaintext_pins() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_user_pin(UUID, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION link_auth_id(UUID, UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION migrate_plaintext_pins() TO service_role;
+
 -- Public RPC: returns active users for login page (no auth required, minimal fields)
 CREATE OR REPLACE FUNCTION get_login_users()
 RETURNS JSONB AS $$
@@ -1421,7 +1434,7 @@ RETURNS JSONB AS $$
       'name', name,
       'role', role,
       'department', department,
-      'job_function', job_function,
+      'job_functions', job_functions,
       'brands', brands
     ) ORDER BY name
   ), '[]'::jsonb)
@@ -1445,11 +1458,14 @@ RETURNS TEXT AS $$
   SELECT department::text FROM users WHERE auth_id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Get the current user's job_function (null = office user, not terminal-locked)
-CREATE OR REPLACE FUNCTION get_my_job_function()
-RETURNS TEXT AS $$
-  SELECT job_function::text FROM users WHERE auth_id = auth.uid();
+-- Get the current user's job_functions (empty = office user, not terminal-locked)
+CREATE OR REPLACE FUNCTION get_my_job_functions()
+RETURNS job_function[] AS $$
+  SELECT job_functions FROM users WHERE auth_id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Drop the legacy single-value helper. No callers in app code or RLS.
+DROP FUNCTION IF EXISTS get_my_job_function();
 
 -- Get the current user's id (users.id, NOT auth.uid()) from auth.uid() → users.auth_id
 CREATE OR REPLACE FUNCTION get_my_user_id()
@@ -1509,23 +1525,72 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 -- ── Users table ─────────────────────────────────────────────────────
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Everyone can read users (needed for displaying names, assignments, etc.)
+-- Lock out anonymous access entirely. Authenticated SELECT is filtered to
+-- non-sensitive columns via column grants below.
 DROP POLICY IF EXISTS "users_select" ON users;
-CREATE POLICY "users_select" ON users FOR SELECT USING (true);
+CREATE POLICY "users_select" ON users FOR SELECT USING (auth.uid() IS NOT NULL);
 
--- Admins can insert any user; managers can insert users in their own department
+-- Insert: admin can create any role; managers can create non-admin users in
+-- their own department only. The previous policy had an unqualified
+-- `department` reference that bound to the EXISTS alias `u.department`,
+-- making the dept check a no-op (always true). Use `users.department` to
+-- reference the new row.
 DROP POLICY IF EXISTS "users_insert" ON users;
 CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (
   is_admin() OR (
-    EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.role = 'manager' AND u.department = department)
+    EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.role = 'manager' AND u.department = users.department)
+    AND users.role NOT IN ('admin', 'super_admin')
   )
 );
 
--- Admins can update any user; others can update their own non-sensitive fields
+-- Update: row visibility for admin / dept-managers / self.
+-- Sensitive columns (role, department, pin, etc.) are protected by column
+-- grants below — clients cannot UPDATE them at all; mutations of those
+-- fields must go through the auth-admin Edge Function (service_role).
 DROP POLICY IF EXISTS "users_update" ON users;
 CREATE POLICY "users_update" ON users FOR UPDATE USING (
-  is_admin() OR id = get_my_user_id()
+  is_admin()
+  OR (get_my_role() = 'manager' AND department::text = get_my_department())
+  OR id = get_my_user_id()
+) WITH CHECK (
+  is_admin()
+  OR (get_my_role() = 'manager' AND department::text = get_my_department())
+  OR id = get_my_user_id()
 );
+
+-- Column-level grants. Sensitive columns are only writable via service_role
+-- (Edge Functions). pin / failed_login_attempts / locked_until are also not
+-- readable by clients — they're internal auth state.
+REVOKE ALL ON users FROM anon;
+REVOKE ALL ON users FROM authenticated;
+
+-- Read access: hide pin and lockout state from clients
+GRANT SELECT (
+  id, auth_id, username, name, email, country_code, phone,
+  role, department, job_functions, brands, is_active,
+  employee_id, nationality, hire_date, notes,
+  created_at, updated_at
+) ON users TO authenticated;
+
+-- Write access: clients can edit display/contact fields. Role, department,
+-- job_functions, is_active, brands, username, auth_id, pin, and lockout
+-- counters are service_role-only (changed via auth-admin Edge Function).
+GRANT UPDATE (
+  name, email, country_code, phone,
+  employee_id, nationality, hire_date, notes,
+  updated_at
+) ON users TO authenticated;
+
+-- INSERT/DELETE go through Edge Functions (service_role). No direct client
+-- writes — RLS would catch admin inserts, but column grants are belt+braces.
+
+-- service_role needs full access for Edge Functions (auth-admin, auth-login).
+-- The REVOKE ALL above only targets anon/authenticated, but drizzle-kit
+-- recreating tables strips service_role's grants too — re-grant the
+-- Supabase default so admin paths keep working.
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
 
 -- ── User Sessions (Presence) ────────────────────────────────────────
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;

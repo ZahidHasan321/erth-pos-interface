@@ -82,7 +82,7 @@ export const Route = createFileRoute("/$main")<{
     // their own terminal means keeping them on the wrong domain; safer to
     // scrub the session and let them sign back in via the workshop login.
     const user = (context.auth as any).user;
-    if (user && user.role === "staff" && user.job_function) {
+    if (user && user.role === "staff" && Array.isArray(user.job_functions) && user.job_functions.length > 0) {
       throw redirect({
         to: `/${params.main}/login` as any,
         search: { redirect: undefined, error: "terminal_user_on_pos" } as any,

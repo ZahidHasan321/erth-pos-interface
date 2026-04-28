@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       user_id: userId,
       role: userData.role,
       department: userData.department,
-      job_function: userData.job_function,
+      job_functions: userData.job_functions ?? [],
     };
 
     // Step 2: Find or create Supabase Auth user
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
           name: userData.name,
           role: userData.role,
           department: userData.department,
-          job_function: userData.job_function,
+          job_functions: userData.job_functions ?? [],
           brands: userData.brands ?? [],
         },
       }),

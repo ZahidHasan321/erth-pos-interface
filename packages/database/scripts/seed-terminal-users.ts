@@ -47,22 +47,22 @@ async function main() {
 
   for (const u of USERS) {
     const [user] = await sql<{ id: string; created: boolean }[]>`
-      INSERT INTO users (username, name, role, department, job_function, is_active, pin)
+      INSERT INTO users (username, name, role, department, job_functions, is_active, pin)
       VALUES (
         ${u.username}, ${u.name}, 'staff', 'workshop',
-        ${u.job_function}::job_function, true,
+        ARRAY[${u.job_function}]::job_function[], true,
         crypt(${PIN}, gen_salt('bf', 8))
       )
       ON CONFLICT (username) DO UPDATE SET
-        name         = EXCLUDED.name,
-        role         = EXCLUDED.role,
-        department   = EXCLUDED.department,
-        job_function = EXCLUDED.job_function,
-        is_active    = true,
-        pin          = crypt(${PIN}, gen_salt('bf', 8)),
+        name          = EXCLUDED.name,
+        role          = EXCLUDED.role,
+        department    = EXCLUDED.department,
+        job_functions = EXCLUDED.job_functions,
+        is_active     = true,
+        pin           = crypt(${PIN}, gen_salt('bf', 8)),
         failed_login_attempts = 0,
-        locked_until = NULL,
-        updated_at   = now()
+        locked_until  = NULL,
+        updated_at    = now()
       RETURNING id, (xmax = 0) AS created
     `;
 

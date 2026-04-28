@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCreateUser } from "@/hooks/useUsers";
-import { useCreateResource } from "@/hooks/useResources";
 import { useUnits } from "@/hooks/useUnits";
 import { Button } from "@repo/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, UserPlus, Factory, Sparkles } from "lucide-react";
 import { UserForm, EMPTY_USER_FORM, isUserFormValid, type UserFormState } from "@/components/users/UserForm";
 import { JOB_FUNCTION_LABELS } from "@/lib/rbac";
+import { JOB_FUNCTION_TO_STAGE } from "@/lib/job-functions";
 import type { JobFunction, ProductionStage } from "@repo/database";
 
 type NewUserSearch = {
@@ -48,7 +48,6 @@ function NewUserPage() {
   const navigate = useNavigate();
   const { stage: presetStage, unit_id: presetUnitId } = Route.useSearch();
   const createUserMut = useCreateUser();
-  const createResourceMut = useCreateResource();
   const { data: units = [] } = useUnits();
 
   const presetJobFunction = presetStage ? STAGE_TO_JOB_FUNCTION[presetStage] : undefined;
@@ -58,7 +57,7 @@ function NewUserPage() {
     ...EMPTY_USER_FORM,
     role: presetJobFunction ? "staff" : EMPTY_USER_FORM.role,
     department: presetJobFunction ? "workshop" : EMPTY_USER_FORM.department,
-    job_function: presetJobFunction ?? null,
+    job_functions: presetJobFunction ? [presetJobFunction] : [],
   }));
 
   const handleSubmit = async () => {
@@ -66,7 +65,25 @@ function NewUserPage() {
     const isTerminalWorker =
       form.role === "staff" &&
       form.department === "workshop" &&
-      form.job_function !== null;
+      form.job_functions.length > 0;
+
+    // Terminal workers also need one `resources` row per assigned job. Hand
+    // them to the Edge Function so user + auth + pin + resources land
+    // atomically (rollback if any step fails — no orphan accounts). The
+    // preset unit (if a manager came from the production-team page) is only
+    // applied to the matching stage; other stages are created with no unit
+    // and the manager assigns them later on /team.
+    const resources = isTerminalWorker
+      ? form.job_functions.map((job) => {
+          const stage = JOB_FUNCTION_TO_STAGE[job];
+          const matchesPreset = presetStage && stage === presetStage;
+          return {
+            resource_name: form.name,
+            responsibility: stage,
+            unit_id: matchesPreset ? presetUnitId ?? null : null,
+          };
+        })
+      : [];
 
     try {
       const created = await createUserMut.mutateAsync({
@@ -77,7 +94,7 @@ function NewUserPage() {
         phone: form.phone || null,
         role: form.role,
         department: form.department,
-        job_function: isTerminalWorker ? form.job_function : null,
+        job_functions: isTerminalWorker ? form.job_functions : [],
         brands: form.department === "shop" ? form.brands : null,
         is_active: form.is_active,
         pin: form.pin || undefined,
@@ -85,19 +102,8 @@ function NewUserPage() {
         nationality: form.nationality || null,
         hire_date: form.hire_date || null,
         notes: form.notes || null,
+        resources,
       });
-
-      if (isTerminalWorker && form.job_function) {
-        const stage = Object.entries(STAGE_TO_JOB_FUNCTION).find(
-          ([, jf]) => jf === form.job_function,
-        )?.[0] as ProductionStage | undefined;
-        await createResourceMut.mutateAsync({
-          user_id: created.id,
-          resource_name: form.name,
-          responsibility: stage ?? null,
-          unit_id: presetUnitId ?? null,
-        });
-      }
 
       toast.success(`User "${created.name}" created`);
       navigate({ to: "/users/$userId", params: { userId: created.id } });
@@ -106,7 +112,7 @@ function NewUserPage() {
     }
   };
 
-  const isPending = createUserMut.isPending || createResourceMut.isPending;
+  const isPending = createUserMut.isPending;
   const canSubmit = isUserFormValid(form, "add");
 
   return (

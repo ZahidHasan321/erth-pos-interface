@@ -23,7 +23,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function ImageOptionGrid({
+export function ImageOptionGrid({
   options, value, onChange, allowClear = false, cols = "auto",
 }: {
   options: BaseOption[];
@@ -87,7 +87,7 @@ function ImageOptionGrid({
   );
 }
 
-function ThicknessPicker({
+export function ThicknessPicker({
   value, onChange,
 }: { value: string | null; onChange: (v: string) => void }) {
   return (
@@ -115,7 +115,7 @@ function ThicknessPicker({
   );
 }
 
-function IconToggle({
+export function IconToggle({
   checked, onChange, icon, label,
 }: {
   checked: boolean;
@@ -170,25 +170,32 @@ export function StyleFields() {
             <Controller
               control={control}
               name="lines"
-              render={({ field }) => (
-                <div className="inline-flex rounded-lg border bg-background p-0.5">
-                  {[1, 2, 3].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => field.onChange(n)}
-                      className={cn(
-                        "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
-                        field.value === n
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              )}
+              render={({ field }) => {
+                const options: { value: number | null; label: string }[] = [
+                  { value: null, label: "None" },
+                  { value: 1, label: "1" },
+                  { value: 2, label: "2" },
+                ];
+                return (
+                  <div className="inline-flex rounded-lg border bg-background p-0.5">
+                    {options.map((o) => (
+                      <button
+                        key={o.label}
+                        type="button"
+                        onClick={() => field.onChange(o.value)}
+                        className={cn(
+                          "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
+                          field.value === o.value
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              }}
             />
           </div>
         </div>

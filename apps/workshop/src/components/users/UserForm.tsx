@@ -5,7 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@repo/ui/date-picker";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Combobox } from "@repo/ui/combobox";
+import { FlagIcon } from "@repo/ui/flag-icon";
 import { ROLE_LABELS, DEPARTMENT_LABELS, JOB_FUNCTION_LABELS } from "@/lib/rbac";
+import { getSortedCountries } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import {
   UserCog, Shield, Phone, Mail, Hash,
@@ -14,6 +17,34 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import type { Role, Department, JobFunction } from "@repo/database";
+
+const SORTED_COUNTRIES = getSortedCountries();
+const PHONE_CODE_OPTIONS = SORTED_COUNTRIES.map((c) => ({
+  value: c.phoneCode,
+  label: `${c.name} ${c.phoneCode}`,
+  node: (
+    <span className="flex items-center gap-2">
+      <FlagIcon code={c.code} />
+      {c.name} {c.phoneCode}
+    </span>
+  ),
+  selectedNode: (
+    <span className="flex items-center gap-2">
+      <FlagIcon code={c.code} />
+      {c.phoneCode}
+    </span>
+  ),
+}));
+const NATIONALITY_OPTIONS = SORTED_COUNTRIES.map((c) => ({
+  value: c.name,
+  label: c.name,
+  node: (
+    <span className="flex items-center gap-2">
+      <FlagIcon code={c.code} />
+      {c.name}
+    </span>
+  ),
+}));
 
 export const ALL_BRANDS = ["erth", "sakkba", "qass"] as const;
 export const BRAND_LABELS: Record<string, string> = { erth: "Erth", sakkba: "Sakkba", qass: "Qass" };
@@ -27,7 +58,7 @@ export type UserFormState = {
   phone: string;
   role: Role;
   department: Department;
-  job_function: JobFunction | null;
+  job_functions: JobFunction[];
   brands: string[];
   is_active: boolean;
   pin: string;
@@ -45,7 +76,7 @@ export const EMPTY_USER_FORM: UserFormState = {
   phone: "",
   role: "staff",
   department: "workshop",
-  job_function: null,
+  job_functions: [],
   brands: [],
   is_active: true,
   pin: "",
@@ -171,12 +202,15 @@ export function UserForm({
           <div className="space-y-1.5">
             <FieldLabel>Phone</FieldLabel>
             <div className="flex gap-1.5">
-              <Input
-                className="w-[72px] shrink-0 text-center font-mono text-xs"
-                placeholder="+965"
-                value={form.country_code}
-                onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))}
-              />
+              <div className="w-[120px] shrink-0">
+                <Combobox
+                  options={PHONE_CODE_OPTIONS}
+                  value={form.country_code}
+                  onChange={(v) => setForm((p) => ({ ...p, country_code: v }))}
+                  placeholder="Code"
+                  contentClassName="!w-[280px]"
+                />
+              </div>
               <div className="relative flex-1">
                 <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
@@ -209,10 +243,11 @@ export function UserForm({
             </div>
             <div className="space-y-1.5">
               <FieldLabel>Nationality</FieldLabel>
-              <Input
-                placeholder="Kuwaiti"
+              <Combobox
+                options={NATIONALITY_OPTIONS}
                 value={form.nationality}
-                onChange={(e) => setForm((p) => ({ ...p, nationality: e.target.value }))}
+                onChange={(v) => setForm((p) => ({ ...p, nationality: v }))}
+                placeholder="Select nationality"
               />
             </div>
           </div>
@@ -290,32 +325,45 @@ export function UserForm({
               {form.role === "admin" && "Full access to all pages. Can manage users, schedules, pricing, and operations."}
               {form.role === "manager" && form.department === "workshop" && "Full workshop operations: scheduling, receiving, dispatch, team, performance."}
               {form.role === "manager" && form.department === "shop" && "View-only access to workshop data. Dashboard, tracker, performance."}
-              {form.role === "staff" && form.department === "workshop" && !form.job_function && "Office staff — dashboard / tracker / performance access."}
-              {form.role === "staff" && form.department === "workshop" && form.job_function && `Terminal worker — sees only the ${JOB_FUNCTION_LABELS[form.job_function]} terminal. No sidebar.`}
+              {form.role === "staff" && form.department === "workshop" && form.job_functions.length === 0 && "Office staff — dashboard / tracker / performance access."}
+              {form.role === "staff" && form.department === "workshop" && form.job_functions.length === 1 && `Terminal worker — sees only the ${JOB_FUNCTION_LABELS[form.job_functions[0]]} terminal. No sidebar.`}
+              {form.role === "staff" && form.department === "workshop" && form.job_functions.length > 1 && `Cross-trained terminal worker — switches between ${form.job_functions.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ")} via a tab bar. No sidebar.`}
               {form.role === "staff" && form.department === "shop" && "Shop-only access. No workshop pages."}
             </p>
           </div>
 
           {form.role === "staff" && form.department === "workshop" && (
-            <div className="space-y-1.5">
-              <FieldLabel>Terminal Assignment</FieldLabel>
-              <Select
-                value={form.job_function ?? "none"}
-                onValueChange={(v) =>
-                  setForm((p) => ({
-                    ...p,
-                    job_function: v === "none" ? null : (v as JobFunction),
-                  }))
-                }
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (office staff)</SelectItem>
-                  {JOB_FUNCTIONS.map((j) => (
-                    <SelectItem key={j} value={j}>{JOB_FUNCTION_LABELS[j]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <FieldLabel>Terminal Assignments</FieldLabel>
+              <p className="text-[11px] text-muted-foreground">
+                Pick every station this worker can run. One resource is created per station so the scheduler tracks each skill's capacity separately.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {JOB_FUNCTIONS.map((j) => {
+                  const selected = form.job_functions.includes(j);
+                  return (
+                    <ChipToggle
+                      key={j}
+                      active={selected}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          job_functions: selected
+                            ? p.job_functions.filter((x) => x !== j)
+                            : [...p.job_functions, j],
+                        }))
+                      }
+                    >
+                      {JOB_FUNCTION_LABELS[j]}
+                    </ChipToggle>
+                  );
+                })}
+              </div>
+              {form.job_functions.length === 0 && (
+                <p className="text-[11px] text-muted-foreground italic pt-1">
+                  No stations selected — this user will be office staff.
+                </p>
+              )}
             </div>
           )}
 

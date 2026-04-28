@@ -13,6 +13,7 @@
     "db:test": "tsx scripts/test-queries.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
     "db:seed-terminal-users": "tsx scripts/seed-terminal-users.ts",
+    "db:seed-office-users": "tsx scripts/seed-office-users.ts",
     "db:migrate-styles-pricing": "tsx scripts/migrate-styles-pricing.ts",
     "db:import-airtable": "tsx scripts/import-airtable.ts",
     "check-types": "tsc --noEmit",

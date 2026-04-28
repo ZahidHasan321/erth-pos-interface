@@ -5,10 +5,12 @@ import type { Role, Department, JobFunction } from "./schema";
 // Hierarchy:
 //   - role: rank (super_admin > admin > manager > staff)
 //   - department: workshop | shop
-//   - job_function: terminal specialisation for workshop staff (nullable)
+//   - job_functions: terminal specialisations for workshop staff (array; may
+//     hold more than one when a worker is cross-trained, e.g. ["sewer","qc"]).
 //
-// Null job_function = office user; access decided by role + department.
-// Non-null job_function = terminal-locked user; sees only their own terminal page.
+// Empty job_functions = office user; access decided by role + department.
+// One or more job_functions = terminal-locked user; sees only the terminal
+// pages matching their assigned jobs (one tab per job).
 //
 // Per-app code supplies its own PERMISSIONS matrix keyed on page paths.
 // Shared helpers (canAccess / isAdmin / isTerminalUser / getTerminalPath)
@@ -20,7 +22,7 @@ export interface AuthUser {
   name: string;
   role: Role;
   department: Department | null;
-  job_function: JobFunction | null;
+  job_functions: JobFunction[];
   brands: string[] | null;
   is_active: boolean;
   email: string | null;
@@ -33,9 +35,9 @@ export type Permission = "full" | "view" | "own" | "none";
 // Matrix key format:
 //   "admin"                        → super_admin or admin (rank override)
 //   "manager:workshop"             → manager + department
-//   "staff:workshop"               → staff + department (office staff, no job_function)
-//   "terminal:sewer"               → any staff with job_function = sewer
-//   "terminal"                     → any staff with a non-null job_function (wildcard)
+//   "staff:workshop"               → staff + department (office staff, empty job_functions)
+//   "terminal:sewer"               → any staff with "sewer" in job_functions
+//   "terminal"                     → any staff with at least one job_function (wildcard)
 export type PermissionMatrix = Record<string, Record<string, Permission>>;
 
 function getUserKeys(user: AuthUser): string[] {
@@ -47,14 +49,18 @@ function getUserKeys(user: AuthUser): string[] {
     return keys;
   }
 
-  // Terminal-locked staff — add terminal-specific key first (most specific wins).
-  if (user.role === "staff" && user.job_function) {
-    keys.push(`terminal:${user.job_function}`);
+  // Terminal-locked staff — emit one specific key per assigned job. A
+  // sewer+qc worker hits both `terminal:sewer` and `terminal:qc` matrix
+  // entries, so each terminal page they're assigned to grants access.
+  if (user.role === "staff" && user.job_functions.length > 0) {
+    for (const job of user.job_functions) {
+      keys.push(`terminal:${job}`);
+    }
     keys.push("terminal");
     return keys;
   }
 
-  // Office user (staff or manager without job_function).
+  // Office user (staff or manager with no terminal jobs).
   if (user.department) {
     keys.push(`${user.role}:${user.department}`);
   }
@@ -115,7 +121,7 @@ export function isManager(user: AuthUser | null): boolean {
 }
 
 export function isTerminalUser(user: AuthUser | null): boolean {
-  return !!user && user.role === "staff" && !!user.job_function;
+  return !!user && user.role === "staff" && user.job_functions.length > 0;
 }
 
 // Map job_function → terminal route path. URL slugs use hyphens;
@@ -130,9 +136,23 @@ const TERMINAL_PATHS: Record<JobFunction, string> = {
   qc: "/terminals/quality-check",
 };
 
+// First job's terminal path. Used as the post-login redirect target —
+// multi-job workers land on their first tab and switch from the tab bar.
 export function getTerminalPath(user: AuthUser | null): string | null {
-  if (!user?.job_function) return null;
-  return TERMINAL_PATHS[user.job_function] ?? null;
+  const first = user?.job_functions?.[0];
+  if (!first) return null;
+  return TERMINAL_PATHS[first] ?? null;
+}
+
+// All terminal paths for a user, in their assigned order. Powers the tab
+// bar in TerminalLayout when a worker holds multiple jobs.
+export function getTerminalPaths(
+  user: AuthUser | null,
+): Array<{ job: JobFunction; path: string }> {
+  if (!user?.job_functions?.length) return [];
+  return user.job_functions
+    .map((job) => ({ job, path: TERMINAL_PATHS[job] }))
+    .filter((entry): entry is { job: JobFunction; path: string } => !!entry.path);
 }
 
 export const ROLE_LABELS: Record<Role, string> = {

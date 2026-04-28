@@ -269,10 +269,11 @@ function StageTabs({
 // ── Worker Row ──────────────────────────────────────────────────────
 
 function WorkerRow({
-  w, actual, onEdit, onDelete,
+  w, actual, otherStages, onEdit, onDelete,
 }: {
   w: ResourceWithUser;
   actual: number;
+  otherStages: string[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -292,7 +293,11 @@ function WorkerRow({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">{w.resource_name}</p>
-            {w.user && (
+            {otherStages.length > 0 ? (
+              <p className="text-[11px] text-muted-foreground truncate">
+                Also: {otherStages.join(", ")}
+              </p>
+            ) : w.user && (
               <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
                 <Link2 className="w-2.5 h-2.5" />
                 {w.user.name}
@@ -364,6 +369,11 @@ function WorkerRow({
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{w.resource_name}</p>
+              {otherStages.length > 0 && (
+                <p className="text-[10px] text-muted-foreground truncate">
+                  Also: {otherStages.join(", ")}
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-0.5">
                 {w.resource_type && (
                   <span className={cn(
@@ -396,11 +406,12 @@ function WorkerRow({
 // ── Unit Section ────────────────────────────────────────────────────
 
 function UnitSection({
-  unit, workers, todayCompletions, stageColor, onEditUnit, onDeleteUnit, onAddWorker, onEditWorker, onDeleteWorker,
+  unit, workers, todayCompletions, otherStagesByResourceId, stageColor, onEditUnit, onDeleteUnit, onAddWorker, onEditWorker, onDeleteWorker,
 }: {
   unit: Unit | null; // null = Unassigned bucket
   workers: ResourceWithUser[];
   todayCompletions: Map<string, number>;
+  otherStagesByResourceId: Map<string, string[]>;
   stageColor: string;
   onEditUnit?: () => void;
   onDeleteUnit?: () => void;
@@ -500,6 +511,7 @@ function UnitSection({
                   key={w.id}
                   w={w}
                   actual={todayCompletions.get(w.resource_name) ?? 0}
+                  otherStages={otherStagesByResourceId.get(w.id) ?? []}
                   onEdit={() => onEditWorker(w)}
                   onDelete={() => onDeleteWorker(w)}
                 />
@@ -733,6 +745,28 @@ function TeamPage() {
 
   const unassignedWorkers = workersByUnit.get(null) ?? [];
 
+  // For cross-trained workers (multiple job_functions → multiple resource rows
+  // sharing user_id), list the other stages this row's user works on.
+  const otherStagesByResourceId = useMemo(() => {
+    const stagesByUser = new Map<string, ProductionStage[]>();
+    for (const r of resources) {
+      if (!r.user_id || !r.responsibility) continue;
+      const arr = stagesByUser.get(r.user_id) ?? [];
+      arr.push(r.responsibility as ProductionStage);
+      stagesByUser.set(r.user_id, arr);
+    }
+    const map = new Map<string, string[]>();
+    for (const r of resources) {
+      if (!r.user_id) continue;
+      const all = stagesByUser.get(r.user_id) ?? [];
+      const others = all
+        .filter((s) => s !== r.responsibility)
+        .map((s) => STAGES.find((st) => st.key === s)?.label ?? s);
+      map.set(r.id, others);
+    }
+    return map;
+  }, [resources]);
+
   const workerCountByUnit = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of resources) {
@@ -887,6 +921,7 @@ function TeamPage() {
               unit={u}
               workers={workersByUnit.get(u.id) ?? []}
               todayCompletions={todayCompletions}
+              otherStagesByResourceId={otherStagesByResourceId}
               stageColor={stageColor}
               onEditUnit={() => openEditUnit(u)}
               onDeleteUnit={() => setDeleteUnitTarget(u)}
@@ -900,6 +935,7 @@ function TeamPage() {
               unit={null}
               workers={unassignedWorkers}
               todayCompletions={todayCompletions}
+              otherStagesByResourceId={otherStagesByResourceId}
               stageColor="bg-muted-foreground"
               onAddWorker={() => goToAddWorker(activeStage, null)}
               onEditWorker={openEditWorker}

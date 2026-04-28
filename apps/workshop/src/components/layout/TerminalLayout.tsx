@@ -1,18 +1,24 @@
-import { Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
-import { JOB_FUNCTION_LABELS } from "@/lib/rbac";
+import { JOB_FUNCTION_LABELS, getTerminalPaths } from "@/lib/rbac";
 import { Button } from "@repo/ui/button";
 import { LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Bare-bones fullscreen layout for terminal-only users.
-// No sidebar. Minimal header = brand mark + user + logout.
+// No sidebar. Header = brand mark + active job + user + logout.
+// When a worker holds multiple job_functions, a tab bar lets them switch
+// between their assigned terminals (e.g. Sewing ↔ Quality Check).
 interface TerminalLayoutProps {
   onLogout: () => void;
 }
 
 export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
   const { user } = useAuth();
-  const jobLabel = user?.job_function ? JOB_FUNCTION_LABELS[user.job_function] : null;
+  const location = useLocation();
+  const tabs = getTerminalPaths(user);
+  const activeTab = tabs.find((t) => location.pathname.startsWith(t.path));
+  const activeJobLabel = activeTab ? JOB_FUNCTION_LABELS[activeTab.job] : null;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
@@ -23,7 +29,7 @@ export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
           </div>
           <div className="flex flex-col leading-tight">
             <span className="font-bold text-sm uppercase tracking-wider">
-              {jobLabel ?? "Terminal"}
+              {activeJobLabel ?? "Terminal"}
             </span>
             {user?.name && (
               <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
@@ -42,6 +48,27 @@ export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
           <span className="hidden sm:inline">Logout</span>
         </Button>
       </header>
+      {tabs.length > 1 && (
+        <nav className="flex items-stretch border-b bg-card shrink-0 overflow-x-auto">
+          {tabs.map((tab) => {
+            const isActive = activeTab?.job === tab.job;
+            return (
+              <Link
+                key={tab.job}
+                to={tab.path}
+                className={cn(
+                  "px-4 h-10 flex items-center text-xs font-bold uppercase tracking-wider border-b-2 transition-colors whitespace-nowrap",
+                  isActive
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {JOB_FUNCTION_LABELS[tab.job]}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
       <main
         data-scroll-restoration-id="terminal-main-scroll"
         className="flex-1 overflow-y-auto overflow-x-hidden"

@@ -19,7 +19,7 @@ export const Route = createFileRoute("/cashier")({
             });
         }
         const user = (context.auth as any).user;
-        if (user && user.role === "staff" && user.job_function) {
+        if (user && user.role === "staff" && Array.isArray(user.job_functions) && user.job_functions.length > 0) {
             throw redirect({
                 to: "/login",
                 search: { redirect: undefined, error: "terminal_user_on_pos" } as any,

@@ -19,7 +19,7 @@ const AuthContext = React.createContext<AuthContext | null>(null);
 async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
   const { data, error } = await db
     .from('users')
-    .select('id, username, name, role, department, job_function, brands, is_active, email, phone, employee_id')
+    .select('id, username, name, role, department, job_functions, brands, is_active, email, phone, employee_id')
     .eq('id', userId)
     .single();
 
@@ -38,7 +38,7 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
     name: data.name,
     role: data.role ?? 'staff',
     department: data.department ?? null,
-    job_function: data.job_function ?? null,
+    job_functions: Array.isArray(data.job_functions) ? data.job_functions : [],
     brands: data.brands ?? null,
     is_active: data.is_active ?? true,
     email: data.email ?? null,

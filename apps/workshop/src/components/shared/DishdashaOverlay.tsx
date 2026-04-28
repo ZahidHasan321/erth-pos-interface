@@ -184,6 +184,9 @@ interface DishdashaOverlayProps {
   measurement: Measurement | null | undefined;
   /** On alterations, narrows the view to only measurements/sections that changed. */
   alterationFilter?: AlterationFilter | null;
+  /** Operator-recorded values from the last QC fail. Rendered in red beside the
+   *  expected value so the worker knows what to correct. */
+  qcFailActuals?: Map<string, number> | null;
   notes?: string | null;
 }
 
@@ -191,6 +194,7 @@ export function DishdashaOverlay({
   garment,
   measurement,
   alterationFilter,
+  qcFailActuals,
   notes,
 }: DishdashaOverlayProps) {
   const g = garment as any;
@@ -202,14 +206,26 @@ export function DishdashaOverlay({
   // Sidebar style measurements (pocket sizes, jabzour, collar dims) are absolute
   // style dimensions — degree is a body-posture offset that applies only to the
   // main body measurements shown on the SVG template, not to these.
-  const measureVal = (key: keyof Measurement) =>
-    m ? (
-      <MeasurementValue
-        raw={m[key]}
-        degree={0}
-        correction={corrections.get(key as string) ?? null}
-      />
-    ) : null;
+  const measureVal = (key: keyof Measurement) => {
+    if (!m) return null;
+    const correction = corrections.get(key as string) ?? null;
+    const qcActual = qcFailActuals?.get(key as string);
+    if (qcActual === undefined) {
+      return <MeasurementValue raw={m[key]} degree={0} correction={correction} />;
+    }
+    return (
+      <span className="inline-flex flex-col items-center justify-center gap-0.5">
+        <MeasurementValue raw={m[key]} degree={0} correction={correction} />
+        <span
+          className="text-red-600 font-black leading-none"
+          style={{ fontSize: "0.7em" }}
+          title={`QC measured ${qcActual}`}
+        >
+          <MeasurementValue raw={qcActual} degree={0} />
+        </span>
+      </span>
+    );
+  };
 
   const styleLabel = String(g.style ?? "kuwaiti").toUpperCase();
   const lineCount = String(g.lines ?? 1);
@@ -256,6 +272,8 @@ export function DishdashaOverlay({
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
             const correction = corrections.get(key as string) ?? null;
+            const qcActual = qcFailActuals?.get(key as string);
+            const hasQcActual = qcActual !== undefined;
             const effectiveRaw = correction ? correction.corrected : (m ? m[key] : null);
             const parts = parseMeasurementParts(effectiveRaw, correction ? 0 : degree);
             if (!parts) return null;
@@ -264,13 +282,15 @@ export function DishdashaOverlay({
             const reason = alterationFilter?.fieldReasons.get(key as string);
             const tintClass = correction
               ? "bg-red-50 border-red-500 text-red-700"
-              : reason
-                ? ALTERATION_REASON_CELL_CLASS[reason]
-                : "bg-white/95 border-zinc-500 text-zinc-900";
+              : hasQcActual
+                ? "bg-red-50 border-red-500 text-zinc-900"
+                : reason
+                  ? ALTERATION_REASON_CELL_CLASS[reason]
+                  : "bg-white/95 border-zinc-500 text-zinc-900";
             return (
               <div
                 key={field.id}
-                className={`absolute flex items-center justify-center border font-black leading-none ${tintClass}`}
+                className={`absolute flex ${hasQcActual && !isVertical ? "flex-col" : ""} items-center justify-center border font-black leading-none ${tintClass}`}
                 style={{
                   left: `${field.left}%`,
                   top: `${field.top}%`,
@@ -286,6 +306,15 @@ export function DishdashaOverlay({
                   degree={degree}
                   correction={correction}
                 />
+                {hasQcActual && (
+                  <span
+                    className="text-red-600 font-black"
+                    style={{ fontSize: "0.62em", lineHeight: 1 }}
+                    title={`QC measured ${qcActual}`}
+                  >
+                    <MeasurementValue raw={qcActual} degree={0} />
+                  </span>
+                )}
               </div>
             );
           })}

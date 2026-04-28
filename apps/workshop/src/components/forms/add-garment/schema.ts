@@ -43,7 +43,7 @@ export const addGarmentSchema = z.object({
 
   // Style + options
   style: z.string(),
-  lines: z.number().int().min(1).max(3),
+  lines: z.number().int().min(1).max(2).nullable(),
   collar_type: z.string().nullable(),
   collar_button: z.string().nullable(),
   small_tabaggi: z.boolean(),

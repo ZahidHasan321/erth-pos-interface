@@ -40,6 +40,7 @@ interface ComboboxProps {
   disabled?: boolean;
   onSearch?: (query: string) => void;
   className?: string;
+  contentClassName?: string;
 }
 
 export function Combobox({
@@ -51,6 +52,7 @@ export function Combobox({
   disabled,
   onSearch,
   className,
+  contentClassName,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const selectedOption = options.find((option) => option.value === value);
@@ -79,7 +81,7 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="!w-[var(--radix-popover-trigger-width)] p-0 pointer-events-auto"
+        className={cn("!w-[var(--radix-popover-trigger-width)] p-0 pointer-events-auto", contentClassName)}
       >
         <Command>
           <CommandInput placeholder={placeholder} {...(onSearch ? { onValueChange: onSearch } : {})} />

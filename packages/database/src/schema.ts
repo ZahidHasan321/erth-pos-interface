@@ -234,7 +234,7 @@ export const users = pgTable("users", {
     phone: text("phone"),
     role: roleEnum("role").default("staff"),
     department: departmentEnum("department"),
-    job_function: jobFunctionEnum("job_function"),
+    job_functions: jobFunctionEnum("job_functions").array().notNull().default(sql`'{}'::job_function[]`),
     brands: text("brands").array(),
     is_active: boolean("is_active").default(true).notNull(),
     pin: text("pin"),
@@ -581,17 +581,37 @@ export interface QCFlag {
 
 export interface QcAttempt {
     inspector: string;
-    ratings: Record<string, number> | null;
-    result: "pass" | "fail";
-    fail_reason: string | null;
-    /** New: array of stages garment must re-run before next QC. */
-    return_stages?: string[] | null;
-    /** Deprecated single-stage form. Read fallback for old records. */
-    return_stage?: string | null;
     date: string;
-    /** New: simple flags (no numeric values), used on fail attempts. */
+    result: "pass" | "fail";
+    /** Trip number this attempt belongs to. Optional for legacy records. */
+    trip?: number;
+    /** Sequential number within the trip (1, 2, ...). Optional for legacy records. */
+    attempt_number?: number;
+    /** Operator-recorded measurements keyed by `measurements` column name. */
+    measurements?: Record<string, number> | null;
+    /** Operator-recorded options keyed by `garments` column name. */
+    options?: Record<string, string | boolean | number | null> | null;
+    /** Operator-recorded 1-5 ratings keyed by quality aspect. */
+    quality_ratings?: Record<string, number> | null;
+    /** Keys (measurement column names) that exceeded tolerance this attempt. */
+    failed_measurements?: string[] | null;
+    /** Keys (garment option columns) that did not match expected value. */
+    failed_options?: string[] | null;
+    /** Keys (quality aspect names) scored below threshold. */
+    failed_quality?: string[] | null;
+    /** Stages garment must re-run on fail; null on pass. */
+    return_stages?: string[] | null;
+
+    // ── Legacy fields (deprecated, read-only fallback for historical records) ──
+    /** @deprecated use quality_ratings */
+    ratings?: Record<string, number> | null;
+    /** @deprecated unused — system computes verdict, no free-text reason */
+    fail_reason?: string | null;
+    /** @deprecated single-stage form */
+    return_stage?: string | null;
+    /** @deprecated old flag editor */
     flags?: QCFlag[] | null;
-    /** Deprecated. Old pass-mode mistake records. */
+    /** @deprecated old pass-mode correction records */
     measurement_issues?: MeasurementIssue[] | null;
 }
 

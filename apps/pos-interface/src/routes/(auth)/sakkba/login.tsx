@@ -60,8 +60,8 @@ function SakkbaLoginPage() {
         setUsers(
           (data as ShopUser[]).filter(
             (u) =>
-              u.brands?.includes("sakkba") &&
-              (u.department === "shop" || u.role === "super_admin")
+              (u.department === "shop" || u.role === "super_admin") &&
+              (!u.brands || u.brands.length === 0 || u.brands.includes("sakkba"))
           )
         );
       }

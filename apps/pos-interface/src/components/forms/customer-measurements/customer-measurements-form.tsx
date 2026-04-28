@@ -685,8 +685,8 @@ export function CustomerMeasurementsForm({
               { name: "jabzour_width", label: "Jabzour W", options: JABZOUR_SIDEPOCKET_OPTIONS },
               { name: "top_pocket_length", label: "Top Pkt Len" },
               { name: "top_pocket_width", label: "Top Pkt W" },
-              { name: "side_pocket_length", label: "Side Pkt Len", options: JABZOUR_SIDEPOCKET_OPTIONS },
-              { name: "side_pocket_width", label: "Side Pkt W", options: JABZOUR_SIDEPOCKET_OPTIONS },
+              { name: "side_pocket_length", label: "Side Pkt Len" },
+              { name: "side_pocket_width", label: "Side Pkt W" },
               { name: "side_pocket_distance", label: "Side Pkt Dist" },
               { name: "side_pocket_opening", label: "Side Pkt Open" },
             ]}

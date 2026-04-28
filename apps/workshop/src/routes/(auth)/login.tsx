@@ -39,12 +39,13 @@ type WorkshopUser = {
   name: string;
   role: string | null;
   department: string | null;
-  job_function: string | null;
+  job_functions: string[] | null;
 };
 
 function pillSubtitle(u: WorkshopUser): string {
-  if (u.job_function && u.job_function in JOB_FUNCTION_LABELS) {
-    return JOB_FUNCTION_LABELS[u.job_function as JobFunction];
+  const jobs = (u.job_functions ?? []).filter((j): j is JobFunction => j in JOB_FUNCTION_LABELS);
+  if (jobs.length > 0) {
+    return jobs.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ");
   }
   if (u.role === "super_admin") return "Super Admin";
   if (u.role) return u.role.charAt(0).toUpperCase() + u.role.slice(1);
