@@ -161,7 +161,7 @@ function AddGarmentPage() {
         jabzour_1: values.jabzour_1,
         jabzour_2: values.jabzour_2,
         jabzour_thickness: values.jabzour_thickness,
-        lines: values.lines,
+        lines: values.lines ?? undefined,
         soaking: values.soaking,
         express: values.express,
         delivery_date: new Date(values.delivery_date).toISOString(),

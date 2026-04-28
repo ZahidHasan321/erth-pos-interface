@@ -1058,7 +1058,7 @@ export const submitQc = async (
   enabledKeys: Set<string>,
   returnStages: PieceStage[] | null,
 ): Promise<{ result: "pass" | "fail" }> => {
-  const { data: existing, error: fetchErr } = await db
+  const { data: existingData, error: fetchErr } = await db
     .from('garments')
     .select(`
       worker_history, trip_history, trip_number, stage_timings,
@@ -1070,6 +1070,7 @@ export const submitQc = async (
 
   if (fetchErr) throw new Error(`submitQc: failed to fetch garment for QC: ${fetchErr.message}`);
 
+  const existing = existingData as any;
   const expectedMeasurements = (existing?.measurement ?? {}) as Record<string, unknown>;
   const expectedOptions: Record<string, unknown> = {};
   for (const o of QC_OPTIONS) expectedOptions[o.key] = (existing as any)?.[o.key];

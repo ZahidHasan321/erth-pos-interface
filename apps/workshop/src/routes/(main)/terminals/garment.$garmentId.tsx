@@ -47,7 +47,6 @@ import {
 } from "lucide-react";
 import type {
   WorkshopGarment,
-  PieceStage,
   ProductionPlan,
   TripHistoryEntry,
 } from "@repo/database";
