@@ -24,12 +24,17 @@ async function fetchUserFromSession(userId: string): Promise<AuthUser | null> {
     .single();
 
   if (error) {
+    // PGRST116 = `.single()` got zero rows. Either the row was deleted, or
+    // RLS hid it because `is_active = false` (see is_active_user() / users_select
+    // policy in triggers.sql). Either way the session is no longer valid —
+    // return null so the caller signs out.
+    if (error.code === 'PGRST116') return null;
     throw new Error(`Failed to load user profile: ${error.message}`);
   }
   if (!data) return null;
 
-  // Deactivated account — caller forces logout. Returning null here keeps the
-  // pattern consistent with "user not found".
+  // Belt-and-braces: if RLS ever stops filtering, this client-side check still
+  // forces logout for inactive users.
   if (data.is_active === false) return null;
 
   return {

@@ -321,6 +321,10 @@ export interface RefundItem {
     style?: boolean;
     express?: boolean;
     soaking?: boolean;
+    /** Display metadata: hours soaked (8 or 24). Not used by the RPC; kept on the
+     *  saved refund_items JSON so the payment-history view can label which soaking
+     *  tier was refunded after prices change. */
+    soaking_hours?: number | null;
     shelf_item_id?: number;
     quantity?: number;
     /** Shelf refund only: whether to return units to stock. Defaults to true on the RPC side. */

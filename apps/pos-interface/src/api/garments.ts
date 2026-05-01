@@ -88,6 +88,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> =>
       )
     `)
     .eq('location', 'shop')
+    .neq('piece_stage', 'discarded')
     .eq('orders.brand', getBrand())
     .eq('garment_feedback.distribution', 'workshop');
 

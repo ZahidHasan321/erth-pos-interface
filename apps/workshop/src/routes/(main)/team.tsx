@@ -250,7 +250,7 @@ function StageTabs({
             <Icon className={cn("w-3.5 h-3.5", isActive ? stSc.iconColor : "")} />
             <span>{stage.label}</span>
             <span className={cn(
-              "text-[10px] font-bold tabular-nums ml-0.5 bg-muted px-1.5 py-0.5 rounded-full transition-colors duration-200",
+              "text-[10px] font-semibold tabular-nums ml-0.5 bg-muted px-1.5 py-0.5 rounded-sm transition-colors duration-200",
               isActive ? "text-foreground" : "text-muted-foreground",
             )}>
               {stats.count}
@@ -288,7 +288,7 @@ function WorkerRow({
       {/* Desktop */}
       <div className="hidden md:grid grid-cols-[1fr_80px_80px_80px_100px_70px] gap-2 px-5 py-2.5 items-center">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-7 h-7 rounded-full bg-zinc-100 flex items-center justify-center text-[11px] font-bold text-zinc-500 shrink-0">
+          <div className="w-7 h-7 rounded-sm border bg-muted flex items-center justify-center text-[11px] font-semibold text-muted-foreground shrink-0">
             {w.resource_name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
@@ -309,7 +309,7 @@ function WorkerRow({
         {w.resource_type ? (
           <span className={cn(
             "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded w-fit",
-            w.resource_type === "Senior" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600",
+            w.resource_type === "Senior" ? "bg-foreground text-background" : "bg-muted text-muted-foreground border",
           )}>
             {w.resource_type}
           </span>
@@ -322,11 +322,11 @@ function WorkerRow({
 
         {target > 0 ? (
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="flex-1 h-1 bg-muted overflow-hidden rounded-sm">
               <div
                 className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  eff >= 90 ? "bg-emerald-500" : eff >= 70 ? "bg-amber-500" : "bg-red-500",
+                  "h-full transition-all duration-500",
+                  eff >= 90 ? "bg-emerald-600" : eff >= 70 ? "bg-amber-600" : "bg-destructive",
                 )}
                 style={{ width: `${Math.min(eff, 100)}%` }}
               />
@@ -345,14 +345,14 @@ function WorkerRow({
         <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="p-1.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             aria-label="Edit worker"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+            className="p-1.5 rounded-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
             aria-label="Remove worker"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ function WorkerRow({
       <div className="md:hidden px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500 shrink-0">
+            <div className="w-8 h-8 rounded-sm border bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0">
               {w.resource_name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -378,7 +378,7 @@ function WorkerRow({
                 {w.resource_type && (
                   <span className={cn(
                     "text-[9px] font-bold uppercase px-1 py-0.5 rounded",
-                    w.resource_type === "Senior" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600",
+                    w.resource_type === "Senior" ? "bg-foreground text-background" : "bg-muted text-muted-foreground border",
                   )}>
                     {w.resource_type}
                   </span>
@@ -426,22 +426,21 @@ function UnitSection({
   const eff = targetSum > 0 ? Math.round((actualSum / targetSum) * 100) : 0;
 
   return (
-    <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+    <div className="border rounded-md overflow-hidden bg-card">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30 border-b">
+      <div className={cn("flex items-center gap-2 px-4 py-2 border-b border-l-2 bg-card", stageColor.replace("bg-", "border-l-"))}>
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="p-1 rounded hover:bg-muted"
+          className="p-1 rounded-sm hover:bg-muted"
           aria-label={collapsed ? "Expand unit" : "Collapse unit"}
         >
           <ChevronDown className={cn("w-4 h-4 transition-transform", collapsed && "-rotate-90")} />
         </button>
-        <div className={cn("w-1 h-5 rounded-full", stageColor)} />
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <h3 className="text-sm font-bold truncate">
-            {unit ? unit.name : <span className="text-muted-foreground italic">Unassigned</span>}
+          <h3 className="text-[13px] font-semibold truncate uppercase tracking-wide">
+            {unit ? unit.name : <span className="text-muted-foreground italic normal-case">Unassigned</span>}
           </h3>
-          <span className="text-[10px] font-bold tabular-nums bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
+          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground border px-1.5 py-px rounded-sm">
             {count}
           </span>
           {unit?.notes && (
@@ -457,7 +456,7 @@ function UnitSection({
           <div className="flex items-center gap-0.5">
             <button
               onClick={onAddWorker}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="p-1.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               aria-label="Add worker to unit"
               title="Add worker"
             >
@@ -466,7 +465,7 @@ function UnitSection({
             {unit && onEditUnit && (
               <button
                 onClick={onEditUnit}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="p-1.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 aria-label="Rename unit"
                 title="Rename unit"
               >
@@ -476,7 +475,7 @@ function UnitSection({
             {unit && onDeleteUnit && (
               <button
                 onClick={onDeleteUnit}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="p-1.5 rounded-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
                 aria-label="Delete unit"
                 title="Delete unit"
               >
@@ -896,11 +895,11 @@ function TeamPage() {
       <StageTabs activeStage={activeStage} onSelect={setActiveStage} stageStats={stageStats} />
 
       {isLoading || unitsLoading ? (
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-md" />
       ) : unitsForActiveStage.length === 0 && unassignedWorkers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <UserX className="w-8 h-8 text-muted-foreground" />
+          <div className="w-12 h-12 rounded-md border bg-muted flex items-center justify-center mb-4">
+            <UserX className="w-6 h-6 text-muted-foreground" />
           </div>
           <h3 className="text-base font-semibold mb-1">
             No {activeStageLabel.toLowerCase()} units yet

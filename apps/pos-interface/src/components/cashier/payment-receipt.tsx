@@ -15,6 +15,8 @@ export interface ReceiptGarment {
     fabric_length?: number;
     fabric_name?: string;
     express?: boolean;
+    soaking?: boolean;
+    soaking_hours?: number | null;
     fabric_price_snapshot?: number;
     stitching_price_snapshot?: number;
     style_price_snapshot?: number;
@@ -62,6 +64,7 @@ type ArabicKey =
     | "القماش"
     | "بروفه"
     | "استعجال"
+    | "نقع"
     | "خدمة التوصيل"
     | "الإجمالي";
 
@@ -77,6 +80,7 @@ const ARABIC_HEADERS: Record<ArabicKey, string> = {
     القماش: "القماش",
     بروفه: "بروفه",
     استعجال: "استعجال",
+    نقع: "نقع",
     "خدمة التوصيل": "خدمة التوصيل",
     الإجمالي: "الإجمالي",
 };
@@ -110,7 +114,7 @@ const thicknessMap: Record<string, string> = {
 const fmt = (n: number): string => Number(n.toFixed(3)).toString();
 
 const COL_ORDER: ArabicKey[] = [
-    "#", "الإجمالي", "خدمة التوصيل", "استعجال", "بروفه",
+    "#", "الإجمالي", "خدمة التوصيل", "نقع", "استعجال", "بروفه",
     "القماش", "عدد الأمتار", "الخط الجانبي", "بزمات",
     "الجبزور", "الحشوات", "الغولة", "الموديل",
 ];
@@ -158,6 +162,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                     القماش: g.fabric_name || "غير محدد",
                     بروفه: g.garment_type === "brova" ? "نعم" : "لا",
                     استعجال: g.express ? "نعم" : "لا",
+                    نقع: g.soaking ? (g.soaking_hours ? `${g.soaking_hours} س` : "نعم") : "لا",
                     "خدمة التوصيل": data.homeDelivery ? "منزلي" : "استلام",
                     الإجمالي: `${fmt((g.stitching_price_snapshot || 0) + (g.fabric_price_snapshot || 0) + (g.style_price_snapshot || 0))} د.ك`,
                 };

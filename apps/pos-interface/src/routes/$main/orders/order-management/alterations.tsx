@@ -42,6 +42,7 @@ async function getAlterationGarments(): Promise<AlterationGarment[]> {
     `)
     .in("feedback_status", ["needs_repair", "needs_redo"])
     .eq("location", "shop")
+    .neq("piece_stage", "discarded")
     .eq("order.brand", brand)
     .eq("order.checkout_status", "confirmed");
 

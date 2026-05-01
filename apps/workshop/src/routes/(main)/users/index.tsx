@@ -29,21 +29,21 @@ export const Route = createFileRoute("/(main)/users/")({
 });
 
 const ROLE_STYLE: Record<Role, string> = {
-  super_admin: "bg-zinc-950 text-white border-zinc-950",
-  admin:   "bg-zinc-900 text-white border-zinc-900",
-  manager: "bg-zinc-200 text-zinc-800 border-zinc-300",
-  staff:   "bg-zinc-100 text-zinc-500 border-zinc-200",
+  super_admin: "bg-foreground text-background border-foreground",
+  admin:       "bg-foreground text-background border-foreground",
+  manager:     "bg-muted text-foreground border-border",
+  staff:       "bg-card text-muted-foreground border-border",
 };
 
 const DEPT_STYLE: Record<Department, string> = {
-  workshop: "bg-zinc-100 text-zinc-600 border-zinc-200",
-  shop:     "bg-zinc-100 text-zinc-600 border-zinc-200",
+  workshop: "bg-card text-muted-foreground border-border",
+  shop:     "bg-card text-muted-foreground border-border",
 };
 
 function getAvatarStyle(role: Role, _department: Department) {
-  if (role === "admin") return "bg-zinc-900 text-white ring-zinc-400";
-  if (role === "manager") return "bg-zinc-200 text-zinc-700 ring-zinc-300";
-  return "bg-zinc-100 text-zinc-500 ring-zinc-200";
+  if (role === "admin" || role === "super_admin") return "bg-foreground text-background border-foreground";
+  if (role === "manager") return "bg-muted text-foreground border-border";
+  return "bg-card text-muted-foreground border-border";
 }
 
 
@@ -67,13 +67,10 @@ function DeactivateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <div className={cn(
-            "mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-2",
-            isActive ? "bg-zinc-100" : "bg-zinc-100",
-          )}>
+          <div className="mx-auto w-10 h-10 rounded-md border bg-muted flex items-center justify-center mb-2">
             {isActive
-              ? <AlertTriangle className="w-6 h-6 text-zinc-900" />
-              : <Power className="w-6 h-6 text-zinc-900" />
+              ? <AlertTriangle className="w-5 h-5 text-foreground" />
+              : <Power className="w-5 h-5 text-foreground" />
             }
           </div>
           <DialogTitle className="text-center text-base font-bold">
@@ -120,12 +117,12 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl border bg-card p-5 shadow-sm", className)}>
+    <div className={cn("rounded-md border bg-card p-4", className)}>
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-muted-foreground" />
-        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
+        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       </div>
-      <p className="text-2xl font-black leading-none tabular-nums tracking-tight">{value}</p>
+      <p className="text-2xl font-semibold leading-none tabular-nums tracking-tight">{value}</p>
     </div>
   );
 }
@@ -162,10 +159,10 @@ function UserCard({
     <div
       onClick={onEdit}
       className={cn(
-        "group relative rounded-xl border bg-card p-4 transition-all duration-200 cursor-pointer flex flex-col h-full",
+        "group relative rounded-md border bg-card p-4 transition-colors cursor-pointer flex flex-col h-full",
         isInactive
           ? "opacity-60 bg-muted/30 border-dashed"
-          : "hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5",
+          : "hover:border-foreground/40",
       )}
     >
       {/* Action buttons - top right */}
@@ -173,10 +170,10 @@ function UserCard({
         <button
           onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
           className={cn(
-            "p-1.5 rounded-lg transition-colors",
+            "p-1.5 rounded-sm transition-colors",
             isInactive
-              ? "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
-              : "text-muted-foreground hover:text-red-600 hover:bg-red-50",
+              ? "text-muted-foreground hover:text-emerald-700 hover:bg-muted"
+              : "text-muted-foreground hover:text-destructive hover:bg-muted",
           )}
           title={isInactive ? "Reactivate" : "Deactivate"}
         >
@@ -188,15 +185,15 @@ function UserCard({
       <div className="flex items-start gap-3 mb-3">
         <div className="relative shrink-0">
           <div className={cn(
-            "w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold ring-2 ring-offset-1",
+            "w-10 h-10 rounded-md flex items-center justify-center text-sm font-semibold border",
             getAvatarStyle(role, department),
           )}>
             {user.name.slice(0, 2).toUpperCase()}
           </div>
           {/* Online indicator dot */}
           <div className={cn(
-            "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card",
-            isInactive ? "bg-zinc-300" : isOnline ? "bg-emerald-500" : "bg-zinc-300",
+            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card",
+            isInactive ? "bg-muted-foreground/30" : isOnline ? "bg-emerald-500" : "bg-muted-foreground/30",
           )} />
         </div>
         <div className="min-w-0 flex-1 pr-8">
@@ -228,14 +225,14 @@ function UserCard({
       <div className="mt-auto pt-2 border-t border-dashed space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={cn(
-            "inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border",
+            "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm border",
             ROLE_STYLE[role],
           )}>
             <Shield className="w-2.5 h-2.5" />
             {ROLE_LABELS[role]}
           </span>
           <span className={cn(
-            "inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border",
+            "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm border",
             DEPT_STYLE[department],
           )}>
             {department === "workshop" ? <Factory className="w-2.5 h-2.5" /> : <ShoppingBag className="w-2.5 h-2.5" />}
@@ -244,7 +241,7 @@ function UserCard({
           {department === "shop" && brands && brands.map((b) => (
             <span
               key={b}
-              className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full border bg-zinc-100 text-zinc-600 border-zinc-200"
+              className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm border bg-card text-muted-foreground border-border"
             >
               {BRAND_LABELS[b] ?? b}
             </span>
@@ -340,7 +337,7 @@ function UsersPage() {
         title="User Management"
         subtitle="Manage staff accounts, roles, and department access"
       >
-        <Button asChild size="default" className="shadow-sm gap-2 shrink-0">
+        <Button asChild size="default" className="gap-2 shrink-0">
           <Link to="/users/new">
             <Plus className="w-4 h-4" />
             Add User
@@ -358,7 +355,7 @@ function UsersPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="rounded-xl border bg-card shadow-sm p-3 mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <div className="rounded-md border bg-card p-3 mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1 min-w-[200px] sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -371,16 +368,16 @@ function UsersPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Department toggle pills */}
-          <div className="flex rounded-lg border border-border bg-muted p-0.5">
+          <div className="flex rounded-sm border bg-muted p-0.5">
             {(["all", "workshop", "shop"] as const).map((d) => (
               <button
                 key={d}
                 onClick={() => setDeptFilter(d)}
                 className={cn(
-                  "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
+                  "px-3 py-1 text-[11px] font-semibold uppercase tracking-wide rounded-sm transition-colors",
                   deptFilter === d
-                    ? "bg-background shadow-sm text-foreground ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                    ? "bg-background text-foreground border border-border"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {d === "all" ? "All" : DEPARTMENT_LABELS[d]}
@@ -405,7 +402,7 @@ function UsersPage() {
           <label
             htmlFor="show-inactive"
             className={cn(
-              "flex items-center gap-2 px-3 h-9 rounded-lg border cursor-pointer transition-colors",
+              "flex items-center gap-2 px-3 h-9 rounded-sm border cursor-pointer transition-colors",
               showInactive
                 ? "bg-foreground text-background border-foreground"
                 : "bg-muted border-border text-muted-foreground hover:text-foreground",
@@ -428,9 +425,9 @@ function UsersPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="rounded-xl border bg-card p-4 space-y-3">
+            <div key={i} className="rounded-md border bg-card p-4 space-y-3">
               <div className="flex items-start gap-3">
-                <Skeleton className="w-11 h-11 rounded-full shrink-0" />
+                <Skeleton className="w-10 h-10 rounded-md shrink-0" />
                 <div className="space-y-2 flex-1">
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
@@ -438,16 +435,16 @@ function UsersPage() {
               </div>
               <Skeleton className="h-3 w-full" />
               <div className="flex gap-2">
-                <Skeleton className="h-5 w-16 rounded-full" />
-                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-sm" />
+                <Skeleton className="h-5 w-20 rounded-sm" />
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <UserX className="w-8 h-8 text-muted-foreground" />
+          <div className="w-12 h-12 rounded-md border bg-muted flex items-center justify-center mb-4">
+            <UserX className="w-6 h-6 text-muted-foreground" />
           </div>
           <h3 className="text-base font-semibold text-foreground mb-1">No users found</h3>
           <p className="text-sm text-muted-foreground max-w-xs">

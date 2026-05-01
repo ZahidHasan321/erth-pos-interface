@@ -8,10 +8,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Softened radii — 8px base, scaled gently.
+     4px on inputs/badges, 8px default cards, 12px max on modals/popovers.
+     Tailwind's rounded-2xl/3xl utilities are clamped to 12px so legacy classes
+     don't punch through the design language. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -41,7 +47,20 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.5rem; /* 8px — softened. Cards default to this. */
+
+  /* ── Semantic status tokens ──────────────────────────
+     Color reserved for meaning, not decoration. Use these instead of raw
+     tailwind palette classes (bg-red-50, text-emerald-600, etc.) so future
+     theme shifts stay coherent. */
+  --status-ok: oklch(0.62 0.13 150);
+  --status-ok-bg: oklch(0.96 0.03 150);
+  --status-warn: oklch(0.72 0.15 75);
+  --status-warn-bg: oklch(0.97 0.04 80);
+  --status-bad: oklch(0.55 0.20 27);
+  --status-bad-bg: oklch(0.96 0.03 27);
+  --status-info: oklch(0.55 0.10 240);
+  --status-info-bg: oklch(0.96 0.02 240);
 
   /* ── Atelier palette ─────────────────────────────────
      Warm off-white background, pure-white elevated surfaces (cards, sidebar,
@@ -77,7 +96,7 @@
   /* Utility */
   --destructive: oklch(0.52 0.19 28);
   --border: oklch(0.88 0 0);
-  --input: oklch(0.97 0 0);
+  --input: oklch(0.85 0 0);
   --ring: oklch(0.42 0.12 58);
 
   /* Sidebar — pure white (elevated surface, same as cards) */

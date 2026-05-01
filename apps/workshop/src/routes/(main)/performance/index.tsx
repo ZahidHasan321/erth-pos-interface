@@ -69,12 +69,12 @@ function KpiCard({
   color?: string;
 }) {
   return (
-    <div className="bg-card border rounded-xl p-5 shadow-sm">
+    <div className="bg-card border rounded-md p-4">
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-muted-foreground" />
-        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
+        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       </div>
-      <p className="text-2xl font-black tabular-nums tracking-tight">{value}</p>
+      <p className="text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
       {subtitle && <p className="text-[11px] text-muted-foreground mt-1 truncate">{subtitle}</p>}
     </div>
   );
@@ -94,30 +94,29 @@ function StageFilter({
       <button
         onClick={() => onSelect(null)}
         className={cn(
-          "px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+          "px-2.5 py-1 rounded-sm text-[11px] font-semibold uppercase tracking-wide border transition-colors",
           selected === null
-            ? "bg-foreground text-background shadow-sm"
-            : "bg-muted/60 text-muted-foreground hover:bg-muted",
+            ? "bg-foreground text-background border-foreground"
+            : "bg-card text-muted-foreground border-border hover:text-foreground",
         )}
       >
-        All Stages
+        All
       </button>
       {STAGE_ORDER.map((stage) => (
         <button
           key={stage}
           onClick={() => onSelect(selected === stage ? null : stage)}
           className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[11px] font-semibold uppercase tracking-wide border transition-colors",
             selected === stage
-              ? "shadow-sm border-transparent"
-              : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted",
+              ? "bg-muted text-foreground border-border"
+              : "bg-card text-muted-foreground border-border hover:text-foreground",
           )}
-          style={
-            selected === stage
-              ? { backgroundColor: `${STAGE_COLORS[stage]}20`, color: STAGE_COLORS[stage], borderColor: `${STAGE_COLORS[stage]}40` }
-              : undefined
-          }
         >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: STAGE_COLORS[stage] }}
+          />
           {STAGE_LABELS[stage]}
         </button>
       ))}
@@ -134,9 +133,9 @@ function TargetProgressBar({ actual, target, color }: { actual: number; target: 
 
   return (
     <div className="w-full">
-      <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
+      <div className="h-1 rounded-sm bg-muted overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500"
+          className="h-full transition-all duration-500"
           style={{ width: `${cappedWidth}%`, backgroundColor: color }}
         />
       </div>
@@ -182,8 +181,8 @@ function WorkerTable({
   }, [workers, searchQuery]);
 
   return (
-    <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
-      <div className="hidden md:grid grid-cols-[1fr_90px_90px_70px_120px_70px_70px_60px] gap-2 px-5 py-3 bg-muted/30 border-b">
+    <div className="border rounded-md overflow-hidden bg-card">
+      <div className="hidden md:grid grid-cols-[1fr_90px_90px_70px_120px_70px_70px_60px] gap-2 px-5 py-2.5 bg-muted/40 border-b">
         {[
           { key: "name", label: "Worker" },
           { key: "stage", label: "Stage" },
@@ -226,23 +225,21 @@ function WorkerTable({
               <div className="hidden md:grid grid-cols-[1fr_90px_90px_70px_120px_70px_70px_60px] gap-2 px-5 py-3 items-center">
                 <div className="flex flex-col gap-1 min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-muted/60 flex items-center justify-center text-[10px] font-black text-muted-foreground shrink-0">
+                    <div className="w-7 h-7 rounded-sm border bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
                       {i + 1}
                     </div>
                     <span className="text-sm font-bold truncate">{w.name}</span>
                   </div>
                 </div>
-                <span
-                  className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded w-fit"
-                  style={{ backgroundColor: `${STAGE_COLORS[w.stage]}15`, color: STAGE_COLORS[w.stage] }}
-                >
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide w-fit text-muted-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STAGE_COLORS[w.stage] }} />
                   {STAGE_LABELS[w.stage] ?? w.stage}
                 </span>
                 <span className="text-xs text-muted-foreground font-medium truncate">{w.unit ?? "\u2014"}</span>
                 <div>
                   {w.type ? (
-                    <span className={cn("text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
-                      w.type === "Senior" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600",
+                    <span className={cn("text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-sm",
+                      w.type === "Senior" ? "bg-foreground text-background" : "bg-muted text-muted-foreground border",
                     )}>
                       {w.type}
                     </span>
@@ -289,7 +286,7 @@ function WorkerTable({
                 </div>
                 <div className="flex items-center justify-end">
                   {w.reworkCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-px rounded-sm">
                       <RotateCcw className="w-2.5 h-2.5" />
                       {w.reworkCount}
                     </span>
@@ -303,20 +300,18 @@ function WorkerTable({
               <div className="md:hidden px-4 py-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-muted/60 flex items-center justify-center text-[10px] font-black text-muted-foreground shrink-0">
+                    <div className="w-7 h-7 rounded-sm border bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
                       {i + 1}
                     </div>
                     <div className="min-w-0">
                       <span className="text-sm font-bold truncate block">{w.name}</span>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className="text-[9px] font-bold rounded px-1.5 py-0.5"
-                          style={{ backgroundColor: `${STAGE_COLORS[w.stage]}15`, color: STAGE_COLORS[w.stage] }}
-                        >
+                        <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground">
+                          <span className="w-1 h-1 rounded-full" style={{ backgroundColor: STAGE_COLORS[w.stage] }} />
                           {STAGE_LABELS[w.stage] ?? w.stage}
                         </span>
                         {w.reworkCount > 0 && (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-orange-600 bg-orange-100 px-1 py-0.5 rounded">
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-px rounded-sm">
                             <RotateCcw className="w-2 h-2" />
                             {w.reworkCount}
                           </span>
@@ -441,14 +436,14 @@ function PerformancePage() {
       {isLoading ? (
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-md" />)}
           </div>
-          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-md" />
           <div className="grid md:grid-cols-2 gap-4">
-            <Skeleton className="h-72 rounded-xl" />
-            <Skeleton className="h-72 rounded-xl" />
+            <Skeleton className="h-72 rounded-md" />
+            <Skeleton className="h-72 rounded-md" />
           </div>
-          <Skeleton className="h-96 rounded-xl" />
+          <Skeleton className="h-96 rounded-md" />
         </div>
       ) : (
         <>
@@ -485,7 +480,7 @@ function PerformancePage() {
           </div>
 
           {/* Stage Filter */}
-          <div className="bg-card border rounded-xl p-4 shadow-sm">
+          <div className="bg-card border rounded-md p-4 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-3">Filter by Stage</p>
             <StageFilter selected={stageFilter} onSelect={setStageFilter} />
           </div>
@@ -493,7 +488,7 @@ function PerformancePage() {
           {/* Charts Row */}
           <div className="grid md:grid-cols-2 gap-4">
             {/* Daily Trend */}
-            <div className="bg-card border rounded-xl p-5 shadow-sm">
+            <div className="bg-card border rounded-md p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Daily Output</p>
                 {summary.dailyTarget > 0 && (
@@ -556,7 +551,7 @@ function PerformancePage() {
             </div>
 
             {/* Stage Breakdown */}
-            <div className="bg-card border rounded-xl p-5 shadow-sm">
+            <div className="bg-card border rounded-md p-5 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-4">Stage Throughput</p>
               {stageChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>

@@ -229,6 +229,7 @@ export function CashierOrderDetailView({ orderId, onBack }: { orderId: string; o
                                     jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness,
                                     fabric_length: Number(g.fabric_length) || 0,
                                     fabric_name: g.fabric?.name, express: g.express,
+                                    soaking: g.soaking, soaking_hours: g.soaking_hours,
                                     fabric_price_snapshot: Number(g.fabric_price_snapshot) || 0,
                                     stitching_price_snapshot: Number(g.stitching_price_snapshot) || 0,
                                     style_price_snapshot: Number(g.style_price_snapshot) || 0,

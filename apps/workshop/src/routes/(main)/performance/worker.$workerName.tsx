@@ -69,7 +69,7 @@ function KpiCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm">
+    <div className="rounded-md border bg-card p-5">
       <div className="flex items-center gap-2 mb-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
         <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
@@ -107,9 +107,9 @@ function WorkerDetailPage() {
       <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
         <div className="h-8 w-48 bg-muted rounded animate-pulse mb-6" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 bg-muted rounded-xl animate-pulse" />)}
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 bg-muted rounded-md animate-pulse" />)}
         </div>
-        <div className="h-72 bg-muted rounded-xl animate-pulse" />
+        <div className="h-72 bg-muted rounded-md animate-pulse" />
       </div>
     );
   }
@@ -201,12 +201,12 @@ function WorkerDetailPage() {
 
       {/* Secondary Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-xl border bg-card px-4 py-3">
+        <div className="rounded-md border bg-card px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Avg / Day</p>
           <p className="text-lg font-black tabular-nums">{avgPerDay}</p>
         </div>
         {worker.dailyTarget > 0 && (
-          <div className="rounded-xl border bg-card px-4 py-3">
+          <div className="rounded-md border bg-card px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Days on Target</p>
             <p className="text-lg font-black tabular-nums">
               {daysOnTarget}<span className="text-sm text-muted-foreground font-normal"> / {dailyData.length}</span>
@@ -214,7 +214,7 @@ function WorkerDetailPage() {
           </div>
         )}
         {bestDay && (
-          <div className="rounded-xl border bg-card px-4 py-3">
+          <div className="rounded-md border bg-card px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Best Day</p>
             <p className="text-lg font-black tabular-nums">{bestDay.completed}</p>
             <p className="text-[10px] text-muted-foreground">
@@ -223,7 +223,7 @@ function WorkerDetailPage() {
           </div>
         )}
         {worker.rating && (
-          <div className="rounded-xl border bg-card px-4 py-3">
+          <div className="rounded-md border bg-card px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Rating</p>
             <div className="flex items-center gap-0.5 mt-1">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -241,7 +241,7 @@ function WorkerDetailPage() {
       </div>
 
       {/* Daily Trend Chart — full width */}
-      <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="rounded-md border bg-card p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-muted-foreground" />
@@ -317,7 +317,7 @@ function WorkerDetailPage() {
       {dailyData.length > 0 && (
         <div className="grid md:grid-cols-2 gap-4">
           {/* Bar chart view */}
-          <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="rounded-md border bg-card p-5">
             <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-4">Daily Breakdown</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dailyData}>
@@ -347,7 +347,7 @@ function WorkerDetailPage() {
           </div>
 
           {/* Table view */}
-          <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
+          <div className="rounded-md border overflow-hidden bg-card">
             <div className="px-5 py-3 border-b bg-muted/30">
               <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Day-by-Day Log</p>
             </div>

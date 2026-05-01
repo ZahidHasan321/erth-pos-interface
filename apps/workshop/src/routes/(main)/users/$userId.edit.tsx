@@ -96,8 +96,8 @@ function EditUserPage() {
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
         <Skeleton className="h-6 w-32 mb-6" />
-        <Skeleton className="h-48 rounded-xl mb-4" />
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-40 rounded-md mb-4" />
+        <Skeleton className="h-64 rounded-md" />
       </div>
     );
   }
@@ -111,7 +111,7 @@ function EditUserPage() {
             Back to Users
           </Link>
         </Button>
-        <div className="text-center py-20 rounded-xl border border-dashed">
+        <div className="text-center py-20 rounded-md border border-dashed">
           <p className="text-lg font-semibold mb-1">User not found</p>
           <p className="text-sm text-muted-foreground">This user may have been removed.</p>
         </div>
@@ -123,7 +123,7 @@ function EditUserPage() {
   const canSave = isUserFormValid(form, "edit");
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-zinc-100/60 min-h-full">
+    <div className="p-4 sm:p-6 lg:p-8 min-h-full">
       {/* Breadcrumb */}
       <Button variant="ghost" size="sm" asChild className="mb-3 gap-2 text-muted-foreground -ml-2">
         <Link to="/users/$userId" params={{ userId: user.id }}>
@@ -133,23 +133,22 @@ function EditUserPage() {
       </Button>
 
       {/* Hero */}
-      <div className="rounded-xl border border-zinc-200 bg-card shadow-sm overflow-hidden mb-4">
-        <div className="h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
-        <div className="flex items-center justify-between px-5 py-2 bg-zinc-50 border-b border-zinc-200">
+      <div className="rounded-md border bg-card overflow-hidden mb-4 border-l-2 border-l-amber-500">
+        <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground">EDITING RECORD</span>
-            <span className="h-px w-6 bg-border" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Editing record</span>
+            <span className="h-px w-4 bg-border" />
             <span className="text-[10px] font-mono text-muted-foreground">{user.id.slice(0, 8)}</span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700">Unsaved</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Unsaved</span>
         </div>
 
-        <div className="p-6 flex items-center gap-5">
-          <div className="h-16 w-16 rounded-xl bg-amber-50 ring-1 ring-amber-200 flex items-center justify-center shrink-0">
-            <Pencil className="w-6 h-6 text-amber-800" />
+        <div className="p-5 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-md border bg-muted flex items-center justify-center shrink-0">
+            <Pencil className="w-5 h-5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-none mb-1 truncate">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight leading-none mb-1 truncate">
               {user.name}
             </h1>
             <p className="text-sm text-muted-foreground">

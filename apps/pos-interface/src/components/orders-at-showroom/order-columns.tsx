@@ -405,7 +405,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                       to="/$main/orders/order-management/feedback/$orderId"
                       params={{ orderId: String(row.original.order.id) }}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" ? "Alteration feedback" : "Final feedback"}
+                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" || status === "alteration_out" ? "Alteration feedback" : "Final feedback"}
                     >
                       <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
@@ -414,7 +414,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                 <TooltipContent side="top" className="text-xs font-bold">
                   {status === "brova_trial"
                     ? "Brova Feedback"
-                    : status === "alteration_in"
+                    : status === "alteration_in" || status === "alteration_out"
                       ? "Alteration Feedback"
                       : "Final Feedback"}
                 </TooltipContent>

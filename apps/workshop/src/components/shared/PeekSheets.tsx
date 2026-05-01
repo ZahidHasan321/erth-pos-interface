@@ -283,10 +283,8 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
     <>
       {/* Header */}
       <SheetHeader className={cn(
-        "px-5 pt-5 pb-4 border-b",
-        garment.garment_type === "brova"
-          ? "bg-gradient-to-br from-purple-50/80 to-white"
-          : "bg-gradient-to-br from-blue-50/80 to-white",
+        "px-5 pt-5 pb-4 border-b border-l-2 bg-card",
+        garment.garment_type === "brova" ? "border-l-purple-500" : "border-l-blue-500",
       )}>
         <div className="flex items-center gap-2 flex-wrap">
           <GarmentTypeBadge type={garment.garment_type ?? "final"} />

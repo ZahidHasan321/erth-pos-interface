@@ -22,6 +22,7 @@ import {
 import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { cn, clickableProps } from "@/lib/utils";
+import { isAlteration as isAlterationTrip, getAlterationNumber } from "@repo/database";
 
 import type { OrderRow } from "./types";
 
@@ -208,9 +209,19 @@ export function OrderDataTable({
                                 return g.locationKey === 'shop';
                               })
                               .map((garment) => {
-                                const tripNum = (garment.garment as any).trip_number || 1;
-                                const isAlteration = garment.isBrova && tripNum >= 3;
-                                const alterationNum = tripNum - 2;
+                                const tripNum = (garment.garment as any).trip_number ?? 1;
+                                const garmentType = (garment.garment as any).garment_type as string | null;
+                                const isAlterationReturn = isAlterationTrip(tripNum);
+                                const alterationNum = getAlterationNumber(tripNum);
+                                const isAlterationGarment = garmentType === "alteration";
+                                const showAsAlteration = isAlterationReturn || isAlterationGarment;
+                                const badgeLabel = isAlterationReturn
+                                  ? `Alt #${alterationNum}`
+                                  : isAlterationGarment
+                                    ? "Alteration"
+                                    : garment.isBrova
+                                      ? "Brova"
+                                      : "Final";
                                 return (
                                   <div
                                     key={garment.garmentRecordId}
@@ -219,7 +230,7 @@ export function OrderDataTable({
                                     <div className="flex justify-between items-center mb-1.5">
                                       <span className="font-mono font-medium text-xs text-muted-foreground">{garment.garmentId}</span>
                                       <div className="flex items-center gap-1">
-                                        {isAlteration && (
+                                        {isAlterationReturn && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
@@ -240,14 +251,14 @@ export function OrderDataTable({
                                         <span
                                           className={cn(
                                             "inline-flex items-center rounded border px-1 py-0 text-xs font-bold",
-                                            isAlteration
+                                            showAsAlteration
                                               ? "bg-blue-50 text-blue-700 border-blue-200"
                                               : garment.isBrova
                                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
                                           )}
                                         >
-                                          {isAlteration ? `Alt #${alterationNum}` : garment.isBrova ? "Brova" : "Final"}
+                                          {badgeLabel}
                                         </span>
                                       </div>
                                     </div>

@@ -161,8 +161,8 @@ function UserDetailPage() {
       <div className="rounded-lg border bg-card mb-6">
         <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-5">
           <div className={cn(
-            "w-16 h-16 rounded-full flex items-center justify-center text-xl font-semibold shrink-0",
-            isInactive ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
+            "w-14 h-14 rounded-md border flex items-center justify-center text-lg font-semibold shrink-0",
+            isInactive ? "bg-muted text-muted-foreground" : "bg-foreground text-background border-foreground",
           )}>
             {user.name.slice(0, 2).toUpperCase()}
           </div>
@@ -171,10 +171,10 @@ function UserDetailPage() {
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h1 className="text-xl font-semibold tracking-tight">{user.name}</h1>
               <span className={cn(
-                "inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full",
+                "inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm border",
                 isInactive
-                  ? "bg-muted text-muted-foreground"
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200",
+                  ? "bg-muted text-muted-foreground border-border"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200",
               )}>
                 <span className={cn(
                   "w-1.5 h-1.5 rounded-full",
@@ -332,7 +332,7 @@ function UserDetailPage() {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-2 bg-red-50">
+            <div className="mx-auto w-10 h-10 rounded-md border border-destructive/30 flex items-center justify-center mb-2 bg-destructive/10">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <DialogTitle className="text-center text-base font-bold">Delete user permanently?</DialogTitle>

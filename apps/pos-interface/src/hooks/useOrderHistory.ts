@@ -26,6 +26,8 @@ export type OrderHistoryItem = {
     style: number;
     delivery: number;
     shelf: number;
+    express: number;
+    soaking: number;
     discount: number;
   };
 };
@@ -173,6 +175,8 @@ export function useOrderHistory({
             style: styleCharge,
             delivery: deliveryCharge,
             shelf: shelfCharge,
+            express: expressCharge,
+            soaking: soakingCharge,
             discount: discountValue,
           }
         };

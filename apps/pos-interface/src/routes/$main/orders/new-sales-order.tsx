@@ -348,6 +348,8 @@ function NewSalesOrder() {
                 style: 0,
                 delivery: orderData.delivery_charge ?? 0,
                 shelf: orderData.shelf_charge ?? 0,
+                express: orderData.express_charge ?? 0,
+                soaking: orderData.soaking_charge ?? 0,
             },
             discountType: orderData.discount_type ?? undefined,
             discountValue: orderData.discount_value ?? 0,

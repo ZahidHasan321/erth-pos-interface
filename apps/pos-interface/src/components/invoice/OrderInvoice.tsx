@@ -32,6 +32,8 @@ export interface InvoiceData {
     style: number;
     delivery: number;
     shelf: number;
+    express?: number;
+    soaking?: number;
   };
   discountType?: string;
   discountValue?: number;
@@ -61,6 +63,7 @@ type ArabicKey =
   | "القماش"
   | "بروفه"
   | "استعجال"
+  | "نقع"
   | "خدمة التوصيل"
   | "الإجمالي";
 
@@ -76,6 +79,7 @@ const ARABIC_HEADERS: Record<ArabicKey, string> = {
   القماش: "القماش",
   بروفه: "بروفه",
   استعجال: "استعجال",
+  نقع: "نقع",
   "خدمة التوصيل": "خدمة التوصيل",
   الإجمالي: "الإجمالي",
 };
@@ -184,6 +188,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
           القماش: fabricName,
           بروفه: sel.garment_type === "brova" ? "نعم" : "لا",
           استعجال: sel.express ? "نعم" : "لا",
+          نقع: sel.soaking ? (sel.soaking_hours ? `${sel.soaking_hours} س` : "نعم") : "لا",
           "خدمة التوصيل": homeDelivery ? "منزلي" : "استلام",
           الإجمالي: `${fmt((sel.stitching_price_snapshot || 0) + (sel.fabric_amount || 0) + (sel.style_price_snapshot || 0))} د.ك`,
         };
@@ -265,6 +270,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                       "#",
                       "الإجمالي",
                       "خدمة التوصيل",
+                      "نقع",
                       "استعجال",
                       "بروفه",
                       "القماش",

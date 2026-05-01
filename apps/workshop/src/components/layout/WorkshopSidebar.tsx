@@ -114,7 +114,7 @@ export function WorkshopSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-4 border-b group-data-[collapsible=icon]:px-1.5">
         <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/90 to-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0 shadow-md">
+          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
             W
           </div>
           <span className="font-bold text-sm uppercase tracking-wider group-data-[collapsible=icon]:hidden">

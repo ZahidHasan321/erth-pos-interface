@@ -107,6 +107,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                 garment_id: g.id,
                 fabric: sel.fabric, stitching: sel.stitching, style: sel.style,
                 express: sel.express, soaking: sel.soaking,
+                soaking_hours: sel.soaking ? (g.soaking_hours ?? null) : undefined,
                 amount,
             });
             total += amount;
@@ -144,7 +145,13 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
             if (sel.style) amount += getGarmentPrice(g, "style");
             if (sel.express) amount += getGarmentPrice(g, "express");
             if (sel.soaking) amount += getGarmentPrice(g, "soaking");
-            items.push({ garment_id: g.id, fabric: sel.fabric, stitching: sel.stitching, style: sel.style, express: sel.express, soaking: sel.soaking, amount });
+            items.push({
+                garment_id: g.id,
+                fabric: sel.fabric, stitching: sel.stitching, style: sel.style,
+                express: sel.express, soaking: sel.soaking,
+                soaking_hours: sel.soaking ? (g.soaking_hours ?? null) : undefined,
+                amount,
+            });
             total += amount;
         }
 

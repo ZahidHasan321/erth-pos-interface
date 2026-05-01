@@ -1446,22 +1446,28 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 -- RLS HELPER FUNCTIONS
 -- ═══════════════════════════════════════════════════════════════════════
 
+-- All accessor helpers filter `is_active = true`. Deactivated users get NULL
+-- from these, which causes downstream RLS predicates to fail (no role match,
+-- no department match, etc.) — so flipping `is_active = false` revokes access
+-- without waiting for JWT refresh. Pair with `is_active_user()` below for
+-- bare auth checks.
+
 -- Get the current user's role from auth.uid() → users.auth_id
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS TEXT AS $$
-  SELECT role::text FROM users WHERE auth_id = auth.uid();
+  SELECT role::text FROM users WHERE auth_id = auth.uid() AND is_active = true;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Get the current user's department from auth.uid() → users.auth_id
 CREATE OR REPLACE FUNCTION get_my_department()
 RETURNS TEXT AS $$
-  SELECT department::text FROM users WHERE auth_id = auth.uid();
+  SELECT department::text FROM users WHERE auth_id = auth.uid() AND is_active = true;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Get the current user's job_functions (empty = office user, not terminal-locked)
 CREATE OR REPLACE FUNCTION get_my_job_functions()
 RETURNS job_function[] AS $$
-  SELECT job_functions FROM users WHERE auth_id = auth.uid();
+  SELECT job_functions FROM users WHERE auth_id = auth.uid() AND is_active = true;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Drop the legacy single-value helper. No callers in app code or RLS.
@@ -1470,7 +1476,7 @@ DROP FUNCTION IF EXISTS get_my_job_function();
 -- Get the current user's id (users.id, NOT auth.uid()) from auth.uid() → users.auth_id
 CREATE OR REPLACE FUNCTION get_my_user_id()
 RETURNS UUID AS $$
-  SELECT id FROM users WHERE auth_id = auth.uid();
+  SELECT id FROM users WHERE auth_id = auth.uid() AND is_active = true;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Raise if the calling user is not active. Use at the top of state-mutating
@@ -1491,31 +1497,48 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
+-- Replacement for bare `is_active_user()` checks in RLS policies.
+-- Returns true only when the JWT maps to an existing, active user row.
+-- Combined with the client-side 401 interceptor in db.ts, deactivating or
+-- deleting a user causes their next API call to 401 → forced signOut.
+CREATE OR REPLACE FUNCTION is_active_user()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
 -- Check if current user is admin
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role IN ('super_admin', 'admin'));
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin'));
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Check if current user is admin or manager
 CREATE OR REPLACE FUNCTION is_manager_or_above()
 RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role IN ('super_admin', 'admin', 'manager'));
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin', 'manager'));
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Check if current user can access a given brand
--- super_admin and workshop users see all brands; shop users only see their assigned brands
+-- super_admin and workshop users see all brands; shop users only see their assigned brands.
+-- All EXISTS checks filter is_active = true so deactivated users return false on every branch.
 CREATE OR REPLACE FUNCTION can_access_brand(brand_value TEXT)
 RETURNS BOOLEAN AS $$
   SELECT
     -- super_admin sees everything
-    EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'super_admin')
+    EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role = 'super_admin')
     -- workshop department sees all brands (they process orders for every brand)
-    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND department = 'workshop')
-    -- no brands set = unrestricted (backwards compat)
-    OR NOT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND brands IS NOT NULL AND array_length(brands, 1) > 0)
+    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND department = 'workshop')
+    -- active user with no brands set = unrestricted (backwards compat). Must
+    -- also confirm an active row exists, otherwise deactivated/missing users
+    -- would fall through this branch and gain access.
+    OR (
+      EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true)
+      AND NOT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND brands IS NOT NULL AND array_length(brands, 1) > 0)
+    )
     -- brand is in the user's brands array (case-insensitive)
-    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND lower(brand_value) = ANY(brands));
+    OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND lower(brand_value) = ANY(brands));
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- ═══════════════════════════════════════════════════════════════════════
@@ -1528,7 +1551,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 -- Lock out anonymous access entirely. Authenticated SELECT is filtered to
 -- non-sensitive columns via column grants below.
 DROP POLICY IF EXISTS "users_select" ON users;
-CREATE POLICY "users_select" ON users FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "users_select" ON users FOR SELECT USING (is_active_user());
 
 -- Insert: admin can create any role; managers can create non-admin users in
 -- their own department only. The previous policy had an unqualified
@@ -1538,7 +1561,7 @@ CREATE POLICY "users_select" ON users FOR SELECT USING (auth.uid() IS NOT NULL);
 DROP POLICY IF EXISTS "users_insert" ON users;
 CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (
   is_admin() OR (
-    EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.role = 'manager' AND u.department = users.department)
+    EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.is_active = true AND u.role = 'manager' AND u.department = users.department)
     AND users.role NOT IN ('admin', 'super_admin')
   )
 );
@@ -1619,10 +1642,10 @@ CREATE POLICY "sessions_delete" ON user_sessions FOR DELETE USING (
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "customers_select" ON customers;
-CREATE POLICY "customers_select" ON customers FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "customers_select" ON customers FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "customers_insert" ON customers;
-CREATE POLICY "customers_insert" ON customers FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "customers_insert" ON customers FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "customers_update" ON customers;
 CREATE POLICY "customers_update" ON customers FOR UPDATE USING (is_manager_or_above() OR get_my_department() = 'shop');
@@ -1632,7 +1655,7 @@ ALTER TABLE prices ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "prices_select" ON prices;
 CREATE POLICY "prices_select" ON prices FOR SELECT USING (
-  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+  is_active_user() AND can_access_brand(brand::text)
 );
 
 DROP POLICY IF EXISTS "prices_modify" ON prices;
@@ -1647,16 +1670,16 @@ ALTER TABLE fabrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shelf ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "campaigns_select" ON campaigns;
-CREATE POLICY "campaigns_select" ON campaigns FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "campaigns_select" ON campaigns FOR SELECT USING (is_active_user());
 DROP POLICY IF EXISTS "styles_select" ON styles;
 CREATE POLICY "styles_select" ON styles FOR SELECT USING (
-  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
 );
 DROP POLICY IF EXISTS "fabrics_select" ON fabrics;
-CREATE POLICY "fabrics_select" ON fabrics FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "fabrics_select" ON fabrics FOR SELECT USING (is_active_user());
 DROP POLICY IF EXISTS "shelf_select" ON shelf;
 CREATE POLICY "shelf_select" ON shelf FOR SELECT USING (
-  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
 );
 
 DROP POLICY IF EXISTS "campaigns_modify" ON campaigns;
@@ -1672,20 +1695,20 @@ CREATE POLICY "shelf_modify" ON shelf FOR ALL USING (is_manager_or_above());
 ALTER TABLE measurements ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "measurements_select" ON measurements;
-CREATE POLICY "measurements_select" ON measurements FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "measurements_select" ON measurements FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "measurements_insert" ON measurements;
-CREATE POLICY "measurements_insert" ON measurements FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "measurements_insert" ON measurements FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "measurements_update" ON measurements;
-CREATE POLICY "measurements_update" ON measurements FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY "measurements_update" ON measurements FOR UPDATE USING (is_active_user());
 
 -- ── Orders ──────────────────────────────────────────────────────────
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "orders_select" ON orders;
 CREATE POLICY "orders_select" ON orders FOR SELECT USING (
-  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+  is_active_user() AND can_access_brand(brand::text)
 );
 
 DROP POLICY IF EXISTS "orders_insert" ON orders;
@@ -1702,7 +1725,7 @@ CREATE POLICY "orders_update" ON orders FOR UPDATE USING (
 ALTER TABLE work_orders ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "work_orders_select" ON work_orders;
-CREATE POLICY "work_orders_select" ON work_orders FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "work_orders_select" ON work_orders FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "work_orders_insert" ON work_orders;
 CREATE POLICY "work_orders_insert" ON work_orders FOR INSERT WITH CHECK (
@@ -1726,8 +1749,8 @@ CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (
 ALTER TABLE garments ENABLE ROW LEVEL SECURITY;
 
 -- Garments are scoped by department (shop + workshop both need reads) AND by
--- the brand of the parent order. Closes the prior USING (auth.uid() IS NOT NULL)
--- gap where shop users in one brand could read garments from another brand.
+-- the brand of the parent order. Closes the prior open-to-any-authed-user gap
+-- where shop users in one brand could read garments from another brand.
 DROP POLICY IF EXISTS "garments_select" ON garments;
 CREATE POLICY "garments_select" ON garments FOR SELECT USING (
   (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
@@ -1770,7 +1793,7 @@ CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (
 );
 
 DROP POLICY IF EXISTS "feedback_insert" ON garment_feedback;
-CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "feedback_update" ON garment_feedback;
 CREATE POLICY "feedback_update" ON garment_feedback FOR UPDATE USING (
@@ -1782,7 +1805,7 @@ ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "resources_select" ON resources;
 CREATE POLICY "resources_select" ON resources FOR SELECT USING (
-  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
 );
 
 DROP POLICY IF EXISTS "resources_modify" ON resources;
@@ -1794,7 +1817,7 @@ CREATE POLICY "resources_modify" ON resources FOR ALL USING (
 ALTER TABLE order_shelf_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "shelf_items_select" ON order_shelf_items;
-CREATE POLICY "shelf_items_select" ON order_shelf_items FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "shelf_items_select" ON order_shelf_items FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "shelf_items_insert" ON order_shelf_items;
 CREATE POLICY "shelf_items_insert" ON order_shelf_items FOR INSERT WITH CHECK (
@@ -1823,7 +1846,7 @@ ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
 -- filter. RLS is the load-bearing check; the RPC param is a UX hint.
 DROP POLICY IF EXISTS "payments_select" ON payment_transactions;
 CREATE POLICY "payments_select" ON payment_transactions FOR SELECT USING (
-  auth.uid() IS NOT NULL AND EXISTS (
+  is_active_user() AND EXISTS (
     SELECT 1 FROM orders o
     WHERE o.id = payment_transactions.order_id AND can_access_brand(o.brand::text)
   )
@@ -1848,7 +1871,7 @@ ALTER TABLE register_sessions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "register_sessions_select" ON register_sessions;
 CREATE POLICY "register_sessions_select" ON register_sessions FOR SELECT USING (
-  auth.uid() IS NOT NULL AND can_access_brand(brand::text)
+  is_active_user() AND can_access_brand(brand::text)
 );
 
 DROP POLICY IF EXISTS "register_sessions_insert" ON register_sessions;
@@ -1866,7 +1889,7 @@ ALTER TABLE register_cash_movements ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "register_cash_movements_select" ON register_cash_movements;
 CREATE POLICY "register_cash_movements_select" ON register_cash_movements FOR SELECT USING (
-  auth.uid() IS NOT NULL AND EXISTS (
+  is_active_user() AND EXISTS (
     SELECT 1 FROM register_sessions s
     WHERE s.id = register_cash_movements.register_session_id
       AND can_access_brand(s.brand::text)
@@ -1892,49 +1915,49 @@ ALTER TABLE transfer_requests ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "transfer_requests_select" ON transfer_requests;
 CREATE POLICY "transfer_requests_select" ON transfer_requests
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_requests_insert" ON transfer_requests;
 CREATE POLICY "transfer_requests_insert" ON transfer_requests
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_requests_update" ON transfer_requests;
 CREATE POLICY "transfer_requests_update" ON transfer_requests
-    FOR UPDATE USING (auth.uid() IS NOT NULL);
+    FOR UPDATE USING (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_requests_delete" ON transfer_requests;
 CREATE POLICY "transfer_requests_delete" ON transfer_requests
-    FOR DELETE USING (auth.uid() IS NOT NULL);
+    FOR DELETE USING (is_active_user());
 
 ALTER TABLE transfer_request_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "transfer_request_items_select" ON transfer_request_items;
 CREATE POLICY "transfer_request_items_select" ON transfer_request_items
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_request_items_insert" ON transfer_request_items;
 CREATE POLICY "transfer_request_items_insert" ON transfer_request_items
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_request_items_update" ON transfer_request_items;
 CREATE POLICY "transfer_request_items_update" ON transfer_request_items
-    FOR UPDATE USING (auth.uid() IS NOT NULL);
+    FOR UPDATE USING (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_request_items_delete" ON transfer_request_items;
 CREATE POLICY "transfer_request_items_delete" ON transfer_request_items
-    FOR DELETE USING (auth.uid() IS NOT NULL);
+    FOR DELETE USING (is_active_user());
 
 -- ── Appointments ────────────────────────────────────────────────────
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "appointments_select" ON appointments;
 CREATE POLICY "appointments_select" ON appointments FOR SELECT USING (
-  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
 );
 
 DROP POLICY IF EXISTS "appointments_insert" ON appointments;
 CREATE POLICY "appointments_insert" ON appointments FOR INSERT WITH CHECK (
-  auth.uid() IS NOT NULL AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
 );
 
 DROP POLICY IF EXISTS "appointments_update" ON appointments;
@@ -2964,11 +2987,11 @@ ALTER TABLE dispatch_log ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "dispatch_log_select" ON dispatch_log;
 CREATE POLICY "dispatch_log_select" ON dispatch_log
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "dispatch_log_insert" ON dispatch_log;
 CREATE POLICY "dispatch_log_insert" ON dispatch_log
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_active_user());
 
 -- Periodic cleanup helper — run manually or via cron.
 -- Drops rows older than the given interval (default 6 months).
@@ -4068,28 +4091,28 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "notifications_select" ON notifications;
 CREATE POLICY "notifications_select" ON notifications
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "notifications_insert" ON notifications;
 CREATE POLICY "notifications_insert" ON notifications
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_active_user());
 
 ALTER TABLE notification_reads ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "notification_reads_select" ON notification_reads;
 CREATE POLICY "notification_reads_select" ON notification_reads
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "notification_reads_insert" ON notification_reads;
 CREATE POLICY "notification_reads_insert" ON notification_reads
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+    FOR INSERT WITH CHECK (is_active_user());
 
 -- ── Accessories RLS ────────────────────────────────────────────────────
 ALTER TABLE accessories ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "accessories_select" ON accessories;
 CREATE POLICY "accessories_select" ON accessories
-    FOR SELECT USING (auth.uid() IS NOT NULL);
+    FOR SELECT USING (is_active_user());
 
 DROP POLICY IF EXISTS "accessories_insert" ON accessories;
 CREATE POLICY "accessories_insert" ON accessories

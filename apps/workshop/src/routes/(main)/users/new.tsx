@@ -116,7 +116,7 @@ function NewUserPage() {
   const canSubmit = isUserFormValid(form, "add");
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-zinc-100/60 min-h-full">
+    <div className="p-4 sm:p-6 lg:p-8 min-h-full">
       {/* Breadcrumb */}
       <Button variant="ghost" size="sm" asChild className="mb-3 gap-2 text-muted-foreground -ml-2">
         <Link to="/users">
@@ -126,23 +126,22 @@ function NewUserPage() {
       </Button>
 
       {/* Hero */}
-      <div className="rounded-xl border border-zinc-200 bg-card shadow-sm overflow-hidden mb-4">
-        <div className="h-1 bg-gradient-to-r from-zinc-900 via-zinc-700 to-zinc-900" />
-        <div className="flex items-center justify-between px-5 py-2 bg-zinc-50 border-b border-zinc-200">
+      <div className="rounded-md border bg-card overflow-hidden mb-4">
+        <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground">NEW PERSONNEL</span>
-            <span className="h-px w-6 bg-border" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">New personnel</span>
+            <span className="h-px w-4 bg-border" />
             <span className="text-[10px] font-mono text-muted-foreground">FORM · 001</span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Draft</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Draft</span>
         </div>
 
-        <div className="p-6 flex items-center gap-5">
-          <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-700 flex items-center justify-center ring-1 ring-border shrink-0">
-            <UserPlus className="w-7 h-7 text-white" />
+        <div className="p-5 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-md bg-foreground flex items-center justify-center shrink-0">
+            <UserPlus className="w-5 h-5 text-background" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-none mb-1">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight leading-none mb-1">
               Create Account
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -153,10 +152,10 @@ function NewUserPage() {
 
         {/* Prefill banner */}
         {(presetJobFunction || presetUnit) && (
-          <div className="border-t border-amber-200 bg-amber-50/60 px-6 py-3 flex items-start gap-3">
-            <Sparkles className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+          <div className="border-t border-l-2 border-l-amber-500 bg-amber-50/40 px-5 py-2.5 flex items-start gap-3">
+            <Sparkles className="w-3.5 h-3.5 text-amber-700 mt-0.5 shrink-0" />
             <div className="text-xs space-y-0.5 flex-1">
-              <p className="text-amber-900 font-bold uppercase tracking-[0.1em] text-[10px]">
+              <p className="text-amber-900 font-semibold uppercase tracking-wider text-[10px]">
                 Pre-filled from production team
               </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-amber-900 pt-0.5">

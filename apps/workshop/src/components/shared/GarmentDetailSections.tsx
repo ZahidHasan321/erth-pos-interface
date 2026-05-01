@@ -125,10 +125,8 @@ export function GarmentHeader({
 }) {
   return (
     <div className={cn(
-      "border rounded-xl p-4 shadow-sm",
-      garment.garment_type === "brova"
-        ? "bg-gradient-to-r from-purple-50/80 to-white border-purple-200"
-        : "bg-gradient-to-r from-blue-50/80 to-white border-blue-200",
+      "border bg-card rounded-md p-4 border-l-2",
+      garment.garment_type === "brova" ? "border-l-purple-500" : "border-l-blue-500",
     )}>
       {/* Header body — info on left, children (dates) on right at sm+ */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -224,7 +222,7 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
   });
 
   return (
-    <div className="bg-gradient-to-b from-amber-50/60 to-white border border-amber-200/60 rounded-xl p-4 shadow-sm space-y-2">
+    <div className="bg-card border rounded-md p-4 space-y-2">
       {garment.style_image_url && (
         <div className="rounded-lg overflow-hidden border">
           <img
@@ -349,9 +347,9 @@ export function WorkerHistorySection({
   const currentIdx = stageOrder.indexOf(currentStage as any);
 
   return (
-    <div className="bg-gradient-to-b from-teal-50/60 to-white border border-teal-200/60 rounded-xl p-4 shadow-sm">
+    <div className="bg-card border rounded-md p-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-teal-700">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           Production Team
         </h3>
         {onEditPlan && (
@@ -416,8 +414,8 @@ export function WorkerHistorySection({
 
 export function MeasurementsSection({ garment }: { garment: WorkshopGarment }) {
   return (
-    <div className="bg-gradient-to-b from-sky-50/60 to-white border border-sky-200/60 rounded-xl p-4 shadow-sm">
-      <h3 className="text-sm font-bold uppercase tracking-wider text-sky-700 mb-2">
+    <div className="bg-card border rounded-md p-4">
+      <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
         Measurements
       </h3>
       <MeasurementGrid
