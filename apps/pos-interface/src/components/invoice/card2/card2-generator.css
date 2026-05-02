@@ -242,6 +242,25 @@
   display: inline-block;
 }
 
+.card2-style-matrix__tick-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4mm;
+}
+
+.card2-style-matrix__tick-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6mm;
+  font-size: 7pt;
+  line-height: 1;
+}
+
+.card2-style-matrix__tick-label {
+  font-weight: 600;
+}
+
 .card2-style-matrix__meta-row td {
   background: #fff;
   padding: 0.2mm 0.25mm;

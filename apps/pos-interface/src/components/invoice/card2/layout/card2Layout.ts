@@ -6,7 +6,7 @@ import { mmToPt } from './units'
 type Card2LineItemStyleGroupId = Exclude<keyof Card2LineItemStyle, 'jabzoor2' | 'collarPosition'>
 
 interface Card2LineItemsFixedColumn {
-  id: 'fabricType' | 'meters' | 'price' | 'fabricSource' | 'type' | 'line'
+  id: 'garmentId' | 'measurementId' | 'meters' | 'price' | 'fabricSource' | 'shopOrFabric' | 'type' | 'line'
   title: string
   widthPercent: number
 }
@@ -335,12 +335,14 @@ const measurementAnchors: Readonly<Record<string, PdfPoint>> = {
 }
 
 const lineItemsFixedColumns: readonly Card2LineItemsFixedColumn[] = [
-  { id: 'fabricType', title: 'Fabric Type', widthPercent: 7.4 },
-  { id: 'meters', title: 'Meters', widthPercent: 3.4 },
-  { id: 'price', title: 'Price', widthPercent: 3.4 },
-  { id: 'fabricSource', title: 'Fabric Source', widthPercent: 3.8 },
-  { id: 'type', title: 'Type', widthPercent: 2.9 },
-  { id: 'line', title: 'Line', widthPercent: 2.9 },
+  { id: 'garmentId', title: 'Garment ID', widthPercent: 3.6 },
+  { id: 'measurementId', title: 'Meas. ID', widthPercent: 3.4 },
+  { id: 'meters', title: 'Meters', widthPercent: 2.8 },
+  { id: 'price', title: 'Price', widthPercent: 2.8 },
+  { id: 'fabricSource', title: 'Source', widthPercent: 3.0 },
+  { id: 'shopOrFabric', title: 'Shop / Fabric', widthPercent: 4.5 },
+  { id: 'type', title: 'Type', widthPercent: 2.5 },
+  { id: 'line', title: 'Line', widthPercent: 2.0 },
 ]
 
 const lineItemsStyleGroups: readonly Card2LineItemsStyleGroup[] = [

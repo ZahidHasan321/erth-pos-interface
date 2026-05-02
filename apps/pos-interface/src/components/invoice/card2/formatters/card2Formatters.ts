@@ -6,6 +6,7 @@ import type {
   Card2SidePocketCarryItem,
   Card2StyleSelection,
 } from '../types'
+import { formatMeasurement as formatMeasurementShared } from '@repo/database'
 import {
   resolveStyleGroupLabel,
   resolveStyleOptionLabel,
@@ -73,10 +74,16 @@ export const formatValue = (value: PrimitiveValue): string => {
   return normalizedValue.length > 0 ? normalizedValue : EMPTY_VALUE
 }
 
+export const formatMeasurement = (value: PrimitiveValue): string => {
+  if (value === null || value === undefined) return EMPTY_VALUE
+  const formatted = formatMeasurementShared(value)
+  return formatted.length > 0 ? formatted : EMPTY_VALUE
+}
+
 export const formatMeasurementTuple = (
   values: readonly PrimitiveValue[],
   separator = ' / ',
-): string => values.map((value) => formatValue(value)).join(separator)
+): string => values.map((value) => formatMeasurement(value)).join(separator)
 
 export const formatPaymentMethods = (
   paymentMethods: readonly Card2PaymentMethod[] | undefined,

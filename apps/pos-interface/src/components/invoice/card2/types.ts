@@ -9,7 +9,7 @@ export type Card2SignatureValue = string | null
 export type Card2BrovaStatus = 'yes' | 'no' | 'ok' | 'pending'
 export type Card2PaymentMethod = 'link' | 'cash' | 'knet'
 export type Card2FabricSource = 'in-house' | 'out'
-export type Card2FabricType = 'K' | 'S'
+export type Card2FabricType = 'K' | 'D'
 export type Card2FabricLine = 1 | 2
 export type Card2LineNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 export type Card2HashwaCode = 'S' | 'D' | 'T' | 'N'
@@ -42,6 +42,7 @@ export interface Card2SleeveShapeStyleProperties {
 
 export interface Card2CollarShapeStyleProperties {
   hashwa?: Card2HashwaCode
+  smallTabaggi?: boolean
 }
 
 export interface Card2LineItemStyle {
@@ -57,6 +58,7 @@ export interface Card2LineItemStyle {
 
 export interface Card2LineItemFabric {
   fabricType?: string
+  shopOrFabric?: string
   meters?: Card2MeasurementValue
   price?: Card2AmountValue
   source?: Card2FabricSource
@@ -66,6 +68,8 @@ export interface Card2LineItemFabric {
 
 export interface Card2LineItem {
   lineNumber: Card2LineNumber
+  garmentId?: string
+  measurementId?: string
   fabric?: Card2LineItemFabric
   style?: Card2LineItemStyle
 }

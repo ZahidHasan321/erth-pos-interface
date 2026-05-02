@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import React, { Fragment } from 'react'
 import type {
   Card2HashwaCode,
   Card2LineItem,
@@ -159,6 +159,24 @@ const buildStyleMetaDetails = (
     return details
   }
 
+  if (groupId === 'collarShape') {
+    const hashwaDetail = resolveHashwaDetail(lineItem, 'collarShape')
+
+    if (hashwaDetail) {
+      details.push(hashwaDetail)
+    }
+
+    const collarSelection = resolveLineItemStyleSelection(lineItem, 'collarShape') as
+      | { properties?: { smallTabaggi?: boolean } }
+      | undefined
+
+    if (collarSelection?.properties?.smallTabaggi === true) {
+      details.push('Small Tabaggi')
+    }
+
+    return details
+  }
+
   return []
 }
 
@@ -182,23 +200,49 @@ const buildStyleGroupColumns = (
     }
   })
 
-const resolveFixedColumnValue = (
+const TickRow = ({ label, checked }: { label: string; checked: boolean }) => (
+  <span className="card2-style-matrix__tick-row">
+    <img
+      className="card2-style-matrix__checkbox-icon"
+      src={checked ? checkboxMarkedIcon : checkboxIcon}
+      alt=""
+      aria-hidden
+    />
+    <span className="card2-style-matrix__tick-label">{label}</span>
+  </span>
+)
+
+const renderFixedColumnValue = (
   lineItem: Card2LineItem,
   columnId: FixedColumnId,
-): string => {
+): React.ReactNode => {
   const fabric = lineItem.fabric
 
   switch (columnId) {
-    case 'fabricType':
-      return formatValue(fabric?.fabricType)
+    case 'garmentId':
+      return formatValue(lineItem.garmentId)
+    case 'measurementId':
+      return formatValue(lineItem.measurementId)
     case 'meters':
       return formatValue(fabric?.meters)
     case 'price':
       return formatValue(fabric?.price)
     case 'fabricSource':
-      return formatValue(fabric?.source)
+      return (
+        <span className="card2-style-matrix__tick-stack">
+          <TickRow label="IN" checked={fabric?.source === 'in-house'} />
+          <TickRow label="OUT" checked={fabric?.source === 'out'} />
+        </span>
+      )
+    case 'shopOrFabric':
+      return formatValue(fabric?.shopOrFabric)
     case 'type':
-      return formatValue(fabric?.type)
+      return (
+        <span className="card2-style-matrix__tick-stack">
+          <TickRow label="K" checked={fabric?.type === 'K'} />
+          <TickRow label="D" checked={fabric?.type === 'D'} />
+        </span>
+      )
     case 'line':
       return formatValue(fabric?.line)
     default:
@@ -288,7 +332,7 @@ export function Card2LineItemStyleMatrixTableHtml({
               <tr className="card2-style-matrix__data-row" key={`line-item-${lineItem.lineNumber}`}>
                 {fixedColumns.map((column) => (
                   <td key={`fixed-cell-${lineItem.lineNumber}-${column.id}`} rowSpan={2}>
-                    {resolveFixedColumnValue(lineItem, column.id)}
+                    {renderFixedColumnValue(lineItem, column.id)}
                   </td>
                 ))}
 

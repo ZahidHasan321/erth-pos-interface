@@ -1,6 +1,6 @@
 import type { Card2PdfData } from '../types'
 import measGarmentSvg from '../assets/meas_garment.svg'
-import { formatValue } from '../formatters/card2Formatters'
+import { formatMeasurement } from '../formatters/card2Formatters'
 
 interface Card2GarmentMeasurementTemplateHtmlProps {
   data: Card2PdfData
@@ -47,28 +47,28 @@ const buildMeasurementOverlayValues = (
   const besideGarment = data.measurements?.besideGarment
 
   return {
-    frontPocketDistance: formatValue(besideGarment?.topPocket?.distance),
-    lengthFront: formatValue(onGarment?.length?.front),
-    lengthBack: formatValue(onGarment?.length?.back),
-    shoulder: formatValue(onGarment?.shoulder),
-    sleeves: formatValue(onGarment?.sleeves),
-    armholes: formatValue(onGarment?.armholes),
-    width: formatValue(onGarment?.width),
-    upChest: formatValue(onGarment?.upChest),
-    chest: formatValue(onGarment?.chest),
-    halfChest: formatValue(onGarment?.halfChest),
-    waistFront: formatValue(onGarment?.waist?.front),
-    waistBack: formatValue(onGarment?.waist?.back),
-    bottom: formatValue(onGarment?.bottom),
-    topPocketLength: formatValue(besideGarment?.topPocket?.length),
-    topPocketWidth: formatValue(besideGarment?.topPocket?.width),
-    topPocketDistance: formatValue(besideGarment?.topPocket?.distance),
-    jabzoor: formatValue(besideGarment?.jabzoor),
-    elbow: formatValue(besideGarment?.elbow),
-    sidePocketLength: formatValue(besideGarment?.sidePocket?.length),
-    sidePocketWidth: formatValue(besideGarment?.sidePocket?.width),
-    sidePocketDistance: formatValue(besideGarment?.sidePocket?.distance),
-    sidePocketOpening: formatValue(besideGarment?.sidePocket?.opening),
+    frontPocketDistance: formatMeasurement(besideGarment?.topPocket?.distance),
+    lengthFront: formatMeasurement(onGarment?.length?.front),
+    lengthBack: formatMeasurement(onGarment?.length?.back),
+    shoulder: formatMeasurement(onGarment?.shoulder),
+    sleeves: formatMeasurement(onGarment?.sleeves),
+    armholes: formatMeasurement(onGarment?.armholes),
+    width: formatMeasurement(onGarment?.width),
+    upChest: formatMeasurement(onGarment?.upChest),
+    chest: formatMeasurement(onGarment?.chest),
+    halfChest: formatMeasurement(onGarment?.halfChest),
+    waistFront: formatMeasurement(onGarment?.waist?.front),
+    waistBack: formatMeasurement(onGarment?.waist?.back),
+    bottom: formatMeasurement(onGarment?.bottom),
+    topPocketLength: formatMeasurement(besideGarment?.topPocket?.length),
+    topPocketWidth: formatMeasurement(besideGarment?.topPocket?.width),
+    topPocketDistance: formatMeasurement(besideGarment?.topPocket?.distance),
+    jabzoor: formatMeasurement(besideGarment?.jabzoor),
+    elbow: formatMeasurement(besideGarment?.elbow),
+    sidePocketLength: formatMeasurement(besideGarment?.sidePocket?.length),
+    sidePocketWidth: formatMeasurement(besideGarment?.sidePocket?.width),
+    sidePocketDistance: formatMeasurement(besideGarment?.sidePocket?.distance),
+    sidePocketOpening: formatMeasurement(besideGarment?.sidePocket?.opening),
   }
 }
 

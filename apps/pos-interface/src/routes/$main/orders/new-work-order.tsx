@@ -1018,6 +1018,22 @@ function NewWorkOrder() {
         name: "signature",
     });
 
+    const { data: card2MeasurementsListResponse } = useQuery({
+        queryKey: ["measurements", customerDemographics.id],
+        queryFn: () => getMeasurementsByCustomerId(Number(customerDemographics.id)),
+        enabled: !!customerDemographics.id,
+        staleTime: Infinity,
+    });
+
+    const card2MeasurementDisplayById = React.useMemo(() => {
+        const list = card2MeasurementsListResponse?.data ?? [];
+        const map: Record<string, string> = {};
+        for (const m of list) {
+            if (m.id && m.measurement_id) map[m.id] = m.measurement_id;
+        }
+        return map;
+    }, [card2MeasurementsListResponse]);
+
     const card2Data = React.useMemo(() => {
         const orderData = OrderForm.getValues();
         const orderTaker = employees.find((e) => e.id === orderData.order_taker_id);
@@ -1032,6 +1048,7 @@ function NewWorkOrder() {
             garments: fabricSelections,
             fabrics: fabricsResponse ?? [],
             measurement: card2MeasurementResponse?.data ?? null,
+            measurementDisplayById: card2MeasurementDisplayById,
             charges: {
                 fabric: orderData.fabric_charge ?? 0,
                 stitching: orderData.stitching_charge ?? 0,
@@ -1055,6 +1072,7 @@ function NewWorkOrder() {
         fabricSelections,
         fabricsResponse,
         card2MeasurementResponse,
+        card2MeasurementDisplayById,
         employees,
         card2Signature,
     ]);

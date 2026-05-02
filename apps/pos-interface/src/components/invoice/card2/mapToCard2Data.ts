@@ -19,6 +19,7 @@ export interface MapToCard2Input {
   garments: GarmentSchema[]
   fabrics: Fabric[]
   measurement: Measurement | null | undefined
+  measurementDisplayById?: Record<string, string>
   charges: {
     fabric?: number
     stitching?: number
@@ -65,10 +66,14 @@ const toDateString = (value?: string | null): string | undefined => {
   return d.toISOString().slice(0, 10)
 }
 
+const truncate = (value: string, max: number): string =>
+  value.length <= max ? value : `${value.slice(0, max - 1)}…`
+
 const buildLineItem = (
   garment: GarmentSchema,
   index: number,
   fabrics: Fabric[],
+  measurementDisplayById: Record<string, string>,
 ): Card2LineItem => {
   const fabric = fabrics.find((f) => f.id === garment.fabric_id)
   const meters = toNum(garment.fabric_length)
@@ -79,19 +84,38 @@ const buildLineItem = (
   if (garment.mobile_pocket) carryItems.push('mobile')
   if (garment.wallet_pocket) carryItems.push('wallet')
 
+  const shopOrFabric = garment.fabric_source === 'OUT'
+    ? (garment.shop_name?.trim() || undefined)
+    : (fabric?.name ? truncate(fabric.name, 18) : undefined)
+
+  const fabricStyleType = garment.style === 'kuwaiti' ? 'K' : garment.style === 'design' ? 'D' : undefined
+
+  const measurementDisplay = garment.measurement_id
+    ? measurementDisplayById[garment.measurement_id]
+    : undefined
+
   return {
     lineNumber: ((index + 1) as Card2LineItem['lineNumber']),
+    garmentId: garment.garment_id ?? undefined,
+    measurementId: measurementDisplay,
     fabric: {
       fabricType: fabric?.name ?? undefined,
+      shopOrFabric,
       meters: meters ?? undefined,
       price: total ?? undefined,
       source: garment.fabric_source === 'IN' ? 'in-house' : garment.fabric_source === 'OUT' ? 'out' : undefined,
-      type: undefined,
+      type: fabricStyleType,
       line: (garment.lines === 1 || garment.lines === 2 ? garment.lines : undefined) as 1 | 2 | undefined,
     },
     style: {
       collarShape: garment.collar_type
-        ? { id: garment.collar_type, properties: { hashwa: toHashwa(garment.collar_thickness) } }
+        ? {
+            id: garment.collar_type,
+            properties: {
+              hashwa: toHashwa(garment.collar_thickness),
+              smallTabaggi: garment.small_tabaggi ?? undefined,
+            },
+          }
         : undefined,
       collarPosition: garment.collar_position ?? undefined,
       button: garment.collar_button ? { id: garment.collar_button } : undefined,
@@ -125,7 +149,7 @@ const buildMeasurements = (m: Measurement | null | undefined): Card2PdfData['mea
   return {
     unit: 'cm',
     onGarment: {
-      collar: { length: toNum(m.collar_length), width: toNum(m.collar_width) },
+      collar: { length: toNum(m.collar_width), width: toNum(m.collar_height) },
       length: { front: toNum(m.length_front), back: toNum(m.length_back) },
       shoulder: toNum(m.shoulder),
       sleeves: toNum(m.sleeve_length),
@@ -156,7 +180,8 @@ const buildMeasurements = (m: Measurement | null | undefined): Card2PdfData['mea
 }
 
 export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
-  const lineItems = input.garments.slice(0, 8).map((g, i) => buildLineItem(g, i, input.fabrics))
+  const measurementDisplayById = input.measurementDisplayById ?? {}
+  const lineItems = input.garments.slice(0, 8).map((g, i) => buildLineItem(g, i, input.fabrics, measurementDisplayById))
 
   const totalFabric = lineItems.reduce((sum, li) => sum + (typeof li.fabric?.price === 'number' ? li.fabric.price : 0), 0)
   const grandTotal = input.orderTotal ?? 0
@@ -181,7 +206,7 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
       customerMobile: input.customer.phone ?? undefined,
       orderDate: toDateString(input.orderDate),
       dueDate: toDateString(input.deliveryDate),
-      brovaStatus: 'pending',
+      brovaStatus: input.garments.some((g) => g.garment_type === 'brova') ? 'yes' : 'no',
     },
     lineItems,
     measurements: buildMeasurements(input.measurement),
@@ -203,7 +228,7 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
       fabricSummary: {
         inHouse: inHouseTotal || undefined,
         out: outTotal || undefined,
-        totalQuantity: Number((inHouseTotal + outTotal).toFixed(2)) || undefined,
+        totalQuantity: input.garments.length || undefined,
       },
       paymentSummary: {
         total: grandTotal,

@@ -13,6 +13,7 @@ import {
   type Card2FieldSlotId,
 } from './layout'
 import {
+  formatMeasurement,
   formatMeasurementTuple,
   formatPaymentMethods,
   formatValue,
@@ -65,19 +66,19 @@ const fieldValueResolvers: Readonly<
       data.measurements?.onGarment?.length?.front,
       data.measurements?.onGarment?.length?.back,
     ]),
-  shoulder: (data) => formatValue(data.measurements?.onGarment?.shoulder),
-  sleeves: (data) => formatValue(data.measurements?.onGarment?.sleeves),
-  armholes: (data) => formatValue(data.measurements?.onGarment?.armholes),
-  width: (data) => formatValue(data.measurements?.onGarment?.width),
-  upChest: (data) => formatValue(data.measurements?.onGarment?.upChest),
-  chest: (data) => formatValue(data.measurements?.onGarment?.chest),
-  halfChest: (data) => formatValue(data.measurements?.onGarment?.halfChest),
+  shoulder: (data) => formatMeasurement(data.measurements?.onGarment?.shoulder),
+  sleeves: (data) => formatMeasurement(data.measurements?.onGarment?.sleeves),
+  armholes: (data) => formatMeasurement(data.measurements?.onGarment?.armholes),
+  width: (data) => formatMeasurement(data.measurements?.onGarment?.width),
+  upChest: (data) => formatMeasurement(data.measurements?.onGarment?.upChest),
+  chest: (data) => formatMeasurement(data.measurements?.onGarment?.chest),
+  halfChest: (data) => formatMeasurement(data.measurements?.onGarment?.halfChest),
   waistFrontBack: (data) =>
     formatMeasurementTuple([
       data.measurements?.onGarment?.waist?.front,
       data.measurements?.onGarment?.waist?.back,
     ]),
-  bottom: (data) => formatValue(data.measurements?.onGarment?.bottom),
+  bottom: (data) => formatMeasurement(data.measurements?.onGarment?.bottom),
   measurementUnit: (data) => formatValue(data.measurements?.unit),
   topPocketLengthWidthDistance: (data) =>
     formatMeasurementTuple([
@@ -85,8 +86,8 @@ const fieldValueResolvers: Readonly<
       data.measurements?.besideGarment?.topPocket?.width,
       data.measurements?.besideGarment?.topPocket?.distance,
     ]),
-  jabzoorMeasurement: (data) => formatValue(data.measurements?.besideGarment?.jabzoor),
-  elbowMeasurement: (data) => formatValue(data.measurements?.besideGarment?.elbow),
+  jabzoorMeasurement: (data) => formatMeasurement(data.measurements?.besideGarment?.jabzoor),
+  elbowMeasurement: (data) => formatMeasurement(data.measurements?.besideGarment?.elbow),
   sidePocketLengthWidthDistanceOpening: (data) =>
     formatMeasurementTuple([
       data.measurements?.besideGarment?.sidePocket?.length,
