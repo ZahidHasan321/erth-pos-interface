@@ -327,7 +327,7 @@ export const CollarCell = ({
             value={field.value || ""}
             disabled={isFormDisabled}
           >
-            <SelectTrigger className="bg-background border-border/60 min-w-[60px]">
+            <SelectTrigger className="bg-background border-border/60 min-w-[80px]">
               <SelectValue placeholder="Hashwa" />
             </SelectTrigger>
             <SelectContent>

@@ -27,7 +27,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "collar_type",
     header: "Collar",
-    size: 160,
+    size: 180,
     cell: StyleCells.CollarCell,
   },
   {
