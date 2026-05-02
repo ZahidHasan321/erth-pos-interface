@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Card2PdfData } from '../types'
 import measGarmentSvg from '../assets/meas_garment.svg'
 import { formatMeasurement } from '../formatters/card2Formatters'
@@ -42,7 +43,7 @@ type MeasurementOverlayKey = keyof typeof measurementOverlayBoxes
 
 const buildMeasurementOverlayValues = (
   data: Card2PdfData,
-): Record<MeasurementOverlayKey, string> => {
+): Record<MeasurementOverlayKey, ReactNode> => {
   const onGarment = data.measurements?.onGarment
   const besideGarment = data.measurements?.besideGarment
 

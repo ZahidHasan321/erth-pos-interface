@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react'
 import type {
   Card2HashwaCode,
   Card2LineItem,
@@ -6,7 +7,7 @@ import type {
   Card2SidePocketCarryItem,
   Card2StyleSelection,
 } from '../types'
-import { formatMeasurement as formatMeasurementShared } from '@repo/database'
+import { parseMeasurementParts } from '@repo/database'
 import {
   resolveStyleGroupLabel,
   resolveStyleOptionLabel,
@@ -74,16 +75,51 @@ export const formatValue = (value: PrimitiveValue): string => {
   return normalizedValue.length > 0 ? normalizedValue : EMPTY_VALUE
 }
 
-export const formatMeasurement = (value: PrimitiveValue): string => {
+const StackedFraction = ({ numerator, denominator }: { numerator: number; denominator: number }) => (
+  <span className="card2-frac">
+    <span className="card2-frac__num">{numerator}</span>
+    <span className="card2-frac__den">{denominator}</span>
+  </span>
+)
+
+export const formatMeasurement = (value: PrimitiveValue): ReactNode => {
   if (value === null || value === undefined) return EMPTY_VALUE
-  const formatted = formatMeasurementShared(value)
-  return formatted.length > 0 ? formatted : EMPTY_VALUE
+  const parts = parseMeasurementParts(value)
+  if (!parts) return EMPTY_VALUE
+  const sign = parts.negative ? '-' : ''
+  const deg = parts.hasDegree ? '°' : ''
+  if (parts.numerator === 0) return `${sign}${parts.whole}${deg}`
+  const fraction = <StackedFraction numerator={parts.numerator} denominator={parts.denominator} />
+  if (parts.whole > 0) {
+    return (
+      <>
+        {sign}
+        {parts.whole}
+        {' '}
+        {fraction}
+        {deg}
+      </>
+    )
+  }
+  return (
+    <>
+      {sign}
+      {fraction}
+      {deg}
+    </>
+  )
 }
 
 export const formatMeasurementTuple = (
   values: readonly PrimitiveValue[],
-  separator = ' / ',
-): string => values.map((value) => formatMeasurement(value)).join(separator)
+  separator: ReactNode = ' / ',
+): ReactNode =>
+  values.map((value, index) => (
+    <Fragment key={index}>
+      {index > 0 ? separator : null}
+      {formatMeasurement(value)}
+    </Fragment>
+  ))
 
 export const formatPaymentMethods = (
   paymentMethods: readonly Card2PaymentMethod[] | undefined,

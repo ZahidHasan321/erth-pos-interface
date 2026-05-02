@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   Card2BrovaStatus,
   Card2LineItem,
@@ -48,7 +49,7 @@ const joinClassNames = (...names: Array<string | false | undefined>): string =>
   names.filter((value) => Boolean(value)).join(' ')
 
 const fieldValueResolvers: Readonly<
-  Record<Card2FieldSlotId, (data: Card2PdfData, locale: Card2Locale) => string>
+  Record<Card2FieldSlotId, (data: Card2PdfData, locale: Card2Locale) => ReactNode>
 > = {
   orderNumber: (data) => formatValue(data.orderHeader?.orderNumber),
   customerName: (data) => formatValue(data.orderHeader?.customerName),
