@@ -46,7 +46,6 @@ export const RESPONSIBILITY_LABELS = {
 } as const;
 
 export const PRODUCTION_STAGES = [
-  "soaking",
   "cutting",
   "post_cutting",
   "sewing",
@@ -57,9 +56,10 @@ export const PRODUCTION_STAGES = [
 
 export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 
-// Stage → next stage transition map (linear fallback)
+// Stage → next stage transition map (linear fallback).
+// Soaking is a parallel track (see SoakTerminal + soaking_completed_at) — not
+// part of the piece_stage pipeline anymore.
 export const STAGE_NEXT: Record<string, string> = {
-  soaking: "cutting",
   cutting: "post_cutting",
   post_cutting: "sewing",
   sewing: "finishing",

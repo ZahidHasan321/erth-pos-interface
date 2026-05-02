@@ -33,6 +33,8 @@ export function buildPrefillValues(
     base.lines = source.lines ?? 1;
     base.collar_type = source.collar_type ?? null;
     base.collar_button = source.collar_button ?? null;
+    base.collar_position = (source.collar_position as "up" | "down" | null) ?? null;
+    base.collar_thickness = source.collar_thickness ?? null;
     base.small_tabaggi = !!source.small_tabaggi;
     base.jabzour_1 = (source.jabzour_1 as string | null) ?? null;
     base.jabzour_2 = source.jabzour_2 ?? null;

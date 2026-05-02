@@ -225,7 +225,7 @@ export function CashierOrderDetailView({ orderId, onBack }: { orderId: string; o
                                 discountValue={discountValue}
                                 garments={garments.map((g: any) => ({
                                     garment_type: g.garment_type, style: g.style,
-                                    collar_type: g.collar_type, collar_button: g.collar_button, cuffs_type: g.cuffs_type,
+                                    collar_type: g.collar_type, collar_button: g.collar_button, collar_position: g.collar_position, cuffs_type: g.cuffs_type,
                                     jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness,
                                     fabric_length: Number(g.fabric_length) || 0,
                                     fabric_name: g.fabric?.name, express: g.express,

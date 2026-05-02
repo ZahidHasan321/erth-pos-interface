@@ -14,6 +14,7 @@ import {
   dispatchGarments,
   releaseFinals,
   releaseFinalsWithPlan,
+  markSoakComplete,
   updateGarmentDetails,
   updateOrderDeliveryDate,
   updateOrderAssignedDate,
@@ -22,6 +23,7 @@ import {
   WORKSHOP_GARMENTS_KEY,
   SCHEDULER_KEY,
   TERMINAL_KEY,
+  SOAK_QUEUE_KEY,
   WORKLOAD_KEY,
   COMPLETED_TODAY_KEY,
   ASSIGNED_OVERVIEW_KEY,
@@ -42,6 +44,7 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: WORKSHOP_GARMENTS_KEY });
   qc.invalidateQueries({ queryKey: SCHEDULER_KEY });
   qc.invalidateQueries({ queryKey: TERMINAL_KEY });
+  qc.invalidateQueries({ queryKey: SOAK_QUEUE_KEY });
   qc.invalidateQueries({ queryKey: WORKLOAD_KEY });
   qc.invalidateQueries({ queryKey: COMPLETED_TODAY_KEY });
   qc.invalidateQueries({ queryKey: SIDEBAR_COUNTS_KEY });
@@ -188,28 +191,22 @@ export function useScheduleGarments() {
   return useMutation({
     mutationFn: (args: {
       ids: string[];
-      soakingIds?: string[];
-      nonSoakingIds?: string[];
       plan: Record<string, string>;
       date: string;
       reentryStage?: PieceStage;
     }) =>
-      scheduleGarments(
-        args.ids, args.plan, args.date, undefined,
-        args.reentryStage, args.soakingIds, args.nonSoakingIds,
-      ),
+      scheduleGarments(args.ids, args.plan, args.date, undefined, args.reentryStage),
     onMutate: (args) => {
       // Scheduled garments get a production_plan and move out of waiting_cut,
-      // so they'll no longer match the scheduler filter — optimistically patch them
-      const soakSet = new Set(args.soakingIds ?? []);
+      // so they'll no longer match the scheduler filter — optimistically patch them.
+      // Soaking is parallel; first piece_stage is always cutting (or reentryStage).
       const prev = qc.getQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY);
       if (prev) {
         const idSet = new Set(args.ids);
         qc.setQueryData<WorkshopGarment[]>(WORKSHOP_GARMENTS_KEY, (old) =>
           (old ?? []).map((g) => {
             if (!idSet.has(g.id)) return g;
-            const stage = args.reentryStage
-              ?? (soakSet.has(g.id) ? 'soaking' : 'cutting');
+            const stage = args.reentryStage ?? 'cutting';
             return {
               ...g,
               production_plan: args.plan,
@@ -347,9 +344,8 @@ export function useReleaseFinalsWithPlan() {
     mutationFn: (args: { ids: string[]; plan: Record<string, string>; date: string }) =>
       releaseFinalsWithPlan(args.ids, args.plan, args.date),
     onMutate: (args) => {
-      const stage = (args.plan as any).soaker ? 'soaking' : 'cutting';
       return optimisticPatch(qc, args.ids, {
-        piece_stage: stage as PieceStage,
+        piece_stage: 'cutting' as PieceStage,
         in_production: true,
         production_plan: args.plan,
         assigned_date: args.date,
@@ -361,6 +357,26 @@ export function useReleaseFinalsWithPlan() {
     onError: (err, _args, rollback) => {
       rollback?.();
       toast.error(`Failed to release finals: ${errorMsg(err)}`);
+    },
+    onSettled: () => invalidateAll(qc),
+  });
+}
+
+// ── Soak (parallel track) ──────────────────────────────────────────────────
+
+export function useMarkSoakComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => markSoakComplete(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      soaking_completed_at: new Date().toISOString() as any,
+    }),
+    onSuccess: (_data, ids) => {
+      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} marked soak complete`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to mark soak complete: ${errorMsg(err)}`);
     },
     onSettled: () => invalidateAll(qc),
   });

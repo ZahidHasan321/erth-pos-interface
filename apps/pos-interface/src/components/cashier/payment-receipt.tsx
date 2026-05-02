@@ -9,6 +9,7 @@ export interface ReceiptGarment {
     style?: string;
     collar_type?: string;
     collar_button?: string;
+    collar_position?: "up" | "down" | null;
     cuffs_type?: string;
     jabzour_1?: string;
     jabzour_thickness?: string;
@@ -144,7 +145,9 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
         const rows: Row[] = React.useMemo(() => {
             return garments.map((g, idx) => {
                 const model = g.style === "kuwaiti" ? "كلاسيك" : "ديزاين";
-                const collar = collarMap[g.collar_type || ""] || "عادي";
+                const collarBase = collarMap[g.collar_type || ""] || "عادي";
+                const collarPos = g.collar_position === "up" ? " (أعلى)" : g.collar_position === "down" ? " (أسفل)" : "";
+                const collar = `${collarBase}${collarPos}`;
                 const buttons = g.collar_button === "COL_TABBAGI" ? "تبقي" : g.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
                 const jabzour = jabzourMap[g.jabzour_1 || ""] || "بدون";
                 const cuff = cuffMap[g.cuffs_type || ""] || "عادي";

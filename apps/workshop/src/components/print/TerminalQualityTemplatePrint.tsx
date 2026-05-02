@@ -350,7 +350,7 @@ export function TerminalQualityTemplatePrint({
               height={<MeasurementOrDash raw={measurement?.collar_height} degree={degree} />}
               width={<MeasurementOrDash raw={measurement?.collar_width} degree={degree} />}
               accessories={
-                (collarButton || garment.small_tabaggi) ? (
+                (collarButton || garment.small_tabaggi || (garment as { collar_position?: string }).collar_position) ? (
                   <>
                     {collarButton ? (
                       <span>
@@ -364,6 +364,12 @@ export function TerminalQualityTemplatePrint({
                       <span>
                         <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" /> SMALL TABAGGI
                       </span>
+                    ) : null}
+                    {(garment as { collar_position?: string }).collar_position === "up" ? (
+                      <span>COLLAR UP</span>
+                    ) : null}
+                    {(garment as { collar_position?: string }).collar_position === "down" ? (
+                      <span>COLLAR DOWN</span>
                     ) : null}
                   </>
                 ) : null

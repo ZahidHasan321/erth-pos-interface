@@ -625,6 +625,36 @@ function OptionGroups({
             />
           </FailWrap>
         </div>
+        <SubLabel failed={failed("collar_position")}>Position</SubLabel>
+        <FailWrap failed={failed("collar_position")}>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={text("collar_position") === "up"}
+                onChange={(e) => onChange("collar_position", e.target.checked ? "up" : null)}
+              />
+              UP
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={text("collar_position") === "down"}
+                onChange={(e) => onChange("collar_position", e.target.checked ? "down" : null)}
+              />
+              DOWN
+            </label>
+          </div>
+        </FailWrap>
+        <div className="flex items-center gap-2">
+          <SubLabel className="mb-0" failed={failed("collar_thickness")}>Thickness</SubLabel>
+          <FailWrap failed={failed("collar_thickness")} inline>
+            <ThicknessPicker
+              value={text("collar_thickness")}
+              onChange={(v) => onChange("collar_thickness", v)}
+            />
+          </FailWrap>
+        </div>
       </OptionGroup>
 
       <OptionGroup title="Jabzour">
@@ -633,21 +663,37 @@ function OptionGroups({
           <ImageOptionGrid
             options={jabzourTypes}
             value={text("jabzour_1")}
-            onChange={(v) => onChange("jabzour_1", v)}
+            onChange={(v) => {
+              onChange("jabzour_1", v);
+              if (v !== "JAB_SHAAB" && values.jabzour_2 != null) {
+                onChange("jabzour_2", null);
+              }
+            }}
             allowClear
           />
         </FailWrap>
-        <SubLabel failed={failed("jabzour_2")}>
-          Type 2 <span className="text-muted-foreground/60">(only when first is Shaab)</span>
-        </SubLabel>
-        <FailWrap failed={failed("jabzour_2")}>
-          <ImageOptionGrid
-            options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
-            value={text("jabzour_2")}
-            onChange={(v) => onChange("jabzour_2", v)}
-            allowClear
-          />
-        </FailWrap>
+        {(text("jabzour_1") === "JAB_SHAAB" || text("jabzour_2") != null) && (
+          <>
+            <SubLabel failed={failed("jabzour_2")}>
+              Type 2{" "}
+              {text("jabzour_1") === "JAB_SHAAB" ? (
+                <span className="text-red-600">*</span>
+              ) : (
+                <span className="text-amber-600">
+                  (clear — only used when Type 1 is Shaab)
+                </span>
+              )}
+            </SubLabel>
+            <FailWrap failed={failed("jabzour_2")}>
+              <ImageOptionGrid
+                options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                value={text("jabzour_2")}
+                onChange={(v) => onChange("jabzour_2", v)}
+                allowClear
+              />
+            </FailWrap>
+          </>
+        )}
         <div className="flex items-center gap-2">
           <SubLabel className="mb-0" failed={failed("jabzour_thickness")}>Thickness</SubLabel>
           <FailWrap failed={failed("jabzour_thickness")} inline>

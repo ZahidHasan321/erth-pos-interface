@@ -32,6 +32,8 @@ export const garmentSchema = z.object({
   // Style options
   collar_type: z.string().optional().nullable(),
   collar_button: z.string().optional().nullable(),
+  collar_position: z.enum(['up', 'down']).nullable().optional(),
+  collar_thickness: z.string().optional().nullable(),
   cuffs_type: z.string().optional().nullable(),
   cuffs_thickness: z.string().optional().nullable(),
   front_pocket_type: z.string().optional().nullable(),
@@ -96,6 +98,8 @@ export const garmentDefaults: GarmentSchema = {
   quantity: 1,
   collar_type: 'COL_DOWN_COLLAR',
   collar_button: 'COL_TABBAGI',
+  collar_position: null,
+  collar_thickness: 'DOUBLE',
   cuffs_type: 'CUF_NO_CUFF',
   cuffs_thickness: 'NO HASHWA',
   front_pocket_type: 'FRO_MUDAWWAR_FRONT_POCKET',

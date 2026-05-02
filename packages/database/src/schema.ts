@@ -136,6 +136,9 @@ export type MeasurementType = (typeof measurementTypeEnum.enumValues)[number];
 export const jabzourTypeEnum = pgEnum("jabzour_type", ["BUTTON", "ZIPPER"]);
 export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
 
+export const collarPositionEnum = pgEnum("collar_position", ["up", "down"]);
+export type CollarPosition = (typeof collarPositionEnum.enumValues)[number];
+
 export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final", "alteration"]);
 export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
@@ -679,6 +682,8 @@ export const garments = pgTable("garments", {
     // Style Specifics
     collar_type: text("collar_type"),
     collar_button: text("collar_button"),
+    collar_position: collarPositionEnum("collar_position"),
+    collar_thickness: text("collar_thickness"),
     cuffs_type: text("cuffs_type"),
     cuffs_thickness: text("cuffs_thickness"),
     front_pocket_type: text("front_pocket_type"),
@@ -697,6 +702,9 @@ export const garments = pgTable("garments", {
     soaking: boolean("soaking").default(false),
     // Soaking duration in hours. NULL when soaking=false. Currently 8 or 24.
     soaking_hours: integer("soaking_hours"),
+    // When soaking finished. NULL while pending or for non-soak garments.
+    // Soaking runs as a parallel track — see soak terminal queue + cutting gate.
+    soaking_completed_at: timestamp("soaking_completed_at", { withTimezone: true }),
     express: boolean("express").default(false),
     garment_type: garmentTypeEnum("garment_type").default("final"),
     delivery_date: timestamp("delivery_date"),

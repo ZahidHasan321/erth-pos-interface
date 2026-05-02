@@ -141,7 +141,7 @@ export function getGarmentAltLabel(garment: {
 // only the style design itself counts.
 const STYLE_IDENTITY_FIELDS = [
     "style",
-    "collar_type", "collar_button",
+    "collar_type", "collar_button", "collar_thickness",
     "cuffs_type", "cuffs_thickness",
     "front_pocket_type", "front_pocket_thickness",
     "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi",

@@ -169,7 +169,9 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
       return (fabricSelections || []).map((sel, idx) => {
         const isKuwaiti = sel.style === "kuwaiti";
         const model = isKuwaiti ? "كلاسيك" : "ديزاين";
-        const collar = collarMap[sel.collar_type || ""] || "عادي";
+        const collarBase = collarMap[sel.collar_type || ""] || "عادي";
+        const collarPos = (sel as any).collar_position === "up" ? " (أعلى)" : (sel as any).collar_position === "down" ? " (أسفل)" : "";
+        const collar = `${collarBase}${collarPos}`;
         const buttons = sel.collar_button === "COL_TABBAGI" ? "تبقي" : sel.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
         const jabzour = jabzourMap[sel.jabzour_1 || ""] || "بدون";
         const cuff = cuffMap[sel.cuffs_type || ""] || "عادي";

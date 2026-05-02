@@ -353,6 +353,36 @@ export function AlterationGarmentForm({
                             onChange={(v) => setStyle("small_tabaggi", v)}
                             image={smallTabaggiImage}
                         />
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-slate-700">Position</span>
+                            <div className="flex gap-3">
+                                <label className="flex items-center gap-1.5 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        checked={styleStr("collar_position") === "up"}
+                                        onChange={(e) =>
+                                            setStyle("collar_position", e.target.checked ? "up" : "")
+                                        }
+                                    />
+                                    UP
+                                </label>
+                                <label className="flex items-center gap-1.5 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        checked={styleStr("collar_position") === "down"}
+                                        onChange={(e) =>
+                                            setStyle("collar_position", e.target.checked ? "down" : "")
+                                        }
+                                    />
+                                    DOWN
+                                </label>
+                            </div>
+                        </div>
+                        <ThicknessField
+                            label="Thickness"
+                            value={styleStr("collar_thickness")}
+                            onChange={(v) => setStyle("collar_thickness", v)}
+                        />
                     </StyleGroup>
 
                     {/* Cuffs */}

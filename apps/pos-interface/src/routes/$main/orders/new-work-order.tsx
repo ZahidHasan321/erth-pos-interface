@@ -393,6 +393,17 @@ function NewWorkOrder() {
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
 
+        const custId = Number(customer.id);
+        queryClient.fetchQuery({
+            queryKey: ["measurements", custId],
+            queryFn: () => getMeasurementsByCustomerId(custId),
+            staleTime: Infinity,
+        }).then(res => {
+            if (res.status === "success" && res.data && res.data.length > 0) {
+                addSavedStep(1);
+            }
+        });
+
         if (orderId) {
             try {
                 const response = await updateOrder({ customer_id: customer.id }, orderId);
@@ -408,7 +419,7 @@ function NewWorkOrder() {
         } else {
             setCurrentStep(0);
         }
-    }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep]);
+    }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep, queryClient, addSavedStep]);
 
     const handlePendingOrderSelected = React.useCallback(async (order: Order) => {
         // Set loading state
@@ -542,7 +553,18 @@ function NewWorkOrder() {
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
         setCurrentStep(0);
-    }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep]);
+
+        const custId = Number(customer.id);
+        queryClient.fetchQuery({
+            queryKey: ["measurements", custId],
+            queryFn: () => getMeasurementsByCustomerId(custId),
+            staleTime: Infinity,
+        }).then(res => {
+            if (res.status === "success" && res.data && res.data.length > 0) {
+                addSavedStep(1);
+            }
+        });
+    }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep, queryClient, addSavedStep]);
 
     const handleTopLevelCustomerFound = React.useCallback((customer: Customer) => {
         if (orderId) {

@@ -47,6 +47,8 @@ type StyleFieldDef = {
 export const STYLE_FIELD_DEFS: Record<AlterationStyleField, StyleFieldDef> = {
     collar_type: { label: "Collar Type", type: "text" },
     collar_button: { label: "Collar Button", type: "text" },
+    collar_position: { label: "Collar Position", type: "text" },
+    collar_thickness: { label: "Collar Thickness", type: "text" },
     cuffs_type: { label: "Cuffs Type", type: "text" },
     cuffs_thickness: { label: "Cuffs Thickness", type: "text" },
     front_pocket_type: { label: "Front Pocket Type", type: "text" },

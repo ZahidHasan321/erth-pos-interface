@@ -222,6 +222,10 @@ export const formatLineItemStyleSummary = (
     )
   }
 
+  if (style.collarPosition) {
+    parts.push(`Collar: ${style.collarPosition === 'up' ? 'UP' : 'DOWN'}`)
+  }
+
   if (style.button) {
     parts.push(
       `${resolveStyleGroupLabel('button', locale)}: ${formatStyleSelection('button', style.button, locale)}`,

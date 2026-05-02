@@ -90,7 +90,10 @@ const buildLineItem = (
       line: (garment.lines === 1 || garment.lines === 2 ? garment.lines : undefined) as 1 | 2 | undefined,
     },
     style: {
-      collarShape: garment.collar_type ? { id: garment.collar_type } : undefined,
+      collarShape: garment.collar_type
+        ? { id: garment.collar_type, properties: { hashwa: toHashwa(garment.collar_thickness) } }
+        : undefined,
+      collarPosition: garment.collar_position ?? undefined,
       button: garment.collar_button ? { id: garment.collar_button } : undefined,
       jabzoor: garment.jabzour_1
         ? { id: garment.jabzour_1, properties: { hashwa: toHashwa(garment.jabzour_thickness) } }

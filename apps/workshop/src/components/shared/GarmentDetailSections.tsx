@@ -72,6 +72,7 @@ function parseJson<T>(raw: unknown): T | null {
 const STYLE_FIELDS: { key: string; label: string; type: "text" | "boolean"; thicknessKey?: string }[] = [
   { key: "collar_type", label: "Collar", type: "text", thicknessKey: "collar_thickness" },
   { key: "collar_button", label: "Collar Button", type: "text" },
+  { key: "collar_position", label: "Collar Position", type: "text" },
   { key: "cuffs_type", label: "Cuffs", type: "text", thicknessKey: "cuffs_thickness" },
   { key: "front_pocket_type", label: "Front Pocket", type: "text", thicknessKey: "front_pocket_thickness" },
   { key: "wallet_pocket", label: "Wallet Pocket", type: "boolean" },
@@ -331,9 +332,7 @@ export function WorkerHistorySection({
   const currentStage = garment.piece_stage ?? "";
   const isReturn = (garment.trip_number ?? 1) > 1;
 
-  let stages = PRODUCTION_STAGES.filter(
-    (s) => s !== "soaking" || garment.soaking,
-  );
+  let stages: string[] = [...PRODUCTION_STAGES];
 
   // For re-entry garments, only show stages from re-entry point onward
   if (isReturn && reentryStage) {

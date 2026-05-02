@@ -224,14 +224,26 @@ export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
  * Replaces the pattern of fetching every workshop garment and filtering
  * client-side. GarmentCard uses rich fields (fabric, style, order) so the
  * joins stay, but measurement is dropped.
+ *
+ * Cutting gate: soaking is a parallel track keyed off the per-garment
+ * `soaking` flag + `soaking_completed_at` (see getSoakingQueue). Garments
+ * still pending soak must not appear in the cutting terminal even if their
+ * piece_stage was advanced to 'cutting' by the scheduler.
  */
 export const getTerminalStageGarments = async (stage: string): Promise<WorkshopGarment[]> => {
-  const { data, error } = await db
+  let query = db
     .from('garments')
     .select(WORKSHOP_QUERY_LIGHT)
     .eq('location', 'workshop')
     .eq('piece_stage', stage)
-    .eq('order.checkout_status', 'confirmed')
+    .eq('order.checkout_status', 'confirmed');
+
+  if (stage === 'cutting') {
+    // soaking=false OR soaking_completed_at IS NOT NULL
+    query = query.or('soaking.eq.false,soaking_completed_at.not.is.null');
+  }
+
+  const { data, error } = await query
     .order('assigned_date', { ascending: true, nullsFirst: false })
     .order('id', { ascending: true });
 
@@ -241,9 +253,52 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
 };
 
-/** Piece stages shown as columns on the daily production board. */
+/**
+ * Soak terminal queue: parallel track, independent of piece_stage.
+ * A garment shows up here from the moment it's received at the workshop
+ * (location='workshop') until its soak is marked complete. The soak runs in
+ * parallel with the pipeline — the garment's piece_stage stays in whatever
+ * state it actually is (waiting_for_acceptance, waiting_cut, etc) and the
+ * soak terminal shows it as a *copy* until done.
+ *
+ * Soak runs once per garment lifetime — `trip_number = 1` excludes
+ * alteration returns (same fabric). Redo replacements are new rows with
+ * trip_number=1, so they qualify naturally.
+ */
+export const getSoakingQueue = async (): Promise<WorkshopGarment[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('soaking', true)
+    .is('soaking_completed_at', null)
+    .eq('location', 'workshop')
+    .eq('trip_number', 1)
+    .eq('order.checkout_status', 'confirmed')
+    .order('id', { ascending: true });
+
+  if (error) {
+    throw new Error(`getSoakingQueue: failed to fetch soak queue: ${error.message}`);
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+};
+
+/**
+ * Mark soak complete on the given garments. Sets only soaking_completed_at;
+ * does NOT change piece_stage / location / in_production. The garment simply
+ * disappears from the soak terminal queue and (if its piece_stage is later
+ * advanced to cutting) becomes eligible for the cutting terminal.
+ */
+export const markSoakComplete = async (ids: string[]): Promise<void> => {
+  const { error } = await db
+    .from('garments')
+    .update({ soaking_completed_at: new Date().toISOString() })
+    .in('id', ids);
+  if (error) throw new Error(`markSoakComplete: failed to mark soak complete: ${error.message}`);
+};
+
+/** Piece stages shown as columns on the daily production board.
+ *  Soaking is a parallel track (see SoakTerminal) — not a board column. */
 export const BOARD_STAGES = [
-  'soaking',
   'cutting',
   'post_cutting',
   'sewing',
@@ -882,8 +937,6 @@ export const scheduleGarments = async (
   assignedDate: string,
   _assignedUnit?: string,
   reentryStage?: PieceStage,
-  soakingIds?: string[],
-  nonSoakingIds?: string[],
 ): Promise<void> => {
   const baseUpdate = {
     production_plan: plan,
@@ -892,27 +945,15 @@ export const scheduleGarments = async (
     qc_rework_stages: null,
   };
 
-  if (reentryStage) {
-    const { error } = await db
-      .from('garments')
-      .update({ ...baseUpdate, piece_stage: reentryStage })
-      .in('id', ids);
-    if (error) throw new Error(`scheduleGarments: failed to schedule garments with reentry stage: ${error.message}`);
-  } else if (soakingIds?.length && nonSoakingIds?.length) {
-    const [r1, r2] = await Promise.all([
-      db.from('garments').update({ ...baseUpdate, piece_stage: 'soaking' as PieceStage }).in('id', soakingIds),
-      db.from('garments').update({ ...baseUpdate, piece_stage: 'cutting' as PieceStage }).in('id', nonSoakingIds),
-    ]);
-    if (r1.error) throw new Error(`scheduleGarments: failed to schedule soaking garments: ${r1.error.message}`);
-    if (r2.error) throw new Error(`scheduleGarments: failed to schedule cutting garments: ${r2.error.message}`);
-  } else {
-    const firstStage: PieceStage = (soakingIds?.length && plan.soaker) ? 'soaking' : 'cutting';
-    const { error } = await db
-      .from('garments')
-      .update({ ...baseUpdate, piece_stage: firstStage })
-      .in('id', ids);
-    if (error) throw new Error(`scheduleGarments: failed to schedule garments: ${error.message}`);
-  }
+  // Soaking is a parallel track now — never set piece_stage='soaking' here.
+  // First production stage is always cutting; cutting terminal gates on
+  // soaking_completed_at so soak-pending garments wait there.
+  const firstStage: PieceStage = reentryStage ?? ('cutting' as PieceStage);
+  const { error } = await db
+    .from('garments')
+    .update({ ...baseUpdate, piece_stage: firstStage })
+    .in('id', ids);
+  if (error) throw new Error(`scheduleGarments: failed to schedule garments: ${error.message}`);
 
   // Append trip_history entry for each garment
   const { data: garments } = await db
@@ -1276,18 +1317,18 @@ export const releaseFinals = async (ids: string[]): Promise<void> => {
 };
 
 /** Release finals with a production plan + assigned date — skips scheduler step.
- *  Handles finals at waiting_for_acceptance (not yet POS-released) or waiting_cut (POS-released, no plan). */
+ *  Handles finals at waiting_for_acceptance (not yet POS-released) or waiting_cut (POS-released, no plan).
+ *  Soaking is parallel — first stage is always cutting; the cutting terminal gates on soak completion. */
 export const releaseFinalsWithPlan = async (
   ids: string[],
   plan: Record<string, string>,
   assignedDate: string,
   _assignedUnit?: string,
 ): Promise<void> => {
-  const firstStage: PieceStage = plan.soaker ? 'soaking' : 'cutting';
   const { error } = await db
     .from('garments')
     .update({
-      piece_stage: firstStage,
+      piece_stage: 'cutting' as PieceStage,
       in_production: true,
       production_plan: plan,
       assigned_date: assignedDate,
@@ -1580,6 +1621,8 @@ export interface CreateGarmentInput {
   style_id?: number | null;
   collar_type?: string | null;
   collar_button?: string | null;
+  collar_position?: 'up' | 'down' | null;
+  collar_thickness?: string | null;
   cuffs_type?: string | null;
   cuffs_thickness?: string | null;
   front_pocket_type?: string | null;
@@ -1660,6 +1703,8 @@ export const createGarmentForOrder = async (
     style_id: input.style_id ?? null,
     collar_type: input.collar_type ?? null,
     collar_button: input.collar_button ?? null,
+    collar_position: input.collar_position ?? null,
+    collar_thickness: input.collar_thickness ?? null,
     cuffs_type: input.cuffs_type ?? null,
     cuffs_thickness: input.cuffs_thickness ?? null,
     front_pocket_type: input.front_pocket_type ?? null,

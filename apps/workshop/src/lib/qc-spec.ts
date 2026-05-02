@@ -99,6 +99,8 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
 export const QC_OPTIONS: QcOptionSpec[] = [
   { key: "collar_type",            label: "Collar Type",             type: "text" },
   { key: "collar_button",          label: "Collar Button",           type: "text" },
+  { key: "collar_position",        label: "Collar Position",         type: "text" },
+  { key: "collar_thickness",       label: "Collar Thickness",        type: "text" },
   { key: "cuffs_type",             label: "Cuffs Type",              type: "text" },
   { key: "cuffs_thickness",        label: "Cuffs Thickness",         type: "text" },
   { key: "front_pocket_type",      label: "Front Pocket Type",       type: "text" },

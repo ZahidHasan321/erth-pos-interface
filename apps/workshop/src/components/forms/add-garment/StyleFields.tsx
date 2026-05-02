@@ -246,6 +246,46 @@ export function StyleFields() {
             )}
           />
         </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Position</Label>
+          <Controller
+            control={control}
+            name="collar_position"
+            render={({ field }) => (
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={field.value === "up"}
+                    onChange={(e) => field.onChange(e.target.checked ? "up" : null)}
+                  />
+                  UP
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={field.value === "down"}
+                    onChange={(e) => field.onChange(e.target.checked ? "down" : null)}
+                  />
+                  DOWN
+                </label>
+                <span className="text-xs text-muted-foreground self-center">
+                  (none = ordinary)
+                </span>
+              </div>
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Thickness</Label>
+          <Controller
+            control={control}
+            name="collar_thickness"
+            render={({ field }) => (
+              <ThicknessPicker value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </div>
       </SectionCard>
 
       <SectionCard title="Jabzour">

@@ -14,8 +14,7 @@ interface MeasurementOverlayBox {
 }
 
 const measurementOverlayBoxes = {
-  collarLength: { left: 25.112, top: 4.08, width: 12.682, height: 5.903 },
-  collarWidth: { left: 39.69, top: 4.08, width: 12.682, height: 5.903 },
+  frontPocketDistance: { left: 25.112, top: 4.08, width: 12.682, height: 5.903 },
   lengthFront: { left: 25.112, top: 18.876, width: 12.682, height: 5.903 },
   lengthBack: { left: 39.69, top: 18.876, width: 12.682, height: 5.903 },
   shoulder: { left: 32.011, top: 31.272, width: 13.459, height: 6.266 },
@@ -48,8 +47,7 @@ const buildMeasurementOverlayValues = (
   const besideGarment = data.measurements?.besideGarment
 
   return {
-    collarLength: formatValue(onGarment?.collar?.length),
-    collarWidth: formatValue(onGarment?.collar?.width),
+    frontPocketDistance: formatValue(besideGarment?.topPocket?.distance),
     lengthFront: formatValue(onGarment?.length?.front),
     lengthBack: formatValue(onGarment?.length?.back),
     shoulder: formatValue(onGarment?.shoulder),

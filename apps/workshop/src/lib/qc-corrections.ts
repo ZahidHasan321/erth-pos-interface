@@ -27,6 +27,8 @@ export function getMeasurementCorrections(
 const QC_OPTION_TO_SECTION: Record<string, AlterationStyleSection> = {
   collar_type: "collar",
   collar_button: "collar",
+  collar_position: "collar",
+  collar_thickness: "collar",
   small_tabaggi: "collar",
   jabzour_1: "jabzour",
   jabzour_2: "jabzour",

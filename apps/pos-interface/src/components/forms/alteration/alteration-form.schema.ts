@@ -18,7 +18,7 @@ export const ALTERATION_MEASUREMENT_FIELDS = [
 export type AlterationMeasurementField = (typeof ALTERATION_MEASUREMENT_FIELDS)[number];
 
 export const ALTERATION_STYLE_FIELDS = [
-    "collar_type", "collar_button",
+    "collar_type", "collar_button", "collar_position", "collar_thickness",
     "cuffs_type", "cuffs_thickness",
     "front_pocket_type", "front_pocket_thickness",
     "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi",

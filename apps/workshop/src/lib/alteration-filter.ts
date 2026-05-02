@@ -138,6 +138,8 @@ export const ALTERATION_REASON_CELL_CLASS: Record<AlterationReason, string> = {
 const STYLE_KEY_TO_SECTIONS: Record<string, AlterationStyleSection[]> = {
   collar_type: ["collar"],
   collar_button: ["collar"],
+  collar_position: ["collar"],
+  collar_thickness: ["collar"],
   small_tabaggi: ["collar"],
   cuffs_type: ["cuffs"],
   cuffs_thickness: ["cuffs"],

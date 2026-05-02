@@ -3,6 +3,7 @@ import {
   getWorkshopGarments,
   getSchedulerGarments,
   getTerminalStageGarments,
+  getSoakingQueue,
   getBoardGarments,
   getCompletedTodayGarments,
   getGarmentById,
@@ -23,6 +24,7 @@ import {
 // entire workshop garment list on every change.
 export const SCHEDULER_KEY = ['scheduler-garments'] as const;
 export const TERMINAL_KEY = ['terminal-garments'] as const;
+export const SOAK_QUEUE_KEY = ['soak-queue'] as const;
 export const BOARD_KEY = ['board-garments'] as const;
 export const WORKLOAD_KEY = ['workshop-workload'] as const;
 export const COMPLETED_TODAY_KEY = ['completed-today-garments'] as const;
@@ -135,6 +137,19 @@ export function useGarment(id: string) {
  * location=workshop AND piece_stage=stage, so the client only receives
  * rows for the one terminal it's rendering.
  */
+/**
+ * Soak terminal queue — parallel track, independent of piece_stage.
+ * Returns garments where soaking=true, soaking_completed_at IS NULL,
+ * location='workshop', trip_number=1.
+ */
+export function useSoakingQueue() {
+  return useQuery({
+    queryKey: SOAK_QUEUE_KEY,
+    queryFn: getSoakingQueue,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
 export function useTerminalGarments(stage: string) {
   return useQuery({
     queryKey: [...TERMINAL_KEY, stage],

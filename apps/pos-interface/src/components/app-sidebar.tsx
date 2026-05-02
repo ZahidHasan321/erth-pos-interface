@@ -287,14 +287,14 @@ export function AppSidebar({
           {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           <span>{title}</span>
           {!isOpen && totalCount > 0 && (
-            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
               {totalCount}
             </span>
           )}
           <ChevronDown
-            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
-              !isOpen && !totalCount ? "ml-auto" : ""
-            } ${isOpen ? "rotate-180" : ""}`}
+            className={`ml-auto h-4 w-4 shrink-0 transition-transform duration-200 ${
+              isOpen ? "rotate-180" : ""
+            }`}
           />
         </SidebarMenuButton>
         <div

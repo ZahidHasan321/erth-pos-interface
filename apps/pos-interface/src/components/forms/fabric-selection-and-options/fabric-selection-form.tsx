@@ -546,7 +546,7 @@ export function FabricSelectionForm({
 
         const firstRow = garments[0];
         const fieldsToCopy = [
-            "style_id", "style", "collar_type", "collar_button",
+            "style_id", "style", "collar_type", "collar_button", "collar_thickness",
             "cuffs_type", "cuffs_thickness", "front_pocket_type",
             "front_pocket_thickness", "wallet_pocket", "pen_holder",
             "small_tabaggi", "jabzour_1", "jabzour_2",

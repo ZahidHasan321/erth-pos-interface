@@ -35,6 +35,8 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         quantity: g.quantity || 1,
         collar_type: g.collar_type,
         collar_button: g.collar_button,
+        collar_position: g.collar_position ?? null,
+        collar_thickness: g.collar_thickness,
         cuffs_type: g.cuffs_type,
         cuffs_thickness: g.cuffs_thickness,
         front_pocket_type: g.front_pocket_type,

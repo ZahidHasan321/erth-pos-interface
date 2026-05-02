@@ -243,7 +243,7 @@ export const listAlterationOrders = async (): Promise<ApiResponse<Order[]>> => {
 export const getCustomerGarmentsForLink = async (customerId: number) => {
     const { data, error } = await db
         .from("garments")
-        .select("id, garment_id, garment_type, alteration_measurements, alteration_styles, full_measurement_set_id, measurement_id, collar_type, collar_button, cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder, mobile_pocket, small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, order_id, orders!inner(customer_id, order_date)")
+        .select("id, garment_id, garment_type, alteration_measurements, alteration_styles, full_measurement_set_id, measurement_id, collar_type, collar_button, collar_position, collar_thickness, cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder, mobile_pocket, small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, order_id, orders!inner(customer_id, order_date)")
         .eq("orders.customer_id", customerId)
         .order("order_id", { ascending: false })
         .limit(50);
@@ -264,6 +264,8 @@ export type PriorGarmentForLink = {
     measurement_id: string | null;
     collar_type: string | null;
     collar_button: string | null;
+    collar_position: "up" | "down" | null;
+    collar_thickness: string | null;
     cuffs_type: string | null;
     cuffs_thickness: string | null;
     front_pocket_type: string | null;

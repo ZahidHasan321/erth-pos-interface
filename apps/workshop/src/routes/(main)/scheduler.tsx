@@ -598,7 +598,6 @@ function SchedulerPage() {
   };
 
   const getSelectedGarmentIds = () => getSelectedGarments().map((g) => g.id);
-  const selectedHasSoaking = getSelectedGarments().some((g) => g.soaking);
 
   const isSchedulingReturns = selReturns.size > 0;
 
@@ -719,9 +718,7 @@ function SchedulerPage() {
 
   const handleSchedule = async (plan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
     const selected = getSelectedGarments();
-    const soakingIds = selected.filter((g) => g.soaking).map((g) => g.id);
-    const nonSoakingIds = selected.filter((g) => !g.soaking).map((g) => g.id);
-    await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), soakingIds, nonSoakingIds, plan, date, reentryStage: reentryStage as any });
+    await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), plan, date, reentryStage: reentryStage as any });
     clearAll();
   };
 
@@ -948,7 +945,6 @@ function SchedulerPage() {
         defaultDate={selectedDate}
         isAlteration={false}
         defaultPlan={getDefaultPlanForSelection()}
-        hasSoaking={selectedHasSoaking}
         isPending={scheduleMut.isPending}
       />
 

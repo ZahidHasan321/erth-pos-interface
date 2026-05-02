@@ -436,13 +436,19 @@ export function DishdashaOverlay({
                 height={measureVal("collar_height")}
                 width={measureVal("collar_width")}
                 accessories={
-                  (collarButton || g.small_tabaggi) ? (
+                  (collarButton || g.small_tabaggi || g.collar_position) ? (
                     <>
                       {collarButton && (
                         <AccessoryPill icon={collarButton.image ?? undefined} label={collarButton.label} />
                       )}
                       {g.small_tabaggi && (
                         <AccessoryPill icon={ACCESSORY_ICONS.smallTabaggi} label="SMALL TABAGGI" />
+                      )}
+                      {g.collar_position === "up" && (
+                        <AccessoryPill label="COLLAR UP" />
+                      )}
+                      {g.collar_position === "down" && (
+                        <AccessoryPill label="COLLAR DOWN" />
                       )}
                     </>
                   ) : null

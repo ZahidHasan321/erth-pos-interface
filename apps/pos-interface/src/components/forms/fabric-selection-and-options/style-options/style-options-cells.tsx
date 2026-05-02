@@ -284,6 +284,66 @@ export const CollarCell = ({
           </div>
         )}
       />
+      <Controller
+        name={`garments.${row.index}.collar_position`}
+        control={control}
+        render={({ field }) => (
+          <div className="flex flex-col gap-1 min-w-[64px]">
+            <div className="flex items-center space-x-1.5">
+              <Checkbox
+                id={`collar_up-${row.index}`}
+                checked={field.value === "up"}
+                onCheckedChange={(checked) =>
+                  field.onChange(checked ? "up" : null)
+                }
+                disabled={isFormDisabled}
+              />
+              <label htmlFor={`collar_up-${row.index}`} className="text-[10px] leading-none">
+                UP
+              </label>
+            </div>
+            <div className="flex items-center space-x-1.5">
+              <Checkbox
+                id={`collar_down-${row.index}`}
+                checked={field.value === "down"}
+                onCheckedChange={(checked) =>
+                  field.onChange(checked ? "down" : null)
+                }
+                disabled={isFormDisabled}
+              />
+              <label htmlFor={`collar_down-${row.index}`} className="text-[10px] leading-none">
+                DOWN
+              </label>
+            </div>
+          </div>
+        )}
+      />
+      <Controller
+        name={`garments.${row.index}.collar_thickness`}
+        control={control}
+        render={({ field }) => (
+          <Select
+            onValueChange={field.onChange}
+            value={field.value || ""}
+            disabled={isFormDisabled}
+          >
+            <SelectTrigger className="bg-background border-border/60 min-w-[60px]">
+              <SelectValue placeholder="Hashwa" />
+            </SelectTrigger>
+            <SelectContent>
+              {ThicknessOptions.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                  className={option.className}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
     </div>
   );
 };

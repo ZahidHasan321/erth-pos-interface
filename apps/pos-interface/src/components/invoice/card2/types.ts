@@ -40,8 +40,13 @@ export interface Card2SleeveShapeStyleProperties {
   hashwa?: Card2HashwaCode
 }
 
+export interface Card2CollarShapeStyleProperties {
+  hashwa?: Card2HashwaCode
+}
+
 export interface Card2LineItemStyle {
-  collarShape?: Card2StyleSelection
+  collarShape?: Card2StyleSelection<Card2CollarShapeStyleProperties>
+  collarPosition?: 'up' | 'down'
   button?: Card2StyleSelection
   jabzoor?: Card2StyleSelection<Card2JabzoorStyleProperties>
   jabzoor2?: Card2StyleSelection<Card2JabzoorStyleProperties>

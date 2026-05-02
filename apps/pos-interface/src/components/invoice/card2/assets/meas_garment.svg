@@ -19,16 +19,6 @@
       <g
          id="g1069">
         <path
-           id="path5"
-           d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
-           style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-           transform="matrix(1.3333333,0,0,-1.3333333,196.88067,964.33853)" />
-        <path
-           id="path6"
-           d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
-           style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-           transform="matrix(1.3333333,0,0,-1.3333333,156.76333,964.33853)" />
-        <path
            id="path7"
            d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
            style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
@@ -56,7 +46,7 @@
              id="tspan44"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.623px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
-             y="0">Collar</tspan></text>
+             y="0">F.Pocket</tspan></text>
         <text
            id="text45"
            xml:space="preserve"

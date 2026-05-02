@@ -10,6 +10,7 @@
     "db:triggers": "tsx scripts/apply-triggers.ts",
     "db:add-alteration-orders": "tsx scripts/add-alteration-orders.ts",
     "db:add-qc-rework-stages": "tsx scripts/add-qc-rework-stages-col.ts",
+    "db:add-soaking-completed-at": "tsx scripts/add-soaking-completed-at-col.ts",
     "db:test": "tsx scripts/test-queries.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
     "db:seed-terminal-users": "tsx scripts/seed-terminal-users.ts",

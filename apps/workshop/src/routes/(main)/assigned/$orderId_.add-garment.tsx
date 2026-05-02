@@ -150,6 +150,8 @@ function AddGarmentPage() {
         style: values.style,
         collar_type: values.collar_type,
         collar_button: values.collar_button,
+        collar_position: values.collar_position,
+        collar_thickness: values.collar_thickness,
         cuffs_type: values.cuffs_type,
         cuffs_thickness: values.cuffs_thickness,
         front_pocket_type: values.front_pocket_type,
