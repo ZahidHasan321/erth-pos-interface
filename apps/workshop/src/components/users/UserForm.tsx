@@ -48,7 +48,8 @@ const NATIONALITY_OPTIONS = SORTED_COUNTRIES.map((c) => ({
 
 export const ALL_BRANDS = ["erth", "sakkba", "qass"] as const;
 export const BRAND_LABELS: Record<string, string> = { erth: "Erth", sakkba: "Sakkba", qass: "Qass" };
-export const JOB_FUNCTIONS: JobFunction[] = ["soaker", "cutter", "post_cutter", "sewer", "finisher", "ironer", "qc"];
+// TEMP DISABLED: "post_cutter" removed from selectable job functions (kept in DB enum)
+export const JOB_FUNCTIONS: JobFunction[] = ["soaker", "cutter", /* "post_cutter", */ "sewer", "finisher", "ironer", "qc"];
 
 export type UserFormState = {
   username: string;

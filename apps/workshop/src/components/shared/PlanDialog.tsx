@@ -6,7 +6,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { useResources } from "@/hooks/useResources";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Droplets, Scissors, Loader2 } from "lucide-react";
-import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
+import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import {
   useStepWorkload,
   sortWorkersByLoad,
@@ -20,7 +20,8 @@ import {
 const PLAN_STEPS: (PlanStep & { required: boolean })[] = [
   { key: "soaker",          label: "Soaking",       responsibility: "soaking",       required: false, icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
   { key: "cutter",          label: "Cutting",       responsibility: "cutting",       required: true,  icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
-  { key: "post_cutter",     label: "Post-Cutting",  responsibility: "post_cutting",  required: true,  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
+  // TEMP DISABLED: post_cutting hidden from production flow
+  // { key: "post_cutter",     label: "Post-Cutting",  responsibility: "post_cutting",  required: true,  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
   { key: "sewer",           label: "Sewing",        responsibility: "sewing",        required: true,  icon: IconNeedle,    color: "text-purple-600",  accent: "bg-purple-500" },
   { key: "finisher",        label: "Finishing",      responsibility: "finishing",     required: true,  icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
   { key: "ironer",          label: "Ironing",        responsibility: "ironing",       required: true,  icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },

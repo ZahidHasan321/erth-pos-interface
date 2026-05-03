@@ -8,7 +8,8 @@ import { useResources } from "@/hooks/useResources";
 import { getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
 import { Droplets, Scissors, Loader2 } from "lucide-react";
-import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
+// IconStack2 unused: post_cutting temp disabled
+import { IconNeedle, IconIroning1, IconRosette, IconSparkles } from "@tabler/icons-react";
 import type { TripHistoryEntry } from "@repo/database";
 import {
   useStepWorkload,
@@ -24,7 +25,8 @@ import {
 const STEPS: (PlanStep & { historyKey: string })[] = [
   { key: "soaker",          historyKey: "soaking",       label: "Soaking",       responsibility: "soaking",       icon: Droplets,    color: "text-sky-600",     accent: "bg-sky-500" },
   { key: "cutter",          historyKey: "cutting",       label: "Cutting",       responsibility: "cutting",       icon: Scissors,    color: "text-amber-600",   accent: "bg-amber-500" },
-  { key: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
+  // TEMP DISABLED: post_cutting hidden from production flow
+  // { key: "post_cutter",     historyKey: "post_cutting",  label: "Post-Cutting",  responsibility: "post_cutting",  icon: IconStack2,    color: "text-orange-600",  accent: "bg-orange-500" },
   { key: "sewer",           historyKey: "sewing",        label: "Sewing",        responsibility: "sewing",        icon: IconNeedle,    color: "text-purple-600",  accent: "bg-purple-500" },
   { key: "finisher",        historyKey: "finishing",      label: "Finishing",      responsibility: "finishing",     icon: IconSparkles,  color: "text-emerald-600", accent: "bg-emerald-500" },
   { key: "ironer",          historyKey: "ironing",        label: "Ironing",        responsibility: "ironing",       icon: IconIroning1,  color: "text-red-600",     accent: "bg-red-500" },
@@ -32,7 +34,7 @@ const STEPS: (PlanStep & { historyKey: string })[] = [
 ];
 
 // Selectable stages: cutting through ironing (no soaking, no QC)
-const SELECTABLE_STEPS = STEPS.slice(1, -1); // cutter, post_cutter, sewer, finisher, ironer
+const SELECTABLE_STEPS = STEPS.slice(1, -1); // cutter, sewer, finisher, ironer
 const QC_STEP = STEPS[STEPS.length - 1];
 
 interface ReturnPlanDialogProps {

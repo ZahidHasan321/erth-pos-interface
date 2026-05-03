@@ -38,16 +38,17 @@ export const FEEDBACK_STATUS_COLORS = {
 export const RESPONSIBILITY_LABELS = {
   soaking: "Soaking",
   cutting: "Cutting",
-  post_cutting: "Post-Cutting",
+  // post_cutting: "Post-Cutting", // TEMP DISABLED: post_cutting hidden from production flow
   sewing: "Sewing",
   finishing: "Finishing",
   ironing: "Ironing",
   quality_check: "Quality Check",
 } as const;
 
+// TEMP DISABLED: post_cutting hidden from production flow (kept in DB enum)
 export const PRODUCTION_STAGES = [
   "cutting",
-  "post_cutting",
+  // "post_cutting",
   "sewing",
   "finishing",
   "ironing",
@@ -60,8 +61,9 @@ export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 // Soaking is a parallel track (see SoakTerminal + soaking_completed_at) — not
 // part of the piece_stage pipeline anymore.
 export const STAGE_NEXT: Record<string, string> = {
-  cutting: "post_cutting",
-  post_cutting: "sewing",
+  cutting: "sewing", // TEMP DISABLED: post_cutting — was cutting → post_cutting
+  post_cutting: "sewing", // legacy fallthrough for any garment still at post_cutting
+
   sewing: "finishing",
   finishing: "ironing",
   ironing: "quality_check",
@@ -72,7 +74,7 @@ export const STAGE_NEXT: Record<string, string> = {
 export const STAGE_TO_PLAN_KEY: Record<string, string> = {
   soaking: "soaker",
   cutting: "cutter",
-  post_cutting: "post_cutter",
+  // post_cutting: "post_cutter", // TEMP DISABLED
   sewing: "sewer",
   finishing: "finisher",
   ironing: "ironer",

@@ -15,14 +15,15 @@ type NewUserSearch = {
   unit_id?: string;
 };
 
+// TEMP DISABLED: post_cutting hidden from production flow (kept in DB enum)
 const VALID_STAGES: ProductionStage[] = [
-  "soaking", "cutting", "post_cutting", "sewing", "finishing", "ironing", "quality_check",
+  "soaking", "cutting", /* "post_cutting", */ "sewing", "finishing", "ironing", "quality_check",
 ];
 
 const STAGE_TO_JOB_FUNCTION: Record<ProductionStage, JobFunction> = {
   soaking: "soaker",
   cutting: "cutter",
-  post_cutting: "post_cutter",
+  post_cutting: "post_cutter", // legacy mapping; not selectable
   sewing: "sewer",
   finishing: "finisher",
   ironing: "ironer",

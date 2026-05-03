@@ -39,7 +39,7 @@ import {
   Send,
   History,
 } from "lucide-react";
-import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
+import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { isAdmin, isManager } from "@/lib/rbac";
@@ -100,7 +100,8 @@ export function WorkshopSidebar() {
   const terminalItems = [
     { label: "Soaking",       icon: Droplets,     href: "/terminals/soaking",       count: counts?.soaking,       color: "text-sky-500" },
     { label: "Cutting",       icon: Scissors,     href: "/terminals/cutting",       count: counts?.cutting,       color: "text-amber-500" },
-    { label: "Post-Cutting",  icon: IconStack2,    href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
+    // TEMP DISABLED: post_cutting terminal hidden
+    // { label: "Post-Cutting",  icon: IconStack2,    href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
     { label: "Sewing",        icon: IconNeedle,   href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-500" },
     { label: "Finishing",     icon: IconSparkles, href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-500" },
     { label: "Ironing",       icon: IconIroning1, href: "/terminals/ironing",       count: counts?.ironing,       color: "text-rose-500" },
