@@ -12,7 +12,6 @@ import { EodKpiCards } from "@/components/eod-report/eod-kpi-cards";
 import { EodPaymentChart, EodOrderBreakdown } from "@/components/eod-report/eod-payment-chart";
 import { EodTransactionTable } from "@/components/eod-report/eod-transaction-table";
 import { RevenueTrendChart, CollectionsVsRefundsChart, CashierLeaderboard } from "@/components/eod-report/eod-charts";
-import { printEodReport, viewEodReport } from "@/components/eod-report/eod-print-view";
 
 export const Route = createFileRoute("/$main/store/end-of-day-report")({
     component: EndOfDayReport,
@@ -94,10 +93,13 @@ function EndOfDayReport() {
         if (!summary) return;
         setPrintLoading(true);
         try {
-            const txRes = await getEodTransactions(dateFromStr, dateToStr);
+            const [txRes, printMod] = await Promise.all([
+                getEodTransactions(dateFromStr, dateToStr),
+                import("@/components/eod-report/eod-print-view"),
+            ]);
             const params = { summary, transactions: txRes.data, dateFrom: dateFromStr, dateTo: dateToStr };
-            if (action === "view") await viewEodReport(params);
-            else await printEodReport(params);
+            if (action === "view") await printMod.viewEodReport(params);
+            else await printMod.printEodReport(params);
         } catch (err) {
             toast.error(`Could not ${action} end-of-day report: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
