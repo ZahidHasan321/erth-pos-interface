@@ -101,18 +101,37 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
         if (stepUnits.length === 1) {
           units[step.key] = stepUnits[0];
         } else if (defaultPlan?.[step.key]) {
-          const match = resources.find(
-            (r) => r.resource_name === defaultPlan[step.key] && r.responsibility === step.responsibility,
-          );
-          if (match?.unit) units[step.key] = match.unit;
+          // Sewing: defaultPlan value IS the unit name. Other steps: look up worker → unit.
+          if (step.key === "sewer") {
+            if (stepUnits.includes(defaultPlan[step.key])) {
+              units[step.key] = defaultPlan[step.key];
+            }
+          } else {
+            const match = resources.find(
+              (r) => r.resource_name === defaultPlan[step.key] && r.responsibility === step.responsibility,
+            );
+            if (match?.unit) units[step.key] = match.unit;
+          }
         }
       }
       setUnitSelections(units);
+
+      // Sewing: production_plan.sewer holds the unit name directly. Auto-fill
+      // when only one unit exists or when defaultPlan already has a value.
+      const sewingUnits = stageUnits["sewer"] ?? [];
+      if (sewingUnits.length === 1 && !defaultPlan?.sewer) {
+        setPlan((p) => ({ ...p, sewer: sewingUnits[0] }));
+      }
     }
   }, [open, defaultDate, defaultPlan, resources, stageUnits]);
 
   const handleUnitChange = (stepKey: string, unit: string) => {
     setUnitSelections((prev) => ({ ...prev, [stepKey]: unit }));
+    // Sewing: unit IS the assignment — set the plan value directly, no worker grid.
+    if (stepKey === "sewer") {
+      setPlan((prev) => ({ ...prev, sewer: unit }));
+      return;
+    }
     const step = PLAN_STEPS.find((s) => s.key === stepKey)!;
     const workers = resources.filter((r) => r.responsibility === step.responsibility && r.unit === unit);
     if (plan[stepKey] && !workers.some((w) => w.resource_name === plan[stepKey])) {
@@ -247,11 +266,12 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
         <div className="px-5 py-4 space-y-1">
           {visibleSteps.map((step, i) => {
             const units = stageUnits[step.key] ?? [];
+            const isSewing = step.key === "sewer";
             const workers = getWorkers(step.key, step.responsibility);
             const selectedWorker = plan[step.key] ?? "";
             const stepWorkload = workload[step.key] ?? {};
             const isFilled = !!selectedWorker;
-            const noUnit = units.length > 1 && !unitSelections[step.key];
+            const noUnit = !isSewing && units.length > 1 && !unitSelections[step.key];
 
             const isLocked = locked.has(step.key);
 
@@ -278,8 +298,11 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                       step={step}
                       isFilled={isFilled || isLocked}
                       workerName={selectedWorker}
-                      unitName={unitSelections[step.key]}
-                      onClear={isFilled && !isLocked ? () => setPlan((prev) => ({ ...prev, [step.key]: "" })) : undefined}
+                      unitName={isSewing ? undefined : unitSelections[step.key]}
+                      onClear={isFilled && !isLocked ? () => {
+                        setPlan((prev) => ({ ...prev, [step.key]: "" }));
+                        if (isSewing) setUnitSelections((prev) => ({ ...prev, [step.key]: "" }));
+                      } : undefined}
                     />
                     {isLocked && (
                       <span className="text-xs text-muted-foreground font-medium ml-9.5">(locked — already in production)</span>
@@ -292,13 +315,14 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                   {/* Selection area — hidden when filled or locked */}
                   {!isFilled && !isLocked && (
                     <div className="space-y-2.5">
-                      {/* Unit picker (only if multiple units) */}
-                      {units.length > 1 && (
+                      {/* Unit picker. For sewing this IS the assignment.
+                          For other stages it filters the worker grid below. */}
+                      {(isSewing ? units.length > 0 : units.length > 1) && (
                         <div>
                           <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
                             Unit
                           </Label>
-                          <div className="flex gap-1.5">
+                          <div className="flex gap-1.5 flex-wrap">
                             {units.map((u) => (
                               <button
                                 key={u}
@@ -316,45 +340,50 @@ export function PlanDialog({ open, onOpenChange, onConfirm, garmentCount, defaul
                               </button>
                             ))}
                           </div>
+                          {isSewing && units.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic py-1">No sewing units configured</p>
+                          )}
                         </div>
                       )}
 
-                      {/* Worker grid */}
-                      <div>
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
-                          Worker
-                        </Label>
-                        {noUnit ? (
-                          <p className="text-xs text-muted-foreground italic py-1">Select a unit first</p>
-                        ) : workers.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
-                        ) : (
-                          <div className="space-y-1.5">
-                            <div className="flex flex-wrap gap-1.5">
-                              {sortWorkersByLoad(workers, stepWorkload).map((r) => (
-                                <WorkerChip
-                                  key={r.id}
-                                  worker={r}
-                                  isSelected={selectedWorker === r.resource_name}
-                                  load={stepWorkload[r.resource_name] ?? 0}
-                                  capacity={r.daily_target ?? 0}
-                                  onSelect={() => setPlan((prev) => ({
-                                    ...prev,
-                                    [step.key]: selectedWorker === r.resource_name ? "" : r.resource_name,
-                                  }))}
-                                />
-                              ))}
+                      {/* Worker grid — non-sewing stages only */}
+                      {!isSewing && (
+                        <div>
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold mb-1 block">
+                            Worker
+                          </Label>
+                          {noUnit ? (
+                            <p className="text-xs text-muted-foreground italic py-1">Select a unit first</p>
+                          ) : workers.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap gap-1.5">
+                                {sortWorkersByLoad(workers, stepWorkload).map((r) => (
+                                  <WorkerChip
+                                    key={r.id}
+                                    worker={r}
+                                    isSelected={selectedWorker === r.resource_name}
+                                    load={stepWorkload[r.resource_name] ?? 0}
+                                    capacity={r.daily_target ?? 0}
+                                    onSelect={() => setPlan((prev) => ({
+                                      ...prev,
+                                      [step.key]: selectedWorker === r.resource_name ? "" : r.resource_name,
+                                    }))}
+                                  />
+                                ))}
+                              </div>
+                              {/* Workload detail — shown below when a worker is selected */}
+                              {(() => {
+                                const sw = workers.find((r) => r.resource_name === selectedWorker);
+                                return sw && (sw.daily_target ?? 0) > 0 ? (
+                                  <WorkloadBar current={stepWorkload[selectedWorker] ?? 0} max={sw.daily_target ?? 0} />
+                                ) : null;
+                              })()}
                             </div>
-                            {/* Workload detail — shown below when a worker is selected */}
-                            {(() => {
-                              const sw = workers.find((r) => r.resource_name === selectedWorker);
-                              return sw && (sw.daily_target ?? 0) > 0 ? (
-                                <WorkloadBar current={stepWorkload[selectedWorker] ?? 0} max={sw.daily_target ?? 0} />
-                              ) : null;
-                            })()}
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

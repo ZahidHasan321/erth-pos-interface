@@ -55,7 +55,7 @@ const PLAN_STEPS = [
     responsibility: "post_cutting",
     stageOrder: 3,
   },
-  { key: "sewer", label: "Sewer", responsibility: "sewing", stageOrder: 4 },
+  { key: "sewer", label: "Sewing Unit", responsibility: "sewing", stageOrder: 4 },
   {
     key: "finisher",
     label: "Finisher",
@@ -1160,7 +1160,7 @@ const WORKER_LABELS: Record<string, string> = {
   soaker: "Soaker",
   cutter: "Cutter",
   post_cutter: "Post-Cutter",
-  sewer: "Sewer",
+  sewer: "Sewing Unit",
   finisher: "Finisher",
   ironer: "Ironer",
   quality_checker: "QC",

@@ -11,11 +11,38 @@ interface WorkerDropdownProps {
 
 export function WorkerDropdown({ responsibility, unit, value, onChange, placeholder = "Select worker" }: WorkerDropdownProps) {
   const { data: resources = [] } = useResources();
+
+  // Sewing is unit-collaborative — list distinct units instead of individuals.
+  const isSewing = responsibility === "sewing";
+
+  if (isSewing) {
+    const units = Array.from(new Set(
+      resources
+        .filter((r) => r.responsibility === "sewing" && r.unit)
+        .map((r) => r.unit as string),
+    )).sort();
+
+    return (
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder={placeholder === "Select worker" ? "Select sewing unit" : placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {units.map((u) => (
+            <SelectItem key={u} value={u}>{u}</SelectItem>
+          ))}
+          {units.length === 0 && (
+            <SelectItem value="__none" disabled>No sewing units configured</SelectItem>
+          )}
+        </SelectContent>
+      </Select>
+    );
+  }
+
   let filtered = responsibility
     ? resources.filter((r) => r.responsibility === responsibility)
     : resources;
 
-  // If unit is specified, filter to that unit
   if (unit) {
     filtered = filtered.filter((r) => r.unit === unit);
   }

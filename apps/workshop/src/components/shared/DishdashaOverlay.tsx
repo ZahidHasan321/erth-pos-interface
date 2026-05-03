@@ -254,12 +254,13 @@ export function DishdashaOverlay({
 
   return (
     <div
-      className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900 flex"
-      style={{ height: "calc(100vh - 180px)", maxHeight: "calc(100vh - 180px)" }}
+      className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900 flex flex-col landscape:flex-row landscape:h-[calc(100vh-180px)] landscape:max-h-[calc(100vh-180px)]"
     >
-        {/* Template frame with measurement cells — height-driven so it always fits viewport */}
+        {/* Template frame with measurement cells.
+            Landscape: height-driven (fits viewport vertically).
+            Portrait: width-driven (full width, stacks above panel). */}
         <div
-          className="relative shrink-0 border-r border-zinc-200 h-full"
+          className="relative shrink-0 border-b landscape:border-b-0 landscape:border-r border-zinc-200 w-full landscape:w-auto landscape:h-full"
           style={{ aspectRatio: "793.76001 / 1122.5601" }}
         >
           <div className="relative w-full h-full">
@@ -296,7 +297,7 @@ export function DishdashaOverlay({
                   top: `${field.top}%`,
                   width: `${field.width}%`,
                   height: `${field.height}%`,
-                  fontSize: "clamp(14px, 2.8%, 20px)",
+                  fontSize: "clamp(16px, 2.8%, 22px)",
                   writingMode: isVertical ? "vertical-rl" : undefined,
                   borderRadius: "1.5px",
                 }}

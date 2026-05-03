@@ -173,8 +173,11 @@ export function QualityCheckForm({ garment, measurement }: Props) {
   for (const o of QC_OPTIONS) {
     if (!enabledKeys.has(o.key)) continue;
     if (o.type === "boolean") continue; // boolean default false is valid
-    if (o.key === "jabzour_2") continue; // jabzour_2 optional — only used when jabzour_1 = Shaab
     if (o.key === "lines") continue; // None is a valid choice
+    // If the garment's expected value is null/empty, operator should leave it empty
+    // too — forcing a value would cause a false mismatch (e.g. jabzour_1 not requested).
+    const expected = expectedOptions[o.key];
+    if (expected == null || expected === "") continue;
     if (options[o.key] == null || options[o.key] === "") {
       missing.push({ key: o.key, label: o.label });
     }

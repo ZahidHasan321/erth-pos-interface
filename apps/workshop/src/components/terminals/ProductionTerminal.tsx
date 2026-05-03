@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
 import { useAuth } from "@/context/auth";
+import { useCurrentUserUnit } from "@/hooks/useCurrentUserUnit";
 import { isTerminalUser } from "@/lib/rbac";
 import {
   PageHeader,
@@ -302,9 +303,15 @@ function GarmentRow({
   showExpressFlag?: boolean;
   showActions?: boolean;
 }) {
+  const { user } = useAuth();
+  const showAssignee = !isTerminalUser(user);
   const altLabel = showAlt ? getGarmentAltLabel(garment) : null;
   const working = isWorking(garment);
   const sessionStart = working ? getCurrentSessionStart(garment, stage) : null;
+  const planKey = STAGE_TO_PLAN_KEY[stage];
+  const plan = garment.production_plan as ProductionPlan | null;
+  const assignee = planKey ? ((plan?.[planKey] as string | undefined) ?? null) : null;
+  const assigneeLabel = stage === "sewing" ? "Unit" : "Worker";
 
   return (
     <TableRow
@@ -380,6 +387,27 @@ function GarmentRow({
       <TableCell className="px-3 py-3">
         <BrandBadge brand={garment.order_brand} />
       </TableCell>
+      {showAssignee && (
+        <TableCell className="px-3 py-3 text-sm">
+          {assignee ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium",
+                stage === "sewing"
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "bg-slate-100 text-slate-700",
+                working && "ring-1 ring-emerald-400",
+              )}
+              title={`${assigneeLabel}: ${assignee}${working ? " (working)" : ""}`}
+            >
+              {working && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+              {assignee}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      )}
       {showActions && (
         <TableCell className="px-3 py-3 text-right">
           <InlineActions garment={garment} stage={stage} />
@@ -406,6 +434,9 @@ function SectionTable({
   showExpressFlag?: boolean;
   showActions?: boolean;
 }) {
+  const { user } = useAuth();
+  const showAssignee = !isTerminalUser(user);
+  const assigneeHeader = stage === "sewing" ? "Unit" : "Worker";
   return (
     <TableContainer>
       <Table>
@@ -419,6 +450,9 @@ function SectionTable({
             <TableHead className="w-[160px]">Fabric</TableHead>
             <TableHead className="w-[160px]">Style</TableHead>
             <TableHead className="w-[80px]">Brand</TableHead>
+            {showAssignee && (
+              <TableHead className="w-[140px]">{assigneeHeader}</TableHead>
+            )}
             {showActions && (
               <TableHead className="w-[180px] text-right">Actions</TableHead>
             )}
@@ -512,6 +546,9 @@ export function ProductionTerminal({
   const { user } = useAuth();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  // For sewing, terminal scope is the user's sewing unit (not their name) —
+  // garments are assigned to a unit and any member of that unit can act on them.
+  const sewingUnit = useCurrentUserUnit("sewing");
 
   // Terminal-locked users see only the garments the scheduler assigned to
   // them in production_plan. Office users (admin/manager/staff with no
@@ -523,11 +560,21 @@ export function ProductionTerminal({
     }
     const planKey = STAGE_TO_PLAN_KEY[terminalStage];
     if (!planKey) return stageGarments;
+    // Sewing is unit-scoped: production_plan.sewer holds the unit name; show
+    // garments where the user's sewing unit matches. If the user has no unit,
+    // show nothing.
+    if (terminalStage === "sewing") {
+      if (!sewingUnit) return [];
+      return stageGarments.filter((g) => {
+        const plan = g.production_plan as ProductionPlan | null;
+        return plan?.sewer === sewingUnit;
+      });
+    }
     return stageGarments.filter((g) => {
       const plan = g.production_plan as ProductionPlan | null;
       return plan?.[planKey] === user.name;
     });
-  }, [stageGarments, user, terminalStage]);
+  }, [stageGarments, user, terminalStage, sewingUnit]);
 
   const stageLabel =
     PIECE_STAGE_LABELS[terminalStage as keyof typeof PIECE_STAGE_LABELS] ??

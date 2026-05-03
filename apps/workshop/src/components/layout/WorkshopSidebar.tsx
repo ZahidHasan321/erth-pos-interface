@@ -110,6 +110,7 @@ export function WorkshopSidebar() {
 
   const totalTerminalCount = terminalItems.reduce((s, t) => s + (t.count ?? 0), 0);
   const isCollapsedDesktop = state === "collapsed" && !isMobile;
+  const canSeeTerminals = isAdmin(authUser) || isManager(authUser);
 
   return (
     <Sidebar collapsible="icon">
@@ -164,7 +165,10 @@ export function WorkshopSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Terminals — collapsible to reduce clutter */}
+        {/* Terminals — collapsible to reduce clutter. Hidden from staff;
+            only admin/superadmin and workshop managers can open terminals
+            here. Terminal-role users have their own dedicated layout. */}
+        {canSeeTerminals && (
         <SidebarGroup>
           <SidebarGroupLabel
             asChild
@@ -214,6 +218,7 @@ export function WorkshopSidebar() {
             </div>
           </div>
         </SidebarGroup>
+        )}
 
         <SidebarSeparator />
 

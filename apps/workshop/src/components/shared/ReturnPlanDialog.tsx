@@ -266,6 +266,16 @@ export function ReturnPlanDialog({
                   const currentWorker = plan[step.key] ?? "";
                   const previousWorker = historyAsPlan[step.key];
                   const isEditing = editingStep === step.key;
+                  const isSewing = step.key === "sewer";
+                  // For sewing the picker chooses a unit (not a worker). The
+                  // distinct units come from resources with responsibility=sewing.
+                  const stepUnits = isSewing
+                    ? Array.from(new Set(
+                        resources
+                          .filter((r) => r.responsibility === step.responsibility && r.unit)
+                          .map((r) => r.unit as string),
+                      )).sort()
+                    : [];
                   const stepWorkers = resources.filter((r) => r.responsibility === step.responsibility);
                   const stepWorkload = workload[step.key] ?? {};
 
@@ -285,28 +295,56 @@ export function ReturnPlanDialog({
                           onClear={currentWorker && !isEditing ? () => setEditingStep(step.key) : undefined}
                         />
 
-                        {/* Worker selection — shown when no worker or editing */}
+                        {/* Worker / unit selection — shown when no value or editing */}
                         {(!currentWorker || isEditing) && (
                           <div className="mt-2.5">
-                            <div className="flex flex-wrap gap-1.5">
-                              {stepWorkers.length === 0 ? (
-                                <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
-                              ) : (
-                                sortWorkersByLoad(stepWorkers, stepWorkload).map((r) => (
-                                  <WorkerChip
-                                    key={r.id}
-                                    worker={r}
-                                    isSelected={currentWorker === r.resource_name}
-                                    load={stepWorkload[r.resource_name] ?? 0}
-                                    capacity={r.daily_target ?? 0}
-                                    onSelect={() => {
-                                      setPlan((prev) => ({ ...prev, [step.key]: r.resource_name }));
-                                      setEditingStep(null);
-                                    }}
-                                  />
-                                ))
-                              )}
-                            </div>
+                            {isSewing ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {stepUnits.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic py-1">No sewing units configured</p>
+                                ) : (
+                                  stepUnits.map((u) => (
+                                    <button
+                                      key={u}
+                                      type="button"
+                                      onClick={() => {
+                                        setPlan((prev) => ({ ...prev, [step.key]: u }));
+                                        setEditingStep(null);
+                                      }}
+                                      aria-pressed={currentWorker === u}
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]",
+                                        currentWorker === u
+                                          ? "border-primary bg-primary/5 text-primary"
+                                          : "border-zinc-200 bg-card text-zinc-600 hover:border-zinc-300",
+                                      )}
+                                    >
+                                      {u}
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {stepWorkers.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic py-1">No workers available</p>
+                                ) : (
+                                  sortWorkersByLoad(stepWorkers, stepWorkload).map((r) => (
+                                    <WorkerChip
+                                      key={r.id}
+                                      worker={r}
+                                      isSelected={currentWorker === r.resource_name}
+                                      load={stepWorkload[r.resource_name] ?? 0}
+                                      capacity={r.daily_target ?? 0}
+                                      onSelect={() => {
+                                        setPlan((prev) => ({ ...prev, [step.key]: r.resource_name }));
+                                        setEditingStep(null);
+                                      }}
+                                    />
+                                  ))
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

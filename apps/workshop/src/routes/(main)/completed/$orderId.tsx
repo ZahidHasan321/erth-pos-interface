@@ -25,7 +25,7 @@ const PLAN_STEPS = [
   { key: "soaker", label: "Soaker", responsibility: "soaking", stageOrder: 1 },
   { key: "cutter", label: "Cutter", responsibility: "cutting", stageOrder: 2 },
   { key: "post_cutter", label: "Post-Cutter", responsibility: "post_cutting", stageOrder: 3 },
-  { key: "sewer", label: "Sewer", responsibility: "sewing", stageOrder: 4 },
+  { key: "sewer", label: "Sewing Unit", responsibility: "sewing", stageOrder: 4 },
   { key: "finisher", label: "Finisher", responsibility: "finishing", stageOrder: 5 },
   { key: "ironer", label: "Ironer", responsibility: "ironing", stageOrder: 6 },
   { key: "quality_checker", label: "QC Inspector", responsibility: "quality_check", stageOrder: 7 },

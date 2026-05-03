@@ -15,7 +15,7 @@ import {
   useCancelStartGarment,
 } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
-import { HISTORY_KEY_MAP } from "@/components/shared/GarmentDetailSections";
+import { HISTORY_KEY_MAP, GarmentHeader } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { QualityCheckForm } from "@/components/terminals/QualityCheckForm";
@@ -232,6 +232,12 @@ function TerminalGarmentPage() {
           />
         )}
 
+        {isQC && (
+          <div className="mb-3">
+            <GarmentHeader garment={garment} showExtras />
+          </div>
+        )}
+
         <div className="mt-4">
           {isQC ? (
             <QualityCheckForm garment={garment} measurement={effectiveMeasurement} />
@@ -286,6 +292,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
   const completeMut = useCompleteAndAdvance();
 
   const stage = garment.piece_stage ?? "";
+  const isSewing = stage === "sewing";
   const plan = garment.production_plan as ProductionPlan | null;
   const nextStage = getNextPlanStage(
     stage,
@@ -375,7 +382,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                   className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
-                    By
+                    {isSewing ? "Unit" : "By"}
                   </span>
                   <span className="font-bold text-emerald-900 truncate text-base">
                     {worker}
@@ -472,7 +479,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
             </p>
             <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
               <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">
-                By
+                {isSewing ? "Unit" : "By"}
               </span>
               <span className="font-bold text-base">{worker}</span>
             </div>
