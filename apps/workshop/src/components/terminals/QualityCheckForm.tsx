@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { ArrowRight, Check, Loader2, X, AlertTriangle, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -100,11 +100,18 @@ export function QualityCheckForm({ garment, measurement }: Props) {
 
   const carryForward = lastFail ?? null;
 
-  // ── Form state ────────────────────────────────────────────────────────────
-  const [inspector, setInspector] = useState(plannedQC);
+  // ── Draft persistence ─────────────────────────────────────────────────────
+  // Auto-save in-progress QC to localStorage so an interruption (refresh,
+  // accidental nav, tab close) doesn't force re-entry. Key includes trip and
+  // attempt count so a fresh fail invalidates stale drafts automatically.
+  const draftKey = `qc-draft:${garment.id}:t${currentTrip}:a${tripEntry?.qc_attempts?.length ?? 0}`;
+  const draft = useMemo(() => loadDraft(draftKey), [draftKey]);
+
+  const [inspector, setInspector] = useState(draft?.inspector ?? plannedQC);
   const [overrideInspector, setOverrideInspector] = useState(false);
 
   const [measurements, setMeasurements] = useState<Record<string, string>>(() => {
+    if (draft?.measurements) return { ...draft.measurements };
     const init: Record<string, string> = {};
     if (carryForward?.measurements) {
       for (const [k, v] of Object.entries(carryForward.measurements)) {
@@ -114,17 +121,29 @@ export function QualityCheckForm({ garment, measurement }: Props) {
     return init;
   });
   const [options, setOptions] = useState<Record<string, string | boolean | number | null>>(() => {
+    if (draft?.options) return { ...draft.options };
     return { ...(carryForward?.options ?? {}) };
   });
   const [quality, setQuality] = useState<Record<string, number>>(() => {
+    if (draft?.quality) return { ...draft.quality };
     return { ...(carryForward?.quality_ratings ?? {}) };
   });
   // Track which option fields the user has explicitly touched. Boolean toggles
   // can't be distinguished from "default false" via value alone, so we track
   // explicit interaction to avoid flashing red on untouched controls.
   const [touchedOptions, setTouchedOptions] = useState<Set<string>>(
-    () => new Set(Object.keys(carryForward?.options ?? {})),
+    () => new Set(draft?.touchedOptions ?? Object.keys(carryForward?.options ?? {})),
   );
+
+  useEffect(() => {
+    saveDraft(draftKey, {
+      inspector,
+      measurements,
+      options,
+      quality,
+      touchedOptions: [...touchedOptions],
+    });
+  }, [draftKey, inspector, measurements, options, quality, touchedOptions]);
 
   const setMeasurement = (key: string, val: string) =>
     setMeasurements((p) => ({ ...p, [key]: val }));
@@ -212,6 +231,7 @@ export function QualityCheckForm({ garment, measurement }: Props) {
           enabledKeys,
           returnStages: null,
         });
+        clearDraft(draftKey);
         toast.success(`${garment.garment_id} passed QC`);
         router.history.back();
       } catch (err: any) {
@@ -238,6 +258,7 @@ export function QualityCheckForm({ garment, measurement }: Props) {
         .filter((s) => returnStages.has(s))
         .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
         .join(" → ");
+      clearDraft(draftKey);
       toast.warning(`${garment.garment_id} returned to ${stageNames}`);
       setFailDialogOpen(false);
       router.history.back();
@@ -598,9 +619,15 @@ function OptionGroups({
   const text = (k: string) =>
     values[k] == null || values[k] === "" ? null : String(values[k]);
   const bool = (k: string) => Boolean(values[k]);
-  // Only flag a field as failed in the live preview once the user has touched
-  // it — keeps a fresh page from glowing red on every option.
-  const failed = (k: string) => failedKeys.has(k) && touchedKeys.has(k);
+  // Boolean toggles get the failed indicator immediately — OFF is a real
+  // answer, not "no answer yet". Image pickers stay gated behind touch so a
+  // fresh page doesn't glow red on every untouched option.
+  const failed = (k: string) => {
+    if (!failedKeys.has(k)) return false;
+    const spec = QC_OPTIONS.find((o) => o.key === k);
+    if (spec?.type === "boolean") return true;
+    return touchedKeys.has(k);
+  };
 
   return (
     <div className="space-y-3">
@@ -979,6 +1006,15 @@ const OPTION_IMAGE_LOOKUP: Record<string, BaseOption[]> = {
   cuffs_type: cuffTypes,
 };
 
+// Icon for each boolean accessory — used in the fail dialog so a wallet/pen
+// mismatch reads as "wallet icon → empty" instead of just "Yes → No".
+const BOOL_ICON_LOOKUP: Record<string, { icon: string; label: string }> = {
+  wallet_pocket: { icon: walletIcon, label: "Wallet" },
+  pen_holder: { icon: penIcon, label: "Pen" },
+  mobile_pocket: { icon: phoneIcon, label: "Mobile" },
+  small_tabaggi: { icon: smallTabaggiImage, label: "Small Tabaggi" },
+};
+
 function FailReport({
   evaluation,
   expectedMeasurements,
@@ -1164,6 +1200,7 @@ function OptionFailRow({
   got: unknown;
 }) {
   const visual = OPTION_IMAGE_LOOKUP[spec.key];
+  const boolIcon = spec.type === "boolean" ? BOOL_ICON_LOOKUP[spec.key] : undefined;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50/40 px-3 py-2">
@@ -1176,6 +1213,12 @@ function OptionFailRow({
           <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
           <ImageOptionChip option={visual.find((b) => b.value === got)} highlight />
         </>
+      ) : boolIcon ? (
+        <>
+          <BoolOptionChip on={Boolean(expected)} icon={boolIcon} muted />
+          <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <BoolOptionChip on={Boolean(got)} icon={boolIcon} highlight />
+        </>
       ) : (
         <>
           <TextOptionChip label={formatOptionText(spec, expected)} muted />
@@ -1183,6 +1226,49 @@ function OptionFailRow({
           <TextOptionChip label={formatOptionText(spec, got)} highlight />
         </>
       )}
+    </div>
+  );
+}
+
+function BoolOptionChip({
+  on,
+  icon,
+  muted,
+  highlight,
+}: {
+  on: boolean;
+  icon: { icon: string; label: string };
+  muted?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center gap-0.5 rounded-md p-1 min-w-[68px]",
+        muted && "bg-background border",
+        highlight && "bg-red-100 border border-red-300",
+      )}
+    >
+      {on ? (
+        <img
+          src={icon.icon}
+          alt={icon.label}
+          className="h-9 w-9 object-contain"
+        />
+      ) : (
+        <div className="h-9 w-9 rounded bg-muted flex items-center justify-center text-[9px] text-muted-foreground font-semibold uppercase">
+          Off
+        </div>
+      )}
+      <span
+        className={cn(
+          "text-[10px] font-medium leading-tight text-center",
+          muted && "text-muted-foreground",
+          highlight && "text-red-900 font-bold",
+        )}
+      >
+        {on ? icon.label : "—"}
+      </span>
     </div>
   );
 }
@@ -1288,4 +1374,78 @@ function mergedInputsForSave(
     if (enabledKeys.has(k)) merged.quality_ratings[k] = current.quality_ratings[k]!;
   }
   return merged;
+}
+
+// ── Draft helpers ───────────────────────────────────────────────────────────
+// Drafts auto-expire after 24h. Each load also sweeps stale entries so an
+// abandoned shop doesn't accumulate localStorage bloat over time.
+
+const DRAFT_PREFIX = "qc-draft:";
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface QcDraft {
+  inspector: string;
+  measurements: Record<string, string>;
+  options: Record<string, string | boolean | number | null>;
+  quality: Record<string, number>;
+  touchedOptions: string[];
+  savedAt: number;
+}
+
+function loadDraft(key: string): QcDraft | null {
+  if (typeof localStorage === "undefined") return null;
+  sweepStaleDrafts();
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QcDraft;
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(key: string, data: Omit<QcDraft, "savedAt">) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ ...data, savedAt: Date.now() }));
+  } catch {
+    // Quota exceeded or disabled — silent failure, draft is best-effort.
+  }
+}
+
+function clearDraft(key: string) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function sweepStaleDrafts() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const now = Date.now();
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(DRAFT_PREFIX)) continue;
+      try {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as { savedAt?: number };
+        if (!parsed.savedAt || now - parsed.savedAt > DRAFT_TTL_MS) stale.push(k);
+      } catch {
+        stale.push(k);
+      }
+    }
+    for (const k of stale) localStorage.removeItem(k);
+  } catch {
+    // ignore
+  }
 }
