@@ -6,6 +6,7 @@ import type { PieceStage } from '@repo/database';
 import {
   QC_OPTIONS,
   evaluateQc,
+  normalizeExpectedJabzour,
   type QcInputs,
 } from '@/lib/qc-spec';
 
@@ -1115,6 +1116,9 @@ export const submitQc = async (
   const expectedMeasurements = (existing?.measurement ?? {}) as Record<string, unknown>;
   const expectedOptions: Record<string, unknown> = {};
   for (const o of QC_OPTIONS) expectedOptions[o.key] = (existing as any)?.[o.key];
+  const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
+  expectedOptions.jabzour_1 = j.jabzour_1;
+  expectedOptions.jabzour_2 = j.jabzour_2;
 
   const evalResult = evaluateQc(expectedMeasurements, expectedOptions, inputs, enabledKeys);
 

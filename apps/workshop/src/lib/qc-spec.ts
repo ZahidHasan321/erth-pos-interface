@@ -130,6 +130,27 @@ export const QC_RETURN_STAGES: PieceStage[] = [
   "cutting", "post_cutting", "sewing", "finishing", "ironing",
 ];
 
+/**
+ * Translate raw garment jabzour fields into the value space the QC picker uses.
+ * DB stores `jabzour_1` as the enum `BUTTON|ZIPPER` with `jabzour_2` holding
+ * the visual style (e.g. `JAB_BAIN_MURABBA`). The picker shows visual styles
+ * directly with `JAB_SHAAB` standing in for the zipper case. Without this
+ * translation, operator picks ("JAB_BAIN_MURABBA") never match the raw enum
+ * ("BUTTON") and QC always reports a mismatch.
+ */
+export function normalizeExpectedJabzour(
+  rawJ1: unknown,
+  rawJ2: unknown,
+): { jabzour_1: string | null; jabzour_2: string | null } {
+  if (rawJ1 === "BUTTON") {
+    return { jabzour_1: (rawJ2 as string | null) ?? null, jabzour_2: null };
+  }
+  if (rawJ1 === "ZIPPER") {
+    return { jabzour_1: "JAB_SHAAB", jabzour_2: (rawJ2 as string | null) ?? null };
+  }
+  return { jabzour_1: null, jabzour_2: null };
+}
+
 /** Compare option values. Booleans treat false === null === undefined. */
 export function optionEquals(spec: QcOptionSpec, a: unknown, b: unknown): boolean {
   if (spec.type === "boolean") return Boolean(a) === Boolean(b);

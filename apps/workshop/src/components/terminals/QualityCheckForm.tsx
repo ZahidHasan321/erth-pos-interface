@@ -46,6 +46,7 @@ import {
   QC_TOLERANCE,
   QC_QUALITY_THRESHOLD,
   evaluateQc,
+  normalizeExpectedJabzour,
   type QcInputs,
   type QcOptionSpec,
 } from "@/lib/qc-spec";
@@ -143,6 +144,10 @@ export function QualityCheckForm({ garment, measurement }: Props) {
   const expectedMeasurements = (measurement ?? {}) as Record<string, unknown>;
   const expectedOptions: Record<string, unknown> = {};
   for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as any)[o.key];
+  // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
+  const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
+  expectedOptions.jabzour_1 = j.jabzour_1;
+  expectedOptions.jabzour_2 = j.jabzour_2;
 
   const numericInputs: QcInputs = useMemo(
     () => ({
