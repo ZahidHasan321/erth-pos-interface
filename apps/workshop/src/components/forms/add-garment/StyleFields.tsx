@@ -24,13 +24,14 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export function ImageOptionGrid({
-  options, value, onChange, allowClear = false, cols = "auto",
+  options, value, onChange, allowClear = false, cols = "auto", disabled = false,
 }: {
   options: BaseOption[];
   value: string | null;
   onChange: (v: string | null) => void;
   allowClear?: boolean;
   cols?: "auto" | "tight";
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -47,13 +48,15 @@ export function ImageOptionGrid({
           <button
             key={o.value}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(allowClear && selected ? null : o.value)}
             className={cn(
               "group relative flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 bg-background transition-all",
-              "hover:border-primary/60 hover:shadow-sm",
+              !disabled && "hover:border-primary/60 hover:shadow-sm",
               selected
                 ? "border-primary bg-primary/5 shadow-sm"
                 : "border-border",
+              disabled && "opacity-50 cursor-not-allowed",
             )}
           >
             {selected && (
@@ -88,23 +91,31 @@ export function ImageOptionGrid({
 }
 
 export function ThicknessPicker({
-  value, onChange,
-}: { value: string | null; onChange: (v: string) => void }) {
+  value, onChange, disabled = false,
+}: { value: string | null; onChange: (v: string) => void; disabled?: boolean }) {
   return (
-    <div className="inline-flex rounded-lg border bg-background p-0.5">
+    <div
+      className={cn(
+        "inline-flex rounded-lg border bg-background p-0.5",
+        disabled && "opacity-50",
+      )}
+    >
       {thicknessOptions.map((t) => {
         const selected = value === t.value;
         return (
           <button
             key={t.value}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(t.value)}
             title={t.full}
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-bold transition-colors min-w-[36px]",
               selected
                 ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                : "text-muted-foreground",
+              !disabled && !selected && "hover:text-foreground hover:bg-muted",
+              disabled && "cursor-not-allowed",
             )}
           >
             {t.label}
@@ -116,21 +127,24 @@ export function ThicknessPicker({
 }
 
 export function IconToggle({
-  checked, onChange, icon, label,
+  checked, onChange, icon, label, disabled = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   icon: string;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         "relative flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 bg-background transition-all min-w-[72px]",
-        "hover:border-primary/60",
+        !disabled && "hover:border-primary/60",
         checked ? "border-primary bg-primary/5" : "border-border",
+        disabled && "opacity-50 cursor-not-allowed",
       )}
     >
       {checked && (

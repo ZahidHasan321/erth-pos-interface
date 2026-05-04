@@ -91,21 +91,32 @@ export function QualityCheckForm({ garment, measurement }: Props) {
         ...QC_QUALITY.map((q) => q.key),
       ]);
     }
-    return new Set([
+    const flagged = new Set<string>([
       ...(lastFail.failed_measurements ?? []),
       ...(lastFail.failed_options ?? []),
       ...(lastFail.failed_quality ?? []),
     ]);
+    // Jabzour 1 ↔ Jabzour 2 are hard-coupled: switching jabzour_1 to JAB_SHAAB requires
+    // re-entering jabzour_2 (and vice versa). Always enable both together.
+    if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
+      flagged.add("jabzour_1");
+      flagged.add("jabzour_2");
+    }
+    return flagged;
   }, [lastFail]);
 
   const carryForward = lastFail ?? null;
 
   // ── Draft persistence ─────────────────────────────────────────────────────
   // Auto-save in-progress QC to localStorage so an interruption (refresh,
-  // accidental nav, tab close) doesn't force re-entry. Key includes trip and
-  // attempt count so a fresh fail invalidates stale drafts automatically.
-  const draftKey = `qc-draft:${garment.id}:t${currentTrip}:a${tripEntry?.qc_attempts?.length ?? 0}`;
-  const draft = useMemo(() => loadDraft(draftKey), [draftKey]);
+  // accidental nav, tab close) doesn't force re-entry. Key is stable per
+  // garment+trip; the attempts count is stored *inside* the payload so a
+  // newly-recorded fail invalidates the stale draft on next load. Stable key
+  // avoids a race where the key changes mid-submit (after qc_attempts grows)
+  // and useEffect writes the pre-submit state under the new key.
+  const attemptsCount = tripEntry?.qc_attempts?.length ?? 0;
+  const draftKey = `qc-draft:${garment.id}:t${currentTrip}`;
+  const draft = useMemo(() => loadDraft(draftKey, attemptsCount), [draftKey, attemptsCount]);
 
   const [inspector, setInspector] = useState(draft?.inspector ?? plannedQC);
   const [overrideInspector, setOverrideInspector] = useState(false);
@@ -137,13 +148,25 @@ export function QualityCheckForm({ garment, measurement }: Props) {
 
   useEffect(() => {
     saveDraft(draftKey, {
+      attemptsCount,
       inspector,
       measurements,
       options,
       quality,
       touchedOptions: [...touchedOptions],
     });
-  }, [draftKey, inspector, measurements, options, quality, touchedOptions]);
+  }, [draftKey, attemptsCount, inspector, measurements, options, quality, touchedOptions]);
+
+  // Jabzour invariant: jabzour_2 only exists when jabzour_1 = JAB_SHAAB.
+  // Runs on mount (sanitizes corrupt draft state like jabzour_1=JAB_BAIN_MURABBA
+  // + jabzour_2=JAB_BAIN_MUSALLAS that's structurally impossible to pick) and
+  // whenever jabzour_1 flips. Safer than the inline clear on the jabzour_1
+  // picker, which depended on a stale closure of `values.jabzour_2`.
+  useEffect(() => {
+    if (options.jabzour_1 !== "JAB_SHAAB" && options.jabzour_2 != null) {
+      setOptions((p) => ({ ...p, jabzour_2: null }));
+    }
+  }, [options.jabzour_1, options.jabzour_2]);
 
   const setMeasurement = (key: string, val: string) =>
     setMeasurements((p) => ({ ...p, [key]: val }));
@@ -198,8 +221,12 @@ export function QualityCheckForm({ garment, measurement }: Props) {
     if (!enabledKeys.has(o.key)) continue;
     if (o.type === "boolean") continue; // boolean default false is valid
     if (o.key === "lines") continue; // None is a valid choice
-    // If the garment's expected value is null/empty, operator should leave it empty
-    // too — forcing a value would cause a false mismatch (e.g. jabzour_1 not requested).
+    // jabzour_2 never gates completeness — record what's actually on the garment.
+    // SHAAB-without-jabzour_2 is a valid (failing) observation when the worker
+    // forgot the second style; evaluation flags the mismatch.
+    if (o.key === "jabzour_2") continue;
+    // If the spec expected null, operator can leave it empty — forcing a value
+    // would cause a false mismatch (e.g. jabzour_1 wasn't requested at all).
     const expected = expectedOptions[o.key];
     if (expected == null || expected === "") continue;
     if (options[o.key] == null || options[o.key] === "") {
@@ -606,6 +633,7 @@ function FractionPreview({ value }: { value: number }) {
 // share a card; accessories (small_tabaggi/wallet/pen/mobile) are icon toggles.
 function OptionGroups({
   values,
+  enabledKeys,
   failedKeys,
   touchedKeys,
   onChange,
@@ -619,6 +647,7 @@ function OptionGroups({
   const text = (k: string) =>
     values[k] == null || values[k] === "" ? null : String(values[k]);
   const bool = (k: string) => Boolean(values[k]);
+  const off = (k: string) => !enabledKeys.has(k);
   // Boolean toggles get the failed indicator immediately — OFF is a real
   // answer, not "no answer yet". Image pickers stay gated behind touch so a
   // fresh page doesn't glow red on every untouched option.
@@ -639,6 +668,7 @@ function OptionGroups({
             value={text("collar_type")}
             onChange={(v) => onChange("collar_type", v)}
             allowClear
+            disabled={off("collar_type")}
           />
         </FailWrap>
         <SubLabel failed={failed("collar_button")}>Button</SubLabel>
@@ -648,6 +678,7 @@ function OptionGroups({
             value={text("collar_button")}
             onChange={(v) => onChange("collar_button", v)}
             allowClear
+            disabled={off("collar_button")}
           />
         </FailWrap>
         <div className="flex flex-wrap gap-2">
@@ -657,15 +688,17 @@ function OptionGroups({
               onChange={(v) => onChange("small_tabaggi", v)}
               icon={smallTabaggiImage}
               label="Small Tabaggi"
+              disabled={off("small_tabaggi")}
             />
           </FailWrap>
         </div>
         <SubLabel failed={failed("collar_position")}>Position</SubLabel>
         <FailWrap failed={failed("collar_position")}>
-          <div className="flex gap-4">
+          <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                disabled={off("collar_position")}
                 checked={text("collar_position") === "up"}
                 onChange={(e) => onChange("collar_position", e.target.checked ? "up" : null)}
               />
@@ -674,6 +707,7 @@ function OptionGroups({
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                disabled={off("collar_position")}
                 checked={text("collar_position") === "down"}
                 onChange={(e) => onChange("collar_position", e.target.checked ? "down" : null)}
               />
@@ -687,6 +721,7 @@ function OptionGroups({
             <ThicknessPicker
               value={text("collar_thickness")}
               onChange={(v) => onChange("collar_thickness", v)}
+              disabled={off("collar_thickness")}
             />
           </FailWrap>
         </div>
@@ -698,13 +733,9 @@ function OptionGroups({
           <ImageOptionGrid
             options={jabzourTypes}
             value={text("jabzour_1")}
-            onChange={(v) => {
-              onChange("jabzour_1", v);
-              if (v !== "JAB_SHAAB" && values.jabzour_2 != null) {
-                onChange("jabzour_2", null);
-              }
-            }}
+            onChange={(v) => onChange("jabzour_1", v)}
             allowClear
+            disabled={off("jabzour_1")}
           />
         </FailWrap>
         {(text("jabzour_1") === "JAB_SHAAB" || text("jabzour_2") != null) && (
@@ -725,6 +756,7 @@ function OptionGroups({
                 value={text("jabzour_2")}
                 onChange={(v) => onChange("jabzour_2", v)}
                 allowClear
+                disabled={off("jabzour_2")}
               />
             </FailWrap>
           </>
@@ -735,6 +767,7 @@ function OptionGroups({
             <ThicknessPicker
               value={text("jabzour_thickness")}
               onChange={(v) => onChange("jabzour_thickness", v)}
+              disabled={off("jabzour_thickness")}
             />
           </FailWrap>
         </div>
@@ -748,6 +781,7 @@ function OptionGroups({
             value={text("front_pocket_type")}
             onChange={(v) => onChange("front_pocket_type", v)}
             allowClear
+            disabled={off("front_pocket_type")}
           />
         </FailWrap>
         <div className="flex items-center gap-2">
@@ -756,6 +790,7 @@ function OptionGroups({
             <ThicknessPicker
               value={text("front_pocket_thickness")}
               onChange={(v) => onChange("front_pocket_thickness", v)}
+              disabled={off("front_pocket_thickness")}
             />
           </FailWrap>
         </div>
@@ -767,6 +802,7 @@ function OptionGroups({
               onChange={(v) => onChange("wallet_pocket", v)}
               icon={walletIcon}
               label="Wallet"
+              disabled={off("wallet_pocket")}
             />
           </FailWrap>
           <FailWrap failed={failed("pen_holder")} inline>
@@ -775,6 +811,7 @@ function OptionGroups({
               onChange={(v) => onChange("pen_holder", v)}
               icon={penIcon}
               label="Pen"
+              disabled={off("pen_holder")}
             />
           </FailWrap>
           <FailWrap failed={failed("mobile_pocket")} inline>
@@ -783,6 +820,7 @@ function OptionGroups({
               onChange={(v) => onChange("mobile_pocket", v)}
               icon={phoneIcon}
               label="Mobile"
+              disabled={off("mobile_pocket")}
             />
           </FailWrap>
         </div>
@@ -796,6 +834,7 @@ function OptionGroups({
             value={text("cuffs_type")}
             onChange={(v) => onChange("cuffs_type", v)}
             allowClear
+            disabled={off("cuffs_type")}
           />
         </FailWrap>
         <div className="flex items-center gap-2">
@@ -804,6 +843,7 @@ function OptionGroups({
             <ThicknessPicker
               value={text("cuffs_thickness")}
               onChange={(v) => onChange("cuffs_thickness", v)}
+              disabled={off("cuffs_thickness")}
             />
           </FailWrap>
         </div>
@@ -814,6 +854,7 @@ function OptionGroups({
           <LinesPicker
             value={typeof values.lines === "number" ? values.lines : null}
             onChange={(v) => onChange("lines", v)}
+            disabled={off("lines")}
           />
         </FailWrap>
       </OptionGroup>
@@ -885,9 +926,11 @@ function SubLabel({
 function LinesPicker({
   value,
   onChange,
+  disabled = false,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
+  disabled?: boolean;
 }) {
   const options: { value: number | null; label: string }[] = [
     { value: null, label: "None" },
@@ -895,17 +938,25 @@ function LinesPicker({
     { value: 2, label: "2" },
   ];
   return (
-    <div className="inline-flex rounded-lg border bg-background p-0.5">
+    <div
+      className={cn(
+        "inline-flex rounded-lg border bg-background p-0.5",
+        disabled && "opacity-50",
+      )}
+    >
       {options.map((o) => (
         <button
           key={o.label}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(o.value)}
           className={cn(
             "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
             value === o.value
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted",
+              : "text-muted-foreground",
+            !disabled && value !== o.value && "hover:bg-muted",
+            disabled && "cursor-not-allowed",
           )}
         >
           {o.label}
@@ -1384,6 +1435,8 @@ const DRAFT_PREFIX = "qc-draft:";
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface QcDraft {
+  /** Number of QC attempts on the garment when this draft was saved. */
+  attemptsCount: number;
   inspector: string;
   measurements: Record<string, string>;
   options: Record<string, string | boolean | number | null>;
@@ -1392,7 +1445,13 @@ interface QcDraft {
   savedAt: number;
 }
 
-function loadDraft(key: string): QcDraft | null {
+/**
+ * Loads draft. Returns null and clears the entry if:
+ * - missing/expired (TTL)
+ * - attemptsCount mismatch (a new fail/pass was recorded since save → carryForward
+ *   shifted, draft is stale and would mis-prefill the form)
+ */
+function loadDraft(key: string, currentAttemptsCount: number): QcDraft | null {
   if (typeof localStorage === "undefined") return null;
   sweepStaleDrafts();
   try {
@@ -1400,6 +1459,10 @@ function loadDraft(key: string): QcDraft | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as QcDraft;
     if (!parsed.savedAt || Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    if (parsed.attemptsCount !== currentAttemptsCount) {
       localStorage.removeItem(key);
       return null;
     }
