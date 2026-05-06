@@ -261,10 +261,18 @@ export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Pro
     //    Bumping trip_number from 0 → 1 is how we mark "first dispatch from shop"
     //    — the dispatch page filters by trip_number = 0, and workshop receiving
     //    already expects trip 1 for incoming-first-time garments.
+    //    Gate by trip_number = 0 so this path only ever touches first-time
+    //    dispatches. Returning garments (trip ≥ 1) must go through the
+    //    "Return to Workshop" tab → dispatchGarmentToWorkshop, which bumps
+    //    trip and clears stale production state. Without this gate, a bulk
+    //    dispatch on an order containing both fresh and returning garments
+    //    silently re-stamps a returned brova as trip=1 and leaves its plan /
+    //    completion_time intact, producing a stuck waiting_cut row.
     let query = db
         .from('garments')
         .update({ location: 'transit_to_workshop', trip_number: 1 })
-        .eq('order_id', orderId);
+        .eq('order_id', orderId)
+        .eq('trip_number', 0);
 
     if (garmentIds) {
         query = query.in('id', garmentIds);
@@ -283,7 +291,8 @@ export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Pro
             .from('garments')
             .select('id, trip_number')
             .eq('order_id', orderId)
-            .eq('location', 'transit_to_workshop');
+            .eq('location', 'transit_to_workshop')
+            .eq('trip_number', 1);
         if (garmentIds) logQuery = logQuery.in('id', garmentIds);
         const { data: rows } = await logQuery;
 
