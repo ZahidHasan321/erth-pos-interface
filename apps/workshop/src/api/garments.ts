@@ -907,10 +907,11 @@ export const sendToScheduler = async (ids: string[]): Promise<void> => {
     .in('id', ids);
   if (err1) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${err1.message}`);
 
-  // Release any finals still at waiting_for_acceptance (customer approved → straight to scheduler)
+  // Release any finals still at waiting_for_acceptance (customer approved → straight to scheduler).
+  // Clear the inherited brova plan so Scheduler picks them up — its filter requires production_plan IS NULL.
   const { error: err2 } = await db
     .from('garments')
-    .update({ piece_stage: 'waiting_cut' as PieceStage })
+    .update({ piece_stage: 'waiting_cut' as PieceStage, production_plan: null })
     .in('id', ids)
     .eq('piece_stage', 'waiting_for_acceptance');
   if (err2) throw new Error(`sendToScheduler: failed to release waiting_for_acceptance finals: ${err2.message}`);

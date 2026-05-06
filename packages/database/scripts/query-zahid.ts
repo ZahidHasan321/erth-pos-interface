@@ -1,34 +1,26 @@
 import "dotenv/config";
 import { db } from "../src/client";
-import { garments } from "../src/schema";
+import { garments, orders, workOrders } from "../src/schema";
 import { eq, sql } from "drizzle-orm";
 
 async function main() {
-  const stale = await db
-    .select({
-      id: garments.id,
-      garment_id: garments.garment_id,
-      order_id: garments.order_id,
-      soaking_completed_at: garments.soaking_completed_at,
-    })
+  // Find brovas with repair/redo feedback or in transit/return paths
+  const brovas = await db
+    .select()
     .from(garments)
-    .where(sql`piece_stage = 'soaking'`);
+    .where(sql`garment_type = 'brova' AND (feedback_status IN ('needs_repair','needs_redo') OR location = 'transit_to_workshop' OR (piece_stage = 'brova_trialed' AND feedback_status IS NOT NULL))`);
 
-  console.log(`Found ${stale.length} garment(s) with stale piece_stage='soaking':`);
-  for (const g of stale) {
-    console.log(`  - ${g.garment_id} (order ${g.order_id}) soak_done=${g.soaking_completed_at?.toISOString() ?? "NO"}`);
-  }
+  console.log(`Brovas needing attention: ${brovas.length}`);
+  const orderIds = [...new Set(brovas.map((b) => b.order_id))];
 
-  if (stale.length === 0) {
-    process.exit(0);
-  }
-
-  for (const g of stale) {
-    await db
-      .update(garments)
-      .set({ piece_stage: "cutting" as any })
-      .where(eq(garments.id, g.id));
-    console.log(`Updated ${g.garment_id} → piece_stage=cutting`);
+  for (const oid of orderIds) {
+    const wo = await db.select().from(workOrders).where(eq(workOrders.order_id, oid)).limit(1);
+    const o = await db.select().from(orders).where(eq(orders.id, oid)).limit(1);
+    const gs = await db.select().from(garments).where(eq(garments.order_id, oid));
+    console.log(`\n--- order_id=${oid} | invoice=${wo[0]?.invoice_number} | phase=${wo[0]?.order_phase} | checkout=${o[0]?.checkout_status} ---`);
+    for (const g of gs) {
+      console.log(`  ${g.garment_id} | type=${g.garment_type} | stage=${g.piece_stage} | loc=${g.location} | trip=${g.trip_number} | fb=${g.feedback_status} | accept=${g.acceptance_status} | in_prod=${g.in_production} | plan=${g.production_plan ? "set" : "null"} | assigned=${g.assigned_date}`);
+    }
   }
 
   process.exit(0);

@@ -350,29 +350,28 @@ export function TerminalQualityTemplatePrint({
               height={<MeasurementOrDash raw={measurement?.collar_height} degree={degree} />}
               width={<MeasurementOrDash raw={measurement?.collar_width} degree={degree} />}
               accessories={
-                (collarButton || garment.small_tabaggi || (garment as { collar_position?: string }).collar_position) ? (
-                  <>
-                    {collarButton ? (
-                      <span>
-                        {collarButton.image ? (
-                          <img src={collarButton.image} alt={collarButton.label} />
-                        ) : null}
-                        {collarButton.label}
-                      </span>
-                    ) : null}
-                    {garment.small_tabaggi ? (
-                      <span>
-                        <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" /> SMALL TABAGGI
-                      </span>
-                    ) : null}
-                    {(garment as { collar_position?: string }).collar_position === "up" ? (
-                      <span>COLLAR UP</span>
-                    ) : null}
-                    {(garment as { collar_position?: string }).collar_position === "down" ? (
-                      <span>COLLAR DOWN</span>
-                    ) : null}
-                  </>
-                ) : null
+                <>
+                  {collarButton ? (
+                    <span>
+                      {collarButton.image ? (
+                        <img src={collarButton.image} alt={collarButton.label} />
+                      ) : null}
+                      {collarButton.label}
+                    </span>
+                  ) : null}
+                  {garment.small_tabaggi ? (
+                    <span>
+                      <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" /> SMALL TABAGGI
+                    </span>
+                  ) : null}
+                  {(garment as { collar_position?: string }).collar_position === "up" ? (
+                    <span>COLLAR UP</span>
+                  ) : (garment as { collar_position?: string }).collar_position === "down" ? (
+                    <span>COLLAR DOWN</span>
+                  ) : (
+                    <span>COLLAR STANDARD</span>
+                  )}
+                </>
               }
             />
           </section>
