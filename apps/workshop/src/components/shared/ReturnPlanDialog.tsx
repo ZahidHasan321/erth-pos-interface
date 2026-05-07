@@ -145,15 +145,21 @@ export function ReturnPlanDialog({
     return filtered;
   }, [historyAsPlan, resources]);
 
-  // Reset on open — no stages pre-selected; workers auto-fill when user toggles a stage on
+  // Reset on open — no stages pre-selected; workers auto-fill when user toggles a stage on.
+  // QC is force-appended to visibleSteps (not toggleable), so pre-fill it from history
+  // here — otherwise Schedule stays disabled until the user scrolls down and picks QC manually.
   useEffect(() => {
     if (open) {
-      setPlan({});
+      const initialPlan: Record<string, string> = {};
+      if (activeHistoryPlan[QC_STEP.key]) {
+        initialPlan[QC_STEP.key] = activeHistoryPlan[QC_STEP.key];
+      }
+      setPlan(initialPlan);
       setDate(defaultDate ?? getLocalDateStr());
       setSelectedStages(new Set());
       setEditingStep(null);
     }
-  }, [open, defaultDate]);
+  }, [open, defaultDate, activeHistoryPlan]);
 
   const toggleStage = (planKey: string) => {
     if (locked.has(planKey)) return;

@@ -30,21 +30,21 @@ export const garmentSchema = z.object({
   quantity: z.number().default(1),
 
   // Style options
-  collar_type: z.string().optional().nullable(),
-  collar_button: z.string().optional().nullable(),
+  collar_type: z.string({ message: "Collar type is required" }).min(1, "Collar type is required"),
+  collar_button: z.string({ message: "Collar button is required" }).min(1, "Collar button is required"),
   collar_position: z.enum(['up', 'down']).nullable().optional(),
-  collar_thickness: z.string().optional().nullable(),
-  cuffs_type: z.string().optional().nullable(),
+  collar_thickness: z.string({ message: "Collar thickness is required" }).min(1, "Collar thickness is required"),
+  cuffs_type: z.string({ message: "Cuffs type is required" }).min(1, "Cuffs type is required"),
   cuffs_thickness: z.string().optional().nullable(),
-  front_pocket_type: z.string().optional().nullable(),
-  front_pocket_thickness: z.string().optional().nullable(),
+  front_pocket_type: z.string({ message: "Front pocket type is required" }).min(1, "Front pocket type is required"),
+  front_pocket_thickness: z.string({ message: "Front pocket thickness is required" }).min(1, "Front pocket thickness is required"),
   wallet_pocket: z.boolean().optional().nullable(),
   pen_holder: z.boolean().optional().nullable(),
   mobile_pocket: z.boolean().optional().nullable(),
   small_tabaggi: z.boolean().optional().nullable(),
-  jabzour_1: z.string().optional().nullable(),
+  jabzour_1: z.string({ message: "Jabzour type is required" }).min(1, "Jabzour type is required"),
   jabzour_2: z.string().optional().nullable(),
-  jabzour_thickness: z.string().optional().nullable(),
+  jabzour_thickness: z.string({ message: "Jabzour thickness is required" }).min(1, "Jabzour thickness is required"),
 
   lines: z.number().default(1),
 
@@ -78,6 +78,28 @@ export const garmentSchema = z.object({
       message: "Shop name is required for external source",
       path: ["shop_name"]
     });
+  }
+
+  // Conditional: cuffs_thickness required when cuffs are present
+  if (data.cuffs_type && data.cuffs_type !== 'CUF_NO_CUFF') {
+    if (!data.cuffs_thickness || data.cuffs_thickness.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Cuffs thickness is required",
+        path: ["cuffs_thickness"]
+      });
+    }
+  }
+
+  // Conditional: jabzour_2 required when jabzour_1 is SHAAB
+  if (data.jabzour_1 === 'JAB_SHAAB') {
+    if (!data.jabzour_2 || data.jabzour_2.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Second jabzour is required when Shaab is selected",
+        path: ["jabzour_2"]
+      });
+    }
   }
 });
 

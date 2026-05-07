@@ -1389,7 +1389,10 @@ function TextOptionChip({
 
 function formatOptionText(spec: QcOptionSpec, val: unknown): string {
   if (spec.type === "boolean") return val ? "Yes" : "No";
-  if (val == null || val === "") return "—";
+  if (val == null || val === "") {
+    if (spec.key === "collar_position") return "Standard";
+    return "—";
+  }
   if (spec.key.endsWith("_thickness")) {
     const t = thicknessOptions.find((opt) => opt.value === val);
     if (t) return t.full;

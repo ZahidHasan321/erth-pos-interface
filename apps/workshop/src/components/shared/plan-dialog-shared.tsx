@@ -487,10 +487,11 @@ export function ReturnContextBanner({
     .filter(Boolean)
     .join(" • ") || null;
 
-  // Workshop-actionable measurement errors: drop customer_request (already propagated)
-  const actionableMeasurementDiffs = (measurementDiffs ?? []).filter(
-    (d) => d.reason !== "customer_request" && d.reason !== "Customer Request",
-  );
+  // Show all logged measurement diffs. Customer Request rows propagate to a new
+  // measurements row (workshop sews to that), but the workshop still needs to
+  // see *what changed* as repair context — otherwise an alteration like "collar
+  // adjustment" looks like it has no measurement work attached.
+  const actionableMeasurementDiffs = measurementDiffs ?? [];
 
   // Rejected style options only — and drop rows where the "fix" equals the
   // original value (historical data before the save-path fix). For
