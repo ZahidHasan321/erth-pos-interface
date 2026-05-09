@@ -229,7 +229,15 @@ export function evaluateQc(
 
   const failed_options = QC_OPTIONS
     .filter((o) => enabledKeys.has(o.key))
-    .filter((o) => !optionEquals(o, inputs.options[o.key], expectedOptions[o.key]))
+    .filter((o) => {
+      // collar_position null = "Standard" — always a valid choice, regardless
+      // of what the spec asked for. Operator can leave blank to mean Standard.
+      if (o.key === "collar_position") {
+        const input = inputs.options[o.key];
+        if (input == null || input === "") return false;
+      }
+      return !optionEquals(o, inputs.options[o.key], expectedOptions[o.key]);
+    })
     .map((o) => o.key);
 
   const failed_quality = QC_QUALITY

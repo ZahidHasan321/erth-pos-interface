@@ -161,16 +161,29 @@ export function QualityCheckForm({
   // In alteration mode, hide measurements not flagged by the shop. In all
   // other modes (full QC, QC-fail rework), keep the full template visible —
   // rework just disables non-flagged inputs as a re-check hint.
-  const scopedHide = isAlteration;
+  // Measurements: scope only in customer-feedback alteration mode.
+  // Options: scope in alteration AND QC-fail rework — both cases narrow to
+  // the flagged groups (e.g. collar wrong → only collar group visible).
+  const scopedHideMeasurements = isAlteration;
+  const scopedHideOptions = isAlteration || isRework;
   const visibleGroups = useMemo(
     () => {
       const allow = (k: string) =>
-        scopedHide ? enabledKeys.has(k) : visibleMeasurementKeys.has(k);
-      return QC_MEASUREMENT_GROUPS
+        scopedHideMeasurements ? enabledKeys.has(k) : visibleMeasurementKeys.has(k);
+      const filtered = QC_MEASUREMENT_GROUPS
         .map((g) => ({ ...g, keys: g.keys.filter(allow) }))
         .filter((g) => g.keys.length > 0);
+      // Merge consecutive groups sharing the same title — the unnamed splits
+      // were a 7-col table artifact; flex-wrap fills rows without them.
+      const merged: { title: string; keys: string[] }[] = [];
+      for (const g of filtered) {
+        const last = merged[merged.length - 1];
+        if (last && last.title === g.title) last.keys.push(...g.keys);
+        else merged.push({ title: g.title, keys: [...g.keys] });
+      }
+      return merged;
     },
-    [visibleMeasurementKeys, scopedHide, enabledKeys],
+    [visibleMeasurementKeys, scopedHideMeasurements, enabledKeys],
   );
 
   const carryForward = lastFail ?? null;
@@ -252,12 +265,41 @@ export function QualityCheckForm({
 
   // ── Live evaluation (preview, also blocks submit when incomplete) ─────────
   const expectedMeasurements = (measurement ?? {}) as Record<string, unknown>;
+  // Keys the customer's measurement record actually has a value for. Marked
+  // with * in the form so operators know which inputs verify against an
+  // expected value vs. which are just observational.
+  const expectedMeasurementKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of QC_MEASUREMENTS) {
+      const v = expectedMeasurements[m.key];
+      if (v == null || v === "") continue;
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) set.add(m.key);
+    }
+    return set;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measurement]);
   const expectedOptions: Record<string, unknown> = {};
   for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as any)[o.key];
   // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
   const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
   expectedOptions.jabzour_1 = j.jabzour_1;
   expectedOptions.jabzour_2 = j.jabzour_2;
+
+  // Option fields the garment record specifies. Marked with * in the form.
+  // Booleans only count when expected=true (false = "feature absent", not a
+  // value to verify). Built inline since QC_OPTIONS is small.
+  const expectedOptionKeys = new Set<string>();
+  for (const o of QC_OPTIONS) {
+    const v = expectedOptions[o.key];
+    if (o.type === "boolean") {
+      if (Boolean(v)) expectedOptionKeys.add(o.key);
+    } else if (o.type === "number") {
+      if (v != null && Number.isFinite(Number(v))) expectedOptionKeys.add(o.key);
+    } else if (v != null && v !== "") {
+      expectedOptionKeys.add(o.key);
+    }
+  }
 
   const numericInputs: QcInputs = useMemo(
     () => ({
@@ -295,6 +337,8 @@ export function QualityCheckForm({
     // SHAAB-without-jabzour_2 is a valid (failing) observation when the worker
     // forgot the second style; evaluation flags the mismatch.
     if (o.key === "jabzour_2") continue;
+    // collar_position null = "Standard" — always a valid choice, never required.
+    if (o.key === "collar_position") continue;
     // If the spec expected null, operator can leave it empty — forcing a value
     // would cause a false mismatch (e.g. jabzour_1 wasn't requested at all).
     const expected = expectedOptions[o.key];
@@ -433,12 +477,13 @@ export function QualityCheckForm({
       {visibleGroups.length > 0 && (
         <SectionCard title="Step 1 — Measurements" subtitle={`Tolerance ±${QC_TOLERANCE}"`}>
           {visibleGroups.map((group, i) => (
-            <MeasurementTable
+            <MeasurementGrid
               key={group.title || `group-${i}`}
               title={group.title}
               keys={group.keys}
               values={measurements}
               enabledKeys={enabledKeys}
+              expectedKeys={expectedMeasurementKeys}
               failedKeys={new Set(evaluation.failed_measurements)}
               onChange={setMeasurement}
             />
@@ -446,15 +491,16 @@ export function QualityCheckForm({
         </SectionCard>
       )}
 
-      {/* Step 2 — Options (groups with no enabled fields are hidden in alteration mode) */}
-      {(!scopedHide || QC_OPTIONS.some((o) => enabledKeys.has(o.key))) && (
+      {/* Step 2 — Options (groups with no enabled fields are hidden in alteration + QC-rework modes) */}
+      {(!scopedHideOptions || QC_OPTIONS.some((o) => enabledKeys.has(o.key))) && (
         <SectionCard title="Step 2 — Options">
           <OptionGroups
             values={options}
             enabledKeys={enabledKeys}
+            expectedKeys={expectedOptionKeys}
             failedKeys={new Set(evaluation.failed_options)}
             touchedKeys={touchedOptions}
-            scopedHide={scopedHide}
+            scopedHide={scopedHideOptions}
             onChange={setOption}
           />
         </SectionCard>
@@ -600,13 +646,15 @@ function SectionCard({
   );
 }
 
-// Multi-column measurement table — POS-style. Header row = label, then a
-// decimal input row, then a fraction preview row. One <table> per group.
-function MeasurementTable({
+// Flex-wrap card grid. Each measurement is a card (label / input / fraction)
+// that grows to fill the row, so wide screens fill horizontally and narrow
+// screens wrap. Replaces the prior fixed-column <table> layout.
+function MeasurementGrid({
   title,
   keys,
   values,
   enabledKeys,
+  expectedKeys,
   failedKeys,
   onChange,
 }: {
@@ -614,78 +662,59 @@ function MeasurementTable({
   keys: string[];
   values: Record<string, string>;
   enabledKeys: Set<string>;
+  /** Keys with a recorded expected value on the customer's measurement
+   *  snapshot. Marked with * so operators see which inputs verify against
+   *  an expected number vs. which are observational. */
+  expectedKeys: Set<string>;
   failedKeys: Set<string>;
   onChange: (key: string, val: string) => void;
 }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm overflow-x-auto p-3">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-3">
       {title && <h4 className="text-sm font-semibold pb-2 text-foreground">{title}</h4>}
-      <table className="border-separate border-spacing-1">
-        <thead>
-          <tr>
-            {keys.map((key) => {
-              const spec = QC_MEASUREMENTS.find((m) => m.key === key)!;
-              return (
-                <th
-                  key={key}
-                  className="border border-border rounded-md px-1.5 py-1.5 text-[10px] text-muted-foreground font-semibold text-center leading-tight bg-muted/40 w-[112px]"
-                >
-                  {spec.label}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {/* Decimal input row */}
-          <tr>
-            {keys.map((key) => {
-              const enabled = enabledKeys.has(key);
-              const measuredVal = values[key] ?? "";
-              const measuredNum = Number(measuredVal);
-              const hasValue = measuredVal !== "" && Number.isFinite(measuredNum);
-              const isFailed = hasValue && failedKeys.has(key);
-              return (
-                <td key={key} className="border border-border rounded-md px-1 py-1 w-[112px]">
-                  <Input
-                    type="number"
-                    step="0.125"
-                    inputMode="decimal"
-                    disabled={!enabled}
-                    value={measuredVal}
-                    onChange={(e) => onChange(key, e.target.value)}
-                    className={cn(
-                      "h-8 w-full text-center tabular-nums bg-transparent border-0 shadow-none px-1 focus:ring-1 focus:ring-primary",
-                      !enabled && "bg-muted/30 text-muted-foreground",
-                      isFailed && "ring-1 ring-red-400",
-                    )}
-                    placeholder="—"
-                  />
-                </td>
-              );
-            })}
-          </tr>
-          {/* Fraction row */}
-          <tr>
-            {keys.map((key) => {
-              const measuredVal = values[key] ?? "";
-              const measuredNum = measuredVal === "" ? null : Number(measuredVal);
-              return (
-                <td
-                  key={key}
-                  className="border border-border rounded-md px-1 py-1 bg-muted/20 text-center"
-                >
-                  <div className="h-5 flex items-center justify-center">
-                    {measuredNum != null && Number.isFinite(measuredNum) && (
-                      <FractionPreview value={measuredNum} />
-                    )}
-                  </div>
-                </td>
-              );
-            })}
-          </tr>
-        </tbody>
-      </table>
+      <div className="flex flex-wrap gap-2">
+        {keys.map((key) => {
+          const spec = QC_MEASUREMENTS.find((m) => m.key === key)!;
+          const enabled = enabledKeys.has(key);
+          const isExpected = expectedKeys.has(key);
+          const measuredVal = values[key] ?? "";
+          const measuredNum = measuredVal === "" ? null : Number(measuredVal);
+          const hasValue = measuredVal !== "" && Number.isFinite(measuredNum);
+          const isFailed = hasValue && failedKeys.has(key);
+          return (
+            <div
+              key={key}
+              className={cn(
+                "flex flex-col rounded-md border border-border basis-32 max-w-44 grow shrink-0 p-1.5",
+                isFailed && "ring-1 ring-red-400 border-red-300",
+              )}
+            >
+              <div className="text-xs text-muted-foreground font-semibold text-center leading-tight bg-muted/40 rounded-sm px-1 py-1 mb-1">
+                {spec.label}
+                {isExpected && <span className="text-red-500 ml-0.5">*</span>}
+              </div>
+              <Input
+                type="number"
+                step="0.125"
+                inputMode="decimal"
+                disabled={!enabled}
+                value={measuredVal}
+                onChange={(e) => onChange(key, e.target.value)}
+                className={cn(
+                  "h-10 w-full text-center text-base tabular-nums bg-transparent border-0 shadow-none px-1 focus:ring-1 focus:ring-primary",
+                  !enabled && "bg-muted/30 text-muted-foreground",
+                )}
+                placeholder="—"
+              />
+              <div className="h-5 flex items-center justify-center mt-1">
+                {measuredNum != null && Number.isFinite(measuredNum) && (
+                  <FractionPreview value={measuredNum} />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -715,6 +744,7 @@ function FractionPreview({ value }: { value: number }) {
 function OptionGroups({
   values,
   enabledKeys,
+  expectedKeys,
   failedKeys,
   touchedKeys,
   scopedHide,
@@ -722,6 +752,8 @@ function OptionGroups({
 }: {
   values: Record<string, string | boolean | number | null>;
   enabledKeys: Set<string>;
+  /** Option keys the garment record specifies — drive the * marker. */
+  expectedKeys: Set<string>;
   failedKeys: Set<string>;
   touchedKeys: Set<string>;
   /** When true, hide fields not in enabledKeys instead of rendering them disabled. */
@@ -734,6 +766,7 @@ function OptionGroups({
   const off = (k: string) => !enabledKeys.has(k);
   const show = (k: string) => !scopedHide || enabledKeys.has(k);
   const showAny = (...keys: string[]) => keys.some(show);
+  const req = (k: string) => expectedKeys.has(k);
   // Boolean toggles get the failed indicator immediately — OFF is a real
   // answer, not "no answer yet". Image pickers stay gated behind touch so a
   // fresh page doesn't glow red on every untouched option.
@@ -750,7 +783,7 @@ function OptionGroups({
         <OptionGroup title="Collar">
           {show("collar_type") && (
             <>
-              <SubLabel failed={failed("collar_type")}>Type</SubLabel>
+              <SubLabel failed={failed("collar_type")} required={req("collar_type")}>Type</SubLabel>
               <FailWrap failed={failed("collar_type")}>
                 <ImageOptionGrid
                   options={collarTypes}
@@ -764,7 +797,7 @@ function OptionGroups({
           )}
           {show("collar_button") && (
             <>
-              <SubLabel failed={failed("collar_button")}>Button</SubLabel>
+              <SubLabel failed={failed("collar_button")} required={req("collar_button")}>Button</SubLabel>
               <FailWrap failed={failed("collar_button")}>
                 <ImageOptionGrid
                   options={collarButtons}
@@ -818,7 +851,7 @@ function OptionGroups({
           )}
           {show("collar_thickness") && (
             <div className="flex items-center gap-2">
-              <SubLabel className="mb-0" failed={failed("collar_thickness")}>Thickness</SubLabel>
+              <SubLabel className="mb-0" failed={failed("collar_thickness")} required={req("collar_thickness")}>Thickness</SubLabel>
               <FailWrap failed={failed("collar_thickness")} inline>
                 <ThicknessPicker
                   value={text("collar_thickness")}
@@ -835,7 +868,7 @@ function OptionGroups({
         <OptionGroup title="Jabzour">
           {show("jabzour_1") && (
             <>
-              <SubLabel failed={failed("jabzour_1")}>Type 1</SubLabel>
+              <SubLabel failed={failed("jabzour_1")} required={req("jabzour_1")}>Type 1</SubLabel>
               <FailWrap failed={failed("jabzour_1")}>
                 <ImageOptionGrid
                   options={jabzourTypes}
@@ -872,7 +905,7 @@ function OptionGroups({
           )}
           {show("jabzour_thickness") && (
             <div className="flex items-center gap-2">
-              <SubLabel className="mb-0" failed={failed("jabzour_thickness")}>Thickness</SubLabel>
+              <SubLabel className="mb-0" failed={failed("jabzour_thickness")} required={req("jabzour_thickness")}>Thickness</SubLabel>
               <FailWrap failed={failed("jabzour_thickness")} inline>
                 <ThicknessPicker
                   value={text("jabzour_thickness")}
@@ -889,7 +922,7 @@ function OptionGroups({
         <OptionGroup title="Front pocket">
           {show("front_pocket_type") && (
             <>
-              <SubLabel failed={failed("front_pocket_type")}>Type</SubLabel>
+              <SubLabel failed={failed("front_pocket_type")} required={req("front_pocket_type")}>Type</SubLabel>
               <FailWrap failed={failed("front_pocket_type")}>
                 <ImageOptionGrid
                   options={topPocketTypes}
@@ -903,7 +936,7 @@ function OptionGroups({
           )}
           {show("front_pocket_thickness") && (
             <div className="flex items-center gap-2">
-              <SubLabel className="mb-0" failed={failed("front_pocket_thickness")}>Thickness</SubLabel>
+              <SubLabel className="mb-0" failed={failed("front_pocket_thickness")} required={req("front_pocket_thickness")}>Thickness</SubLabel>
               <FailWrap failed={failed("front_pocket_thickness")} inline>
                 <ThicknessPicker
                   value={text("front_pocket_thickness")}
@@ -960,7 +993,7 @@ function OptionGroups({
         <OptionGroup title="Cuffs">
           {show("cuffs_type") && (
             <>
-              <SubLabel failed={failed("cuffs_type")}>Type</SubLabel>
+              <SubLabel failed={failed("cuffs_type")} required={req("cuffs_type")}>Type</SubLabel>
               <FailWrap failed={failed("cuffs_type")}>
                 <ImageOptionGrid
                   options={cuffTypes}
@@ -974,7 +1007,7 @@ function OptionGroups({
           )}
           {show("cuffs_thickness") && (
             <div className="flex items-center gap-2">
-              <SubLabel className="mb-0" failed={failed("cuffs_thickness")}>Thickness</SubLabel>
+              <SubLabel className="mb-0" failed={failed("cuffs_thickness")} required={req("cuffs_thickness")}>Thickness</SubLabel>
               <FailWrap failed={failed("cuffs_thickness")} inline>
                 <ThicknessPicker
                   value={text("cuffs_thickness")}
@@ -1045,10 +1078,12 @@ function SubLabel({
   children,
   className,
   failed,
+  required,
 }: {
   children: React.ReactNode;
   className?: string;
   failed?: boolean;
+  required?: boolean;
 }) {
   return (
     <div
@@ -1059,6 +1094,7 @@ function SubLabel({
       )}
     >
       {children}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
     </div>
   );
 }
