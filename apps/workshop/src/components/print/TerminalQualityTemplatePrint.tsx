@@ -7,6 +7,10 @@ import { parseMeasurementParts } from "@repo/database";
 import type { Measurement, WorkshopGarment } from "@repo/database";
 import type { AlterationFilter } from "@/lib/alteration-filter";
 import { MeasurementValue } from "@/components/shared/MeasurementValue";
+import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
+import { getMeasurementCorrections } from "@/lib/qc-corrections";
+import { hasBasmaMeasurements } from "@/lib/qc-spec";
 
 const BRAND_LOGOS: Record<string, string> = {
   ERTH: erthLogo,
@@ -61,18 +65,6 @@ function optionFor(key: string | null | undefined) {
   return STYLE_IMAGE_MAP[key] ?? null;
 }
 
-function MeasurementOrDash({
-  raw,
-  degree,
-}: {
-  raw: unknown;
-  degree: number;
-}) {
-  const parts = parseMeasurementParts(raw, degree);
-  if (!parts) return <>{EMPTY_VALUE}</>;
-  return <MeasurementValue raw={raw} degree={degree} />;
-}
-
 function StyleImageCell({
   image,
   alt,
@@ -88,12 +80,22 @@ function StyleImageCell({
   return <div className="terminal-qc-style-placeholder">{fallback}</div>;
 }
 
+function ExtraRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="terminal-qc-extra-row">
+      <span className="terminal-qc-extra-row-label">{label}</span>
+      <span className="terminal-qc-extra-row-value">{value ?? EMPTY_VALUE}</span>
+    </div>
+  );
+}
+
 function MeasureLayout({
   image,
   imageAlt,
   imageFallback,
   height,
   width,
+  extras,
   accessories,
 }: {
   image: string | null | undefined;
@@ -101,6 +103,7 @@ function MeasureLayout({
   imageFallback: string;
   height: React.ReactNode;
   width?: React.ReactNode;
+  extras?: React.ReactNode;
   accessories?: React.ReactNode;
 }) {
   return (
@@ -113,6 +116,9 @@ function MeasureLayout({
       </div>
       {width !== undefined && (
         <div className="terminal-qc-width-box">{width ?? EMPTY_VALUE}</div>
+      )}
+      {extras && (
+        <div className="terminal-qc-extras-row">{extras}</div>
       )}
       {accessories && (
         <div className="terminal-qc-accessories-row">{accessories}</div>
@@ -129,6 +135,7 @@ export function TerminalQualityTemplatePrint({
   garment,
   alterationFilter,
   measurement: measurementProp,
+  qcFailActuals,
 }: {
   garment: WorkshopGarment;
   alterationFilter?: AlterationFilter | null;
@@ -136,11 +143,27 @@ export function TerminalQualityTemplatePrint({
    *  `garment.measurement` is null and the effective set is computed from
    *  full_measurement_set or original_garment + sparse changes. */
   measurement?: Measurement | null;
+  /** Operator-recorded values from the last QC fail — rendered in red beside
+   *  the expected value so the worker knows what to correct. */
+  qcFailActuals?: Map<string, number> | null;
 }) {
   const showSection = (key: "frontPocket" | "jabzour" | "sidePocket" | "cuffs" | "collar") =>
     !alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has(key);
   const measurement = measurementProp ?? garment.measurement ?? null;
   const degree = measurement?.degree ? Number(measurement.degree) : 0;
+  const corrections = getMeasurementCorrections(garment.trip_history);
+  const basma = hasBasmaMeasurements(measurement as unknown as Record<string, unknown> | null);
+
+  const hasMeasureVal = (key: keyof Measurement): boolean => {
+    if (!measurement) return false;
+    const v = measurement[key];
+    return v != null && v !== "" && Number(v) > 0;
+  };
+  const styledMeasure = (key: keyof Measurement) => {
+    if (!measurement) return null;
+    const correction = corrections.get(key as string) ?? null;
+    return <MeasurementValue raw={measurement[key]} degree={0} correction={correction} />;
+  };
 
   const styleLabel = String(garment.style ?? "kuwaiti").toUpperCase();
   const lineCount = String(garment.lines ?? 1);
@@ -160,6 +183,10 @@ export function TerminalQualityTemplatePrint({
   const jabzourSecondary = isShaab ? optionFor(garment.jabzour_2) : null;
 
   const garmentDisplayId = garment.garment_id ?? garment.id.slice(0, 8);
+  const stageLabel = garment.piece_stage
+    ? PIECE_STAGE_LABELS[garment.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? garment.piece_stage
+    : null;
+  const typeLabel = (garment.garment_type ?? "FINAL").toUpperCase();
 
   return (
     <div className="terminal-qc-print-sheet">
@@ -167,6 +194,9 @@ export function TerminalQualityTemplatePrint({
         <div className="terminal-qc-print-id-block">
           <span className="terminal-qc-print-id-label">N FAT</span>
           <span className="terminal-qc-print-id-value">{garmentDisplayId}</span>
+          <span className="terminal-qc-print-id-meta">
+            {typeLabel}{stageLabel ? ` · ${stageLabel}` : ""}
+          </span>
         </div>
 
         <div className="terminal-qc-print-customer">
@@ -179,6 +209,11 @@ export function TerminalQualityTemplatePrint({
           <p>
             <span>Invoice:</span> {garment.invoice_number ?? EMPTY_VALUE}
           </p>
+          {garment.delivery_date_order && (
+            <p>
+              <span>Due:</span> {formatDate(garment.delivery_date_order)}
+            </p>
+          )}
         </div>
 
         <div className="terminal-qc-print-brand">
@@ -206,24 +241,29 @@ export function TerminalQualityTemplatePrint({
             if (alterationFilter?.hideUnchanged && !alterationFilter.measurementKeys.has(measurementKey as string)) {
               return null;
             }
-            const parts = measurement
-              ? parseMeasurementParts(measurement[measurementKey], degree)
-              : null;
+            const correction = corrections.get(measurementKey as string) ?? null;
+            const qcActual = qcFailActuals?.get(measurementKey as string);
+            const hasQcActual = qcActual !== undefined;
+            const effectiveRaw = correction ? correction.corrected : (measurement ? measurement[measurementKey] : null);
+            const parts = parseMeasurementParts(effectiveRaw, correction ? 0 : degree);
             if (!parts) return null;
 
             const reason = alterationFilter?.fieldReasons.get(measurementKey as string);
-            const reasonClass = reason === "Customer Request"
-              ? "terminal-qc-measure-cell-reason-customer"
-              : reason === "Workshop Error"
-                ? "terminal-qc-measure-cell-reason-workshop"
-                : reason === "Shop Error"
-                  ? "terminal-qc-measure-cell-reason-shop"
-                  : "";
+            const isVertical = "orientation" in field && field.orientation === "vertical";
+            const stateClass = correction || hasQcActual
+              ? "terminal-qc-measure-cell-issue"
+              : reason === "Customer Request"
+                ? "terminal-qc-measure-cell-reason-customer"
+                : reason === "Workshop Error"
+                  ? "terminal-qc-measure-cell-reason-workshop"
+                  : reason === "Shop Error"
+                    ? "terminal-qc-measure-cell-reason-shop"
+                    : "";
 
             return (
               <div
                 key={field.id}
-                className={`terminal-qc-measure-cell ${"orientation" in field && field.orientation === "vertical" ? "terminal-qc-measure-cell-vertical" : ""} ${reasonClass}`}
+                className={`terminal-qc-measure-cell ${isVertical ? "terminal-qc-measure-cell-vertical" : ""} ${hasQcActual && !isVertical ? "terminal-qc-measure-cell-stacked" : ""} ${stateClass}`}
                 style={{
                   left: `${field.left}%`,
                   top: `${field.top}%`,
@@ -231,7 +271,16 @@ export function TerminalQualityTemplatePrint({
                   height: `${field.height}%`,
                 }}
               >
-                <MeasurementValue raw={measurement![measurementKey]} degree={degree} />
+                <MeasurementValue
+                  raw={measurement ? measurement[measurementKey] : null}
+                  degree={degree}
+                  correction={correction}
+                />
+                {hasQcActual && (
+                  <span className="terminal-qc-measure-cell-actual">
+                    <MeasurementValue raw={qcActual} degree={0} />
+                  </span>
+                )}
               </div>
             );
           })}
@@ -255,8 +304,9 @@ export function TerminalQualityTemplatePrint({
               image={frontPocket?.image}
               imageAlt={frontPocket?.label ?? "Front pocket"}
               imageFallback="POCKET"
-              height={<MeasurementOrDash raw={measurement?.top_pocket_length} degree={degree} />}
-              width={<MeasurementOrDash raw={measurement?.top_pocket_width} degree={degree} />}
+              height={styledMeasure("top_pocket_length")}
+              width={styledMeasure("top_pocket_width")}
+              extras={<ExtraRow label="Pocket Dist" value={styledMeasure("top_pocket_distance")} />}
               accessories={
                 garment.pen_holder ? (
                   <span>
@@ -278,8 +328,13 @@ export function TerminalQualityTemplatePrint({
               image={jabzourPrimary?.image}
               imageAlt={jabzourPrimary?.label ?? "Jabzour"}
               imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
-              height={<MeasurementOrDash raw={measurement?.jabzour_length} degree={degree} />}
-              width={<MeasurementOrDash raw={measurement?.jabzour_width} degree={degree} />}
+              height={styledMeasure("jabzour_width")}
+              width={styledMeasure("jabzour_length")}
+              extras={
+                hasMeasureVal("second_button_distance")
+                  ? <ExtraRow label="2nd Bottom Dist" value={styledMeasure("second_button_distance")} />
+                  : null
+              }
               accessories={isShaab ? <span>ZIPPER</span> : null}
             />
             {jabzourSecondary?.image ? (
@@ -301,8 +356,8 @@ export function TerminalQualityTemplatePrint({
               image={sidePocket?.image}
               imageAlt={sidePocket?.label ?? "Side pocket"}
               imageFallback="SIDE"
-              height={<MeasurementOrDash raw={measurement?.side_pocket_length} degree={degree} />}
-              width={<MeasurementOrDash raw={measurement?.side_pocket_width} degree={degree} />}
+              height={styledMeasure("side_pocket_length")}
+              width={styledMeasure("side_pocket_width")}
               accessories={
                 (garment.wallet_pocket || garment.mobile_pocket) ? (
                   <>
@@ -336,6 +391,16 @@ export function TerminalQualityTemplatePrint({
                 fallback="NO CUFF"
               />
             </div>
+            {basma && (hasMeasureVal("basma_length") || hasMeasureVal("basma_width")) && (
+              <div className="terminal-qc-extras-row">
+                {hasMeasureVal("basma_length") && (
+                  <ExtraRow label="Basma L" value={styledMeasure("basma_length")} />
+                )}
+                {hasMeasureVal("basma_width") && (
+                  <ExtraRow label="Basma W" value={styledMeasure("basma_width")} />
+                )}
+              </div>
+            )}
           </section>
           )}
 
@@ -349,8 +414,8 @@ export function TerminalQualityTemplatePrint({
               image={collarType?.image}
               imageAlt={collarType?.label ?? "Collar"}
               imageFallback="COLLAR"
-              height={<MeasurementOrDash raw={measurement?.collar_height} degree={degree} />}
-              width={<MeasurementOrDash raw={measurement?.collar_width} degree={degree} />}
+              height={styledMeasure("collar_height")}
+              width={styledMeasure("collar_width")}
               accessories={
                 <>
                   {collarButton ? (

@@ -20,17 +20,20 @@ export function MeasurementValue({ raw, degree = 0, className, correction }: Mea
 
   return (
     <span
-      className={`inline-flex items-center gap-[3px] ${correction ? "text-red-600 font-black" : ""} ${className ?? ""}`}
-      style={{ writingMode: "horizontal-tb" }}
+      className={`inline-flex items-baseline gap-[2px] tabular-nums ${correction ? "text-red-600 font-black" : ""} ${className ?? ""}`}
+      style={{ writingMode: "horizontal-tb", fontFeatureSettings: '"tnum","lnum"' }}
       title={tooltip}
     >
       {p.negative && <span>-</span>}
       {(p.whole > 0 || p.numerator === 0) && <span>{p.whole}</span>}
       {p.numerator > 0 && (
-        <span className="inline-flex flex-col items-center leading-none">
-          <span className="text-[0.8em]">{p.numerator}</span>
-          <span className="block h-px w-full bg-current" />
-          <span className="text-[0.8em]">{p.denominator}</span>
+        <span
+          className="inline-flex flex-col items-center justify-center leading-[0.95]"
+          style={{ fontSize: "0.62em", transform: "translateY(-0.05em)" }}
+        >
+          <span>{p.numerator}</span>
+          <span className="block h-[1.5px] w-full bg-current rounded-full" style={{ marginBlock: "1px" }} />
+          <span>{p.denominator}</span>
         </span>
       )}
       {p.hasDegree && <span>°</span>}

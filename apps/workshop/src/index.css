@@ -525,6 +525,16 @@ input[type="number"] {
     color: #000;
   }
 
+  body.terminal-printing .terminal-qc-print-id-meta {
+    font-size: 1.9mm;
+    font-weight: 800;
+    letter-spacing: 0.2mm;
+    text-transform: uppercase;
+    line-height: 1.2;
+    color: #000;
+    margin-top: 0.3mm;
+  }
+
   body.terminal-printing .terminal-qc-print-customer {
     padding: 1.5mm 2mm;
     font-size: 3mm;
@@ -634,6 +644,26 @@ input[type="number"] {
     background: #e4e4e7;
     border-color: #71717a;
     color: #18181b;
+  }
+
+  /* Workshop correction or last-QC-fail mismatch — flag in red so the worker
+     spots cells that need fixing at a glance. */
+  body.terminal-printing .terminal-qc-measure-cell-issue {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+  }
+
+  /* When showing both expected and qc-measured value, stack vertically. */
+  body.terminal-printing .terminal-qc-measure-cell-stacked {
+    flex-direction: column;
+    gap: 0.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell-actual {
+    color: #b91c1c;
+    font-size: 1.8mm;
+    line-height: 1;
   }
 
   /* ── Style panel ── */
@@ -824,6 +854,37 @@ input[type="number"] {
     height: 3.4mm;
     object-fit: contain;
     filter: grayscale(1) contrast(1.2);
+  }
+
+  /* Extras — secondary measurements like Pocket Dist, 2nd Bottom Dist, Basma. */
+  body.terminal-printing .terminal-qc-extras-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1mm;
+    margin-top: 0.8mm;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1mm;
+    border: 0.3mm solid #000;
+    background: #fff;
+    padding: 0.4mm 1.4mm;
+    font-size: 2.2mm;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row-label {
+    font-size: 1.6mm;
+    font-weight: 900;
+    letter-spacing: 0.15mm;
+    text-transform: uppercase;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row-value {
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
   }
 
   /* ── Notes ── */

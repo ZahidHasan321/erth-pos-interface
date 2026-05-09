@@ -41,11 +41,10 @@ export const qualityCheckTemplateFields = [
   { id: "waistFront", left: 35.6, top: 79.5, width: 10.8, height: 3.4 },
   { id: "waistBack", left: 54.2, top: 79.5, width: 10.8, height: 3.4 },
   { id: "bottom", left: 44.2, top: 88.3, width: 13.7, height: 3.6 },
-  // Sleeve Hem — at the cuff end of the left sleeve. Position is approximate
-  // and may need tweaking against the SVG template after first render.
-  { id: "sleeveHem", left: 14.5, top: 50.0, width: 9.0, height: 2.6 },
+  // Sleeve Hem — at the cuff end of the left sleeve.
+  { id: "sleeveHem", left: 20.5, top: 46.5, width: 7.0, height: 2.4 },
   // Bottom Hem — directly beneath the BOTTOM cell at the garment's lower edge.
-  { id: "bottomHem", left: 42.0, top: 92.4, width: 18.0, height: 2.6 },
+  { id: "bottomHem", left: 44.2, top: 95.0, width: 13.7, height: 2.6 },
 ] as const satisfies readonly QualityTemplateField[];
 
 export type QualityTemplateFieldId =

@@ -8,10 +8,23 @@ import {
 import { parseMeasurementParts } from "@repo/database";
 import type { WorkshopGarment, Measurement } from "@repo/database";
 import { MeasurementValue } from "./MeasurementValue";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@repo/ui/tooltip";
 import type { AlterationFilter } from "@/lib/alteration-filter";
 import { ALTERATION_REASON_CELL_CLASS } from "@/lib/alteration-filter";
 import { getMeasurementCorrections } from "@/lib/qc-corrections";
-import { hasBasmaMeasurements } from "@/lib/qc-spec";
+import { hasBasmaMeasurements, QC_MEASUREMENTS } from "@/lib/qc-spec";
+
+const QC_LABEL_BY_KEY: Record<string, string> = Object.fromEntries(
+  QC_MEASUREMENTS.map((m) => [m.key, m.label]),
+);
+
+function qcLabel(key: keyof Measurement): string | undefined {
+  return QC_LABEL_BY_KEY[key as string];
+}
 
 // ── Measurement helpers ──────────────────────────────────────────
 
@@ -65,14 +78,36 @@ function StyleImage({
       <img
         src={image}
         alt={alt}
-        className="h-20 w-full rounded-md border border-zinc-200 bg-white object-contain"
+        className="h-14 w-full rounded-md border border-zinc-200 bg-white object-contain"
       />
     );
   }
   return (
-    <div className="h-20 w-full rounded-md border border-zinc-200 bg-white flex items-center justify-center text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+    <div className="h-14 w-full rounded-md border border-zinc-200 bg-white flex items-center justify-center text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
       {fallback}
     </div>
+  );
+}
+
+const VALUE_BOX_INTERACTIVE =
+  "cursor-pointer transition-transform duration-100 hover:scale-110 hover:ring-2 hover:ring-blue-400 hover:shadow-md hover:z-10 active:scale-105";
+
+function HoverValueBox({
+  label,
+  children,
+  className,
+}: {
+  label?: string;
+  children: React.ReactNode;
+  className: string;
+}) {
+  const box = <div className={`${className} ${VALUE_BOX_INTERACTIVE}`}>{children}</div>;
+  if (!label) return box;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{box}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -81,33 +116,58 @@ function MeasureLayout({
   imageAlt,
   imageFallback,
   height,
+  heightLabel,
   width,
+  widthLabel,
+  extras,
   accessories,
 }: {
   image: string | null | undefined;
   imageAlt: string;
   imageFallback: string;
   height: React.ReactNode;
+  heightLabel?: string;
   width?: React.ReactNode;
+  widthLabel?: string;
+  /** Optional secondary measurements stacked on the right side of the section. */
+  extras?: React.ReactNode;
   accessories?: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="grid grid-cols-[6rem_auto] items-start gap-1.5">
-        <StyleImage image={image} alt={imageAlt} fallback={imageFallback} />
-        <div className="flex items-center justify-start">
-          <span className="inline-flex items-center justify-center w-9 h-20 rounded-md border border-zinc-200 bg-white text-base font-semibold text-zinc-700">
-            <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
-          </span>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        {/* Left col: image + rotated height, width below */}
+        <div className="space-y-1.5 shrink-0">
+          <div className="flex items-stretch gap-1.5">
+            <div className="w-20 shrink-0">
+              <StyleImage image={image} alt={imageAlt} fallback={imageFallback} />
+            </div>
+            <HoverValueBox
+              label={heightLabel}
+              className="inline-flex h-14 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white text-base font-semibold text-zinc-700"
+            >
+              <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
+            </HoverValueBox>
+          </div>
+          {width !== undefined && (
+            <div className="w-[7.5rem]">
+              <HoverValueBox
+                label={widthLabel}
+                className="flex items-center justify-center rounded-md border border-zinc-200 bg-white px-1 py-1 text-center text-sm font-semibold text-zinc-700"
+              >
+                {width ?? "—"}
+              </HoverValueBox>
+            </div>
+          )}
         </div>
+        {/* Right col: extras stacked vertically */}
+        {extras && (
+          <div className="flex-1 flex flex-col gap-1.5 min-w-0">{extras}</div>
+        )}
       </div>
-      {width !== undefined && (
-        <div className="mt-1.5 w-24 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-center text-base font-semibold text-zinc-700">
-          {width ?? "—"}
-        </div>
-      )}
+      {/* Accessories span full section width to avoid clipping when many pills present */}
       {accessories && (
-        <div className="mt-2 flex flex-wrap justify-end gap-1">{accessories}</div>
+        <div className="flex flex-wrap gap-1">{accessories}</div>
       )}
     </div>
   );
@@ -187,19 +247,24 @@ function StyleSection({
 function MeasureRow({
   label,
   value,
+  tooltip,
 }: {
   label: string;
   value: React.ReactNode;
+  tooltip?: string;
 }) {
   return (
-    <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1">
-      <span className="text-[10px] font-bold tracking-wide text-zinc-500 uppercase">
+    <HoverValueBox
+      label={tooltip}
+      className="flex flex-col items-center justify-center rounded-md border border-zinc-200 bg-white px-2 py-1 text-center"
+    >
+      <span className="text-[8px] font-bold tracking-wide text-zinc-500 uppercase leading-tight">
         {label}
       </span>
-      <span className="text-sm font-semibold text-zinc-800 tabular-nums">
+      <span className="text-sm font-semibold text-zinc-700 tabular-nums leading-tight">
         {value ?? "—"}
       </span>
-    </div>
+    </HoverValueBox>
   );
 }
 
@@ -228,6 +293,14 @@ export function DishdashaOverlay({
   const degree = m?.degree ? Number(m.degree) : 0;
 
   const corrections = getMeasurementCorrections(garment.trip_history);
+
+  // Optional measurements should hide entirely when blank (per spec: 2nd Bottom
+  // Dist, Basma, Sleeve/Bottom Hem, Pen Pocket — all skip if no value).
+  const hasVal = (key: keyof Measurement) => {
+    if (!m) return false;
+    const v = m[key];
+    return v != null && v !== "" && Number(v) > 0;
+  };
 
   // Sidebar style measurements (pocket sizes, jabzour, collar dims) are absolute
   // style dimensions — degree is a body-posture offset that applies only to the
@@ -310,41 +383,52 @@ export function DishdashaOverlay({
               "orientation" in field && field.orientation === "vertical";
             const reason = alterationFilter?.fieldReasons.get(key as string);
             const tintClass = correction
-              ? "bg-red-50 border-red-500 text-red-700"
+              ? "bg-red-50 border border-red-500 text-red-700"
               : hasQcActual
-                ? "bg-red-50 border-red-500 text-zinc-900"
+                ? "bg-red-50 border border-red-500 text-zinc-900"
                 : reason
-                  ? ALTERATION_REASON_CELL_CLASS[reason]
-                  : "bg-white/95 border-zinc-500 text-zinc-900";
+                  ? `border ${ALTERATION_REASON_CELL_CLASS[reason]}`
+                  : "bg-white/90 border border-zinc-200/70 text-zinc-900";
+            const fieldLabel = qcLabel(key);
+            const cellTitle = hasQcActual && fieldLabel
+              ? `${fieldLabel} — QC measured ${qcActual}`
+              : fieldLabel;
             return (
-              <div
-                key={field.id}
-                className={`absolute flex ${hasQcActual && !isVertical ? "flex-col" : ""} items-center justify-center border font-black leading-none ${tintClass}`}
-                style={{
-                  left: `${field.left}%`,
-                  top: `${field.top}%`,
-                  width: `${field.width}%`,
-                  height: `${field.height}%`,
-                  fontSize: "clamp(16px, 2.8%, 22px)",
-                  writingMode: isVertical ? "vertical-rl" : undefined,
-                  borderRadius: "1.5px",
-                }}
-              >
-                <MeasurementValue
-                  raw={m ? m[key] : null}
-                  degree={degree}
-                  correction={correction}
-                />
-                {hasQcActual && (
-                  <span
-                    className="text-red-600 font-black"
-                    style={{ fontSize: "0.62em", lineHeight: 1 }}
-                    title={`QC measured ${qcActual}`}
+              <Tooltip key={field.id}>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`absolute flex ${hasQcActual && !isVertical ? "flex-col" : ""} items-center justify-center font-black leading-none cursor-pointer transition-all duration-100 hover:z-20 hover:scale-125 hover:ring-2 hover:ring-blue-500 hover:shadow-lg active:scale-110 active:ring-blue-700 ${tintClass}`}
+                    style={{
+                      left: `${field.left}%`,
+                      top: `${field.top}%`,
+                      width: `${field.width}%`,
+                      height: `${field.height}%`,
+                      fontSize: "clamp(16px, 2.8%, 22px)",
+                      writingMode: isVertical ? "vertical-rl" : undefined,
+                      borderRadius: "4px",
+                      boxSizing: "content-box",
+                      padding: isVertical ? "8px 3px" : "4px 5px",
+                      marginLeft: isVertical ? "-3px" : "-5px",
+                      marginTop: isVertical ? "-8px" : "-4px",
+                    }}
                   >
-                    <MeasurementValue raw={qcActual} degree={0} />
-                  </span>
-                )}
-              </div>
+                    <MeasurementValue
+                      raw={m ? m[key] : null}
+                      degree={degree}
+                      correction={correction}
+                    />
+                    {hasQcActual && (
+                      <span
+                        className="text-red-600 font-black"
+                        style={{ fontSize: "0.62em", lineHeight: 1 }}
+                      >
+                        <MeasurementValue raw={qcActual} degree={0} />
+                      </span>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                {cellTitle && <TooltipContent>{cellTitle}</TooltipContent>}
+              </Tooltip>
             );
           })}
 
@@ -386,14 +470,22 @@ export function DishdashaOverlay({
                 imageAlt={frontPocket?.label ?? "Front pocket"}
                 imageFallback="POCKET"
                 height={measureVal("top_pocket_length")}
+                heightLabel={qcLabel("top_pocket_length")}
                 width={measureVal("top_pocket_width")}
+                widthLabel={qcLabel("top_pocket_width")}
+                extras={
+                  <MeasureRow
+                    label="Pocket Dist"
+                    value={measureVal("top_pocket_distance")}
+                    tooltip={qcLabel("top_pocket_distance")}
+                  />
+                }
                 accessories={
                   g.pen_holder ? (
                     <AccessoryPill icon={ACCESSORY_ICONS.pen} label="PEN" rotate />
                   ) : null
                 }
               />
-              <MeasureRow label="10. Pocket Dist" value={measureVal("top_pocket_distance")} />
             </StyleSection>
             )}
 
@@ -404,22 +496,32 @@ export function DishdashaOverlay({
                 image={jabzourPrimary?.image}
                 imageAlt="Jabzour"
                 imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
-                height={measureVal("jabzour_length")}
-                width={measureVal("jabzour_width")}
-                accessories={
-                  isShaab ? (
-                    <AccessoryPill label="ZIPPER" />
+                height={measureVal("jabzour_width")}
+                heightLabel={qcLabel("jabzour_width")}
+                width={measureVal("jabzour_length")}
+                widthLabel={qcLabel("jabzour_length")}
+                extras={
+                  hasVal("second_button_distance") ? (
+                    <MeasureRow
+                      label="2nd Bottom Dist"
+                      value={measureVal("second_button_distance")}
+                      tooltip={qcLabel("second_button_distance")}
+                    />
                   ) : null
                 }
+                accessories={
+                  <>
+                    {isShaab && <AccessoryPill label="ZIPPER" />}
+                    {jabzourSecondary?.image && (
+                      <img
+                        src={jabzourSecondary.image}
+                        alt=""
+                        className="h-8 w-14 rounded-md border border-zinc-200 bg-white object-contain"
+                      />
+                    )}
+                  </>
+                }
               />
-              {jabzourSecondary?.image && (
-                <img
-                  src={jabzourSecondary.image}
-                  alt=""
-                  className="mt-1 h-10 w-[4.5rem] rounded-md border border-zinc-200 bg-white object-contain"
-                />
-              )}
-              <MeasureRow label="2nd Bottom Dist" value={measureVal("second_button_distance")} />
             </StyleSection>
             )}
 
@@ -431,7 +533,9 @@ export function DishdashaOverlay({
                 imageAlt="Side pocket"
                 imageFallback="SIDE"
                 height={measureVal("side_pocket_length")}
+                heightLabel={qcLabel("side_pocket_length")}
                 width={measureVal("side_pocket_width")}
+                widthLabel={qcLabel("side_pocket_width")}
                 accessories={
                   (g.wallet_pocket || g.mobile_pocket) ? (
                     <>
@@ -447,19 +551,33 @@ export function DishdashaOverlay({
             {/* Cuffs */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("cuffs")) && (
             <StyleSection title="Cuffs" thickness={g.cuffs_thickness}>
-              <div className="w-24">
-                <StyleImage
-                  image={cuffsType?.image}
-                  alt={cuffsType?.label ?? "Cuffs"}
-                  fallback="NO CUFF"
-                />
+              <div className="flex gap-2">
+                <div className="w-20 shrink-0">
+                  <StyleImage
+                    image={cuffsType?.image}
+                    alt={cuffsType?.label ?? "Cuffs"}
+                    fallback="NO CUFF"
+                  />
+                </div>
+                {basma && (hasVal("basma_length") || hasVal("basma_width")) && (
+                  <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                    {hasVal("basma_length") && (
+                      <MeasureRow
+                        label="Basma L"
+                        value={measureVal("basma_length")}
+                        tooltip={qcLabel("basma_length")}
+                      />
+                    )}
+                    {hasVal("basma_width") && (
+                      <MeasureRow
+                        label="Basma W"
+                        value={measureVal("basma_width")}
+                        tooltip={qcLabel("basma_width")}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
-              {basma && (
-                <>
-                  <MeasureRow label="Basma L" value={measureVal("basma_length")} />
-                  <MeasureRow label="Basma W" value={measureVal("basma_width")} />
-                </>
-              )}
             </StyleSection>
             )}
 
@@ -471,7 +589,9 @@ export function DishdashaOverlay({
                 imageAlt={collarType?.label ?? "Collar"}
                 imageFallback="COLLAR"
                 height={measureVal("collar_height")}
+                heightLabel={qcLabel("collar_height")}
                 width={measureVal("collar_width")}
+                widthLabel={qcLabel("collar_width")}
                 accessories={
                   <>
                     {collarButton && (
@@ -492,12 +612,6 @@ export function DishdashaOverlay({
               />
             </StyleSection>
             )}
-
-            {g.lines && g.lines > 1 ? (
-              <div className="col-span-2 flex items-center justify-center py-1.5 rounded-lg border border-zinc-200 text-[11px] font-black uppercase tracking-wide text-zinc-700">
-                {g.lines} Lines
-              </div>
-            ) : null}
 
             {notes && (
               <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2">

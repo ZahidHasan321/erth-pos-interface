@@ -618,17 +618,17 @@ function MeasurementTable({
   onChange: (key: string, val: string) => void;
 }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden p-3">
+    <div className="bg-card rounded-xl border border-border shadow-sm overflow-x-auto p-3">
       {title && <h4 className="text-sm font-semibold pb-2 text-foreground">{title}</h4>}
-      <table className="w-full border-collapse table-fixed">
+      <table className="border-separate border-spacing-1">
         <thead>
-          <tr className="border-t border-border">
+          <tr>
             {keys.map((key) => {
               const spec = QC_MEASUREMENTS.find((m) => m.key === key)!;
               return (
                 <th
                   key={key}
-                  className="border border-border px-1.5 py-1.5 text-[10px] text-muted-foreground font-semibold text-center leading-tight bg-muted/40"
+                  className="border border-border rounded-md px-1.5 py-1.5 text-[10px] text-muted-foreground font-semibold text-center leading-tight bg-muted/40 w-[112px]"
                 >
                   {spec.label}
                 </th>
@@ -646,7 +646,7 @@ function MeasurementTable({
               const hasValue = measuredVal !== "" && Number.isFinite(measuredNum);
               const isFailed = hasValue && failedKeys.has(key);
               return (
-                <td key={key} className="border border-border px-1 py-1">
+                <td key={key} className="border border-border rounded-md px-1 py-1 w-[112px]">
                   <Input
                     type="number"
                     step="0.125"
@@ -673,7 +673,7 @@ function MeasurementTable({
               return (
                 <td
                   key={key}
-                  className="border border-border px-1 py-1 bg-muted/20 text-center"
+                  className="border border-border rounded-md px-1 py-1 bg-muted/20 text-center"
                 >
                   <div className="h-5 flex items-center justify-center">
                     {measuredNum != null && Number.isFinite(measuredNum) && (

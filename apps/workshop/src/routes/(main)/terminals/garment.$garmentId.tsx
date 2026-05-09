@@ -29,7 +29,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   PIECE_STAGE_LABELS,
   PRODUCTION_STAGES,
@@ -170,6 +170,38 @@ function TerminalGarmentPage() {
           </Button>
         </div>
 
+        {!isQC && (
+          <div className="mb-3 flex items-center gap-2.5 flex-wrap rounded-lg border bg-card px-3 py-2">
+            <span className={cn(
+              "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border shrink-0",
+              garment.garment_type === "brova"
+                ? "bg-purple-100 text-purple-800 border-purple-200"
+                : "bg-blue-100 text-blue-800 border-blue-200",
+            )}>
+              {garment.garment_type}
+            </span>
+            <span className="font-mono font-black text-base shrink-0">
+              {garment.garment_id ?? garment.id.slice(0, 8)}
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+              {stageLabel}
+            </span>
+            {garment.customer_name && (
+              <span className="text-sm text-muted-foreground truncate min-w-0">
+                {garment.customer_name}
+              </span>
+            )}
+            {garment.invoice_number && (
+              <span className="text-xs text-muted-foreground shrink-0">#{garment.invoice_number}</span>
+            )}
+            {garment.delivery_date_order && (
+              <span className="text-xs text-amber-700 font-medium ml-auto shrink-0">
+                Due {formatDate(garment.delivery_date_order)}
+              </span>
+            )}
+          </div>
+        )}
+
         {isRepair && (
           <div className={cn(
             "mb-3 flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5",
@@ -257,6 +289,7 @@ function TerminalGarmentPage() {
           garment={garment}
           alterationFilter={alterationFilter}
           measurement={effectiveMeasurement}
+          qcFailActuals={qcFailActuals}
         />
       </div>
     </div>
