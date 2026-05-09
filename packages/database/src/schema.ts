@@ -417,9 +417,6 @@ export const measurements = pgTable("measurements", {
     chest_back: numeric("chest_back", { precision: 5, scale: 2 }),
     armhole_front: numeric("armhole_front", { precision: 5, scale: 2 }),
 
-    // Collar / Gallabiya
-    collar_length: numeric("collar_length", { precision: 5, scale: 2 }),
-
     // Buttons
     second_button_distance: numeric("second_button_distance", { precision: 5, scale: 2 }),
 

@@ -57,9 +57,6 @@ export const customerMeasurementsSchema = z.object({
   jabzour_length: decimalField,
   jabzour_width: decimalField,
 
-  // Collar / Gallabiya
-  collar_length: decimalField,
-
   // Buttons
   second_button_distance: decimalField.optional().nullable(),
 
@@ -116,7 +113,6 @@ export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   bottom: undefined as any,
   jabzour_length: undefined as any,
   jabzour_width: 1.5,
-  collar_length: undefined as any,
   second_button_distance: null,
   basma_length: undefined as any,
   basma_width: undefined as any,

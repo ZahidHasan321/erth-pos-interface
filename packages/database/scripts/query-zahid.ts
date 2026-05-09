@@ -2,42 +2,54 @@ import "dotenv/config";
 import { db } from "../src/client";
 import { sql } from "drizzle-orm";
 
-const APPLY = process.argv.includes("--apply");
-
 async function main() {
-  const preview = await db.execute(sql`
-    SELECT id, garment_id, collar_type, collar_position, collar_thickness
+  // 1. All orders with finals stuck at waiting_for_acceptance
+  const stuck = await db.execute(sql`
+    SELECT
+      o.id AS order_id,
+      g.id AS garment_uuid,
+      g.garment_id,
+      g.garment_type,
+      g.piece_stage,
+      g.location,
+      g.acceptance_status,
+      g.feedback_status,
+      g.in_production,
+      g.trip_number
+    FROM garments g
+    JOIN orders o ON o.id = g.order_id
+    WHERE g.piece_stage = 'waiting_for_acceptance'
+    ORDER BY o.id, g.garment_id
+  `);
+  console.log("=== Garments stuck at waiting_for_acceptance ===");
+  console.log(JSON.stringify(stuck, null, 2));
+
+  // 2. Brova status per order that has stuck finals
+  const stuckOrderIds = [...new Set((stuck as any[]).map((r) => r.order_id))];
+  if (stuckOrderIds.length > 0) {
+    const brovas = await db.execute(sql`
+      SELECT order_id, garment_id, piece_stage, location,
+             acceptance_status, feedback_status, trip_number
+      FROM garments
+      WHERE order_id = ANY(${sql.raw(`ARRAY[${stuckOrderIds.join(",")}]::int[]`)})
+        AND garment_type = 'brova'
+      ORDER BY order_id, garment_id
+    `);
+    console.log("\n=== Brovas in those orders ===");
+    console.log(JSON.stringify(brovas, null, 2));
+  }
+
+  // 3. Check order 12 specifically (user mentioned 12-1)
+  const order12 = await db.execute(sql`
+    SELECT id, garment_id, garment_type, piece_stage, location,
+           acceptance_status, feedback_status, trip_number, in_production
     FROM garments
-    WHERE collar_thickness IS NULL
-    ORDER BY created_at DESC
+    WHERE order_id = 12
+    ORDER BY garment_id
   `);
+  console.log("\n=== Order 12 garments ===");
+  console.log(JSON.stringify(order12, null, 2));
 
-  const rows = preview as unknown as Array<{
-    id: string;
-    garment_id: string;
-    collar_type: string | null;
-    collar_position: string | null;
-    collar_thickness: string | null;
-  }>;
-
-  console.log(`Garments with NULL collar_thickness: ${rows.length}`);
-  for (const r of rows) {
-    console.log(
-      `  ${r.garment_id} | type=${r.collar_type ?? "—"} | pos=${r.collar_position ?? "—"}`,
-    );
-  }
-
-  if (!APPLY) {
-    console.log(`\nDry run. Re-run with --apply to UPDATE ${rows.length} rows to collar_thickness='DOUBLE'.`);
-    process.exit(0);
-  }
-
-  const result = await db.execute(sql`
-    UPDATE garments
-    SET collar_thickness = 'DOUBLE'
-    WHERE collar_thickness IS NULL
-  `);
-  console.log(`\nUpdated rows. Result:`, (result as any).rowCount ?? result);
   process.exit(0);
 }
 

@@ -240,7 +240,12 @@ function TerminalGarmentPage() {
 
         <div className="mt-4">
           {isQC ? (
-            <QualityCheckForm garment={garment} measurement={effectiveMeasurement} />
+            <QualityCheckForm
+              garment={garment}
+              measurement={effectiveMeasurement}
+              isAlteration={(isAltIn || isAltOut) && !hasQcFail}
+              alterationFilter={baseAlterationFilter}
+            />
           ) : isProductionStage ? (
             <TerminalActions garment={garment} />
           ) : null}

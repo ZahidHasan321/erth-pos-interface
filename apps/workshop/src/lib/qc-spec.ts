@@ -11,6 +11,10 @@ export interface QcMeasurementSpec {
   key: string;
   /** Display label, uppercase to match operator's spec sheet. */
   label: string;
+  /** Optional measure — appended at end of QC list, never gates completion. */
+  optional?: boolean;
+  /** Basma-only — shown only when garment has basma values, hides sleeve_width. */
+  basma?: boolean;
 }
 
 export interface QcOptionSpec {
@@ -26,74 +30,105 @@ export interface QcQualitySpec {
   label: string;
 }
 
-/** 28 measurements in operator-defined order. Grouped by table for the UI. */
+/** Measurements in PDF order. Numbered 1-18 first, then unnumbered extras,
+ *  conditional basma, then optional measures at end. */
 export const QC_MEASUREMENTS: QcMeasurementSpec[] = [
-  // Group 1 — Jabzour & Bottom Distance
-  { key: "jabzour_length",         label: "JABZOUR LENGTH" },
-  { key: "jabzour_width",          label: "JABZOUR WIDTH" },
-  { key: "second_button_distance", label: "2ND BOTTOM DISTANCE" },
-  // Group 2 — Pockets
-  { key: "side_pocket_length",     label: "SIDE POCKET HEIGHT" },
-  { key: "side_pocket_width",      label: "SIDE POCKET WIDTH" },
-  { key: "side_pocket_distance",   label: "DISTANCE TO SIDE POCKET" },
-  { key: "side_pocket_opening",    label: "SIDE POCKET OPENING" },
-  { key: "top_pocket_length",      label: "FRNT POCKET HEIGHT" },
-  { key: "top_pocket_width",       label: "FRNT POCKET WIDTH" },
-  { key: "top_pocket_distance",    label: "DISTANCE TO FRONT POCKET" },
-  // Group 3 — Body Lengths & Collar
-  { key: "length_front",           label: "FRONT LENGTH" },
-  { key: "length_back",            label: "BACK LENGTH" },
-  { key: "collar_length",          label: "COLLAR LENGTH/GALLABI LENGTH" },
-  { key: "collar_height",          label: "COLLAR/GALLABI HEIGHT" },
+  // 1-18 — numbered standard measures
+  { key: "chest_full",             label: "FULL CHEST" },
   { key: "shoulder",               label: "SHOULDER" },
-  { key: "armhole",                label: "ARMHOLE" },
-  // Group 4 — Sleeves & Basma
-  { key: "sleeve_length",          label: "SLEEVES LENGTH" },
-  { key: "basma_sleeve_length",    label: "BASMA SLEEVES LENGTH" },
+  { key: "sleeve_length",          label: "SLEEVES LEN" },
+  { key: "sleeve_width",           label: "SLEEVES W" },
   { key: "elbow",                  label: "ELBOW" },
-  { key: "sleeve_width",           label: "SLEEVES WIDTH" },
-  { key: "basma_length",           label: "BASMA LENGTH" },
-  { key: "basma_width",            label: "BASMA WIDTH" },
-  // Group 5 — Chest, Waist, Bottom
+  { key: "armhole_front",          label: "ARMHOLE F" },
   { key: "chest_upper",            label: "UPPER CHEST" },
   { key: "chest_front",            label: "FRONT CHEST" },
   { key: "waist_front",            label: "FRONT WAIST" },
+  { key: "top_pocket_distance",    label: "TOP POCKET DIST" },
+  { key: "jabzour_length",         label: "JABZOUR LEN" },
+  { key: "length_front",           label: "FRONT LEN" },
+  { key: "bottom",                 label: "BOTTOM" },
   { key: "chest_back",             label: "BACK CHEST" },
   { key: "waist_back",             label: "BACK WAIST" },
-  { key: "bottom",                 label: "BOTTOM" },
+  { key: "length_back",            label: "BACK LEN" },
+  { key: "collar_width",           label: "COLLAR/GALLABI LEN" },
+  { key: "collar_height",          label: "COLLAR/GALLABI W" },
+  // Unnumbered extras
+  { key: "waist_full",             label: "WAIST FULL" },
+  { key: "jabzour_width",          label: "JABZOUR W" },
+  { key: "top_pocket_length",      label: "TOP PKT LEN" },
+  { key: "top_pocket_width",       label: "TOP PKT W" },
+  { key: "side_pocket_length",     label: "SIDE PKT LEN" },
+  { key: "side_pocket_width",      label: "SIDE PKT W" },
+  { key: "side_pocket_distance",   label: "SIDE PKT DIST" },
+  { key: "side_pocket_opening",    label: "SIDE PKT OPEN" },
+  { key: "second_button_distance", label: "2ND BOTTOM DIST" },
+  // Basma — only if garment uses Basma
+  { key: "basma_sleeve_length",    label: "BASMA SLEEVE L", basma: true },
+  { key: "basma_length",           label: "BASMA LEN",      basma: true },
+  { key: "basma_width",            label: "BASMA W",        basma: true },
+  // Optional — end of QC, never gates completion
+  { key: "sleeve_hemming",         label: "SLEEVE HEM",     optional: true },
+  { key: "bottom_hemming",         label: "BOTTOM HEM",     optional: true },
+  { key: "pen_pocket_length",      label: "PEN PKT LEN",    optional: true },
+  { key: "pen_pocket_width",       label: "PEN PKT W",      optional: true },
 ];
 
-/** UI grouping for measurement tables — flat serial split into ~equal chunks. */
+/** UI grouping for measurement tables. Groups split into ~7-col chunks, with
+ *  basma + optional carved off as separate (conditionally rendered) groups. */
 export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   {
     title: "",
     keys: [
-      "jabzour_length", "jabzour_width", "second_button_distance",
-      "side_pocket_length", "side_pocket_width", "side_pocket_distance", "side_pocket_opening",
+      "chest_full", "shoulder", "sleeve_length", "sleeve_width",
+      "elbow", "armhole_front", "chest_upper",
     ],
   },
   {
     title: "",
     keys: [
-      "top_pocket_length", "top_pocket_width", "top_pocket_distance",
-      "length_front", "length_back", "collar_length", "collar_height",
+      "chest_front", "waist_front", "top_pocket_distance", "jabzour_length",
+      "length_front", "bottom", "chest_back",
     ],
   },
   {
     title: "",
     keys: [
-      "shoulder", "armhole",
-      "sleeve_length", "basma_sleeve_length", "elbow", "sleeve_width", "basma_length",
+      "waist_back", "length_back", "collar_width", "collar_height",
+      "waist_full", "jabzour_width", "top_pocket_length",
     ],
   },
   {
     title: "",
     keys: [
-      "basma_width",
-      "chest_upper", "chest_front", "waist_front", "chest_back", "waist_back", "bottom",
+      "top_pocket_width", "side_pocket_length", "side_pocket_width",
+      "side_pocket_distance", "side_pocket_opening", "second_button_distance",
     ],
+  },
+  // Basma group — rendered only when basma applies (see hasBasmaMeasurements).
+  {
+    title: "Basma",
+    keys: ["basma_sleeve_length", "basma_length", "basma_width"],
+  },
+  // Optional group — rendered last; never gates completion.
+  {
+    title: "Optional",
+    keys: ["sleeve_hemming", "bottom_hemming", "pen_pocket_length", "pen_pocket_width"],
   },
 ];
+
+/** True when the garment has any basma measurement on file. Used to gate the
+ *  Basma group on QC and to hide sleeve_width (basma_sleeve_length replaces it). */
+export function hasBasmaMeasurements(measurement: Record<string, unknown> | null | undefined): boolean {
+  if (!measurement) return false;
+  for (const k of ["basma_length", "basma_width", "basma_sleeve_length"]) {
+    const v = measurement[k];
+    if (v != null && v !== "" && Number(v) > 0) return true;
+  }
+  return false;
+}
+
+/** Keys hidden when Basma is active (basma_sleeve_length supersedes sleeve_width). */
+export const QC_BASMA_HIDDEN_KEYS = new Set(["sleeve_width"]);
 
 /** 14 garment option fields. */
 export const QC_OPTIONS: QcOptionSpec[] = [
@@ -184,6 +219,9 @@ export function evaluateQc(
     .filter((m) => {
       const expected = Number(expectedMeasurements[m.key]);
       const got = Number(inputs.measurements[m.key]);
+      // Optional fields with no expected value are skipped — they don't fail
+      // when blank because the spec sheet may not require them.
+      if (m.optional && !Number.isFinite(expected)) return false;
       if (!Number.isFinite(expected) || !Number.isFinite(got)) return true;
       return Math.abs(got - expected) > QC_TOLERANCE;
     })

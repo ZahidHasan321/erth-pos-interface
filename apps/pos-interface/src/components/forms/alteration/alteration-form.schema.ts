@@ -9,7 +9,7 @@ export const ALTERATION_MEASUREMENT_FIELDS = [
     "waist_full", "waist_front", "waist_back",
     "length_front", "length_back", "bottom",
     "jabzour_width", "jabzour_length",
-    "collar_length", "second_button_distance",
+    "second_button_distance",
     "basma_length", "basma_width", "basma_sleeve_length",
     "sleeve_hemming", "bottom_hemming",
     "pen_pocket_length", "pen_pocket_width",

@@ -11,9 +11,12 @@ import { MeasurementValue } from "./MeasurementValue";
 import type { AlterationFilter } from "@/lib/alteration-filter";
 import { ALTERATION_REASON_CELL_CLASS } from "@/lib/alteration-filter";
 import { getMeasurementCorrections } from "@/lib/qc-corrections";
+import { hasBasmaMeasurements } from "@/lib/qc-spec";
 
 // ── Measurement helpers ──────────────────────────────────────────
 
+// Body template field → measurements column. Per PDF, "ARMHOLE FULL" is
+// removed from QC; the body's ARMHOLE cell now shows armhole_front (#6 ARMHOLE F).
 const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   collar: "collar_width",
   wk1: "collar_height",
@@ -23,7 +26,7 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   shoulder: "shoulder",
   sideUpper: "side_pocket_distance",
   sleeves: "sleeve_length",
-  armhole: "armhole",
+  armhole: "armhole_front",
   width: "sleeve_width",
   sideLower: "side_pocket_opening",
   upperChest: "chest_upper",
@@ -32,6 +35,8 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   waistFront: "waist_front",
   waistBack: "waist_back",
   bottom: "bottom",
+  sleeveHem: "sleeve_hemming",
+  bottomHem: "bottom_hemming",
 };
 
 function fmtThick(v: string | null | undefined): string {
@@ -177,6 +182,27 @@ function StyleSection({
   );
 }
 
+// Small label/value row used inside StyleSection for secondary measurements
+// (e.g. top pocket distance, 2nd button distance, basma, hems).
+function MeasureRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1">
+      <span className="text-[10px] font-bold tracking-wide text-zinc-500 uppercase">
+        {label}
+      </span>
+      <span className="text-sm font-semibold text-zinc-800 tabular-nums">
+        {value ?? "—"}
+      </span>
+    </div>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────
 
 interface DishdashaOverlayProps {
@@ -251,6 +277,8 @@ export function DishdashaOverlay({
     isShaab && g.jabzour_2 ? STYLE_IMAGE_MAP[g.jabzour_2] : null;
 
   const sidePocket = STYLE_IMAGE_MAP["SID_MUDAWWAR_SIDE_POCKET"];
+
+  const basma = hasBasmaMeasurements(m as unknown as Record<string, unknown> | null);
 
   return (
     <div
@@ -365,6 +393,7 @@ export function DishdashaOverlay({
                   ) : null
                 }
               />
+              <MeasureRow label="10. Pocket Dist" value={measureVal("top_pocket_distance")} />
             </StyleSection>
             )}
 
@@ -390,6 +419,7 @@ export function DishdashaOverlay({
                   className="mt-1 h-10 w-[4.5rem] rounded-md border border-zinc-200 bg-white object-contain"
                 />
               )}
+              <MeasureRow label="2nd Bottom Dist" value={measureVal("second_button_distance")} />
             </StyleSection>
             )}
 
@@ -424,6 +454,12 @@ export function DishdashaOverlay({
                   fallback="NO CUFF"
                 />
               </div>
+              {basma && (
+                <>
+                  <MeasureRow label="Basma L" value={measureVal("basma_length")} />
+                  <MeasureRow label="Basma W" value={measureVal("basma_width")} />
+                </>
+              )}
             </StyleSection>
             )}
 

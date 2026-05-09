@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { useSubmitQc } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { QC_OPTION_TO_SECTION } from "@/lib/qc-corrections";
+import type { AlterationFilter } from "@/lib/alteration-filter";
 import {
   collarTypes,
   collarButtons,
@@ -45,7 +47,9 @@ import {
   QC_RETURN_STAGES,
   QC_TOLERANCE,
   QC_QUALITY_THRESHOLD,
+  QC_BASMA_HIDDEN_KEYS,
   evaluateQc,
+  hasBasmaMeasurements,
   normalizeExpectedJabzour,
   type QcInputs,
   type QcOptionSpec,
@@ -63,9 +67,22 @@ import type {
 interface Props {
   garment: WorkshopGarment;
   measurement: Measurement | null | undefined;
+  /** When true, scope QC to only the fields the shop flagged as needing fixes
+   *  (alteration trip 2+ or alt-out garment). Quality ratings stay enabled
+   *  so the inspector still scores overall workmanship. */
+  isAlteration?: boolean;
+  /** Reported issues — measurementKeys + visibleSections drive which inputs
+   *  show. Null when alteration has no flagged fields (degenerate case where
+   *  inspector signs off on ratings only). */
+  alterationFilter?: AlterationFilter | null;
 }
 
-export function QualityCheckForm({ garment, measurement }: Props) {
+export function QualityCheckForm({
+  garment,
+  measurement,
+  isAlteration = false,
+  alterationFilter = null,
+}: Props) {
   const router = useRouter();
   const submitMut = useSubmitQc();
 
@@ -83,27 +100,78 @@ export function QualityCheckForm({ garment, measurement }: Props) {
     .at(-1);
 
   const isRework = !!lastFail;
+
+  // Basma is implicit — driven by whether the measurement snapshot has any
+  // basma value. When active, basma_sleeve_length supersedes sleeve_width.
+  const basma = hasBasmaMeasurements(measurement as unknown as Record<string, unknown> | null);
+  const visibleMeasurementKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of QC_MEASUREMENTS) {
+      if (m.basma && !basma) continue;
+      if (basma && QC_BASMA_HIDDEN_KEYS.has(m.key)) continue;
+      set.add(m.key);
+    }
+    return set;
+  }, [basma]);
+
   const enabledKeys = useMemo(() => {
-    if (!lastFail) {
-      return new Set([
-        ...QC_MEASUREMENTS.map((m) => m.key),
-        ...QC_OPTIONS.map((o) => o.key),
-        ...QC_QUALITY.map((q) => q.key),
+    // QC-fail rework takes precedence: re-check only the previous fail's flagged fields.
+    if (lastFail) {
+      const flagged = new Set<string>([
+        ...(lastFail.failed_measurements ?? []),
+        ...(lastFail.failed_options ?? []),
+        ...(lastFail.failed_quality ?? []),
       ]);
+      // Jabzour 1 ↔ Jabzour 2 are hard-coupled: switching jabzour_1 to JAB_SHAAB requires
+      // re-entering jabzour_2 (and vice versa). Always enable both together.
+      if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
+        flagged.add("jabzour_1");
+        flagged.add("jabzour_2");
+      }
+      return flagged;
     }
-    const flagged = new Set<string>([
-      ...(lastFail.failed_measurements ?? []),
-      ...(lastFail.failed_options ?? []),
-      ...(lastFail.failed_quality ?? []),
+    // Alteration QC: only check what the shop flagged. Ratings stay always-on
+    // so inspector still scores overall workmanship even when nothing was reported.
+    if (isAlteration) {
+      const flagged = new Set<string>();
+      if (alterationFilter) {
+        for (const k of alterationFilter.measurementKeys) {
+          if (visibleMeasurementKeys.has(k)) flagged.add(k);
+        }
+        for (const o of QC_OPTIONS) {
+          const sec = QC_OPTION_TO_SECTION[o.key];
+          if (sec && alterationFilter.visibleSections.has(sec)) flagged.add(o.key);
+        }
+        if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
+          flagged.add("jabzour_1");
+          flagged.add("jabzour_2");
+        }
+      }
+      for (const q of QC_QUALITY) flagged.add(q.key);
+      return flagged;
+    }
+    // Full QC — initial pass on a brand-new garment.
+    return new Set([
+      ...QC_MEASUREMENTS.filter((m) => visibleMeasurementKeys.has(m.key)).map((m) => m.key),
+      ...QC_OPTIONS.map((o) => o.key),
+      ...QC_QUALITY.map((q) => q.key),
     ]);
-    // Jabzour 1 ↔ Jabzour 2 are hard-coupled: switching jabzour_1 to JAB_SHAAB requires
-    // re-entering jabzour_2 (and vice versa). Always enable both together.
-    if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
-      flagged.add("jabzour_1");
-      flagged.add("jabzour_2");
-    }
-    return flagged;
-  }, [lastFail]);
+  }, [lastFail, isAlteration, alterationFilter, visibleMeasurementKeys]);
+
+  // In alteration mode, hide measurements not flagged by the shop. In all
+  // other modes (full QC, QC-fail rework), keep the full template visible —
+  // rework just disables non-flagged inputs as a re-check hint.
+  const scopedHide = isAlteration;
+  const visibleGroups = useMemo(
+    () => {
+      const allow = (k: string) =>
+        scopedHide ? enabledKeys.has(k) : visibleMeasurementKeys.has(k);
+      return QC_MEASUREMENT_GROUPS
+        .map((g) => ({ ...g, keys: g.keys.filter(allow) }))
+        .filter((g) => g.keys.length > 0);
+    },
+    [visibleMeasurementKeys, scopedHide, enabledKeys],
+  );
 
   const carryForward = lastFail ?? null;
 
@@ -209,9 +277,11 @@ export function QualityCheckForm({ garment, measurement }: Props) {
   );
 
   // Completeness — every enabled input must have a value before submit.
+  // Optional measures (sleeve hem, bottom hem, pen pkt) never gate submit.
   const missing: { key: string; label: string }[] = [];
   for (const m of QC_MEASUREMENTS) {
     if (!enabledKeys.has(m.key)) continue;
+    if (m.optional) continue;
     const v = measurements[m.key];
     if (v == null || v === "" || !Number.isFinite(Number(v))) {
       missing.push({ key: m.key, label: m.label });
@@ -327,6 +397,12 @@ export function QualityCheckForm({ garment, measurement }: Props) {
                 {enabledKeys.size === 1 ? "" : "s"}
               </span>
             )}
+            {!isRework && isAlteration && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 text-[10px] font-bold">
+                <AlertTriangle className="w-3 h-3" />
+                Alteration — checking only flagged fields
+              </span>
+            )}
           </h3>
           {inspector && !overrideInspector ? (
             <button
@@ -353,31 +429,36 @@ export function QualityCheckForm({ garment, measurement }: Props) {
         </div>
       </div>
 
-      {/* Step 1 — Measurements */}
-      <SectionCard title="Step 1 — Measurements" subtitle={`Tolerance ±${QC_TOLERANCE}"`}>
-        {QC_MEASUREMENT_GROUPS.map((group) => (
-          <MeasurementTable
-            key={group.title}
-            title={group.title}
-            keys={group.keys}
-            values={measurements}
-            enabledKeys={enabledKeys}
-            failedKeys={new Set(evaluation.failed_measurements)}
-            onChange={setMeasurement}
-          />
-        ))}
-      </SectionCard>
+      {/* Step 1 — Measurements (skipped entirely when alteration has none flagged) */}
+      {visibleGroups.length > 0 && (
+        <SectionCard title="Step 1 — Measurements" subtitle={`Tolerance ±${QC_TOLERANCE}"`}>
+          {visibleGroups.map((group, i) => (
+            <MeasurementTable
+              key={group.title || `group-${i}`}
+              title={group.title}
+              keys={group.keys}
+              values={measurements}
+              enabledKeys={enabledKeys}
+              failedKeys={new Set(evaluation.failed_measurements)}
+              onChange={setMeasurement}
+            />
+          ))}
+        </SectionCard>
+      )}
 
-      {/* Step 2 — Options */}
-      <SectionCard title="Step 2 — Options">
-        <OptionGroups
-          values={options}
-          enabledKeys={enabledKeys}
-          failedKeys={new Set(evaluation.failed_options)}
-          touchedKeys={touchedOptions}
-          onChange={setOption}
-        />
-      </SectionCard>
+      {/* Step 2 — Options (groups with no enabled fields are hidden in alteration mode) */}
+      {(!scopedHide || QC_OPTIONS.some((o) => enabledKeys.has(o.key))) && (
+        <SectionCard title="Step 2 — Options">
+          <OptionGroups
+            values={options}
+            enabledKeys={enabledKeys}
+            failedKeys={new Set(evaluation.failed_options)}
+            touchedKeys={touchedOptions}
+            scopedHide={scopedHide}
+            onChange={setOption}
+          />
+        </SectionCard>
+      )}
 
       {/* Step 3 — Quality */}
       <SectionCard title="Step 3 — Quality" subtitle={`Score 1-5 (≥${QC_QUALITY_THRESHOLD} passes)`}>
@@ -636,18 +717,23 @@ function OptionGroups({
   enabledKeys,
   failedKeys,
   touchedKeys,
+  scopedHide,
   onChange,
 }: {
   values: Record<string, string | boolean | number | null>;
   enabledKeys: Set<string>;
   failedKeys: Set<string>;
   touchedKeys: Set<string>;
+  /** When true, hide fields not in enabledKeys instead of rendering them disabled. */
+  scopedHide?: boolean;
   onChange: (key: string, val: string | boolean | number | null) => void;
 }) {
   const text = (k: string) =>
     values[k] == null || values[k] === "" ? null : String(values[k]);
   const bool = (k: string) => Boolean(values[k]);
   const off = (k: string) => !enabledKeys.has(k);
+  const show = (k: string) => !scopedHide || enabledKeys.has(k);
+  const showAny = (...keys: string[]) => keys.some(show);
   // Boolean toggles get the failed indicator immediately — OFF is a real
   // answer, not "no answer yet". Image pickers stay gated behind touch so a
   // fresh page doesn't glow red on every untouched option.
@@ -660,204 +746,258 @@ function OptionGroups({
 
   return (
     <div className="space-y-3">
-      <OptionGroup title="Collar">
-        <SubLabel failed={failed("collar_type")}>Type</SubLabel>
-        <FailWrap failed={failed("collar_type")}>
-          <ImageOptionGrid
-            options={collarTypes}
-            value={text("collar_type")}
-            onChange={(v) => onChange("collar_type", v)}
-            allowClear
-            disabled={off("collar_type")}
-          />
-        </FailWrap>
-        <SubLabel failed={failed("collar_button")}>Button</SubLabel>
-        <FailWrap failed={failed("collar_button")}>
-          <ImageOptionGrid
-            options={collarButtons}
-            value={text("collar_button")}
-            onChange={(v) => onChange("collar_button", v)}
-            allowClear
-            disabled={off("collar_button")}
-          />
-        </FailWrap>
-        <div className="flex flex-wrap gap-2">
-          <FailWrap failed={failed("small_tabaggi")} inline>
-            <IconToggle
-              checked={bool("small_tabaggi")}
-              onChange={(v) => onChange("small_tabaggi", v)}
-              icon={smallTabaggiImage}
-              label="Small Tabaggi"
-              disabled={off("small_tabaggi")}
-            />
-          </FailWrap>
-        </div>
-        <SubLabel failed={failed("collar_position")}>Position</SubLabel>
-        <FailWrap failed={failed("collar_position")}>
-          <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                disabled={off("collar_position")}
-                checked={text("collar_position") === "up"}
-                onChange={(e) => onChange("collar_position", e.target.checked ? "up" : null)}
-              />
-              UP
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                disabled={off("collar_position")}
-                checked={text("collar_position") === "down"}
-                onChange={(e) => onChange("collar_position", e.target.checked ? "down" : null)}
-              />
-              DOWN
-            </label>
-          </div>
-        </FailWrap>
-        <div className="flex items-center gap-2">
-          <SubLabel className="mb-0" failed={failed("collar_thickness")}>Thickness</SubLabel>
-          <FailWrap failed={failed("collar_thickness")} inline>
-            <ThicknessPicker
-              value={text("collar_thickness")}
-              onChange={(v) => onChange("collar_thickness", v)}
-              disabled={off("collar_thickness")}
-            />
-          </FailWrap>
-        </div>
-      </OptionGroup>
+      {showAny("collar_type", "collar_button", "small_tabaggi", "collar_position", "collar_thickness") && (
+        <OptionGroup title="Collar">
+          {show("collar_type") && (
+            <>
+              <SubLabel failed={failed("collar_type")}>Type</SubLabel>
+              <FailWrap failed={failed("collar_type")}>
+                <ImageOptionGrid
+                  options={collarTypes}
+                  value={text("collar_type")}
+                  onChange={(v) => onChange("collar_type", v)}
+                  allowClear
+                  disabled={off("collar_type")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("collar_button") && (
+            <>
+              <SubLabel failed={failed("collar_button")}>Button</SubLabel>
+              <FailWrap failed={failed("collar_button")}>
+                <ImageOptionGrid
+                  options={collarButtons}
+                  value={text("collar_button")}
+                  onChange={(v) => onChange("collar_button", v)}
+                  allowClear
+                  disabled={off("collar_button")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("small_tabaggi") && (
+            <div className="flex flex-wrap gap-2">
+              <FailWrap failed={failed("small_tabaggi")} inline>
+                <IconToggle
+                  checked={bool("small_tabaggi")}
+                  onChange={(v) => onChange("small_tabaggi", v)}
+                  icon={smallTabaggiImage}
+                  label="Small Tabaggi"
+                  disabled={off("small_tabaggi")}
+                />
+              </FailWrap>
+            </div>
+          )}
+          {show("collar_position") && (
+            <>
+              <SubLabel failed={failed("collar_position")}>Position</SubLabel>
+              <FailWrap failed={failed("collar_position")}>
+                <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      disabled={off("collar_position")}
+                      checked={text("collar_position") === "up"}
+                      onChange={(e) => onChange("collar_position", e.target.checked ? "up" : null)}
+                    />
+                    UP
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      disabled={off("collar_position")}
+                      checked={text("collar_position") === "down"}
+                      onChange={(e) => onChange("collar_position", e.target.checked ? "down" : null)}
+                    />
+                    DOWN
+                  </label>
+                </div>
+              </FailWrap>
+            </>
+          )}
+          {show("collar_thickness") && (
+            <div className="flex items-center gap-2">
+              <SubLabel className="mb-0" failed={failed("collar_thickness")}>Thickness</SubLabel>
+              <FailWrap failed={failed("collar_thickness")} inline>
+                <ThicknessPicker
+                  value={text("collar_thickness")}
+                  onChange={(v) => onChange("collar_thickness", v)}
+                  disabled={off("collar_thickness")}
+                />
+              </FailWrap>
+            </div>
+          )}
+        </OptionGroup>
+      )}
 
-      <OptionGroup title="Jabzour">
-        <SubLabel failed={failed("jabzour_1")}>Type 1</SubLabel>
-        <FailWrap failed={failed("jabzour_1")}>
-          <ImageOptionGrid
-            options={jabzourTypes}
-            value={text("jabzour_1")}
-            onChange={(v) => onChange("jabzour_1", v)}
-            allowClear
-            disabled={off("jabzour_1")}
-          />
-        </FailWrap>
-        {(text("jabzour_1") === "JAB_SHAAB" || text("jabzour_2") != null) && (
-          <>
-            <SubLabel failed={failed("jabzour_2")}>
-              Type 2{" "}
-              {text("jabzour_1") === "JAB_SHAAB" ? (
-                <span className="text-red-600">*</span>
-              ) : (
-                <span className="text-amber-600">
-                  (clear — only used when Type 1 is Shaab)
-                </span>
-              )}
-            </SubLabel>
-            <FailWrap failed={failed("jabzour_2")}>
-              <ImageOptionGrid
-                options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
-                value={text("jabzour_2")}
-                onChange={(v) => onChange("jabzour_2", v)}
-                allowClear
-                disabled={off("jabzour_2")}
-              />
-            </FailWrap>
-          </>
-        )}
-        <div className="flex items-center gap-2">
-          <SubLabel className="mb-0" failed={failed("jabzour_thickness")}>Thickness</SubLabel>
-          <FailWrap failed={failed("jabzour_thickness")} inline>
-            <ThicknessPicker
-              value={text("jabzour_thickness")}
-              onChange={(v) => onChange("jabzour_thickness", v)}
-              disabled={off("jabzour_thickness")}
-            />
-          </FailWrap>
-        </div>
-      </OptionGroup>
+      {showAny("jabzour_1", "jabzour_2", "jabzour_thickness") && (
+        <OptionGroup title="Jabzour">
+          {show("jabzour_1") && (
+            <>
+              <SubLabel failed={failed("jabzour_1")}>Type 1</SubLabel>
+              <FailWrap failed={failed("jabzour_1")}>
+                <ImageOptionGrid
+                  options={jabzourTypes}
+                  value={text("jabzour_1")}
+                  onChange={(v) => onChange("jabzour_1", v)}
+                  allowClear
+                  disabled={off("jabzour_1")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("jabzour_2") && (text("jabzour_1") === "JAB_SHAAB" || text("jabzour_2") != null) && (
+            <>
+              <SubLabel failed={failed("jabzour_2")}>
+                Type 2{" "}
+                {text("jabzour_1") === "JAB_SHAAB" ? (
+                  <span className="text-red-600">*</span>
+                ) : (
+                  <span className="text-amber-600">
+                    (clear — only used when Type 1 is Shaab)
+                  </span>
+                )}
+              </SubLabel>
+              <FailWrap failed={failed("jabzour_2")}>
+                <ImageOptionGrid
+                  options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                  value={text("jabzour_2")}
+                  onChange={(v) => onChange("jabzour_2", v)}
+                  allowClear
+                  disabled={off("jabzour_2")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("jabzour_thickness") && (
+            <div className="flex items-center gap-2">
+              <SubLabel className="mb-0" failed={failed("jabzour_thickness")}>Thickness</SubLabel>
+              <FailWrap failed={failed("jabzour_thickness")} inline>
+                <ThicknessPicker
+                  value={text("jabzour_thickness")}
+                  onChange={(v) => onChange("jabzour_thickness", v)}
+                  disabled={off("jabzour_thickness")}
+                />
+              </FailWrap>
+            </div>
+          )}
+        </OptionGroup>
+      )}
 
-      <OptionGroup title="Front pocket">
-        <SubLabel failed={failed("front_pocket_type")}>Type</SubLabel>
-        <FailWrap failed={failed("front_pocket_type")}>
-          <ImageOptionGrid
-            options={topPocketTypes}
-            value={text("front_pocket_type")}
-            onChange={(v) => onChange("front_pocket_type", v)}
-            allowClear
-            disabled={off("front_pocket_type")}
-          />
-        </FailWrap>
-        <div className="flex items-center gap-2">
-          <SubLabel className="mb-0" failed={failed("front_pocket_thickness")}>Thickness</SubLabel>
-          <FailWrap failed={failed("front_pocket_thickness")} inline>
-            <ThicknessPicker
-              value={text("front_pocket_thickness")}
-              onChange={(v) => onChange("front_pocket_thickness", v)}
-              disabled={off("front_pocket_thickness")}
-            />
-          </FailWrap>
-        </div>
-        <SubLabel>Accessories</SubLabel>
-        <div className="flex flex-wrap gap-2">
-          <FailWrap failed={failed("wallet_pocket")} inline>
-            <IconToggle
-              checked={bool("wallet_pocket")}
-              onChange={(v) => onChange("wallet_pocket", v)}
-              icon={walletIcon}
-              label="Wallet"
-              disabled={off("wallet_pocket")}
-            />
-          </FailWrap>
-          <FailWrap failed={failed("pen_holder")} inline>
-            <IconToggle
-              checked={bool("pen_holder")}
-              onChange={(v) => onChange("pen_holder", v)}
-              icon={penIcon}
-              label="Pen"
-              disabled={off("pen_holder")}
-            />
-          </FailWrap>
-          <FailWrap failed={failed("mobile_pocket")} inline>
-            <IconToggle
-              checked={bool("mobile_pocket")}
-              onChange={(v) => onChange("mobile_pocket", v)}
-              icon={phoneIcon}
-              label="Mobile"
-              disabled={off("mobile_pocket")}
-            />
-          </FailWrap>
-        </div>
-      </OptionGroup>
+      {showAny("front_pocket_type", "front_pocket_thickness", "wallet_pocket", "pen_holder", "mobile_pocket") && (
+        <OptionGroup title="Front pocket">
+          {show("front_pocket_type") && (
+            <>
+              <SubLabel failed={failed("front_pocket_type")}>Type</SubLabel>
+              <FailWrap failed={failed("front_pocket_type")}>
+                <ImageOptionGrid
+                  options={topPocketTypes}
+                  value={text("front_pocket_type")}
+                  onChange={(v) => onChange("front_pocket_type", v)}
+                  allowClear
+                  disabled={off("front_pocket_type")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("front_pocket_thickness") && (
+            <div className="flex items-center gap-2">
+              <SubLabel className="mb-0" failed={failed("front_pocket_thickness")}>Thickness</SubLabel>
+              <FailWrap failed={failed("front_pocket_thickness")} inline>
+                <ThicknessPicker
+                  value={text("front_pocket_thickness")}
+                  onChange={(v) => onChange("front_pocket_thickness", v)}
+                  disabled={off("front_pocket_thickness")}
+                />
+              </FailWrap>
+            </div>
+          )}
+          {showAny("wallet_pocket", "pen_holder", "mobile_pocket") && (
+            <>
+              <SubLabel>Accessories</SubLabel>
+              <div className="flex flex-wrap gap-2">
+                {show("wallet_pocket") && (
+                  <FailWrap failed={failed("wallet_pocket")} inline>
+                    <IconToggle
+                      checked={bool("wallet_pocket")}
+                      onChange={(v) => onChange("wallet_pocket", v)}
+                      icon={walletIcon}
+                      label="Wallet"
+                      disabled={off("wallet_pocket")}
+                    />
+                  </FailWrap>
+                )}
+                {show("pen_holder") && (
+                  <FailWrap failed={failed("pen_holder")} inline>
+                    <IconToggle
+                      checked={bool("pen_holder")}
+                      onChange={(v) => onChange("pen_holder", v)}
+                      icon={penIcon}
+                      label="Pen"
+                      disabled={off("pen_holder")}
+                    />
+                  </FailWrap>
+                )}
+                {show("mobile_pocket") && (
+                  <FailWrap failed={failed("mobile_pocket")} inline>
+                    <IconToggle
+                      checked={bool("mobile_pocket")}
+                      onChange={(v) => onChange("mobile_pocket", v)}
+                      icon={phoneIcon}
+                      label="Mobile"
+                      disabled={off("mobile_pocket")}
+                    />
+                  </FailWrap>
+                )}
+              </div>
+            </>
+          )}
+        </OptionGroup>
+      )}
 
-      <OptionGroup title="Cuffs">
-        <SubLabel failed={failed("cuffs_type")}>Type</SubLabel>
-        <FailWrap failed={failed("cuffs_type")}>
-          <ImageOptionGrid
-            options={cuffTypes}
-            value={text("cuffs_type")}
-            onChange={(v) => onChange("cuffs_type", v)}
-            allowClear
-            disabled={off("cuffs_type")}
-          />
-        </FailWrap>
-        <div className="flex items-center gap-2">
-          <SubLabel className="mb-0" failed={failed("cuffs_thickness")}>Thickness</SubLabel>
-          <FailWrap failed={failed("cuffs_thickness")} inline>
-            <ThicknessPicker
-              value={text("cuffs_thickness")}
-              onChange={(v) => onChange("cuffs_thickness", v)}
-              disabled={off("cuffs_thickness")}
+      {showAny("cuffs_type", "cuffs_thickness") && (
+        <OptionGroup title="Cuffs">
+          {show("cuffs_type") && (
+            <>
+              <SubLabel failed={failed("cuffs_type")}>Type</SubLabel>
+              <FailWrap failed={failed("cuffs_type")}>
+                <ImageOptionGrid
+                  options={cuffTypes}
+                  value={text("cuffs_type")}
+                  onChange={(v) => onChange("cuffs_type", v)}
+                  allowClear
+                  disabled={off("cuffs_type")}
+                />
+              </FailWrap>
+            </>
+          )}
+          {show("cuffs_thickness") && (
+            <div className="flex items-center gap-2">
+              <SubLabel className="mb-0" failed={failed("cuffs_thickness")}>Thickness</SubLabel>
+              <FailWrap failed={failed("cuffs_thickness")} inline>
+                <ThicknessPicker
+                  value={text("cuffs_thickness")}
+                  onChange={(v) => onChange("cuffs_thickness", v)}
+                  disabled={off("cuffs_thickness")}
+                />
+              </FailWrap>
+            </div>
+          )}
+        </OptionGroup>
+      )}
+
+      {show("lines") && (
+        <OptionGroup title="Lines">
+          <FailWrap failed={failed("lines")} inline>
+            <LinesPicker
+              value={typeof values.lines === "number" ? values.lines : null}
+              onChange={(v) => onChange("lines", v)}
+              disabled={off("lines")}
             />
           </FailWrap>
-        </div>
-      </OptionGroup>
-
-      <OptionGroup title="Lines">
-        <FailWrap failed={failed("lines")} inline>
-          <LinesPicker
-            value={typeof values.lines === "number" ? values.lines : null}
-            onChange={(v) => onChange("lines", v)}
-            disabled={off("lines")}
-          />
-        </FailWrap>
-      </OptionGroup>
+        </OptionGroup>
+      )}
     </div>
   );
 }

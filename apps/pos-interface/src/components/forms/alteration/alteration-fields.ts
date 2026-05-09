@@ -28,7 +28,6 @@ export const MEASUREMENT_FIELD_LABELS: Record<AlterationMeasurementField, string
     bottom: "Bottom",
     jabzour_width: "Jabzour W",
     jabzour_length: "Jabzour Len",
-    collar_length: "Collar Length",
     second_button_distance: "2nd Button Dist",
     basma_length: "Basma Len",
     basma_width: "Basma W",

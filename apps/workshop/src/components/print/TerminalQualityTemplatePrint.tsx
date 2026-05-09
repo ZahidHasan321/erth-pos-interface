@@ -27,7 +27,7 @@ const FIELD_MEASUREMENT_MAP: Record<QualityTemplateFieldId, keyof Measurement> =
     shoulder: "shoulder",
     sideUpper: "side_pocket_distance",
     sleeves: "sleeve_length",
-    armhole: "armhole",
+    armhole: "armhole_front",
     width: "sleeve_width",
     sideLower: "side_pocket_opening",
     upperChest: "chest_upper",
@@ -36,6 +36,8 @@ const FIELD_MEASUREMENT_MAP: Record<QualityTemplateFieldId, keyof Measurement> =
     waistFront: "waist_front",
     waistBack: "waist_back",
     bottom: "bottom",
+    sleeveHem: "sleeve_hemming",
+    bottomHem: "bottom_hemming",
   };
 
 const EMPTY_VALUE = "-";

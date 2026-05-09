@@ -695,10 +695,9 @@ export function CustomerMeasurementsForm({
           />
           <MeasurementTable
             form={form}
-            title="Gallabiya, Basma, Hemming & Pen Pocket"
+            title="Basma, Hemming & Pen Pocket"
             isDisabled={!isEditing}
             columns={[
-              { name: "collar_length", label: "Gallabiya Len" },
               { name: "second_button_distance", label: "2nd Button Dist" },
               { name: "basma_length", label: "Basma Len" },
               { name: "basma_width", label: "Basma W" },

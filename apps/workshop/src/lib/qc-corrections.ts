@@ -24,7 +24,9 @@ export function getMeasurementCorrections(
   return map;
 }
 
-const QC_OPTION_TO_SECTION: Record<string, AlterationStyleSection> = {
+// Aligned with alteration-filter STYLE_KEY_TO_SECTIONS so the same section a
+// shop reports against (e.g. "frontPocket") enables the same option keys here.
+export const QC_OPTION_TO_SECTION: Record<string, AlterationStyleSection> = {
   collar_type: "collar",
   collar_button: "collar",
   collar_position: "collar",
@@ -38,8 +40,8 @@ const QC_OPTION_TO_SECTION: Record<string, AlterationStyleSection> = {
   front_pocket_type: "frontPocket",
   front_pocket_thickness: "frontPocket",
   pen_holder: "frontPocket",
-  wallet_pocket: "sidePocket",
-  mobile_pocket: "sidePocket",
+  wallet_pocket: "frontPocket",
+  mobile_pocket: "frontPocket",
 };
 
 const QC_MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
@@ -51,7 +53,6 @@ const QC_MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
   side_pocket_width: "sidePocket",
   collar_height: "collar",
   collar_width: "collar",
-  collar_length: "collar",
 };
 
 export interface QcFailContext {
