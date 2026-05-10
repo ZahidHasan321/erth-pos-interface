@@ -15,6 +15,7 @@ import {
   releaseFinals,
   releaseFinalsWithPlan,
   markSoakComplete,
+  startSoakingBatch,
   updateGarmentDetails,
   updateOrderDeliveryDate,
   updateOrderAssignedDate,
@@ -363,6 +364,24 @@ export function useReleaseFinalsWithPlan() {
 }
 
 // ── Soak (parallel track) ──────────────────────────────────────────────────
+
+export function useStartSoakingBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => startSoakingBatch(ids),
+    onMutate: (ids) => optimisticPatch(qc, ids, {
+      soaking_started_at: new Date().toISOString() as any,
+    }),
+    onSuccess: (_data, ids) => {
+      toast.success(`Started soak on ${ids.length} garment${ids.length > 1 ? 's' : ''}`);
+    },
+    onError: (err, _ids, rollback) => {
+      rollback?.();
+      toast.error(`Failed to start soak: ${errorMsg(err)}`);
+    },
+    onSettled: () => invalidateAll(qc),
+  });
+}
 
 export function useMarkSoakComplete() {
   const qc = useQueryClient();

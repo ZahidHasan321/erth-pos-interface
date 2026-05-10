@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import { useHistoryGarments } from "@/hooks/useWorkshopGarments";
 import { PageHeader, EmptyState, GarmentTypeBadge } from "@/components/shared/PageShell";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { Badge } from "@repo/ui/badge";
@@ -10,7 +10,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps, TIMEZONE } from "@/lib/utils";
+import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps, TIMEZONE, getKuwaitDayRange } from "@/lib/utils";
 import type { WorkshopGarment, StageTimings, StageTimingEntry, TripHistoryEntry, QcAttempt } from "@repo/database";
 import { getQcReturnStages } from "@repo/database";
 import { ArrowLeft, History, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
@@ -27,6 +27,7 @@ export const Route = createFileRoute("/(main)/terminals/$stage/history")({
 interface HistoryRow {
   key: string;
   garment: WorkshopGarment;
+  startedAt: string | null;  // ISO
   completedAt: string;       // ISO
   worker: string | null;
   result?: "pass" | "fail";  // QC only
@@ -45,6 +46,7 @@ function extractStageRows(g: WorkshopGarment, stage: string, dateStr: string): H
     .map((e, i) => ({
       key: `${g.id}-${stage}-${i}`,
       garment: g,
+      startedAt: e.started_at ?? null,
       completedAt: e.completed_at as string,
       worker: e.worker ?? null,
     }));
@@ -60,6 +62,7 @@ function extractQcRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
       rows.push({
         key: `${g.id}-qc-${trip.trip}-${i}`,
         garment: g,
+        startedAt: null,
         completedAt: a.date,
         worker: a.inspector || null,
         result: a.result,
@@ -69,6 +72,25 @@ function extractQcRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
     });
   }
   return rows;
+}
+
+function extractSoakingRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
+  const completed = g.soaking_completed_at;
+  if (!completed) return [];
+  const completedIso = typeof completed === "string" ? completed : new Date(completed).toISOString();
+  if (toLocalDateStr(parseUtcTimestamp(completedIso)) !== dateStr) return [];
+  const started = g.soaking_started_at;
+  const startedIso =
+    started == null ? null : typeof started === "string" ? started : new Date(started).toISOString();
+  return [
+    {
+      key: `${g.id}-soaking`,
+      garment: g,
+      startedAt: startedIso,
+      completedAt: completedIso,
+      worker: null,
+    },
+  ];
 }
 
 function formatTime(iso: string): string {
@@ -93,9 +115,10 @@ function formatDateLong(dateStr: string): string {
 
 // ── skeleton row ─────────────────────────────────────────────────────────────
 
-function SkeletonRow({ isQc }: { isQc: boolean }) {
+function SkeletonRow({ isQc, showStarted, showWorker }: { isQc: boolean; showStarted: boolean; showWorker: boolean }) {
   return (
     <TableRow>
+      {showStarted && <TableCell className="px-3 py-3"><Skeleton className="h-4 w-12" /></TableCell>}
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-12" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-16" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
@@ -104,7 +127,7 @@ function SkeletonRow({ isQc }: { isQc: boolean }) {
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-28" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-28" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
-      <TableCell className="px-3 py-3"><Skeleton className="h-4 w-20" /></TableCell>
+      {showWorker && <TableCell className="px-3 py-3"><Skeleton className="h-4 w-20" /></TableCell>}
       {isQc && <TableCell className="px-3 py-3"><Skeleton className="h-5 w-16 rounded-full" /></TableCell>}
     </TableRow>
   );
@@ -115,11 +138,15 @@ function SkeletonRow({ isQc }: { isQc: boolean }) {
 function TerminalHistoryPage() {
   const { stage } = useParams({ from: "/(main)/terminals/$stage/history" });
   const navigate = useNavigate();
-  const { data: garments = [], isLoading } = useWorkshopGarments();
   const [dateStr, setDateStr] = useState(() => getLocalDateStr());
+  const dayRange = useMemo(() => getKuwaitDayRange(dateStr), [dateStr]);
+  const { data: garments = [], isLoading } = useHistoryGarments(stage, dateStr, dayRange);
   const [search, setSearch] = useState("");
 
   const isQc = stage === "quality_check";
+  const isSoaking = stage === "soaking";
+  const showStarted = !isQc;
+  const showWorker = !isSoaking;
   const stageLabel = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
 
   const searchFilter = useMemo(() => {
@@ -139,11 +166,15 @@ function TerminalHistoryPage() {
     const all: HistoryRow[] = [];
     for (const g of garments) {
       if (searchFilter && !searchFilter(g)) continue;
-      const entries = isQc ? extractQcRows(g, dateStr) : extractStageRows(g, stage, dateStr);
+      const entries = isQc
+        ? extractQcRows(g, dateStr)
+        : isSoaking
+          ? extractSoakingRows(g, dateStr)
+          : extractStageRows(g, stage, dateStr);
       all.push(...entries);
     }
     return all.sort((a, b) => (b.completedAt.localeCompare(a.completedAt)));
-  }, [garments, stage, dateStr, isQc, searchFilter]);
+  }, [garments, stage, dateStr, isQc, isSoaking, searchFilter]);
 
   const passCount = isQc ? rows.filter((r) => r.result === "pass").length : 0;
   const failCount = isQc ? rows.filter((r) => r.result === "fail").length : 0;
@@ -250,7 +281,8 @@ function TerminalHistoryPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-                <TableHead className="w-[90px]">Time</TableHead>
+                {showStarted && <TableHead className="w-[90px]">Started</TableHead>}
+                <TableHead className="w-[90px]">{isSoaking ? "Completed" : "Time"}</TableHead>
                 <TableHead className="w-[120px]">Garment</TableHead>
                 <TableHead className="w-[80px]">Type</TableHead>
                 <TableHead className="w-[110px]">Order / Invoice</TableHead>
@@ -258,13 +290,13 @@ function TerminalHistoryPage() {
                 <TableHead className="w-[160px]">Fabric</TableHead>
                 <TableHead className="w-[160px]">Style</TableHead>
                 <TableHead className="w-[80px]">Brand</TableHead>
-                <TableHead className="w-[140px]">Worker</TableHead>
+                {showWorker && <TableHead className="w-[140px]">Worker</TableHead>}
                 {isQc && <TableHead className="w-[110px]">Result</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 6 }, (_, i) => (
-                <SkeletonRow key={i} isQc={isQc} />
+                <SkeletonRow key={i} isQc={isQc} showStarted={showStarted} showWorker={showWorker} />
               ))}
             </TableBody>
           </Table>
@@ -276,7 +308,8 @@ function TerminalHistoryPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-                <TableHead className="w-[90px]">Time</TableHead>
+                {showStarted && <TableHead className="w-[90px]">Started</TableHead>}
+                <TableHead className="w-[90px]">{isSoaking ? "Completed" : "Time"}</TableHead>
                 <TableHead className="w-[120px]">Garment</TableHead>
                 <TableHead className="w-[80px]">Type</TableHead>
                 <TableHead className="w-[110px]">Order / Invoice</TableHead>
@@ -284,7 +317,7 @@ function TerminalHistoryPage() {
                 <TableHead className="w-[160px]">Fabric</TableHead>
                 <TableHead className="w-[160px]">Style</TableHead>
                 <TableHead className="w-[80px]">Brand</TableHead>
-                <TableHead className="w-[140px]">Worker</TableHead>
+                {showWorker && <TableHead className="w-[140px]">Worker</TableHead>}
                 {isQc && <TableHead className="w-[110px]">Result</TableHead>}
               </TableRow>
             </TableHeader>
@@ -298,6 +331,11 @@ function TerminalHistoryPage() {
                     onClick={() => handleRowClick(g)}
                     className="cursor-pointer hover:bg-muted/40"
                   >
+                    {showStarted && (
+                      <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
+                        {r.startedAt ? formatTime(r.startedAt) : "—"}
+                      </TableCell>
+                    )}
                     <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
                       {formatTime(r.completedAt)}
                     </TableCell>
@@ -346,9 +384,11 @@ function TerminalHistoryPage() {
                     <TableCell className="px-3 py-3">
                       <BrandBadge brand={g.order_brand} />
                     </TableCell>
-                    <TableCell className="px-3 py-3 text-sm">
-                      {r.worker ?? <span className="text-xs text-muted-foreground italic">—</span>}
-                    </TableCell>
+                    {showWorker && (
+                      <TableCell className="px-3 py-3 text-sm">
+                        {r.worker ?? <span className="text-xs text-muted-foreground italic">—</span>}
+                      </TableCell>
+                    )}
                     {isQc && (
                       <TableCell className="px-3 py-3">
                         {r.result === "pass" ? (

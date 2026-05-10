@@ -4025,7 +4025,7 @@ AS $$
     )
     SELECT jsonb_build_object(
         'receiving',     COUNT(*) FILTER (WHERE location::text IN ('transit_to_workshop','lost_in_transit')),
-        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production AND piece_stage::text <> 'waiting_for_acceptance'),
+        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production AND piece_stage::text <> 'discarded' AND (piece_stage::text <> 'waiting_for_acceptance' OR garment_type::text = 'final')),
         'scheduler',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND in_production AND production_plan IS NULL AND piece_stage::text = 'waiting_cut'),
         'soaking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND soaking IS TRUE AND soaking_completed_at IS NULL AND trip_number = 1),
         'cutting',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'cutting'),

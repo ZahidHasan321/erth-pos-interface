@@ -61,7 +61,7 @@ export const QC_MEASUREMENTS: QcMeasurementSpec[] = [
   { key: "side_pocket_width",      label: "SIDE PKT W" },
   { key: "side_pocket_distance",   label: "SIDE PKT DIST" },
   { key: "side_pocket_opening",    label: "SIDE PKT OPEN" },
-  { key: "second_button_distance", label: "2ND BOTTOM DIST" },
+  { key: "second_button_distance", label: "2ND BOTTOM DIST", optional: true },
   // Basma — only if garment uses Basma
   { key: "basma_sleeve_length",    label: "BASMA SLEEVE L", basma: true },
   { key: "basma_length",           label: "BASMA LEN",      basma: true },

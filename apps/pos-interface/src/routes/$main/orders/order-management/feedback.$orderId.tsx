@@ -1785,19 +1785,21 @@ function UnifiedFeedbackInterface() {
                                                     )}
                                                 >
                                                     <Check className="w-3 h-3" />
-                                                    OK
+                                                    {opt.id === "smallTabaggi" ? "Keep" : "OK"}
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, false)}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all",
+                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all whitespace-nowrap",
                                                         isRejected
                                                             ? "bg-red-500 border-red-500 text-white"
                                                             : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600"
                                                     )}
                                                 >
                                                     <X className="w-3 h-3" />
-                                                    No
+                                                    {opt.id === "smallTabaggi"
+                                                        ? (activeGarment?.small_tabaggi ? "Remove Tabbagi" : "Add Tabbagi")
+                                                        : "No"}
                                                 </button>
                                             </div>
                                         </div>

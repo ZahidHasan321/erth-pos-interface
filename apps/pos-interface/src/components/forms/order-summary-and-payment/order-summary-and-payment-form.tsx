@@ -38,6 +38,7 @@ import { getEmployees } from "@/api/employees";
 import { OrderInvoice, SalesInvoice, type InvoiceData } from "@/components/invoice";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
 import { usePricing } from "@/hooks/usePricing";
+import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 
 import HomeDeliveryIcon from "@/assets/home_delivery.png";
 import PickUpIcon from "@/assets/pickup.png";
@@ -127,7 +128,7 @@ export function OrderSummaryAndPaymentForm({
   onPrintCard2,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
-  const { getPrice } = usePricing();
+  const { getPrice, styles } = usePricing();
 
   // Watch form values
   const [
@@ -192,7 +193,19 @@ export function OrderSummaryAndPaymentForm({
     return fabricSelections.filter((f) => f.soaking && f.soaking_hours === 24).length;
   }, [fabricSelections]);
 
-  const soakingGarmentCount = soaking8hCount + soaking24hCount;
+  const liveStyleCharge = React.useMemo(() => {
+    if (!styles || styles.length === 0 || fabricSelections.length === 0) return 0;
+    return fabricSelections.reduce(
+      (acc, g) => acc + calculateGarmentStylePrice(g, styles),
+      0,
+    );
+  }, [fabricSelections, styles]);
+
+  React.useEffect(() => {
+    if (liveStyleCharge !== Number(form.getValues("style_charge") || 0)) {
+      form.setValue("style_charge", liveStyleCharge, { shouldDirty: false });
+    }
+  }, [liveStyleCharge, form]);
 
   React.useEffect(() => {
     const newDeliveryCharge = home_delivery ? (getPrice("HOME_DELIVERY") || 5) : 0;
@@ -396,7 +409,9 @@ export function OrderSummaryAndPaymentForm({
                             <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-red-100 text-red-600">Express</span>
                           )}
                           {g.soaking && (
-                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-sky-100 text-sky-600">Soak</span>
+                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-sky-100 text-sky-600">
+                              Soak{g.soaking_hours ? ` ${g.soaking_hours}h` : ""}
+                            </span>
                           )}
                           {g.delivery_date && (
                             <span className="text-[9px] px-1 py-px rounded-full bg-muted text-muted-foreground">
@@ -456,10 +471,10 @@ export function OrderSummaryAndPaymentForm({
                       <span className="text-muted-foreground">Stitching</span>
                       <span className="font-medium tabular-nums">{Number(stitching_charge || 0).toFixed(3)} KWD</span>
                     </div>
-                    {Number(style_charge) > 0 && (
+                    {(effectiveOrderType === "WORK" || Number(style_charge) > 0) && (
                       <div className="flex justify-between py-0.5">
                         <span className="text-muted-foreground">Style</span>
-                        <span className="font-medium tabular-nums">{Number(style_charge).toFixed(3)} KWD</span>
+                        <span className="font-medium tabular-nums">{Number(style_charge || 0).toFixed(3)} KWD</span>
                       </div>
                     )}
                     {Number(delivery_charge) > 0 && (
@@ -474,10 +489,22 @@ export function OrderSummaryAndPaymentForm({
                         <span className="font-medium tabular-nums">{Number(express_charge).toFixed(3)} KWD</span>
                       </div>
                     )}
-                    {Number(soaking_charge) > 0 && (
+                    {soaking8hCount > 0 && (
                       <div className="flex justify-between py-0.5">
-                        <span className="text-muted-foreground">Soaking{soakingGarmentCount > 1 ? ` (${soakingGarmentCount})` : ""}</span>
-                        <span className="font-medium tabular-nums">{Number(soaking_charge).toFixed(3)} KWD</span>
+                        <span className="text-muted-foreground">Soaking 8h ({soaking8hCount})</span>
+                        <span className="font-medium tabular-nums">{(soaking8hCount * (getPrice("SOAKING_8H_CHARGE") || 0)).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {soaking24hCount > 0 && (
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">Soaking 24h ({soaking24hCount})</span>
+                        <span className="font-medium tabular-nums">{(soaking24hCount * (getPrice("SOAKING_24H_CHARGE") || 0)).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    {Number(soaking_charge) > 0 && (soaking8hCount > 0 && soaking24hCount > 0) && (
+                      <div className="flex justify-between py-0.5 text-xs">
+                        <span className="text-muted-foreground italic">Soaking total</span>
+                        <span className="font-semibold tabular-nums">{Number(soaking_charge).toFixed(3)} KWD</span>
                       </div>
                     )}
                     {Number(shelf_charge) > 0 && (
@@ -1108,10 +1135,22 @@ export function OrderSummaryAndPaymentForm({
                       <span>{Number(express_charge).toFixed(3)} KWD</span>
                     </div>
                   )}
-                  {Number(soaking_charge) > 0 && (
+                  {soaking8hCount > 0 && (
                     <div className="flex justify-between">
-                      <span>Soaking{soakingGarmentCount > 1 ? ` (${soakingGarmentCount})` : ""}</span>
-                      <span>{Number(soaking_charge).toFixed(3)} KWD</span>
+                      <span>Soaking 8h ({soaking8hCount})</span>
+                      <span>{(soaking8hCount * (getPrice("SOAKING_8H_CHARGE") || 0)).toFixed(3)} KWD</span>
+                    </div>
+                  )}
+                  {soaking24hCount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Soaking 24h ({soaking24hCount})</span>
+                      <span>{(soaking24hCount * (getPrice("SOAKING_24H_CHARGE") || 0)).toFixed(3)} KWD</span>
+                    </div>
+                  )}
+                  {Number(soaking_charge) > 0 && (soaking8hCount > 0 && soaking24hCount > 0) && (
+                    <div className="flex justify-between text-xs italic">
+                      <span>Soaking total</span>
+                      <span className="font-semibold">{Number(soaking_charge).toFixed(3)} KWD</span>
                     </div>
                   )}
                   <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>

@@ -376,6 +376,11 @@ export function FabricSelectionForm({
             return;
         }
 
+        if (styles.length === 0) {
+            toast.error("Style pricing not loaded yet — please retry in a moment");
+            return;
+        }
+
         // Aggregate stock validation before saving
         const usage = new Map<number, number>();
         let stockErrorFound = false;

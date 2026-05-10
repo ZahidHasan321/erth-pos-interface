@@ -284,6 +284,62 @@ export const getSoakingQueue = async (): Promise<WorkshopGarment[]> => {
 };
 
 /**
+ * Terminal history fetch: garments that completed work at the given stage on
+ * the given local day, regardless of where they live now (shop, workshop,
+ * transit). Unlike production-side fetchers this MUST NOT filter by location —
+ * a soak completed three weeks ago is valid history even though the garment
+ * is now at the customer.
+ *
+ * Server-side prunes:
+ *   - soaking: soaking_completed_at within Kuwait-day [start, end].
+ *   - quality_check: trip_history is not null (qc_attempts live there).
+ *   - other stages: stage_timings is not null (entries live there).
+ * The remaining per-row date match still happens client-side because
+ * stage_timings/qc_attempts are jsonb arrays Supabase can't filter into.
+ */
+export const getHistoryGarments = async (
+  stage: string,
+  dateStr: string,
+  range: { start: string; end: string },
+): Promise<WorkshopGarment[]> => {
+  let query = db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('order.checkout_status', 'confirmed');
+
+  if (stage === 'soaking') {
+    query = query
+      .gte('soaking_completed_at', range.start)
+      .lte('soaking_completed_at', range.end);
+  } else if (stage === 'quality_check') {
+    query = query.not('trip_history', 'is', null);
+  } else {
+    query = query.not('stage_timings', 'is', null);
+  }
+
+  const { data, error } = await query.order('id', { ascending: true });
+  if (error) {
+    throw new Error(`getHistoryGarments: failed to fetch '${stage}' history for ${dateStr}: ${error.message}`);
+  }
+  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+};
+
+/**
+ * Start soak on the given garments. Stamps soaking_started_at = now() on
+ * each, so a batch shares a common start time. Idempotent-ish: re-starting
+ * an already-started garment overwrites its start time, so callers should
+ * pre-filter to garments where soaking_started_at IS NULL.
+ */
+export const startSoakingBatch = async (ids: string[]): Promise<void> => {
+  if (ids.length === 0) return;
+  const { error } = await db
+    .from('garments')
+    .update({ soaking_started_at: new Date().toISOString() })
+    .in('id', ids);
+  if (error) throw new Error(`startSoakingBatch: failed to start soak: ${error.message}`);
+};
+
+/**
  * Mark soak complete on the given garments. Sets only soaking_completed_at;
  * does NOT change piece_stage / location / in_production. The garment simply
  * disappears from the soak terminal queue and (if its piece_stage is later

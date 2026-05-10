@@ -332,7 +332,6 @@ export function QualityCheckForm({
   for (const o of QC_OPTIONS) {
     if (!enabledKeys.has(o.key)) continue;
     if (o.type === "boolean") continue; // boolean default false is valid
-    if (o.key === "lines") continue; // None is a valid choice
     // jabzour_2 never gates completeness — record what's actually on the garment.
     // SHAAB-without-jabzour_2 is a valid (failing) observation when the worker
     // forgot the second style; evaluation flags the mismatch.
@@ -1108,8 +1107,7 @@ function LinesPicker({
   onChange: (v: number | null) => void;
   disabled?: boolean;
 }) {
-  const options: { value: number | null; label: string }[] = [
-    { value: null, label: "None" },
+  const options: { value: number; label: string }[] = [
     { value: 1, label: "1" },
     { value: 2, label: "2" },
   ];

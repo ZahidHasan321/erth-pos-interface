@@ -4,6 +4,7 @@ import {
   getSchedulerGarments,
   getTerminalStageGarments,
   getSoakingQueue,
+  getHistoryGarments,
   getBoardGarments,
   getCompletedTodayGarments,
   getGarmentById,
@@ -147,6 +148,20 @@ export function useSoakingQueue() {
     queryKey: SOAK_QUEUE_KEY,
     queryFn: getSoakingQueue,
     staleTime: LIST_STALE_TIME,
+  });
+}
+
+/**
+ * Terminal history fetch — location-independent (history is records, not
+ * current state). Server prunes by date for soaking, by jsonb-not-null for
+ * stage_timings / qc. Per-row date match still happens client-side.
+ */
+export function useHistoryGarments(stage: string, dateStr: string, range: { start: string; end: string }) {
+  return useQuery({
+    queryKey: ['history-garments', stage, dateStr],
+    queryFn: () => getHistoryGarments(stage, dateStr, range),
+    staleTime: LIST_STALE_TIME,
+    placeholderData: keepPreviousData,
   });
 }
 

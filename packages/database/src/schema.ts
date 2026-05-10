@@ -699,6 +699,10 @@ export const garments = pgTable("garments", {
     soaking: boolean("soaking").default(false),
     // Soaking duration in hours. NULL when soaking=false. Currently 8 or 24.
     soaking_hours: integer("soaking_hours"),
+    // When the soak bath was started. NULL while waiting in the soak queue
+    // or for non-soak garments. Set when staff hits "Start Soak" in the
+    // soak terminal (typically as a batch — multiple garments share a start).
+    soaking_started_at: timestamp("soaking_started_at", { withTimezone: true }),
     // When soaking finished. NULL while pending or for non-soak garments.
     // Soaking runs as a parallel track — see soak terminal queue + cutting gate.
     soaking_completed_at: timestamp("soaking_completed_at", { withTimezone: true }),

@@ -581,14 +581,20 @@ export function ReturnContextBanner({
           <ul className="space-y-1">
             {rejectedOptions.map((o, i) => {
               const label = OPTION_LABELS[o.option_name] ?? o.option_name;
+              const isSmallTabaggi = o.option_name === "smallTabaggi";
+              const tabaggiAction = o.expected_value === "Yes" ? "Remove" : "Add";
               return (
                 <li key={`${o.option_name}-${i}`} className="text-xs leading-tight">
                   <div className="flex items-center gap-1 flex-wrap">
                     <span className="font-medium text-foreground">{label}</span>
                     {o.rejected && (
-                      <span className="text-muted-foreground">
-                        {o.expected_value ?? "—"} → <span className="font-semibold text-foreground">{o.new_value ?? "fix"}</span>
-                      </span>
+                      isSmallTabaggi ? (
+                        <span className="font-semibold text-foreground">{tabaggiAction}</span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {o.expected_value ?? "—"} → <span className="font-semibold text-foreground">{o.new_value ?? "fix"}</span>
+                        </span>
+                      )
                     )}
                     {o.hashwa_rejected && (
                       <span className="text-muted-foreground">
