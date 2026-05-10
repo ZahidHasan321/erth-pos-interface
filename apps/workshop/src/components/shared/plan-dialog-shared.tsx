@@ -1,10 +1,30 @@
 import { useMemo, useState } from "react";
-import { Check, Lock, RotateCcw, ChevronRight, Ruler, Shirt, Image as ImageIcon, Mic, Play, Pause, XCircle } from "lucide-react";
+import { Check, Lock, RotateCcw, ChevronRight, ArrowRight, Ruler, Shirt, Image as ImageIcon, Mic, Play, Pause, XCircle } from "lucide-react";
 import { IconRosette } from "@tabler/icons-react";
 import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { cn, formatDate } from "@/lib/utils";
+import { STYLE_IMAGE_MAP, THICKNESS_LABELS } from "@/lib/style-images";
 import type { ProductionPlan, QcAttempt, TripHistoryEntry } from "@repo/database";
 import { getQcReturnStages } from "@repo/database";
+
+function StyleOptionChip({ styleKey }: { styleKey: string | null | undefined }) {
+  const key = String(styleKey ?? "");
+  const mapped = key ? STYLE_IMAGE_MAP[key] : null;
+  const label = mapped?.label ?? key ?? "—";
+  return (
+    <span className="inline-flex items-center gap-1">
+      {mapped?.image ? (
+        <img
+          src={mapped.image}
+          alt={label}
+          title={label}
+          className="h-7 w-7 object-contain rounded bg-white border border-zinc-200"
+        />
+      ) : null}
+      <span className="font-semibold text-foreground">{label}</span>
+    </span>
+  );
+}
 
 // ── Shared types ────────────────────────────────────────────────────────────
 
@@ -578,27 +598,37 @@ export function ReturnContextBanner({
               Style Errors
             </span>
           </div>
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {rejectedOptions.map((o, i) => {
               const label = OPTION_LABELS[o.option_name] ?? o.option_name;
               const isSmallTabaggi = o.option_name === "smallTabaggi";
               const tabaggiAction = o.expected_value === "Yes" ? "Remove" : "Add";
               return (
                 <li key={`${o.option_name}-${i}`} className="text-xs leading-tight">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="font-medium text-foreground">{label}</span>
+                  <div className="flex items-start gap-1.5 flex-wrap">
+                    <span className="font-medium text-foreground pt-1.5">{label}</span>
                     {o.rejected && (
                       isSmallTabaggi ? (
-                        <span className="font-semibold text-foreground">{tabaggiAction}</span>
+                        <span className="font-semibold text-foreground pt-1.5">{tabaggiAction}</span>
                       ) : (
-                        <span className="text-muted-foreground">
-                          {o.expected_value ?? "—"} → <span className="font-semibold text-foreground">{o.new_value ?? "fix"}</span>
+                        <span className="inline-flex items-center gap-1 flex-wrap">
+                          <StyleOptionChip styleKey={o.expected_value} />
+                          <ArrowRight className={cn("w-3 h-3 shrink-0", tone.iconAccent)} />
+                          {o.new_value ? (
+                            <StyleOptionChip styleKey={o.new_value} />
+                          ) : (
+                            <span className="italic text-muted-foreground pt-1.5">fix</span>
+                          )}
                         </span>
                       )
                     )}
                     {o.hashwa_rejected && (
-                      <span className="text-muted-foreground">
-                        (hashwa) → <span className="font-semibold text-foreground">{o.hashwa_new_value ?? "fix"}</span>
+                      <span className="text-muted-foreground pt-1.5">
+                        (hashwa) → <span className="font-semibold text-foreground">
+                          {o.hashwa_new_value
+                            ? (THICKNESS_LABELS[o.hashwa_new_value] ?? o.hashwa_new_value)
+                            : "fix"}
+                        </span>
                       </span>
                     )}
                   </div>
