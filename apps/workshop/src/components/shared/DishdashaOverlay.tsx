@@ -530,7 +530,7 @@ export function DishdashaOverlay({
                 ? "bg-red-50 border border-red-500 text-zinc-900"
                 : reason
                   ? `border ${ALTERATION_REASON_CELL_CLASS[reason]}`
-                  : "bg-white/90 border border-zinc-200/70 text-zinc-900";
+                  : "bg-yellow-100/90 border border-yellow-500 text-zinc-900";
             const fieldLabel = qcLabel(key);
             const cellTitle = hasQcActual && fieldLabel
               ? `${fieldLabel} — QC measured ${qcActual}`
