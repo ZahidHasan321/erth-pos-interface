@@ -192,6 +192,88 @@ export async function dispatchTransfer(
   return data as { success: boolean; transfer_id: number };
 }
 
+export interface TransferGroup {
+  item_type: string;
+  items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
+}
+
+export interface SendGroup {
+  item_type: string;
+  items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; qty: number }[];
+}
+
+export interface BatchTransferResult {
+  success: boolean;
+  transfers: { transfer_id: number; item_type: string }[];
+}
+
+/**
+ * Atomic fan-out for mixed-type carts. One Postgres transaction creates N
+ * transfer_requests (one per item type). Either all succeed or all roll back.
+ */
+export async function createTransferRequestsBatch(request: {
+  direction: string;
+  brand: string;
+  requested_by: string;
+  notes?: string;
+  groups: TransferGroup[];
+}): Promise<BatchTransferResult> {
+  const { data, error } = await db.rpc('create_transfer_requests_batch', {
+    p_requested_by: request.requested_by,
+    p_brand: request.brand,
+    p_direction: request.direction,
+    p_notes: request.notes ?? null,
+    p_groups: request.groups,
+  });
+
+  if (error) throw error;
+  return data as BatchTransferResult;
+}
+
+/**
+ * Atomic fan-out for direct-send carts. Stock decrements + dispatched-state
+ * transfer rows are all in one Postgres transaction.
+ */
+export async function directSendTransfersBatch(request: {
+  sender: string;
+  brand: string;
+  direction: string;
+  notes?: string;
+  groups: SendGroup[];
+}): Promise<BatchTransferResult> {
+  const { data, error } = await db.rpc('direct_send_transfers_batch', {
+    p_sender: request.sender,
+    p_brand: request.brand,
+    p_direction: request.direction,
+    p_notes: request.notes ?? null,
+    p_groups: request.groups,
+  });
+
+  if (error) throw error;
+  return data as BatchTransferResult;
+}
+
+export async function directSendTransfer(request: {
+  sender: string;
+  brand: string;
+  direction: string;
+  item_type: string;
+  notes?: string;
+  items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; qty: number }[];
+}): Promise<{ success: boolean; transfer_id: number }> {
+  const { data, error } = await db.rpc('direct_send_transfer', {
+    p_sender: request.sender,
+    p_brand: request.brand,
+    p_direction: request.direction,
+    p_item_type: request.item_type,
+    p_items: request.items,
+    p_notes: request.notes ?? null,
+  });
+
+  if (error) throw error;
+  return data as { success: boolean; transfer_id: number };
+}
+
 export async function deleteTransferRequest(id: number): Promise<void> {
   // Hard-delete is only allowed while the request is still in 'requested' status.
   // Guarding by status here prevents wiping an already-approved row if an approver

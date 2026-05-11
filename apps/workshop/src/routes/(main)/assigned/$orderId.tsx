@@ -3,8 +3,7 @@ import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
-import { PlanDialog } from "@/components/shared/PlanDialog";
-import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
+import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import {
   StageBadge,
@@ -19,7 +18,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Label } from "@repo/ui/label";
 import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
 import { useUpdateOrderDeliveryDate } from "@/hooks/useGarmentMutations";
-import { cn, formatDate, toLocalDateStr, parseUtcTimestamp, getKuwaitDayRange } from "@/lib/utils";
+import { cn, formatDate, toLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import { getGarmentEditability } from "@/lib/editability";
 import {
   ArrowLeft,
@@ -46,8 +45,9 @@ export const Route = createFileRoute("/(main)/assigned/$orderId")({
 
 // ── Constants ──────────────────────────────────────────────────
 
+// Soaking is intentionally not in the plan — no per-worker (or per-unit)
+// assignment is made; any user in the soaking group can pick up any garment.
 const PLAN_STEPS = [
-  { key: "soaker", label: "Soaker", responsibility: "soaking", stageOrder: 1 },
   { key: "cutter", label: "Cutter", responsibility: "cutting", stageOrder: 2 },
   {
     key: "post_cutter",
@@ -83,6 +83,18 @@ const STAGE_ORDER: Record<string, number> = {
   ready_for_dispatch: 8,
 };
 
+// Map current piece_stage → worker_key responsible for that stage. Used to
+// surface "who's on it right now" as the headline fact in each card.
+const STAGE_TO_WORKER_KEY: Record<string, string> = {
+  soaking: "soaker",
+  cutting: "cutter",
+  post_cutting: "post_cutter",
+  sewing: "sewer",
+  finishing: "finisher",
+  ironing: "ironer",
+  quality_check: "quality_checker",
+};
+
 /** Extract current trip entry from trip_history */
 function getCurrentTripEntry(
   garment: WorkshopGarment,
@@ -104,10 +116,11 @@ function getDeliveryUrgency(date?: string) {
   const diff = Math.ceil(
     (parseUtcTimestamp(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   );
-  if (diff < 0) return { className: "text-red-700", days: diff };
-  if (diff <= 2) return { className: "text-orange-700", days: diff };
-  if (diff <= 5) return { className: "text-yellow-800", days: diff };
-  return { className: "text-green-700", days: diff };
+  // 3 levels — bad / warn / neutral. The old "yellow band" at ≤5d wasn't
+  // actionable; staff act on overdue or imminent (≤2d) only.
+  if (diff < 0)  return { className: "text-[var(--status-bad)]",  days: diff };
+  if (diff <= 2) return { className: "text-[var(--status-warn)]", days: diff };
+  return { className: "text-muted-foreground", days: diff };
 }
 
 // ── Main Page ──────────────────────────────────────────────────
@@ -127,9 +140,9 @@ function AssignedOrderDetailPage() {
   if (isLoading) {
     return (
       <div className="p-4 space-y-3">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-8 w-48 rounded-md" />
+        <Skeleton className="h-28 rounded-md" />
+        <Skeleton className="h-56 rounded-md" />
       </div>
     );
   }
@@ -139,13 +152,13 @@ function AssignedOrderDetailPage() {
       <div className="p-4">
         <button
           onClick={() => router.history.back()}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors mb-4"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Production Tracker
         </button>
-        <div className="text-center py-12 border border-dashed rounded-xl bg-muted/5">
-          <p className="text-lg font-semibold text-muted-foreground">
+        <div className="text-center py-10 border border-dashed border-border rounded-md bg-card">
+          <p className="text-base text-muted-foreground">
             No garments found for this order
           </p>
         </div>
@@ -153,9 +166,7 @@ function AssignedOrderDetailPage() {
     );
   }
 
-  // Compute shared plan: the plan that most planned garments share
-  // Skip "soaker" when comparing — soaking only applies to some garments,
-  // so a missing soaker doesn't count as a different assignment.
+  // Compute shared plan: the plan that most planned garments share.
   const plannedGarments = garments.filter((g) => g.production_plan);
   const sharedPlan = (() => {
     if (plannedGarments.length === 0) return null;
@@ -163,25 +174,11 @@ function AssignedOrderDetailPage() {
       string,
       string
     >;
-    const nonSoakSteps = PLAN_STEPS.filter((s) => s.key !== "soaker");
     const allSame = plannedGarments.every((g) => {
       const p = (g.production_plan ?? {}) as Record<string, string>;
-      return nonSoakSteps.every((s) => (p[s.key] ?? "") === (ref[s.key] ?? ""));
+      return PLAN_STEPS.every((s) => (p[s.key] ?? "") === (ref[s.key] ?? ""));
     });
     if (!allSame) return null;
-    // For soaker, only compare garments that both have soaking
-    const soakingGarments = plannedGarments.filter((g) => g.soaking);
-    if (soakingGarments.length > 1) {
-      const refSoaker =
-        ((soakingGarments[0].production_plan ?? {}) as Record<string, string>)
-          .soaker ?? "";
-      const soakersSame = soakingGarments.every((g) => {
-        const soaker =
-          ((g.production_plan ?? {}) as Record<string, string>).soaker ?? "";
-        return soaker === refSoaker;
-      });
-      if (!soakersSame) return null;
-    }
     return ref;
   })();
 
@@ -216,8 +213,8 @@ function AssignedOrderDetailPage() {
 
       {/* Divergent plans indicator */}
       {!sharedPlan && plannedGarments.length > 1 && (
-        <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          <p className="text-xs font-semibold text-amber-800">
+        <div className="mt-3 bg-[var(--status-warn-bg)] border border-transparent rounded-md px-3 py-2">
+          <p className="text-sm font-medium text-[var(--status-warn)]">
             Garments have different worker assignments — edit individually below
           </p>
         </div>
@@ -231,11 +228,11 @@ function AssignedOrderDetailPage() {
           <div className="mt-4 space-y-4">
             {brovas.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-xs">
-                    Brova
+                <h3 className="text-base font-medium text-foreground flex items-center gap-2">
+                  Brova
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
                   </span>
-                  {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
                 </h3>
                 {brovas.map((g) => (
                   <GarmentPlanCard
@@ -250,11 +247,11 @@ function AssignedOrderDetailPage() {
             )}
             {finals.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-xs">
-                    Final
+                <h3 className="text-base font-medium text-foreground flex items-center gap-2">
+                  Final
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {finals.length} garment{finals.length !== 1 ? "s" : ""}
                   </span>
-                  {finals.length} garment{finals.length !== 1 ? "s" : ""}
                 </h3>
                 {finals.map((g) => (
                   <GarmentPlanCard
@@ -313,66 +310,59 @@ function OrderHeader({
   const maxAltNumber = getAlterationNumber(maxTrip);
   const urgency = getDeliveryUrgency(first.delivery_date_order);
 
+  // Map every order-level state to ok/warn/info/neutral via tokens. Color =
+  // urgency, not state-variety. The label text differentiates between similar
+  // hues.
+  const okCls   = "bg-[var(--status-ok-bg)] text-[var(--status-ok)]";
+  const warnCls = "bg-[var(--status-warn-bg)] text-[var(--status-warn)]";
+  const infoCls = "bg-[var(--status-info-bg)] text-[var(--status-info)]";
+  const mutedCls = "bg-muted text-foreground";
+
   const statusLabel = (() => {
     if (
       first.order_phase === "completed" ||
       garments.every((g) => g.piece_stage === "completed")
     )
-      return { text: "Completed", cls: "bg-green-100 text-green-800" };
+      return { text: "Completed", cls: okCls };
     if (readyDispatch.length === garments.length)
-      return {
-        text: "Ready for dispatch",
-        cls: "bg-emerald-100 text-emerald-800",
-      };
+      return { text: "Ready for dispatch", cls: okCls };
     // At shop needing fix: pending return to workshop. "(In)" is reserved for
     // garments actively being fixed in production.
     if (needsRepairAtShop.length > 0) {
       const nextAlt = Math.max(...needsRepairAtShop.map((g) => g.trip_number ?? 1));
-      return { text: `Pending return — Alt ${nextAlt}`, cls: "bg-orange-100 text-orange-800" };
+      return { text: `Pending return — Alt ${nextAlt}`, cls: warnCls };
     }
     if (
       brovas.length > 0 &&
       brovasAtShop.length === brovas.length &&
       finals.length === 0
     )
-      return {
-        text: `At shop — Trial ${maxTrip}`,
-        cls: "bg-green-100 text-green-800",
-      };
+      return { text: `At shop — Trial ${maxTrip}`, cls: warnCls };
     if (
       waitingAcceptance.length > 0 &&
       inProd.length === 0 &&
       atShop.length > 0
     ) {
       if (brovas.length > 0 && anyBrovaAccepted)
-        return {
-          text: "Awaiting finals release",
-          cls: "bg-violet-100 text-violet-800",
-        };
-      return {
-        text: "Awaiting brova trial",
-        cls: "bg-amber-100 text-amber-800",
-      };
+        return { text: "Awaiting finals release", cls: warnCls };
+      return { text: "Awaiting brova trial", cls: warnCls };
     }
     if (brovas.length > 0 && finals.length === 0)
       return {
         text: maxAltNumber !== null
           ? `Alt ${maxAltNumber} in production`
           : "Brova in production",
-        cls: "bg-purple-100 text-purple-800",
+        cls: infoCls,
       };
     if (
       brovas.length === 0 &&
       finals.length > 0 &&
       waitingAcceptance.length > 0
     )
-      return {
-        text: "Finals pending release",
-        cls: "bg-amber-100 text-amber-800",
-      };
+      return { text: "Finals pending release", cls: warnCls };
     if (inProd.length > 0)
-      return { text: "In production", cls: "bg-blue-100 text-blue-800" };
-    return { text: "In progress", cls: "bg-zinc-100 text-zinc-800" };
+      return { text: "In production", cls: infoCls };
+    return { text: "In progress", cls: mutedCls };
   })();
 
   const bCount = brovas.length;
@@ -394,12 +384,12 @@ function OrderHeader({
       : null;
 
   return (
-    <div className="bg-card border rounded-xl p-4 shadow-sm">
+    <div className="bg-card border border-border rounded-md p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-black text-lg">#{orderId}</span>
-            <span className="font-semibold text-sm">
+            <span className="font-mono text-lg">#{orderId}</span>
+            <span className="font-medium text-base tracking-tight">
               {first.customer_name ?? "—"}
             </span>
             {brands.map((b) => (
@@ -413,7 +403,7 @@ function OrderHeader({
             )}
             <span
               className={cn(
-                "text-xs font-semibold uppercase px-2 py-0.5 rounded-md",
+                "text-xs font-medium px-2 py-0.5 rounded-md",
                 statusLabel.cls,
               )}
             >
@@ -422,12 +412,12 @@ function OrderHeader({
           </div>
 
           <div className="flex items-center flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-            {first.invoice_number && <span>INV-{first.invoice_number}</span>}
+            {first.invoice_number && <span className="font-mono">INV-{first.invoice_number}</span>}
             <span className="flex items-center gap-1">
               <Package className="w-3.5 h-3.5" /> {summary}
             </span>
             {first.customer_mobile && (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 font-mono">
                 <Phone className="w-3.5 h-3.5" /> {first.customer_mobile}
               </span>
             )}
@@ -439,15 +429,11 @@ function OrderHeader({
           </div>
         </div>
 
-        {/* Order-level delivery date — editable (cascades to shared garments) */}
+        {/* Order-level delivery date — editable (cascades to shared garments).
+            Color only the days-left number, not the whole row. */}
         <OrderDeliveryDateEditor
           orderId={orderId}
           value={first.delivery_date_order ?? null}
-          urgencyClassName={cn(
-            urgency.days !== null && urgency.days < 0 && "bg-red-100 text-red-800",
-            urgency.days !== null && urgency.days >= 0 && urgency.days <= 2 && "bg-amber-100 text-amber-800",
-            (urgency.days === null || urgency.days > 2) && "bg-muted text-foreground",
-          )}
           daysLabel={daysLabel}
           daysLabelClassName={urgency.className}
         />
@@ -459,38 +445,34 @@ function OrderHeader({
 function OrderDeliveryDateEditor({
   orderId,
   value,
-  urgencyClassName,
   daysLabel,
   daysLabelClassName,
 }: {
   orderId: number;
   value: string | null;
-  urgencyClassName: string;
   daysLabel: string | null;
   daysLabelClassName: string;
 }) {
   const mut = useUpdateOrderDeliveryDate();
   return (
     <div className="shrink-0 text-right space-y-1">
-      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1 justify-end">
-        <Clock className="w-3 h-3" /> Delivery Date
+      <Label className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
+        <Clock className="w-3 h-3" /> Delivery date
       </Label>
-      <div className={cn("inline-flex rounded-md p-0.5", urgencyClassName)}>
-        <ConfirmedDatePicker
-          value={value}
-          onConfirm={async (d) => {
-            const ds = toLocalDateStr(d);
-            if (!ds) return;
-            await mut.mutateAsync({ orderId, date: ds });
-          }}
-          label="order delivery date"
-          extraDescription="Garments sharing this date will also be updated; garments with custom dates (e.g. express) stay unchanged."
-          className="h-8 text-sm font-semibold bg-transparent border-0"
-          displayFormat="PPP"
-        />
-      </div>
+      <ConfirmedDatePicker
+        value={value}
+        onConfirm={async (d) => {
+          const ds = toLocalDateStr(d);
+          if (!ds) return;
+          await mut.mutateAsync({ orderId, date: ds });
+        }}
+        label="order delivery date"
+        extraDescription="Garments sharing this date will also be updated; garments with custom dates (e.g. express) stay unchanged."
+        className="h-8 text-sm font-medium bg-transparent border-0"
+        displayFormat="PPP"
+      />
       {daysLabel && (
-        <p className={cn("text-xs font-bold", daysLabelClassName)}>{daysLabel}</p>
+        <p className={cn("text-sm font-medium", daysLabelClassName)}>{daysLabel}</p>
       )}
     </div>
   );
@@ -510,7 +492,6 @@ function SharedPlanSection({
   updateMut: ReturnType<typeof useUpdateGarmentDetails>;
 }) {
   const [planOpen, setPlanOpen] = useState(false);
-  const hasSoaking = garments.some((g) => g.soaking);
   const anyStarted = garments.some((g) => g.start_time);
   const editableGarments = garments.filter((g) => getGarmentEditability(g).canEditPlan);
   const skippedCount = garments.length - editableGarments.length;
@@ -526,9 +507,7 @@ function SharedPlanSection({
     return union;
   })();
 
-  const visibleSteps = PLAN_STEPS.filter(
-    (s) => s.key !== "soaker" || hasSoaking,
-  );
+  const visibleSteps = PLAN_STEPS;
 
   const handlePlanConfirm = async (
     newPlan: Record<string, string>,
@@ -556,28 +535,28 @@ function SharedPlanSection({
   };
 
   return (
-    <div className="mt-3 bg-card border rounded-xl p-3 shadow-sm">
+    <div className="mt-3 bg-card border border-border rounded-md p-3">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <h3 className="text-sm font-medium text-muted-foreground">
           {planLabel}
         </h3>
         {anyCanEdit ? (
           <button
             onClick={() => setPlanOpen(true)}
-            className="text-xs text-primary hover:underline cursor-pointer font-medium"
+            className="text-sm text-foreground hover:text-primary cursor-pointer font-medium"
           >
             {skippedCount > 0
               ? `Edit plan for ${editableGarments.length} of ${garments.length}`
               : "Edit plan for all"}
           </button>
         ) : anyStarted ? (
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <span className="text-sm text-muted-foreground flex items-center gap-1">
             <Play className="w-3 h-3" /> In progress
           </span>
         ) : null}
       </div>
 
-      {/* Worker pills */}
+      {/* Worker pills — all neutral. Worker name is the signal; role is the label. */}
       <div className="flex flex-wrap gap-1.5">
         {visibleSteps.map((step) => {
           const worker = plan[step.key];
@@ -585,17 +564,18 @@ function SharedPlanSection({
           return (
             <span
               key={step.key}
-              className="inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md"
+              className="inline-flex items-center gap-1 text-sm bg-muted px-2 py-0.5 rounded-md"
             >
               <span className="text-muted-foreground">{step.label}:</span>
-              <span className="font-semibold">{worker}</span>
+              <span className="font-medium text-foreground">{worker}</span>
             </span>
           );
         })}
       </div>
 
       {anyCanEdit && (
-        <PlanDialog
+        <ProductionPlanDialog
+          mode="new"
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
@@ -604,7 +584,6 @@ function SharedPlanSection({
           defaultPlan={plan}
           title={`Edit ${planLabel}`}
           confirmLabel={skippedCount > 0 ? `Save for ${editableGarments.length}` : "Save for All"}
-          hasSoaking={editableGarments.some((g) => g.soaking)}
           lockedSteps={sharedLockedSteps}
         />
       )}
@@ -657,70 +636,47 @@ function GarmentPlanCard({
 
   const [planOpen, setPlanOpen] = useState(false);
 
-  const visibleSteps = PLAN_STEPS.filter(
-    (s) => s.key !== "soaker" || hasSoaking,
-  );
+  const visibleSteps = PLAN_STEPS;
 
+  // Context message — muted text below the pipeline. The stage badge already
+  // says WHAT stage; this adds one line of WHY-it-matters (action prompt or
+  // state nuance). Color only when it's a true urgency cue (overdue-ish).
   const contextMessage = (() => {
     const altN = getAlterationNumber(tripNum);
     const altPrefix = altN !== null ? `Alt ${altN} — ` : "";
-    // Done states
     if (garment.piece_stage === "discarded")
-      return { text: "Discarded (redo)", cls: "text-red-700" };
+      return { text: "Discarded (redo)", cls: "text-[var(--status-bad)]" };
     if (garment.piece_stage === "completed")
-      return { text: "Completed", cls: "text-green-700" };
+      return { text: "Completed", cls: "text-muted-foreground" };
     if (garment.piece_stage === "ready_for_dispatch")
-      return {
-        text: `${altPrefix}Production complete — ready for dispatch`,
-        cls: "text-emerald-700",
-      };
-    // Transit
+      return { text: `${altPrefix}Production complete — ready for dispatch`, cls: "text-[var(--status-ok)]" };
     if (garment.location === "transit_to_shop")
-      return { text: `${altPrefix}In transit to shop`, cls: "text-cyan-700" };
+      return { text: `${altPrefix}In transit to shop`, cls: "text-muted-foreground" };
     if (garment.location === "transit_to_workshop")
-      return { text: `${altPrefix}In transit to workshop`, cls: "text-orange-700" };
-    // Shop states
+      return { text: `${altPrefix}In transit to workshop`, cls: "text-muted-foreground" };
     if (needsRepairAtShop) {
-      // Next alt cycle = current trip (will become trip+1 on return).
       const nextAlt = tripNum ?? 1;
-      return { text: `Needs to return for Alt ${nextAlt}`, cls: "text-orange-700" };
+      return { text: `Needs to return for Alt ${nextAlt}`, cls: "text-[var(--status-warn)]" };
     }
     if (garment.piece_stage === "awaiting_trial" && garment.location === "shop")
       return {
         text: altN !== null ? `At shop — Alt ${altN} trial` : "At shop — awaiting trial",
-        cls: "text-green-700",
+        cls: "text-[var(--status-warn)]",
       };
     if (garment.piece_stage === "ready_for_pickup")
-      return { text: "Ready for pickup", cls: "text-green-700" };
+      return { text: "Ready for pickup", cls: "text-[var(--status-ok)]" };
     if (isAtShopPostProduction) return null;
-    // Workshop states
     if (garment.piece_stage === "waiting_for_acceptance") {
       if (anyBrovaAccepted)
-        return {
-          text: "Customer approved — ready to release finals",
-          cls: "text-violet-700",
-        };
-      return {
-        text: "Parked — awaiting brova acceptance",
-        cls: "text-muted-foreground",
-      };
+        return { text: "Customer approved — ready to release finals", cls: "text-[var(--status-ok)]" };
+      return { text: "Parked — awaiting brova acceptance", cls: "text-muted-foreground" };
     }
     if (garment.location === "workshop" && hasStarted)
-      return { text: `${altPrefix}In production`, cls: "text-blue-700" };
+      return { text: `${altPrefix}In production`, cls: "text-muted-foreground" };
     if (garment.location === "workshop" && !hasStarted && garment.in_production)
-      return {
-        text: `${altPrefix}Scheduled — waiting to start`,
-        cls: "text-muted-foreground",
-      };
-    if (
-      garment.location === "workshop" &&
-      !hasStarted &&
-      !garment.in_production
-    )
-      return {
-        text: `${altPrefix}Received — not yet started`,
-        cls: "text-muted-foreground",
-      };
+      return { text: `${altPrefix}Scheduled — waiting to start`, cls: "text-muted-foreground" };
+    if (garment.location === "workshop" && !hasStarted && !garment.in_production)
+      return { text: `${altPrefix}Received — not yet started`, cls: "text-muted-foreground" };
     return null;
   })();
 
@@ -749,246 +705,218 @@ function GarmentPlanCard({
     replaced_by_garment_id: string | null;
   }).replaced_by_garment_id;
 
+  // Location — plain text. Metadata, not status.
+  const locationLabel =
+    garment.location === "shop"
+      ? "at shop"
+      : garment.location === "workshop"
+        ? "at workshop"
+        : garment.location === "transit_to_shop"
+          ? "transit → shop"
+          : garment.location === "transit_to_workshop"
+            ? "transit → workshop"
+            : garment.location;
+
+  // Worker doing the current stage — headline fact when production is running.
+  const currentWorkerKey = STAGE_TO_WORKER_KEY[garment.piece_stage ?? ""];
+  const currentWorker = currentWorkerKey
+    ? (history[currentWorkerKey] ?? plan[currentWorkerKey] ?? null)
+    : null;
+
+  // Days-left, single computation reused inline below.
+  const deliveryDays = garment.delivery_date
+    ? Math.ceil(
+        (parseUtcTimestamp(garment.delivery_date).getTime() - Date.now()) /
+          86400000,
+      )
+    : null;
+  const isDone =
+    garment.piece_stage === "completed" ||
+    garment.piece_stage === "ready_for_pickup";
+  const daysText =
+    deliveryDays === null
+      ? null
+      : deliveryDays < 0
+        ? `${Math.abs(deliveryDays)}d late`
+        : deliveryDays === 0
+          ? "due today"
+          : `${deliveryDays}d left`;
+  const daysCls =
+    deliveryDays === null || isDone
+      ? "text-muted-foreground"
+      : deliveryDays < 0
+        ? "text-[var(--status-bad)]"
+        : deliveryDays <= 2
+          ? "text-[var(--status-warn)]"
+          : "text-muted-foreground";
+
+  // Show the context line only when it's a true call-to-action (non-muted) or
+  // when there's no current worker to anchor row 3. Drops noise like
+  // "in production" / "scheduled — waiting to start" which the pipeline + days
+  // already communicate.
+  const showContext =
+    contextMessage &&
+    (contextMessage.cls !== "text-muted-foreground" || !currentWorker);
+
   return (
     <div
       className={cn(
-        "bg-card border rounded-xl p-3 shadow-sm",
-        garment.express && "border-orange-200",
-        isReturn && "border-l-4 border-l-orange-400",
-        isAlterationIn && "bg-orange-50/40 border-orange-200",
+        "bg-card border border-border rounded-md p-3",
         garment.piece_stage === "waiting_for_acceptance" &&
           !anyBrovaAccepted &&
-          "opacity-50 bg-zinc-50",
-        isDiscarded && "bg-red-50/40 border-red-200 opacity-75",
+          "opacity-60",
+        isDiscarded && "border-l-2 border-l-[var(--status-bad)] opacity-70",
       )}
     >
-      {/* Garment header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          {/* Identity row */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span
-              className={cn(
-                "text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
-                garment.garment_type === "brova"
-                  ? "bg-purple-100 text-purple-800 border-purple-200"
-                  : "bg-blue-100 text-blue-800 border-blue-200",
-              )}
-            >
-              {garment.garment_type}
-            </span>
-            <Link
-              to="/assigned/garment/$garmentId"
-              params={{ garmentId: garment.id }}
-              className="font-mono font-bold text-sm text-primary hover:underline"
-            >
-              {garment.garment_id ?? garment.id.slice(0, 8)}
-            </Link>
-            {garment.express && (
-              <Zap
-                className="w-3.5 h-3.5 text-red-600 fill-red-600"
-                aria-label="Express"
-              />
-            )}
-            {garment.home_delivery_order && (
-              <Home
-                className="w-3.5 h-3.5 text-indigo-600"
-                aria-label="Home delivery"
-              />
-            )}
-          </div>
-
-          {/* Status row — stage + location + alt/qc chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <StageBadge
-              stage={garment.piece_stage}
-              garmentType={garment.garment_type}
-              inProduction={garment.in_production}
-              location={garment.location}
-              finalApprovalState={
-                garment.garment_type === "final" &&
-                garment.piece_stage === "waiting_for_acceptance"
-                  ? anyBrovaAccepted
-                    ? "approved"
-                    : "pending"
-                  : undefined
-              }
+      {/* Row 1: identity + actions */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xs text-muted-foreground capitalize shrink-0">
+            {garment.garment_type}
+          </span>
+          <Link
+            to="/assigned/garment/$garmentId"
+            params={{ garmentId: garment.id }}
+            className="font-mono text-base text-foreground hover:text-primary hover:underline truncate"
+          >
+            {garment.garment_id ?? garment.id.slice(0, 8)}
+          </Link>
+          {garment.express && (
+            <Zap
+              className="w-4 h-4 text-[var(--status-bad)] fill-current shrink-0"
+              aria-label="Express"
             />
-            <span
-              className={cn(
-                "text-xs font-semibold uppercase px-1.5 py-0.5 rounded",
-                garment.location === "shop"
-                  ? "bg-green-100 text-green-800"
-                  : garment.location === "workshop"
-                    ? "bg-blue-100 text-blue-800"
-                    : garment.location === "transit_to_shop"
-                      ? "bg-cyan-100 text-cyan-800"
-                      : garment.location === "transit_to_workshop"
-                        ? "bg-orange-100 text-orange-800"
-                        : "bg-zinc-100 text-zinc-800",
-              )}
-            >
-              {garment.location === "shop"
-                ? "At Shop"
-                : garment.location === "workshop"
-                  ? "Workshop"
-                  : garment.location === "transit_to_shop"
-                    ? "Transit to Shop"
-                    : garment.location === "transit_to_workshop"
-                      ? "Transit to Workshop"
-                      : garment.location}
-            </span>
-            {garment.piece_stage !== "discarded" && !isAlterationIn && (
-              <AlterationBadge
-                tripNumber={garment.trip_number}
-                garmentType={garment.garment_type}
-              />
-            )}
-            {garment.piece_stage !== "discarded" && isAlterationIn && (
-              <AlterationInBadge tripNumber={tripNum} />
-            )}
-            {garment.piece_stage !== "discarded" && hasQcFailThisTrip && (
-              <QcFixBadge
-                tripNumber={garment.trip_number}
-                tripHistory={garment.trip_history}
-              />
-            )}
-          </div>
+          )}
+          {garment.home_delivery_order && (
+            <Home
+              className="w-4 h-4 text-indigo-700 shrink-0"
+              aria-label="Home delivery"
+            />
+          )}
         </div>
-
-        <div className="shrink-0 text-right space-y-1 text-[11px] tabular-nums leading-tight">
-          {garment.delivery_date &&
-            (() => {
-              const days = Math.ceil(
-                (parseUtcTimestamp(garment.delivery_date).getTime() - Date.now()) /
-                  86400000,
-              );
-              const isDone =
-                garment.piece_stage === "completed" ||
-                garment.piece_stage === "ready_for_pickup";
-              const daysText =
-                days < 0
-                  ? `${Math.abs(days)}d late`
-                  : days === 0
-                    ? "today"
-                    : `${days}d`;
-              return (
-                <div
-                  className={cn(
-                    "flex items-center justify-end gap-1",
-                    isDone
-                      ? "text-muted-foreground"
-                      : days < 0
-                        ? "text-red-700"
-                        : days <= 2
-                          ? "text-amber-700"
-                          : "text-muted-foreground",
-                  )}
-                >
-                  <span>Due</span>
-                  <span className="font-semibold">
-                    {formatDate(String(garment.delivery_date))}
-                  </span>
-                  <span>({daysText})</span>
-                </div>
-              );
-            })()}
-          {garment.assigned_date &&
-            (() => {
-              const days = Math.ceil(
-                (new Date(getKuwaitDayRange(garment.assigned_date).end).getTime() -
-                  Date.now()) /
-                  86400000,
-              );
-              const isPast = days < 0;
-              const isDone =
-                garment.piece_stage === "ready_for_dispatch" ||
-                garment.piece_stage === "completed" ||
-                garment.piece_stage === "ready_for_pickup";
-              const daysText =
-                days < 0
-                  ? `${Math.abs(days)}d over`
-                  : days === 0
-                    ? "today"
-                    : `${days}d`;
-              return (
-                <div
-                  className={cn(
-                    isPast && !isDone ? "text-red-600" : "text-muted-foreground",
-                  )}
-                >
-                  Assigned{" "}
-                  <span className="font-semibold">
-                    {formatDate(garment.assigned_date)}
-                  </span>
-                  <span className="ml-0.5">({daysText})</span>
-                </div>
-              );
-            })()}
-          <div className="flex items-center justify-end gap-1 pt-0.5">
-            {isDiscarded ? (
-              replacedByGarmentId ? (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
-                  Replacement created
-                </span>
-              ) : (
-                <Link
-                  to="/assigned/$orderId/add-garment"
-                  params={{ orderId: String(garment.order_id) }}
-                  search={{ replaces: garment.id }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 whitespace-nowrap"
-                >
-                  Create replacement
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              )
-            ) : canEdit ? (
-              <button
-                onClick={() => setPlanOpen(true)}
-                className="p-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors"
-                title="Edit production plan"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            ) : editability.canEditDeliveryDate ? (
-              <div className="w-32" title="Change delivery date">
-                <ConfirmedDatePicker
-                  value={garment.delivery_date ?? ""}
-                  onConfirm={async (d) => {
-                    await updateMut.mutateAsync({
-                      id: garment.id,
-                      updates: { delivery_date: toLocalDateStr(d) },
-                    });
-                  }}
-                  label="garment delivery date"
-                  displayFormat="dd MMM"
-                  className="h-7 text-[11px] px-2"
-                />
-              </div>
-            ) : editability.readOnlyReason ? (
-              <span
-                className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5"
-                title={editability.readOnlyReason}
-              >
-                <Lock className="w-3 h-3" />
+        <div className="flex items-center gap-1 shrink-0">
+          {isDiscarded ? (
+            replacedByGarmentId ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs font-medium text-muted-foreground whitespace-nowrap">
+                Replacement created
               </span>
-            ) : null}
+            ) : (
+              <Link
+                to="/assigned/$orderId/add-garment"
+                params={{ orderId: String(garment.order_id) }}
+                search={{ replaces: garment.id }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--status-bad)] text-white text-sm font-medium whitespace-nowrap"
+              >
+                Create replacement
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )
+          ) : canEdit ? (
+            <button
+              onClick={() => setPlanOpen(true)}
+              className="p-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors"
+              title="Edit production plan"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          ) : editability.canEditDeliveryDate ? (
+            <div className="w-28" title="Change delivery date">
+              <ConfirmedDatePicker
+                value={garment.delivery_date ?? ""}
+                onConfirm={async (d) => {
+                  await updateMut.mutateAsync({
+                    id: garment.id,
+                    updates: { delivery_date: toLocalDateStr(d) },
+                  });
+                }}
+                label="garment delivery date"
+                displayFormat="dd MMM"
+                className="h-7 text-xs px-2"
+              />
+            </div>
+          ) : editability.readOnlyReason ? (
+            <span
+              className="text-xs text-muted-foreground flex items-center"
+              title={editability.readOnlyReason}
+            >
+              <Lock className="w-3.5 h-3.5" />
+            </span>
+          ) : null}
+          {!isDiscarded && (
             <Link
               to="/assigned/garment/$garmentId"
               params={{ garmentId: garment.id }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-xs font-semibold text-primary hover:bg-muted/50 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted hover:text-primary transition-colors whitespace-nowrap"
               title="Open garment details"
             >
               Details
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Pipeline — hidden for discarded garments (dead, no pipeline state) */}
+      {/* Row 2: status badges + days-left */}
+      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StageBadge
+            stage={garment.piece_stage}
+            garmentType={garment.garment_type}
+            inProduction={garment.in_production}
+            location={garment.location}
+            finalApprovalState={
+              garment.garment_type === "final" &&
+              garment.piece_stage === "waiting_for_acceptance"
+                ? anyBrovaAccepted
+                  ? "approved"
+                  : "pending"
+                : undefined
+            }
+          />
+          {garment.piece_stage !== "discarded" && !isAlterationIn && (
+            <AlterationBadge
+              tripNumber={garment.trip_number}
+              garmentType={garment.garment_type}
+            />
+          )}
+          {garment.piece_stage !== "discarded" && isAlterationIn && (
+            <AlterationInBadge tripNumber={tripNum} />
+          )}
+          {garment.piece_stage !== "discarded" && hasQcFailThisTrip && (
+            <QcFixBadge
+              tripNumber={garment.trip_number}
+              tripHistory={garment.trip_history}
+            />
+          )}
+        </div>
+        {daysText && (
+          <span className={cn("text-sm font-medium tabular-nums shrink-0", daysCls)}>
+            {daysText}
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: current worker · location · (urgent context if any) */}
+      <div className="mt-1 text-sm">
+        {currentWorker ? (
+          <>
+            <span className="text-foreground font-medium">{currentWorker}</span>
+            <span className="text-muted-foreground"> · {locationLabel}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">{locationLabel}</span>
+        )}
+        {showContext && contextMessage && (
+          <span className={cn("ml-1.5", contextMessage.cls)}>
+            · {contextMessage.text}
+          </span>
+        )}
+      </div>
+
+      {/* Pipeline — hidden for discarded (dead, no pipeline). Context line is
+          already shown on Row 3 above when actionable; no need to repeat. */}
       {!isDiscarded && garment.production_plan && (
-        <div className="mt-2">
+        <div className="mt-2.5">
           <ProductionPipeline
             currentStage={garment.piece_stage}
             compact
@@ -996,18 +924,13 @@ function GarmentPlanCard({
             reentryStage={isReturn ? reentryStage : undefined}
             qcFailCount={qcFailCount}
           />
-          {contextMessage && (
-            <p className={cn("text-xs font-semibold mt-1", contextMessage.cls)}>
-              {contextMessage.text}
-            </p>
-          )}
         </div>
       )}
 
-      {/* No plan yet (non-discarded) */}
+      {/* No plan yet — single muted line so the card stays compact */}
       {!isDiscarded && !garment.production_plan && (
-        <p className="mt-2 text-xs text-muted-foreground italic">
-          {contextMessage ? contextMessage.text : "Not yet scheduled"}
+        <p className="mt-2 text-sm text-muted-foreground italic">
+          Not yet scheduled
         </p>
       )}
 
@@ -1037,43 +960,47 @@ function GarmentPlanCard({
           if (toShow.length === 0 && sharedPlan) return null;
 
           return (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
               {!sharedPlan &&
                 toShow.map((step) => {
                   const worker = history[step.key] ?? plan[step.key];
                   if (!worker) return null;
                   const isDone = currentStageOrder > step.stageOrder;
                   const isCurrent = currentStageOrder === step.stageOrder;
+                  // All neutral. Done = check icon. Current = filled foreground dot.
+                  // Pending = muted text. No colored backgrounds.
                   return (
                     <span
                       key={step.key}
                       className={cn(
-                        "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded",
-                        isDone
-                          ? "bg-emerald-50 text-emerald-700"
-                          : isCurrent
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "bg-zinc-50 text-muted-foreground",
+                        "inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded-md",
+                        isCurrent
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground",
                       )}
                     >
-                      {isDone && <Check className="w-2.5 h-2.5" />}
-                      <span className="font-medium">{step.label}:</span>
-                      <span className="font-semibold">{worker}</span>
+                      {isDone ? (
+                        <Check className="w-3 h-3 text-[var(--status-ok)]" />
+                      ) : isCurrent ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-foreground" />
+                      ) : null}
+                      <span>{step.label}:</span>
+                      <span className="font-medium text-foreground">{worker}</span>
                     </span>
                   );
                 })}
               {sharedPlan && diffs.length > 0 && (
                 <>
-                  <span className="text-xs text-amber-600 font-semibold">
+                  <span className="text-sm text-muted-foreground">
                     Overrides:
                   </span>
                   {diffs.map((step) => (
                     <span
                       key={step.key}
-                      className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+                      className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded-md bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
                     >
-                      <span className="font-medium">{step.label}:</span>
-                      <span className="font-semibold">{plan[step.key]}</span>
+                      <span>{step.label}:</span>
+                      <span className="font-medium">{plan[step.key]}</span>
                     </span>
                   ))}
                 </>
@@ -1084,11 +1011,11 @@ function GarmentPlanCard({
                 completed.map((step) => (
                   <span
                     key={step.key}
-                    className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700"
+                    className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded-md text-muted-foreground"
                   >
-                    <Check className="w-2.5 h-2.5" />
-                    <span className="font-medium">{step.label}:</span>
-                    <span className="font-semibold">{history[step.key]}</span>
+                    <Check className="w-3 h-3 text-[var(--status-ok)]" />
+                    <span>{step.label}:</span>
+                    <span className="font-medium text-foreground">{history[step.key]}</span>
                   </span>
                 ))}
             </div>
@@ -1109,9 +1036,10 @@ function GarmentPlanCard({
         />
       )}
 
-      {/* Plan dialog — ReturnPlanDialog for trip 2+ (matches scheduler), PlanDialog otherwise */}
+      {/* Trip 2+ uses rework mode (with feedback context), otherwise new mode. */}
       {canEdit && isReturn && (
-        <ReturnPlanDialog
+        <ProductionPlanDialog
+          mode="rework"
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
@@ -1128,7 +1056,8 @@ function GarmentPlanCard({
         />
       )}
       {canEdit && !isReturn && (
-        <PlanDialog
+        <ProductionPlanDialog
+          mode="new"
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
@@ -1142,7 +1071,6 @@ function GarmentPlanCard({
           }
           title={`Edit Plan — ${garment.garment_id}`}
           confirmLabel="Save Changes"
-          hasSoaking={hasSoaking}
           showDeliveryDate
           defaultDeliveryDate={
             garment.delivery_date ? String(garment.delivery_date) : undefined
@@ -1228,18 +1156,18 @@ function CompactTripHistory({
   if (entries.length === 0) return null;
 
   return (
-    <div className="mt-2 border-t pt-2">
+    <div className="mt-2.5 border-t border-border pt-2">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors w-full"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors w-full"
       >
-        <History className="w-3 h-3" />
-        <span className="font-semibold">
+        <History className="w-3.5 h-3.5" />
+        <span className="font-medium">
           Previous {entries.length === 1 ? "trip" : `${entries.length} trips`}
         </span>
         <ChevronDown
           className={cn(
-            "w-3 h-3 ml-auto transition-transform duration-200",
+            "w-4 h-4 ml-auto transition-transform duration-200",
             open && "rotate-180",
           )}
         />
@@ -1254,18 +1182,10 @@ function CompactTripHistory({
         <div className="overflow-hidden">
           <div className="mt-1.5 space-y-1.5 pb-0.5">
             {entries.map((entry, i) => (
-              <div key={i} className="bg-muted/40 rounded-md px-2 py-1.5">
-                <div className="flex items-center gap-2 text-xs">
-                  <span
-                    className={cn(
-                      "font-bold uppercase px-1.5 py-0.5 rounded",
-                      entry.trip === 1
-                        ? "bg-blue-100 text-blue-700"
-                        : entry.trip === 2
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-orange-100 text-orange-700",
-                    )}
-                  >
+              <div key={i} className="bg-muted rounded-md px-2 py-1.5">
+                <div className="flex items-center gap-2 text-sm">
+                  {/* Trip number is metadata — neutral chip, mono number for scanning */}
+                  <span className="font-medium font-mono px-1.5 py-0.5 rounded bg-card border border-border text-foreground">
                     {entry.trip === 1
                       ? "Original"
                       : entry.trip === 2
@@ -1295,12 +1215,12 @@ function CompactTripHistory({
                       {workers.map(([key, name]) => (
                         <span
                           key={key}
-                          className="inline-flex items-center gap-0.5 text-[11px] bg-background px-1.5 py-0.5 rounded"
+                          className="inline-flex items-center gap-1 text-sm bg-card px-1.5 py-0.5 rounded"
                         >
                           <span className="text-muted-foreground">
                             {WORKER_LABELS[key] ?? key}:
                           </span>
-                          <span className="font-semibold">{name}</span>
+                          <span className="font-medium">{name}</span>
                         </span>
                       ))}
                     </div>

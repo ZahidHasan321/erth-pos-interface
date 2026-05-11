@@ -36,7 +36,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
 
     const { data: fabrics = [] } = useQuery({
       queryKey: ["fabrics"],
-      queryFn: getFabrics,
+      queryFn: () => getFabrics(),
       staleTime: Infinity,
       gcTime: Infinity,
     });

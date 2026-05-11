@@ -4,6 +4,7 @@ import { getFabrics } from "@/api/fabrics";
 import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
+import { getStylePricingRules } from "@/api/style-rules";
 import { getCampaigns } from "@/api/campaigns";
 import { Button } from "@repo/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
@@ -171,7 +172,7 @@ export function FabricSelectionForm({
 
     const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
-        queryFn: getFabrics,
+        queryFn: () => getFabrics(),
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -183,7 +184,15 @@ export function FabricSelectionForm({
         gcTime: Infinity,
     });
 
+    const { data: stylePricingRulesResponse } = useQuery({
+        queryKey: ["style-pricing-rules"],
+        queryFn: getStylePricingRules,
+        staleTime: Infinity,
+        gcTime: Infinity,
+    });
+
     const styles = stylesResponse?.data || [];
+    const stylePricingRules = stylePricingRulesResponse?.data || [];
 
     const {
         fields: garmentFields,
@@ -284,7 +293,7 @@ export function FabricSelectionForm({
 
             const garmentsToSave = data.garments.map((garment) => {
                 const stitchingSnapshot = stitchingPrice;
-                const styleSnapshot = calculateGarmentStylePrice(garment, styles || []);
+                const styleSnapshot = calculateGarmentStylePrice(garment, styles || [], stylePricingRules);
                 const fabricSnapshot = garment.fabric_amount || 0;
 
                 totalFabricCharge += fabricSnapshot;
@@ -856,6 +865,7 @@ export function FabricSelectionForm({
                             isFormDisabled={isFormDisabled}
                             styles={styles}
                             stitchingPrice={stitchingPrice}
+                            stylePricingRules={stylePricingRules}
                         />
 
                         {hasStockError && (

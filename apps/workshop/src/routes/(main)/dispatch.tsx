@@ -148,7 +148,7 @@ function ReadyOrderCard({
                 {hasExpress && <ExpressBadge />}
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/80">{group.customerName ?? "Unknown"}</span>
+                <span className="font-medium text-foreground/80 tracking-tight">{group.customerName ?? "Unknown"}</span>
                 {group.customerMobile && <span>{group.customerMobile}</span>}
                 <span className="w-px h-3 bg-border/60 shrink-0" />
                 <span>{groupIds.length} pcs</span>
@@ -299,7 +299,7 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
               {hasExpress && <ExpressBadge />}
             </div>
             <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/80">{group.customerName ?? "Unknown"}</span>
+              <span className="font-medium text-foreground/80 tracking-tight">{group.customerName ?? "Unknown"}</span>
               {group.customerMobile && <span>{group.customerMobile}</span>}
               <span className="w-px h-3 bg-border/60 shrink-0" />
               <span>{group.garments.length} pcs</span>
@@ -497,7 +497,7 @@ function DispatchHistoryTab() {
                       {r.invoice_number ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <div className="text-xs font-bold">{r.customer_name ?? 'Unknown'}</div>
+                      <div className="text-xs font-bold tracking-tight">{r.customer_name ?? 'Unknown'}</div>
                       {r.customer_phone && (
                         <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
                       )}

@@ -25,7 +25,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
   // Fetch products from server
   const { data: serverProducts, isLoading, error } = useQuery({
     queryKey: ['products'],
-    queryFn: getShelf,
+    queryFn: () => getShelf(),
     staleTime: Infinity,
     gcTime: Infinity,
   })

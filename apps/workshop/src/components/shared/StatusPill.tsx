@@ -21,18 +21,20 @@ export type PillColor =
   | "red"
   | "zinc";
 
+// Map every legacy hue onto 4 semantic buckets driven by --status-* tokens.
+// Color = meaning (ok/warn/bad/info/neutral), not decoration.
 const PILL_STYLES: Record<PillColor, { bg: string; text: string; dot: string }> = {
-  green:   { bg: "bg-green-100",   text: "text-green-800",   dot: "bg-green-500" },
-  emerald: { bg: "bg-emerald-100", text: "text-emerald-800", dot: "bg-emerald-500" },
-  sky:     { bg: "bg-sky-100",     text: "text-sky-800",     dot: "bg-sky-500" },
-  blue:    { bg: "bg-blue-100",    text: "text-blue-800",    dot: "bg-blue-500" },
-  violet:  { bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-500" },
-  teal:    { bg: "bg-teal-100",    text: "text-teal-800",    dot: "bg-teal-500" },
-  purple:  { bg: "bg-purple-100",  text: "text-purple-800",  dot: "bg-purple-500" },
-  amber:   { bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-500" },
-  orange:  { bg: "bg-orange-100",  text: "text-orange-800",  dot: "bg-orange-500" },
-  red:     { bg: "bg-red-100",     text: "text-red-800",     dot: "bg-red-500" },
-  zinc:    { bg: "bg-zinc-100",    text: "text-zinc-700",    dot: "bg-zinc-400" },
+  green:   { bg: "bg-[var(--status-ok-bg)]",   text: "text-[var(--status-ok)]",   dot: "bg-[var(--status-ok)]" },
+  emerald: { bg: "bg-[var(--status-ok-bg)]",   text: "text-[var(--status-ok)]",   dot: "bg-[var(--status-ok)]" },
+  teal:    { bg: "bg-[var(--status-ok-bg)]",   text: "text-[var(--status-ok)]",   dot: "bg-[var(--status-ok)]" },
+  amber:   { bg: "bg-[var(--status-warn-bg)]", text: "text-[var(--status-warn)]", dot: "bg-[var(--status-warn)]" },
+  orange:  { bg: "bg-[var(--status-warn-bg)]", text: "text-[var(--status-warn)]", dot: "bg-[var(--status-warn)]" },
+  red:     { bg: "bg-[var(--status-bad-bg)]",  text: "text-[var(--status-bad)]",  dot: "bg-[var(--status-bad)]" },
+  sky:     { bg: "bg-[var(--status-info-bg)]", text: "text-[var(--status-info)]", dot: "bg-[var(--status-info)]" },
+  blue:    { bg: "bg-[var(--status-info-bg)]", text: "text-[var(--status-info)]", dot: "bg-[var(--status-info)]" },
+  violet:  { bg: "bg-[var(--status-info-bg)]", text: "text-[var(--status-info)]", dot: "bg-[var(--status-info)]" },
+  purple:  { bg: "bg-[var(--status-info-bg)]", text: "text-[var(--status-info)]", dot: "bg-[var(--status-info)]" },
+  zinc:    { bg: "bg-muted",                   text: "text-muted-foreground",     dot: "bg-muted-foreground/40" },
 };
 
 interface StatusPillProps {
@@ -47,7 +49,7 @@ export function StatusPill({ color, icon: Icon, children, className }: StatusPil
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide whitespace-nowrap",
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap",
         s.bg,
         s.text,
         className,

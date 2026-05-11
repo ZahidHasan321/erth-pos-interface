@@ -84,9 +84,11 @@ export const AmountCell = ({
   const meta = table.options.meta as {
     styles?: any[];
     stitchingPrice?: number;
+    stylePricingRules?: any[];
   };
   const styles = meta?.styles || [];
   const stitchingPrice = meta?.stitchingPrice || 0;
+  const stylePricingRules = meta?.stylePricingRules || [];
 
   const garment = useWatch({
     control,
@@ -98,12 +100,12 @@ export const AmountCell = ({
 
     // Calculate style options price from styles table
     const baseStylePrice = styles.length > 0
-      ? calculateGarmentStylePrice(garment, styles)
+      ? calculateGarmentStylePrice(garment, styles, stylePricingRules)
       : 0;
 
     // Add stitching price (child or adult from DB)
     return baseStylePrice + stitchingPrice;
-  }, [garment, styles, stitchingPrice]);
+  }, [garment, styles, stitchingPrice, stylePricingRules]);
 
   return (
     <div className="flex items-center justify-center">

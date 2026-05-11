@@ -3,13 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
-import { PlanDialog } from "@/components/shared/PlanDialog";
-import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
+import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
 import {
-  PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge,
+  PageHeader, LoadingSkeleton, GarmentTypeBadge,
 } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
@@ -57,21 +56,32 @@ function Section({
   title,
   icon: Icon,
   count,
-  accent,
+  emptyLabel,
   children,
 }: {
   title: string;
   icon: LucideIcon;
   count: number;
-  accent?: string;
+  emptyLabel?: string;
   children: React.ReactNode;
 }) {
+  if (count === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
+        <Icon className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground/70 text-xs ml-auto">
+          {emptyLabel ?? "Empty"}
+        </span>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mt-5">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
-        <h2 className="font-semibold text-base text-foreground">{title}</h2>
-        <Badge variant="secondary" className={cn("text-xs", accent)}>
+        <h2 className="text-base font-medium">{title}</h2>
+        <Badge variant="secondary" className="text-xs font-medium">
           {count}
         </Badge>
       </div>
@@ -164,11 +174,11 @@ function SchedulerSectionTable({
                 </TableCell>
                 <TableCell className="px-3 py-3">
                   <div className="flex flex-col gap-1">
-                    <span className="font-mono text-sm font-bold">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                    <span className="font-mono text-base">{g.garment_id ?? g.id.slice(0, 8)}</span>
                     <div className="flex items-center gap-1 flex-wrap">
                       {!hideExpress && g.express && <ExpressBadge />}
                       {g.soaking && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
                           <Droplets className="w-3 h-3" /> Soak
                         </span>
                       )}
@@ -183,33 +193,36 @@ function SchedulerSectionTable({
                 {showAlt && (
                   <TableCell className="px-3 py-3">
                     {altNum !== null ? (
-                      <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
+                      >
                         Alt {altNum}
                       </Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">—</span>
                     )}
                   </TableCell>
                 )}
                 <TableCell className="px-3 py-3 text-sm">
                   <div className="flex flex-col gap-0.5">
-                    <span className="font-semibold">{g.customer_name ?? "—"}</span>
+                    <span className="text-base tracking-tight">{g.customer_name ?? "—"}</span>
                     {g.customer_mobile && (
-                      <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
+                      <span className="text-sm font-mono text-muted-foreground">{g.customer_mobile}</span>
                     )}
                   </div>
                 </TableCell>
                 <TableCell className="px-3 py-3 font-mono">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-bold">#{g.order_id}</span>
+                    <span className="text-base">#{g.order_id}</span>
                     {g.invoice_number && (
-                      <span className="text-xs text-muted-foreground">INV-{g.invoice_number}</span>
+                      <span className="text-sm text-muted-foreground">INV-{g.invoice_number}</span>
                     )}
                   </div>
                 </TableCell>
                 {showFeedback && (
                   <TableCell className="px-3 py-3">
-                    {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-xs text-muted-foreground">—</span>}
+                    {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-sm text-muted-foreground">—</span>}
                   </TableCell>
                 )}
                 <TableCell className="px-3 py-3">
@@ -218,15 +231,15 @@ function SchedulerSectionTable({
                 <TableCell className="px-3 py-3 text-center">
                   <div className="flex flex-col items-center gap-1">
                     {g.delivery_date_order ? (
-                      <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+                      <span className={cn("text-sm font-medium tabular-nums inline-flex items-center gap-1", urgency.text)}>
                         <Clock className="w-3 h-3" />
                         {formatDate(g.delivery_date_order)}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">—</span>
                     )}
                     {g.home_delivery && (
-                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
                         <Home className="w-3 h-3" /> Home
                       </span>
                     )}
@@ -293,18 +306,18 @@ function HeatCalendar({
   return (
     <div className="select-none">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+        <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="p-2.5 -m-1 rounded-md hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="font-bold text-sm tracking-tight">{monthLabel}</span>
-        <button onClick={() => shiftMonth(1)} aria-label="Next month" className="p-2.5 -m-1 rounded-lg hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
+        <span className="text-sm font-medium tracking-tight">{monthLabel}</span>
+        <button onClick={() => shiftMonth(1)} aria-label="Next month" className="p-2.5 -m-1 rounded-md hover:bg-muted active:bg-muted/60 transition-colors touch-manipulation">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
       <div className="grid grid-cols-7 gap-0.5 text-center mb-0.5">
         {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} className="text-[10px] font-bold text-muted-foreground/40 uppercase py-0.5">{d}</div>
+          <div key={d} className="text-[10px] font-medium text-muted-foreground/60 py-0.5">{d}</div>
         ))}
       </div>
 
@@ -324,20 +337,20 @@ function HeatCalendar({
               onClick={() => handleDay(day)}
               disabled={isPast}
               className={cn(
-                "relative h-10 rounded-md text-xs font-semibold transition-[color,background-color,border-color,box-shadow] touch-manipulation flex flex-col items-center justify-center",
+                "relative h-10 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow] touch-manipulation flex flex-col items-center justify-center",
                 isPast && "text-muted-foreground/20 cursor-not-allowed",
                 !isPast && !isSelected && "hover:bg-primary/10 pointer-coarse:active:scale-95 cursor-pointer",
                 !isPast && !isSelected && HEAT_BG[heat],
-                isToday && !isSelected && "ring-2 ring-primary/50 font-black text-primary",
-                isSelected && "bg-primary text-primary-foreground shadow-md",
+                isToday && !isSelected && "ring-2 ring-primary/50 font-semibold text-primary",
+                isSelected && "bg-primary text-primary-foreground",
               )}
             >
               <span>{day}</span>
               {count > 0 && !isPast && (
                 <span className={cn(
-                  "text-[9px] font-bold leading-none tabular-nums",
+                  "text-[9px] font-medium leading-none tabular-nums",
                   isSelected ? "text-primary-foreground/70"
-                    : heat >= 4 ? "text-red-600" : heat >= 3 ? "text-orange-600" : heat >= 2 ? "text-amber-600" : "text-emerald-600",
+                    : heat >= 4 ? "text-[var(--status-bad)]" : heat >= 3 ? "text-[var(--status-warn)]" : heat >= 2 ? "text-[var(--status-warn)]" : "text-[var(--status-ok)]",
                 )}>
                   {count}
                 </span>
@@ -361,13 +374,13 @@ function HeatCalendar({
 // ── Workload Summary ──────────────────────────────────────────────────────────
 
 const STAGE_ICONS: Record<string, { icon: LucideIcon; color: string }> = {
-  soaking: { icon: Droplets, color: "text-blue-500" },
-  cutting: { icon: Scissors, color: "text-rose-500" },
-  post_cutting: { icon: Ruler, color: "text-orange-500" },
-  sewing: { icon: Shirt, color: "text-indigo-500" },
-  finishing: { icon: Sparkles, color: "text-amber-500" },
-  ironing: { icon: Flame, color: "text-red-500" },
-  quality_check: { icon: ShieldCheck, color: "text-emerald-500" },
+  soaking: { icon: Droplets, color: "text-blue-700" },
+  cutting: { icon: Scissors, color: "text-rose-700" },
+  post_cutting: { icon: Ruler, color: "text-orange-700" },
+  sewing: { icon: Shirt, color: "text-indigo-700" },
+  finishing: { icon: Sparkles, color: "text-amber-700" },
+  ironing: { icon: Flame, color: "text-red-700" },
+  quality_check: { icon: ShieldCheck, color: "text-emerald-700" },
 };
 
 function WorkloadSummary({
@@ -407,11 +420,11 @@ function WorkloadSummary({
           <div key={stage}>
             <button
               onClick={() => setExpandedStage(isExpanded ? null : stage)}
-              className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors", isExpanded ? "bg-muted/60" : "hover:bg-muted/30")}
+              className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-left transition-colors", isExpanded ? "bg-muted/60" : "hover:bg-muted/30")}
             >
               {StageIcon && <StageIcon className={cn("w-4 h-4 shrink-0", stageIcon.color)} />}
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1 truncate">{stage.replace(/_/g, " ")}</span>
-              <span className="text-xs font-bold tabular-nums shrink-0 text-muted-foreground">{totalAssigned}</span>
+              <span className="text-sm font-medium text-muted-foreground flex-1 truncate capitalize">{stage.replace(/_/g, " ")}</span>
+              <span className="text-sm font-medium tabular-nums shrink-0 text-muted-foreground">{totalAssigned}</span>
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground/30 transition-transform shrink-0", isExpanded && "rotate-180")} />
             </button>
 
@@ -422,11 +435,11 @@ function WorkloadSummary({
                   return (
                     <div key={`${w.unit}::${w.name}`} className="flex items-center gap-2">
                       <User className="w-3 h-3 text-muted-foreground/40 shrink-0" />
-                      <span className="text-sm font-medium truncate flex-1">{w.name}</span>
+                      <span className="text-base truncate flex-1">{w.name}</span>
                       {showUnits && (
-                        <span className="text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{w.unit}</span>
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground shrink-0">{w.unit}</span>
                       )}
-                      <span className={cn("text-sm font-bold tabular-nums", wOver ? "text-red-600" : "text-muted-foreground")}>
+                      <span className={cn("text-sm font-medium tabular-nums", wOver ? "text-[var(--status-bad)]" : "text-muted-foreground")}>
                         {w.assigned}{w.target ? `/${w.target}` : ""}
                       </span>
                     </div>
@@ -732,7 +745,7 @@ function SchedulerPage() {
 
       {/* ── Tablet/phone: calendar on top, workload below ── */}
       <div className="lg:hidden mb-3">
-        <div className="bg-card border rounded-xl shadow-sm p-3">
+        <div className="bg-card border border-border rounded-md p-3">
           <div className="max-w-[320px] mx-auto sm:mx-0">
             <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
           </div>
@@ -740,8 +753,8 @@ function SchedulerPage() {
             <button onClick={() => setShowMobilePanel(!showMobilePanel)} className="w-full flex items-center justify-between text-left touch-manipulation">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-bold">{selectedDateLabel}</span>
-                {totalForDate > 0 && <span className="text-xs text-muted-foreground tabular-nums">· {totalForDate} scheduled</span>}
+                <span className="text-sm font-medium">{selectedDateLabel}</span>
+                {totalForDate > 0 && <span className="text-sm text-muted-foreground tabular-nums">· {totalForDate} scheduled</span>}
               </div>
               <ChevronDown className={cn("w-3 h-3 text-muted-foreground/50 transition-transform", showMobilePanel && "rotate-180")} />
             </button>
@@ -758,7 +771,7 @@ function SchedulerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 items-start">
 
         {/* ── Col 1: Sections ── */}
-        <div className="space-y-8 min-w-0">
+        <div className="space-y-2 min-w-0">
 
           {/* Search */}
           <div className="relative max-w-sm">
@@ -785,94 +798,71 @@ function SchedulerPage() {
           ) : (
             <>
               {/* ── EXPRESS ── */}
-              <Section title="Express" icon={Zap} count={sortedExpress.length}>
-                {sortedExpress.length === 0 ? (
-                  <EmptyState icon={Zap} message="No express garments to schedule" />
-                ) : (
-                  <SchedulerSectionTable
-                    garments={sortedExpress}
-                    selectedIds={selNew}
-                    onToggle={toggleGarment(setSelNew)}
-                    showType
-                    hideExpress
-                    disabled={newDisabled}
-                  />
-                )}
+              <Section title="Express" icon={Zap} count={sortedExpress.length} emptyLabel="No express to schedule">
+                <SchedulerSectionTable
+                  garments={sortedExpress}
+                  selectedIds={selNew}
+                  onToggle={toggleGarment(setSelNew)}
+                  showType
+                  hideExpress
+                  disabled={newDisabled}
+                />
               </Section>
 
               {/* ── BROVA ── */}
-              <Section title="Brova" icon={Package} count={sortedBrova.length}>
-                {sortedBrova.length === 0 ? (
-                  <EmptyState icon={Package} message="No brova garments to schedule" />
-                ) : (
-                  <SchedulerSectionTable
-                    garments={sortedBrova}
-                    selectedIds={selNew}
-                    onToggle={toggleGarment(setSelNew)}
-                    disabled={newDisabled}
-                  />
-                )}
+              <Section title="Brova" icon={Package} count={sortedBrova.length} emptyLabel="No brova to schedule">
+                <SchedulerSectionTable
+                  garments={sortedBrova}
+                  selectedIds={selNew}
+                  onToggle={toggleGarment(setSelNew)}
+                  disabled={newDisabled}
+                />
               </Section>
 
               {/* ── FINALS (no brova — manual plan, cross-order OK) ── */}
-              {sortedDirectFinals.length > 0 && (
-                <Section title="Finals" icon={Package} count={sortedDirectFinals.length}>
-                  <SchedulerSectionTable
-                    garments={sortedDirectFinals}
-                    selectedIds={selNew}
-                    onToggle={toggleGarment(setSelNew)}
-                    disabled={newDisabled}
-                  />
-                </Section>
-              )}
+              <Section title="Finals" icon={Package} count={sortedDirectFinals.length} emptyLabel="No direct finals to schedule">
+                <SchedulerSectionTable
+                  garments={sortedDirectFinals}
+                  selectedIds={selNew}
+                  onToggle={toggleGarment(setSelNew)}
+                  disabled={newDisabled}
+                />
+              </Section>
 
               {/* ── APPROVED FINALS (garment-level, locked to single order — shares brova plan) ── */}
-              <Section title="Approved Finals" icon={Package} count={sortedFinals.length}>
-                {sortedFinals.length === 0 ? (
-                  <EmptyState icon={Package} message="No approved finals to schedule" />
-                ) : (
-                  <SchedulerSectionTable
-                    garments={sortedFinals}
-                    selectedIds={selFinals}
-                    onToggle={toggleGarment(setSelFinals)}
-                    disabled={finalsDisabled}
-                    lockToOrder
-                  />
-                )}
+              <Section title="Approved finals" icon={Package} count={sortedFinals.length} emptyLabel="No approved finals to schedule">
+                <SchedulerSectionTable
+                  garments={sortedFinals}
+                  selectedIds={selFinals}
+                  onToggle={toggleGarment(setSelFinals)}
+                  disabled={finalsDisabled}
+                  lockToOrder
+                />
               </Section>
 
               {/* ── ALTERATION ORDERS (OUT) — independent, cross-order, no plan inheritance ── */}
-              <Section title="Alteration Orders (Out)" icon={Scissors} count={sortedAlterationOut.length}>
-                {sortedAlterationOut.length === 0 ? (
-                  <EmptyState icon={Scissors} message="No alteration orders to schedule" />
-                ) : (
-                  <SchedulerSectionTable
-                    garments={sortedAlterationOut}
-                    selectedIds={selNew}
-                    onToggle={toggleGarment(setSelNew)}
-                    showType
-                    showAlt
-                    disabled={newDisabled}
-                  />
-                )}
+              <Section title="Alteration orders (out)" icon={Scissors} count={sortedAlterationOut.length} emptyLabel="No alteration orders to schedule">
+                <SchedulerSectionTable
+                  garments={sortedAlterationOut}
+                  selectedIds={selNew}
+                  onToggle={toggleGarment(setSelNew)}
+                  showAlt
+                  disabled={newDisabled}
+                />
               </Section>
 
               {/* ── RETURNS (garment-level) ── */}
-              <Section title="Returns" icon={RotateCcw} count={sortedReturns.length}>
-                {sortedReturns.length === 0 ? (
-                  <EmptyState icon={RotateCcw} message="No returns to schedule" />
-                ) : (
-                  <SchedulerSectionTable
-                    garments={sortedReturns}
-                    selectedIds={selReturns}
-                    onToggle={toggleGarment(setSelReturns)}
-                    showType
-                    showAlt
-                    showFeedback
-                    disabled={returnsDisabled}
-                    lockToOrder
-                  />
-                )}
+              <Section title="Returns" icon={RotateCcw} count={sortedReturns.length} emptyLabel="No returns to schedule">
+                <SchedulerSectionTable
+                  garments={sortedReturns}
+                  selectedIds={selReturns}
+                  onToggle={toggleGarment(setSelReturns)}
+                  showType
+                  showAlt
+                  showFeedback
+                  disabled={returnsDisabled}
+                  lockToOrder
+                />
               </Section>
             </>
           )}
@@ -880,11 +870,11 @@ function SchedulerPage() {
 
         {/* ── Col 2: Calendar + workload (desktop only) ── */}
         <div className="hidden lg:block lg:sticky lg:top-4">
-          <div className="bg-card border rounded-xl shadow-sm p-3">
+          <div className="bg-card border border-border rounded-md p-3">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Calendar className="w-4 h-4 text-primary" />
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Schedule Date</span>
+                <span className="text-sm font-medium text-muted-foreground">Schedule date</span>
               </div>
               <HeatCalendar selected={selectedDate} onSelect={setSelectedDate} scheduledDates={scheduledDates} maxPerDay={maxPerDay} />
             </div>
@@ -892,9 +882,9 @@ function SchedulerPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-bold">{selectedDateLabel}</span>
+                  <span className="text-sm font-medium">{selectedDateLabel}</span>
                 </div>
-                {totalForDate > 0 && <span className="text-xs font-bold text-muted-foreground tabular-nums">{totalForDate}</span>}
+                {totalForDate > 0 && <span className="text-sm font-medium text-muted-foreground tabular-nums">{totalForDate}</span>}
               </div>
               <div className="max-h-[320px] overflow-y-auto">
                 <WorkloadSummary workload={workload} totalForDate={totalForDate} multiUnitStages={multiUnitStages} />
@@ -903,20 +893,20 @@ function SchedulerPage() {
 
             <div className="border-t mt-3 pt-3">
               {totalSelected > 0 ? (
-                <p className="text-sm font-semibold mb-2">
+                <p className="text-sm font-medium mb-2">
                   {getSelectedGarmentIds().length} garment{getSelectedGarmentIds().length !== 1 ? "s" : ""}
                   <span className="text-muted-foreground font-normal text-xs"> selected</span>
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground mb-2">Select garments to schedule</p>
+                <p className="text-sm text-muted-foreground mb-2">Select garments to schedule</p>
               )}
               <Button
-                className="w-full h-9 font-bold text-sm"
+                className="w-full h-9 text-sm font-medium"
                 disabled={totalSelected === 0 || !selectedDate || scheduleMut.isPending}
                 onClick={() => isSchedulingReturns ? setReturnPlanOpen(true) : setPlanOpen(true)}
               >
                 {scheduleMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-                {scheduleMut.isPending ? "Scheduling…" : "Create Plan"}
+                {scheduleMut.isPending ? "Scheduling…" : "Create plan"}
               </Button>
             </div>
           </div>
@@ -937,18 +927,19 @@ function SchedulerPage() {
         </Button>
       </BatchActionBar>
 
-      <PlanDialog
+      <ProductionPlanDialog
+        mode="new"
         open={planOpen}
         onOpenChange={setPlanOpen}
         onConfirm={handleSchedule}
         garmentCount={getSelectedGarmentIds().length}
         defaultDate={selectedDate}
-        isAlteration={false}
         defaultPlan={getDefaultPlanForSelection()}
         isPending={scheduleMut.isPending}
       />
 
-      <ReturnPlanDialog
+      <ProductionPlanDialog
+        mode="rework"
         open={returnPlanOpen}
         onOpenChange={setReturnPlanOpen}
         onConfirm={handleSchedule}

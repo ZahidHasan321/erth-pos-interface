@@ -4,32 +4,31 @@ import { useQuery } from "@tanstack/react-query";
 import { useGarment } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { getAllFeedbackForGarment } from "@/api/feedback";
-import { PlanDialog } from "@/components/shared/PlanDialog";
-import { ReturnPlanDialog } from "@/components/shared/ReturnPlanDialog";
+import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import {
   GarmentHeader,
   NotesSection,
-  TripCyclesSection,
-  CollapsibleSpecsSection,
+  StyleSection,
+  MeasurementsSection,
+  TripCycleCard,
+  TripListPanel,
 } from "@/components/shared/GarmentDetailSections";
 import { getGarmentEditability } from "@/lib/editability";
 import { canEdit } from "@/lib/rbac";
 import { useAuth } from "@/context/auth";
-import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
 import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
-import { ArrowLeft, Clock, Timer, Lock, Replace } from "lucide-react";
+import { ArrowLeft, Lock, Replace } from "lucide-react";
 import { toLocalDateStr, formatDate } from "@/lib/utils";
-import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry, GarmentFeedback } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/garment/$garmentId")({
   component: AssignedGarmentDetailPage,
   head: () => ({ meta: [{ title: "Garment Details" }] }),
 });
 
-/** Extract current trip entry from trip_history */
 function getCurrentTripEntry(garment: WorkshopGarment): TripHistoryEntry | null {
   const raw = garment.trip_history;
   const entries: TripHistoryEntry[] = !raw
@@ -42,8 +41,6 @@ function getCurrentTripEntry(garment: WorkshopGarment): TripHistoryEntry | null 
   const tripNum = garment.trip_number ?? 1;
   return entries.find((t) => t.trip === tripNum) ?? null;
 }
-
-// ── Main Page ──────────────────────────────────────────────────
 
 function AssignedGarmentDetailPage() {
   const { garmentId } = Route.useParams();
@@ -60,32 +57,40 @@ function AssignedGarmentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
+      <div className="p-4 max-w-[1600px] mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-32 rounded-md" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <Skeleton className="lg:col-span-3 h-96 rounded-md" />
+          <Skeleton className="lg:col-span-6 h-96 rounded-md" />
+          <Skeleton className="lg:col-span-3 h-96 rounded-md" />
+        </div>
       </div>
     );
   }
 
   if (!garment) {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto text-center py-24">
-        <p className="text-lg font-semibold text-muted-foreground">Garment not found</p>
+      <div className="p-4 max-w-[1600px] mx-auto text-center py-24">
+        <p className="text-base text-muted-foreground">Garment not found.</p>
         <Button variant="outline" className="mt-4" onClick={() => router.history.back()}>
-          Go Back
+          Go back
         </Button>
       </div>
     );
   }
 
-  const hasSoaking = !!garment.soaking;
   const isReturn = (garment.trip_number ?? 1) > 1;
   const currentTripEntry = getCurrentTripEntry(garment);
   const reentryStage = currentTripEntry?.reentry_stage ?? null;
   const qcFailCount = currentTripEntry?.qc_attempts?.filter((a) => a.result === "fail").length ?? 0;
 
   const editability = getGarmentEditability(garment);
+
+  const currentTripNum = garment.trip_number ?? 1;
+  const [selectedTrip, setSelectedTrip] = useState<number>(currentTripNum);
+  const selectedFeedback: GarmentFeedback | null =
+    feedbackHistory.find((fb) => (fb.trip_number ?? 1) === selectedTrip) ?? null;
 
   const handlePlanConfirm = async (newPlan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
     const updates: Record<string, unknown> = {
@@ -99,47 +104,62 @@ function AssignedGarmentDetailPage() {
   };
 
   return (
-    <div className="p-3 sm:p-4 max-w-[1600px] mx-auto pb-8">
-      <div className="flex items-center justify-between mb-3">
+    <div className="p-3 sm:p-4 max-w-[1600px] mx-auto pb-8 space-y-4">
+      {/* Top bar: back link + replacement CTA */}
+      <div className="flex items-center justify-between">
         <button
           onClick={() => router.history.back()}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Order
+          Back to order
         </button>
         <DiscardedReplacementCta garment={garment} />
       </div>
 
+      {/* Identity header with inline editable dates + pipeline */}
       <GarmentHeader garment={garment} showExtras reentryStage={reentryStage} qcFailCount={qcFailCount}>
         <EditableDates garment={garment} updateMut={updateMut} editability={editability} />
         {editability.readOnlyReason && !editability.canEditPlan && !editability.canEditDeliveryDate && (
-          <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground sm:justify-end">
             <Lock className="w-3 h-3" />
             <span>{editability.readOnlyReason}</span>
           </div>
         )}
       </GarmentHeader>
 
-      {/* Two-column layout on wide screens: trip cycles on left, specs/notes on right */}
-      <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-4 min-w-0">
-          <TripCyclesSection
+      {/* Notes — always full-width when present, sits above the dashboard */}
+      {garment.notes && <NotesSection notes={garment.notes} />}
+
+      {/* 3-col dashboard: Specs (left) | Selected trip (center) | Trip list (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-3 min-w-0">
+          <SidebarSpecs garment={garment} />
+        </div>
+
+        <div className="lg:col-span-6 min-w-0">
+          <TripCycleCard
             garment={garment}
-            feedbackHistory={feedbackHistory}
+            tripNum={selectedTrip}
+            feedback={selectedFeedback}
+            onEditPlan={editability.canEditPlan ? () => setPlanOpen(true) : undefined}
             isLoadingFeedback={isLoadingFeedback}
-            onEditCurrentPlan={editability.canEditPlan ? () => setPlanOpen(true) : undefined}
           />
         </div>
 
-        <aside className="space-y-4 min-w-0 lg:sticky lg:top-4 lg:self-start">
-          {garment.notes && <NotesSection notes={garment.notes} />}
-          <CollapsibleSpecsSection garment={garment} defaultOpen />
-        </aside>
+        <div className="lg:col-span-3 min-w-0">
+          <TripListPanel
+            garment={garment}
+            feedbackHistory={feedbackHistory}
+            selectedTrip={selectedTrip}
+            onSelect={setSelectedTrip}
+          />
+        </div>
       </div>
 
       {editability.canEditPlan && isReturn && (
-        <ReturnPlanDialog
+        <ProductionPlanDialog
+          mode="rework"
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
@@ -156,7 +176,8 @@ function AssignedGarmentDetailPage() {
         />
       )}
       {editability.canEditPlan && !isReturn && (
-        <PlanDialog
+        <ProductionPlanDialog
+          mode="new"
           open={planOpen}
           onOpenChange={setPlanOpen}
           onConfirm={handlePlanConfirm}
@@ -165,7 +186,6 @@ function AssignedGarmentDetailPage() {
           defaultPlan={garment.production_plan as Record<string, string> | null}
           title={`Edit Plan — ${garment.garment_id}`}
           confirmLabel="Save Changes"
-          hasSoaking={hasSoaking}
           lockedSteps={editability.lockedPlanSteps}
         />
       )}
@@ -173,11 +193,59 @@ function AssignedGarmentDetailPage() {
   );
 }
 
-// ── Discarded replacement CTA ──────────────────────────────────
-// Only surfaces for discarded garments. If the garment has already been
-// replaced, show a disabled pill instead of the button — prevents a second
-// replacement and makes the wire-up visible.
+// Sidebar tabs — Style vs Measurements. Each pane fills the column on its own
+// so the sidebar doesn't stretch beyond the viewport.
+function SidebarSpecs({ garment }: { garment: WorkshopGarment }) {
+  const [tab, setTab] = useState<"style" | "measurements">("style");
+  return (
+    <div className="bg-card border border-border rounded-md overflow-hidden">
+      <div role="tablist" aria-label="Garment specs" className="flex border-b border-border">
+        <SidebarTab active={tab === "style"} onSelect={() => setTab("style")}>
+          Style
+        </SidebarTab>
+        <SidebarTab active={tab === "measurements"} onSelect={() => setTab("measurements")}>
+          Measurements
+        </SidebarTab>
+      </div>
+      <div className="p-4">
+        {tab === "style" ? (
+          <StyleSection garment={garment} embedded />
+        ) : (
+          <MeasurementsSection garment={garment} embedded />
+        )}
+      </div>
+    </div>
+  );
+}
 
+function SidebarTab({
+  active,
+  onSelect,
+  children,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      role="tab"
+      type="button"
+      aria-selected={active}
+      onClick={onSelect}
+      className={[
+        "flex-1 px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
+        active
+          ? "text-foreground border-b-2 border-foreground -mb-px"
+          : "text-muted-foreground hover:text-foreground",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Surfaces only for discarded garments. Disabled if already replaced.
 function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
   const { user } = useAuth();
   if (garment.piece_stage !== "discarded") return null;
@@ -185,8 +253,8 @@ function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
   const replacedById = (garment as WorkshopGarment & { replaced_by_garment_id: string | null }).replaced_by_garment_id;
   if (replacedById) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs font-semibold text-muted-foreground">
-        <Replace className="w-3 h-3" /> Replacement already created
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm text-muted-foreground">
+        <Replace className="w-3.5 h-3.5" /> Replacement already created
       </span>
     );
   }
@@ -203,8 +271,6 @@ function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
     </Button>
   );
 }
-
-// ── Editable Dates ─────────────────────────────────────────────
 
 function EditableDates({
   garment,
@@ -233,38 +299,34 @@ function EditableDates({
   const deliveryValue = garment.delivery_date ?? garment.delivery_date_order ?? null;
 
   return (
-    <div className="flex flex-wrap gap-3 justify-end">
-      <div className="space-y-1">
-        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Clock className="w-3 h-3" /> Garment Delivery
-        </Label>
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 sm:justify-end">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Delivery</span>
         {editability.canEditDeliveryDate ? (
           <ConfirmedDatePicker
             value={garment.delivery_date ?? ""}
             onConfirm={handleDeliveryChange}
             label="garment delivery date"
-            className="h-8 text-sm font-semibold"
+            className="h-8 text-sm"
           />
         ) : (
-          <div className="h-8 flex items-center text-sm font-semibold text-amber-700">
+          <span className="text-base tabular-nums">
             {deliveryValue ? formatDate(toLocalDateStr(deliveryValue)) : "—"}
-          </div>
+          </span>
         )}
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Timer className="w-3 h-3" /> Assigned
-        </Label>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Assigned</span>
         {editability.canEditPlan ? (
           <DatePicker
             value={garment.assigned_date ?? ""}
             onChange={handleAssignedChange}
-            className="h-8 text-sm font-semibold"
+            className="h-8 text-sm"
           />
         ) : (
-          <div className="h-8 flex items-center text-sm font-semibold text-violet-700">
+          <span className="text-base tabular-nums">
             {garment.assigned_date ? formatDate(garment.assigned_date) : "—"}
-          </div>
+          </span>
         )}
       </div>
     </div>

@@ -256,8 +256,14 @@ async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
 // the auth.users email so login keeps working.
 // deno-lint-ignore no-explicit-any
 async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
-  const { user_id, ...updates } = params;
+  const { user_id, resources: resourcesParam, ...updates } = params;
   if (!user_id) return jsonError("user_id is required");
+  const desiredResources: Array<{ responsibility: string; unit_id: string | null }> =
+    Array.isArray(resourcesParam) ? resourcesParam : [];
+  const desiredUnitByStage = new Map<string, string | null>();
+  for (const r of desiredResources) {
+    if (r && r.responsibility) desiredUnitByStage.set(r.responsibility, r.unit_id ?? null);
+  }
 
   // Load current row so we can do permission checks and detect what changed
   const { data: target, error: targetErr } = await supabase
@@ -366,12 +372,12 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
 
     const { data: existing } = await supabase
       .from("resources")
-      .select("id, responsibility")
+      .select("id, responsibility, unit_id")
       .eq("user_id", user_id);
 
-    const existingByStage = new Map<string, string>();
-    for (const r of (existing ?? []) as Array<{ id: string; responsibility: string | null }>) {
-      if (r.responsibility) existingByStage.set(r.responsibility, r.id);
+    const existingByStage = new Map<string, { id: string; unit_id: string | null }>();
+    for (const r of (existing ?? []) as Array<{ id: string; responsibility: string | null; unit_id: string | null }>) {
+      if (r.responsibility) existingByStage.set(r.responsibility, { id: r.id, unit_id: r.unit_id });
     }
 
     const stagesToAdd: string[] = [];
@@ -379,8 +385,8 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
       if (stage && !existingByStage.has(stage)) stagesToAdd.push(stage);
     }
     const idsToDelete: string[] = [];
-    for (const [stage, id] of existingByStage) {
-      if (!desiredStages.has(stage)) idsToDelete.push(id);
+    for (const [stage, info] of existingByStage) {
+      if (!desiredStages.has(stage)) idsToDelete.push(info.id);
     }
 
     if (stagesToAdd.length > 0) {
@@ -388,7 +394,9 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
         user_id,
         resource_name: target.name,
         responsibility: stage,
-        unit_id: null,
+        // Use caller-supplied unit_id when provided; otherwise null and the
+        // /team page will assign later (preserves prior behavior).
+        unit_id: desiredUnitByStage.has(stage) ? desiredUnitByStage.get(stage) ?? null : null,
       }));
       const { error: addErr } = await supabase.from("resources").insert(inserts);
       if (addErr) return jsonError(`Adding resource rows failed: ${addErr.message}`);
@@ -399,6 +407,21 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
         .delete()
         .in("id", idsToDelete);
       if (delErr) return jsonError(`Removing resource rows failed: ${delErr.message}`);
+    }
+
+    // Reassign unit_id on still-existing stages where the caller passed a
+    // different value (e.g. sewer moved to a new sewing team). Skipped when
+    // the caller didn't include that stage in the resources payload.
+    for (const [stage, info] of existingByStage) {
+      if (!desiredStages.has(stage)) continue;
+      if (!desiredUnitByStage.has(stage)) continue;
+      const newUnit = desiredUnitByStage.get(stage) ?? null;
+      if (newUnit === info.unit_id) continue;
+      const { error: upErr } = await supabase
+        .from("resources")
+        .update({ unit_id: newUnit })
+        .eq("id", info.id);
+      if (upErr) return jsonError(`Reassigning unit for ${stage} failed: ${upErr.message}`);
     }
   }
 

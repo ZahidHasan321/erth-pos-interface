@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Pencil, Check, X, ChevronDown, Tag } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageShell";
 import { IconNeedle, IconScissors, IconHome, IconBolt, IconDroplet } from "@tabler/icons-react";
+import { StylePricingRulesSection } from "@/components/pricing/StylePricingRulesSection";
 import type { Brand, Price, Style } from "@repo/database";
 
 // ── Image imports ─────────────────────────────────────────────────────────────
@@ -143,6 +144,7 @@ function InlineEditor({ value, onSave, onCancel, isPending, compact }: {
           type="number" step="0.001" min="0" value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
+          onFocus={(e) => e.target.select()}
           className="w-full h-8 text-sm font-mono text-center"
           autoFocus
         />
@@ -164,6 +166,7 @@ function InlineEditor({ value, onSave, onCancel, isPending, compact }: {
         type="number" step="0.001" min="0" value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
+        onFocus={(e) => e.target.select()}
         className="w-24 h-8 text-sm font-mono text-right"
         autoFocus
       />
@@ -637,6 +640,9 @@ function PricingPage() {
               ))}
             </div>
           </div>
+
+          {/* Style pricing override rules */}
+          <StylePricingRulesSection brand={brand} />
 
         </div>
       )}

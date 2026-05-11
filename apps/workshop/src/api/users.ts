@@ -49,10 +49,16 @@ export const createUser = async (
 /** Update user via Edge Function. Sensitive columns (role/department/
  *  job_function/is_active/brands/username) are not writable by clients
  *  directly — column grants block them. The Edge Function also keeps the
- *  Supabase Auth user (email + app_metadata) in sync. */
+ *  Supabase Auth user (email + app_metadata) in sync.
+ *
+ *  Pass `resources` to set unit_id per stage in lockstep with job_functions
+ *  changes (new stages use the supplied unit_id; existing stages get their
+ *  unit_id updated if it changed). */
 export const updateUser = async (
   id: string,
-  updates: Partial<Omit<NewUser, "id" | "created_at">>
+  updates: Partial<Omit<NewUser, "id" | "created_at">> & {
+    resources?: Array<{ responsibility: string; unit_id: string | null }>;
+  }
 ): Promise<User> => {
   const result = await callAuthAdmin({ action: "update-user", user_id: id, ...updates });
   return result.user;

@@ -1,27 +1,39 @@
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { usePerformanceData, getWorkerDailyBreakdown } from "@/hooks/usePerformance";
-import { PageHeader } from "@/components/shared/PageShell";
+import {
+  usePerformanceData,
+  getWorkerDailyBreakdown,
+  getWorkerDurations,
+  getWorkerDaysPresent,
+  getWorkerQuality,
+  MIN_QUALITY_SAMPLE,
+} from "@/hooks/usePerformance";
+import { PageHeader, SectionCard, StatusBanner } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
 import { cn, getLocalDateStr, getKuwaitDayRange, TIMEZONE } from "@/lib/utils";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as RechartsTooltip, ReferenceLine,
-  BarChart, Bar,
 } from "recharts";
 import {
   ArrowLeft, Target, Zap, RotateCcw, Star,
-  CalendarDays, TrendingUp, Package2,
+  CalendarDays, TrendingUp, Package2, Clock, CalendarCheck, Info,
+  ShieldCheck,
 } from "lucide-react";
 
 const STAGE_LABELS: Record<string, string> = {
-  soaking: "Soaking", cutting: "Cutting", post_cutting: "Post-Cut",
+  soaking: "Soaking", cutting: "Cutting", post_cutting: "Post-cut",
   sewing: "Sewing", finishing: "Finishing", ironing: "Ironing", quality_check: "QC",
 };
 
-const STAGE_COLORS: Record<string, string> = {
-  soaking: "#0ea5e9", cutting: "#f59e0b", post_cutting: "#f97316",
-  sewing: "#8b5cf6", finishing: "#10b981", ironing: "#f43f5e", quality_check: "#6366f1",
+const STAGE_DOT: Record<string, string> = {
+  soaking: "var(--status-info)",
+  cutting: "var(--status-warn)",
+  post_cutting: "var(--status-warn)",
+  sewing: "var(--foreground)",
+  finishing: "var(--status-ok)",
+  ironing: "var(--status-bad)",
+  quality_check: "var(--status-info)",
 };
 
 type WorkerSearch = { stage: string; preset?: string };
@@ -57,6 +69,19 @@ function getDateRange(preset: string): { from: string; to: string } {
   }
 }
 
+function efficiencyTone(eff: number): "ok" | "warn" | "bad" {
+  if (eff >= 90) return "ok";
+  if (eff >= 70) return "warn";
+  return "bad";
+}
+
+const TONE_TEXT: Record<"ok" | "warn" | "bad" | "info", string> = {
+  ok:   "text-[var(--status-ok)]",
+  warn: "text-[var(--status-warn)]",
+  bad:  "text-[var(--status-bad)]",
+  info: "text-[var(--status-info)]",
+};
+
 // ── KPI Card ────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -69,12 +94,36 @@ function KpiCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border bg-card p-5">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-muted-foreground" />
-        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
+    <div className="rounded-md border border-border bg-card p-4">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <p className="text-xs">{label}</p>
       </div>
-      {children}
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+// ── Inline stat (no card chrome) ────────────────────────────────────
+
+function InlineStat({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  tone?: "ok" | "warn" | "bad" | "info";
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 px-4 py-2 border-r last:border-r-0 border-border first:pl-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex items-baseline gap-2">
+        <span className={cn("text-base font-medium tabular-nums", tone ? TONE_TEXT[tone] : "")}>{value}</span>
+        {hint && <span className="text-xs text-muted-foreground truncate">{hint}</span>}
+      </div>
     </div>
   );
 }
@@ -99,15 +148,43 @@ function WorkerDetailPage() {
     [garments, name, stage],
   );
 
-  const stageColor = STAGE_COLORS[stage] ?? "#94a3b8";
-  const presetLabel = preset === "today" ? "Today" : preset === "week" ? "Last 7 Days" : preset === "month" ? "Last 30 Days" : "Last 90 Days";
+  const durations = useMemo(
+    () => getWorkerDurations(garments, name),
+    [garments, name],
+  );
+  const daysPresent = useMemo(
+    () => getWorkerDaysPresent(garments, name),
+    [garments, name],
+  );
+
+  const quality = useMemo(
+    () => getWorkerQuality(garments, name, stage),
+    [garments, name, stage],
+  );
+
+  const timing = useMemo(() => {
+    if (durations.length === 0) return null;
+    const sorted = [...durations].sort((a, b) => a - b);
+    const avg = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))];
+    return {
+      avg: Math.round(avg),
+      median: Math.round(median),
+      p90: Math.round(p90),
+      sampleCount: sorted.length,
+    };
+  }, [durations]);
+
+  const stageDot = STAGE_DOT[stage] ?? "var(--muted-foreground)";
+  const presetLabel = preset === "today" ? "Today" : preset === "week" ? "Last 7 days" : preset === "month" ? "Last 30 days" : "Last 90 days";
 
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
         <div className="h-8 w-48 bg-muted rounded animate-pulse mb-6" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 bg-muted rounded-md animate-pulse" />)}
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 bg-muted rounded-md animate-pulse" />)}
         </div>
         <div className="h-72 bg-muted rounded-md animate-pulse" />
       </div>
@@ -123,15 +200,15 @@ function WorkerDetailPage() {
             Back to Performance
           </Link>
         </Button>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-lg font-semibold mb-1">Worker not found</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-base font-medium mb-1">Worker not found</p>
           <p className="text-sm text-muted-foreground">No data for "{name}" in {STAGE_LABELS[stage] ?? stage} {presetLabel.toLowerCase()}.</p>
         </div>
       </div>
     );
   }
 
-  const effColor = worker.efficiency >= 90 ? "#10b981" : worker.efficiency >= 70 ? "#f59e0b" : "#ef4444";
+  const effTone = efficiencyTone(worker.efficiency);
 
   // Compute best/worst day
   const bestDay = dailyData.length > 0 ? dailyData.reduce((a, b) => b.completed > a.completed ? b : a) : null;
@@ -162,210 +239,285 @@ function WorkerDetailPage() {
         </PageHeader>
       </div>
 
-      {/* KPI Cards */}
+      {/* Unit-only worker notice */}
+      {worker.unitOnly && (
+        <StatusBanner tone="info" icon={Info}>
+          {STAGE_LABELS[stage] ?? stage} performance is tracked at the unit level
+          {worker.unit ? <> ({worker.unit})</> : null}. Individual output is not scored — this page shows attendance and per-garment time only.
+        </StatusBanner>
+      )}
+
+      {/* Primary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard icon={Package2} label="Total Output">
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black tabular-nums">{worker.actual}</span>
-            {worker.dailyTarget > 0 && (
-              <span className="text-sm text-muted-foreground">pieces</span>
-            )}
-          </div>
-        </KpiCard>
+        {worker.unitOnly ? (
+          <>
+            <KpiCard icon={CalendarCheck} label="Days present">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-semibold tabular-nums tracking-tight">{daysPresent.length}</span>
+                <span className="text-sm text-muted-foreground">day{daysPresent.length === 1 ? "" : "s"}</span>
+              </div>
+            </KpiCard>
 
-        <KpiCard icon={Zap} label="Efficiency">
-          {worker.dailyTarget > 0 ? (
-            <span className="text-2xl font-black tabular-nums" style={{ color: effColor }}>
-              {worker.efficiency}%
-            </span>
-          ) : (
-            <span className="text-sm text-muted-foreground">No target set</span>
-          )}
-        </KpiCard>
-
-        <KpiCard icon={Target} label="Daily Target">
-          {worker.dailyTarget > 0 ? (
-            <div>
-              <span className="text-2xl font-black tabular-nums">{worker.dailyTarget}</span>
-              <span className="text-sm text-muted-foreground ml-1">/day</span>
-            </div>
-          ) : (
-            <span className="text-sm text-muted-foreground">Not set</span>
-          )}
-        </KpiCard>
-
-        <KpiCard icon={RotateCcw} label="Rework">
-          <span className="text-2xl font-black tabular-nums">{worker.reworkCount}</span>
-        </KpiCard>
-      </div>
-
-      {/* Secondary Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-md border bg-card px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Avg / Day</p>
-          <p className="text-lg font-black tabular-nums">{avgPerDay}</p>
-        </div>
-        {worker.dailyTarget > 0 && (
-          <div className="rounded-md border bg-card px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Days on Target</p>
-            <p className="text-lg font-black tabular-nums">
-              {daysOnTarget}<span className="text-sm text-muted-foreground font-normal"> / {dailyData.length}</span>
-            </p>
-          </div>
-        )}
-        {bestDay && (
-          <div className="rounded-md border bg-card px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Best Day</p>
-            <p className="text-lg font-black tabular-nums">{bestDay.completed}</p>
-            <p className="text-[10px] text-muted-foreground">
-              {new Date(bestDay.date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" })}
-            </p>
-          </div>
-        )}
-        {worker.rating && (
-          <div className="rounded-md border bg-card px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Rating</p>
-            <div className="flex items-center gap-0.5 mt-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star
-                  key={i}
-                  className={cn(
-                    "w-4 h-4",
-                    i < worker.rating! ? "fill-amber-400 text-amber-400" : "fill-muted text-muted",
-                  )}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Daily Trend Chart — full width */}
-      <div className="rounded-md border bg-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-muted-foreground" />
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Daily Output Trend</p>
-          </div>
-          {worker.dailyTarget > 0 && (
-            <span className="text-[10px] text-muted-foreground">
-              Target: {worker.dailyTarget}/day
-            </span>
-          )}
-        </div>
-        {dailyData.length > 1 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={dailyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v) => {
-                  const d = new Date(v + "T12:00:00+03:00");
-                  return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" });
-                }}
-              />
-              <YAxis tick={{ fontSize: 10 }} width={35} />
-              <RechartsTooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
-                labelFormatter={(v) => {
-                  const d = new Date(v + "T12:00:00+03:00");
-                  return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
-                }}
-              />
-              {worker.dailyTarget > 0 && (
-                <ReferenceLine
-                  y={worker.dailyTarget}
-                  stroke="#f59e0b"
-                  strokeDasharray="6 3"
-                  strokeWidth={1.5}
-                  label={{
-                    value: "Target",
-                    position: "insideTopRight",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    fill: "#f59e0b",
-                  }}
-                />
+            <KpiCard icon={Clock} label="Avg / garment">
+              {timing ? (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-semibold tabular-nums tracking-tight">{timing.avg}</span>
+                  <span className="text-sm text-muted-foreground">min</span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">No timing data</span>
               )}
-              <Line
-                type="monotone"
-                dataKey="completed"
-                stroke={stageColor}
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: stageColor }}
-                activeDot={{ r: 6 }}
-                animationDuration={800}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : dailyData.length === 1 ? (
-          <div className="text-center py-12">
-            <p className="text-3xl font-black tabular-nums">{dailyData[0].completed}</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {new Date(dailyData[0].date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "long", month: "long", day: "numeric" })}
-            </p>
-          </div>
+            </KpiCard>
+
+            <KpiCard icon={Package2} label="Garments touched">
+              <span className="text-2xl font-semibold tabular-nums tracking-tight">{timing?.sampleCount ?? 0}</span>
+            </KpiCard>
+
+            <KpiCard icon={Star} label="Rating">
+              {worker.rating ? (
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={cn(
+                        "w-4 h-4",
+                        i < worker.rating!
+                          ? "fill-[var(--status-warn)] text-[var(--status-warn)]"
+                          : "fill-muted text-muted",
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">—</span>
+              )}
+            </KpiCard>
+          </>
         ) : (
-          <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground italic">
-            No output data for this period
-          </div>
+          <>
+            <KpiCard icon={Package2} label="Total output">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-semibold tabular-nums tracking-tight">{worker.actual}</span>
+                {worker.dailyTarget > 0 && (
+                  <span className="text-sm text-muted-foreground">pieces</span>
+                )}
+              </div>
+            </KpiCard>
+
+            <KpiCard icon={Zap} label="Efficiency">
+              {worker.dailyTarget > 0 ? (
+                <span className={cn("text-2xl font-semibold tabular-nums tracking-tight", TONE_TEXT[effTone])}>
+                  {worker.efficiency}%
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">No target set</span>
+              )}
+            </KpiCard>
+
+            <KpiCard icon={Target} label="Daily target">
+              {worker.dailyTarget > 0 ? (
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-semibold tabular-nums tracking-tight">{worker.dailyTarget}</span>
+                  <span className="text-sm text-muted-foreground">/day</span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">Not set</span>
+              )}
+            </KpiCard>
+
+            <KpiCard icon={RotateCcw} label="Rework">
+              <span className="text-2xl font-semibold tabular-nums tracking-tight">{worker.reworkCount}</span>
+            </KpiCard>
+          </>
         )}
       </div>
 
-      {/* Day-by-Day Breakdown */}
-      {dailyData.length > 0 && (
-        <div className="grid md:grid-cols-2 gap-4">
-          {/* Bar chart view */}
-          <div className="rounded-md border bg-card p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-4">Daily Breakdown</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 9 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v + "T12:00:00+03:00");
-                    return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric" });
-                  }}
-                />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <RechartsTooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
-                  labelFormatter={(v) => {
-                    const d = new Date(v + "T12:00:00+03:00");
-                    return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
-                  }}
-                />
-                {worker.dailyTarget > 0 && (
-                  <ReferenceLine y={worker.dailyTarget} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1} />
-                )}
-                <Bar dataKey="completed" radius={[4, 4, 0, 0]} animationDuration={800} fill={stageColor} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Timing + secondary metrics — one inline strip (only for individual stages) */}
+      {!worker.unitOnly && (timing || dailyData.length > 0) && (
+        <div className="bg-card border border-border rounded-md flex flex-wrap">
+          {timing && (
+            <>
+              <InlineStat label="Avg min/piece" value={timing.avg} />
+              <InlineStat label="Median" value={timing.median} />
+              <InlineStat label="p90" value={timing.p90} />
+              <InlineStat label="Sessions" value={timing.sampleCount} />
+            </>
+          )}
+          <InlineStat label="Avg / day" value={avgPerDay} />
+          {worker.dailyTarget > 0 && (
+            <InlineStat
+              label="Days on target"
+              value={`${daysOnTarget} / ${dailyData.length}`}
+            />
+          )}
+          {bestDay && (
+            <InlineStat
+              label="Best day"
+              value={bestDay.completed}
+              hint={new Date(bestDay.date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" })}
+            />
+          )}
+        </div>
+      )}
 
-          {/* Table view */}
-          <div className="rounded-md border overflow-hidden bg-card">
-            <div className="px-5 py-3 border-b bg-muted/30">
-              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Day-by-Day Log</p>
+      {/* Quality — defect rate + QC pass rate. Only individual stages. */}
+      {!worker.unitOnly && (
+        <SectionCard
+          title="Quality"
+          action={<span className="text-xs text-muted-foreground">{quality.sampleSize} piece{quality.sampleSize === 1 ? "" : "s"} handled</span>}
+        >
+          {quality.sampleSize < MIN_QUALITY_SAMPLE ? (
+            <p className="text-sm text-muted-foreground">
+              Need at least {MIN_QUALITY_SAMPLE} pieces in range to compute reliable quality stats.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span className="text-xs">QC pass rate</span>
+                </div>
+                <p
+                  className={cn(
+                    "text-2xl font-semibold tabular-nums tracking-tight",
+                    quality.qcPassRate === null
+                      ? "text-muted-foreground"
+                      : quality.qcPassRate >= 90
+                      ? TONE_TEXT.ok
+                      : quality.qcPassRate >= 75
+                      ? TONE_TEXT.warn
+                      : TONE_TEXT.bad,
+                  )}
+                >
+                  {quality.qcPassRate === null ? "—" : `${quality.qcPassRate}%`}
+                </p>
+                <p className="text-xs text-muted-foreground">no QC fails across all trips</p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <RotateCcw className="w-3 h-3" />
+                  <span className="text-xs">Defect rate</span>
+                </div>
+                <p
+                  className={cn(
+                    "text-2xl font-semibold tabular-nums tracking-tight",
+                    quality.defectRate === null
+                      ? "text-muted-foreground"
+                      : quality.defectRate <= 5
+                      ? TONE_TEXT.ok
+                      : quality.defectRate <= 15
+                      ? TONE_TEXT.warn
+                      : TONE_TEXT.bad,
+                  )}
+                >
+                  {quality.defectRate === null ? "—" : `${quality.defectRate}%`}
+                </p>
+                <p className="text-xs text-muted-foreground">QC flagged this stage for rework</p>
+              </div>
             </div>
-            <div className="divide-y max-h-[260px] overflow-y-auto">
+          )}
+        </SectionCard>
+      )}
+
+      {/* Days present (unit-only stages) */}
+      {worker.unitOnly && daysPresent.length > 0 && (
+        <SectionCard title="Days present">
+          <div className="flex flex-wrap gap-1.5">
+            {daysPresent.map((d) => (
+              <span key={d} className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md tabular-nums">
+                {new Date(d + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" })}
+              </span>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Daily Output + Log — side by side */}
+      {!worker.unitOnly && dailyData.length > 0 && (
+        <div className="grid md:grid-cols-[1.4fr_1fr] gap-4">
+          <SectionCard
+            title="Daily output"
+            action={
+              worker.dailyTarget > 0 ? (
+                <span className="text-xs text-muted-foreground">Target {worker.dailyTarget}/day</span>
+              ) : null
+            }
+          >
+            {dailyData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v + "T12:00:00+03:00");
+                      return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "short", day: "numeric" });
+                    }}
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={32} />
+                  <RechartsTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid var(--border)" }}
+                    labelFormatter={(v) => {
+                      const d = new Date(v + "T12:00:00+03:00");
+                      return d.toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" });
+                    }}
+                  />
+                  {worker.dailyTarget > 0 && (
+                    <ReferenceLine
+                      y={worker.dailyTarget}
+                      stroke="var(--status-warn)"
+                      strokeDasharray="4 3"
+                      strokeWidth={1}
+                      label={{
+                        value: "Target",
+                        position: "insideTopRight",
+                        fontSize: 10,
+                        fill: "var(--status-warn)",
+                      }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="completed"
+                    stroke={stageDot}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: stageDot }}
+                    activeDot={{ r: 5 }}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-2xl font-semibold tabular-nums tracking-tight">{dailyData[0].completed}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {new Date(dailyData[0].date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "long", month: "long", day: "numeric" })}
+                </p>
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Day-by-day"
+            action={<CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />}
+            bodyClassName="p-0"
+          >
+            <div className="divide-y divide-border max-h-[260px] overflow-y-auto">
               {[...dailyData].reverse().map((d) => {
                 const dayEff = worker.dailyTarget > 0 ? Math.round((d.completed / worker.dailyTarget) * 100) : 0;
                 const met = d.completed >= worker.dailyTarget;
                 return (
-                  <div key={d.date} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/5">
-                    <span className="text-xs text-muted-foreground">
+                  <div key={d.date} className="flex items-center justify-between px-4 py-2 hover:bg-muted/20 transition-colors">
+                    <span className="text-sm text-muted-foreground">
                       {new Date(d.date + "T12:00:00+03:00").toLocaleDateString("en-GB", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" })}
                     </span>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold tabular-nums">{d.completed}</span>
+                      <span className="text-sm font-medium tabular-nums">{d.completed}</span>
                       {worker.dailyTarget > 0 && (
                         <span className={cn(
-                          "text-[10px] font-bold tabular-nums w-10 text-right",
-                          met ? "text-emerald-600" : dayEff >= 70 ? "text-amber-600" : "text-red-600",
+                          "text-xs tabular-nums w-10 text-right",
+                          met ? TONE_TEXT.ok : dayEff >= 70 ? TONE_TEXT.warn : TONE_TEXT.bad,
                         )}>
                           {dayEff}%
                         </span>
@@ -375,7 +527,7 @@ function WorkerDetailPage() {
                 );
               })}
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
     </div>

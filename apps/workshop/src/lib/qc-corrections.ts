@@ -40,8 +40,11 @@ export const QC_OPTION_TO_SECTION: Record<string, AlterationStyleSection> = {
   front_pocket_type: "frontPocket",
   front_pocket_thickness: "frontPocket",
   pen_holder: "frontPocket",
-  wallet_pocket: "frontPocket",
-  mobile_pocket: "frontPocket",
+  // Wallet + mobile accessory pills render inside the Side Pocket section in
+  // DishdashaOverlay, not Front Pocket — keep the section mapping aligned so
+  // QC defects surface next to the visible pill.
+  wallet_pocket: "sidePocket",
+  mobile_pocket: "sidePocket",
 };
 
 const QC_MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
@@ -56,8 +59,11 @@ const QC_MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
 };
 
 export interface QcFailContext {
-  /** key → operator-recorded value that failed tolerance this attempt. */
+  /** Measurement key → operator-recorded value that failed tolerance. */
   actuals: Map<string, number>;
+  /** Option key (DB column name) → operator-recorded value that mismatched the spec.
+   *  Lets the terminal render a red "QC saw X" badge alongside the expected style. */
+  optionActuals: Map<string, unknown>;
   /** Filter reusing the alteration-overlay machinery for style sections. */
   filter: AlterationFilter;
 }
@@ -82,6 +88,12 @@ export function buildQcFailContext(garment: WorkshopGarment): QcFailContext | nu
     if (typeof v === "number" && Number.isFinite(v)) actuals.set(k, v);
   }
 
+  const optionActuals = new Map<string, unknown>();
+  for (const k of lastFail.failed_options ?? []) {
+    const v = lastFail.options?.[k];
+    if (v !== undefined) optionActuals.set(k, v);
+  }
+
   const fieldReasons = new Map(
     [...actuals.keys()].map((k) => [k, "Workshop Error" as const]),
   );
@@ -97,10 +109,11 @@ export function buildQcFailContext(garment: WorkshopGarment): QcFailContext | nu
   }
 
   const measurementKeys = new Set(actuals.keys());
-  if (measurementKeys.size === 0 && visibleSections.size === 0) return null;
+  if (measurementKeys.size === 0 && visibleSections.size === 0 && optionActuals.size === 0) return null;
 
   return {
     actuals,
+    optionActuals,
     filter: {
       measurementKeys,
       fieldReasons,

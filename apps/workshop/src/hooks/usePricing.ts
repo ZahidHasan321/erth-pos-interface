@@ -1,6 +1,15 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getPrices, updatePrice, getStyles, updateStylePrice } from "@/api/pricing";
+import {
+  getPrices,
+  updatePrice,
+  getStyles,
+  updateStylePrice,
+  getStylePricingRules,
+  upsertStylePricingRule,
+  deleteStylePricingRule,
+  type StylePricingRuleInput,
+} from "@/api/pricing";
 import type { Brand } from "@repo/database";
 
 // Prices and styles are tiny (~13 and ~75 rows total). Fetch all brands once
@@ -49,5 +58,35 @@ export function useUpdateStylePrice() {
     mutationFn: ({ id, rate_per_item }: { id: number; rate_per_item: number }) =>
       updateStylePrice(id, rate_per_item),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["styles"] }),
+  });
+}
+
+export function useStylePricingRules(brand: Brand) {
+  const query = useQuery({
+    queryKey: ["style-pricing-rules"],
+    queryFn: getStylePricingRules,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const data = useMemo(
+    () => query.data?.filter((r) => r.brand === brand),
+    [query.data, brand],
+  );
+  return { ...query, data };
+}
+
+export function useUpsertStylePricingRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: StylePricingRuleInput) => upsertStylePricingRule(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["style-pricing-rules"] }),
+  });
+}
+
+export function useDeleteStylePricingRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteStylePricingRule(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["style-pricing-rules"] }),
   });
 }

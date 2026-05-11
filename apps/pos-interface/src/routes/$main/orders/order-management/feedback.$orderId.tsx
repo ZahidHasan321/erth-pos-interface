@@ -73,6 +73,7 @@ import {
   cuffTypes,
   walletIcon,
   penIcon,
+  phoneIcon,
   smallTabaggiImage,
   thicknessOptions,
   type BaseOption
@@ -108,12 +109,22 @@ const MEASUREMENT_ROWS = [
   { type: "Waist", subType: "Front", key: "waist_front" },
   { type: "Waist", subType: "Back", key: "waist_back" },
   { type: "Arm Hole", subType: "Arm Hole", key: "armhole" },
+  { type: "Arm Hole", subType: "Front", key: "armhole_front" },
   { type: "Chest", subType: "Upper", key: "chest_upper" },
   { type: "Chest", subType: "Full", key: "chest_full" },
   { type: "Chest", subType: "Half", key: "chest_front" },
+  { type: "Chest", subType: "Back", key: "chest_back" },
+  { type: "Shoulder", subType: "Shoulder", key: "shoulder" },
   { type: "Elbow", subType: "Elbow", key: "elbow" },
-  { type: "Sleeves", subType: "Sleeves", key: "sleeve_length" },
+  { type: "Sleeves", subType: "Length", key: "sleeve_length" },
+  { type: "Sleeves", subType: "Width", key: "sleeve_width" },
   { type: "Bottom", subType: "Bottom", key: "bottom" },
+  { type: "Jabzour", subType: "Length", key: "jabzour_length" },
+  { type: "Jabzour", subType: "Width", key: "jabzour_width" },
+  { type: "Jabzour", subType: "2nd Btn Dist", key: "second_button_distance" },
+  { type: "Basma", subType: "Length", key: "basma_length" },
+  { type: "Basma", subType: "Width", key: "basma_width" },
+  { type: "Basma", subType: "Sleeve Length", key: "basma_sleeve_length" },
 ] as const;
 
 type MeasurementRow = (typeof MEASUREMENT_ROWS)[number];
@@ -122,7 +133,7 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
   {
     title: "Collar, Length & Chest",
     rows: MEASUREMENT_ROWS.filter(r =>
-      ["collar_width", "collar_height", "length_front", "length_back", "chest_upper", "chest_full", "chest_front"].includes(r.key)
+      ["collar_width", "collar_height", "length_front", "length_back", "chest_upper", "chest_full", "chest_front", "chest_back"].includes(r.key)
     ),
   },
   {
@@ -134,7 +145,19 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
   {
     title: "Waist, Arms & Bottom",
     rows: MEASUREMENT_ROWS.filter(r =>
-      ["waist_front", "waist_back", "armhole", "elbow", "sleeve_length", "bottom"].includes(r.key)
+      ["waist_front", "waist_back", "armhole", "armhole_front", "shoulder", "elbow", "sleeve_length", "sleeve_width", "bottom"].includes(r.key)
+    ),
+  },
+  {
+    title: "Jabzour",
+    rows: MEASUREMENT_ROWS.filter(r =>
+      ["jabzour_length", "jabzour_width", "second_button_distance"].includes(r.key)
+    ),
+  },
+  {
+    title: "Basma",
+    rows: MEASUREMENT_ROWS.filter(r =>
+      ["basma_length", "basma_width", "basma_sleeve_length"].includes(r.key)
     ),
   },
 ];
@@ -166,6 +189,18 @@ const DIFFERENCE_REASONS = [
   { label: "Shop Error", color: "text-muted-foreground bg-muted/50" },
 ];
 
+// Lightweight option lists for non-image style fields (collar position, lines).
+// BaseOption shape kept so they reuse the same picker UI; `image` left empty.
+const collarPositions: BaseOption[] = [
+  { value: "up", displayText: "Up", alt: "Collar up", image: null },
+  { value: "down", displayText: "Down", alt: "Collar down", image: null },
+  { value: "__standard__", displayText: "Standard", alt: "Standard", image: null },
+];
+const linesOptions: BaseOption[] = [
+  { value: "1", displayText: "Single Line", alt: "Single line", image: null },
+  { value: "2", displayText: "Double Line", alt: "Double line", image: null },
+];
+
 // Maps optionRows id → picker option list for style rejection replacement
 const STYLE_OPTION_LISTS: Record<string, BaseOption[] | undefined> = {
   collar: collarTypes,
@@ -173,6 +208,8 @@ const STYLE_OPTION_LISTS: Record<string, BaseOption[] | undefined> = {
   frontPocket: topPocketTypes,
   cuff: cuffTypes,
   jabzour: jabzourTypes,
+  collarPosition: collarPositions,
+  lines: linesOptions,
 };
 
 // --- Types ---
@@ -818,6 +855,27 @@ function UnifiedFeedbackInterface() {
         toast.error("Measurements still loading — please wait before submitting");
         return;
     }
+    // Any measurement change must have a reason picked — silently dropping
+    // a Customer Request because the dropdown was untouched is the bug behind
+    // the "spec changed in feedback but workshop still made the old size" reports.
+    const missingReason: string[] = [];
+    for (const row of MEASUREMENT_ROWS) {
+      const fbVal = currentState.feedbackMeasurements[row.key];
+      if (fbVal === "" || fbVal === undefined) continue;
+      const orig = measurement ? (measurement[row.key as keyof Measurement] as number | null) : null;
+      if (orig == null) continue;
+      if (Number(orig) === Number(fbVal)) continue;
+      if (!currentState.differenceReasons[row.key]) {
+        missingReason.push(`${row.type} ${row.subType}`);
+      }
+    }
+    if (missingReason.length > 0) {
+      toast.error(
+        `Pick a reason for: ${missingReason.join(", ")} — Customer Request / Workshop Error / Shop Error`,
+        { duration: 6000 },
+      );
+      return;
+    }
     setIsConfirmDialogOpen(true);
   };
 
@@ -956,12 +1014,12 @@ function UnifiedFeedbackInterface() {
           }
         }
 
-        // --- Style propagation (brova rejection → brovas + finals sharing style_id) ---
-        // Triggered only on brova trial: rejecting a style here overwrites style
-        // fields on every garment in the order with the same style_id — including
-        // finals — so workshop produces the corrected style. style_id stays fixed
-        // so grouping holds.
-        if (activeGarment.garment_type === "brova" && activeGarment.style_id != null) {
+        // --- Style propagation ---
+        // Brovas: bulk-update every garment in the order sharing style_id (so
+        // finals inherit the correction before they're produced). Finals and
+        // alteration-order garments update only the active garment — siblings
+        // may already be in a different production state and shouldn't shift.
+        {
           const styleFieldUpdates: Partial<Garment> = {};
           const hashwaFieldUpdates: Partial<Garment> = {};
           for (const opt of optionRows) {
@@ -987,20 +1045,38 @@ function UnifiedFeedbackInterface() {
                   styleFieldUpdates.jabzour_2 = mainNewValue;
                 }
               }
+              // Collar position: "__standard__" sentinel means null (no position set).
+              else if (opt.id === "collarPosition") {
+                styleFieldUpdates.collar_position =
+                  mainNewValue === "__standard__" ? null : (mainNewValue as "up" | "down");
+              }
+              // Lines: enum string ("1"/"2") → integer column.
+              else if (opt.id === "lines") {
+                const parsed = Number(mainNewValue);
+                if (parsed === 1 || parsed === 2) styleFieldUpdates.lines = parsed;
+              }
             }
-            // smallTabaggi is a boolean toggle: reject = flip, no picker.
-            if (opt.id === "smallTabaggi" && mainRejected) {
-              styleFieldUpdates.small_tabaggi = !activeGarment.small_tabaggi;
+            // Boolean accessory toggles — reject = flip current value (add if off, remove if on).
+            if (mainRejected) {
+              if (opt.id === "smallTabaggi") styleFieldUpdates.small_tabaggi = !activeGarment.small_tabaggi;
+              else if (opt.id === "penHolder") styleFieldUpdates.pen_holder = !activeGarment.pen_holder;
+              else if (opt.id === "walletPocket") styleFieldUpdates.wallet_pocket = !activeGarment.wallet_pocket;
+              else if (opt.id === "mobilePocket") styleFieldUpdates.mobile_pocket = !activeGarment.mobile_pocket;
             }
             if (hashwaRejected && hashwaNewValue) {
               if (opt.id === "frontPocket") hashwaFieldUpdates.front_pocket_thickness = hashwaNewValue;
               else if (opt.id === "cuff") hashwaFieldUpdates.cuffs_thickness = hashwaNewValue;
               else if (opt.id === "jabzour") hashwaFieldUpdates.jabzour_thickness = hashwaNewValue;
+              else if (opt.id === "collar") hashwaFieldUpdates.collar_thickness = hashwaNewValue;
             }
           }
           const combined = { ...styleFieldUpdates, ...hashwaFieldUpdates };
           if (Object.keys(combined).length > 0) {
-            await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
+            if (activeGarment.garment_type === "brova" && activeGarment.style_id != null) {
+              await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
+            } else {
+              await updateGarment(activeGarment.id, combined);
+            }
           }
         }
 
@@ -1173,6 +1249,27 @@ function UnifiedFeedbackInterface() {
     return list.find(o => o.value === val || o.displayText === val)?.image;
   };
 
+  // Boolean accessory toggles (no picker — rejection flips the value).
+  // Centralized so the JSX, the propagation switch, and the diff log all agree.
+  const BOOL_OPT_FIELDS: Record<string, keyof Garment> = {
+    smallTabaggi: "small_tabaggi",
+    penHolder: "pen_holder",
+    walletPocket: "wallet_pocket",
+    mobilePocket: "mobile_pocket",
+  };
+  const BOOL_OPT_NAMES: Record<string, string> = {
+    smallTabaggi: "Small Tabbagi",
+    penHolder: "Pen Holder",
+    walletPocket: "Wallet Pocket",
+    mobilePocket: "Mobile Pocket",
+  };
+  const isBoolOpt = (id: string) => id in BOOL_OPT_FIELDS;
+  const getBoolCurrent = (id: string): boolean => {
+    if (!activeGarment) return false;
+    const field = BOOL_OPT_FIELDS[id];
+    return !!(field && (activeGarment as any)[field]);
+  };
+
   const findDisplayText = (list: BaseOption[], val: string | undefined | null) => {
     if (!val) return val;
     return list.find(o => o.value === val || o.displayText === val)?.displayText ?? val;
@@ -1215,8 +1312,8 @@ function UnifiedFeedbackInterface() {
         mainValue: g.collar_type,
         displayText: findDisplayText(collarTypes, g.collar_type),
         mainImage: findOptionImage(collarTypes, g.collar_type),
-        hashwaLabel: null,
-        hashwaValue: null
+        hashwaLabel: "Hashwa",
+        hashwaValue: g.collar_thickness,
       },
       {
         id: "collarBtn",
@@ -1269,25 +1366,54 @@ function UnifiedFeedbackInterface() {
         hashwaLabel: "Hashwa",
         hashwaValue: g.cuffs_thickness
       },
-      // Accessories
-      ...(g.wallet_pocket ? [{
+      // Accessories — always shown so customer can ADD as well as REMOVE.
+      {
         id: "walletPocket",
         label: "Wallet Pocket",
-        mainValue: "Yes",
-        displayText: "Wallet Pocket",
+        mainValue: g.wallet_pocket ? "Yes" : "No",
+        displayText: g.wallet_pocket ? "Yes — Wallet pocket present" : "No — Not applied",
         mainImage: walletIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
-      }] : []),
-      ...(g.pen_holder ? [{
+      },
+      {
         id: "penHolder",
         label: "Pen Holder",
-        mainValue: "Yes",
-        displayText: "Pen Holder",
+        mainValue: g.pen_holder ? "Yes" : "No",
+        displayText: g.pen_holder ? "Yes — Pen holder present" : "No — Not applied",
         mainImage: penIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
-      }] : []),
+      },
+      {
+        id: "mobilePocket",
+        label: "Mobile Pocket",
+        mainValue: g.mobile_pocket ? "Yes" : "No",
+        displayText: g.mobile_pocket ? "Yes — Mobile pocket present" : "No — Not applied",
+        mainImage: phoneIcon as string | null,
+        hashwaLabel: null as string | null,
+        hashwaValue: null as string | null
+      },
+      // Collar position — three-state (up / down / null=standard).
+      {
+        id: "collarPosition",
+        label: "Collar Position",
+        mainValue: g.collar_position ?? "__standard__",
+        displayText: findDisplayText(collarPositions, g.collar_position ?? "__standard__"),
+        mainImage: null,
+        hashwaLabel: null,
+        hashwaValue: null,
+      },
+      // Lines — single (1) or double (2). Stored as integer on DB.
+      {
+        id: "lines",
+        label: "Lines",
+        mainValue: String(g.lines ?? 1),
+        displayText: findDisplayText(linesOptions, String(g.lines ?? 1)),
+        mainImage: null,
+        hashwaLabel: null,
+        hashwaValue: null,
+      },
     ];
 
     return rows.filter(r => r.mainValue && r.mainValue !== "None");
@@ -1785,20 +1911,26 @@ function UnifiedFeedbackInterface() {
                                                     )}
                                                 >
                                                     <Check className="w-3 h-3" />
-                                                    {opt.id === "smallTabaggi" ? "Keep" : "OK"}
+                                                    {isBoolOpt(opt.id) ? "Keep" : "OK"}
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, false)}
                                                     className={cn(
                                                         "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all whitespace-nowrap",
+                                                        // Booleans: color the reject button green when rejection = ADD,
+                                                        // red when rejection = REMOVE. Picker rows stay red.
                                                         isRejected
-                                                            ? "bg-red-500 border-red-500 text-white"
-                                                            : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600"
+                                                            ? (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
+                                                                ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                : "bg-red-500 border-red-500 text-white")
+                                                            : (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
+                                                                ? "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
+                                                                : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600")
                                                     )}
                                                 >
                                                     <X className="w-3 h-3" />
-                                                    {opt.id === "smallTabaggi"
-                                                        ? (activeGarment?.small_tabaggi ? "Remove Tabbagi" : "Add Tabbagi")
+                                                    {isBoolOpt(opt.id)
+                                                        ? (getBoolCurrent(opt.id) ? `Remove ${BOOL_OPT_NAMES[opt.id]}` : `Add ${BOOL_OPT_NAMES[opt.id]}`)
                                                         : "No"}
                                                 </button>
                                             </div>
@@ -1878,15 +2010,21 @@ function UnifiedFeedbackInterface() {
                                             </div>
                                         )}
 
-                                        {/* Small Tabbagi reject → flip indicator (no picker) */}
-                                        {isRejected && opt.id === "smallTabaggi" && (
-                                            <div className="mt-3 pt-3 border-t border-red-200 flex items-center gap-2">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">New →</span>
-                                                <Badge variant="outline" className="font-black text-xs bg-red-50 text-red-700 border-red-200">
-                                                    {activeGarment?.small_tabaggi ? "Remove Small Tabbagi" : "Add Small Tabbagi"}
-                                                </Badge>
-                                            </div>
-                                        )}
+                                        {/* Boolean reject → flip indicator (no picker). Green = add, red = remove. */}
+                                        {isRejected && isBoolOpt(opt.id) && (() => {
+                                            const removing = getBoolCurrent(opt.id);
+                                            const tone = removing
+                                                ? { wrap: "border-red-200", label: "text-red-700", badge: "bg-red-50 text-red-700 border-red-200" }
+                                                : { wrap: "border-emerald-200", label: "text-emerald-700", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+                                            return (
+                                                <div className={cn("mt-3 pt-3 border-t flex items-center gap-2", tone.wrap)}>
+                                                    <span className={cn("text-[10px] font-black uppercase tracking-widest shrink-0", tone.label)}>New →</span>
+                                                    <Badge variant="outline" className={cn("font-black text-xs", tone.badge)}>
+                                                        {removing ? `Remove ${BOOL_OPT_NAMES[opt.id]}` : `Add ${BOOL_OPT_NAMES[opt.id]}`}
+                                                    </Badge>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* Hashwa row */}
                                         {opt.hashwaValue && (

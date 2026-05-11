@@ -101,7 +101,7 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
     title: "",
     keys: [
       "top_pocket_width", "side_pocket_length", "side_pocket_width",
-      "side_pocket_distance", "side_pocket_opening", "second_button_distance",
+      "side_pocket_distance", "side_pocket_opening",
     ],
   },
   // Basma group — rendered only when basma applies (see hasBasmaMeasurements).
@@ -112,7 +112,10 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   // Optional group — rendered last; never gates completion.
   {
     title: "Optional",
-    keys: ["sleeve_hemming", "bottom_hemming", "pen_pocket_length", "pen_pocket_width"],
+    keys: [
+      "second_button_distance",
+      "sleeve_hemming", "bottom_hemming", "pen_pocket_length", "pen_pocket_width",
+    ],
   },
 ];
 
@@ -219,9 +222,14 @@ export function evaluateQc(
     .filter((m) => {
       const expected = Number(expectedMeasurements[m.key]);
       const got = Number(inputs.measurements[m.key]);
-      // Optional fields with no expected value are skipped — they don't fail
-      // when blank because the spec sheet may not require them.
-      if (m.optional && !Number.isFinite(expected)) return false;
+      // Optional fields never fail on a blank cell — operator's observation
+      // is "nothing to measure" (e.g. spec had a pen pocket but the actual
+      // garment doesn't, or the spec never asked for it). Only fail when both
+      // sides are present and out of tolerance.
+      if (m.optional) {
+        if (!Number.isFinite(expected) || !Number.isFinite(got)) return false;
+        return Math.abs(got - expected) > QC_TOLERANCE;
+      }
       if (!Number.isFinite(expected) || !Number.isFinite(got)) return true;
       return Math.abs(got - expected) > QC_TOLERANCE;
     })
@@ -230,11 +238,14 @@ export function evaluateQc(
   const failed_options = QC_OPTIONS
     .filter((o) => enabledKeys.has(o.key))
     .filter((o) => {
-      // collar_position null = "Standard" — always a valid choice, regardless
-      // of what the spec asked for. Operator can leave blank to mean Standard.
+      // collar_position: all 3 values matter (up / down / standard). Blank
+      // input means "Standard" — compare normally so a spec of "up" with a
+      // blank operator entry is flagged as a mismatch (garment likely built
+      // as Standard instead of Up).
       if (o.key === "collar_position") {
-        const input = inputs.options[o.key];
-        if (input == null || input === "") return false;
+        const input = inputs.options[o.key] ?? null;
+        const exp = expectedOptions[o.key] ?? null;
+        return (input || null) !== (exp || null);
       }
       return !optionEquals(o, inputs.options[o.key], expectedOptions[o.key]);
     })

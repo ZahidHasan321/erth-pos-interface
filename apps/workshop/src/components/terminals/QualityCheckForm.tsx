@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { ArrowRight, Check, Loader2, X, AlertTriangle, Star } from "lucide-react";
+import { ArrowRight, Ban, Loader2, X, AlertTriangle, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@repo/ui/button";
@@ -18,6 +18,7 @@ import { parseMeasurementParts } from "@repo/database";
 import { cn } from "@/lib/utils";
 import { useSubmitQc } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
+import { StageChip } from "@/components/shared/plan-dialog-shared";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { QC_OPTION_TO_SECTION } from "@/lib/qc-corrections";
 import type { AlterationFilter } from "@/lib/alteration-filter";
@@ -267,10 +268,12 @@ export function QualityCheckForm({
   const expectedMeasurements = (measurement ?? {}) as Record<string, unknown>;
   // Keys the customer's measurement record actually has a value for. Marked
   // with * in the form so operators know which inputs verify against an
-  // expected value vs. which are just observational.
+  // expected value vs. which are just observational. Optional measures are
+  // excluded — they never gate submit, so the * would misread as "required".
   const expectedMeasurementKeys = useMemo(() => {
     const set = new Set<string>();
     for (const m of QC_MEASUREMENTS) {
+      if (m.optional) continue;
       const v = expectedMeasurements[m.key];
       if (v == null || v === "") continue;
       const n = Number(v);
@@ -545,18 +548,17 @@ export function QualityCheckForm({
       {/* Fail dialog — show report + stage picker */}
       <Dialog open={failDialogOpen} onOpenChange={setFailDialogOpen}>
         <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-5 pt-5 pb-3 bg-red-50/60 border-b border-red-100">
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-red-900">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+          <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
+            <DialogTitle className="text-base font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[var(--status-bad)]" />
               Failed QC — return to production
             </DialogTitle>
-            <p className="text-xs text-red-800/80 mt-0.5">
-              {garment.garment_id} · review the issues below, then pick which stages to send the
-              piece back through.
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {garment.garment_id} · review what needs fixing, then pick which stages to send the piece back to.
             </p>
           </DialogHeader>
 
-          <div className="px-5 py-4 max-h-[55vh] overflow-y-auto">
+          <div className="px-4 py-4 max-h-[55vh] overflow-y-auto">
             <FailReport
               evaluation={evaluation}
               expectedMeasurements={expectedMeasurements}
@@ -565,40 +567,31 @@ export function QualityCheckForm({
             />
           </div>
 
-          <div className="px-5 py-3 border-t bg-muted/30">
+          <div className="px-4 py-3 border-t border-border bg-muted/30">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-sm font-medium text-muted-foreground">
                 Return through stages
-              </label>
-              <span className="text-[11px] text-muted-foreground">
+              </span>
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {returnStages.size} selected
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {QC_RETURN_STAGES.map((s) => {
-                const selected = returnStages.has(s);
                 const label = PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s;
                 return (
-                  <button
+                  <StageChip
                     key={s}
-                    type="button"
+                    label={label}
+                    isSelected={returnStages.has(s)}
                     onClick={() => toggleReturnStage(s)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
-                      selected
-                        ? "border-red-500 bg-red-100 text-red-900"
-                        : "border-zinc-300 bg-background text-muted-foreground hover:bg-muted",
-                    )}
-                  >
-                    {selected && <Check className="w-3 h-3" />}
-                    {label}
-                  </button>
+                  />
                 );
               })}
             </div>
           </div>
 
-          <DialogFooter className="px-5 py-3 border-t">
+          <DialogFooter className="px-4 py-3 border-t border-border">
             <Button variant="outline" onClick={() => setFailDialogOpen(false)}>
               Cancel
             </Button>
@@ -612,7 +605,7 @@ export function QualityCheckForm({
               ) : (
                 <X className="w-4 h-4 mr-1.5" />
               )}
-              Send Back
+              Send back
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -783,81 +776,81 @@ function OptionGroups({
           {show("collar_type") && (
             <>
               <SubLabel failed={failed("collar_type")} required={req("collar_type")}>Type</SubLabel>
-              <FailWrap failed={failed("collar_type")}>
-                <ImageOptionGrid
-                  options={collarTypes}
-                  value={text("collar_type")}
-                  onChange={(v) => onChange("collar_type", v)}
-                  allowClear
-                  disabled={off("collar_type")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={collarTypes}
+                value={text("collar_type")}
+                onChange={(v) => onChange("collar_type", v)}
+                allowClear
+                disabled={off("collar_type")}
+                failed={failed("collar_type")}
+              />
             </>
           )}
           {show("collar_button") && (
             <>
               <SubLabel failed={failed("collar_button")} required={req("collar_button")}>Button</SubLabel>
-              <FailWrap failed={failed("collar_button")}>
-                <ImageOptionGrid
-                  options={collarButtons}
-                  value={text("collar_button")}
-                  onChange={(v) => onChange("collar_button", v)}
-                  allowClear
-                  disabled={off("collar_button")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={collarButtons}
+                value={text("collar_button")}
+                onChange={(v) => onChange("collar_button", v)}
+                allowClear
+                disabled={off("collar_button")}
+                failed={failed("collar_button")}
+              />
             </>
           )}
           {show("small_tabaggi") && (
             <div className="flex flex-wrap gap-2">
-              <FailWrap failed={failed("small_tabaggi")} inline>
-                <IconToggle
-                  checked={bool("small_tabaggi")}
-                  onChange={(v) => onChange("small_tabaggi", v)}
-                  icon={smallTabaggiImage}
-                  label="Small Tabaggi"
-                  disabled={off("small_tabaggi")}
-                />
-              </FailWrap>
+              <IconToggle
+                checked={bool("small_tabaggi")}
+                onChange={(v) => onChange("small_tabaggi", v)}
+                icon={smallTabaggiImage}
+                label="Small Tabaggi"
+                disabled={off("small_tabaggi")}
+                failed={failed("small_tabaggi")}
+              />
             </div>
           )}
           {show("collar_position") && (
             <>
               <SubLabel failed={failed("collar_position")}>Position</SubLabel>
-              <FailWrap failed={failed("collar_position")}>
-                <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={off("collar_position")}
-                      checked={text("collar_position") === "up"}
-                      onChange={(e) => onChange("collar_position", e.target.checked ? "up" : null)}
-                    />
-                    UP
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={off("collar_position")}
-                      checked={text("collar_position") === "down"}
-                      onChange={(e) => onChange("collar_position", e.target.checked ? "down" : null)}
-                    />
-                    DOWN
-                  </label>
-                </div>
-              </FailWrap>
+              <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
+                {(["up", "down"] as const).map((pos) => {
+                  const selected = text("collar_position") === pos;
+                  const showFail = selected && failed("collar_position");
+                  return (
+                    <label
+                      key={pos}
+                      className={cn(
+                        "flex items-center gap-2 text-sm rounded px-1",
+                        showFail && "text-red-700 font-bold",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={off("collar_position")}
+                        checked={selected}
+                        onChange={(e) =>
+                          onChange("collar_position", e.target.checked ? pos : null)
+                        }
+                        className={cn(showFail && "accent-red-500")}
+                      />
+                      {pos.toUpperCase()}
+                    </label>
+                  );
+                })}
+              </div>
             </>
           )}
           {show("collar_thickness") && (
             <div className="flex items-center gap-2">
               <SubLabel className="mb-0" failed={failed("collar_thickness")} required={req("collar_thickness")}>Thickness</SubLabel>
-              <FailWrap failed={failed("collar_thickness")} inline>
-                <ThicknessPicker
-                  value={text("collar_thickness")}
-                  onChange={(v) => onChange("collar_thickness", v)}
-                  disabled={off("collar_thickness")}
-                />
-              </FailWrap>
+              <ThicknessPicker
+                value={text("collar_thickness")}
+                onChange={(v) => onChange("collar_thickness", v)}
+                disabled={off("collar_thickness")}
+                failed={failed("collar_thickness")}
+              />
             </div>
           )}
         </OptionGroup>
@@ -868,15 +861,14 @@ function OptionGroups({
           {show("jabzour_1") && (
             <>
               <SubLabel failed={failed("jabzour_1")} required={req("jabzour_1")}>Type 1</SubLabel>
-              <FailWrap failed={failed("jabzour_1")}>
-                <ImageOptionGrid
-                  options={jabzourTypes}
-                  value={text("jabzour_1")}
-                  onChange={(v) => onChange("jabzour_1", v)}
-                  allowClear
-                  disabled={off("jabzour_1")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={jabzourTypes}
+                value={text("jabzour_1")}
+                onChange={(v) => onChange("jabzour_1", v)}
+                allowClear
+                disabled={off("jabzour_1")}
+                failed={failed("jabzour_1")}
+              />
             </>
           )}
           {show("jabzour_2") && (text("jabzour_1") === "JAB_SHAAB" || text("jabzour_2") != null) && (
@@ -891,27 +883,25 @@ function OptionGroups({
                   </span>
                 )}
               </SubLabel>
-              <FailWrap failed={failed("jabzour_2")}>
-                <ImageOptionGrid
-                  options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
-                  value={text("jabzour_2")}
-                  onChange={(v) => onChange("jabzour_2", v)}
-                  allowClear
-                  disabled={off("jabzour_2")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                value={text("jabzour_2")}
+                onChange={(v) => onChange("jabzour_2", v)}
+                allowClear
+                disabled={off("jabzour_2")}
+                failed={failed("jabzour_2")}
+              />
             </>
           )}
           {show("jabzour_thickness") && (
             <div className="flex items-center gap-2">
               <SubLabel className="mb-0" failed={failed("jabzour_thickness")} required={req("jabzour_thickness")}>Thickness</SubLabel>
-              <FailWrap failed={failed("jabzour_thickness")} inline>
-                <ThicknessPicker
-                  value={text("jabzour_thickness")}
-                  onChange={(v) => onChange("jabzour_thickness", v)}
-                  disabled={off("jabzour_thickness")}
-                />
-              </FailWrap>
+              <ThicknessPicker
+                value={text("jabzour_thickness")}
+                onChange={(v) => onChange("jabzour_thickness", v)}
+                disabled={off("jabzour_thickness")}
+                failed={failed("jabzour_thickness")}
+              />
             </div>
           )}
         </OptionGroup>
@@ -922,27 +912,25 @@ function OptionGroups({
           {show("front_pocket_type") && (
             <>
               <SubLabel failed={failed("front_pocket_type")} required={req("front_pocket_type")}>Type</SubLabel>
-              <FailWrap failed={failed("front_pocket_type")}>
-                <ImageOptionGrid
-                  options={topPocketTypes}
-                  value={text("front_pocket_type")}
-                  onChange={(v) => onChange("front_pocket_type", v)}
-                  allowClear
-                  disabled={off("front_pocket_type")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={topPocketTypes}
+                value={text("front_pocket_type")}
+                onChange={(v) => onChange("front_pocket_type", v)}
+                allowClear
+                disabled={off("front_pocket_type")}
+                failed={failed("front_pocket_type")}
+              />
             </>
           )}
           {show("front_pocket_thickness") && (
             <div className="flex items-center gap-2">
               <SubLabel className="mb-0" failed={failed("front_pocket_thickness")} required={req("front_pocket_thickness")}>Thickness</SubLabel>
-              <FailWrap failed={failed("front_pocket_thickness")} inline>
-                <ThicknessPicker
-                  value={text("front_pocket_thickness")}
-                  onChange={(v) => onChange("front_pocket_thickness", v)}
-                  disabled={off("front_pocket_thickness")}
-                />
-              </FailWrap>
+              <ThicknessPicker
+                value={text("front_pocket_thickness")}
+                onChange={(v) => onChange("front_pocket_thickness", v)}
+                disabled={off("front_pocket_thickness")}
+                failed={failed("front_pocket_thickness")}
+              />
             </div>
           )}
           {showAny("wallet_pocket", "pen_holder", "mobile_pocket") && (
@@ -950,37 +938,34 @@ function OptionGroups({
               <SubLabel>Accessories</SubLabel>
               <div className="flex flex-wrap gap-2">
                 {show("wallet_pocket") && (
-                  <FailWrap failed={failed("wallet_pocket")} inline>
-                    <IconToggle
-                      checked={bool("wallet_pocket")}
-                      onChange={(v) => onChange("wallet_pocket", v)}
-                      icon={walletIcon}
-                      label="Wallet"
-                      disabled={off("wallet_pocket")}
-                    />
-                  </FailWrap>
+                  <IconToggle
+                    checked={bool("wallet_pocket")}
+                    onChange={(v) => onChange("wallet_pocket", v)}
+                    icon={walletIcon}
+                    label="Wallet"
+                    disabled={off("wallet_pocket")}
+                    failed={failed("wallet_pocket")}
+                  />
                 )}
                 {show("pen_holder") && (
-                  <FailWrap failed={failed("pen_holder")} inline>
-                    <IconToggle
-                      checked={bool("pen_holder")}
-                      onChange={(v) => onChange("pen_holder", v)}
-                      icon={penIcon}
-                      label="Pen"
-                      disabled={off("pen_holder")}
-                    />
-                  </FailWrap>
+                  <IconToggle
+                    checked={bool("pen_holder")}
+                    onChange={(v) => onChange("pen_holder", v)}
+                    icon={penIcon}
+                    label="Pen"
+                    disabled={off("pen_holder")}
+                    failed={failed("pen_holder")}
+                  />
                 )}
                 {show("mobile_pocket") && (
-                  <FailWrap failed={failed("mobile_pocket")} inline>
-                    <IconToggle
-                      checked={bool("mobile_pocket")}
-                      onChange={(v) => onChange("mobile_pocket", v)}
-                      icon={phoneIcon}
-                      label="Mobile"
-                      disabled={off("mobile_pocket")}
-                    />
-                  </FailWrap>
+                  <IconToggle
+                    checked={bool("mobile_pocket")}
+                    onChange={(v) => onChange("mobile_pocket", v)}
+                    icon={phoneIcon}
+                    label="Mobile"
+                    disabled={off("mobile_pocket")}
+                    failed={failed("mobile_pocket")}
+                  />
                 )}
               </div>
             </>
@@ -993,27 +978,25 @@ function OptionGroups({
           {show("cuffs_type") && (
             <>
               <SubLabel failed={failed("cuffs_type")} required={req("cuffs_type")}>Type</SubLabel>
-              <FailWrap failed={failed("cuffs_type")}>
-                <ImageOptionGrid
-                  options={cuffTypes}
-                  value={text("cuffs_type")}
-                  onChange={(v) => onChange("cuffs_type", v)}
-                  allowClear
-                  disabled={off("cuffs_type")}
-                />
-              </FailWrap>
+              <ImageOptionGrid
+                options={cuffTypes}
+                value={text("cuffs_type")}
+                onChange={(v) => onChange("cuffs_type", v)}
+                allowClear
+                disabled={off("cuffs_type")}
+                failed={failed("cuffs_type")}
+              />
             </>
           )}
           {show("cuffs_thickness") && (
             <div className="flex items-center gap-2">
               <SubLabel className="mb-0" failed={failed("cuffs_thickness")} required={req("cuffs_thickness")}>Thickness</SubLabel>
-              <FailWrap failed={failed("cuffs_thickness")} inline>
-                <ThicknessPicker
-                  value={text("cuffs_thickness")}
-                  onChange={(v) => onChange("cuffs_thickness", v)}
-                  disabled={off("cuffs_thickness")}
-                />
-              </FailWrap>
+              <ThicknessPicker
+                value={text("cuffs_thickness")}
+                onChange={(v) => onChange("cuffs_thickness", v)}
+                disabled={off("cuffs_thickness")}
+                failed={failed("cuffs_thickness")}
+              />
             </div>
           )}
         </OptionGroup>
@@ -1021,37 +1004,14 @@ function OptionGroups({
 
       {show("lines") && (
         <OptionGroup title="Lines">
-          <FailWrap failed={failed("lines")} inline>
-            <LinesPicker
-              value={typeof values.lines === "number" ? values.lines : null}
-              onChange={(v) => onChange("lines", v)}
-              disabled={off("lines")}
-            />
-          </FailWrap>
+          <LinesPicker
+            value={typeof values.lines === "number" ? values.lines : null}
+            onChange={(v) => onChange("lines", v)}
+            disabled={off("lines")}
+            failed={failed("lines")}
+          />
         </OptionGroup>
       )}
-    </div>
-  );
-}
-
-function FailWrap({
-  failed,
-  inline,
-  children,
-}: {
-  failed?: boolean;
-  inline?: boolean;
-  children: React.ReactNode;
-}) {
-  if (!failed) return <>{children}</>;
-  return (
-    <div
-      className={cn(
-        "rounded-lg ring-1 ring-red-300 bg-red-50/40 p-1.5",
-        inline && "inline-block",
-      )}
-    >
-      {children}
     </div>
   );
 }
@@ -1102,10 +1062,12 @@ function LinesPicker({
   value,
   onChange,
   disabled = false,
+  failed = false,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   disabled?: boolean;
+  failed?: boolean;
 }) {
   const options: { value: number; label: string }[] = [
     { value: 1, label: "1" },
@@ -1116,26 +1078,33 @@ function LinesPicker({
       className={cn(
         "inline-flex rounded-lg border bg-background p-0.5",
         disabled && "opacity-50",
+        failed && "border-red-400",
       )}
     >
-      {options.map((o) => (
-        <button
-          key={o.label}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
-            value === o.value
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground",
-            !disabled && value !== o.value && "hover:bg-muted",
-            disabled && "cursor-not-allowed",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
+      {options.map((o) => {
+        const selected = value === o.value;
+        const showFail = selected && failed;
+        return (
+          <button
+            key={o.label}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
+              showFail
+                ? "bg-red-500 text-white shadow-sm"
+                : selected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground",
+              !disabled && !selected && "hover:bg-muted",
+              disabled && "cursor-not-allowed",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1265,8 +1234,9 @@ function FailReport({
       </div>
 
       {m > 0 && (
-        <ReportSection title="Measurements out of tolerance" hint={`±${QC_TOLERANCE}"`}>
-          <div className="rounded-lg border border-red-200 bg-red-50/40 divide-y divide-red-100">
+        <ReportSection title="Measurements to correct" hint={`±${QC_TOLERANCE}"`}>
+          <FoundVsExpectedHeader withDiffSpacer />
+          <div className="rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] divide-y divide-[color:var(--status-bad)]/15">
             {evaluation.failed_measurements.map((k) => {
               const spec = QC_MEASUREMENTS.find((mm) => mm.key === k)!;
               const exp = Number(expectedMeasurements[k]);
@@ -1278,19 +1248,21 @@ function FailReport({
                   key={k}
                   className="flex items-center gap-3 px-3 py-2"
                 >
-                  <span className="text-xs font-semibold uppercase tracking-wider text-foreground flex-1 min-w-0 truncate">
+                  <span className="text-sm text-foreground flex-1 min-w-0 truncate">
                     {spec.label}
                   </span>
-                  <MeasurementValue value={exp} muted />
-                  <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                  <MeasurementValue value={got} highlight />
-                  {diff != null && (
-                    <span className="text-[11px] font-bold tabular-nums text-red-600 min-w-[52px] text-right">
-                      {diff > 0 ? "+" : ""}
-                      {diff.toFixed(3).replace(/\.?0+$/, "")}
-                      {"\""}
-                    </span>
-                  )}
+                  <div className="w-28 flex justify-center shrink-0">
+                    <MeasurementValue value={got} highlight />
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-[color:var(--status-bad)]/60 shrink-0" />
+                  <div className="w-28 flex justify-center shrink-0">
+                    <MeasurementValue value={exp} muted />
+                  </div>
+                  <span className="text-sm tabular-nums text-[var(--status-bad)] w-[52px] text-right shrink-0">
+                    {diff != null
+                      ? `${diff > 0 ? "+" : ""}${diff.toFixed(3).replace(/\.?0+$/, "")}"`
+                      : ""}
+                  </span>
                 </div>
               );
             })}
@@ -1299,7 +1271,8 @@ function FailReport({
       )}
 
       {o > 0 && (
-        <ReportSection title="Mismatched options">
+        <ReportSection title="Options to redo">
+          <FoundVsExpectedHeader />
           <div className="grid grid-cols-1 gap-2">
             {evaluation.failed_options.map((k) => {
               const spec = QC_OPTIONS.find((oo) => oo.key === k)!;
@@ -1318,10 +1291,10 @@ function FailReport({
 
       {q > 0 && (
         <ReportSection
-          title="Quality below threshold"
-          hint={`< ${QC_QUALITY_THRESHOLD}/5`}
+          title="Quality to improve"
+          hint={`needs ≥ ${QC_QUALITY_THRESHOLD}/5`}
         >
-          <div className="rounded-lg border border-red-200 bg-red-50/40 divide-y divide-red-100">
+          <div className="rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] divide-y divide-[color:var(--status-bad)]/15">
             {evaluation.failed_quality.map((k) => {
               const spec = QC_QUALITY.find((qq) => qq.key === k)!;
               const score = inputs.quality_ratings[k] ?? 0;
@@ -1330,7 +1303,7 @@ function FailReport({
                   key={k}
                   className="flex items-center gap-3 px-3 py-2"
                 >
-                  <span className="text-xs font-semibold uppercase tracking-wider flex-1 min-w-0 truncate">
+                  <span className="text-sm text-foreground flex-1 min-w-0 truncate">
                     {spec.label}
                   </span>
                   <div className="inline-flex gap-0.5">
@@ -1340,13 +1313,13 @@ function FailReport({
                         className={cn(
                           "w-4 h-4",
                           n <= score
-                            ? "fill-red-500 text-red-500"
-                            : "text-zinc-300",
+                            ? "fill-[var(--status-bad)] text-[var(--status-bad)]"
+                            : "text-muted-foreground/40",
                         )}
                       />
                     ))}
                   </div>
-                  <span className="text-xs font-bold tabular-nums text-red-600 min-w-[28px] text-right">
+                  <span className="text-sm tabular-nums text-[var(--status-bad)] min-w-[28px] text-right">
                     {score}/5
                   </span>
                 </div>
@@ -1361,9 +1334,9 @@ function FailReport({
 
 function SummaryPill({ count, label }: { count: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-800 px-2.5 py-1 text-[11px] font-bold">
+    <span className="inline-flex items-center gap-1 rounded-md bg-[var(--status-bad-bg)] text-[var(--status-bad)] px-2 py-0.5 text-sm">
       <span className="tabular-nums">{count}</span>
-      <span className="font-medium opacity-80">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
     </span>
   );
 }
@@ -1380,10 +1353,8 @@ function ReportSection({
   return (
     <section>
       <div className="flex items-baseline justify-between mb-1.5">
-        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </h4>
-        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+        <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+        {hint && <span className="text-sm text-muted-foreground">{hint}</span>}
       </div>
       {children}
     </section>
@@ -1400,14 +1371,14 @@ function MeasurementValue({
   highlight?: boolean;
 }) {
   if (!Number.isFinite(value)) {
-    return <span className="text-xs text-muted-foreground italic">—</span>;
+    return <span className="text-sm text-muted-foreground italic">—</span>;
   }
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center min-w-[64px] h-7 px-2 rounded-md text-xs font-mono tabular-nums",
-        muted && "bg-background border text-muted-foreground",
-        highlight && "bg-red-100 border border-red-300 text-red-900 font-bold",
+        "inline-flex items-center justify-center min-w-[64px] h-7 px-2 rounded-md text-sm font-mono tabular-nums border",
+        muted && "bg-card border-border text-muted-foreground",
+        highlight && "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30 text-[var(--status-bad)]",
       )}
     >
       <FractionPreview value={value} />
@@ -1426,32 +1397,129 @@ function OptionFailRow({
 }) {
   const visual = OPTION_IMAGE_LOOKUP[spec.key];
   const boolIcon = spec.type === "boolean" ? BOOL_ICON_LOOKUP[spec.key] : undefined;
+  // Thickness / collar_position / lines render via richer chips so the rework
+  // dialog matches the colored badges shown elsewhere (DishdashaOverlay, feedback).
+  const isRichChip =
+    spec.key.endsWith("_thickness") ||
+    spec.key === "collar_position" ||
+    spec.key === "lines";
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50/40 px-3 py-2">
-      <span className="text-xs font-semibold uppercase tracking-wider flex-1 min-w-0 truncate">
+    <div className="flex items-center gap-3 rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] px-3 py-2">
+      <span className="text-sm text-foreground flex-1 min-w-0 truncate">
         {spec.label}
       </span>
-      {visual ? (
-        <>
-          <ImageOptionChip option={visual.find((b) => b.value === expected)} muted />
-          <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
+      <div className="w-28 flex justify-center shrink-0">
+        {visual ? (
           <ImageOptionChip option={visual.find((b) => b.value === got)} highlight />
-        </>
-      ) : boolIcon ? (
-        <>
-          <BoolOptionChip on={Boolean(expected)} icon={boolIcon} muted />
-          <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
+        ) : boolIcon ? (
           <BoolOptionChip on={Boolean(got)} icon={boolIcon} highlight />
-        </>
-      ) : (
-        <>
-          <TextOptionChip label={formatOptionText(spec, expected)} muted />
-          <ArrowRight className="w-3.5 h-3.5 text-red-400 shrink-0" />
+        ) : isRichChip ? (
+          <RichOptionChip spec={spec} value={got} highlight />
+        ) : (
           <TextOptionChip label={formatOptionText(spec, got)} highlight />
-        </>
-      )}
+        )}
+      </div>
+      <ArrowRight className="w-3.5 h-3.5 text-[color:var(--status-bad)]/60 shrink-0" />
+      <div className="w-28 flex justify-center shrink-0">
+        {visual ? (
+          <ImageOptionChip option={visual.find((b) => b.value === expected)} muted />
+        ) : boolIcon ? (
+          <BoolOptionChip on={Boolean(expected)} icon={boolIcon} muted />
+        ) : isRichChip ? (
+          <RichOptionChip spec={spec} value={expected} muted />
+        ) : (
+          <TextOptionChip label={formatOptionText(spec, expected)} muted />
+        )}
+      </div>
     </div>
+  );
+}
+
+function FoundVsExpectedHeader({ withDiffSpacer = false }: { withDiffSpacer?: boolean }) {
+  // Column positions mirror the row layout below so headers line up to the pixel.
+  return (
+    <div className="flex items-center gap-3 px-3 pb-1.5 border border-transparent text-sm">
+      <span className="flex-1" />
+      <span className="w-28 text-center text-[var(--status-bad)] shrink-0">Found</span>
+      <ArrowRight className="w-3.5 h-3.5 text-[color:var(--status-bad)]/60 shrink-0" />
+      <span className="w-28 text-center text-muted-foreground shrink-0">Should be</span>
+      {withDiffSpacer && <span className="w-[52px] shrink-0" aria-hidden />}
+    </div>
+  );
+}
+
+// Rich chip for thickness / collar_position / lines — color-coded so the
+// rework instruction reads at a glance instead of as raw text.
+function RichOptionChip({
+  spec,
+  value,
+  muted,
+  highlight,
+}: {
+  spec: QcOptionSpec;
+  value: unknown;
+  muted?: boolean;
+  highlight?: boolean;
+}) {
+  const base =
+    "inline-flex items-center justify-center min-w-[64px] h-7 px-2.5 rounded-md text-sm border whitespace-nowrap";
+  const highlightTone = "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30 text-[var(--status-bad)]";
+
+  if (spec.key.endsWith("_thickness")) {
+    const raw = value == null || value === "" ? "" : String(value).toUpperCase();
+    const label =
+      value == null || value === "" ? "—" : formatOptionText(spec, value);
+    // Identity tones: thickness has distinct kinds, kept on 700-shades per CLAUDE.md
+    const tone = highlight
+      ? highlightTone
+      : raw === "SINGLE"
+        ? "bg-card border-border text-blue-700"
+        : raw === "DOUBLE"
+          ? "bg-card border-border text-emerald-700"
+          : raw === "TRIPLE"
+            ? "bg-card border-border text-orange-700"
+            : raw === "NO HASHWA"
+              ? "bg-card border-border text-muted-foreground"
+              : "bg-card border-border text-muted-foreground";
+    return <span className={cn(base, tone)}>{label}</span>;
+  }
+
+  if (spec.key === "collar_position") {
+    const v =
+      value === "up" ? "up" : value === "down" ? "down" : "standard";
+    const label =
+      v === "up" ? "Collar Up" : v === "down" ? "Collar Down" : "Standard";
+    const tone = highlight
+      ? highlightTone
+      : v === "up"
+        ? "bg-card border-border text-amber-700"
+        : v === "down"
+          ? "bg-card border-border text-sky-700"
+          : "bg-card border-border text-muted-foreground";
+    return <span className={cn(base, tone)}>{label}</span>;
+  }
+
+  if (spec.key === "lines") {
+    const n = Number(value);
+    const label = n === 1 ? "Single" : n === 2 ? "Double" : "—";
+    const tone = highlight
+      ? highlightTone
+      : muted
+        ? "bg-card border-border text-muted-foreground"
+        : "bg-card border-border text-foreground";
+    return <span className={cn(base, tone)}>Line {label}</span>;
+  }
+
+  return (
+    <span
+      className={cn(
+        base,
+        highlight ? highlightTone : "bg-card border-border text-muted-foreground",
+      )}
+    >
+      {formatOptionText(spec, value)}
+    </span>
   );
 }
 
@@ -1468,10 +1536,11 @@ function BoolOptionChip({
 }) {
   return (
     <div
+      title={on ? icon.label : `No ${icon.label}`}
       className={cn(
-        "flex flex-col items-center gap-0.5 rounded-md p-1 min-w-[68px]",
-        muted && "bg-background border",
-        highlight && "bg-red-100 border border-red-300",
+        "rounded-md p-1 transition-transform hover:scale-110 active:scale-110 border",
+        muted && "bg-card border-border",
+        highlight && "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30",
       )}
     >
       {on ? (
@@ -1481,19 +1550,21 @@ function BoolOptionChip({
           className="h-9 w-9 object-contain"
         />
       ) : (
-        <div className="h-9 w-9 rounded bg-muted flex items-center justify-center text-[9px] text-muted-foreground font-semibold uppercase">
-          Off
+        <div className="relative h-9 w-9">
+          <img
+            src={icon.icon}
+            alt={icon.label}
+            className="h-9 w-9 object-contain opacity-25 grayscale"
+          />
+          <Ban
+            strokeWidth={2.5}
+            className={cn(
+              "absolute inset-0 m-auto w-6 h-6",
+              highlight ? "text-[var(--status-bad)]" : "text-muted-foreground",
+            )}
+          />
         </div>
       )}
-      <span
-        className={cn(
-          "text-[10px] font-medium leading-tight text-center",
-          muted && "text-muted-foreground",
-          highlight && "text-red-900 font-bold",
-        )}
-      >
-        {on ? icon.label : "—"}
-      </span>
     </div>
   );
 }
@@ -1509,10 +1580,11 @@ function ImageOptionChip({
 }) {
   return (
     <div
+      title={option?.displayText ?? "None"}
       className={cn(
-        "flex flex-col items-center gap-0.5 rounded-md p-1 min-w-[68px]",
-        muted && "bg-background border",
-        highlight && "bg-red-100 border border-red-300",
+        "rounded-md p-1 transition-transform hover:scale-110 active:scale-110 border",
+        muted && "bg-card border-border",
+        highlight && "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30",
       )}
     >
       {option?.image ? (
@@ -1522,19 +1594,10 @@ function ImageOptionChip({
           className="h-9 w-9 object-contain"
         />
       ) : (
-        <div className="h-9 w-9 rounded bg-muted flex items-center justify-center text-[9px] text-muted-foreground font-semibold uppercase">
+        <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
           None
         </div>
       )}
-      <span
-        className={cn(
-          "text-[10px] font-medium leading-tight text-center",
-          muted && "text-muted-foreground",
-          highlight && "text-red-900 font-bold",
-        )}
-      >
-        {option?.displayText ?? "—"}
-      </span>
     </div>
   );
 }
@@ -1551,9 +1614,9 @@ function TextOptionChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center min-w-[60px] h-7 px-2.5 rounded-md text-xs font-medium",
-        muted && "bg-background border text-muted-foreground",
-        highlight && "bg-red-100 border border-red-300 text-red-900 font-bold",
+        "inline-flex items-center justify-center min-w-[60px] h-7 px-2.5 rounded-md text-sm border",
+        muted && "bg-card border-border text-muted-foreground",
+        highlight && "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30 text-[var(--status-bad)]",
       )}
     >
       {label}

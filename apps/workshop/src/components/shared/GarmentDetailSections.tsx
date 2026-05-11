@@ -9,14 +9,11 @@ import { STYLE_IMAGE_MAP, THICKNESS_LABELS, ACCESSORY_ICONS } from "@/lib/style-
 import { useState } from "react";
 import {
   Check,
-  Clock,
-  Timer,
   Home,
   User,
   Package,
   Phone,
   ChevronDown,
-  History,
   Star,
   X,
   RotateCcw,
@@ -33,32 +30,30 @@ import { getQcReturnStages } from "@repo/database";
 
 // ── Customer feedback constants ────────────────────────────────
 
-const SATISFACTION_LEVELS: Record<number, { label: string; emoji: string }> = {
-  1: { label: "Angry",   emoji: "\u{1F621}" },
-  2: { label: "Unhappy", emoji: "\u{1F61E}" },
-  3: { label: "Okay",    emoji: "\u{1F636}" },
-  4: { label: "Happy",   emoji: "\u{1F60A}" },
-  5: { label: "Love It", emoji: "\u{1F929}" },
+const SATISFACTION_LEVELS: Record<number, string> = {
+  1: "Angry",
+  2: "Unhappy",
+  3: "Okay",
+  4: "Happy",
+  5: "Love it",
 };
 
-// Only color the verdicts that drive a manager decision: rejection/redo = red,
-// repair-with-fix = amber. Plain accepted/collected/delivered stay neutral —
-// nothing for the manager to act on, so no need to attract the eye.
+// Color only the verdicts that require manager action. Accepted/collected/delivered
+// stay neutral — nothing to act on.
 const FEEDBACK_ACTION_STYLE: Record<string, { label: string; cls: string }> = {
-  accepted:              { label: "Accepted",          cls: "bg-muted text-foreground border-border" },
-  needs_repair_accepted: { label: "Accepted with Fix", cls: "bg-amber-100 text-amber-800 border-amber-200" },
-  needs_repair_rejected: { label: "Rejected — Repair", cls: "bg-amber-100 text-amber-800 border-amber-200" },
-  needs_repair:          { label: "Needs Repair",      cls: "bg-amber-100 text-amber-800 border-amber-200" },
-  needs_redo:            { label: "Rejected — Redo",   cls: "bg-red-100 text-red-800 border-red-200" },
-  collected:             { label: "Collected",         cls: "bg-muted text-foreground border-border" },
-  delivered:             { label: "Delivered",         cls: "bg-muted text-foreground border-border" },
+  accepted:              { label: "Accepted",          cls: "bg-muted text-foreground" },
+  needs_repair_accepted: { label: "Accepted with fix", cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
+  needs_repair_rejected: { label: "Rejected — repair", cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
+  needs_repair:          { label: "Needs repair",      cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
+  needs_redo:            { label: "Rejected — redo",   cls: "bg-[var(--status-bad-bg)] text-[var(--status-bad)]" },
+  collected:             { label: "Collected",         cls: "bg-muted text-foreground" },
+  delivered:             { label: "Delivered",         cls: "bg-muted text-foreground" },
 };
 
-// Reason chips stay semantic — they're the whole point of the diff table.
 const DIFF_REASON_STYLE: Record<string, string> = {
-  customer_request: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  workshop_error:   "bg-red-50 text-red-700 border-red-200",
-  shop_error:       "bg-muted text-muted-foreground border-border",
+  customer_request: "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+  workshop_error:   "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
+  shop_error:       "bg-muted text-muted-foreground",
 };
 
 function parseJson<T>(raw: unknown): T | null {
@@ -71,13 +66,13 @@ function parseJson<T>(raw: unknown): T | null {
 
 const STYLE_FIELDS: { key: string; label: string; type: "text" | "boolean"; thicknessKey?: string }[] = [
   { key: "collar_type", label: "Collar", type: "text", thicknessKey: "collar_thickness" },
-  { key: "collar_button", label: "Collar Button", type: "text" },
-  { key: "collar_position", label: "Collar Position", type: "text" },
+  { key: "collar_button", label: "Collar button", type: "text" },
+  { key: "collar_position", label: "Collar position", type: "text" },
   { key: "cuffs_type", label: "Cuffs", type: "text", thicknessKey: "cuffs_thickness" },
-  { key: "front_pocket_type", label: "Front Pocket", type: "text", thicknessKey: "front_pocket_thickness" },
-  { key: "wallet_pocket", label: "Wallet Pocket", type: "boolean" },
-  { key: "pen_holder", label: "Pen Holder", type: "boolean" },
-  { key: "small_tabaggi", label: "Small Tabaggi", type: "boolean" },
+  { key: "front_pocket_type", label: "Front pocket", type: "text", thicknessKey: "front_pocket_thickness" },
+  { key: "wallet_pocket", label: "Wallet pocket", type: "boolean" },
+  { key: "pen_holder", label: "Pen holder", type: "boolean" },
+  { key: "small_tabaggi", label: "Small tabaggi", type: "boolean" },
   { key: "jabzour_1", label: "Jabzour 1", type: "text", thicknessKey: "jabzour_thickness" },
   { key: "jabzour_2", label: "Jabzour 2", type: "text" },
   { key: "lines", label: "Lines", type: "text" },
@@ -96,20 +91,91 @@ export const HISTORY_KEY_MAP: Record<string, string> = {
 const WORKER_LABELS: Record<string, string> = {
   soaker: "Soaker",
   cutter: "Cutter",
-  post_cutter: "Post-Cutter",
-  sewer: "Sewing Unit",
+  post_cutter: "Post-cutter",
+  sewer: "Sewing unit",
   finisher: "Finisher",
   ironer: "Ironer",
-  quality_checker: "QC Inspector",
+  quality_checker: "QC inspector",
   soaking: "Soaking",
   cutting: "Cutting",
-  post_cutting: "Post-Cutting",
-  sewing: "Sewing Unit",
+  post_cutting: "Post-cutting",
+  sewing: "Sewing unit",
   finishing: "Finishing",
   ironing: "Ironing",
 };
 
+// ── Section title ──────────────────────────────────────────────
+
+function SectionTitle({ children, count }: { children: React.ReactNode; count?: number | string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <h3 className="text-sm font-medium text-muted-foreground">{children}</h3>
+      {count !== undefined && (
+        <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
+      )}
+    </div>
+  );
+}
+
+// ── Summary row (collapsible subsection with one-line summary) ─
+
+function SummaryRow({
+  icon,
+  label,
+  summary,
+  badge,
+  defaultOpen = false,
+  action,
+  children,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  /** One-line at-a-glance text shown when collapsed. */
+  summary: React.ReactNode;
+  /** Optional status pill, rendered between summary and chevron. */
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  /** Optional trailing action (e.g. Edit plan) rendered inside expanded content header. */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-border rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 transition-colors cursor-pointer"
+      >
+        {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
+        <span className="text-sm font-medium text-muted-foreground shrink-0">{label}</span>
+        <span className="text-sm text-foreground min-w-0 truncate">{summary}</span>
+        {badge && <span className="ml-auto shrink-0">{badge}</span>}
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-muted-foreground shrink-0 transition-transform",
+            !badge && "ml-auto",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border p-3 space-y-3">
+          {action && <div className="flex justify-end">{action}</div>}
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Garment Header ──────────────────────────────────────────────
+//
+// Single source of truth for the identity strip used by both the assigned
+// detail page and the terminal page. No decorative left-border (the brova/
+// final distinction is conveyed by a labelled pill, not chrome). Children
+// render inline on sm+ so edit-date controls can pin right.
 
 export function GarmentHeader({
   garment,
@@ -125,25 +191,15 @@ export function GarmentHeader({
   qcFailCount?: number;
 }) {
   return (
-    <div className={cn(
-      "border bg-card rounded-md p-4 border-l-2",
-      garment.garment_type === "brova" ? "border-l-purple-500" : "border-l-blue-500",
-    )}>
-      {/* Header body — info on left, children (dates) on right at sm+ */}
+    <div className="border border-border bg-card rounded-md p-4">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {/* Top row */}
+        <div className="min-w-0 flex-1 space-y-2">
+          {/* Identity row */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-md border ${
-                garment.garment_type === "brova"
-                  ? "bg-purple-100 text-purple-800 border-purple-200"
-                  : "bg-blue-100 text-blue-800 border-blue-200"
-              }`}
-            >
+            <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-foreground capitalize">
               {garment.garment_type}
             </span>
-            <span className="font-mono font-black text-xl">
+            <span className="font-mono text-2xl tracking-tight">
               {garment.garment_id ?? garment.id.slice(0, 8)}
             </span>
             <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
@@ -152,54 +208,44 @@ export function GarmentHeader({
             <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
           </div>
 
-          {/* Info row */}
-          <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
+          {/* Customer / invoice / phone / delivery — all sentence case, muted */}
+          <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             {garment.customer_name && (
-              <span className="flex items-center gap-1 text-muted-foreground">
+              <span className="flex items-center gap-1">
                 <User className="w-3.5 h-3.5" aria-hidden="true" />
                 {garment.customer_name}
               </span>
             )}
             {garment.invoice_number && (
-              <span className="flex items-center gap-1 text-muted-foreground">
+              <span className="flex items-center gap-1 font-mono">
                 <Package className="w-3.5 h-3.5" aria-hidden="true" />
-                #{garment.invoice_number}
+                INV-{garment.invoice_number}
               </span>
             )}
             {showExtras && garment.customer_mobile && (
-              <span className="flex items-center gap-1 text-muted-foreground">
+              <span className="flex items-center gap-1 font-mono">
                 <Phone className="w-3.5 h-3.5" aria-hidden="true" />
                 {garment.customer_mobile}
               </span>
             )}
             {garment.home_delivery_order && (
-              <span className="flex items-center gap-1 text-indigo-700 font-medium">
+              <span className="flex items-center gap-1 text-indigo-700">
                 <Home className="w-3.5 h-3.5" aria-hidden="true" />
                 Delivery
               </span>
             )}
             {!showExtras && garment.delivery_date_order && (
-              <span className="flex items-center gap-1 text-amber-700 font-medium">
-                <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-                {formatDate(garment.delivery_date_order)}
-              </span>
+              <span>Delivery {formatDate(garment.delivery_date_order)}</span>
             )}
             {!showExtras && garment.assigned_date && (
-              <span className="flex items-center gap-1 text-violet-700 font-medium">
-                <Timer className="w-3.5 h-3.5" aria-hidden="true" />
-                {formatDate(garment.assigned_date)}
-              </span>
+              <span>Assigned {formatDate(garment.assigned_date)}</span>
             )}
           </div>
         </div>
 
-        {/* Extra content (e.g. editable dates) — pinned right on sm+ */}
-        {children && (
-          <div className="sm:text-right shrink-0">{children}</div>
-        )}
+        {children && <div className="sm:text-right shrink-0">{children}</div>}
       </div>
 
-      {/* Full pipeline */}
       <div className="mt-3">
         <ProductionPipeline
           currentStage={garment.piece_stage}
@@ -214,7 +260,14 @@ export function GarmentHeader({
 
 // ── Style Section ──────────────────────────────────────────────
 
-export function StyleSection({ garment }: { garment: WorkshopGarment }) {
+export function StyleSection({
+  garment,
+  embedded = false,
+}: {
+  garment: WorkshopGarment;
+  /** When rendered inside an already-bordered wrapper, drop the local card chrome. */
+  embedded?: boolean;
+}) {
   const g = garment as any;
   const specs = STYLE_FIELDS.filter((f) => {
     const val = g[f.key];
@@ -223,57 +276,42 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
   });
 
   return (
-    <div className="bg-card border rounded-md p-4 space-y-2">
+    <div className={cn("space-y-3", !embedded && "bg-card border border-border rounded-md p-4")}>
       {garment.style_image_url && (
-        <div className="rounded-lg overflow-hidden border">
+        <div className="rounded-md overflow-hidden border border-border bg-muted">
           <img
             src={garment.style_image_url}
             alt={garment.style_name ?? "Style"}
-            className="w-full h-auto max-h-48 object-contain bg-zinc-50"
+            className="w-full h-auto max-h-48 object-contain"
           />
         </div>
       )}
 
-      <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700">
-        Style & Fabric
-      </h3>
+      {!embedded && <SectionTitle>Style & fabric</SectionTitle>}
 
-      <div className="space-y-0.5">
-        <div className="flex items-center justify-between py-1.5 border-b border-dashed">
-          <span className="text-sm text-muted-foreground">Style</span>
-          <span className="text-sm font-semibold capitalize">
-            {garment.style_name ?? garment.style ?? "—"}
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between py-1.5 border-b border-dashed">
-          <span className="text-sm text-muted-foreground">Fabric</span>
-          <span className="text-sm font-semibold">
-            {garment.fabric_name ?? "—"}
-            {garment.fabric_color && (
-              <span className="text-muted-foreground ml-1">({garment.fabric_color})</span>
-            )}
-          </span>
-        </div>
-
+      <div className="space-y-0">
+        <SpecRow label="Style" value={garment.style_name ?? garment.style ?? "—"} valueClass="capitalize" />
+        <SpecRow
+          label="Fabric"
+          value={
+            <>
+              {garment.fabric_name ?? "—"}
+              {garment.fabric_color && (
+                <span className="text-muted-foreground ml-1">({garment.fabric_color})</span>
+              )}
+            </>
+          }
+        />
         {garment.soaking && (
-          <div className="flex items-center justify-between py-1.5 border-b border-dashed">
-            <span className="text-sm text-muted-foreground">Soaking</span>
-            <span className="text-sm font-semibold text-blue-700">Required</span>
-          </div>
+          <SpecRow label="Soaking" value={<span className="text-[var(--status-info)]">Required</span>} />
         )}
 
         {specs.map((field) => {
           let lookupKey = String(g[field.key]);
-          // jabzour_1 stores BUTTON/ZIPPER enum; actual style key is in jabzour_2
-          // ZIPPER = Shaab (show JAB_SHAAB), BUTTON = jabzour_2 is the style
           if (field.key === "jabzour_1") {
             lookupKey = g.jabzour_1 === "ZIPPER" ? "JAB_SHAAB" : String(g.jabzour_2 ?? "");
           }
-          // jabzour_2: when ZIPPER, show the sub-style; when BUTTON, jabzour_2 was already shown as jabzour_1
-          if (field.key === "jabzour_2" && g.jabzour_1 !== "ZIPPER") {
-            return null; // skip, already shown in jabzour_1 row
-          }
+          if (field.key === "jabzour_2" && g.jabzour_1 !== "ZIPPER") return null;
           const mapped = field.type === "text" ? STYLE_IMAGE_MAP[lookupKey] : null;
           const thickness = field.thicknessKey ? g[field.thicknessKey] : null;
           const thicknessLabel = thickness ? THICKNESS_LABELS[thickness] ?? thickness : null;
@@ -284,39 +322,54 @@ export function StyleSection({ garment }: { garment: WorkshopGarment }) {
             : null;
 
           return (
-            <div
+            <SpecRow
               key={field.key}
-              className="flex items-center justify-between py-2 border-b border-dashed last:border-0"
-            >
-              <span className="text-sm text-muted-foreground">{field.label}</span>
-              <div className="flex items-center gap-2">
-                {mapped?.image ? (
-                  <img src={mapped.image} alt={mapped.label} className="h-10 w-10 object-contain rounded" title={mapped.label} />
-                ) : boolIcon ? (
-                  <img src={boolIcon} alt={field.label} className="h-7 w-7 object-contain" />
-                ) : null}
-                <span className="text-sm font-semibold">
-                  {isBool ? "Yes" : (mapped?.label ?? lookupKey)}
-                </span>
-                {thicknessLabel && (
-                  <span className="text-xs font-bold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded">
-                    {thicknessLabel}
-                  </span>
-                )}
-              </div>
-            </div>
+              label={field.label}
+              value={
+                <div className="flex items-center gap-2 justify-end">
+                  {mapped?.image ? (
+                    <img src={mapped.image} alt={mapped.label} className="h-9 w-9 object-contain rounded-md" title={mapped.label} />
+                  ) : boolIcon ? (
+                    <img src={boolIcon} alt={field.label} className="h-7 w-7 object-contain" />
+                  ) : null}
+                  <span>{isBool ? "Yes" : (mapped?.label ?? lookupKey)}</span>
+                  {thicknessLabel && (
+                    <span className="text-xs font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
+                      {thicknessLabel}
+                    </span>
+                  )}
+                </div>
+              }
+            />
           );
         })}
 
         {specs.length === 0 && !garment.fabric_name && (
-          <p className="text-xs text-muted-foreground italic py-1">No style specs recorded</p>
+          <p className="text-sm text-muted-foreground italic py-1">No style specs recorded.</p>
         )}
       </div>
     </div>
   );
 }
 
-// ── Worker History ─────────────────────────────────────────────
+function SpecRow({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: React.ReactNode;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-3">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className={cn("text-base text-right min-w-0", valueClass)}>{value}</span>
+    </div>
+  );
+}
+
+// ── Worker / Production Team ───────────────────────────────────
 
 export function WorkerHistorySection({
   garment,
@@ -333,35 +386,27 @@ export function WorkerHistorySection({
   const isReturn = (garment.trip_number ?? 1) > 1;
 
   let stages: string[] = [...PRODUCTION_STAGES];
-
-  // For re-entry garments, only show stages from re-entry point onward
   if (isReturn && reentryStage) {
     const reentryIdx = stages.indexOf(reentryStage as any);
-    if (reentryIdx > 0) {
-      stages = stages.slice(reentryIdx);
-    }
+    if (reentryIdx > 0) stages = stages.slice(reentryIdx);
   }
-
-  const stageOrder = stages.map((s) => s);
-  const currentIdx = stageOrder.indexOf(currentStage as any);
+  const currentIdx = stages.indexOf(currentStage as any);
 
   return (
-    <div className="bg-card border rounded-md p-4">
+    <div className="bg-card border border-border rounded-md p-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          Production Team
-        </h3>
+        <SectionTitle>Production team</SectionTitle>
         {onEditPlan && (
           <button
             onClick={onEditPlan}
-            className="text-xs text-primary hover:underline cursor-pointer font-medium"
+            className="text-sm font-medium text-primary hover:underline cursor-pointer"
           >
-            Edit Plan
+            Edit plan
           </button>
         )}
       </div>
 
-      <div className="space-y-0.5">
+      <div>
         {stages.map((stage, i) => {
           const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
           const planned = (plan as any)?.[historyKey] ?? null;
@@ -373,34 +418,22 @@ export function WorkerHistorySection({
           return (
             <div
               key={stage}
-              className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${
-                isCurrent
-                  ? "bg-blue-50 border border-blue-200"
-                  : isDone
-                    ? "bg-emerald-50/50"
-                    : "bg-zinc-50/50"
-              }`}
+              className="flex items-center justify-between py-2 border-b border-border last:border-0"
             >
               <div className="flex items-center gap-2">
-                {isDone && <Check className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />}
-                {isCurrent && <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />}
-                {isPending && <div className="w-2 h-2 rounded-full bg-zinc-300" />}
-                <span className={`font-medium ${isPending ? "text-muted-foreground" : ""}`}>
+                {isDone && <Check className="w-3.5 h-3.5 text-[var(--status-ok)]" aria-hidden="true" />}
+                {isCurrent && <div className="w-2 h-2 rounded-full bg-[var(--status-info)] animate-pulse" />}
+                {isPending && <div className="w-2 h-2 rounded-full bg-muted-foreground/40" />}
+                <span className={cn("text-sm", isPending && "text-muted-foreground")}>
                   {WORKER_LABELS[historyKey] ??
                     PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ??
                     stage}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                {actual ? (
-                  <span className="font-semibold text-emerald-700">{actual}</span>
-                ) : planned ? (
-                  <span className="text-muted-foreground">{planned}</span>
-                ) : (
-                  <span className="text-zinc-300">—</span>
-                )}
-              </div>
+              <span className="text-base text-right">
+                {actual ? actual : planned ? <span className="text-muted-foreground">{planned}</span> : <span className="text-muted-foreground/50">—</span>}
+              </span>
             </div>
           );
         })}
@@ -411,12 +444,16 @@ export function WorkerHistorySection({
 
 // ── Measurements Section ──────────────────────────────────────
 
-export function MeasurementsSection({ garment }: { garment: WorkshopGarment }) {
+export function MeasurementsSection({
+  garment,
+  embedded = false,
+}: {
+  garment: WorkshopGarment;
+  embedded?: boolean;
+}) {
   return (
-    <div className="bg-card border rounded-md p-4">
-      <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
-        Measurements
-      </h3>
+    <div className={cn("space-y-2", !embedded && "bg-card border border-border rounded-md p-4")}>
+      {!embedded && <SectionTitle>Measurements</SectionTitle>}
       <MeasurementGrid
         measurement={garment.measurement}
         corrections={getMeasurementCorrections(garment.trip_history)}
@@ -429,192 +466,16 @@ export function MeasurementsSection({ garment }: { garment: WorkshopGarment }) {
 
 export function NotesSection({ notes }: { notes: string }) {
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-1">
-        Notes
-      </h3>
-      <p className="text-sm text-amber-900 whitespace-pre-wrap">{notes}</p>
+    <div className="bg-[var(--status-warn-bg)] border border-border rounded-md p-3 space-y-1">
+      <h3 className="text-sm font-medium text-[var(--status-warn)]">Notes</h3>
+      <p className="text-base text-foreground whitespace-pre-wrap">{notes}</p>
     </div>
   );
 }
 
-// ── Trip History Section ──────────────────────────────────────
-
-export function TripHistorySection({ tripHistory: rawHistory }: { tripHistory: TripHistoryEntry[] | string | null | undefined }) {
-  const [open, setOpen] = useState(false);
-
-  const tripHistory: TripHistoryEntry[] | null = !rawHistory
-    ? null
-    : typeof rawHistory === "string"
-      ? JSON.parse(rawHistory)
-      : Array.isArray(rawHistory)
-        ? rawHistory
-        : null;
-
-  if (!tripHistory || tripHistory.length === 0) return null;
-
-  return (
-    <div className="border rounded-xl overflow-hidden mb-8">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/30 transition-colors"
-      >
-        <History className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
-        <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">
-          Production History
-        </span>
-        <span className="text-xs font-bold bg-muted text-muted-foreground px-2.5 py-1 rounded-full">
-          {tripHistory.length} trip{tripHistory.length !== 1 ? "s" : ""}
-        </span>
-        <ChevronDown className={cn(
-          "w-5 h-5 text-muted-foreground ml-auto transition-transform",
-          open && "rotate-180",
-        )} aria-hidden="true" />
-      </button>
-
-      {open && (
-        <div className="border-t px-5 py-5 space-y-6 animate-fade-in">
-          {tripHistory.map((entry, i) => (
-            <div key={i}>
-              {/* Trip header */}
-              <div className="flex items-center gap-3 mb-3">
-                <span className={cn(
-                  "text-sm font-bold uppercase px-3 py-1 rounded-lg",
-                  entry.trip === 1
-                    ? "bg-blue-100 text-blue-700"
-                    : entry.trip === 2
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-orange-100 text-orange-700",
-                )}>
-                  {entry.trip === 1 ? "Original" : entry.trip === 2 ? "Return" : `Alt ${entry.trip - 2}`}
-                </span>
-                {entry.reentry_stage && (
-                  <span className="text-sm text-muted-foreground">
-                    from <span className="font-medium">{PIECE_STAGE_LABELS[entry.reentry_stage as keyof typeof PIECE_STAGE_LABELS] ?? entry.reentry_stage}</span>
-                  </span>
-                )}
-                {entry.assigned_date && (
-                  <span className="text-sm text-muted-foreground ml-auto">
-                    {formatDate(entry.assigned_date)}
-                    {entry.completed_date && <span> → {formatDate(entry.completed_date)}</span>}
-                  </span>
-                )}
-              </div>
-
-              {/* Workers */}
-              {entry.worker_history && Object.keys(entry.worker_history).length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {Object.entries(entry.worker_history).map(([key, name]) => (
-                    <span key={key} className="inline-flex items-center gap-1.5 text-sm bg-muted/60 px-3 py-1.5 rounded-lg">
-                      <span className="font-medium text-muted-foreground">{WORKER_LABELS[key] ?? key}:</span>
-                      <span className="font-semibold">{name}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Production cycles — show flow with QC attempts */}
-              {entry.qc_attempts?.length > 0 && (
-                <div className="space-y-3 ml-3 border-l-2 border-muted pl-4">
-                  {entry.qc_attempts.map((qc, j) => {
-                    // Show the path this cycle took: re-entry/return stage → ... → QC
-                    const prevReturnStages = j === 0
-                      ? []
-                      : getQcReturnStages(entry.qc_attempts[j - 1]);
-                    const cycleStart = j === 0
-                      ? (entry.reentry_stage ?? "soaking")
-                      : prevReturnStages[0] ?? "soaking";
-                    const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
-
-                    return (
-                      <div key={j}>
-                        {/* Cycle path label */}
-                        {j > 0 && (
-                          <div className="flex items-center gap-1.5 mb-1.5 text-xs text-orange-600 font-semibold">
-                            <RotateCcw className="w-3 h-3" aria-hidden="true" />
-                            Re-entered at {startLabel}
-                          </div>
-                        )}
-                        <div className={cn(
-                          "flex items-start gap-3 rounded-xl px-4 py-3",
-                          qc.result === "pass" ? "bg-emerald-50" : "bg-red-50",
-                        )}>
-                          <div className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                            qc.result === "pass" ? "bg-emerald-500 text-white" : "bg-red-500 text-white",
-                          )}>
-                            {qc.result === "pass" ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <X className="w-3.5 h-3.5" aria-hidden="true" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold">
-                                QC {qc.result === "pass" ? "Passed" : "Failed"}
-                                {entry.qc_attempts.length > 1 && (
-                                  <span className="text-muted-foreground font-normal ml-1">
-                                    (attempt {j + 1}/{entry.qc_attempts.length})
-                                  </span>
-                                )}
-                              </span>
-                              {qc.inspector && (
-                                <span className="text-sm text-muted-foreground">by {qc.inspector}</span>
-                              )}
-                              {qc.date && (
-                                <span className="text-sm text-muted-foreground ml-auto">{formatDate(qc.date)}</span>
-                              )}
-                            </div>
-                            {qc.result === "fail" && qc.fail_reason && (
-                              <p className="text-sm text-red-700 mt-1">{qc.fail_reason}</p>
-                            )}
-                            {qc.result === "fail" && getQcReturnStages(qc).length > 0 && (
-                              <div className="flex items-center gap-1.5 mt-1 text-sm text-red-600">
-                                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                                <span>
-                                  Sent back to{" "}
-                                  {getQcReturnStages(qc)
-                                    .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
-                                    .join(" → ")}
-                                </span>
-                              </div>
-                            )}
-                            {qc.result === "pass" && qc.ratings && (
-                              <div className="flex flex-wrap gap-3 mt-2">
-                                {Object.entries(qc.ratings).map(([cat, score]) => (
-                                  <span key={cat} className="inline-flex items-center gap-1 text-sm text-emerald-700">
-                                    <span className="capitalize">{cat}</span>
-                                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                                    <span className="font-bold">{score}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Separator between trips */}
-              {i < tripHistory.length - 1 && <hr className="mt-5 border-dashed" />}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Trip Cycles Section (manager view — hero) ─────────────────
-//
-// Bundles each trip with the customer feedback it produced. Newest cycle
-// first (current trip pinned at top labelled "Current Cycle"), older trips
-// fully expanded so the manager can scan the lifecycle without clicking.
+// ── Trip cycle internals ──────────────────────────────────────
 
 function feedbackTripKey(fb: GarmentFeedback): number {
-  // trip_number on garment_feedback = trip the garment was on when feedback
-  // was given. The feedback is what produced the next trip.
   return fb.trip_number ?? 1;
 }
 
@@ -640,11 +501,11 @@ interface OptionsChecklistRow {
 
 const OPTION_NAME_LABELS: Record<string, string> = {
   collar: "Collar",
-  collarBtn: "Collar Button",
-  frontPocket: "Front Pocket",
+  collarBtn: "Collar button",
+  frontPocket: "Front pocket",
   cuff: "Cuffs",
   jabzour: "Jabzour",
-  smallTabaggi: "Small Tabaggi",
+  smallTabaggi: "Small tabaggi",
 };
 
 function StyleOptionValue({ styleKey, fallback }: { styleKey: string | null | undefined; fallback?: string }) {
@@ -658,17 +519,25 @@ function StyleOptionValue({ styleKey, fallback }: { styleKey: string | null | un
           src={mapped.image}
           alt={label}
           title={label}
-          className="h-9 w-9 object-contain rounded bg-white border border-border"
+          className="h-9 w-9 object-contain rounded-md bg-card border border-border"
         />
       ) : null}
-      <span className="font-medium">{label}</span>
+      <span>{label}</span>
     </span>
   );
 }
 
-export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
+export function CustomerFeedbackPanel({
+  fb,
+  /** When the panel is already nested under a row that surfaces the action label,
+   *  pass `compact` to drop redundant header chrome. */
+  compact = false,
+}: {
+  fb: GarmentFeedback;
+  compact?: boolean;
+}) {
   const action = fb.action ? FEEDBACK_ACTION_STYLE[fb.action] : null;
-  const sat = fb.satisfaction_level ? SATISFACTION_LEVELS[fb.satisfaction_level] : null;
+  const satLabel = fb.satisfaction_level ? SATISFACTION_LEVELS[fb.satisfaction_level] : null;
   const diffs = parseJson<MeasurementDiffRow[]>(fb.measurement_diffs) ?? [];
   const checklist = parseJson<OptionsChecklistRow[]>(fb.options_checklist) ?? [];
   const photoRaw = parseJson<unknown>(fb.photo_urls);
@@ -682,77 +551,100 @@ export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
   const failedOptions = checklist.filter(
     (c) => c.rejected === true || c.hashwa_rejected === true,
   );
+  const mediaCount = photos.length + voices.length + (fb.customer_signature ? 1 : 0);
 
   return (
-    <div className="border-t pt-3 space-y-2.5">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <MessageSquare className="w-3.5 h-3.5" />
-          Customer Feedback
-        </span>
-        <span className="text-[11px] text-muted-foreground">
-          {fb.feedback_type?.replace(/_/g, " ")}
-        </span>
-        {action && (
-          <span className={cn("text-xs font-bold uppercase px-2 py-0.5 rounded border", action.cls)}>
-            {action.label}
+    <div className={cn("space-y-3", !compact && "border-t border-border pt-3")}>
+      {!compact && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
+            <MessageSquare className="w-3.5 h-3.5" />
+            Customer feedback
           </span>
-        )}
-        {sat && (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded">
-            <span className="text-base leading-none">{sat.emoji}</span>
-            <span className="text-muted-foreground">{sat.label}</span>
-          </span>
-        )}
-        {fb.created_at && (
-          <span className="text-xs text-muted-foreground ml-auto">
-            {formatDate(String(fb.created_at))}
-          </span>
-        )}
-      </div>
+          {fb.feedback_type && (
+            <span className="text-xs text-muted-foreground capitalize">
+              {fb.feedback_type.replace(/_/g, " ")}
+            </span>
+          )}
+          {action && (
+            <span className={cn("text-xs font-medium px-2 py-0.5 rounded-md", action.cls)}>
+              {action.label}
+            </span>
+          )}
+          {satLabel && fb.satisfaction_level && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="inline-flex">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className={cn(
+                      "w-3.5 h-3.5",
+                      i < (fb.satisfaction_level ?? 0)
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-muted-foreground/30",
+                    )}
+                  />
+                ))}
+              </span>
+              {satLabel}
+            </span>
+          )}
+          {fb.created_at && (
+            <span className="text-xs text-muted-foreground ml-auto tabular-nums">
+              {formatDate(String(fb.created_at))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* In compact mode the panel is nested under a row that already shows the
+          verdict + change counts, so we omit satisfaction/date/type chrome and
+          only render the actual change requests below. */}
 
       {fb.notes && (
-        <p className="text-sm bg-card border border-border rounded p-2 whitespace-pre-wrap">
+        <p className="text-base bg-muted rounded-md p-2.5 whitespace-pre-wrap">
           {fb.notes}
         </p>
       )}
 
       {diffs.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-            <Ruler className="w-3.5 h-3.5" />
-            Measurement Changes ({diffs.length})
-          </div>
-          <div className="rounded border border-border overflow-hidden bg-card">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/40 text-muted-foreground">
+        <div className="space-y-1.5">
+          <SectionTitle count={diffs.length}>
+            <span className="inline-flex items-center gap-1.5">
+              <Ruler className="w-3.5 h-3.5" />
+              Measurement changes
+            </span>
+          </SectionTitle>
+          <div className="rounded-md border border-border overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
                 <tr>
-                  <th className="text-left px-2 py-1 font-semibold">Field</th>
-                  <th className="text-left px-2 py-1 font-semibold">Was</th>
-                  <th className="text-left px-2 py-1 font-semibold">Now</th>
-                  <th className="text-left px-2 py-1 font-semibold">Δ</th>
-                  <th className="text-left px-2 py-1 font-semibold">Reason</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Field</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Was</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Now</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Δ</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Reason</th>
                 </tr>
               </thead>
               <tbody>
                 {diffs.map((d, i) => {
                   const reasonKey = (d.reason ?? "").toLowerCase().replace(/\s+/g, "_");
-                  const reasonCls = DIFF_REASON_STYLE[reasonKey] ?? "bg-muted text-muted-foreground border-border";
+                  const reasonCls = DIFF_REASON_STYLE[reasonKey] ?? "bg-muted text-muted-foreground";
                   return (
                     <tr key={i} className="border-t border-border">
-                      <td className="px-2 py-1 font-medium capitalize">{(d.field ?? "—").replace(/_/g, " ")}</td>
-                      <td className="px-2 py-1 tabular-nums text-muted-foreground">
+                      <td className="px-2 py-1.5 capitalize">{(d.field ?? "—").replace(/_/g, " ")}</td>
+                      <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
                         <MeasurementValue raw={d.original_value} />
                       </td>
-                      <td className="px-2 py-1 tabular-nums font-semibold">
+                      <td className="px-2 py-1.5 tabular-nums">
                         <MeasurementValue raw={d.actual_value} />
                       </td>
-                      <td className="px-2 py-1 tabular-nums">
+                      <td className="px-2 py-1.5 tabular-nums">
                         <MeasurementValue raw={d.difference} />
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-1.5">
                         {d.reason && (
-                          <span className={cn("inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border", reasonCls)}>
+                          <span className={cn("inline-block text-xs font-medium px-1.5 py-0.5 rounded-md", reasonCls)}>
                             {d.reason.replace(/_/g, " ")}
                           </span>
                         )}
@@ -767,26 +659,27 @@ export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
       )}
 
       {failedOptions.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-700 mb-1">
-            <ListChecks className="w-3.5 h-3.5" />
-            Style Options to Fix ({failedOptions.length})
-          </div>
+        <div className="space-y-1.5">
+          <SectionTitle count={failedOptions.length}>
+            <span className="inline-flex items-center gap-1.5 text-[var(--status-bad)]">
+              <ListChecks className="w-3.5 h-3.5" />
+              Style options to fix
+            </span>
+          </SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {failedOptions.map((o, i) => {
               const rawName = o.option_name ?? "";
               const label = OPTION_NAME_LABELS[rawName] ?? rawName.replace(/_/g, " ");
               const mainChanged = o.rejected === true;
               const hashwaChanged = o.hashwa_rejected === true;
-              // Non-style-key options (boolean toggles / accessories) render as text, not images.
               const isToggleOption =
                 rawName === "smallTabaggi" ||
                 rawName === "walletPocket" ||
                 rawName === "penHolder";
               const toggleLabels: Record<string, { yes: string; no: string }> = {
-                smallTabaggi: { yes: "Button", no: "No Button" },
-                walletPocket: { yes: "Wallet Pocket", no: "No Wallet Pocket" },
-                penHolder: { yes: "Pen Holder", no: "No Pen Holder" },
+                smallTabaggi: { yes: "Button", no: "No button" },
+                walletPocket: { yes: "Wallet pocket", no: "No wallet pocket" },
+                penHolder: { yes: "Pen holder", no: "No pen holder" },
               };
               const toggleText = (v: string | null | undefined) => {
                 const t = toggleLabels[rawName];
@@ -798,47 +691,47 @@ export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
               return (
                 <div
                   key={i}
-                  className="text-xs bg-red-50 text-red-900 border border-red-200 rounded p-2 space-y-1.5"
+                  className="text-sm bg-[var(--status-bad-bg)] text-[var(--status-bad)] rounded-md p-2.5 space-y-1.5"
                 >
                   <div className="flex items-center gap-1.5">
-                    <X className="w-3 h-3 shrink-0 text-red-600" />
-                    <span className="font-bold uppercase tracking-wider">{label}</span>
+                    <X className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-medium">{label}</span>
                   </div>
                   {mainChanged && (
-                    <div className="flex items-center gap-2 flex-wrap pl-4">
+                    <div className="flex items-center gap-2 flex-wrap pl-5 text-foreground">
                       {isToggleOption ? (
                         <>
-                          <span className="font-medium">{toggleText(o.expected_value)}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          <span className="font-medium">
+                          <span>{toggleText(o.expected_value)}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-[var(--status-bad)] shrink-0" />
+                          <span>
                             {toggleText(o.new_value ?? flippedFromExpected(o.expected_value))}
                           </span>
                         </>
                       ) : (
                         <>
                           <StyleOptionValue styleKey={o.expected_value} />
-                          <ArrowRight className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <ArrowRight className="w-3.5 h-3.5 text-[var(--status-bad)] shrink-0" />
                           {o.new_value ? (
                             <StyleOptionValue styleKey={o.new_value} />
                           ) : (
-                            <span className="italic text-red-600/80">customer to decide</span>
+                            <span className="italic text-muted-foreground">customer to decide</span>
                           )}
                         </>
                       )}
                     </div>
                   )}
                   {hashwaChanged && (
-                    <div className="flex items-center gap-2 flex-wrap pl-4">
-                      <span className="text-[10px] font-bold uppercase text-red-600/80">Thickness →</span>
-                      <span className="font-medium">
+                    <div className="flex items-center gap-2 flex-wrap pl-5 text-foreground">
+                      <span className="text-xs text-[var(--status-bad)]">Thickness →</span>
+                      <span>
                         {o.hashwa_new_value
                           ? (THICKNESS_LABELS[o.hashwa_new_value] ?? o.hashwa_new_value)
-                          : <span className="italic text-red-600/80">customer to decide</span>}
+                          : <span className="italic text-muted-foreground">customer to decide</span>}
                       </span>
                     </div>
                   )}
                   {o.notes && (
-                    <p className="pl-4 text-red-700/90 italic">{o.notes}</p>
+                    <p className="pl-5 italic text-muted-foreground">{o.notes}</p>
                   )}
                 </div>
               );
@@ -847,59 +740,382 @@ export function CustomerFeedbackPanel({ fb }: { fb: GarmentFeedback }) {
         </div>
       )}
 
-      {photos.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-            <ImageIcon className="w-3.5 h-3.5" />
-            Photos ({photos.length})
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {photos.map((src, i) => (
-              <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
-                <img
-                  src={src}
-                  alt={`Feedback photo ${i + 1}`}
-                  className="h-20 w-20 object-cover rounded border border-border hover:opacity-80 transition-opacity"
-                />
-              </a>
-            ))}
-          </div>
-        </div>
+      {mediaCount > 0 && (
+        <FeedbackMediaToggle photos={photos} voices={voices} signature={fb.customer_signature ?? null} />
       )}
 
-      {voices.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-            <Mic className="w-3.5 h-3.5" />
-            Voice Notes ({voices.length})
-          </div>
-          <div className="space-y-1">
-            {voices.map((src, i) => (
-              <audio key={i} controls src={src} className="w-full max-w-md h-8" />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {fb.customer_signature && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Signature</span>
-          <img
-            src={fb.customer_signature}
-            alt="Customer signature"
-            className="h-12 bg-card border border-border rounded px-2"
-          />
-        </div>
-      )}
-
-      {!fb.notes && diffs.length === 0 && failedOptions.length === 0 && photos.length === 0 && voices.length === 0 && !fb.customer_signature && (
-        <p className="text-xs italic text-muted-foreground">No additional notes recorded.</p>
+      {!fb.notes && diffs.length === 0 && failedOptions.length === 0 && mediaCount === 0 && (
+        <p className="text-sm italic text-muted-foreground">
+          {compact ? "No changes requested." : "No additional notes recorded."}
+        </p>
       )}
     </div>
   );
 }
 
-function TripCycleCard({
+function FeedbackMediaToggle({
+  photos,
+  voices,
+  signature,
+}: {
+  photos: string[];
+  voices: string[];
+  signature: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const parts: string[] = [];
+  if (photos.length > 0) parts.push(`${photos.length} photo${photos.length !== 1 ? "s" : ""}`);
+  if (voices.length > 0) parts.push(`${voices.length} voice note${voices.length !== 1 ? "s" : ""}`);
+  if (signature) parts.push("signature");
+
+  return (
+    <div className="border border-border rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 transition-colors cursor-pointer"
+      >
+        <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Media</span>
+        <span className="text-sm text-foreground">{parts.join(" · ")}</span>
+        <ChevronDown
+          className={cn("w-4 h-4 text-muted-foreground ml-auto transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border p-3 space-y-3">
+          {photos.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {photos.map((src, i) => (
+                <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
+                  <img
+                    src={src}
+                    alt={`Feedback photo ${i + 1}`}
+                    className="h-20 w-20 object-cover rounded-md border border-border hover:opacity-80 transition-opacity"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+          {voices.length > 0 && (
+            <div className="space-y-1">
+              {voices.map((src, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Mic className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <audio controls src={src} className="w-full max-w-md h-8" />
+                </div>
+              ))}
+            </div>
+          )}
+          {signature && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Signature</span>
+              <img
+                src={signature}
+                alt="Customer signature"
+                className="h-12 bg-card border border-border rounded-md px-2"
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Trip cycle card (used by CurrentCycle + PastTrips) ────────
+
+function tripLabel(trip: number) {
+  return trip === 1 ? "Original" : trip === 2 ? "Return" : `Alteration ${trip - 2}`;
+}
+
+// ── QC labels ──────────────────────────────────────────────────
+
+const QC_MEASUREMENT_LABELS: Record<string, string> = {
+  collar_width: "Collar width",
+  collar_height: "Collar height",
+  shoulder: "Shoulder",
+  chest_full: "Chest (full)",
+  chest_upper: "Chest (upper)",
+  chest_front: "Chest (front)",
+  chest_back: "Chest (back)",
+  sleeve_length: "Sleeve length",
+  sleeve_width: "Sleeve width",
+  elbow: "Elbow",
+  armhole: "Armhole",
+  armhole_front: "Armhole (front)",
+  waist_full: "Waist (full)",
+  waist_front: "Waist (front)",
+  waist_back: "Waist (back)",
+  length_front: "Length (front)",
+  length_back: "Length (back)",
+  bottom: "Bottom",
+  top_pocket_length: "Top pocket length",
+  top_pocket_width: "Top pocket width",
+  top_pocket_distance: "Top pocket distance",
+  side_pocket_length: "Side pocket length",
+  side_pocket_width: "Side pocket width",
+  side_pocket_distance: "Side pocket distance",
+  side_pocket_opening: "Side pocket opening",
+  jabzour_length: "Jabzour length",
+  jabzour_width: "Jabzour width",
+};
+
+const QC_OPTION_LABELS: Record<string, string> = {
+  collar_type: "Collar",
+  collar_button: "Collar button",
+  collar_position: "Collar position",
+  collar_thickness: "Collar thickness",
+  cuffs_type: "Cuffs",
+  cuffs_thickness: "Cuffs thickness",
+  front_pocket_type: "Front pocket",
+  front_pocket_thickness: "Front pocket thickness",
+  jabzour_1: "Jabzour",
+  jabzour_2: "Jabzour style",
+  jabzour_thickness: "Jabzour thickness",
+  small_tabaggi: "Small tabaggi",
+  wallet_pocket: "Wallet pocket",
+  pen_holder: "Pen holder",
+  mobile_pocket: "Mobile pocket",
+};
+
+const QC_STYLE_KEY_OPTIONS = new Set([
+  "collar_type", "collar_button", "collar_position",
+  "cuffs_type", "front_pocket_type", "jabzour_1", "jabzour_2",
+]);
+
+function qcMeasurementLabel(key: string): string {
+  return QC_MEASUREMENT_LABELS[key] ?? key.replace(/_/g, " ");
+}
+
+function qcOptionLabel(key: string): string {
+  return QC_OPTION_LABELS[key] ?? key.replace(/_/g, " ");
+}
+
+function formatOptionValue(key: string, value: unknown): string {
+  if (value == null || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const thickness = key.endsWith("_thickness");
+  if (thickness && typeof value === "string") return THICKNESS_LABELS[value] ?? value;
+  return String(value);
+}
+
+function QcFailureDetails({
+  qc,
+  garment,
+}: {
+  qc: NonNullable<TripHistoryEntry["qc_attempts"]>[number];
+  garment: WorkshopGarment;
+}) {
+  const g = garment as unknown as Record<string, unknown>;
+  const measurement = (garment.measurement ?? null) as Record<string, number> | null;
+  const failedMeasurements = qc.failed_measurements ?? [];
+  const failedOptions = qc.failed_options ?? [];
+  const failedQuality = qc.failed_quality ?? [];
+  const qualityRatings = qc.quality_ratings ?? qc.ratings ?? null;
+  const returnStages = getQcReturnStages(qc);
+
+  const hasAny =
+    failedMeasurements.length > 0 ||
+    failedOptions.length > 0 ||
+    failedQuality.length > 0 ||
+    !!qc.fail_reason;
+
+  return (
+    <div className="space-y-2.5">
+      {failedMeasurements.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--status-bad)]">
+            <Ruler className="w-3.5 h-3.5" />
+            Measurements out of tolerance
+            <span className="text-xs text-muted-foreground font-normal tabular-nums">
+              {failedMeasurements.length}
+            </span>
+          </div>
+          <div className="rounded-md border border-border overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Field</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Expected</th>
+                  <th className="text-left px-2 py-1.5 text-sm font-medium text-muted-foreground">Recorded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedMeasurements.map((key) => {
+                  const expected = measurement?.[key] ?? null;
+                  const recorded = qc.measurements?.[key] ?? null;
+                  return (
+                    <tr key={key} className="border-t border-border">
+                      <td className="px-2 py-1.5">{qcMeasurementLabel(key)}</td>
+                      <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
+                        <MeasurementValue raw={expected} />
+                      </td>
+                      <td className="px-2 py-1.5 tabular-nums text-[var(--status-bad)]">
+                        <MeasurementValue raw={recorded} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {failedOptions.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--status-bad)]">
+            <ListChecks className="w-3.5 h-3.5" />
+            Options that didn&apos;t match
+            <span className="text-xs text-muted-foreground font-normal tabular-nums">
+              {failedOptions.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {failedOptions.map((key) => {
+              const expected = g[key];
+              const recorded = qc.options?.[key];
+              const isStyleKey = QC_STYLE_KEY_OPTIONS.has(key);
+              return (
+                <div key={key} className="text-sm bg-[var(--status-bad-bg)] rounded-md p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[var(--status-bad)]">
+                    <X className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-medium">{qcOptionLabel(key)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap pl-5 text-foreground">
+                    {isStyleKey ? (
+                      <>
+                        <StyleOptionValue styleKey={expected as string} />
+                        <ArrowRight className="w-3.5 h-3.5 text-[var(--status-bad)] shrink-0" />
+                        <StyleOptionValue styleKey={recorded as string} />
+                      </>
+                    ) : (
+                      <>
+                        <span>{formatOptionValue(key, expected)}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-[var(--status-bad)] shrink-0" />
+                        <span className="text-[var(--status-bad)]">{formatOptionValue(key, recorded)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {failedQuality.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--status-bad)]">
+            <Star className="w-3.5 h-3.5" />
+            Quality aspects below threshold
+            <span className="text-xs text-muted-foreground font-normal tabular-nums">
+              {failedQuality.length}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {failedQuality.map((aspect) => {
+              const score = qualityRatings?.[aspect];
+              return (
+                <span
+                  key={aspect}
+                  className="inline-flex items-center gap-1 text-sm bg-[var(--status-bad-bg)] text-[var(--status-bad)] px-2 py-1 rounded-md"
+                >
+                  <span className="capitalize">{aspect.replace(/_/g, " ")}</span>
+                  {typeof score === "number" && (
+                    <>
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span>{score}</span>
+                    </>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {qc.fail_reason && (
+        <p className="text-sm bg-muted rounded-md p-2.5 whitespace-pre-wrap">
+          {qc.fail_reason}
+        </p>
+      )}
+
+      {returnStages.length > 0 && (
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <RotateCcw className="w-3.5 h-3.5" />
+          Sent back to{" "}
+          <span className="text-foreground">
+            {returnStages
+              .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
+              .join(" → ")}
+          </span>
+        </div>
+      )}
+
+      {!hasAny && returnStages.length === 0 && (
+        <p className="text-sm italic text-muted-foreground">No specific defects recorded.</p>
+      )}
+    </div>
+  );
+}
+
+function QcAttemptList({
+  qcAttempts,
+  reentryStage,
+  garment,
+}: {
+  qcAttempts: NonNullable<TripHistoryEntry["qc_attempts"]>;
+  reentryStage: string | null;
+  garment: WorkshopGarment;
+}) {
+  return (
+    <div className="space-y-3">
+      {qcAttempts.map((qc, j) => {
+        const prevReturnStages = j === 0 ? [] : getQcReturnStages(qcAttempts[j - 1]);
+        const cycleStart = j === 0 ? (reentryStage ?? "soaking") : prevReturnStages[0] ?? "soaking";
+        const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
+
+        return (
+          <div key={j} className="space-y-2">
+            {j > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <RotateCcw className="w-3 h-3" />
+                Re-entered at {startLabel}
+              </div>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {qc.result === "pass" ? (
+                <Check className="w-4 h-4 text-[var(--status-ok)] shrink-0" />
+              ) : (
+                <X className="w-4 h-4 text-[var(--status-bad)] shrink-0" />
+              )}
+              <span className="text-sm font-medium">
+                {qc.result === "pass" ? "Passed" : "Failed"}
+                {qcAttempts.length > 1 && (
+                  <span className="text-muted-foreground font-normal ml-1">
+                    (attempt {j + 1}/{qcAttempts.length})
+                  </span>
+                )}
+              </span>
+              {qc.inspector && (
+                <span className="text-sm text-muted-foreground">by {qc.inspector}</span>
+              )}
+              {qc.date && (
+                <span className="text-xs text-muted-foreground ml-auto tabular-nums">{formatDate(qc.date)}</span>
+              )}
+            </div>
+            {qc.result === "fail" && <QcFailureDetails qc={qc} garment={garment} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TripCycleBody({
   entry,
   feedback,
   isCurrent,
@@ -912,297 +1128,350 @@ function TripCycleCard({
   garment: WorkshopGarment;
   onEditPlan?: () => void;
 }) {
-  // For the current (in-progress) trip, fall back to the live garment fields
-  // since trip_history entries are written when the trip closes.
-  const trip = entry?.trip ?? garment.trip_number ?? 1;
   const workers = entry?.worker_history ?? (isCurrent ? (garment.worker_history as Record<string, string> | null) : null) ?? {};
   const plan = isCurrent ? (garment.production_plan as Record<string, string> | null) ?? {} : entry?.production_plan ?? {};
   const reentryStage = entry?.reentry_stage ?? null;
-  const assignedDate = entry?.assigned_date ?? (isCurrent ? garment.assigned_date : null);
-  const completedDate = entry?.completed_date ?? null;
   const qcAttempts = entry?.qc_attempts ?? [];
-
-  const tripLabel = trip === 1
-    ? "Original"
-    : trip === 2
-      ? "Return"
-      : `Alt ${trip - 2}`;
 
   const workerEntries = Object.entries(workers as Record<string, string>).filter(([, v]) => !!v);
   const planEntries = Object.entries(plan as Record<string, string>).filter(([, v]) => !!v);
   const showPlanFallback = workerEntries.length === 0 && planEntries.length > 0;
   const teamSource = showPlanFallback ? planEntries : workerEntries;
+  const teamCount = teamSource.length;
+
+  const lastQc = qcAttempts.length > 0 ? qcAttempts[qcAttempts.length - 1] : null;
+  const failedCount = qcAttempts.filter((a) => a.result === "fail").length;
+
+  // Build one-line summaries
+  const teamSummary: React.ReactNode =
+    teamCount === 0
+      ? <span className="text-muted-foreground italic">no team assigned</span>
+      : showPlanFallback
+        ? `${teamCount} planned`
+        : `${teamCount} assigned`;
+
+  const qcSummary: React.ReactNode =
+    !lastQc
+      ? <span className="text-muted-foreground italic">not started</span>
+      : lastQc.result === "pass"
+        ? <>Passed{lastQc.inspector && <span className="text-muted-foreground"> by {lastQc.inspector}</span>}</>
+        : <>Failed{failedCount > 1 && <span className="text-muted-foreground"> × {failedCount}</span>}{lastQc.fail_reason && <span className="text-muted-foreground"> — {lastQc.fail_reason}</span>}</>;
+
+  const qcBadge = !lastQc ? null : (
+    <span className={cn(
+      "text-xs font-medium px-2 py-0.5 rounded-md",
+      lastQc.result === "pass"
+        ? "bg-[var(--status-ok-bg)] text-[var(--status-ok)]"
+        : "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
+    )}>
+      {lastQc.result === "pass" ? "Pass" : "Fail"}
+    </span>
+  );
+
+  const { summary: customerSummary, badge: customerBadge } = buildCustomerSummary(feedback, isCurrent);
 
   return (
-    <div className="bg-card border rounded-xl p-3 shadow-sm space-y-3">
-      {/* Cycle meta row — flat, inline, no header band */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-foreground">
-          {tripLabel}
+    <div className="space-y-2">
+      <SummaryRow
+        label="Team"
+        summary={teamSummary}
+        defaultOpen={false}
+        action={
+          isCurrent && onEditPlan ? (
+            <button
+              onClick={onEditPlan}
+              className="text-sm font-medium text-primary hover:underline cursor-pointer"
+            >
+              Edit plan
+            </button>
+          ) : null
+        }
+      >
+        {teamSource.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {teamSource.map(([key, name]) => (
+              <span key={key} className="inline-flex items-center gap-1 text-sm bg-muted px-2 py-1 rounded-md">
+                <span className="text-muted-foreground">{WORKER_LABELS[key] ?? key}:</span>
+                <span>{name}</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm italic text-muted-foreground">No team assigned yet.</p>
+        )}
+      </SummaryRow>
+
+      <SummaryRow
+        label="QC"
+        summary={qcSummary}
+        badge={qcBadge}
+        defaultOpen={!!lastQc && lastQc.result === "fail"}
+      >
+        {qcAttempts.length > 0 ? (
+          <QcAttemptList qcAttempts={qcAttempts} reentryStage={reentryStage} garment={garment} />
+        ) : (
+          <p className="text-sm italic text-muted-foreground">No quality check yet.</p>
+        )}
+      </SummaryRow>
+
+      <SummaryRow
+        label="Customer"
+        summary={customerSummary}
+        badge={customerBadge}
+        defaultOpen={!!feedback}
+      >
+        {feedback ? (
+          <CustomerFeedbackPanel fb={feedback} compact />
+        ) : (
+          <p className="text-sm italic text-muted-foreground">
+            {isCurrent ? "Customer feedback not yet recorded for this cycle." : "No customer feedback was recorded for this trip."}
+          </p>
+        )}
+      </SummaryRow>
+    </div>
+  );
+}
+
+function buildCustomerSummary(
+  fb: GarmentFeedback | null,
+  isCurrent: boolean,
+): { summary: React.ReactNode; badge: React.ReactNode } {
+  if (!fb) {
+    return {
+      summary: <span className="text-muted-foreground italic">{isCurrent ? "no feedback yet" : "not recorded"}</span>,
+      badge: null,
+    };
+  }
+  const action = fb.action ? FEEDBACK_ACTION_STYLE[fb.action] : null;
+  const diffs = parseJson<MeasurementDiffRow[]>(fb.measurement_diffs) ?? [];
+  const checklist = parseJson<OptionsChecklistRow[]>(fb.options_checklist) ?? [];
+  const failedOptions = checklist.filter((c) => c.rejected === true || c.hashwa_rejected === true);
+
+  const parts: string[] = [];
+  if (diffs.length > 0) parts.push(`${diffs.length} measurement change${diffs.length !== 1 ? "s" : ""}`);
+  if (failedOptions.length > 0) parts.push(`${failedOptions.length} style fix${failedOptions.length !== 1 ? "es" : ""}`);
+
+  const summary = parts.length > 0
+    ? parts.join(" · ")
+    : fb.notes
+      ? <span className="text-muted-foreground">notes only</span>
+      : <span className="text-muted-foreground italic">no details</span>;
+
+  const badge = action ? (
+    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-md", action.cls)}>
+      {action.label}
+    </span>
+  ) : null;
+
+  return { summary, badge };
+}
+
+function TripCycleMeta({
+  trip,
+  isCurrent,
+  reentryStage,
+  assignedDate,
+  completedDate,
+}: {
+  trip: number;
+  isCurrent: boolean;
+  reentryStage: string | null;
+  assignedDate: string | null;
+  completedDate: string | null;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-sm font-medium px-2 py-0.5 rounded-md bg-muted text-foreground">
+        {tripLabel(trip)}
+      </span>
+      {isCurrent && (
+        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md bg-foreground text-background">
+          <PlayCircle className="w-3 h-3" />
+          Current
         </span>
-        {isCurrent && (
-          <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-foreground text-background">
-            <PlayCircle className="w-3 h-3" />
-            Current
+      )}
+      {reentryStage && (
+        <span className="text-sm text-muted-foreground">
+          re-entered at{" "}
+          <span className="text-foreground">
+            {PIECE_STAGE_LABELS[reentryStage as keyof typeof PIECE_STAGE_LABELS] ?? reentryStage}
           </span>
-        )}
-        {reentryStage && (
-          <span className="text-xs text-muted-foreground">
-            re-entered at <span className="font-semibold text-foreground">
-              {PIECE_STAGE_LABELS[reentryStage as keyof typeof PIECE_STAGE_LABELS] ?? reentryStage}
-            </span>
-          </span>
-        )}
-        <div className="ml-auto text-xs text-muted-foreground tabular-nums">
-          {assignedDate && <span>{formatDate(assignedDate)}</span>}
-          {completedDate && <span> → {formatDate(completedDate)}</span>}
-          {!completedDate && isCurrent && assignedDate && <span> → in progress</span>}
-        </div>
+        </span>
+      )}
+      <div className="ml-auto text-xs text-muted-foreground tabular-nums">
+        <TripDateRange assignedDate={assignedDate} completedDate={completedDate} isCurrent={isCurrent} />
       </div>
+    </div>
+  );
+}
 
-      {/* Production Team — primary content, edit button when current and editable */}
-      {(teamSource.length > 0 || (isCurrent && onEditPlan)) && (
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {showPlanFallback ? "Planned Team" : "Production Team"}
-            </span>
-            {isCurrent && onEditPlan && (
-              <button
-                onClick={onEditPlan}
-                className="text-xs text-primary hover:underline cursor-pointer font-medium"
-              >
-                Edit Plan
-              </button>
-            )}
-          </div>
-          {teamSource.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {teamSource.map(([key, name]) => (
-                <span key={key} className="inline-flex items-center gap-1 text-xs bg-muted text-foreground px-2 py-1 rounded">
-                  <span className="text-muted-foreground">{WORKER_LABELS[key] ?? key}:</span>
-                  <span className="font-semibold">{name}</span>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs italic text-muted-foreground">No team assigned yet.</p>
-          )}
-        </div>
-      )}
+/** "Assigned 5 May · Closed 11 May" / "Assigned 5 May · in progress" / "Assigned 5 May". */
+function TripDateRange({
+  assignedDate,
+  completedDate,
+  isCurrent,
+}: {
+  assignedDate: string | null;
+  completedDate: string | null;
+  isCurrent: boolean;
+}) {
+  if (!assignedDate && !completedDate) return null;
+  const parts: React.ReactNode[] = [];
+  if (assignedDate) parts.push(<span key="a">Assigned {formatDate(assignedDate)}</span>);
+  if (completedDate) {
+    parts.push(<span key="c">Closed {formatDate(completedDate)}</span>);
+  } else if (isCurrent && assignedDate) {
+    parts.push(<span key="p" className="text-[var(--status-info)]">in progress</span>);
+  }
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <span className="mx-1">·</span>}
+          {p}
+        </span>
+      ))}
+    </>
+  );
+}
 
-      {/* QC attempts */}
-      {qcAttempts.length > 0 && (
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-            QC {qcAttempts.length === 1 ? "Result" : `Attempts (${qcAttempts.length})`}
-          </div>
-          <div className="space-y-1.5">
-            {qcAttempts.map((qc, j) => {
-              const prevReturnStages = j === 0
-                ? []
-                : getQcReturnStages(qcAttempts[j - 1]);
-              const cycleStart = j === 0
-                ? (reentryStage ?? "soaking")
-                : prevReturnStages[0] ?? "soaking";
-              const startLabel = PIECE_STAGE_LABELS[cycleStart as keyof typeof PIECE_STAGE_LABELS] ?? cycleStart;
-              return (
-                <div key={j}>
-                  {j > 0 && (
-                    <div className="flex items-center gap-1.5 mb-1 text-xs text-muted-foreground font-medium">
-                      <RotateCcw className="w-3 h-3" />
-                      Re-entered at {startLabel}
-                    </div>
-                  )}
-                  <div className="flex items-start gap-2 text-sm">
-                    {qc.result === "pass" ? (
-                      <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <X className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">
-                          QC {qc.result === "pass" ? "Passed" : "Failed"}
-                          {qcAttempts.length > 1 && (
-                            <span className="text-muted-foreground font-normal ml-1">
-                              (attempt {j + 1}/{qcAttempts.length})
-                            </span>
-                          )}
-                        </span>
-                        {qc.inspector && (
-                          <span className="text-xs text-muted-foreground">by {qc.inspector}</span>
-                        )}
-                        {qc.date && (
-                          <span className="text-xs text-muted-foreground ml-auto">{formatDate(qc.date)}</span>
-                        )}
-                      </div>
-                      {qc.result === "fail" && qc.fail_reason && (
-                        <p className="text-xs text-red-700 mt-0.5">{qc.fail_reason}</p>
-                      )}
-                      {qc.result === "fail" && getQcReturnStages(qc).length > 0 && (
-                        <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-                          <RotateCcw className="w-3 h-3" />
-                          Sent back to{" "}
-                          {getQcReturnStages(qc)
-                            .map((s) => PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s)
-                            .join(" → ")}
-                        </div>
-                      )}
-                      {qc.result === "pass" && qc.ratings && (
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {Object.entries(qc.ratings).map(([cat, score]) => (
-                            <span key={cat} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
-                              <span className="capitalize">{cat}</span>
-                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              <span className="font-bold text-foreground">{score}</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+// ── Trip Cycle Card (middle column — renders the selected trip) ─
 
-      {/* Customer feedback for this trip */}
-      {feedback ? (
-        <CustomerFeedbackPanel fb={feedback} />
-      ) : isCurrent ? (
-        <p className="text-xs italic text-muted-foreground">
-          Customer feedback not yet recorded for this cycle.
-        </p>
+export function TripCycleCard({
+  garment,
+  tripNum,
+  feedback,
+  onEditPlan,
+  isLoadingFeedback,
+}: {
+  garment: WorkshopGarment;
+  /** Which trip to render. Defaults to the garment's current trip_number. */
+  tripNum?: number;
+  feedback: GarmentFeedback | null;
+  onEditPlan?: () => void;
+  isLoadingFeedback?: boolean;
+}) {
+  const tripEntries = parseTripHistory(garment.trip_history);
+  const currentTripNum = garment.trip_number ?? 1;
+  const renderTrip = tripNum ?? currentTripNum;
+  const entry = tripEntries.find((e) => e.trip === renderTrip) ?? null;
+  const isCurrent = renderTrip === currentTripNum && garment.piece_stage !== "completed";
+
+  // Only allow edit-plan on the live current trip (past trips are read-only).
+  const editPlan = isCurrent ? onEditPlan : undefined;
+
+  return (
+    <div className="bg-card border border-border rounded-md p-4 space-y-3">
+      <TripCycleMeta
+        trip={renderTrip}
+        isCurrent={isCurrent}
+        reentryStage={entry?.reentry_stage ?? null}
+        assignedDate={entry?.assigned_date ?? (isCurrent ? garment.assigned_date ?? null : null)}
+        completedDate={entry?.completed_date ?? null}
+      />
+      {isLoadingFeedback ? (
+        <p className="text-sm italic text-muted-foreground">Loading feedback…</p>
       ) : (
-        <p className="text-xs italic text-muted-foreground">
-          No customer feedback was recorded for this trip.
-        </p>
+        <TripCycleBody
+          entry={entry}
+          feedback={feedback}
+          isCurrent={isCurrent}
+          garment={garment}
+          onEditPlan={editPlan}
+        />
       )}
     </div>
   );
 }
 
-export function TripCyclesSection({
+// ── Trip list panel (right column — selectable list of all trips) ─
+
+export function TripListPanel({
   garment,
   feedbackHistory,
-  isLoadingFeedback,
-  onEditCurrentPlan,
+  selectedTrip,
+  onSelect,
 }: {
   garment: WorkshopGarment;
   feedbackHistory: GarmentFeedback[];
-  isLoadingFeedback?: boolean;
-  /** Open the plan-edit dialog. Wired only into the current-cycle card. */
-  onEditCurrentPlan?: () => void;
+  selectedTrip: number;
+  onSelect: (trip: number) => void;
 }) {
-  const rawHistory = garment.trip_history;
-  const tripEntries: TripHistoryEntry[] = !rawHistory
-    ? []
-    : typeof rawHistory === "string"
-      ? JSON.parse(rawHistory)
-      : Array.isArray(rawHistory)
-        ? (rawHistory as TripHistoryEntry[])
-        : [];
-
+  const tripEntries = parseTripHistory(garment.trip_history);
   const currentTripNum = garment.trip_number ?? 1;
 
-  // Latest feedback per trip (newest by created_at wins; list comes in desc order)
   const feedbackByTrip = new Map<number, GarmentFeedback>();
   for (const fb of feedbackHistory) {
     const k = feedbackTripKey(fb);
     if (!feedbackByTrip.has(k)) feedbackByTrip.set(k, fb);
   }
 
-  // Build cycle list — union of trips seen in trip_history + current garment trip
   const tripNumbers = new Set<number>();
   for (const e of tripEntries) tripNumbers.add(e.trip);
-  tripNumbers.add(currentTripNum);
   for (const t of feedbackByTrip.keys()) tripNumbers.add(t);
+  tripNumbers.add(currentTripNum);
 
   const sortedTrips = [...tripNumbers].sort((a, b) => b - a); // newest first
 
-  if (sortedTrips.length === 0) return null;
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <History className="w-5 h-5 text-foreground" />
-        <h2 className="text-base font-bold uppercase tracking-wider">
-          Trip History
-        </h2>
-        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-          {sortedTrips.length} cycle{sortedTrips.length !== 1 ? "s" : ""}
-        </span>
-        {isLoadingFeedback && (
-          <span className="text-xs text-muted-foreground italic">loading feedback…</span>
-        )}
+    <div className="bg-card border border-border rounded-md overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <SectionTitle count={sortedTrips.length}>Trips</SectionTitle>
       </div>
-
-      <div className="space-y-3">
+      <ul role="listbox" aria-label="Trip history" className="divide-y divide-border">
         {sortedTrips.map((tripNum) => {
           const entry = tripEntries.find((e) => e.trip === tripNum) ?? null;
           const feedback = feedbackByTrip.get(tripNum) ?? null;
           const isCurrent = tripNum === currentTripNum && garment.piece_stage !== "completed";
+          const isSelected = tripNum === selectedTrip;
+          const action = feedback?.action ? FEEDBACK_ACTION_STYLE[feedback.action] : null;
+
           return (
-            <TripCycleCard
-              key={tripNum}
-              entry={entry}
-              feedback={feedback}
-              isCurrent={isCurrent}
-              garment={garment}
-              onEditPlan={isCurrent ? onEditCurrentPlan : undefined}
-            />
+            <li key={tripNum}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => onSelect(tripNum)}
+                className={cn(
+                  "w-full text-left px-4 py-3 transition-colors cursor-pointer",
+                  isSelected ? "bg-accent" : "hover:bg-muted/40",
+                )}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium">{tripLabel(tripNum)}</span>
+                  {isCurrent && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md bg-foreground text-background">
+                      <PlayCircle className="w-3 h-3" />
+                      Current
+                    </span>
+                  )}
+                  {action && (
+                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-md ml-auto", action.cls)}>
+                      {action.label}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                  <TripDateRange
+                    assignedDate={entry?.assigned_date ?? (isCurrent ? garment.assigned_date ?? null : null)}
+                    completedDate={entry?.completed_date ?? null}
+                    isCurrent={isCurrent}
+                  />
+                </div>
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
 
-// ── Collapsible Specs Section ─────────────────────────────────
-//
-// Wraps Style + Production Team + Measurements into one collapsible panel
-// that's secondary to the trip-cycle hero section above.
-
-export function CollapsibleSpecsSection({
-  garment,
-  defaultOpen = false,
-}: {
-  garment: WorkshopGarment;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border rounded-xl bg-card shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/30 transition-colors cursor-pointer"
-      >
-        <Package className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Garment Specs
-        </span>
-        <span className="text-xs text-muted-foreground/80">
-          Style · Measurements
-        </span>
-        <ChevronDown
-          className={cn(
-            "w-4 h-4 text-muted-foreground ml-auto transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {open && (
-        <div className="border-t p-3 space-y-3">
-          <StyleSection garment={garment} />
-          <MeasurementsSection garment={garment} />
-        </div>
-      )}
-    </div>
-  );
+function parseTripHistory(raw: WorkshopGarment["trip_history"]): TripHistoryEntry[] {
+  if (!raw) return [];
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as TripHistoryEntry[]; } catch { return []; }
+  }
+  return Array.isArray(raw) ? (raw as TripHistoryEntry[]) : [];
 }

@@ -195,7 +195,9 @@ export const notificationScopeEnum = pgEnum("notification_scope", [
 ]);
 export type NotificationScope = (typeof notificationScopeEnum.enumValues)[number];
 
-export const accessoryCategoryEnum = pgEnum("accessory_category", [
+// accessory_category is free text (was an enum until migration 0011 — see
+// /store/inventory: stakeholders type new categories inline).
+export const SUGGESTED_ACCESSORY_CATEGORIES = [
     "buttons",
     "zippers",
     "thread",
@@ -203,8 +205,7 @@ export const accessoryCategoryEnum = pgEnum("accessory_category", [
     "elastic",
     "interlining",
     "other",
-]);
-export type AccessoryCategory = (typeof accessoryCategoryEnum.enumValues)[number];
+] as const;
 
 export const unitOfMeasureEnum = pgEnum("unit_of_measure", [
     "pieces",
@@ -213,6 +214,47 @@ export const unitOfMeasureEnum = pgEnum("unit_of_measure", [
     "kg",
 ]);
 export type UnitOfMeasure = (typeof unitOfMeasureEnum.enumValues)[number];
+
+// --- STOCK MOVEMENT ENUMS ---
+export const stockMovementTypeEnum = pgEnum("stock_movement_type", [
+    "restock",         // External supplier delivery (+)
+    "consumption",     // Garment cut, shelf sold (-)
+    "transfer_out",    // Dispatched to other location (-)
+    "transfer_in",     // Received at this location (+)
+    "adjustment",      // Manual recount diff (+/-)
+    "waste",           // Lost in transit / damaged (-)
+    "return",          // Customer return / cancellation (+)
+]);
+export type StockMovementType = (typeof stockMovementTypeEnum.enumValues)[number];
+
+export const stockItemTypeEnum = pgEnum("stock_item_type", [
+    "fabric",
+    "shelf",
+    "accessory",
+]);
+export type StockItemType = (typeof stockItemTypeEnum.enumValues)[number];
+
+export const stockLocationEnum = pgEnum("stock_location", [
+    "shop",
+    "workshop",
+]);
+export type StockLocation = (typeof stockLocationEnum.enumValues)[number];
+
+export const adjustmentReasonEnum = pgEnum("adjustment_reason", [
+    "recount",
+    "found",
+    "lost",
+    "damaged",
+    "system_error",
+    "other",
+]);
+export type AdjustmentReason = (typeof adjustmentReasonEnum.enumValues)[number];
+
+export const styleRuleTypeEnum = pgEnum("style_rule_type", [
+    "flat_override",
+    "additive",
+]);
+export type StyleRuleType = (typeof styleRuleTypeEnum.enumValues)[number];
 
 
 // --- 0. PRICES ---
@@ -324,6 +366,25 @@ export const styles = pgTable("styles", {
     codeBrandIdx: uniqueIndex("styles_code_brand_idx").on(t.code, t.brand),
 }));
 
+// Override behavior for specific style codes (e.g. "designer = 6 KD flat, ignore other options").
+// Resolved at pricing time: highest priority active rule for (brand, style_code) wins.
+// Default behavior when no rule exists = additive (sum of selected styles.rate_per_item).
+export const stylePricingRules = pgTable("style_pricing_rules", {
+    id: serial("id").primaryKey(),
+    brand: brandEnum("brand").notNull(),
+    style_code: text("style_code").notNull(),
+    rule_type: styleRuleTypeEnum("rule_type").notNull(),
+    flat_rate: numeric("flat_rate", { precision: 10, scale: 3 }),
+    priority: integer("priority").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    description: text("description"),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+    brandStyleCodeIdx: index("style_pricing_rules_brand_code_idx").on(t.brand, t.style_code, t.active),
+    brandCodePriorityIdx: uniqueIndex("style_pricing_rules_brand_code_priority_idx").on(t.brand, t.style_code, t.priority),
+}));
+
 export const fabrics = pgTable("fabrics", {
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
@@ -335,6 +396,12 @@ export const fabrics = pgTable("fabrics", {
     price_per_meter: numeric("price_per_meter", { precision: 10, scale: 3 }),
     supplier: text("supplier"),
     season: fabricTypeEnum("season"),
+    image_url: text("image_url"),
+    description: text("description"),
+    sku: text("sku"),
+    default_supplier_id: integer("default_supplier_id"),  // FK suppliers(id) — set in migration after suppliers table
+    low_stock_threshold: numeric("low_stock_threshold", { precision: 10, scale: 2 }),
+    is_archived: boolean("is_archived").default(false).notNull(),
 });
 
 export const shelf = pgTable("shelf", {
@@ -345,17 +412,29 @@ export const shelf = pgTable("shelf", {
     shop_stock: integer("shop_stock").default(0),
     workshop_stock: integer("workshop_stock").default(0),
     price: numeric("price", { precision: 10, scale: 3 }),
+    image_url: text("image_url"),
+    description: text("description"),
+    sku: text("sku"),
+    default_supplier_id: integer("default_supplier_id"),
+    low_stock_threshold: integer("low_stock_threshold"),
+    is_archived: boolean("is_archived").default(false).notNull(),
 });
 
 // --- 3B. ACCESSORIES ---
 export const accessories = pgTable("accessories", {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    category: accessoryCategoryEnum("category").notNull(),
+    category: text("category").notNull(),
     unit_of_measure: unitOfMeasureEnum("unit_of_measure").notNull().default("pieces"),
     price: numeric("price", { precision: 10, scale: 3 }),
     shop_stock: numeric("shop_stock", { precision: 10, scale: 2 }).default(0),
     workshop_stock: numeric("workshop_stock", { precision: 10, scale: 2 }).default(0),
+    image_url: text("image_url"),
+    description: text("description"),
+    sku: text("sku"),
+    default_supplier_id: integer("default_supplier_id"),
+    low_stock_threshold: numeric("low_stock_threshold", { precision: 10, scale: 2 }),
+    is_archived: boolean("is_archived").default(false).notNull(),
     created_at: timestamp("created_at").defaultNow(),
 }, (t) => ({
     nameCategoryIdx: uniqueIndex("accessories_name_category_idx").on(t.name, t.category),
@@ -864,6 +943,7 @@ export const units = pgTable("units", {
     stage: productionStageEnum("stage").notNull(),
     name: text("name").notNull(),
     notes: text("notes"),
+    daily_target: integer("daily_target"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1094,6 +1174,55 @@ export const notificationReads = pgTable("notification_reads", {
     pk: primaryKey({ columns: [t.notification_id, t.user_id] }),
 }));
 
+// --- 16. SUPPLIERS (Shared across fabric / shelf / accessory restocks) ---
+export const suppliers = pgTable("suppliers", {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    email: text("email"),
+    notes: text("notes"),
+    is_archived: boolean("is_archived").default(false).notNull(),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+    nameIdx: uniqueIndex("suppliers_name_idx").on(t.name),
+}));
+
+// --- 17. STOCK MOVEMENTS (Append-only audit ledger for every stock change) ---
+//
+// Every change to fabrics/shelf/accessories.{shop,workshop}_stock writes a row here.
+// Triggers in triggers.sql auto-log on UPDATE; callers stamp context via session vars
+// (app.movement_type, app.movement_ref_type, app.movement_ref_id, app.movement_user_id,
+//  app.movement_supplier_id, app.movement_unit_cost, app.movement_reason, app.movement_notes).
+// Missing context defaults to movement_type='adjustment', reason='unattributed'.
+export const stockMovements = pgTable("stock_movements", {
+    id: serial("id").primaryKey(),
+    item_type: stockItemTypeEnum("item_type").notNull(),
+    item_id: integer("item_id").notNull(),  // soft-ref to fabrics/shelf/accessories
+    location: stockLocationEnum("location").notNull(),
+    movement_type: stockMovementTypeEnum("movement_type").notNull(),
+    qty_delta: numeric("qty_delta", { precision: 10, scale: 2 }).notNull(),  // signed
+    qty_before: numeric("qty_before", { precision: 10, scale: 2 }),
+    qty_after: numeric("qty_after", { precision: 10, scale: 2 }),
+    // traceability
+    ref_type: text("ref_type"),    // 'transfer' | 'order' | 'garment' | 'restock' | 'adjustment' | 'consumption'
+    ref_id: integer("ref_id"),
+    // restock-specific
+    supplier_id: integer("supplier_id").references(() => suppliers.id),
+    unit_cost: numeric("unit_cost", { precision: 10, scale: 3 }),
+    // human context
+    reason: text("reason"),
+    notes: text("notes"),
+    // who/when
+    user_id: uuid("user_id").references(() => users.id),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+    itemIdx: index("stock_movements_item_idx").on(t.item_type, t.item_id),
+    itemLocIdx: index("stock_movements_item_loc_idx").on(t.item_type, t.item_id, t.location),
+    createdAtIdx: index("stock_movements_created_at_idx").on(t.created_at),
+    refIdx: index("stock_movements_ref_idx").on(t.ref_type, t.ref_id),
+    typeCreatedIdx: index("stock_movements_type_created_idx").on(t.movement_type, t.created_at),
+}));
+
 // --- RELATIONS ---
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
@@ -1183,6 +1312,15 @@ export const notificationReadsRelations = relations(notificationReads, ({ one })
     user: one(users, { fields: [notificationReads.user_id], references: [users.id] }),
 }));
 
+export const suppliersRelations = relations(suppliers, ({ many }) => ({
+    movements: many(stockMovements),
+}));
+
+export const stockMovementsRelations = relations(stockMovements, ({ one }) => ({
+    supplier: one(suppliers, { fields: [stockMovements.supplier_id], references: [suppliers.id] }),
+    user: one(users, { fields: [stockMovements.user_id], references: [users.id] }),
+}));
+
 // --- TYPE EXPORTS ---
 
 export type User = InferSelectModel<typeof users>;
@@ -1231,6 +1369,9 @@ export type NewFabric = InferInsertModel<typeof fabrics>;
 export type Style = InferSelectModel<typeof styles>;
 export type NewStyle = InferInsertModel<typeof styles>;
 
+export type StylePricingRule = InferSelectModel<typeof stylePricingRules>;
+export type NewStylePricingRule = InferInsertModel<typeof stylePricingRules>;
+
 export type Campaign = InferSelectModel<typeof campaigns>;
 export type NewCampaign = InferInsertModel<typeof campaigns>;
 
@@ -1276,3 +1417,9 @@ export type Notification = InferSelectModel<typeof notifications>;
 export type NewNotification = InferInsertModel<typeof notifications>;
 export type NotificationRead = InferSelectModel<typeof notificationReads>;
 export type NewNotificationRead = InferInsertModel<typeof notificationReads>;
+
+export type Supplier = InferSelectModel<typeof suppliers>;
+export type NewSupplier = InferInsertModel<typeof suppliers>;
+
+export type StockMovement = InferSelectModel<typeof stockMovements>;
+export type NewStockMovement = InferInsertModel<typeof stockMovements>;

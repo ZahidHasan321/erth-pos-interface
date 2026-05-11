@@ -53,14 +53,8 @@ export const styleOptionsSchema = z.object({
       front_pocket_thickness: z.enum(thicknessValues).optional(),
     })
     .optional(),
-  accessories: z
-    .object({
-      phone: z.boolean().optional(),
-      wallet: z.boolean().optional(),
-      pen_holder: z.boolean().optional(),
-      mobile: z.boolean().optional(),
-    })
-    .optional(),
+  // accessories.* subschema removed — cells write to wallet_pocket / pen_holder /
+  // mobile_pocket on the garment row directly. The nested form was never read.
   cuffs: z
     .object({
       has_cuffs: z.boolean().optional(),
@@ -109,11 +103,6 @@ export const styleOptionsDefaults: StyleOptionsSchema = {
   front_pocket: {
     front_pocket_type: "FRO_MUDAWWAR_FRONT_POCKET",
     front_pocket_thickness: "DOUBLE",
-  },
-  accessories: {
-    phone: true,
-    wallet: false,
-    pen_holder: false,
   },
   cuffs: {
     has_cuffs: false,

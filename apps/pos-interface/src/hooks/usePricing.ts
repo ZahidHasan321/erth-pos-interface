@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { getPrices } from "../api/prices";
 import { getStyles } from "../api/styles";
+import { getStylePricingRules } from "../api/style-rules";
 import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
-import type { Style } from "@repo/database";
+import type { Style, StylePricingRule } from "@repo/database";
 
 export interface Price {
   key: string;
@@ -26,9 +27,17 @@ export function usePricing() {
     gcTime: Infinity,
   });
 
+  const { data: rulesResponse, isLoading: rulesLoading } = useQuery({
+    queryKey: ['style-pricing-rules'],
+    queryFn: getStylePricingRules,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
   const prices = pricesResponse?.data as Price[] | undefined;
   const styles = (stylesResponse?.data || []) as Style[];
-  const isLoading = pricesLoading || stylesLoading;
+  const stylePricingRules = (rulesResponse?.data || []) as StylePricingRule[];
+  const isLoading = pricesLoading || stylesLoading || rulesLoading;
 
   // Helper to get system price safely (home delivery, express, stitching)
   const getPrice = (key: string) => Number(prices?.find(p => p.key === key)?.value || 0);
@@ -57,7 +66,7 @@ export function usePricing() {
 
     // 3. Calculate Style (sum of style extras from styles table)
     const styleTotal = garments.reduce((acc, g) => {
-        return acc + calculateGarmentStylePrice(g, styles);
+        return acc + calculateGarmentStylePrice(g, styles, stylePricingRules);
     }, 0);
 
     // 4. Delivery
@@ -80,5 +89,5 @@ export function usePricing() {
     };
   };
 
-  return { prices, styles, getPrice, stitchingAdult, stitchingChild, calculateOrderTotal, isLoading };
+  return { prices, styles, stylePricingRules, getPrice, stitchingAdult, stitchingChild, calculateOrderTotal, isLoading };
 }

@@ -50,9 +50,16 @@ export function useUpdateUser() {
       updates,
     }: {
       id: string;
-      updates: Partial<Omit<NewUser, "id" | "created_at">>;
+      updates: Partial<Omit<NewUser, "id" | "created_at">> & {
+        resources?: Array<{ responsibility: string; unit_id: string | null }>;
+      };
     }) => updateUser(id, updates),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      // Unit reassignment / new resource rows can land in this same call.
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      qc.invalidateQueries({ queryKey: ["resources-with-users"] });
+    },
   });
 }
 

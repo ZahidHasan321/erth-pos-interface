@@ -1,11 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useUsers, useUpdateUser } from "@/hooks/useUsers";
+import { useUnits } from "@/hooks/useUnits";
 import { setUserPin } from "@/api/users";
+import { getResources } from "@/api/resources";
+import { JOB_FUNCTION_TO_STAGE } from "@/lib/job-functions";
 import { Button } from "@repo/ui/button";
 import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Save } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageShell";
 import { UserForm, EMPTY_USER_FORM, isUserFormValid, type UserFormState } from "@/components/users/UserForm";
 import type { Role, Department, JobFunction } from "@repo/database";
 
@@ -22,9 +27,21 @@ function EditUserPage() {
   const { userId } = Route.useParams();
   const navigate = useNavigate();
   const { data: users = [], isLoading } = useUsers();
+  const { data: units = [] } = useUnits();
+  // Pull resources directly (rather than the joined hook) so we get the raw
+  // unit_id field cheaply on edit.
+  const { data: allResources = [] } = useQuery({
+    queryKey: ["resources"],
+    queryFn: getResources,
+    staleTime: 60_000,
+  });
   const updateMut = useUpdateUser();
 
   const user = useMemo(() => users.find((u) => u.id === userId), [users, userId]);
+  const userResources = useMemo(
+    () => allResources.filter((r) => r.user_id === userId),
+    [allResources, userId],
+  );
 
   const [form, setForm] = useState<UserFormState>(EMPTY_USER_FORM);
   const [initialized, setInitialized] = useState(false);
@@ -32,6 +49,7 @@ function EditUserPage() {
   useEffect(() => {
     if (initialized || !user) return;
     const jobs = (user as unknown as { job_functions: JobFunction[] | null }).job_functions;
+    const sewingResource = userResources.find((r) => r.responsibility === "sewing");
     setForm({
       username: user.username ?? "",
       name: user.name,
@@ -48,19 +66,44 @@ function EditUserPage() {
       nationality: user.nationality ?? "",
       hire_date: user.hire_date ?? "",
       notes: user.notes ?? "",
+      sewing_unit_id: sewingResource?.unit_id ?? null,
     });
     setInitialized(true);
-  }, [user, initialized]);
+  }, [user, userResources, initialized]);
 
   const willBeTerminalWorker = isTerminalWorker(form);
+
+  // Default unit per non-sewer stage = lowest-id unit (mirrors create flow).
+  // Sewing pulls from form.sewing_unit_id.
+  const defaultUnitByStage = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) {
+      if (u.stage === "sewing") continue;
+      if (!map.has(u.stage)) map.set(u.stage, u.id);
+    }
+    return map;
+  }, [units]);
 
   const handleSave = async () => {
     if (!user || !isUserFormValid(form, "edit")) return;
     try {
       // The Edge Function diffs job_functions vs existing resources rows and
-      // adds/removes them. Past KPI history (production_plan, worker_history)
-      // is keyed by username, not resource id, so dropping a resource row
-      // does not orphan attribution.
+      // adds/removes them. We also pass per-stage unit_ids so the edge
+      // function can set them on new inserts AND reassign existing rows
+      // (e.g. sewer moved to a new sewing team). Past KPI history
+      // (production_plan, worker_history) is keyed by username, not
+      // resource id, so dropping a resource row does not orphan attribution.
+      const resources = willBeTerminalWorker
+        ? form.job_functions.map((job) => {
+            const stage = JOB_FUNCTION_TO_STAGE[job];
+            const unit_id =
+              stage === "sewing"
+                ? form.sewing_unit_id
+                : defaultUnitByStage.get(stage) ?? null;
+            return { responsibility: stage, unit_id };
+          })
+        : [];
+
       await updateMut.mutateAsync({
         id: user.id,
         updates: {
@@ -78,6 +121,7 @@ function EditUserPage() {
           nationality: form.nationality || null,
           hire_date: form.hire_date || null,
           notes: form.notes || null,
+          resources,
         },
       });
 
@@ -111,8 +155,8 @@ function EditUserPage() {
             Back to Users
           </Link>
         </Button>
-        <div className="text-center py-20 rounded-md border border-dashed">
-          <p className="text-lg font-semibold mb-1">User not found</p>
+        <div className="text-center py-16 rounded-md border border-dashed border-border">
+          <p className="text-base font-medium mb-1">User not found</p>
           <p className="text-sm text-muted-foreground">This user may have been removed.</p>
         </div>
       </div>
@@ -123,48 +167,24 @@ function EditUserPage() {
   const canSave = isUserFormValid(form, "edit");
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 min-h-full">
-      {/* Breadcrumb */}
-      <Button variant="ghost" size="sm" asChild className="mb-3 gap-2 text-muted-foreground -ml-2">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto min-h-full">
+      <Button variant="ghost" size="sm" asChild className="mb-2 gap-2 text-muted-foreground -ml-2">
         <Link to="/users/$userId" params={{ userId: user.id }}>
           <ArrowLeft className="w-4 h-4" />
           {user.name}
         </Link>
       </Button>
 
-      {/* Hero */}
-      <div className="rounded-md border bg-card overflow-hidden mb-4 border-l-2 border-l-amber-500">
-        <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Editing record</span>
-            <span className="h-px w-4 bg-border" />
-            <span className="text-[10px] font-mono text-muted-foreground">{user.id.slice(0, 8)}</span>
-          </div>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Unsaved</span>
-        </div>
+      <PageHeader
+        icon={Pencil}
+        title={user.name}
+        subtitle="Update access, contact, and employee details. Changes save together."
+      />
 
-        <div className="p-5 flex items-center gap-4">
-          <div className="h-12 w-12 rounded-md border bg-muted flex items-center justify-center shrink-0">
-            <Pencil className="w-5 h-5 text-muted-foreground" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight leading-none mb-1 truncate">
-              {user.name}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Update access, contact, and employee details. Changes save together.
-            </p>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Form */}
       <UserForm mode="edit" form={form} setForm={setForm} />
 
-      {/* Inline footer */}
-      <div className="mt-6 flex items-center justify-between gap-3 pt-4 border-t">
-        <p className="text-[11px] text-muted-foreground hidden sm:block">
+      <div className="mt-6 flex items-center justify-between gap-3 pt-4 border-t border-border">
+        <p className="text-xs text-muted-foreground hidden sm:block">
           {canSave ? "Ready to save." : "Fill required fields."}
         </p>
         <div className="flex items-center gap-2 flex-1 sm:flex-none justify-end">
@@ -173,7 +193,7 @@ function EditUserPage() {
           </Button>
           <Button onClick={handleSave} disabled={!canSave || isPending} className="gap-1.5">
             <Save className="w-3.5 h-3.5" />
-            {isPending ? "Saving..." : "Save Changes"}
+            {isPending ? "Saving..." : "Save changes"}
           </Button>
         </div>
       </div>

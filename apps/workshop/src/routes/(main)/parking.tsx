@@ -9,12 +9,11 @@ import {
   useSendToScheduler,
 } from "@/hooks/useGarmentMutations";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
-import { PageHeader, GarmentTypeBadge } from "@/components/shared/PageShell";
+import { PageHeader, GarmentTypeBadge, LoadingSkeleton } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
-import { Skeleton } from "@repo/ui/skeleton";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import {
   Table,
@@ -45,7 +44,10 @@ import type { WorkshopGarment } from "@repo/database";
 
 function AltBadge({ trip }: { trip: number }) {
   return (
-    <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+    <Badge
+      variant="outline"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
+    >
       Alt {trip - 1}
     </Badge>
   );
@@ -53,8 +55,11 @@ function AltBadge({ trip }: { trip: number }) {
 
 function AltOutBadge({ trip }: { trip: number }) {
   return (
-    <Badge className="bg-amber-600 text-white font-semibold text-xs uppercase tracking-wide border-0">
-      {trip >= 2 ? `Alt Out ${trip - 1}` : "Alt Out"}
+    <Badge
+      variant="outline"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
+    >
+      {trip >= 2 ? `Alt out ${trip - 1}` : "Alt out"}
     </Badge>
   );
 }
@@ -108,14 +113,14 @@ function ParkingGarmentRow({
       )}
       <TableCell className="px-3 py-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-sm font-bold">
+          <span className="font-mono text-base">
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </span>
           {((!hideExpress && garment.express) || garment.soaking) && (
             <div className="flex items-center gap-1">
               {!hideExpress && garment.express && <ExpressBadge />}
               {garment.soaking && (
-                <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
                   <Droplets className="w-3 h-3" /> Soak
                 </span>
               )}
@@ -141,9 +146,9 @@ function ParkingGarmentRow({
       )}
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold">{garment.customer_name ?? "—"}</span>
+          <span className="text-base tracking-tight">{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
-            <span className="text-xs font-mono text-muted-foreground">
+            <span className="text-sm font-mono text-muted-foreground">
               {garment.customer_mobile}
             </span>
           )}
@@ -151,9 +156,9 @@ function ParkingGarmentRow({
       </TableCell>
       <TableCell className="px-3 py-3 font-mono">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold">#{garment.order_id}</span>
+          <span className="text-base">#{garment.order_id}</span>
           {garment.invoice_number && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               INV-{garment.invoice_number}
             </span>
           )}
@@ -167,7 +172,7 @@ function ParkingGarmentRow({
           {garment.delivery_date_order ? (
             <span
               className={cn(
-                "text-xs font-bold tabular-nums inline-flex items-center gap-1",
+                "text-sm font-medium tabular-nums inline-flex items-center gap-1",
                 urgency.text,
               )}
             >
@@ -175,10 +180,10 @@ function ParkingGarmentRow({
               {formatDate(garment.delivery_date_order)}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">—</span>
           )}
           {garment.home_delivery && (
-            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
               <Home className="w-3 h-3" /> Home
             </span>
           )}
@@ -192,12 +197,7 @@ function ParkingGarmentRow({
               variant={actionVariant === "outline" ? "outline" : "default"}
               onClick={onAction}
               disabled={actionPending}
-              className={cn(
-                "text-xs h-7",
-                actionVariant === "green" && "bg-green-600 hover:bg-green-700",
-                actionVariant === "amber" && "bg-amber-600 hover:bg-amber-700",
-                actionVariant === "red" && "bg-red-600 hover:bg-red-700",
-              )}
+              className="text-xs h-7"
             >
               {actionPending ? (
                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -302,50 +302,36 @@ function ParkingGarmentTable({
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
-function EmptyState({
-  icon: Icon,
-  message,
-}: {
-  icon: LucideIcon;
-  message: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-2xl">
-      <Icon className="w-8 h-8 text-muted-foreground/30 mb-2" />
-      <p className="font-semibold text-muted-foreground">{message}</p>
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-3">
-      {[1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-14 rounded-xl" />
-      ))}
-    </div>
-  );
-}
-
 function Section({
   title,
   icon: Icon,
   count,
-  accent,
+  emptyLabel,
   children,
 }: {
   title: string;
   icon: LucideIcon;
   count: number;
-  accent?: string;
+  emptyLabel?: string;
   children: React.ReactNode;
 }) {
+  if (count === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
+        <Icon className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground/70 text-xs ml-auto">
+          {emptyLabel ?? "Empty"}
+        </span>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mt-5">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
-        <h2 className="font-semibold text-base text-foreground">{title}</h2>
-        <Badge variant="secondary" className={cn("text-xs", accent)}>
+        <h2 className="text-base font-medium">{title}</h2>
+        <Badge variant="secondary" className="text-xs font-medium">
           {count}
         </Badge>
       </div>
@@ -370,16 +356,16 @@ function FilterChips({
           key={c.key}
           onClick={() => onFilter(c.key)}
           className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
             active === c.key
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted/60 text-muted-foreground hover:bg-muted",
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/80",
           )}
         >
           {c.label}
           <span
             className={cn(
-              "tabular-nums font-bold px-1.5 py-0.5 rounded-full text-[10px] leading-none",
+              "tabular-nums font-medium px-1.5 py-0.5 rounded-sm text-[10px] leading-none",
               active === c.key
                 ? "bg-primary-foreground/20 text-primary-foreground"
                 : "bg-background text-foreground/60",
@@ -651,7 +637,7 @@ function ParkingPage() {
   const clearAll = () => setSel(new Set());
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-8">
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-2">
       <PageHeader
         icon={ParkingSquare}
         title="Order Parking"
@@ -700,23 +686,19 @@ function ParkingPage() {
             title="Express"
             icon={Zap}
             count={searchedExpress.length}
-            accent="bg-orange-100 text-orange-700"
+            emptyLabel="No express in parking"
           >
-            {searchedExpress.length === 0 ? (
-              <EmptyState icon={Zap} message="No express garments in parking" />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedExpress}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-                showType
-                hideExpress
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedExpress}
+              selectedIds={sel}
+              onToggle={toggle}
+              onAction={(g) => handleSendToScheduler([g.id])}
+              actionLabel="Schedule"
+              getActionVariant={() => "green"}
+              isActionPending={isSchedulePending}
+              showType
+              hideExpress
+            />
           </Section>
 
           {/* ── BROVA ── */}
@@ -724,50 +706,36 @@ function ParkingPage() {
             title="Brova"
             icon={Package}
             count={searchedBrova.length}
-            accent="bg-amber-100 text-amber-700"
+            emptyLabel="No brova in parking"
           >
-            {searchedBrova.length === 0 ? (
-              <EmptyState
-                icon={Package}
-                message="No brova garments in parking"
-              />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedBrova}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedBrova}
+              selectedIds={sel}
+              onToggle={toggle}
+              onAction={(g) => handleSendToScheduler([g.id])}
+              actionLabel="Schedule"
+              getActionVariant={() => "green"}
+              isActionPending={isSchedulePending}
+            />
           </Section>
 
           {/* ── ALTERATION ORDERS (OUT) ── */}
           <Section
-            title="Alteration Orders (Out)"
+            title="Alteration orders (out)"
             icon={Scissors}
             count={searchedAlterationOut.length}
+            emptyLabel="No alteration orders in parking"
           >
-            {searchedAlterationOut.length === 0 ? (
-              <EmptyState
-                icon={Scissors}
-                message="No alteration orders in parking"
-              />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedAlterationOut}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-                showType
-                showAlt
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedAlterationOut}
+              selectedIds={sel}
+              onToggle={toggle}
+              onAction={(g) => handleSendToScheduler([g.id])}
+              actionLabel="Schedule"
+              getActionVariant={() => "green"}
+              isActionPending={isSchedulePending}
+              showAlt
+            />
           </Section>
 
           {/* ── RETURNS ── */}
@@ -775,6 +743,7 @@ function ParkingPage() {
             title="Returns"
             icon={RotateCcw}
             count={returnsGarments.length}
+            emptyLabel="No returns in parking"
           >
             <FilterChips
               chips={returnChips}
@@ -782,14 +751,9 @@ function ParkingPage() {
               onFilter={setReturnFilter}
             />
             {filteredReturns.length === 0 ? (
-              <EmptyState
-                icon={RotateCcw}
-                message={
-                  returnFilter === "all"
-                    ? "No returns in parking"
-                    : "No returns match this filter"
-                }
-              />
+              <p className="text-sm text-muted-foreground px-3 py-2">
+                No returns match this filter
+              </p>
             ) : (
               <TableContainer>
                 <Table>
@@ -840,14 +804,14 @@ function ParkingPage() {
                           </TableCell>
                           <TableCell className="px-3 py-3">
                             <div className="flex flex-col gap-1">
-                              <span className="font-mono text-sm font-bold">
+                              <span className="font-mono text-base">
                                 {g.garment_id ?? g.id.slice(0, 8)}
                               </span>
                               {(g.express || g.soaking) && (
                                 <div className="flex items-center gap-1">
                                   {g.express && <ExpressBadge />}
                                   {g.soaking && (
-                                    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
                                       <Droplets className="w-3 h-3" /> Soak
                                     </span>
                                   )}
@@ -857,11 +821,11 @@ function ParkingPage() {
                           </TableCell>
                           <TableCell className="text-sm">
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">
+                              <span className="text-base tracking-tight">
                                 {g.customer_name ?? "—"}
                               </span>
                               {g.customer_mobile && (
-                                <span className="text-xs font-mono text-muted-foreground">
+                                <span className="text-sm font-mono text-muted-foreground">
                                   {g.customer_mobile}
                                 </span>
                               )}
@@ -883,7 +847,7 @@ function ParkingPage() {
                               {g.delivery_date_order ? (
                                 <span
                                   className={cn(
-                                    "text-xs font-bold tabular-nums inline-flex items-center gap-1",
+                                    "text-sm font-medium tabular-nums inline-flex items-center gap-1",
                                     gUrgency.text,
                                   )}
                                 >
@@ -891,12 +855,12 @@ function ParkingPage() {
                                   {formatDate(g.delivery_date_order)}
                                 </span>
                               ) : (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-sm text-muted-foreground">
                                   —
                                 </span>
                               )}
                               {g.home_delivery && (
-                                <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
                                   <Home className="w-3 h-3" /> Home
                                 </span>
                               )}
@@ -908,7 +872,7 @@ function ParkingPage() {
                               variant="default"
                               onClick={() => handleSendToScheduler([g.id])}
                               disabled={isSchedulePending(g.id)}
-                              className="text-xs h-7 bg-green-600 hover:bg-green-700"
+                              className="text-xs h-7"
                             >
                               {isSchedulePending(g.id) ? (
                                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -932,67 +896,48 @@ function ParkingPage() {
             title="Finals"
             icon={Package}
             count={searchedAllSchedulableFinals.length}
-            accent="bg-blue-100 text-blue-700"
+            emptyLabel="No finals ready to schedule"
           >
-            {searchedAllSchedulableFinals.length === 0 ? (
-              <EmptyState icon={Package} message="No finals ready to schedule" />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedAllSchedulableFinals}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedAllSchedulableFinals}
+              selectedIds={sel}
+              onToggle={toggle}
+              onAction={(g) => handleSendToScheduler([g.id])}
+              actionLabel="Schedule"
+              getActionVariant={() => "green"}
+              isActionPending={isSchedulePending}
+            />
           </Section>
 
           {/* ── CUSTOMER APPROVED (brova accepted, finals ready to schedule) ── */}
           <Section
-            title="Customer Approved"
+            title="Customer approved"
             icon={Unlock}
             count={searchedCustomerApprovedLocked.length}
-            accent="bg-emerald-100 text-emerald-700"
+            emptyLabel="No customer approved finals"
           >
-            {searchedCustomerApprovedLocked.length === 0 ? (
-              <EmptyState
-                icon={Unlock}
-                message="No customer approved finals in parking"
-              />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedCustomerApprovedLocked}
-                selectedIds={sel}
-                onToggle={toggle}
-                onAction={(g) => handleSendToScheduler([g.id])}
-                actionLabel="Schedule"
-                getActionVariant={() => "green"}
-                isActionPending={isSchedulePending}
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedCustomerApprovedLocked}
+              selectedIds={sel}
+              onToggle={toggle}
+              onAction={(g) => handleSendToScheduler([g.id])}
+              actionLabel="Schedule"
+              getActionVariant={() => "green"}
+              isActionPending={isSchedulePending}
+            />
           </Section>
 
           {/* ── FINALS NOT YET APPROVED (brova not done, read-only) ── */}
           <Section
-            title="Finals Not Yet Approved"
+            title="Finals not yet approved"
             icon={Clock}
             count={searchedFinalsNotYetApproved.length}
-            accent="bg-amber-100 text-amber-700"
+            emptyLabel="No finals awaiting approval"
           >
-            {searchedFinalsNotYetApproved.length === 0 ? (
-              <EmptyState
-                icon={Clock}
-                message="No finals awaiting customer approval"
-              />
-            ) : (
-              <ParkingGarmentTable
-                garments={searchedFinalsNotYetApproved}
-                readOnly
-                showType
-              />
-            )}
+            <ParkingGarmentTable
+              garments={searchedFinalsNotYetApproved}
+              readOnly
+            />
           </Section>
         </>
       )}
@@ -1000,7 +945,6 @@ function ParkingPage() {
       <BatchActionBar count={sel.size} onClear={() => setSel(new Set())}>
         <Button
           size="sm"
-          className="bg-green-600 hover:bg-green-700"
           onClick={() => handleSendToScheduler([...sel])}
           disabled={sendToSchedulerMut.isPending}
         >

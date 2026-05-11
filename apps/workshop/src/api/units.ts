@@ -12,7 +12,7 @@ export const getUnits = async (): Promise<Unit[]> => {
 };
 
 export const createUnit = async (
-  unit: Pick<NewUnit, "stage" | "name"> & Partial<Pick<NewUnit, "notes">>,
+  unit: Pick<NewUnit, "stage" | "name"> & Partial<Pick<NewUnit, "notes" | "daily_target">>,
 ): Promise<Unit> => {
   const { data, error } = await db
     .from("units")
@@ -30,7 +30,7 @@ export const createUnit = async (
 
 export const updateUnit = async (
   id: string,
-  updates: Partial<Pick<NewUnit, "name" | "notes">>,
+  updates: Partial<Pick<NewUnit, "name" | "notes" | "daily_target">>,
 ): Promise<Unit> => {
   const { data, error } = await db
     .from("units")

@@ -136,6 +136,8 @@ export function TerminalQualityTemplatePrint({
   alterationFilter,
   measurement: measurementProp,
   qcFailActuals,
+  qcFailOptionActuals: _qcFailOptionActuals,
+  optionChanges: _optionChanges,
 }: {
   garment: WorkshopGarment;
   alterationFilter?: AlterationFilter | null;
@@ -146,6 +148,12 @@ export function TerminalQualityTemplatePrint({
   /** Operator-recorded values from the last QC fail — rendered in red beside
    *  the expected value so the worker knows what to correct. */
   qcFailActuals?: Map<string, number> | null;
+  /** Option defects from the last QC fail — print view not yet rendering these
+   *  per-section; accepted to keep parity with the screen overlay's prop shape. */
+  qcFailOptionActuals?: Map<string, unknown> | null;
+  /** Customer-feedback option changes — print view doesn't render the banner
+   *  yet; accepted for prop parity with the screen overlay. */
+  optionChanges?: import("@/lib/alteration-filter").OptionChange[];
 }) {
   const showSection = (key: "frontPocket" | "jabzour" | "sidePocket" | "cuffs" | "collar") =>
     !alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has(key);

@@ -229,7 +229,125 @@ Never use `new Date().toISOString().slice(0, 10)` for date comparisons — it gi
 - Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (in `apps/pos-interface/.env`)
 - Database: `DATABASE_URL` (postgres connection string), optional `TRANSACTION_URL` (pooler on port 6543)
 
+### Inventory & Transfers (redesigned)
+
+The store/inventory area was consolidated from ~15 stage-based pages to **3 per app**: Inventory, Transfers, Reports (POS keeps End-of-Day Report as a separate financial page).
+
+#### Stock movements ledger
+
+Every change to `fabrics`/`shelf`/`accessories.{shop,workshop}_stock` writes a row to `stock_movements`. Auto-logged via `AFTER UPDATE` triggers (`log_fabric_stock_change`, `log_shelf_stock_change`, `log_accessory_stock_change`). Callers stamp context via PostgreSQL session settings before the UPDATE so the trigger knows WHY:
+
+```sql
+PERFORM set_config('app.movement_type',     'restock',  true);
+PERFORM set_config('app.movement_ref_type', 'restock',  true);
+PERFORM set_config('app.movement_ref_id',   '42',       true);
+PERFORM set_config('app.movement_user_id',  '<uuid>',   true);
+PERFORM set_config('app.movement_supplier_id', '7',     true);
+PERFORM set_config('app.movement_unit_cost',   '12.5',  true);
+PERFORM set_config('app.movement_reason',  'supplier delivery', true);
+PERFORM set_config('app.movement_notes',   '...',      true);
+```
+
+If session settings are missing, the trigger defaults to `movement_type='adjustment'`, `reason='unattributed'` so no change is silently lost.
+
+**movement_type enum:** `restock` · `consumption` · `transfer_out` · `transfer_in` · `adjustment` · `waste` · `return`
+
+**RPCs that stamp context:** `restock_item`, `adjust_stock`, `consume_for_order`, plus the existing `dispatch_transfer`, `receive_transfer`, `complete_work_order`, `complete_sales_order`, `create_complete_sales_order` (all extended to set vars before stock UPDATEs).
+
+**Suppliers** are first-class (`suppliers` table, shared across all item types). Restock dialog has a supplier dropdown with inline "+ New" creation.
+
+#### UI surfaces
+
+- **Inventory** (`/store/inventory`) — list per item type. Click row → detail drawer with stock breakdown, movement history, and Restock / Adjust / Request-transfer buttons (RBAC-gated). The metadata edit dialog NO LONGER shows a stock field — all stock changes go through Restock or Adjust (both require a reason).
+- **Transfers** (`/store/transfers`) — replaces 4 stage-pages per app (request-delivery, active-deliveries, receiving-deliveries, approve-requests). Tabs: `Needs my action` / `Active` / `All` / `History`. The action button on each row changes based on transfer status × user role × side (`primaryActionFor` in `lib/transfers.ts`).
+- **Reports** (`/store/reports`) — KPI cards (restocked, consumed, net, lost), top items by movement type, recent adjustments feed. Driven by `get_movement_aggregates` and `get_top_items_by_movement` RPCs.
+
+#### RBAC permissions added
+
+```
+inventory:restock   → owner-side manager + admin
+inventory:adjust    → manager + admin (either side)
+inventory:delete    → manager:shop + admin (hard-deletes if unused, archives if FK-referenced)
+suppliers:manage    → manager + admin
+
+transfers:request   → staff + manager (either side)
+transfers:approve   → manager + admin (gated by side at render-time)
+transfers:dispatch  → manager + admin (source side)
+transfers:receive   → staff + manager (destination side)
+transfers:cancel    → manager + admin
+```
+
+#### Backfill
+
+`pnpm --filter @repo/database db:backfill-stock-movements` populates the ledger from existing `transfer_request_items` history (transfer_out / transfer_in / waste rows). Refuses to re-run if backfilled rows already exist. Direct dialog edits and order consumption have no historical record → not backfilled.
+
+#### Deprecated (still present, drop later)
+
+- `fabrics.real_stock`, `shelf.stock` — old single-stock columns. Still written by `complete_work_order` / `complete_sales_order` triggers to stay in sync. App reads have been migrated to `shop_stock`/`workshop_stock`. Two app-layer references remain in `apps/pos-interface/src/components/forms/shelf/shelf-columns.tsx` and `apps/pos-interface/src/hooks/useOrderMutations.ts` (unused mutations). Drop after migrating those.
+
 ### Key Documentation
 
 - `MIGRATION_PLAN.md` — Detailed garment stage definitions, transition rules, and SQL migration specs
 - `SHOP_FLOW_AND_ARCHITECTURE.md` — POS app workflows and architecture decisions
+
+## Workshop UI Design Rules
+
+The workshop app is an **operational tool**, not a marketing page. Visual language is dense-data / control-panel (think Linear, Datadog, Vercel admin) — not boutique. Follow these rules in every workshop file. The full ruleset with the typography role table lives at the top of `apps/workshop/src/index.css` — read that first.
+
+### Typography (enforced)
+
+- **Font stack:** Inter + JetBrains Mono (loaded in `apps/workshop/index.html`). Do not introduce Marcellus, Montserrat, or any decorative font.
+- **Root size:** 17px, line-height 1.4. Set in `index.css` — do not override per-page.
+- **One role per element.** Match every text element to a role in the table at the top of `index.css` (page title / section title / primary data / table header / pill / etc). If a case doesn't fit, add a row to the table first — never invent ad-hoc sizes.
+- **Weights:** max 600 (semibold) on page titles, 500 (medium) on section titles + table headers + emphasis, 400 (regular) on body and all data. **Never use `font-bold` or `font-black`** in UI — they fake hierarchy. If a value reads weak, fix it with color contrast or size.
+- **No uppercase + tracking-wider.** Sentence case only. The single exception is true acronyms (INV-, QC, ID).
+- **Table headers are NOT bold.** `text-sm font-medium text-muted-foreground` — hierarchy comes from muted color against `text-base` foreground data, not from header weight.
+
+### Color (enforced)
+
+- **Use semantic tokens, never raw Tailwind palette.** Defined in `apps/workshop/src/index.css`:
+  - `--status-ok` / `--status-ok-bg` — done / ready / approved
+  - `--status-warn` / `--status-warn-bg` — needs decision / customer action / imminent
+  - `--status-bad` / `--status-bad-bg` — overdue / failed / discarded / express
+  - `--status-info` / `--status-info-bg` — in progress / in transit
+  - Plus `bg-muted` / `text-muted-foreground` for neutral
+- **Forbidden:** `bg-{color}-100 text-{color}-800` patterns and any direct `bg-red-50`, `text-emerald-700`, etc. on chips, badges, and status pills. If you find one in a file you're touching, replace it with the right token.
+- **Dark icon tints are OK** for indicator icons that need to stay distinctly identifiable (express ⚡, home delivery, soaking, returns). Use 700-shade Tailwind (`text-red-700`, `text-indigo-700`, etc.) — never -500.
+- **Brand colors are dark, saturated.** `BrandBadge` in `apps/workshop/src/components/shared/StageBadge.tsx`: ERTH = `emerald-900`, SAKKBA = `blue-900`, QASS = `zinc-800` (placeholder). Never re-introduce light brand pills.
+- **One signal wins color per region.** If a row already has a colored stage badge, the location next to it is plain text — not another colored chip. The user must be able to tell what matters by what's colored, not parse 6 simultaneous colors.
+
+### Shape & layout
+
+- **Single radius: `rounded-md`** for cards, chips, badges, buttons, inputs. The only exception is `rounded-full` for status *dots* (1-2px circles). Never `rounded-xl` / `rounded-2xl` / `rounded-full` on chips.
+- **No shadow on cards.** Border only (`border border-border`). Shadows are for popovers/dialogs.
+- **No decorative `border-l-2` accent stripes** unless they encode real state (`isDiscarded` = red left-border).
+- **Card chrome (background tints, rings) reserved for exceptional states only.** Never tint a card to signal "express" or "alteration" when a badge inside already says so. Acceptable: `opacity-60` for parked, red `border-l-2` for discarded.
+
+### Emoji & decorative elements
+
+- **No emoji in UI.** Replace with lucide icons or plain text. `Express` not `⚡ Express`. Satisfaction levels use stars or text labels, never face emoji.
+
+### Hierarchy by reduction, not addition
+
+When in doubt about how to make something prominent, *reduce* the noise around it instead of bolding/coloring it. A `text-base font-medium` value pops on a page where everything else is muted. The same value gets lost on a page where five other things compete in red+bold+uppercase.
+
+### Shared primitives — reach for these first
+
+Workshop pages should compose from `apps/workshop/src/components/shared/PageShell.tsx` instead of re-writing the same Tailwind strings. The primitives bake the rules in so you don't have to remember them.
+
+| Primitive | Replaces | Use for |
+|-----------|----------|---------|
+| `PageHeader` | `<h1 className="text-2xl font-bold...">` | Page title + subtitle + action slot |
+| `SectionCard` | `<div className="bg-card border border-border rounded-md...">` with header | Bordered content card with optional title bar |
+| `SectionLabel` | `<span className="text-xs font-bold uppercase tracking-wider">` | Inline section heading inside lists/forms |
+| `StatusBanner` | `<div className="bg-red-50 text-red-800 rounded-md p-3...">` | Inline alert with semantic tone (`ok`/`warn`/`bad`/`info`) |
+| `StatsCard` | KPI tiles with semantic accent | Metric tiles on dashboards |
+| `EmptyState` | Dashed-border empty placeholder | "No results" panels |
+| `LoadingSkeleton` | `<Skeleton>` stacks | List/page loading state |
+| `MetadataChip` | `<span>` pills with semantic tone | Small inline metadata pills |
+
+If you're tempted to write `bg-card border border-border rounded-md`, `uppercase tracking-wider`, or `bg-red-50 text-red-800` — there's a primitive for that. If a new layout pattern repeats across 2+ pages, add a primitive instead of duplicating the classes.
+
+### POS app is exempt
+
+These rules apply to `apps/workshop` only. POS keeps Marcellus + Montserrat and its existing visual language — it's customer-facing and the boutique feel is intentional there.

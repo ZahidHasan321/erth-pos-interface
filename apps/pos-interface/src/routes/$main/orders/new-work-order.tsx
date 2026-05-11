@@ -98,7 +98,7 @@ export const Route = createFileRoute("/$main/orders/new-work-order")({
         // Prefetch all lookup data in parallel before component mounts
         const { queryClient } = context;
         await Promise.all([
-            queryClient.ensureQueryData({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: Infinity }),
+            queryClient.ensureQueryData({ queryKey: ["fabrics"], queryFn: () => getFabrics(), staleTime: Infinity }),
             queryClient.ensureQueryData({ queryKey: ["employees"], queryFn: getEmployees, staleTime: Infinity }),
             queryClient.ensureQueryData({ queryKey: ["prices"], queryFn: getPrices, staleTime: Infinity }),
             queryClient.ensureQueryData({ queryKey: ["styles"], queryFn: getStyles, staleTime: Infinity }),
@@ -135,14 +135,14 @@ function NewWorkOrder() {
     const { main } = useParams({ strict: false });
     const cashierHandlesPayment = main === "erth";
     const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
-    const { styles, stitchingAdult, stitchingChild } = usePricing();
+    const { styles, stylePricingRules, stitchingAdult, stitchingChild } = usePricing();
 
     // ============================================================================
     // DATA FETCHING & STORE
     // ============================================================================
     const { data: fabricsResponse } = useQuery({
         queryKey: ["fabrics"],
-        queryFn: getFabrics,
+        queryFn: () => getFabrics(),
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -699,7 +699,7 @@ function NewWorkOrder() {
         let totalStyle = 0;
 
         garments.forEach((garment) => {
-            totalStyle += calculateGarmentStylePrice(garment, styles || []);
+            totalStyle += calculateGarmentStylePrice(garment, styles || [], stylePricingRules);
         });
 
         return totalStyle;

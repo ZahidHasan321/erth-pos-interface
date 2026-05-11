@@ -15,7 +15,7 @@ export function useUnits() {
 export function useCreateUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (u: Pick<NewUnit, "stage" | "name"> & Partial<Pick<NewUnit, "notes">>) =>
+    mutationFn: (u: Pick<NewUnit, "stage" | "name"> & Partial<Pick<NewUnit, "notes" | "daily_target">>) =>
       createUnit(u),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -24,7 +24,7 @@ export function useCreateUnit() {
 export function useUpdateUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Pick<NewUnit, "name" | "notes">> }) =>
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Pick<NewUnit, "name" | "notes" | "daily_target">> }) =>
       updateUnit(id, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY });

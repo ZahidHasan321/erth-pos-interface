@@ -34,6 +34,8 @@
     "@tanstack/react-router": "^1.133.22",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/router-generator": "^1.133.20",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.23.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

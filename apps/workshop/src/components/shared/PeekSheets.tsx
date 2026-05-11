@@ -119,7 +119,7 @@ export function OrderPeekSheet({ orderId, open, onOpenChange }: OrderPeekSheetPr
                 {first?.customer_name && (
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" aria-hidden="true" />
-                    {first.customer_name}
+                    <span className="tracking-tight">{first.customer_name}</span>
                   </span>
                 )}
                 {first?.customer_mobile && (
@@ -304,7 +304,7 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
           {garment.customer_name && (
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" aria-hidden="true" />
-              {garment.customer_name}
+              <span className="tracking-tight">{garment.customer_name}</span>
             </span>
           )}
           {garment.customer_mobile && (

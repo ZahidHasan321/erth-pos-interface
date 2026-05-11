@@ -1,14 +1,22 @@
 import { db } from "@/lib/db";
 import type { Shelf } from "@repo/database";
 
-export async function getShelf(): Promise<Shelf[]> {
-  const { data, error } = await db.from("shelf").select("*");
+export async function getShelf(includeArchived = false): Promise<Shelf[]> {
+  let query = db.from("shelf").select("*");
+  if (!includeArchived) query = query.eq("is_archived", false);
+  const { data, error } = await query;
   if (error) throw error;
   return data as Shelf[];
 }
 
+export async function getShelfItemById(id: number): Promise<Shelf | null> {
+  const { data, error } = await db.from("shelf").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`Could not load shelf item: ${error.message}`);
+  return (data as Shelf | null) ?? null;
+}
+
 export async function createShelfItem(
-  item: Pick<Shelf, "type"> & Partial<Pick<Shelf, "brand" | "price" | "workshop_stock">>,
+  item: Pick<Shelf, "type"> & Partial<Omit<Shelf, "id" | "type">>,
 ): Promise<Shelf> {
   const { data, error } = await db
     .from("shelf")

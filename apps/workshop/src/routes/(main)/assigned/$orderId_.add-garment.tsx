@@ -23,6 +23,7 @@ import { MeasurementFields } from "@/components/forms/add-garment/MeasurementFie
 import { addGarmentSchema, type AddGarmentFormValues } from "@/components/forms/add-garment/schema";
 import { buildPrefillValues } from "@/components/forms/add-garment/prefill";
 import { CustomerFeedbackPanel } from "@/components/shared/GarmentDetailSections";
+import { SectionCard, SectionLabel, StatusBanner } from "@/components/shared/PageShell";
 import { canEdit } from "@/lib/rbac";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -208,11 +209,11 @@ function AddGarmentPage() {
             <div className="h-6 w-px bg-border shrink-0" />
             <div className="flex items-center gap-2 min-w-0">
               {mode === "replace" ? (
-                <Replace className="w-5 h-5 text-red-600 shrink-0" />
+                <Replace className="w-5 h-5 text-[color:var(--status-bad)] shrink-0" />
               ) : (
                 <PlusCircle className="w-5 h-5 text-primary shrink-0" />
               )}
-              <h1 className="text-lg sm:text-xl font-bold truncate">
+              <h1 className="text-lg sm:text-xl font-semibold truncate">
                 {mode === "replace" ? "Replacement Garment" : "Add Garment"}
               </h1>
               {mode === "replace" && original && (
@@ -250,18 +251,16 @@ function AddGarmentPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 pb-20">
         {loading ? (
           <div className="space-y-3">
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-48 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
+            <Skeleton className="h-24 rounded-md" />
+            <Skeleton className="h-48 rounded-md" />
+            <Skeleton className="h-96 rounded-md" />
           </div>
         ) : replacesId && !original ? (
-          <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-3 text-sm">
-            Original garment not found.
-          </div>
+          <StatusBanner tone="bad">Original garment not found.</StatusBanner>
         ) : replacesId && alreadyReplaced ? (
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-md p-3 text-sm">
+          <StatusBanner tone="warn">
             This garment already has a replacement — cannot create another.
-          </div>
+          </StatusBanner>
         ) : (
           <FormProvider {...form}>
             <form
@@ -270,33 +269,28 @@ function AddGarmentPage() {
               className="space-y-4"
             >
               {mode === "replace" && original && (
-                <div className="bg-red-50/60 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-sm flex items-start gap-3">
-                  <Replace className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div>
-                      <span className="font-semibold text-red-900 dark:text-red-200">Replacing </span>
-                      <span className="font-mono text-xs text-red-800 dark:text-red-300">
-                        {original.garment_id} · {original.garment_type} · trip {original.trip_number}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-red-700/80 dark:text-red-300/80 mt-0.5">
-                      Original kept for history. No extra pricing — this replaces the old garment.
-                    </p>
+                <StatusBanner tone="bad" icon={Replace}>
+                  <div>
+                    <span className="font-medium">Replacing </span>
+                    <span className="font-mono text-xs">
+                      {original.garment_id} · {original.garment_type} · trip {original.trip_number}
+                    </span>
                   </div>
-                </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Original kept for history. No extra pricing — this replaces the old garment.
+                  </p>
+                </StatusBanner>
               )}
 
               {mode === "replace" && feedbackHistory.length > 0 && (
-                <details className="bg-card border border-border rounded-xl shadow-sm group">
+                <details className="bg-card border border-border rounded-md group">
                   <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer list-none select-none hover:bg-muted/30 transition-colors">
                     <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Feedback history
-                    </span>
-                    <span className="text-[11px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                    <SectionLabel>Feedback history</SectionLabel>
+                    <span className="text-xs font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
                       {feedbackHistory.length}
                     </span>
-                    <span className="ml-auto text-[11px] text-muted-foreground group-open:hidden">
+                    <span className="ml-auto text-xs text-muted-foreground group-open:hidden">
                       Why this redo
                     </span>
                     <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -309,23 +303,18 @@ function AddGarmentPage() {
                 </details>
               )}
 
-              {/* Meta */}
-              <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <header className="px-4 py-2.5 border-b bg-muted/30">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meta</h3>
-                </header>
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <SectionCard title="Meta" bodyClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label>Garment type</Label>
-                    <div className="inline-flex rounded-lg border bg-background p-0.5">
+                    <div className="inline-flex rounded-md border bg-background p-0.5">
                       {(["brova", "final"] as const).map((t) => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => form.setValue("garment_type", t)}
-                          className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                             form.watch("garment_type") === t
-                              ? "bg-primary text-primary-foreground shadow-sm"
+                              ? "bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-muted"
                           }`}
                         >
@@ -342,7 +331,7 @@ function AddGarmentPage() {
                       {...form.register("delivery_date")}
                     />
                     {form.formState.errors.delivery_date && (
-                      <p className="text-xs text-red-600">
+                      <p className="text-xs text-[color:var(--status-bad)]">
                         {form.formState.errors.delivery_date.message as string}
                       </p>
                     )}
@@ -364,8 +353,7 @@ function AddGarmentPage() {
                     <Label htmlFor="notes">Notes</Label>
                     <Input id="notes" {...form.register("notes")} placeholder="Optional" />
                   </div>
-                </div>
-              </section>
+              </SectionCard>
 
               <FabricFields />
               <StyleFields />

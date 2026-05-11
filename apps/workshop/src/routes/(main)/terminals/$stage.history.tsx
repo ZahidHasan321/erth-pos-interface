@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useHistoryGarments } from "@/hooks/useWorkshopGarments";
-import { PageHeader, EmptyState, GarmentTypeBadge } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState, GarmentTypeBadge, StatsCard } from "@/components/shared/PageShell";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
@@ -10,7 +10,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, cn, clickableProps, TIMEZONE, getKuwaitDayRange } from "@/lib/utils";
+import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, clickableProps, TIMEZONE, getKuwaitDayRange } from "@/lib/utils";
 import type { WorkshopGarment, StageTimings, StageTimingEntry, TripHistoryEntry, QcAttempt } from "@repo/database";
 import { getQcReturnStages } from "@repo/database";
 import { ArrowLeft, History, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
@@ -190,7 +190,7 @@ function TerminalHistoryPage() {
     <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-10 space-y-6">
       <button
         onClick={() => window.history.back()}
-        className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back
       </button>
@@ -203,7 +203,7 @@ function TerminalHistoryPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</label>
+          <label className="text-sm font-medium text-muted-foreground">Date</label>
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
@@ -250,7 +250,7 @@ function TerminalHistoryPage() {
           </div>
         </div>
         <div className="flex-1 min-w-[220px] space-y-1">
-          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Search</label>
+          <label className="text-sm font-medium text-muted-foreground">Search</label>
           <Input
             placeholder="Garment, customer, order, fabric, style…"
             value={search}
@@ -261,18 +261,9 @@ function TerminalHistoryPage() {
 
       {isQc && !isLoading && rows.length > 0 && (
         <div className="grid grid-cols-3 gap-2.5">
-          <div className="bg-blue-50/80 border border-blue-200/60 rounded-xl p-3 text-center">
-            <p className="text-2xl font-black text-blue-700 tabular-nums">{rows.length}</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600/70">Total</p>
-          </div>
-          <div className="bg-green-50/80 border border-green-200/60 rounded-xl p-3 text-center">
-            <p className="text-2xl font-black text-green-700 tabular-nums">{passCount}</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-green-600/70">Passed</p>
-          </div>
-          <div className="bg-red-50/80 border border-red-200/60 rounded-xl p-3 text-center">
-            <p className="text-2xl font-black text-red-700 tabular-nums">{failCount}</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-red-600/70">Failed</p>
-          </div>
+          <StatsCard icon={History} value={rows.length} label="Total" color="blue" />
+          <StatsCard icon={Check} value={passCount} label="Passed" color="green" />
+          <StatsCard icon={X} value={failCount} label="Failed" color="red" />
         </div>
       )}
 
@@ -341,7 +332,7 @@ function TerminalHistoryPage() {
                     </TableCell>
                     <TableCell className="px-3 py-3">
                       <div className="flex flex-col gap-1">
-                        <span className="font-mono text-sm font-bold">
+                        <span className="font-mono text-base">
                           {g.garment_id ?? g.id.slice(0, 8)}
                         </span>
                         {g.express && <ExpressBadge />}
@@ -352,7 +343,7 @@ function TerminalHistoryPage() {
                     </TableCell>
                     <TableCell className="px-3 py-3 font-mono">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-bold">#{g.order_id}</span>
+                        <span className="text-base">#{g.order_id}</span>
                         {g.invoice_number && (
                           <span className="text-xs text-muted-foreground">INV-{g.invoice_number}</span>
                         )}
@@ -360,7 +351,7 @@ function TerminalHistoryPage() {
                     </TableCell>
                     <TableCell className="px-3 py-3 text-sm">
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold">{g.customer_name ?? "—"}</span>
+                        <span className="text-base tracking-tight">{g.customer_name ?? "—"}</span>
                         {g.customer_mobile && (
                           <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
                         )}
@@ -392,12 +383,16 @@ function TerminalHistoryPage() {
                     {isQc && (
                       <TableCell className="px-3 py-3">
                         {r.result === "pass" ? (
-                          <Badge className="bg-emerald-600 text-white border-0">
+                          <Badge
+                            variant="outline"
+                            className="border-transparent bg-[var(--status-ok-bg)] text-[var(--status-ok)] text-xs font-medium"
+                          >
                             <Check className="w-3 h-3 mr-1" /> Pass
                           </Badge>
                         ) : r.result === "fail" ? (
                           <Badge
-                            className={cn("bg-red-600 text-white border-0")}
+                            variant="outline"
+                            className="border-transparent bg-[var(--status-bad-bg)] text-[var(--status-bad)] text-xs font-medium"
                             title={r.failReason ?? undefined}
                           >
                             <X className="w-3 h-3 mr-1" /> Fail

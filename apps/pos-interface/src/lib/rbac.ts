@@ -39,12 +39,27 @@ const PERMISSIONS: PermissionMatrix = {
   "/profile":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
   "/cashier":         { admin: "full", "manager:shop": "full", "staff:shop": "full" },
   "/store/inventory": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "/store/transfers": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "/store/reports":   { admin: "full", "manager:shop": "full", "staff:shop": "view" },
 
   // Inventory type permissions — controls create/edit visibility within the inventory page.
   // Shop manages fabrics; accessories + shelf are owned by the workshop.
   "inventory:fabrics":     { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
   "inventory:accessories": { admin: "full", "manager:shop": "view", "staff:shop": "view" },
   "inventory:shelf":       { admin: "full", "manager:shop": "view", "staff:shop": "view" },
+
+  // Stock action permissions (apply to whichever item type the user can edit)
+  "inventory:restock":     { admin: "full", "manager:shop": "full" },
+  "inventory:adjust":      { admin: "full", "manager:shop": "full" },
+  "inventory:delete":      { admin: "full", "manager:shop": "full" },
+  "suppliers:manage":      { admin: "full", "manager:shop": "full" },
+
+  // Transfers — request anywhere; approve/dispatch/receive gated by side at render-time
+  "transfers:request":     { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "transfers:approve":     { admin: "full", "manager:shop": "full" },
+  "transfers:dispatch":    { admin: "full", "manager:shop": "full" },
+  "transfers:receive":     { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "transfers:cancel":      { admin: "full", "manager:shop": "full" },
 };
 
 export function getPermission(user: AuthUser | null, page: string): Permission {

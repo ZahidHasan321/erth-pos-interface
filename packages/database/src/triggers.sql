@@ -136,6 +136,16 @@ BEGIN
   -- 4. Deduct Shelf Stock & Record Items
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
 
+  -- Stamp ledger context: shelf consumption tied to this work order
+  PERFORM set_config('app.movement_type', 'consumption', true);
+  PERFORM set_config('app.movement_ref_type', 'order', true);
+  PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
+  PERFORM set_config('app.movement_user_id', COALESCE((p_checkout_details->>'orderTaker'), '')::text, true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+  PERFORM set_config('app.movement_reason', 'work order checkout (shelf)', true);
+  PERFORM set_config('app.movement_notes', '', true);
+
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
     UPDATE shelf
@@ -153,6 +163,7 @@ BEGIN
   END LOOP;
 
   -- 5. Deduct Fabric Stock
+  PERFORM set_config('app.movement_reason', 'work order checkout (fabric)', true);
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
   LOOP
     UPDATE fabrics
@@ -238,6 +249,16 @@ BEGIN
 
   -- 3. Deduct Shelf Stock & Record Items
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
+
+  -- Stamp ledger context: shelf consumption tied to this sales order
+  PERFORM set_config('app.movement_type', 'consumption', true);
+  PERFORM set_config('app.movement_ref_type', 'order', true);
+  PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
+  PERFORM set_config('app.movement_user_id', COALESCE((p_checkout_details->>'orderTaker'), '')::text, true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+  PERFORM set_config('app.movement_reason', 'sales order checkout', true);
+  PERFORM set_config('app.movement_notes', '', true);
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
@@ -346,6 +367,16 @@ BEGIN
   ) RETURNING id INTO v_order_id;
 
   -- 2. Deduct Shelf Stock & Record Items
+  -- Stamp ledger context: shelf consumption tied to this order
+  PERFORM set_config('app.movement_type', 'consumption', true);
+  PERFORM set_config('app.movement_ref_type', 'order', true);
+  PERFORM set_config('app.movement_ref_id', v_order_id::text, true);
+  PERFORM set_config('app.movement_user_id', COALESCE((p_checkout_details->>'orderTaker'), '')::text, true);
+  PERFORM set_config('app.movement_reason', 'sales order checkout', true);
+  PERFORM set_config('app.movement_notes', '', true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
     UPDATE shelf
@@ -2510,6 +2541,16 @@ BEGIN
     RAISE EXCEPTION 'Transfer % is not in approved status (current: %)', p_transfer_id, v_transfer.status;
   END IF;
 
+  -- Stamp ledger context for auto-log triggers (Phase 1 — stock_movements)
+  PERFORM set_config('app.movement_type', 'transfer_out', true);
+  PERFORM set_config('app.movement_ref_type', 'transfer', true);
+  PERFORM set_config('app.movement_ref_id', p_transfer_id::text, true);
+  PERFORM set_config('app.movement_user_id', p_dispatched_by::text, true);
+  PERFORM set_config('app.movement_reason', 'transfer dispatch', true);
+  PERFORM set_config('app.movement_notes', '', true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+
   -- 2. Process each item
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
@@ -2646,6 +2687,16 @@ BEGIN
         discrepancy_note = v_item->>'discrepancy_note'
     WHERE id = v_transfer_item.id;
 
+    -- Stamp ledger context: this UPDATE is a transfer_in at destination
+    PERFORM set_config('app.movement_type', 'transfer_in', true);
+    PERFORM set_config('app.movement_ref_type', 'transfer', true);
+    PERFORM set_config('app.movement_ref_id', p_transfer_id::text, true);
+    PERFORM set_config('app.movement_user_id', p_received_by::text, true);
+    PERFORM set_config('app.movement_reason', 'transfer receipt', true);
+    PERFORM set_config('app.movement_notes', COALESCE(v_item->>'discrepancy_note', ''), true);
+    PERFORM set_config('app.movement_supplier_id', '', true);
+    PERFORM set_config('app.movement_unit_cost', '', true);
+
     -- Credit the destination with what actually arrived. The missing units are
     -- NOT refunded to source — source was debited at dispatch and those units
     -- are gone.
@@ -2671,6 +2722,33 @@ BEGIN
         UPDATE accessories SET shop_stock = shop_stock + v_received_qty
           WHERE id = v_transfer_item.accessory_id;
       END IF;
+    END IF;
+
+    -- Log a `waste` movement for the missing portion at the SOURCE location
+    -- (informational: source was already debited at dispatch via transfer_out).
+    -- Direct INSERT — no column change, so auto-trigger doesn't fire.
+    IF v_missing_qty > 0 THEN
+      INSERT INTO stock_movements (
+        item_type, item_id, location, movement_type, qty_delta,
+        ref_type, ref_id, user_id, reason, notes
+      )
+      VALUES (
+        CASE
+          WHEN v_transfer_item.fabric_id IS NOT NULL THEN 'fabric'::stock_item_type
+          WHEN v_transfer_item.shelf_id IS NOT NULL THEN 'shelf'::stock_item_type
+          WHEN v_transfer_item.accessory_id IS NOT NULL THEN 'accessory'::stock_item_type
+        END,
+        COALESCE(v_transfer_item.fabric_id, v_transfer_item.shelf_id, v_transfer_item.accessory_id),
+        CASE
+          WHEN v_transfer.direction = 'shop_to_workshop' THEN 'shop'::stock_location
+          ELSE 'workshop'::stock_location
+        END,
+        'waste'::stock_movement_type,
+        -v_missing_qty,
+        'transfer', p_transfer_id, p_received_by,
+        'lost in transit',
+        COALESCE(v_item->>'discrepancy_note', '')
+      );
     END IF;
   END LOOP;
 
@@ -4163,5 +4241,778 @@ BEGIN
     'delivery_charge', p_delivery_charge,
     'order_total', v_new_total
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- STOCK MOVEMENTS LEDGER — auto-log triggers + restock/adjust/consume RPCs
+-- ═══════════════════════════════════════════════════════════════════════
+--
+-- Every UPDATE on fabrics/shelf/accessories that changes shop_stock or
+-- workshop_stock auto-logs a row to stock_movements. Callers stamp context
+-- via session settings before the UPDATE so the trigger knows WHY:
+--
+--   PERFORM set_config('app.movement_type',     'restock',    true);
+--   PERFORM set_config('app.movement_ref_type', 'restock',    true);
+--   PERFORM set_config('app.movement_ref_id',   '42',         true);
+--   PERFORM set_config('app.movement_user_id',  '<uuid>',     true);
+--   PERFORM set_config('app.movement_reason',   'supplier delivery', true);
+--   PERFORM set_config('app.movement_notes',    'arrived in 3 boxes', true);
+--   PERFORM set_config('app.movement_supplier_id', '7',       true);
+--   PERFORM set_config('app.movement_unit_cost',   '12.500',  true);
+--
+-- Missing settings → defaults to movement_type='adjustment',
+-- reason='unattributed' so the change is never silently lost.
+
+-- Helper: read session setting safely, returning NULL when empty/missing.
+CREATE OR REPLACE FUNCTION _movement_setting(p_key TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  v_val TEXT;
+BEGIN
+  v_val := current_setting(p_key, true);
+  IF v_val IS NULL OR v_val = '' THEN
+    RETURN NULL;
+  END IF;
+  RETURN v_val;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Core: insert one ledger row given a stock delta on one location.
+CREATE OR REPLACE FUNCTION _log_stock_movement(
+  p_item_type stock_item_type,
+  p_item_id INT,
+  p_location stock_location,
+  p_qty_before NUMERIC,
+  p_qty_after NUMERIC
+)
+RETURNS VOID AS $$
+DECLARE
+  v_delta NUMERIC := COALESCE(p_qty_after, 0) - COALESCE(p_qty_before, 0);
+  v_type stock_movement_type;
+  v_supplier_id INT;
+  v_user_id UUID;
+  v_unit_cost NUMERIC;
+  v_ref_id INT;
+BEGIN
+  IF v_delta = 0 THEN
+    RETURN;  -- no-op, nothing to log
+  END IF;
+
+  -- Resolve movement_type from session, defaulting to adjustment if not set
+  v_type := COALESCE(_movement_setting('app.movement_type')::stock_movement_type, 'adjustment'::stock_movement_type);
+
+  v_supplier_id := NULLIF(_movement_setting('app.movement_supplier_id'), '')::INT;
+  v_user_id := NULLIF(_movement_setting('app.movement_user_id'), '')::UUID;
+  v_unit_cost := NULLIF(_movement_setting('app.movement_unit_cost'), '')::NUMERIC;
+  v_ref_id := NULLIF(_movement_setting('app.movement_ref_id'), '')::INT;
+
+  INSERT INTO stock_movements (
+    item_type, item_id, location, movement_type,
+    qty_delta, qty_before, qty_after,
+    ref_type, ref_id,
+    supplier_id, unit_cost,
+    reason, notes,
+    user_id
+  )
+  VALUES (
+    p_item_type, p_item_id, p_location, v_type,
+    v_delta, p_qty_before, p_qty_after,
+    _movement_setting('app.movement_ref_type'), v_ref_id,
+    v_supplier_id, v_unit_cost,
+    COALESCE(_movement_setting('app.movement_reason'),
+             CASE WHEN v_type = 'adjustment' THEN 'unattributed' ELSE NULL END),
+    _movement_setting('app.movement_notes'),
+    v_user_id
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Per-table trigger functions: split shop vs workshop into two ledger rows
+-- if both changed in the same UPDATE.
+
+CREATE OR REPLACE FUNCTION log_fabric_stock_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
+    PERFORM _log_stock_movement('fabric', NEW.id, 'shop',
+      OLD.shop_stock, NEW.shop_stock);
+  END IF;
+  IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
+    PERFORM _log_stock_movement('fabric', NEW.id, 'workshop',
+      OLD.workshop_stock, NEW.workshop_stock);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS fabric_stock_audit ON fabrics;
+CREATE TRIGGER fabric_stock_audit
+  AFTER UPDATE ON fabrics
+  FOR EACH ROW
+  WHEN (OLD.shop_stock IS DISTINCT FROM NEW.shop_stock
+     OR OLD.workshop_stock IS DISTINCT FROM NEW.workshop_stock)
+  EXECUTE FUNCTION log_fabric_stock_change();
+
+CREATE OR REPLACE FUNCTION log_shelf_stock_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
+    PERFORM _log_stock_movement('shelf', NEW.id, 'shop',
+      OLD.shop_stock::numeric, NEW.shop_stock::numeric);
+  END IF;
+  IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
+    PERFORM _log_stock_movement('shelf', NEW.id, 'workshop',
+      OLD.workshop_stock::numeric, NEW.workshop_stock::numeric);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS shelf_stock_audit ON shelf;
+CREATE TRIGGER shelf_stock_audit
+  AFTER UPDATE ON shelf
+  FOR EACH ROW
+  WHEN (OLD.shop_stock IS DISTINCT FROM NEW.shop_stock
+     OR OLD.workshop_stock IS DISTINCT FROM NEW.workshop_stock)
+  EXECUTE FUNCTION log_shelf_stock_change();
+
+CREATE OR REPLACE FUNCTION log_accessory_stock_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
+    PERFORM _log_stock_movement('accessory', NEW.id, 'shop',
+      OLD.shop_stock, NEW.shop_stock);
+  END IF;
+  IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
+    PERFORM _log_stock_movement('accessory', NEW.id, 'workshop',
+      OLD.workshop_stock, NEW.workshop_stock);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS accessory_stock_audit ON accessories;
+CREATE TRIGGER accessory_stock_audit
+  AFTER UPDATE ON accessories
+  FOR EACH ROW
+  WHEN (OLD.shop_stock IS DISTINCT FROM NEW.shop_stock
+     OR OLD.workshop_stock IS DISTINCT FROM NEW.workshop_stock)
+  EXECUTE FUNCTION log_accessory_stock_change();
+
+-- ─── RPC: restock_item ────────────────────────────────────────────────
+-- Add stock from external supplier delivery. Logs as movement_type='restock'.
+CREATE OR REPLACE FUNCTION restock_item(
+  p_item_type stock_item_type,
+  p_item_id INT,
+  p_location stock_location,
+  p_qty NUMERIC,
+  p_supplier_id INT DEFAULT NULL,
+  p_unit_cost NUMERIC DEFAULT NULL,
+  p_notes TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_new_qty NUMERIC;
+BEGIN
+  IF p_qty <= 0 THEN
+    RAISE EXCEPTION 'Restock quantity must be positive (got %)', p_qty;
+  END IF;
+
+  PERFORM set_config('app.movement_type', 'restock', true);
+  PERFORM set_config('app.movement_ref_type', 'restock', true);
+  PERFORM set_config('app.movement_ref_id', '', true);
+  PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+  PERFORM set_config('app.movement_supplier_id', COALESCE(p_supplier_id::text, ''), true);
+  PERFORM set_config('app.movement_unit_cost', COALESCE(p_unit_cost::text, ''), true);
+  PERFORM set_config('app.movement_reason', 'supplier delivery', true);
+  PERFORM set_config('app.movement_notes', COALESCE(p_notes, ''), true);
+
+  IF p_item_type = 'fabric' THEN
+    IF p_location = 'shop' THEN
+      UPDATE fabrics SET shop_stock = COALESCE(shop_stock, 0) + p_qty
+        WHERE id = p_item_id RETURNING shop_stock INTO v_new_qty;
+    ELSE
+      UPDATE fabrics SET workshop_stock = COALESCE(workshop_stock, 0) + p_qty
+        WHERE id = p_item_id RETURNING workshop_stock INTO v_new_qty;
+    END IF;
+  ELSIF p_item_type = 'shelf' THEN
+    IF p_location = 'shop' THEN
+      UPDATE shelf SET shop_stock = COALESCE(shop_stock, 0) + p_qty::int
+        WHERE id = p_item_id RETURNING shop_stock INTO v_new_qty;
+    ELSE
+      UPDATE shelf SET workshop_stock = COALESCE(workshop_stock, 0) + p_qty::int
+        WHERE id = p_item_id RETURNING workshop_stock INTO v_new_qty;
+    END IF;
+  ELSIF p_item_type = 'accessory' THEN
+    IF p_location = 'shop' THEN
+      UPDATE accessories SET shop_stock = COALESCE(shop_stock, 0) + p_qty
+        WHERE id = p_item_id RETURNING shop_stock INTO v_new_qty;
+    ELSE
+      UPDATE accessories SET workshop_stock = COALESCE(workshop_stock, 0) + p_qty
+        WHERE id = p_item_id RETURNING workshop_stock INTO v_new_qty;
+    END IF;
+  END IF;
+
+  IF v_new_qty IS NULL THEN
+    RAISE EXCEPTION 'Item % of type % not found', p_item_id, p_item_type;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'new_stock', v_new_qty);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── RPC: adjust_stock ────────────────────────────────────────────────
+-- Manual stocktake correction. Sets stock to an absolute new value, logging
+-- the diff as movement_type='adjustment'. Reason is required.
+CREATE OR REPLACE FUNCTION adjust_stock(
+  p_item_type stock_item_type,
+  p_item_id INT,
+  p_location stock_location,
+  p_new_qty NUMERIC,
+  p_reason TEXT,
+  p_notes TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_old_qty NUMERIC;
+BEGIN
+  IF p_new_qty < 0 THEN
+    RAISE EXCEPTION 'Adjusted quantity cannot be negative (got %)', p_new_qty;
+  END IF;
+  IF p_reason IS NULL OR length(trim(p_reason)) = 0 THEN
+    RAISE EXCEPTION 'Adjustment reason is required';
+  END IF;
+
+  PERFORM set_config('app.movement_type', 'adjustment', true);
+  PERFORM set_config('app.movement_ref_type', 'adjustment', true);
+  PERFORM set_config('app.movement_ref_id', '', true);
+  PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+  PERFORM set_config('app.movement_reason', p_reason, true);
+  PERFORM set_config('app.movement_notes', COALESCE(p_notes, ''), true);
+
+  IF p_item_type = 'fabric' THEN
+    IF p_location = 'shop' THEN
+      SELECT shop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id;
+      UPDATE fabrics SET shop_stock = p_new_qty WHERE id = p_item_id;
+    ELSE
+      SELECT workshop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id;
+      UPDATE fabrics SET workshop_stock = p_new_qty WHERE id = p_item_id;
+    END IF;
+  ELSIF p_item_type = 'shelf' THEN
+    IF p_location = 'shop' THEN
+      SELECT shop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id;
+      UPDATE shelf SET shop_stock = p_new_qty::int WHERE id = p_item_id;
+    ELSE
+      SELECT workshop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id;
+      UPDATE shelf SET workshop_stock = p_new_qty::int WHERE id = p_item_id;
+    END IF;
+  ELSIF p_item_type = 'accessory' THEN
+    IF p_location = 'shop' THEN
+      SELECT shop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id;
+      UPDATE accessories SET shop_stock = p_new_qty WHERE id = p_item_id;
+    ELSE
+      SELECT workshop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id;
+      UPDATE accessories SET workshop_stock = p_new_qty WHERE id = p_item_id;
+    END IF;
+  END IF;
+
+  IF v_old_qty IS NULL THEN
+    RAISE EXCEPTION 'Item % of type % not found', p_item_id, p_item_type;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'old_stock', v_old_qty, 'new_stock', p_new_qty);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── RPC: consume_for_order ───────────────────────────────────────────
+-- Atomic replacement for the non-atomic Promise.all in useOrderMutations.ts.
+-- Decrements both fabric and shelf stocks for an order, logging consumption
+-- rows tied to the order_id (and per-garment for fabric).
+--
+-- p_fabric_items: [{ garment_id: uuid, fabric_id: int, qty: numeric }]
+-- p_shelf_items:  [{ shelf_id: int, qty: int }]
+CREATE OR REPLACE FUNCTION consume_for_order(
+  p_order_id INT,
+  p_fabric_items JSONB DEFAULT '[]'::jsonb,
+  p_shelf_items JSONB DEFAULT '[]'::jsonb,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_item JSONB;
+  v_qty NUMERIC;
+  v_current NUMERIC;
+BEGIN
+  -- Stamp ledger context once for the whole batch
+  PERFORM set_config('app.movement_type', 'consumption', true);
+  PERFORM set_config('app.movement_ref_type', 'order', true);
+  PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
+  PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+  PERFORM set_config('app.movement_reason', 'order consumption', true);
+  PERFORM set_config('app.movement_notes', '', true);
+
+  -- Fabric consumption (per-garment context in notes)
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
+  LOOP
+    v_qty := (v_item->>'qty')::numeric;
+    IF v_qty <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    SELECT shop_stock INTO v_current FROM fabrics WHERE id = (v_item->>'fabric_id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'Fabric % not found', v_item->>'fabric_id';
+    END IF;
+    IF v_current < v_qty THEN
+      RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %',
+        v_item->>'fabric_id', v_current, v_qty;
+    END IF;
+
+    -- Per-iteration: stamp garment_id in notes so per-garment trace is preserved
+    PERFORM set_config('app.movement_notes',
+      'garment ' || COALESCE(v_item->>'garment_id', '?'), true);
+
+    UPDATE fabrics SET shop_stock = shop_stock - v_qty
+      WHERE id = (v_item->>'fabric_id')::int;
+  END LOOP;
+
+  -- Shelf consumption (clear notes back to empty for these rows)
+  PERFORM set_config('app.movement_notes', '', true);
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
+  LOOP
+    v_qty := (v_item->>'qty')::numeric;
+    IF v_qty <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    SELECT shop_stock INTO v_current FROM shelf WHERE id = (v_item->>'shelf_id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'Shelf item % not found', v_item->>'shelf_id';
+    END IF;
+    IF v_current < v_qty THEN
+      RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %',
+        v_item->>'shelf_id', v_current, v_qty;
+    END IF;
+
+    UPDATE shelf SET shop_stock = shop_stock - v_qty::int
+      WHERE id = (v_item->>'shelf_id')::int;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'order_id', p_order_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── Aggregates RPC for Reports page ─────────────────────────────────
+-- Returns totals per movement_type within a date range, optionally scoped
+-- by item_type and location.
+CREATE OR REPLACE FUNCTION get_movement_aggregates(
+  p_from TIMESTAMPTZ,
+  p_to TIMESTAMPTZ,
+  p_item_type stock_item_type DEFAULT NULL,
+  p_location stock_location DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'totals', COALESCE(jsonb_object_agg(movement_type, total), '{}'::jsonb),
+    'count', SUM(cnt)
+  )
+  INTO v_result
+  FROM (
+    SELECT movement_type::text,
+           SUM(ABS(qty_delta)) AS total,
+           COUNT(*) AS cnt
+    FROM stock_movements
+    WHERE created_at >= p_from AND created_at < p_to
+      AND (p_item_type IS NULL OR item_type = p_item_type)
+      AND (p_location IS NULL OR location = p_location)
+    GROUP BY movement_type
+  ) AS t;
+
+  RETURN COALESCE(v_result, jsonb_build_object('totals', '{}'::jsonb, 'count', 0));
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ─── Top-N items by movement type ────────────────────────────────────
+CREATE OR REPLACE FUNCTION get_top_items_by_movement(
+  p_movement_type stock_movement_type,
+  p_from TIMESTAMPTZ,
+  p_to TIMESTAMPTZ,
+  p_limit INT DEFAULT 10
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  WITH sums AS (
+    SELECT item_type, item_id, SUM(ABS(qty_delta)) AS total
+    FROM stock_movements
+    WHERE created_at >= p_from AND created_at < p_to
+      AND movement_type = p_movement_type
+    GROUP BY item_type, item_id
+    ORDER BY total DESC
+    LIMIT p_limit
+  ), enriched AS (
+    SELECT s.item_type::text,
+           s.item_id,
+           s.total,
+           CASE s.item_type
+             WHEN 'fabric'    THEN (SELECT name FROM fabrics    WHERE id = s.item_id)
+             WHEN 'shelf'     THEN (SELECT type FROM shelf      WHERE id = s.item_id)
+             WHEN 'accessory' THEN (SELECT name FROM accessories WHERE id = s.item_id)
+           END AS name
+    FROM sums s
+  )
+  SELECT jsonb_agg(row_to_json(enriched)) INTO v_result FROM enriched;
+
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Direct send: create a transfer that's already approved + dispatched in one
+-- step. Used when the source side is pushing items proactively, without a
+-- prior request from the destination. The destination still needs to call
+-- receive_transfer to confirm arrival.
+--
+-- The result has the same shape as a normal transfer (transfer_requests +
+-- transfer_request_items rows) so the rest of the system — receive flow,
+-- stock_movements ledger, audit timeline — works unchanged. The only
+-- difference is that requested_at = approved_at = dispatched_at, and all
+-- three qty fields on each item are equal.
+CREATE OR REPLACE FUNCTION direct_send_transfer(
+  p_sender UUID,
+  p_brand brand,
+  p_direction transfer_direction,
+  p_item_type transfer_item_type,
+  p_items JSONB,  -- [{ fabric_id?: int, shelf_id?: int, accessory_id?: int, qty: number }]
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_transfer_id INT;
+  v_item JSONB;
+  v_qty DECIMAL;
+  v_fabric_id INT;
+  v_shelf_id INT;
+  v_accessory_id INT;
+  v_current_stock DECIMAL;
+BEGIN
+  -- 1. Create the transfer already in 'dispatched' state.
+  INSERT INTO transfer_requests (
+    brand, direction, item_type, status,
+    requested_by, dispatched_by,
+    notes,
+    created_at, approved_at, dispatched_at
+  )
+  VALUES (
+    p_brand, p_direction, p_item_type, 'dispatched',
+    p_sender, p_sender,
+    p_notes,
+    NOW(), NOW(), NOW()
+  )
+  RETURNING id INTO v_transfer_id;
+
+  -- 2. Stamp ledger context once for the whole batch of stock UPDATEs.
+  PERFORM set_config('app.movement_type', 'transfer_out', true);
+  PERFORM set_config('app.movement_ref_type', 'transfer', true);
+  PERFORM set_config('app.movement_ref_id', v_transfer_id::text, true);
+  PERFORM set_config('app.movement_user_id', p_sender::text, true);
+  PERFORM set_config('app.movement_reason', 'direct send', true);
+  PERFORM set_config('app.movement_notes', '', true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', '', true);
+
+  -- 3. Insert each item with requested = approved = dispatched, and decrement
+  --    source-side stock. Validation mirrors dispatch_transfer.
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_qty := (v_item->>'qty')::decimal;
+    v_fabric_id := NULLIF((v_item->>'fabric_id'), '')::int;
+    v_shelf_id := NULLIF((v_item->>'shelf_id'), '')::int;
+    v_accessory_id := NULLIF((v_item->>'accessory_id'), '')::int;
+
+    IF v_qty IS NULL OR v_qty <= 0 THEN
+      RAISE EXCEPTION 'Quantity must be positive (got %)', v_qty;
+    END IF;
+    IF (v_fabric_id IS NULL)::int + (v_shelf_id IS NULL)::int + (v_accessory_id IS NULL)::int <> 2 THEN
+      RAISE EXCEPTION 'Each item must reference exactly one of fabric_id, shelf_id, accessory_id';
+    END IF;
+
+    INSERT INTO transfer_request_items (
+      transfer_request_id, fabric_id, shelf_id, accessory_id,
+      requested_qty, approved_qty, dispatched_qty
+    )
+    VALUES (
+      v_transfer_id, v_fabric_id, v_shelf_id, v_accessory_id,
+      v_qty, v_qty, v_qty
+    );
+
+    IF p_direction = 'shop_to_workshop' THEN
+      IF v_fabric_id IS NOT NULL THEN
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE fabrics SET shop_stock = shop_stock - v_qty WHERE id = v_fabric_id;
+      ELSIF v_shelf_id IS NOT NULL THEN
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE shelf SET shop_stock = shop_stock - v_qty::int WHERE id = v_shelf_id;
+      ELSIF v_accessory_id IS NOT NULL THEN
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE accessories SET shop_stock = shop_stock - v_qty WHERE id = v_accessory_id;
+      END IF;
+    ELSE
+      IF v_fabric_id IS NOT NULL THEN
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE fabrics SET workshop_stock = workshop_stock - v_qty WHERE id = v_fabric_id;
+      ELSIF v_shelf_id IS NOT NULL THEN
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE shelf SET workshop_stock = workshop_stock - v_qty::int WHERE id = v_shelf_id;
+      ELSIF v_accessory_id IS NOT NULL THEN
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+        IF v_current_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
+        END IF;
+        UPDATE accessories SET workshop_stock = workshop_stock - v_qty WHERE id = v_accessory_id;
+      END IF;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'transfer_id', v_transfer_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- BATCH TRANSFER RPCS
+-- ============================================================================
+-- A single transfer_request row carries one item_type. When the UI lets the
+-- user mix fabrics, shelf items, and accessories in one cart, we fan out to
+-- N requests (one per type). These batch RPCs do that fan-out inside a single
+-- plpgsql function — i.e. one Postgres transaction — so the user either gets
+-- all N transfers or none. No partial-success states.
+--
+-- p_groups shape: [{ item_type: 'fabric'|'shelf'|'accessory', items: [...] }]
+
+CREATE OR REPLACE FUNCTION create_transfer_requests_batch(
+  p_requested_by UUID,
+  p_brand brand,
+  p_direction transfer_direction,
+  p_notes TEXT,
+  p_groups JSONB  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, requested_qty }] }]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_group JSONB;
+  v_item JSONB;
+  v_item_type transfer_item_type;
+  v_transfer_id INT;
+  v_qty DECIMAL;
+  v_fabric_id INT;
+  v_shelf_id INT;
+  v_accessory_id INT;
+  v_results JSONB := '[]'::jsonb;
+BEGIN
+  IF p_groups IS NULL OR jsonb_array_length(p_groups) = 0 THEN
+    RAISE EXCEPTION 'No groups provided';
+  END IF;
+
+  FOR v_group IN SELECT * FROM jsonb_array_elements(p_groups)
+  LOOP
+    v_item_type := (v_group->>'item_type')::transfer_item_type;
+
+    IF v_group->'items' IS NULL OR jsonb_array_length(v_group->'items') = 0 THEN
+      RAISE EXCEPTION 'Group for % has no items', v_item_type;
+    END IF;
+
+    INSERT INTO transfer_requests (
+      brand, direction, item_type, status,
+      requested_by, notes, created_at
+    )
+    VALUES (
+      p_brand, p_direction, v_item_type, 'requested',
+      p_requested_by, p_notes, NOW()
+    )
+    RETURNING id INTO v_transfer_id;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(v_group->'items')
+    LOOP
+      v_qty := (v_item->>'requested_qty')::decimal;
+      v_fabric_id := NULLIF((v_item->>'fabric_id'), '')::int;
+      v_shelf_id := NULLIF((v_item->>'shelf_id'), '')::int;
+      v_accessory_id := NULLIF((v_item->>'accessory_id'), '')::int;
+
+      IF v_qty IS NULL OR v_qty <= 0 THEN
+        RAISE EXCEPTION 'Quantity must be positive (got %)', v_qty;
+      END IF;
+      IF (v_fabric_id IS NULL)::int + (v_shelf_id IS NULL)::int + (v_accessory_id IS NULL)::int <> 2 THEN
+        RAISE EXCEPTION 'Each item must reference exactly one of fabric_id, shelf_id, accessory_id';
+      END IF;
+
+      INSERT INTO transfer_request_items (
+        transfer_request_id, fabric_id, shelf_id, accessory_id, requested_qty
+      )
+      VALUES (
+        v_transfer_id, v_fabric_id, v_shelf_id, v_accessory_id, v_qty
+      );
+    END LOOP;
+
+    v_results := v_results || jsonb_build_object('transfer_id', v_transfer_id, 'item_type', v_item_type);
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'transfers', v_results);
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION direct_send_transfers_batch(
+  p_sender UUID,
+  p_brand brand,
+  p_direction transfer_direction,
+  p_notes TEXT,
+  p_groups JSONB  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, qty }] }]
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_group JSONB;
+  v_item JSONB;
+  v_item_type transfer_item_type;
+  v_transfer_id INT;
+  v_qty DECIMAL;
+  v_fabric_id INT;
+  v_shelf_id INT;
+  v_accessory_id INT;
+  v_current_stock DECIMAL;
+  v_results JSONB := '[]'::jsonb;
+BEGIN
+  IF p_groups IS NULL OR jsonb_array_length(p_groups) = 0 THEN
+    RAISE EXCEPTION 'No groups provided';
+  END IF;
+
+  FOR v_group IN SELECT * FROM jsonb_array_elements(p_groups)
+  LOOP
+    v_item_type := (v_group->>'item_type')::transfer_item_type;
+
+    IF v_group->'items' IS NULL OR jsonb_array_length(v_group->'items') = 0 THEN
+      RAISE EXCEPTION 'Group for % has no items', v_item_type;
+    END IF;
+
+    -- 1. Create the transfer already in 'dispatched' state.
+    INSERT INTO transfer_requests (
+      brand, direction, item_type, status,
+      requested_by, dispatched_by,
+      notes,
+      created_at, approved_at, dispatched_at
+    )
+    VALUES (
+      p_brand, p_direction, v_item_type, 'dispatched',
+      p_sender, p_sender,
+      p_notes,
+      NOW(), NOW(), NOW()
+    )
+    RETURNING id INTO v_transfer_id;
+
+    -- 2. Stamp ledger context for this group's stock UPDATEs.
+    PERFORM set_config('app.movement_type', 'transfer_out', true);
+    PERFORM set_config('app.movement_ref_type', 'transfer', true);
+    PERFORM set_config('app.movement_ref_id', v_transfer_id::text, true);
+    PERFORM set_config('app.movement_user_id', p_sender::text, true);
+    PERFORM set_config('app.movement_reason', 'direct send', true);
+    PERFORM set_config('app.movement_notes', '', true);
+    PERFORM set_config('app.movement_supplier_id', '', true);
+    PERFORM set_config('app.movement_unit_cost', '', true);
+
+    -- 3. Insert each item with requested = approved = dispatched, and decrement
+    --    source-side stock. Validation mirrors dispatch_transfer.
+    FOR v_item IN SELECT * FROM jsonb_array_elements(v_group->'items')
+    LOOP
+      v_qty := (v_item->>'qty')::decimal;
+      v_fabric_id := NULLIF((v_item->>'fabric_id'), '')::int;
+      v_shelf_id := NULLIF((v_item->>'shelf_id'), '')::int;
+      v_accessory_id := NULLIF((v_item->>'accessory_id'), '')::int;
+
+      IF v_qty IS NULL OR v_qty <= 0 THEN
+        RAISE EXCEPTION 'Quantity must be positive (got %)', v_qty;
+      END IF;
+      IF (v_fabric_id IS NULL)::int + (v_shelf_id IS NULL)::int + (v_accessory_id IS NULL)::int <> 2 THEN
+        RAISE EXCEPTION 'Each item must reference exactly one of fabric_id, shelf_id, accessory_id';
+      END IF;
+
+      INSERT INTO transfer_request_items (
+        transfer_request_id, fabric_id, shelf_id, accessory_id,
+        requested_qty, approved_qty, dispatched_qty
+      )
+      VALUES (
+        v_transfer_id, v_fabric_id, v_shelf_id, v_accessory_id,
+        v_qty, v_qty, v_qty
+      );
+
+      IF p_direction = 'shop_to_workshop' THEN
+        IF v_fabric_id IS NOT NULL THEN
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE fabrics SET shop_stock = shop_stock - v_qty WHERE id = v_fabric_id;
+        ELSIF v_shelf_id IS NOT NULL THEN
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE shelf SET shop_stock = shop_stock - v_qty::int WHERE id = v_shelf_id;
+        ELSIF v_accessory_id IS NOT NULL THEN
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE accessories SET shop_stock = shop_stock - v_qty WHERE id = v_accessory_id;
+        END IF;
+      ELSE
+        IF v_fabric_id IS NOT NULL THEN
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE fabrics SET workshop_stock = workshop_stock - v_qty WHERE id = v_fabric_id;
+        ELSIF v_shelf_id IS NOT NULL THEN
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE shelf SET workshop_stock = workshop_stock - v_qty::int WHERE id = v_shelf_id;
+        ELSIF v_accessory_id IS NOT NULL THEN
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+          IF v_current_stock < v_qty THEN
+            RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
+          END IF;
+          UPDATE accessories SET workshop_stock = workshop_stock - v_qty WHERE id = v_accessory_id;
+        END IF;
+      END IF;
+    END LOOP;
+
+    v_results := v_results || jsonb_build_object('transfer_id', v_transfer_id, 'item_type', v_item_type);
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'transfers', v_results);
 END;
 $$ LANGUAGE plpgsql;

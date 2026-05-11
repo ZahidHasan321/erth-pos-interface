@@ -4,7 +4,7 @@ import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useReceiveGarments, useReceiveAndStart, useMarkLostInTransit } from "@/hooks/useGarmentMutations";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import {
-  PageHeader, EmptyState, LoadingSkeleton,
+  PageHeader, LoadingSkeleton,
   GarmentTypeBadge,
 } from "@/components/shared/PageShell";
 import { Button } from "@repo/ui/button";
@@ -32,7 +32,10 @@ export const Route = createFileRoute("/(main)/receiving")({
 function AltBadge({ trip }: { trip: number }) {
   const alt = trip - 1;
   return (
-    <Badge className="bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
+    <Badge
+      variant="outline"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
+    >
       Alt {alt}
     </Badge>
   );
@@ -40,8 +43,11 @@ function AltBadge({ trip }: { trip: number }) {
 
 function AlterationOutBadge() {
   return (
-    <Badge className="bg-amber-500 text-white font-semibold text-xs uppercase tracking-wide border-0">
-      Alteration Out
+    <Badge
+      variant="outline"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
+    >
+      Alteration out
     </Badge>
   );
 }
@@ -96,12 +102,12 @@ function GarmentRow({
       </TableCell>
       <TableCell className="px-3 py-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-sm font-bold">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
+          <span className="font-mono text-base">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
           {((!hideExpress && garment.express) || garment.soaking) && (
             <div className="flex items-center gap-1">
               {!hideExpress && garment.express && <ExpressBadge />}
               {garment.soaking && (
-                <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
                   <Droplets className="w-3 h-3" /> Soak
                 </span>
               )}
@@ -124,17 +130,17 @@ function GarmentRow({
       )}
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold">{garment.customer_name ?? "—"}</span>
+          <span className="text-base tracking-tight">{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
-            <span className="text-xs font-mono text-muted-foreground">{garment.customer_mobile}</span>
+            <span className="text-sm font-mono text-muted-foreground">{garment.customer_mobile}</span>
           )}
         </div>
       </TableCell>
       <TableCell className="px-3 py-3 font-mono">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold">#{garment.order_id}</span>
+          <span className="text-base">#{garment.order_id}</span>
           {garment.invoice_number && (
-            <span className="text-xs text-muted-foreground">INV-{garment.invoice_number}</span>
+            <span className="text-sm text-muted-foreground">INV-{garment.invoice_number}</span>
           )}
         </div>
       </TableCell>
@@ -144,15 +150,15 @@ function GarmentRow({
       <TableCell className="px-3 py-3 text-center">
         <div className="flex flex-col items-center gap-1">
           {garment.delivery_date_order ? (
-            <span className={cn("text-xs font-bold tabular-nums inline-flex items-center gap-1", urgency.text)}>
+            <span className={cn("text-sm font-medium tabular-nums inline-flex items-center gap-1", urgency.text)}>
               <Clock className="w-3 h-3" />
               {formatDate(garment.delivery_date_order)}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">—</span>
           )}
           {garment.home_delivery && (
-            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
               <Home className="w-3 h-3" /> Home
             </span>
           )}
@@ -309,21 +315,40 @@ function Section({
   title,
   icon: Icon,
   count,
-  accent,
+  tone,
+  emptyLabel,
   children,
 }: {
   title: string;
   icon: LucideIcon;
   count: number;
-  accent?: string;
+  tone?: "bad";
+  emptyLabel?: string;
   children: React.ReactNode;
 }) {
+  if (count === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
+        <Icon className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground/70 text-xs ml-auto">
+          {emptyLabel ?? "Empty"}
+        </span>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mt-5">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
-        <h2 className="font-semibold text-base text-foreground">{title}</h2>
-        <Badge variant="secondary" className={cn("text-xs", accent)}>
+        <h2 className="text-base font-medium">{title}</h2>
+        <Badge
+          variant="secondary"
+          className={cn(
+            "text-xs font-medium",
+            tone === "bad" && "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
+          )}
+        >
           {count}
         </Badge>
       </div>
@@ -465,7 +490,7 @@ function ReceivingPage() {
   const totalIncoming = sortedExpress.length + sortedBrova.length + sortedFinals.length + sortedAlterations.length + sortedAlterationOut.length;
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-8">
+    <div className="p-4 sm:p-6 max-w-4xl xl:max-w-7xl mx-auto pb-28 space-y-2">
       <PageHeader
         icon={Inbox}
         title="Receiving"
@@ -499,115 +524,95 @@ function ReceivingPage() {
       ) : (
         <>
           {/* ── EXPRESS ── */}
-          <Section title="Express" icon={Zap} count={sortedExpress.length}>
-            {sortedExpress.length === 0 ? (
-              <EmptyState icon={Zap} message="No express garments in transit" />
-            ) : (
-              <SectionTable
-                garments={sortedExpress}
-                selectedIds={selExpress}
-                onToggle={toggle(setSelExpress)}
-                onReceive={(id) => receive([id])}
-                onReceiveAndStart={(id) => receiveAndStart([id])}
-                onLost={markLost}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant={(g) =>
-                  g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
-                    ? "receive-lost"
-                    : "receive-start-lost"
-                }
-                showType
-                hideExpress
-              />
-            )}
+          <Section title="Express" icon={Zap} count={sortedExpress.length} emptyLabel="No express in transit">
+            <SectionTable
+              garments={sortedExpress}
+              selectedIds={selExpress}
+              onToggle={toggle(setSelExpress)}
+              onReceive={(id) => receive([id])}
+              onReceiveAndStart={(id) => receiveAndStart([id])}
+              onLost={markLost}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant={(g) =>
+                g.garment_type === "final" && orderIdsWithBrova.has(g.order_id)
+                  ? "receive-lost"
+                  : "receive-start-lost"
+              }
+              showType
+              hideExpress
+            />
           </Section>
 
           {/* ── BROVA ── */}
-          <Section title="Brova" icon={Package} count={sortedBrova.length}>
-            {sortedBrova.length === 0 ? (
-              <EmptyState icon={Package} message="No brova garments in transit" />
-            ) : (
-              <SectionTable
-                garments={sortedBrova}
-                selectedIds={selBrova}
-                onToggle={toggle(setSelBrova)}
-                onReceive={(id) => receive([id])}
-                onReceiveAndStart={(id) => receiveAndStart([id])}
-                onLost={markLost}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant="receive-start-lost"
-              />
-            )}
+          <Section title="Brova" icon={Package} count={sortedBrova.length} emptyLabel="No brova in transit">
+            <SectionTable
+              garments={sortedBrova}
+              selectedIds={selBrova}
+              onToggle={toggle(setSelBrova)}
+              onReceive={(id) => receive([id])}
+              onReceiveAndStart={(id) => receiveAndStart([id])}
+              onLost={markLost}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant="receive-start-lost"
+            />
           </Section>
 
           {/* ── FINALS ── */}
-          <Section title="Finals" icon={Package} count={sortedFinals.length}>
-            {sortedFinals.length === 0 ? (
-              <EmptyState icon={Package} message="No final garments in transit" />
-            ) : (
-              <SectionTable
-                garments={sortedFinals}
-                selectedIds={selFinals}
-                onToggle={toggle(setSelFinals)}
-                onReceive={(id) => receive([id])}
-                onReceiveAndStart={(id) => receiveAndStart([id])}
-                onLost={markLost}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant={(g) =>
-                  orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
-                }
-              />
-            )}
+          <Section title="Finals" icon={Package} count={sortedFinals.length} emptyLabel="No finals in transit">
+            <SectionTable
+              garments={sortedFinals}
+              selectedIds={selFinals}
+              onToggle={toggle(setSelFinals)}
+              onReceive={(id) => receive([id])}
+              onReceiveAndStart={(id) => receiveAndStart([id])}
+              onLost={markLost}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant={(g) =>
+                orderIdsWithBrova.has(g.order_id) ? "receive-lost" : "receive-start-lost"
+              }
+            />
           </Section>
 
           {/* ── WORK ORDER ALTERATIONS ── */}
-          <Section title="Work Order Alterations" icon={Package} count={sortedAlterations.length}>
-            {sortedAlterations.length === 0 ? (
-              <EmptyState icon={Package} message="No alterations in transit" />
-            ) : (
-              <SectionTable
-                garments={sortedAlterations}
-                selectedIds={selAlterations}
-                onToggle={toggle(setSelAlterations)}
-                onReceive={(id) => receive([id])}
-                onReceiveAndStart={(id) => receiveAndStart([id])}
-                onLost={markLost}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant="receive-start-lost"
-                showAlt
-                showType
-              />
-            )}
+          <Section title="Work order alterations" icon={Package} count={sortedAlterations.length} emptyLabel="No alterations in transit">
+            <SectionTable
+              garments={sortedAlterations}
+              selectedIds={selAlterations}
+              onToggle={toggle(setSelAlterations)}
+              onReceive={(id) => receive([id])}
+              onReceiveAndStart={(id) => receiveAndStart([id])}
+              onLost={markLost}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant="receive-start-lost"
+              showAlt
+              showType
+            />
           </Section>
 
           {/* ── ALTERATION ORDERS (OUT) ── */}
-          <Section title="Alteration Orders (Out)" icon={Scissors} count={sortedAlterationOut.length}>
-            {sortedAlterationOut.length === 0 ? (
-              <EmptyState icon={Scissors} message="No alteration orders in transit" />
-            ) : (
-              <SectionTable
-                garments={sortedAlterationOut}
-                selectedIds={selAlterationOut}
-                onToggle={toggle(setSelAlterationOut)}
-                onReceive={(id) => receive([id])}
-                onReceiveAndStart={(id) => receiveAndStart([id])}
-                onLost={markLost}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant="receive-start-lost"
-                showAlt
-                showAlterationOut
-              />
-            )}
+          <Section title="Alteration orders (out)" icon={Scissors} count={sortedAlterationOut.length} emptyLabel="No alteration orders in transit">
+            <SectionTable
+              garments={sortedAlterationOut}
+              selectedIds={selAlterationOut}
+              onToggle={toggle(setSelAlterationOut)}
+              onReceive={(id) => receive([id])}
+              onReceiveAndStart={(id) => receiveAndStart([id])}
+              onLost={markLost}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant="receive-start-lost"
+              showAlt
+              showAlterationOut
+            />
           </Section>
 
           {/* ── PAGE-LEVEL BATCH BAR ── */}
@@ -658,21 +663,23 @@ function ReceivingPage() {
           })()}
 
           {/* ── LOST IN TRANSIT ── */}
-          <Section title="Lost in Transit" icon={CircleX} count={lostInTransit.length} accent={lostInTransit.length > 0 ? "bg-red-100 text-red-700" : undefined}>
-            {lostInTransit.length === 0 ? (
-              <EmptyState icon={CircleX} message="No garments lost in transit" />
-            ) : (
-              <SectionTable
-                garments={lostInTransit}
-                selectedIds={new Set()}
-                onToggle={() => {}}
-                onReceive={(id) => receive([id])}
-                isReceivePending={isReceivePending}
-                isReceiveStartPending={isReceiveStartPending}
-                isLostPending={isLostPending}
-                actionVariant="found"
-              />
-            )}
+          <Section
+            title="Lost in transit"
+            icon={CircleX}
+            count={lostInTransit.length}
+            tone="bad"
+            emptyLabel="Nothing lost"
+          >
+            <SectionTable
+              garments={lostInTransit}
+              selectedIds={new Set()}
+              onToggle={() => {}}
+              onReceive={(id) => receive([id])}
+              isReceivePending={isReceivePending}
+              isReceiveStartPending={isReceiveStartPending}
+              isLostPending={isLostPending}
+              actionVariant="found"
+            />
           </Section>
         </>
       )}

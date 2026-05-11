@@ -1,641 +1,559 @@
 import { useState, useMemo } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, ArrowRight } from "lucide-react";
-import { IconStack2 } from "@tabler/icons-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Search, AlertCircle, RefreshCw, ArrowDownToLine, Settings2, Users } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
-import {
-  TableContainer,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@repo/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@repo/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/ui/select";
+import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
-import { getFabrics, createFabric, updateFabric } from "@/api/fabrics";
-import { getShelf, createShelfItem, updateShelfItem } from "@/api/shelf";
-import {
-  getAccessories,
-  createAccessory,
-  updateAccessory,
-} from "@/api/accessories";
-import { PageHeader, EmptyState } from "@/components/shared/PageShell";
-import {
-  ACCESSORY_CATEGORY_LABELS,
-  UNIT_OF_MEASURE_LABELS,
-} from "@/components/store/transfer-constants";
-import type { Fabric, Shelf, Accessory } from "@repo/database";
+import { isLowStock, formatQty } from "@/lib/inventory";
+import { getFabrics } from "@/api/fabrics";
+import { getShelf } from "@/api/shelf";
+import { getAccessories } from "@/api/accessories";
+import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
+import { RestockDialog } from "@/components/inventory/RestockDialog";
+import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
+import type { Fabric, Shelf, Accessory, StockItemType } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/store/inventory")({
   component: InventoryPage,
-  head: () => ({ meta: [{ title: "Inventory Management" }] }),
+  head: () => ({ meta: [{ title: "Inventory" }] }),
 });
 
-const LOW_STOCK = { fabric: 5, shelf: 3, accessory: 10 };
-
-function isLowStock(type: "fabric" | "shelf" | "accessory", workshopStock: number) {
-  return workshopStock > 0 && workshopStock < LOW_STOCK[type];
-}
+type StatusFilter = "all" | "low" | "out" | "ok";
+type ItemType = "fabric" | "shelf" | "accessory";
 
 function InventoryPage() {
-  const { user } = useAuth();
-  const canEditFabrics = getPermission(user, "inventory:fabrics") === "full";
-  const canEditAccessories = getPermission(user, "inventory:accessories") === "full";
-  const canEditShelf = getPermission(user, "inventory:shelf") === "full";
-
-  const [activeTab, setActiveTab] = useState("fabric");
+  const [activeTab, setActiveTab] = useState<ItemType>("accessory");
   const [search, setSearch] = useState("");
-
-  const { data: fabrics = [], isLoading: fl, isError: fe, refetch: fr } = useQuery({ queryKey: ["fabrics"], queryFn: getFabrics, staleTime: 60_000 });
-  const { data: shelfItems = [], isLoading: sl, isError: se, refetch: sr } = useQuery({ queryKey: ["shelf"], queryFn: getShelf, staleTime: 60_000 });
-  const { data: accessories = [], isLoading: al, isError: ae, refetch: ar } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories, staleTime: 60_000 });
-
-  const isLoading = fl || sl || al;
-  const isError = fe || se || ae;
-  const refetchAll = () => { fr(); sr(); ar(); };
-
-  const lowStockCount = useMemo(() => {
-    let count = 0;
-    for (const f of fabrics) if (isLowStock("fabric", Number(f.workshop_stock ?? 0))) count++;
-    for (const s of shelfItems) if (isLowStock("shelf", Number(s.workshop_stock ?? 0))) count++;
-    for (const a of accessories) if (isLowStock("accessory", Number(a.workshop_stock ?? 0))) count++;
-    return count;
-  }, [fabrics, shelfItems, accessories]);
-
-  const stats = [
-    { label: "Fabric Types", value: fabrics.length, icon: Scissors, bg: "bg-purple-50 text-purple-600" },
-    { label: "Shelf Items", value: shelfItems.length, icon: IconStack2, bg: "bg-sky-50 text-sky-600" },
-    { label: "Accessories", value: accessories.length, icon: Package, bg: "bg-pink-50 text-pink-600" },
-    { label: "Low Stock", value: lowStockCount, icon: AlertTriangle, bg: lowStockCount > 0 ? "bg-amber-50 text-amber-600" : "bg-muted text-muted-foreground", highlight: lowStockCount > 0 },
-  ];
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
-      <PageHeader icon={Package} title="Inventory Management" subtitle="Create and manage fabrics, shelf items, and accessories" />
-
-      {/* Stat Cards */}
-      {isLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          {stats.map((s) => (
-            <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className={cn("p-2 rounded-lg shrink-0", s.bg)}>
-                  <s.icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                  <p className={cn("text-lg font-bold tabular-nums", s.highlight && "text-amber-700")}>{s.value}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Low Stock Alert */}
-      {!isLoading && lowStockCount > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-            <p className="text-sm font-medium text-amber-900">
-              <span className="font-bold tabular-nums">{lowStockCount}</span> item{lowStockCount !== 1 ? "s" : ""} running low on stock
-            </p>
-          </div>
-          <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 hover:border-amber-300 shrink-0" asChild>
-            <Link to="/store/request-delivery">
-              Request Delivery
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-      )}
-
-      {/* Error State */}
-      {isError && !isLoading && (
-        <Card className="shadow-none rounded-xl border border-destructive/20 mb-5">
-          <CardContent className="py-10 text-center">
-            <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
-            <p className="font-medium text-sm">Failed to load stock data</p>
-            <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
-            <Button variant="outline" size="sm" onClick={refetchAll} className="mt-4">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Search */}
-      <div className="relative max-w-xl mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search items by name, type, or category..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+    <div className="px-4 sm:px-6 py-5 max-w-[1600px] mx-auto pb-10">
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/store/suppliers">
+            <Users className="h-3.5 w-3.5 mr-1.5" /> Suppliers
+          </Link>
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="fabric">Fabrics</TabsTrigger>
-          <TabsTrigger value="shelf">Shelf Items</TabsTrigger>
-          <TabsTrigger value="accessory">Accessories</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ItemType)}>
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
+            <TabsTrigger value="accessory">Accessories</TabsTrigger>
+            <TabsTrigger value="shelf">Shelf items</TabsTrigger>
+            <TabsTrigger value="fabric">Fabrics</TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8 w-[220px]"
+              />
+            </div>
+            <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
+              <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="ok">In stock</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="out">Out</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-        <TabsContent value="fabric">
-          <FabricsTab search={search} canEdit={canEditFabrics} />
-        </TabsContent>
-        <TabsContent value="shelf">
-          <ShelfTab search={search} canEdit={canEditShelf} />
-        </TabsContent>
-        <TabsContent value="accessory">
-          <AccessoriesTab search={search} canEdit={canEditAccessories} />
-        </TabsContent>
+        <TabsContent value="fabric"><FabricsTab search={search} status={status} /></TabsContent>
+        <TabsContent value="shelf"><ShelfTab search={search} status={status} /></TabsContent>
+        <TabsContent value="accessory"><AccessoriesTab search={search} status={status} /></TabsContent>
       </Tabs>
     </div>
   );
 }
 
-// ─── Shared Components ───────────────────────────────────────────────
+// ─── Shared ───────────────────────────────────────────────────────────
 
 function LowStockBadge() {
-  return (
-    <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
-      Low
-    </span>
-  );
+  return <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-[var(--status-bad-bg)] text-[var(--status-bad)]">Low</span>;
+}
+function OutBadge() {
+  return <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground">Out</span>;
 }
 
 function TableSkeleton({ cols }: { cols: number }) {
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="flex items-center justify-between mb-4">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-8 w-28" />
-        </div>
-        <TableContainer>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                {Array.from({ length: cols }).map((_, i) => (
-                  <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>
+    <div className="border border-border rounded-md overflow-hidden">
+      <TableContainer>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              {Array.from({ length: cols }).map((_, i) => <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <TableRow key={i}>
+                {Array.from({ length: cols }).map((_, j) => (
+                  <TableCell key={j}><Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} /></TableCell>
                 ))}
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: cols }).map((_, j) => (
-                    <TableCell key={j}>
-                      <Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </CardContent>
-    </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </div>
   );
 }
 
 function QueryErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <Card className="shadow-none rounded-xl border border-destructive/20">
-      <CardContent className="py-10 text-center">
-        <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
-        <p className="font-medium text-sm">Failed to load data</p>
-        <p className="text-xs text-muted-foreground mt-1">Something went wrong. Please try again.</p>
-        <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+    <div className="border border-border rounded-md py-10 text-center bg-card">
+      <AlertCircle className="h-6 w-6 mx-auto mb-2 text-[var(--status-bad)] opacity-70" />
+      <p className="text-sm text-muted-foreground">Failed to load data</p>
+      <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
+        <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+      </Button>
+    </div>
+  );
+}
+
+function applyStatus(status: StatusFilter, type: StockItemType, qty: number): boolean {
+  if (status === "all") return true;
+  if (status === "out") return qty <= 0;
+  if (status === "low") return isLowStock(type, qty);
+  return qty > 0 && !isLowStock(type, qty);
+}
+
+function TableShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border border-border rounded-md overflow-hidden bg-card">
+      <TableContainer>
+        <Table>{children}</Table>
+      </TableContainer>
+    </div>
+  );
+}
+
+function TabToolbar({ count, total, lowCount, label, addLabel, addTo, children }: {
+  count: number;
+  total: number;
+  lowCount: number;
+  label: string;
+  addLabel: string;
+  addTo: string;
+  children?: React.ReactNode;
+}) {
+  const { user } = useAuth();
+  // any inventory edit permission qualifies for adding
+  const canAdd =
+    getPermission(user, "inventory:fabrics") === "full"
+    || getPermission(user, "inventory:shelf") === "full"
+    || getPermission(user, "inventory:accessories") === "full";
+
+  return (
+    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <span className="tabular-nums">
+          {count}{count !== total ? ` of ${total}` : ""} {label}
+        </span>
+        {lowCount > 0 && (
+          <span className="text-[var(--status-bad)] tabular-nums">· {lowCount} low</span>
+        )}
+        {children}
+      </div>
+      {canAdd && (
+        <Button size="sm" variant="outline" asChild>
+          <Link to={addTo}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> {addLabel}
+          </Link>
         </Button>
-      </CardContent>
-    </Card>
+      )}
+    </div>
+  );
+}
+
+function RowQuickActions({
+  canRestock, canAdjust, onRestock, onAdjust,
+}: {
+  canRestock: boolean; canAdjust: boolean;
+  onRestock: () => void; onAdjust: () => void;
+}) {
+  if (!canRestock && !canAdjust) return null;
+  return (
+    <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+      {canRestock && (
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRestock} title="Restock">
+          <ArrowDownToLine className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canAdjust && (
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onAdjust} title="Adjust stock">
+          <Settings2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
   );
 }
 
 // ─── Fabrics ───────────────────────────────────────────────────────────
 
-function FabricsTab({ search, canEdit }: { search: string; canEdit: boolean }) {
-  const qc = useQueryClient();
-  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["fabrics"],
-    queryFn: getFabrics,
-    staleTime: 60_000,
-  });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Fabric | null>(null);
+function FabricsTab({ search, status }: { search: string; status: StatusFilter }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canRestock = getPermission(user, "inventory:restock") === "full";
+  const canAdjust = getPermission(user, "inventory:adjust") === "full";
+
+  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({ queryKey: ["fabrics"], queryFn: () => getFabrics(), staleTime: 60_000 });
+  const [restockTarget, setRestockTarget] = useState<Fabric | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<Fabric | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return fabrics.filter((f) => !q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q));
-  }, [fabrics, search]);
+    return fabrics
+      .filter((f) =>
+        (!q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q))
+        && applyStatus(status, "fabric", Number(f.workshop_stock ?? 0))
+      )
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [fabrics, search, status]);
 
-  const createMut = useMutation({
-    mutationFn: createFabric,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); },
-    onError: (err: any) => toast.error(`Could not create fabric: ${err?.message ?? String(err)}`),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Fabric>) => updateFabric(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); setEditing(null); },
-    onError: (err: any) => toast.error(`Could not update fabric: ${err?.message ?? String(err)}`),
-  });
-
-  const openCreate = () => { setEditing(null); setDialogOpen(true); };
-  const openEdit = (f: Fabric) => { setEditing(f); setDialogOpen(true); };
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const name = (fd.get("name") as string).trim();
-    const color = (fd.get("color") as string).trim() || undefined;
-    const color_hex = (fd.get("color_hex") as string).trim() || undefined;
-    const price_per_meter = fd.get("price_per_meter") ? Number(fd.get("price_per_meter")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
-
-    if (!name) { toast.error("Name is required"); return; }
-
-    if (editing) {
-      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, workshop_stock: workshop_stock ?? 0 });
-    } else {
-      createMut.mutate({ name, color, color_hex, price_per_meter, workshop_stock });
-    }
-  };
-
-  const isPending = createMut.isPending || updateMut.isPending;
+  const lowCount = useMemo(
+    () => fabrics.reduce((n, f) => n + (isLowStock("fabric", Number(f.workshop_stock ?? 0)) ? 1 : 0), 0),
+    [fabrics],
+  );
 
   if (isLoading) return <TableSkeleton cols={6} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} fabric(s){search && fabrics.length !== filtered.length && ` of ${fabrics.length}`}
-              {!canEdit && <span className="ml-2 text-xs text-muted-foreground/60">(read only)</span>}
-            </p>
-            {canEdit && (
-              <Button size="sm" onClick={openCreate}>
-                <Plus className="h-4 w-4 mr-1" /> Add Fabric
-              </Button>
-            )}
-          </div>
+      <TabToolbar
+        count={filtered.length}
+        total={fabrics.length}
+        lowCount={lowCount}
+        label="fabrics"
+        addLabel="Add fabric"
+        addTo="/store/inventory/fabric/new"
+      />
+      <TableShell>
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            <TableHead>Name</TableHead>
+            <TableHead>Color code</TableHead>
+            <TableHead className="text-right">Price/m</TableHead>
+            <TableHead className="text-right">Workshop</TableHead>
+            <TableHead className="text-right">Shop</TableHead>
+            <TableHead className="w-[110px]" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filtered.map((f) => {
+            const ws = Number(f.workshop_stock ?? 0);
+            const wsh = Number(f.shop_stock ?? 0);
+            const low = isLowStock("fabric", ws);
+            const out = ws <= 0;
+            return (
+              <TableRow key={f.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "fabric", id: String(f.id) } })}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} />}
+                    {f.name}
+                    {out ? <OutBadge /> : low && <LowStockBadge />}
+                  </div>
+                </TableCell>
+                <TableCell>{f.color ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
+                <TableCell className={cn("text-right tabular-nums", low && "text-[var(--status-bad)] font-medium")}>{formatQty("fabric", ws)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatQty("fabric", wsh)}</TableCell>
+                <TableCell>
+                  <RowQuickActions
+                    canRestock={canRestock}
+                    canAdjust={canAdjust}
+                    onRestock={() => setRestockTarget(f)}
+                    onAdjust={() => setAdjustTarget(f)}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {filtered.length === 0 && (
+            <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No fabrics match the current filters</TableCell></TableRow>
+          )}
+        </TableBody>
+      </TableShell>
 
-          <TableContainer>
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Color Code</TableHead>
-                  <TableHead className="text-right">Price/m</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
-                  <TableHead className="text-right">Shop Stock</TableHead>
-                  <TableHead className="w-[60px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((f) => {
-                  const ws = Number(f.workshop_stock ?? 0);
-                  const low = isLowStock("fabric", ws);
-                  return (
-                    <TableRow key={f.id} className={low ? "bg-red-50/40" : ""}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} />}
-                          {f.name}
-                          {low && <LowStockBadge />}
-                        </div>
-                      </TableCell>
-                      <TableCell>{f.color ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{f.shop_stock ?? 0}</TableCell>
-                      <TableCell>
-                        {canEdit && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(f)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No fabrics match your search" : "No fabrics yet"} /></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit Fabric" : "Add Fabric"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fab-name">Name *</Label>
-              <Input id="fab-name" name="name" defaultValue={editing?.name ?? ""} required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="fab-color">Color Code</Label>
-                <Input id="fab-color" name="color" placeholder="e.g. C04" defaultValue={editing?.color ?? ""} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fab-hex">Color Hex</Label>
-                <div className="flex gap-2">
-                  <Input id="fab-hex" name="color_hex" placeholder="#FFFFFF" defaultValue={editing?.color_hex ?? ""} className="flex-1" />
-                  <input type="color" className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5" defaultValue={editing?.color_hex || "#ffffff"} onChange={(e) => { const el = document.getElementById("fab-hex") as HTMLInputElement; if (el) el.value = e.target.value; }} />
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="fab-price">Price per Meter</Label>
-                <Input id="fab-price" name="price_per_meter" type="number" step="0.001" min={0} defaultValue={editing?.price_per_meter ?? ""} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fab-stock">Workshop Stock (m)</Label>
-                <Input id="fab-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
-                {editing ? "Save" : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {restockTarget && (
+        <RestockDialog
+          open
+          onClose={() => setRestockTarget(null)}
+          itemType="fabric"
+          itemId={restockTarget.id}
+          itemName={restockTarget.name}
+          defaultLocation="workshop"
+          currentStock={Number(restockTarget.workshop_stock ?? 0)}
+        />
+      )}
+      {adjustTarget && (
+        <AdjustStockDialog
+          open
+          onClose={() => setAdjustTarget(null)}
+          itemType="fabric"
+          itemId={adjustTarget.id}
+          itemName={adjustTarget.name}
+          defaultLocation="workshop"
+          currentStock={Number(adjustTarget.workshop_stock ?? 0)}
+        />
+      )}
     </>
   );
 }
 
-// ─── Shelf Items ──────────────────────────────────────────────────────
+// ─── Shelf ────────────────────────────────────────────────────────────
 
-function ShelfTab({ search, canEdit }: { search: string; canEdit: boolean }) {
-  const qc = useQueryClient();
-  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["shelf"], queryFn: getShelf, staleTime: 60_000 });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Shelf | null>(null);
+function ShelfTab({ search, status }: { search: string; status: StatusFilter }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canRestock = getPermission(user, "inventory:restock") === "full";
+  const canAdjust = getPermission(user, "inventory:adjust") === "full";
+
+  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["shelf"], queryFn: () => getShelf(), staleTime: 60_000 });
+  const [restockTarget, setRestockTarget] = useState<Shelf | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<Shelf | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return items.filter((s) => !q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q));
-  }, [items, search]);
+    return items
+      .filter((s) =>
+        (!q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q))
+        && applyStatus(status, "shelf", Number(s.workshop_stock ?? 0))
+      )
+      .sort((a, b) => (a.type ?? "").localeCompare(b.type ?? ""));
+  }, [items, search, status]);
 
-  const createMut = useMutation({ mutationFn: createShelfItem, onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`) });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelfItem(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`) });
+  const lowCount = useMemo(
+    () => items.reduce((n, s) => n + (isLowStock("shelf", Number(s.workshop_stock ?? 0)) ? 1 : 0), 0),
+    [items],
+  );
 
-  const openCreate = () => { setEditing(null); setDialogOpen(true); };
-  const openEdit = (s: Shelf) => { setEditing(s); setDialogOpen(true); };
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const type = (fd.get("type") as string).trim();
-    const brand = (fd.get("brand") as string).trim() || undefined;
-    const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
-    if (!type) { toast.error("Type is required"); return; }
-    if (editing) { updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
-    else { createMut.mutate({ type, brand, price, workshop_stock }); }
-  };
-
-  const isPending = createMut.isPending || updateMut.isPending;
   if (isLoading) return <TableSkeleton cols={6} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} shelf item(s){search && items.length !== filtered.length && ` of ${items.length}`}
-              {!canEdit && <span className="ml-2 text-xs text-muted-foreground/60">(read only)</span>}
-            </p>
-            {canEdit && <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Add Shelf Item</Button>}
-          </div>
-          <TableContainer>
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead>Type</TableHead>
-                  <TableHead>Brand</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
-                  <TableHead className="text-right">Shop Stock</TableHead>
-                  <TableHead className="w-[60px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((s) => {
-                  const ws = Number(s.workshop_stock ?? 0);
-                  const low = isLowStock("shelf", ws);
-                  return (
-                    <TableRow key={s.id} className={low ? "bg-red-50/40" : ""}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">{s.type}{low && <LowStockBadge />}</div>
-                      </TableCell>
-                      <TableCell>{s.brand ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.shop_stock ?? 0}</TableCell>
-                      <TableCell>{canEdit && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8"><EmptyState icon={Package} message={search ? "No shelf items match your search" : "No shelf items yet"} /></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit Shelf Item" : "Add Shelf Item"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2"><Label htmlFor="shelf-type">Type *</Label><Input id="shelf-type" name="type" defaultValue={editing?.type ?? ""} required /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label htmlFor="shelf-brand">Brand</Label><Input id="shelf-brand" name="brand" defaultValue={editing?.brand ?? ""} /></div>
-              <div className="space-y-2"><Label htmlFor="shelf-price">Price</Label><Input id="shelf-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
-            </div>
-            <div className="space-y-2"><Label htmlFor="shelf-stock">Workshop Stock</Label><Input id="shelf-stock" name="workshop_stock" type="number" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}{editing ? "Save" : "Create"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TabToolbar
+        count={filtered.length}
+        total={items.length}
+        lowCount={lowCount}
+        label="shelf items"
+        addLabel="Add shelf item"
+        addTo="/store/inventory/shelf/new"
+      />
+      <TableShell>
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            <TableHead>Type</TableHead>
+            <TableHead>Brand</TableHead>
+            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Workshop</TableHead>
+            <TableHead className="text-right">Shop</TableHead>
+            <TableHead className="w-[110px]" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filtered.map((s) => {
+            const ws = Number(s.workshop_stock ?? 0);
+            const wsh = Number(s.shop_stock ?? 0);
+            const low = isLowStock("shelf", ws);
+            const out = ws <= 0;
+            return (
+              <TableRow key={s.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "shelf", id: String(s.id) } })}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">{s.type}{out ? <OutBadge /> : low && <LowStockBadge />}</div>
+                </TableCell>
+                <TableCell>{s.brand ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
+                <TableCell className={cn("text-right tabular-nums", low && "text-[var(--status-bad)] font-medium")}>{formatQty("shelf", ws)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatQty("shelf", wsh)}</TableCell>
+                <TableCell>
+                  <RowQuickActions
+                    canRestock={canRestock}
+                    canAdjust={canAdjust}
+                    onRestock={() => setRestockTarget(s)}
+                    onAdjust={() => setAdjustTarget(s)}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {filtered.length === 0 && (
+            <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No shelf items match the current filters</TableCell></TableRow>
+          )}
+        </TableBody>
+      </TableShell>
+
+      {restockTarget && (
+        <RestockDialog
+          open
+          onClose={() => setRestockTarget(null)}
+          itemType="shelf"
+          itemId={restockTarget.id}
+          itemName={restockTarget.type ?? "(unnamed)"}
+          defaultLocation="workshop"
+          currentStock={Number(restockTarget.workshop_stock ?? 0)}
+        />
+      )}
+      {adjustTarget && (
+        <AdjustStockDialog
+          open
+          onClose={() => setAdjustTarget(null)}
+          itemType="shelf"
+          itemId={adjustTarget.id}
+          itemName={adjustTarget.type ?? "(unnamed)"}
+          defaultLocation="workshop"
+          currentStock={Number(adjustTarget.workshop_stock ?? 0)}
+        />
+      )}
     </>
   );
 }
 
 // ─── Accessories ──────────────────────────────────────────────────────
 
-const CATEGORIES = ["buttons", "zippers", "thread", "lining", "elastic", "interlining", "other"] as const;
-const UNITS = ["pieces", "meters", "rolls", "kg"] as const;
+function AccessoriesTab({ search, status }: { search: string; status: StatusFilter }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canRestock = getPermission(user, "inventory:restock") === "full";
+  const canAdjust = getPermission(user, "inventory:adjust") === "full";
 
-function AccessoriesTab({ search, canEdit }: { search: string; canEdit: boolean }) {
-  const qc = useQueryClient();
-  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["accessories"], queryFn: getAccessories, staleTime: 60_000 });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Accessory | null>(null);
+  const { data: items = [], isLoading, isError, refetch } = useQuery({ queryKey: ["accessories"], queryFn: () => getAccessories(), staleTime: 60_000 });
+  const [restockTarget, setRestockTarget] = useState<Accessory | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<Accessory | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  const existingCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of items) if (a.category) set.add(a.category);
+    return Array.from(set).sort();
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return items.filter((a) => !q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q));
-  }, [items, search]);
+    return items
+      .filter((a) =>
+        (!q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q))
+        && (categoryFilter === "all" || a.category === categoryFilter)
+        && applyStatus(status, "accessory", Number(a.workshop_stock ?? 0))
+      )
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [items, search, status, categoryFilter]);
 
-  const createMut = useMutation({ mutationFn: createAccessory, onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); }, onError: (err: any) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`) });
-  const updateMut = useMutation({ mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); }, onError: (err: any) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`) });
+  const lowCount = useMemo(
+    () => items.reduce((n, a) => n + (isLowStock("accessory", Number(a.workshop_stock ?? 0)) ? 1 : 0), 0),
+    [items],
+  );
 
-  const openCreate = () => { setEditing(null); setDialogOpen(true); };
-  const openEdit = (a: Accessory) => { setEditing(a); setDialogOpen(true); };
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const name = (fd.get("name") as string).trim();
-    const category = fd.get("category") as string;
-    const unit_of_measure = fd.get("unit_of_measure") as string;
-    const price = fd.get("price") ? Number(fd.get("price")) : undefined;
-    const workshop_stock = fd.get("workshop_stock") ? Number(fd.get("workshop_stock")) : undefined;
-    if (!name || !category) { toast.error("Name and category are required"); return; }
-    if (editing) { updateMut.mutate({ id: editing.id, name, category: category as Accessory["category"], unit_of_measure: unit_of_measure as Accessory["unit_of_measure"], price: price ?? null, workshop_stock: workshop_stock ?? 0 }); }
-    else { createMut.mutate({ name, category: category as Accessory["category"], unit_of_measure: (unit_of_measure || "pieces") as Accessory["unit_of_measure"], price, workshop_stock } as any); }
-  };
-
-  const isPending = createMut.isPending || updateMut.isPending;
   if (isLoading) return <TableSkeleton cols={7} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
     <>
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} accessory(ies){search && items.length !== filtered.length && ` of ${items.length}`}
-              {!canEdit && <span className="ml-2 text-xs text-muted-foreground/60">(read only)</span>}
-            </p>
-            {canEdit && <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Add Accessory</Button>}
-          </div>
-          <TableContainer>
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Workshop Stock</TableHead>
-                  <TableHead className="text-right">Shop Stock</TableHead>
-                  <TableHead className="w-[60px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((a) => {
-                  const ws = Number(a.workshop_stock ?? 0);
-                  const low = isLowStock("accessory", ws);
-                  return (
-                    <TableRow key={a.id} className={low ? "bg-red-50/40" : ""}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">{a.name}{low && <LowStockBadge />}</div>
-                      </TableCell>
-                      <TableCell>{ACCESSORY_CATEGORY_LABELS[a.category] ?? a.category}</TableCell>
-                      <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
-                      <TableCell className={cn("text-right tabular-nums", low && "text-red-600 font-semibold")}>{ws}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.shop_stock ?? 0}</TableCell>
-                      <TableCell>{canEdit && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="py-8"><EmptyState icon={Package} message={search ? "No accessories match your search" : "No accessories yet"} /></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setEditing(null); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit Accessory" : "Add Accessory"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2"><Label htmlFor="acc-name">Name *</Label><Input id="acc-name" name="name" defaultValue={editing?.name ?? ""} required /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="acc-category">Category *</Label>
-                <Select name="category" defaultValue={editing?.category ?? "other"}>
-                  <SelectTrigger id="acc-category"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{ACCESSORY_CATEGORY_LABELS[c] ?? c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="acc-unit">Unit of Measure</Label>
-                <Select name="unit_of_measure" defaultValue={editing?.unit_of_measure ?? "pieces"}>
-                  <SelectTrigger id="acc-unit"><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map((u) => <SelectItem key={u} value={u}>{UNIT_OF_MEASURE_LABELS[u] ?? u}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label htmlFor="acc-price">Price</Label><Input id="acc-price" name="price" type="number" step="0.001" min={0} defaultValue={editing?.price ?? ""} /></div>
-              <div className="space-y-2"><Label htmlFor="acc-stock">Workshop Stock</Label><Input id="acc-stock" name="workshop_stock" type="number" step="0.5" min={0} defaultValue={editing?.workshop_stock ?? 0} /></div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); }}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}{editing ? "Save" : "Create"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TabToolbar
+        count={filtered.length}
+        total={items.length}
+        lowCount={lowCount}
+        label="accessories"
+        addLabel="Add accessory"
+        addTo="/store/inventory/accessory/new"
+      >
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {existingCategories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </TabToolbar>
+      <TableShell>
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            <TableHead>Name</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead>Unit</TableHead>
+            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Workshop</TableHead>
+            <TableHead className="text-right">Shop</TableHead>
+            <TableHead className="w-[110px]" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filtered.map((a) => {
+            const ws = Number(a.workshop_stock ?? 0);
+            const wsh = Number(a.shop_stock ?? 0);
+            const low = isLowStock("accessory", ws);
+            const out = ws <= 0;
+            return (
+              <TableRow key={a.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "accessory", id: String(a.id) } })}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">{a.name}{out ? <OutBadge /> : low && <LowStockBadge />}</div>
+                </TableCell>
+                <TableCell className="capitalize text-muted-foreground">{a.category}</TableCell>
+                <TableCell className="text-muted-foreground">{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
+                <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
+                <TableCell className={cn("text-right tabular-nums", low && "text-[var(--status-bad)] font-medium")}>{formatQty("accessory", ws, a.unit_of_measure)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatQty("accessory", wsh, a.unit_of_measure)}</TableCell>
+                <TableCell>
+                  <RowQuickActions
+                    canRestock={canRestock}
+                    canAdjust={canAdjust}
+                    onRestock={() => setRestockTarget(a)}
+                    onAdjust={() => setAdjustTarget(a)}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {filtered.length === 0 && (
+            <TableRow><TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">No accessories match the current filters</TableCell></TableRow>
+          )}
+        </TableBody>
+      </TableShell>
+
+      {restockTarget && (
+        <RestockDialog
+          open
+          onClose={() => setRestockTarget(null)}
+          itemType="accessory"
+          itemId={restockTarget.id}
+          itemName={restockTarget.name}
+          defaultLocation="workshop"
+          currentStock={Number(restockTarget.workshop_stock ?? 0)}
+          unit={restockTarget.unit_of_measure}
+        />
+      )}
+      {adjustTarget && (
+        <AdjustStockDialog
+          open
+          onClose={() => setAdjustTarget(null)}
+          itemType="accessory"
+          itemId={adjustTarget.id}
+          itemName={adjustTarget.name}
+          defaultLocation="workshop"
+          currentStock={Number(adjustTarget.workshop_stock ?? 0)}
+          unit={adjustTarget.unit_of_measure}
+        />
+      )}
     </>
   );
 }

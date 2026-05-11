@@ -1,11 +1,10 @@
 import type { Measurement, MeasurementIssue } from "@repo/database";
 import { MeasurementValue } from "./MeasurementValue";
+import { cn } from "@/lib/utils";
 
-const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fields: { key: keyof Measurement; label: string }[] }[] = [
+const MEASUREMENT_GROUPS: { title: string; fields: { key: keyof Measurement; label: string }[] }[] = [
   {
-    title: "Collar & Shoulder",
-    color: "text-rose-600",
-    cellColor: "bg-rose-50/70",
+    title: "Collar & shoulder",
     fields: [
       { key: "collar_width", label: "Collar W" },
       { key: "collar_height", label: "Collar H" },
@@ -14,8 +13,6 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
   },
   {
     title: "Chest",
-    color: "text-orange-600",
-    cellColor: "bg-orange-50/70",
     fields: [
       { key: "chest_full", label: "Full" },
       { key: "chest_upper", label: "Upper" },
@@ -24,34 +21,28 @@ const MEASUREMENT_GROUPS: { title: string; color: string; cellColor: string; fie
     ],
   },
   {
-    title: "Sleeve & Armhole",
-    color: "text-emerald-600",
-    cellColor: "bg-emerald-50/70",
+    title: "Sleeve & armhole",
     fields: [
       { key: "sleeve_length", label: "Length" },
       { key: "sleeve_width", label: "Width" },
       { key: "elbow", label: "Elbow" },
       { key: "armhole", label: "Armhole" },
-      { key: "armhole_front", label: "AH Front" },
+      { key: "armhole_front", label: "AH front" },
     ],
   },
   {
-    title: "Waist & Length",
-    color: "text-blue-600",
-    cellColor: "bg-blue-50/70",
+    title: "Waist & length",
     fields: [
       { key: "waist_full", label: "Full" },
       { key: "waist_front", label: "Front" },
       { key: "waist_back", label: "Back" },
-      { key: "length_front", label: "L Front" },
-      { key: "length_back", label: "L Back" },
+      { key: "length_front", label: "L front" },
+      { key: "length_back", label: "L back" },
       { key: "bottom", label: "Bottom" },
     ],
   },
   {
-    title: "Pockets & Jabzour",
-    color: "text-purple-600",
-    cellColor: "bg-purple-50/70",
+    title: "Pockets & jabzour",
     fields: [
       { key: "top_pocket_length", label: "Top P L" },
       { key: "top_pocket_width", label: "Top P W" },
@@ -70,37 +61,42 @@ interface MeasurementGridProps {
 
 export function MeasurementGrid({ measurement, corrections }: MeasurementGridProps) {
   if (!measurement) {
-    return <p className="text-sm text-muted-foreground italic">No measurements recorded</p>;
+    return <p className="text-sm italic text-muted-foreground">No measurements recorded.</p>;
   }
 
   const degree = measurement.degree ? Number(measurement.degree) : 0;
 
   return (
     <div className="space-y-3">
-
       {MEASUREMENT_GROUPS.map((group) => {
         const filled = group.fields.filter((f) => measurement[f.key] || corrections?.has(f.key as string));
         if (filled.length === 0) return null;
         return (
           <div key={group.title}>
-            <p className={`text-xs font-bold uppercase tracking-wider mb-1.5 ${group.color}`}>
+            <h4 className="text-sm font-medium text-muted-foreground mb-1.5">
               {group.title}
-            </p>
-            <div className="grid grid-cols-3 gap-1.5">
+            </h4>
+            <div className="grid grid-cols-3 gap-1">
               {filled.map(({ key, label }) => {
                 const correction = corrections?.get(key as string) ?? null;
                 return (
                   <div
                     key={key}
-                    className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${
-                      correction ? "bg-red-50 ring-1 ring-red-300" : group.cellColor
-                    }`}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-2 py-1",
+                      correction
+                        ? "bg-[var(--status-bad-bg)]"
+                        : "bg-muted",
+                    )}
                   >
                     <span className="text-xs text-muted-foreground">{label}</span>
                     <MeasurementValue
                       raw={measurement[key]}
                       degree={degree}
-                      className="text-sm font-bold tabular-nums"
+                      className={cn(
+                        "text-sm tabular-nums",
+                        correction && "text-[var(--status-bad)]",
+                      )}
                       correction={correction}
                     />
                   </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Droplets, Search, CalendarDays, Check, Loader2, Play, Timer, History } from "lucide-react";
 import { useSoakingQueue } from "@/hooks/useWorkshopGarments";
@@ -41,6 +41,12 @@ function SoakTerminal() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -60,10 +66,18 @@ function SoakTerminal() {
     () => filtered.filter((g) => g.soaking_started_at == null),
     [filtered],
   );
-  const inProgress = useMemo(
-    () => filtered.filter((g) => g.soaking_started_at != null),
-    [filtered],
-  );
+  const inProgress = useMemo(() => {
+    const rows = filtered.filter((g) => g.soaking_started_at != null);
+    // Overdue first, then ready, then still soaking. Within each: longest-elapsed first.
+    return [...rows].sort((a, b) => {
+      const ra = readinessRank(a, now);
+      const rb = readinessRank(b, now);
+      if (ra !== rb) return ra - rb;
+      const ea = now - new Date(a.soaking_started_at as any).getTime();
+      const eb = now - new Date(b.soaking_started_at as any).getTime();
+      return eb - ea;
+    });
+  }, [filtered, now]);
 
   const toggle = (id: string) =>
     setSel((prev) => {
@@ -182,6 +196,7 @@ function SoakTerminal() {
             onToggle={toggle}
             onToggleAll={(on) => setSection(inProgress, on)}
             mode="started"
+            now={now}
           />
         </div>
       )}
@@ -189,7 +204,7 @@ function SoakTerminal() {
       <BatchActionBar count={sel.size} onClear={() => setSel(new Set())}>
         <Button
           size="sm"
-          className="bg-blue-600 hover:bg-blue-700"
+          variant="outline"
           onClick={handleStart}
           disabled={selPendingIds.length === 0 || startMut.isPending}
         >
@@ -202,7 +217,6 @@ function SoakTerminal() {
         </Button>
         <Button
           size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700"
           onClick={handleDone}
           disabled={selStartedIds.length === 0 || doneMut.isPending}
         >
@@ -226,6 +240,7 @@ function SoakSection({
   onToggle,
   onToggleAll,
   mode,
+  now,
 }: {
   title: string;
   subtitle: string;
@@ -234,17 +249,28 @@ function SoakSection({
   onToggle: (id: string) => void;
   onToggleAll: (on: boolean) => void;
   mode: "pending" | "started";
+  now?: number;
 }) {
   const allSelected = garments.length > 0 && garments.every((g) => sel.has(g.id));
   const someSelected = garments.some((g) => sel.has(g.id));
+
+  if (garments.length === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
+        <Droplets className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground/70 text-xs ml-auto">Empty</span>
+      </div>
+    );
+  }
 
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">
+          <h2 className="text-base font-medium">
             {title}{" "}
-            <span className="text-sm font-normal text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               ({garments.length})
             </span>
           </h2>
@@ -252,10 +278,7 @@ function SoakSection({
         </div>
       </div>
 
-      {garments.length === 0 ? (
-        <div className="text-sm text-muted-foreground italic px-1">None.</div>
-      ) : (
-        <TableContainer>
+      <TableContainer>
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
@@ -292,11 +315,11 @@ function SoakSection({
                   </TableCell>
                   <TableCell className="px-3 py-3">
                     <div className="flex flex-col gap-1">
-                      <span className="font-mono text-sm font-bold">
+                      <span className="font-mono text-base">
                         {g.garment_id ?? g.id.slice(0, 8)}
                       </span>
                       {g.soaking_hours != null && (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full w-fit">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md w-fit">
                           <Droplets className="w-3 h-3" /> Soak {g.soaking_hours}h
                         </span>
                       )}
@@ -307,7 +330,7 @@ function SoakSection({
                   </TableCell>
                   <TableCell className="px-3 py-3 font-mono">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold">#{g.order_id}</span>
+                      <span className="text-base">#{g.order_id}</span>
                       {g.invoice_number && (
                         <span className="text-xs text-muted-foreground">
                           INV-{g.invoice_number}
@@ -317,7 +340,7 @@ function SoakSection({
                   </TableCell>
                   <TableCell className="px-3 py-3 text-sm">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold">{g.customer_name ?? "—"}</span>
+                      <span className="text-base">{g.customer_name ?? "—"}</span>
                       {g.customer_mobile && (
                         <span className="text-xs font-mono text-muted-foreground">
                           {g.customer_mobile}
@@ -344,7 +367,11 @@ function SoakSection({
                   </TableCell>
                   {mode === "started" && (
                     <TableCell className="px-3 py-3">
-                      <StartedBadge startedAt={g.soaking_started_at} hours={g.soaking_hours} />
+                      <StartedBadge
+                        startedAt={g.soaking_started_at}
+                        hours={g.soaking_hours}
+                        now={now ?? Date.now()}
+                      />
                     </TableCell>
                   )}
                 </TableRow>
@@ -352,41 +379,61 @@ function SoakSection({
             </TableBody>
           </Table>
         </TableContainer>
-      )}
     </section>
   );
+}
+
+// Lower rank = higher priority in the In-progress list.
+// 0 overdue (past target by >0.5h) · 1 ready (at/past target) · 2 still soaking · 3 no target
+function readinessRank(g: WorkshopGarment, now: number): number {
+  if (!g.soaking_started_at) return 3;
+  if (g.soaking_hours == null) return 3;
+  const elapsedHrs = (now - new Date(g.soaking_started_at as any).getTime()) / 3_600_000;
+  if (elapsedHrs >= g.soaking_hours + 0.5) return 0;
+  if (elapsedHrs >= g.soaking_hours) return 1;
+  return 2;
+}
+
+function fmtHrs(h: number) {
+  const a = Math.abs(h);
+  if (a < 1) return `${Math.max(0, Math.round(a * 60))}m`;
+  const hrs = Math.floor(a);
+  const mins = Math.round((a - hrs) * 60);
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
 }
 
 function StartedBadge({
   startedAt,
   hours,
+  now,
 }: {
   startedAt: string | Date | null | undefined;
   hours: number | null | undefined;
+  now: number;
 }) {
   if (!startedAt) return <span className="text-xs text-muted-foreground">—</span>;
   const startedMs = new Date(startedAt).getTime();
-  const elapsedMs = Date.now() - startedMs;
-  const elapsedHrs = elapsedMs / (1000 * 60 * 60);
+  const elapsedHrs = (now - startedMs) / 3_600_000;
   const targetHrs = hours ?? null;
-  const reached = targetHrs != null && elapsedHrs >= targetHrs;
+  const overBy = targetHrs != null ? elapsedHrs - targetHrs : null;
+  const overdue = overBy != null && overBy >= 0.5;
+  const ready = overBy != null && overBy >= 0 && !overdue;
 
-  const fmt = (h: number) =>
-    h < 1 ? `${Math.max(0, Math.round(h * 60))}m` : `${h.toFixed(h < 10 ? 1 : 0)}h`;
+  const color = overdue
+    ? "text-[var(--status-bad)]"
+    : ready
+      ? "text-[var(--status-ok)]"
+      : "text-[var(--status-info)]";
 
   return (
-    <div className="flex flex-col gap-0.5 text-xs">
-      <span
-        className={`inline-flex items-center gap-1 font-semibold ${
-          reached ? "text-emerald-700" : "text-blue-700"
-        }`}
-      >
+    <div className="flex flex-col gap-0.5 text-xs tabular-nums">
+      <span className={`inline-flex items-center gap-1 font-medium ${color}`}>
         <Timer className="w-3 h-3" />
-        {fmt(elapsedHrs)} elapsed
+        {fmtHrs(elapsedHrs)} elapsed
       </span>
       {targetHrs != null && (
-        <span className="text-muted-foreground">
-          {reached ? "ready" : `target ${targetHrs}h`}
+        <span className={overdue ? "font-medium text-[var(--status-bad)]" : "text-muted-foreground"}>
+          {overdue ? `+${fmtHrs(overBy!)} over` : ready ? "ready" : `target ${targetHrs}h`}
         </span>
       )}
     </div>

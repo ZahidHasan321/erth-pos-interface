@@ -3,13 +3,18 @@ import {
   getTransferRequests,
   getTransferBadgeCounts,
   createTransferRequest,
+  createTransferRequestsBatch,
   approveTransferRequest,
   rejectTransferRequest,
   reviseTransferRequest,
   dispatchTransfer,
+  directSendTransfer,
+  directSendTransfersBatch,
   receiveTransfer,
   deleteTransferRequest,
   type TransferFilters,
+  type TransferGroup,
+  type SendGroup,
 } from "@/api/transfers";
 import { getBrand } from "@/api/orders";
 import { useAuth } from "@/context/auth";
@@ -57,6 +62,24 @@ export function useCreateTransfer() {
       notes?: string;
       items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; requested_qty: number }[];
     }) => createTransferRequest({ ...data, requested_by: user!.id, brand: getBrand() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
+    },
+  });
+}
+
+/**
+ * Atomic batch create. Use this for mixed-type carts — either all N transfer
+ * requests succeed or none. Single Postgres txn.
+ */
+export function useCreateTransfersBatch() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (data: { direction: string; notes?: string; groups: TransferGroup[] }) =>
+      createTransferRequestsBatch({ ...data, requested_by: user!.id, brand: getBrand() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
       queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
@@ -120,6 +143,49 @@ export function useDispatchTransfer() {
   return useMutation({
     mutationFn: ({ transferId, items }: { transferId: number; items: { id: number; dispatched_qty: number }[] }) =>
       dispatchTransfer(transferId, user!.id, items),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
+    },
+  });
+}
+
+export function useDirectSendTransfer() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (data: {
+      direction: string;
+      item_type: string;
+      notes?: string;
+      items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; qty: number }[];
+    }) => directSendTransfer({ ...data, sender: user!.id, brand: getBrand() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["fabrics"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["shelf"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["accessories"], refetchType: "active" });
+    },
+  });
+}
+
+/**
+ * Atomic batch direct-send. Stock decrements + N dispatched-state transfer
+ * rows in one Postgres txn. Either all succeed or all roll back (no half-sent
+ * state where stock left but the transfer row didn't land).
+ */
+export function useDirectSendTransfersBatch() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (data: { direction: string; notes?: string; groups: SendGroup[] }) =>
+      directSendTransfersBatch({ ...data, sender: user!.id, brand: getBrand() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
       queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });

@@ -7,21 +7,28 @@ import {
 import { cn } from "@/lib/utils";
 import type { PieceStage, TripHistoryEntry } from "@repo/database";
 
+// Map every piece_stage to one of four semantic buckets — color = meaning,
+// not a per-stage rainbow. Stage NAME still differentiates (the label text);
+// color only differentiates between "queued / in progress / needs action / done".
 const STAGE_COLOR: Record<string, string> = {
-  waiting_for_acceptance: "bg-zinc-100 text-zinc-700",
-  waiting_cut: "bg-zinc-100 text-zinc-700",
-  soaking: "bg-sky-100 text-sky-800",
-  cutting: "bg-amber-100 text-amber-800",
-  post_cutting: "bg-orange-100 text-orange-800",
-  sewing: "bg-purple-100 text-purple-800",
-  finishing: "bg-emerald-100 text-emerald-800",
-  ironing: "bg-rose-100 text-rose-800",
-  quality_check: "bg-indigo-100 text-indigo-800",
-  ready_for_dispatch: "bg-green-100 text-green-800",
-  awaiting_trial: "bg-blue-100 text-blue-800",
-  ready_for_pickup: "bg-green-100 text-green-800",
-  brova_trialed: "bg-violet-100 text-violet-800",
-  completed: "bg-slate-100 text-slate-700",
+  // queued / parked / captured-state — neutral
+  waiting_for_acceptance: "bg-muted text-foreground",
+  waiting_cut:            "bg-muted text-foreground",
+  brova_trialed:          "bg-muted text-foreground",
+  // in production — info
+  soaking:      "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  cutting:      "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  post_cutting: "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  sewing:       "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  finishing:    "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  ironing:      "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+  // needs decision / customer action — warn
+  quality_check:  "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
+  awaiting_trial: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
+  // done / ready — ok
+  ready_for_dispatch: "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+  ready_for_pickup:   "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+  completed:          "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
 };
 
 interface StageBadgeProps {
@@ -49,7 +56,7 @@ export function StageBadge({
       <Badge
         variant="outline"
         className={cn(
-          "border-0 font-semibold text-xs uppercase tracking-wide bg-sky-100 text-sky-800",
+          "border-transparent font-medium text-xs bg-[var(--status-info-bg)] text-[var(--status-info)]",
           className,
         )}
       >
@@ -62,7 +69,7 @@ export function StageBadge({
       <Badge
         variant="outline"
         className={cn(
-          "border-0 font-semibold text-xs uppercase tracking-wide bg-teal-100 text-teal-800",
+          "border-transparent font-medium text-xs bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
           className,
         )}
       >
@@ -79,7 +86,7 @@ export function StageBadge({
           <Badge
             variant="outline"
             className={cn(
-              "border-0 font-semibold text-xs uppercase tracking-wide bg-violet-100 text-violet-800",
+              "border-transparent font-medium text-xs bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
               className,
             )}
           >
@@ -91,7 +98,7 @@ export function StageBadge({
         <Badge
           variant="outline"
           className={cn(
-            "border-0 font-semibold text-xs uppercase tracking-wide bg-amber-100 text-amber-800",
+            "border-transparent font-medium text-xs bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
             className,
           )}
         >
@@ -104,7 +111,7 @@ export function StageBadge({
         <Badge
           variant="outline"
           className={cn(
-            "border-0 font-semibold text-xs uppercase tracking-wide bg-green-100 text-green-800",
+            "border-transparent font-medium text-xs bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
             className,
           )}
         >
@@ -121,7 +128,7 @@ export function StageBadge({
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-xs uppercase tracking-wide",
+        "border-transparent font-medium text-xs",
         color,
         className,
       )}
@@ -141,7 +148,7 @@ export function FeedbackStatusBadge({
   if (!status) return null;
   const color =
     FEEDBACK_STATUS_COLORS[status as keyof typeof FEEDBACK_STATUS_COLORS] ??
-    "bg-zinc-200 text-zinc-800";
+    "bg-muted text-foreground";
   const label =
     FEEDBACK_STATUS_LABELS[status as keyof typeof FEEDBACK_STATUS_LABELS] ??
     status;
@@ -149,7 +156,7 @@ export function FeedbackStatusBadge({
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-xs uppercase tracking-wide",
+        "border-transparent font-medium text-xs",
         color,
         className,
       )}
@@ -171,7 +178,7 @@ export function AlterationBadge({
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-orange-500 text-white font-semibold text-xs uppercase tracking-wide"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
     >
       Alt {trip - 1}
     </Badge>
@@ -193,7 +200,7 @@ export function QcFixBadge({
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-red-600 text-white font-bold text-xs uppercase tracking-wide"
+      className="border-transparent bg-[var(--status-bad-bg)] text-[var(--status-bad)] font-medium text-xs"
     >
       QC Fix
     </Badge>
@@ -207,16 +214,18 @@ export function TrialBadge({
   tripNumber: number | null | undefined;
 }) {
   const trip = tripNumber ?? 1;
+  // Trial 1 = neutral; subsequent trials escalate (warn → bad) because each
+  // re-trial signals a customer fitting issue.
   return (
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-semibold text-xs uppercase tracking-wide",
+        "border-transparent font-medium text-xs",
         trip === 1
-          ? "bg-purple-100 text-purple-800"
+          ? "bg-muted text-foreground"
           : trip === 2
-            ? "bg-amber-100 text-amber-800"
-            : "bg-red-100 text-red-800",
+            ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
+            : "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
       )}
     >
       Trial {trip}
@@ -235,9 +244,9 @@ export function AlterationInBadge({
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-orange-600 text-white font-bold text-xs uppercase tracking-wide ring-2 ring-orange-300 ring-offset-1"
+      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
     >
-      Alt {trip - 1} (In)
+      Alt {trip - 1} · in
     </Badge>
   );
 }
@@ -246,26 +255,28 @@ export function ExpressBadge() {
   return (
     <Badge
       variant="outline"
-      className="border-0 bg-red-600 text-white font-bold text-xs uppercase tracking-wide"
+      className="border-transparent bg-[var(--status-bad-bg)] text-[var(--status-bad)] font-medium text-xs"
     >
-      ⚡ Express
+      Express
     </Badge>
   );
 }
 
 export function BrandBadge({ brand }: { brand: string | null | undefined }) {
   if (!brand) return null;
+  // Dark, saturated brand tones — identity stays, but the value is the
+  // dark shade (premium feel) not the bright -600 (sticker feel).
   const colorMap: Record<string, string> = {
-    ERTH: "bg-emerald-600 text-white",
-    SAKKBA: "bg-blue-600 text-white",
-    QASS: "bg-violet-600 text-white",
+    ERTH:   "bg-emerald-900 text-emerald-50",
+    SAKKBA: "bg-blue-900 text-blue-50",
+    QASS:   "bg-zinc-800 text-zinc-50",
   };
   return (
     <Badge
       variant="outline"
       className={cn(
-        "border-0 font-bold text-xs uppercase tracking-wide",
-        colorMap[brand] ?? "bg-zinc-600 text-white",
+        "border-transparent font-medium text-xs px-1.5 py-0",
+        colorMap[brand] ?? "bg-zinc-800 text-zinc-50",
       )}
     >
       {brand}

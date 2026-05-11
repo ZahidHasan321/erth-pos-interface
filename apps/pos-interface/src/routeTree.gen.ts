@@ -26,14 +26,11 @@ import { Route as MainCashierIndexRouteImport } from './routes/$main/cashier/ind
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
 import { Route as authSakkbaLoginRouteImport } from './routes/(auth)/sakkba/login'
 import { Route as authErthLoginRouteImport } from './routes/(auth)/erth/login'
-import { Route as MainStoreTransferHistoryRouteImport } from './routes/$main/store/transfer-history'
-import { Route as MainStoreStockReportRouteImport } from './routes/$main/store/stock-report'
-import { Route as MainStoreRequestDeliveryRouteImport } from './routes/$main/store/request-delivery'
-import { Route as MainStoreReceivingDeliveriesRouteImport } from './routes/$main/store/receiving-deliveries'
+import { Route as MainStoreTransfersRouteImport } from './routes/$main/store/transfers'
+import { Route as MainStoreSuppliersRouteImport } from './routes/$main/store/suppliers'
+import { Route as MainStoreReportsRouteImport } from './routes/$main/store/reports'
 import { Route as MainStoreInventoryRouteImport } from './routes/$main/store/inventory'
 import { Route as MainStoreEndOfDayReportRouteImport } from './routes/$main/store/end-of-day-report'
-import { Route as MainStoreApproveRequestsRouteImport } from './routes/$main/store/approve-requests'
-import { Route as MainStoreActiveRequestsRouteImport } from './routes/$main/store/active-requests'
 import { Route as MainOrdersOrdersAtShowroomRouteImport } from './routes/$main/orders/orders-at-showroom'
 import { Route as MainOrdersOrderHistoryRouteImport } from './routes/$main/orders/order-history'
 import { Route as MainOrdersNewWorkOrderRouteImport } from './routes/$main/orders/new-work-order'
@@ -42,6 +39,8 @@ import { Route as MainOrdersNewAlterationOrderRouteImport } from './routes/$main
 import { Route as MainOrdersCustomerProfilesOrdersRouteImport } from './routes/$main/orders/customer-profiles-orders'
 import { Route as MainCustomersCustomerIdRouteImport } from './routes/$main/customers/$customerId'
 import { Route as MainCashierOrderIdRouteImport } from './routes/$main/cashier/$orderId'
+import { Route as MainStoreInventoryIndexRouteImport } from './routes/$main/store/inventory.index'
+import { Route as MainStoreTransfersNewRouteImport } from './routes/$main/store/transfers_.new'
 import { Route as MainOrdersOrderManagementUnlinkRouteImport } from './routes/$main/orders/order-management/unlink'
 import { Route as MainOrdersOrderManagementReceivingBrovaFinalRouteImport } from './routes/$main/orders/order-management/receiving-brova-final'
 import { Route as MainOrdersOrderManagementLinkRouteImport } from './routes/$main/orders/order-management/link'
@@ -51,6 +50,7 @@ import { Route as MainOrdersOrderManagementChangeOptionsRouteImport } from './ro
 import { Route as MainOrdersOrderManagementCancelOrderRouteImport } from './routes/$main/orders/order-management/cancel-order'
 import { Route as MainOrdersOrderManagementBrovaFeedbackRouteImport } from './routes/$main/orders/order-management/brova-feedback'
 import { Route as MainOrdersOrderManagementAlterationsRouteImport } from './routes/$main/orders/order-management/alterations'
+import { Route as MainStoreInventoryItemTypeItemIdRouteImport } from './routes/$main/store/inventory.$itemType.$itemId'
 import { Route as MainOrdersOrderManagementFeedbackOrderIdRouteImport } from './routes/$main/orders/order-management/feedback.$orderId'
 
 const HomeRoute = HomeRouteImport.update({
@@ -138,29 +138,21 @@ const authErthLoginRoute = authErthLoginRouteImport.update({
   path: '/erth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MainStoreTransferHistoryRoute =
-  MainStoreTransferHistoryRouteImport.update({
-    id: '/transfer-history',
-    path: '/transfer-history',
-    getParentRoute: () => MainStoreRouteRoute,
-  } as any)
-const MainStoreStockReportRoute = MainStoreStockReportRouteImport.update({
-  id: '/stock-report',
-  path: '/stock-report',
+const MainStoreTransfersRoute = MainStoreTransfersRouteImport.update({
+  id: '/transfers',
+  path: '/transfers',
   getParentRoute: () => MainStoreRouteRoute,
 } as any)
-const MainStoreRequestDeliveryRoute =
-  MainStoreRequestDeliveryRouteImport.update({
-    id: '/request-delivery',
-    path: '/request-delivery',
-    getParentRoute: () => MainStoreRouteRoute,
-  } as any)
-const MainStoreReceivingDeliveriesRoute =
-  MainStoreReceivingDeliveriesRouteImport.update({
-    id: '/receiving-deliveries',
-    path: '/receiving-deliveries',
-    getParentRoute: () => MainStoreRouteRoute,
-  } as any)
+const MainStoreSuppliersRoute = MainStoreSuppliersRouteImport.update({
+  id: '/suppliers',
+  path: '/suppliers',
+  getParentRoute: () => MainStoreRouteRoute,
+} as any)
+const MainStoreReportsRoute = MainStoreReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => MainStoreRouteRoute,
+} as any)
 const MainStoreInventoryRoute = MainStoreInventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
@@ -169,17 +161,6 @@ const MainStoreInventoryRoute = MainStoreInventoryRouteImport.update({
 const MainStoreEndOfDayReportRoute = MainStoreEndOfDayReportRouteImport.update({
   id: '/end-of-day-report',
   path: '/end-of-day-report',
-  getParentRoute: () => MainStoreRouteRoute,
-} as any)
-const MainStoreApproveRequestsRoute =
-  MainStoreApproveRequestsRouteImport.update({
-    id: '/approve-requests',
-    path: '/approve-requests',
-    getParentRoute: () => MainStoreRouteRoute,
-  } as any)
-const MainStoreActiveRequestsRoute = MainStoreActiveRequestsRouteImport.update({
-  id: '/active-requests',
-  path: '/active-requests',
   getParentRoute: () => MainStoreRouteRoute,
 } as any)
 const MainOrdersOrdersAtShowroomRoute =
@@ -224,6 +205,16 @@ const MainCashierOrderIdRoute = MainCashierOrderIdRouteImport.update({
   id: '/cashier/$orderId',
   path: '/cashier/$orderId',
   getParentRoute: () => MainRouteRoute,
+} as any)
+const MainStoreInventoryIndexRoute = MainStoreInventoryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MainStoreInventoryRoute,
+} as any)
+const MainStoreTransfersNewRoute = MainStoreTransfersNewRouteImport.update({
+  id: '/transfers_/new',
+  path: '/transfers/new',
+  getParentRoute: () => MainStoreRouteRoute,
 } as any)
 const MainOrdersOrderManagementUnlinkRoute =
   MainOrdersOrderManagementUnlinkRouteImport.update({
@@ -279,6 +270,12 @@ const MainOrdersOrderManagementAlterationsRoute =
     path: '/orders/order-management/alterations',
     getParentRoute: () => MainRouteRoute,
   } as any)
+const MainStoreInventoryItemTypeItemIdRoute =
+  MainStoreInventoryItemTypeItemIdRouteImport.update({
+    id: '/$itemType/$itemId',
+    path: '/$itemType/$itemId',
+    getParentRoute: () => MainStoreInventoryRoute,
+  } as any)
 const MainOrdersOrderManagementFeedbackOrderIdRoute =
   MainOrdersOrderManagementFeedbackOrderIdRouteImport.update({
     id: '/orders/order-management/feedback/$orderId',
@@ -307,14 +304,11 @@ export interface FileRoutesByFullPath {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
-  '/$main/store/active-requests': typeof MainStoreActiveRequestsRoute
-  '/$main/store/approve-requests': typeof MainStoreApproveRequestsRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
-  '/$main/store/inventory': typeof MainStoreInventoryRoute
-  '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
-  '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
-  '/$main/store/stock-report': typeof MainStoreStockReportRoute
-  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
+  '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/suppliers': typeof MainStoreSuppliersRoute
+  '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
@@ -329,7 +323,10 @@ export interface FileRoutesByFullPath {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/transfers/new': typeof MainStoreTransfersNewRoute
+  '/$main/store/inventory/': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
+  '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -350,14 +347,10 @@ export interface FileRoutesByTo {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
-  '/$main/store/active-requests': typeof MainStoreActiveRequestsRoute
-  '/$main/store/approve-requests': typeof MainStoreApproveRequestsRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
-  '/$main/store/inventory': typeof MainStoreInventoryRoute
-  '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
-  '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
-  '/$main/store/stock-report': typeof MainStoreStockReportRoute
-  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/suppliers': typeof MainStoreSuppliersRoute
+  '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments': typeof MainAppointmentsIndexRoute
@@ -372,7 +365,10 @@ export interface FileRoutesByTo {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/transfers/new': typeof MainStoreTransfersNewRoute
+  '/$main/store/inventory': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
+  '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -396,14 +392,11 @@ export interface FileRoutesById {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
-  '/$main/store/active-requests': typeof MainStoreActiveRequestsRoute
-  '/$main/store/approve-requests': typeof MainStoreApproveRequestsRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
-  '/$main/store/inventory': typeof MainStoreInventoryRoute
-  '/$main/store/receiving-deliveries': typeof MainStoreReceivingDeliveriesRoute
-  '/$main/store/request-delivery': typeof MainStoreRequestDeliveryRoute
-  '/$main/store/stock-report': typeof MainStoreStockReportRoute
-  '/$main/store/transfer-history': typeof MainStoreTransferHistoryRoute
+  '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
+  '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/suppliers': typeof MainStoreSuppliersRoute
+  '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/(auth)/erth/login': typeof authErthLoginRoute
   '/(auth)/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
@@ -418,7 +411,10 @@ export interface FileRoutesById {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/transfers_/new': typeof MainStoreTransfersNewRoute
+  '/$main/store/inventory/': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
+  '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -443,14 +439,11 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
-    | '/$main/store/active-requests'
-    | '/$main/store/approve-requests'
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
-    | '/$main/store/receiving-deliveries'
-    | '/$main/store/request-delivery'
-    | '/$main/store/stock-report'
-    | '/$main/store/transfer-history'
+    | '/$main/store/reports'
+    | '/$main/store/suppliers'
+    | '/$main/store/transfers'
     | '/erth/login'
     | '/sakkba/login'
     | '/$main/appointments/'
@@ -465,7 +458,10 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/transfers/new'
+    | '/$main/store/inventory/'
     | '/$main/orders/order-management/feedback/$orderId'
+    | '/$main/store/inventory/$itemType/$itemId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -486,14 +482,10 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
-    | '/$main/store/active-requests'
-    | '/$main/store/approve-requests'
     | '/$main/store/end-of-day-report'
-    | '/$main/store/inventory'
-    | '/$main/store/receiving-deliveries'
-    | '/$main/store/request-delivery'
-    | '/$main/store/stock-report'
-    | '/$main/store/transfer-history'
+    | '/$main/store/reports'
+    | '/$main/store/suppliers'
+    | '/$main/store/transfers'
     | '/erth/login'
     | '/sakkba/login'
     | '/$main/appointments'
@@ -508,7 +500,10 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/transfers/new'
+    | '/$main/store/inventory'
     | '/$main/orders/order-management/feedback/$orderId'
+    | '/$main/store/inventory/$itemType/$itemId'
   id:
     | '__root__'
     | '/'
@@ -531,14 +526,11 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
-    | '/$main/store/active-requests'
-    | '/$main/store/approve-requests'
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
-    | '/$main/store/receiving-deliveries'
-    | '/$main/store/request-delivery'
-    | '/$main/store/stock-report'
-    | '/$main/store/transfer-history'
+    | '/$main/store/reports'
+    | '/$main/store/suppliers'
+    | '/$main/store/transfers'
     | '/(auth)/erth/login'
     | '/(auth)/sakkba/login'
     | '/$main/appointments/'
@@ -553,7 +545,10 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/transfers_/new'
+    | '/$main/store/inventory/'
     | '/$main/orders/order-management/feedback/$orderId'
+    | '/$main/store/inventory/$itemType/$itemId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -688,32 +683,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authErthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$main/store/transfer-history': {
-      id: '/$main/store/transfer-history'
-      path: '/transfer-history'
-      fullPath: '/$main/store/transfer-history'
-      preLoaderRoute: typeof MainStoreTransferHistoryRouteImport
+    '/$main/store/transfers': {
+      id: '/$main/store/transfers'
+      path: '/transfers'
+      fullPath: '/$main/store/transfers'
+      preLoaderRoute: typeof MainStoreTransfersRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
-    '/$main/store/stock-report': {
-      id: '/$main/store/stock-report'
-      path: '/stock-report'
-      fullPath: '/$main/store/stock-report'
-      preLoaderRoute: typeof MainStoreStockReportRouteImport
+    '/$main/store/suppliers': {
+      id: '/$main/store/suppliers'
+      path: '/suppliers'
+      fullPath: '/$main/store/suppliers'
+      preLoaderRoute: typeof MainStoreSuppliersRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
-    '/$main/store/request-delivery': {
-      id: '/$main/store/request-delivery'
-      path: '/request-delivery'
-      fullPath: '/$main/store/request-delivery'
-      preLoaderRoute: typeof MainStoreRequestDeliveryRouteImport
-      parentRoute: typeof MainStoreRouteRoute
-    }
-    '/$main/store/receiving-deliveries': {
-      id: '/$main/store/receiving-deliveries'
-      path: '/receiving-deliveries'
-      fullPath: '/$main/store/receiving-deliveries'
-      preLoaderRoute: typeof MainStoreReceivingDeliveriesRouteImport
+    '/$main/store/reports': {
+      id: '/$main/store/reports'
+      path: '/reports'
+      fullPath: '/$main/store/reports'
+      preLoaderRoute: typeof MainStoreReportsRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/store/inventory': {
@@ -728,20 +716,6 @@ declare module '@tanstack/react-router' {
       path: '/end-of-day-report'
       fullPath: '/$main/store/end-of-day-report'
       preLoaderRoute: typeof MainStoreEndOfDayReportRouteImport
-      parentRoute: typeof MainStoreRouteRoute
-    }
-    '/$main/store/approve-requests': {
-      id: '/$main/store/approve-requests'
-      path: '/approve-requests'
-      fullPath: '/$main/store/approve-requests'
-      preLoaderRoute: typeof MainStoreApproveRequestsRouteImport
-      parentRoute: typeof MainStoreRouteRoute
-    }
-    '/$main/store/active-requests': {
-      id: '/$main/store/active-requests'
-      path: '/active-requests'
-      fullPath: '/$main/store/active-requests'
-      preLoaderRoute: typeof MainStoreActiveRequestsRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/orders/orders-at-showroom': {
@@ -799,6 +773,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$main/cashier/$orderId'
       preLoaderRoute: typeof MainCashierOrderIdRouteImport
       parentRoute: typeof MainRouteRoute
+    }
+    '/$main/store/inventory/': {
+      id: '/$main/store/inventory/'
+      path: '/'
+      fullPath: '/$main/store/inventory/'
+      preLoaderRoute: typeof MainStoreInventoryIndexRouteImport
+      parentRoute: typeof MainStoreInventoryRoute
+    }
+    '/$main/store/transfers_/new': {
+      id: '/$main/store/transfers_/new'
+      path: '/transfers/new'
+      fullPath: '/$main/store/transfers/new'
+      preLoaderRoute: typeof MainStoreTransfersNewRouteImport
+      parentRoute: typeof MainStoreRouteRoute
     }
     '/$main/orders/order-management/unlink': {
       id: '/$main/orders/order-management/unlink'
@@ -863,6 +851,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersOrderManagementAlterationsRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/store/inventory/$itemType/$itemId': {
+      id: '/$main/store/inventory/$itemType/$itemId'
+      path: '/$itemType/$itemId'
+      fullPath: '/$main/store/inventory/$itemType/$itemId'
+      preLoaderRoute: typeof MainStoreInventoryItemTypeItemIdRouteImport
+      parentRoute: typeof MainStoreInventoryRoute
+    }
     '/$main/orders/order-management/feedback/$orderId': {
       id: '/$main/orders/order-management/feedback/$orderId'
       path: '/orders/order-management/feedback/$orderId'
@@ -873,26 +868,35 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface MainStoreInventoryRouteChildren {
+  MainStoreInventoryIndexRoute: typeof MainStoreInventoryIndexRoute
+  MainStoreInventoryItemTypeItemIdRoute: typeof MainStoreInventoryItemTypeItemIdRoute
+}
+
+const MainStoreInventoryRouteChildren: MainStoreInventoryRouteChildren = {
+  MainStoreInventoryIndexRoute: MainStoreInventoryIndexRoute,
+  MainStoreInventoryItemTypeItemIdRoute: MainStoreInventoryItemTypeItemIdRoute,
+}
+
+const MainStoreInventoryRouteWithChildren =
+  MainStoreInventoryRoute._addFileChildren(MainStoreInventoryRouteChildren)
+
 interface MainStoreRouteRouteChildren {
-  MainStoreActiveRequestsRoute: typeof MainStoreActiveRequestsRoute
-  MainStoreApproveRequestsRoute: typeof MainStoreApproveRequestsRoute
   MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
-  MainStoreInventoryRoute: typeof MainStoreInventoryRoute
-  MainStoreReceivingDeliveriesRoute: typeof MainStoreReceivingDeliveriesRoute
-  MainStoreRequestDeliveryRoute: typeof MainStoreRequestDeliveryRoute
-  MainStoreStockReportRoute: typeof MainStoreStockReportRoute
-  MainStoreTransferHistoryRoute: typeof MainStoreTransferHistoryRoute
+  MainStoreInventoryRoute: typeof MainStoreInventoryRouteWithChildren
+  MainStoreReportsRoute: typeof MainStoreReportsRoute
+  MainStoreSuppliersRoute: typeof MainStoreSuppliersRoute
+  MainStoreTransfersRoute: typeof MainStoreTransfersRoute
+  MainStoreTransfersNewRoute: typeof MainStoreTransfersNewRoute
 }
 
 const MainStoreRouteRouteChildren: MainStoreRouteRouteChildren = {
-  MainStoreActiveRequestsRoute: MainStoreActiveRequestsRoute,
-  MainStoreApproveRequestsRoute: MainStoreApproveRequestsRoute,
   MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
-  MainStoreInventoryRoute: MainStoreInventoryRoute,
-  MainStoreReceivingDeliveriesRoute: MainStoreReceivingDeliveriesRoute,
-  MainStoreRequestDeliveryRoute: MainStoreRequestDeliveryRoute,
-  MainStoreStockReportRoute: MainStoreStockReportRoute,
-  MainStoreTransferHistoryRoute: MainStoreTransferHistoryRoute,
+  MainStoreInventoryRoute: MainStoreInventoryRouteWithChildren,
+  MainStoreReportsRoute: MainStoreReportsRoute,
+  MainStoreSuppliersRoute: MainStoreSuppliersRoute,
+  MainStoreTransfersRoute: MainStoreTransfersRoute,
+  MainStoreTransfersNewRoute: MainStoreTransfersNewRoute,
 }
 
 const MainStoreRouteRouteWithChildren = MainStoreRouteRoute._addFileChildren(

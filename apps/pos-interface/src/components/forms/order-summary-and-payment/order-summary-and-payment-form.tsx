@@ -128,7 +128,7 @@ export function OrderSummaryAndPaymentForm({
   onPrintCard2,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
-  const { getPrice, styles } = usePricing();
+  const { getPrice, styles, stylePricingRules } = usePricing();
 
   // Watch form values
   const [
@@ -196,10 +196,10 @@ export function OrderSummaryAndPaymentForm({
   const liveStyleCharge = React.useMemo(() => {
     if (!styles || styles.length === 0 || fabricSelections.length === 0) return 0;
     return fabricSelections.reduce(
-      (acc, g) => acc + calculateGarmentStylePrice(g, styles),
+      (acc, g) => acc + calculateGarmentStylePrice(g, styles, stylePricingRules),
       0,
     );
-  }, [fabricSelections, styles]);
+  }, [fabricSelections, styles, stylePricingRules]);
 
   React.useEffect(() => {
     if (liveStyleCharge !== Number(form.getValues("style_charge") || 0)) {

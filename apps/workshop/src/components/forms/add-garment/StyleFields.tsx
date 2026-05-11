@@ -24,7 +24,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export function ImageOptionGrid({
-  options, value, onChange, allowClear = false, cols = "auto", disabled = false,
+  options, value, onChange, allowClear = false, cols = "auto", disabled = false, failed = false,
 }: {
   options: BaseOption[];
   value: string | null;
@@ -32,6 +32,8 @@ export function ImageOptionGrid({
   allowClear?: boolean;
   cols?: "auto" | "tight";
   disabled?: boolean;
+  /** When true, the selected option renders in red — QC fail indicator. */
+  failed?: boolean;
 }) {
   return (
     <div
@@ -44,6 +46,7 @@ export function ImageOptionGrid({
     >
       {options.map((o) => {
         const selected = value === o.value;
+        const showFail = selected && failed;
         return (
           <button
             key={o.value}
@@ -52,15 +55,24 @@ export function ImageOptionGrid({
             onClick={() => onChange(allowClear && selected ? null : o.value)}
             className={cn(
               "group relative flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 bg-background transition-all",
-              !disabled && "hover:border-primary/60 hover:shadow-sm",
-              selected
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border",
+              !disabled && !showFail && "hover:border-primary/60 hover:shadow-sm",
+              showFail
+                ? "border-red-500 bg-red-50 shadow-sm"
+                : selected
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border",
               disabled && "opacity-50 cursor-not-allowed",
             )}
           >
             {selected && (
-              <span className="absolute top-1 right-1 rounded-full bg-primary text-primary-foreground p-0.5 shadow">
+              <span
+                className={cn(
+                  "absolute top-1 right-1 rounded-full p-0.5 shadow",
+                  showFail
+                    ? "bg-red-500 text-white"
+                    : "bg-primary text-primary-foreground",
+                )}
+              >
                 <Check className="w-3 h-3" />
               </span>
             )}
@@ -91,17 +103,25 @@ export function ImageOptionGrid({
 }
 
 export function ThicknessPicker({
-  value, onChange, disabled = false,
-}: { value: string | null; onChange: (v: string) => void; disabled?: boolean }) {
+  value, onChange, disabled = false, failed = false,
+}: {
+  value: string | null;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  /** When true, the selected option renders in red — QC fail indicator. */
+  failed?: boolean;
+}) {
   return (
     <div
       className={cn(
         "inline-flex rounded-lg border bg-background p-0.5",
         disabled && "opacity-50",
+        failed && "border-red-400",
       )}
     >
       {thicknessOptions.map((t) => {
         const selected = value === t.value;
+        const showFail = selected && failed;
         return (
           <button
             key={t.value}
@@ -111,9 +131,11 @@ export function ThicknessPicker({
             title={t.full}
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-bold transition-colors min-w-[36px]",
-              selected
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground",
+              showFail
+                ? "bg-red-500 text-white shadow-sm"
+                : selected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground",
               !disabled && !selected && "hover:text-foreground hover:bg-muted",
               disabled && "cursor-not-allowed",
             )}
@@ -127,13 +149,17 @@ export function ThicknessPicker({
 }
 
 export function IconToggle({
-  checked, onChange, icon, label, disabled = false,
+  checked, onChange, icon, label, disabled = false, failed = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   icon: string;
   label: string;
   disabled?: boolean;
+  /** When true, the toggle renders in red — QC fail indicator. Applies in
+   *  both checked and unchecked states because boolean OFF is a real answer
+   *  the QC operator might need to flag. */
+  failed?: boolean;
 }) {
   return (
     <button
@@ -142,13 +168,22 @@ export function IconToggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 bg-background transition-all min-w-[72px]",
-        !disabled && "hover:border-primary/60",
-        checked ? "border-primary bg-primary/5" : "border-border",
+        !disabled && !failed && "hover:border-primary/60",
+        failed
+          ? "border-red-500 bg-red-50"
+          : checked
+            ? "border-primary bg-primary/5"
+            : "border-border",
         disabled && "opacity-50 cursor-not-allowed",
       )}
     >
       {checked && (
-        <span className="absolute top-1 right-1 rounded-full bg-primary text-primary-foreground p-0.5">
+        <span
+          className={cn(
+            "absolute top-1 right-1 rounded-full p-0.5",
+            failed ? "bg-red-500 text-white" : "bg-primary text-primary-foreground",
+          )}
+        >
           <Check className="w-3 h-3" />
         </span>
       )}
@@ -156,7 +191,7 @@ export function IconToggle({
       <span
         className={cn(
           "text-[10px] font-medium",
-          checked ? "text-foreground" : "text-muted-foreground",
+          failed ? "text-red-700" : checked ? "text-foreground" : "text-muted-foreground",
         )}
       >
         {label}

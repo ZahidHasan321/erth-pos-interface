@@ -13,10 +13,19 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@repo/ui/tooltip";
-import type { AlterationFilter } from "@/lib/alteration-filter";
-import { ALTERATION_REASON_CELL_CLASS } from "@/lib/alteration-filter";
-import { getMeasurementCorrections } from "@/lib/qc-corrections";
-import { hasBasmaMeasurements, QC_MEASUREMENTS } from "@/lib/qc-spec";
+import type {
+  AlterationFilter,
+  AlterationStyleSection,
+  OptionChange,
+} from "@/lib/alteration-filter";
+import {
+  ALTERATION_REASON_CELL_CLASS,
+  OPTION_CHANGE_KIND_CLASS,
+  OPTION_CHANGE_KIND_SYMBOL,
+} from "@/lib/alteration-filter";
+import { getMeasurementCorrections, QC_OPTION_TO_SECTION } from "@/lib/qc-corrections";
+import { hasBasmaMeasurements, QC_MEASUREMENTS, QC_OPTIONS } from "@/lib/qc-spec";
+import { cn } from "@/lib/utils";
 
 const QC_LABEL_BY_KEY: Record<string, string> = Object.fromEntries(
   QC_MEASUREMENTS.map((m) => [m.key, m.label]),
@@ -117,8 +126,10 @@ function MeasureLayout({
   imageFallback,
   height,
   heightLabel,
+  heightTintClass,
   width,
   widthLabel,
+  widthTintClass,
   extras,
   accessories,
 }: {
@@ -127,12 +138,21 @@ function MeasureLayout({
   imageFallback: string;
   height: React.ReactNode;
   heightLabel?: string;
+  /** Tailwind class string applied to the height value box. Empty = default white. */
+  heightTintClass?: string;
   width?: React.ReactNode;
   widthLabel?: string;
+  widthTintClass?: string;
   /** Optional secondary measurements stacked on the right side of the section. */
   extras?: React.ReactNode;
   accessories?: React.ReactNode;
 }) {
+  const heightBase =
+    "inline-flex h-14 w-8 items-center justify-center rounded-md border text-base font-semibold";
+  const widthBase =
+    "flex items-center justify-center rounded-md border px-1 py-1 text-center text-sm font-semibold";
+  const heightDefault = "border-zinc-200 bg-white text-zinc-700";
+  const widthDefault = "border-zinc-200 bg-white text-zinc-700";
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
@@ -144,7 +164,7 @@ function MeasureLayout({
             </div>
             <HoverValueBox
               label={heightLabel}
-              className="inline-flex h-14 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white text-base font-semibold text-zinc-700"
+              className={cn(heightBase, heightTintClass || heightDefault)}
             >
               <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
             </HoverValueBox>
@@ -153,7 +173,7 @@ function MeasureLayout({
             <div className="w-[7.5rem]">
               <HoverValueBox
                 label={widthLabel}
-                className="flex items-center justify-center rounded-md border border-zinc-200 bg-white px-1 py-1 text-center text-sm font-semibold text-zinc-700"
+                className={cn(widthBase, widthTintClass || widthDefault)}
               >
                 {width ?? "—"}
               </HoverValueBox>
@@ -225,10 +245,17 @@ function AccessoryPill({
 function StyleSection({
   title,
   thickness,
+  defects,
+  changes,
   children,
 }: {
   title: string;
   thickness?: string | null;
+  /** QC-fail option defects in this section — rendered as red "QC saw" badges. */
+  defects?: Array<{ key: string; label: string; actualText: string }>;
+  /** Customer-feedback option changes in this section — sewer's to-do list:
+   *  add/remove/change a style. Green=add, red=remove, amber=change. */
+  changes?: OptionChange[];
   children: React.ReactNode;
 }) {
   return (
@@ -237,9 +264,79 @@ function StyleSection({
         <h4 className="text-[11px] font-bold tracking-wide text-zinc-700 uppercase">{title}</h4>
         {thickness !== undefined && <ThicknessBadge value={thickness} />}
       </div>
+      {changes && changes.length > 0 && (
+        <div className="mb-2 rounded-md border border-zinc-300 bg-white p-1.5">
+          <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+            Changes this trip
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {changes.map((c, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                  OPTION_CHANGE_KIND_CLASS[c.kind],
+                )}
+              >
+                <span className="font-black">{OPTION_CHANGE_KIND_SYMBOL[c.kind]}</span>
+                {c.kind === "change"
+                  ? <>{c.label}: {c.fromText} → {c.toText}</>
+                  : c.kind === "hashwa"
+                    ? <>{c.label}: {c.toText}</>
+                    : <>{c.kind === "add" ? "Add" : "Remove"} {c.label}</>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {children}
+      {defects && defects.length > 0 && (
+        <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-1.5">
+          <div className="text-[9px] font-black uppercase tracking-wider text-red-700 mb-1">
+            QC defect — fix to spec
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {defects.map((d) => (
+              <span
+                key={d.key}
+                className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-[10px] font-bold text-red-800"
+              >
+                <span className="opacity-70">{d.label}:</span> {d.actualText}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+const QC_OPTION_LABELS: Record<string, string> = Object.fromEntries(
+  QC_OPTIONS.map((o) => [o.key, o.label]),
+);
+
+function formatOptionActual(key: string, val: unknown): string {
+  if (val == null || val === "") return "missing";
+  const spec = QC_OPTIONS.find((o) => o.key === key);
+  if (spec?.type === "boolean") return val ? "present" : "missing";
+  return String(val);
+}
+
+function buildSectionDefects(
+  optionActuals: Map<string, unknown> | null | undefined,
+  section: AlterationStyleSection,
+): Array<{ key: string; label: string; actualText: string }> {
+  if (!optionActuals || optionActuals.size === 0) return [];
+  const out: Array<{ key: string; label: string; actualText: string }> = [];
+  for (const [k, v] of optionActuals) {
+    if (QC_OPTION_TO_SECTION[k] !== section) continue;
+    out.push({
+      key: k,
+      label: QC_OPTION_LABELS[k] ?? k,
+      actualText: formatOptionActual(k, v),
+    });
+  }
+  return out;
 }
 
 // Small label/value row used inside StyleSection for secondary measurements
@@ -248,20 +345,33 @@ function MeasureRow({
   label,
   value,
   tooltip,
+  tintClass,
 }: {
   label: string;
   value: React.ReactNode;
   tooltip?: string;
+  /** Tailwind class for the row's background/border/text — overrides default
+   *  white when set (used to tint alteration-changed cells). */
+  tintClass?: string;
 }) {
   return (
     <HoverValueBox
       label={tooltip}
-      className="flex flex-col items-center justify-center rounded-md border border-zinc-200 bg-white px-2 py-1 text-center"
+      className={cn(
+        "flex flex-col items-center justify-center rounded-md border px-2 py-1 text-center",
+        tintClass || "border-zinc-200 bg-white",
+      )}
     >
-      <span className="text-[8px] font-bold tracking-wide text-zinc-500 uppercase leading-tight">
+      <span className={cn(
+        "text-[8px] font-bold tracking-wide uppercase leading-tight",
+        tintClass ? "" : "text-zinc-500",
+      )}>
         {label}
       </span>
-      <span className="text-sm font-semibold text-zinc-700 tabular-nums leading-tight">
+      <span className={cn(
+        "text-sm font-semibold tabular-nums leading-tight",
+        tintClass ? "" : "text-zinc-700",
+      )}>
         {value ?? "—"}
       </span>
     </HoverValueBox>
@@ -278,6 +388,12 @@ interface DishdashaOverlayProps {
   /** Operator-recorded values from the last QC fail. Rendered in red beside the
    *  expected value so the worker knows what to correct. */
   qcFailActuals?: Map<string, number> | null;
+  /** Operator-recorded option values from the last QC fail. Rendered as red
+   *  defect badges inside the relevant style section. */
+  qcFailOptionActuals?: Map<string, unknown> | null;
+  /** Customer-feedback option changes (add/remove/change/hashwa) the sewer
+   *  must apply this trip. Rendered as a per-section banner. */
+  optionChanges?: OptionChange[];
   notes?: string | null;
 }
 
@@ -286,6 +402,8 @@ export function DishdashaOverlay({
   measurement,
   alterationFilter,
   qcFailActuals,
+  qcFailOptionActuals,
+  optionChanges,
   notes,
 }: DishdashaOverlayProps) {
   const g = garment as any;
@@ -293,6 +411,21 @@ export function DishdashaOverlay({
   const degree = m?.degree ? Number(m.degree) : 0;
 
   const corrections = getMeasurementCorrections(garment.trip_history);
+
+  const sectionChanges = (section: AlterationStyleSection): OptionChange[] =>
+    (optionChanges ?? []).filter((c) => c.section === section);
+  const metaChanges = (optionChanges ?? []).filter((c) => c.section === "meta");
+
+  // Sidebar measurement tint priority: QC correction > QC fail actual > alteration reason > default.
+  // Mirrors body-template tinting so the sewer sees a consistent visual signal
+  // for cells that need work regardless of which surface they're rendered on.
+  const tintForKey = (key: string): string => {
+    if (corrections.has(key)) return "border-red-500 bg-red-50 text-red-700";
+    if (qcFailActuals?.has(key)) return "border-red-500 bg-red-50 text-zinc-900";
+    const reason = alterationFilter?.fieldReasons.get(key);
+    if (reason) return ALTERATION_REASON_CELL_CLASS[reason];
+    return "";
+  };
 
   // Optional measurements should hide entirely when blank (per spec: 2nd Bottom
   // Dist, Basma, Sleeve/Bottom Hem, Pen Pocket — all skip if no value).
@@ -373,6 +506,15 @@ export function DishdashaOverlay({
 
           {qualityCheckTemplateFields.map((field) => {
             const key = FIELD_MAP[field.id as QualityTemplateFieldId];
+            // Alteration mode (hideUnchanged): hide cells that aren't flagged.
+            // measurementKeys covers both feedback alteration diffs AND QC-fail
+            // actuals (see buildQcFailContext) — single check suffices.
+            if (
+              alterationFilter?.hideUnchanged &&
+              !alterationFilter.measurementKeys.has(key as string)
+            ) {
+              return null;
+            }
             const correction = corrections.get(key as string) ?? null;
             const qcActual = qcFailActuals?.get(key as string);
             const hasQcActual = qcActual !== undefined;
@@ -444,40 +586,59 @@ export function DishdashaOverlay({
 
         {/* Style panel */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
-          {/* Meta row */}
+          {/* Meta row — tints when the underlying option (style / lines) changed
+              this trip, with a small "(changed from X)" hint so the sewer
+              doesn't miss a meta-level spec change. */}
           <div className="grid grid-cols-3 gap-1.5 p-2 border-b border-zinc-200 shrink-0">
-            {[
-              styleLabel,
-              `LINE ${lineLabel}`,
-              (g.garment_type ?? "FINAL").toUpperCase(),
-            ].map((v, i) => (
-              <span
-                key={i}
-                className="rounded-lg border border-zinc-800 bg-white px-2 py-1 text-center text-[11px] font-bold tracking-wide text-zinc-900 uppercase"
-              >
-                {v}
-              </span>
-            ))}
+            {([
+              { label: styleLabel, optName: "style" as const },
+              { label: `LINE ${lineLabel}`, optName: "lines" as const },
+              { label: (g.garment_type ?? "FINAL").toUpperCase(), optName: null },
+            ]).map((meta, i) => {
+              const change = meta.optName
+                ? metaChanges.find((c) => c.label.toLowerCase() === meta.optName)
+                : undefined;
+              const tone = change ? "border-amber-500 bg-amber-50 text-amber-900" : "border-zinc-800 bg-white text-zinc-900";
+              return (
+                <span
+                  key={i}
+                  className={cn(
+                    "rounded-lg border px-2 py-1 text-center text-[11px] font-bold tracking-wide uppercase",
+                    tone,
+                  )}
+                >
+                  {meta.label}
+                  {change && change.kind === "change" && change.fromText && (
+                    <span className="ml-1 text-[9px] font-medium opacity-80">
+                      (was {change.fromText})
+                    </span>
+                  )}
+                </span>
+              );
+            })}
           </div>
 
           {/* Sections */}
           <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min">
             {/* Front Pocket */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("frontPocket")) && (
-            <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness}>
+            <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness} defects={buildSectionDefects(qcFailOptionActuals, "frontPocket")} changes={sectionChanges("frontPocket")}>
               <MeasureLayout
                 image={frontPocket?.image}
                 imageAlt={frontPocket?.label ?? "Front pocket"}
                 imageFallback="POCKET"
                 height={measureVal("top_pocket_length")}
                 heightLabel={qcLabel("top_pocket_length")}
+                heightTintClass={tintForKey("top_pocket_length")}
                 width={measureVal("top_pocket_width")}
                 widthLabel={qcLabel("top_pocket_width")}
+                widthTintClass={tintForKey("top_pocket_width")}
                 extras={
                   <MeasureRow
                     label="Pocket Dist"
                     value={measureVal("top_pocket_distance")}
                     tooltip={qcLabel("top_pocket_distance")}
+                    tintClass={tintForKey("top_pocket_distance")}
                   />
                 }
                 accessories={
@@ -491,21 +652,24 @@ export function DishdashaOverlay({
 
             {/* Jabzour */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("jabzour")) && (
-            <StyleSection title="Jabzour" thickness={g.jabzour_thickness}>
+            <StyleSection title="Jabzour" thickness={g.jabzour_thickness} defects={buildSectionDefects(qcFailOptionActuals, "jabzour")} changes={sectionChanges("jabzour")}>
               <MeasureLayout
                 image={jabzourPrimary?.image}
                 imageAlt="Jabzour"
                 imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
                 height={measureVal("jabzour_width")}
                 heightLabel={qcLabel("jabzour_width")}
+                heightTintClass={tintForKey("jabzour_width")}
                 width={measureVal("jabzour_length")}
                 widthLabel={qcLabel("jabzour_length")}
+                widthTintClass={tintForKey("jabzour_length")}
                 extras={
                   hasVal("second_button_distance") ? (
                     <MeasureRow
                       label="2nd Bottom Dist"
                       value={measureVal("second_button_distance")}
                       tooltip={qcLabel("second_button_distance")}
+                      tintClass={tintForKey("second_button_distance")}
                     />
                   ) : null
                 }
@@ -527,15 +691,17 @@ export function DishdashaOverlay({
 
             {/* Side Pocket */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("sidePocket")) && (
-            <StyleSection title="Side Pocket">
+            <StyleSection title="Side Pocket" defects={buildSectionDefects(qcFailOptionActuals, "sidePocket")} changes={sectionChanges("sidePocket")}>
               <MeasureLayout
                 image={sidePocket?.image}
                 imageAlt="Side pocket"
                 imageFallback="SIDE"
                 height={measureVal("side_pocket_length")}
                 heightLabel={qcLabel("side_pocket_length")}
+                heightTintClass={tintForKey("side_pocket_length")}
                 width={measureVal("side_pocket_width")}
                 widthLabel={qcLabel("side_pocket_width")}
+                widthTintClass={tintForKey("side_pocket_width")}
                 accessories={
                   (g.wallet_pocket || g.mobile_pocket) ? (
                     <>
@@ -550,7 +716,7 @@ export function DishdashaOverlay({
 
             {/* Cuffs */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("cuffs")) && (
-            <StyleSection title="Cuffs" thickness={g.cuffs_thickness}>
+            <StyleSection title="Cuffs" thickness={g.cuffs_thickness} defects={buildSectionDefects(qcFailOptionActuals, "cuffs")} changes={sectionChanges("cuffs")}>
               <div className="flex gap-2">
                 <div className="w-20 shrink-0">
                   <StyleImage
@@ -566,6 +732,7 @@ export function DishdashaOverlay({
                         label="Basma L"
                         value={measureVal("basma_length")}
                         tooltip={qcLabel("basma_length")}
+                        tintClass={tintForKey("basma_length")}
                       />
                     )}
                     {hasVal("basma_width") && (
@@ -573,6 +740,7 @@ export function DishdashaOverlay({
                         label="Basma W"
                         value={measureVal("basma_width")}
                         tooltip={qcLabel("basma_width")}
+                        tintClass={tintForKey("basma_width")}
                       />
                     )}
                   </div>
@@ -583,15 +751,17 @@ export function DishdashaOverlay({
 
             {/* Collar */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("collar")) && (
-            <StyleSection title="Collar" thickness={g.collar_thickness}>
+            <StyleSection title="Collar" thickness={g.collar_thickness} defects={buildSectionDefects(qcFailOptionActuals, "collar")} changes={sectionChanges("collar")}>
               <MeasureLayout
                 image={collarType?.image}
                 imageAlt={collarType?.label ?? "Collar"}
                 imageFallback="COLLAR"
                 height={measureVal("collar_height")}
                 heightLabel={qcLabel("collar_height")}
+                heightTintClass={tintForKey("collar_height")}
                 width={measureVal("collar_width")}
                 widthLabel={qcLabel("collar_width")}
+                widthTintClass={tintForKey("collar_width")}
                 accessories={
                   <>
                     {collarButton && (

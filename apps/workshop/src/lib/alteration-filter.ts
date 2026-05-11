@@ -1,4 +1,12 @@
 import type { GarmentFeedback } from "@repo/database";
+import {
+  collarTypes,
+  collarButtons,
+  cuffTypes,
+  jabzourTypes,
+  topPocketTypes,
+  type BaseOption,
+} from "@/components/forms/add-garment/constants";
 
 /** Section keys used by DishdashaOverlay + TerminalQualityTemplatePrint. */
 export type AlterationStyleSection =
@@ -42,8 +50,11 @@ interface MeasurementDiffEntry {
 
 interface OptionChecklistEntry {
   option_name: string;
+  expected_value?: unknown;
+  new_value?: unknown;
   rejected?: boolean | null;
   hashwa_rejected?: boolean | null;
+  hashwa_new_value?: unknown;
 }
 
 function parseJson<T>(raw: unknown): T | null {
@@ -62,18 +73,31 @@ const OPTION_TO_SECTIONS: Record<string, AlterationStyleSection[]> = {
   collar: ["collar"],
   collarBtn: ["collar"],
   smallTabaggi: ["collar"],
+  penHolder: ["frontPocket"],
+  walletPocket: ["sidePocket"],
+  mobilePocket: ["sidePocket"],
+  collarPosition: ["collar"],
+  // lines is shown in the top meta row (LINE SINGLE/DOUBLE), not in a sidebar
+  // section — value updates via propagation; no section to flag.
 };
 
 /** measurement key → section whose sidebar depends on it. */
 const MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
   top_pocket_length: "frontPocket",
   top_pocket_width: "frontPocket",
+  top_pocket_distance: "frontPocket",
   jabzour_length: "jabzour",
   jabzour_width: "jabzour",
+  second_button_distance: "jabzour",
   side_pocket_length: "sidePocket",
   side_pocket_width: "sidePocket",
   collar_height: "collar",
   collar_width: "collar",
+  // Basma renders inside the Cuffs section in DishdashaOverlay — flag it so a
+  // customer asking for basma changes lights up the right sidebar group.
+  basma_length: "cuffs",
+  basma_width: "cuffs",
+  basma_sleeve_length: "cuffs",
 };
 
 /**
@@ -129,6 +153,155 @@ export const ALTERATION_REASON_CELL_CLASS: Record<AlterationReason, string> = {
   "Customer Request": "bg-emerald-100 border-emerald-500 text-emerald-900",
   "Workshop Error": "bg-red-100 border-red-500 text-red-900",
   "Shop Error": "bg-zinc-200 border-zinc-500 text-zinc-900",
+};
+
+// ── Option change diffs (add/remove/picker change/hashwa change) ──────────
+// Surfaces what the sewer must DO this trip, not just the post-change state.
+// "Remove Pen Holder" / "Add Small Tabaggi" / "Collar: Round → Japanese".
+
+export type OptionChangeKind = "add" | "remove" | "change" | "hashwa";
+
+export interface OptionChange {
+  kind: OptionChangeKind;
+  /** Option group label, e.g. "Pen Holder", "Collar Type", "Front Pocket Hashwa". */
+  label: string;
+  /** "meta" for row-level fields like lines / style; otherwise a sidebar section. */
+  section: AlterationStyleSection | "meta";
+  /** For kind="change" / "hashwa": display strings of prior and new values. */
+  fromText?: string;
+  toText?: string;
+}
+
+/** option_name → human label for the change banner. */
+const OPTION_LABELS: Record<string, string> = {
+  collar: "Collar",
+  collarBtn: "Collar Button",
+  smallTabaggi: "Small Tabaggi",
+  jabzour: "Jabzour",
+  frontPocket: "Front Pocket",
+  cuff: "Cuff",
+  walletPocket: "Wallet Pocket",
+  penHolder: "Pen Holder",
+  mobilePocket: "Mobile Pocket",
+  collarPosition: "Collar Position",
+  lines: "Lines",
+};
+
+/** Picker option lists used to resolve enum value → display name. */
+const OPTION_VALUE_LIST: Record<string, BaseOption[]> = {
+  collar: collarTypes,
+  collarBtn: collarButtons,
+  frontPocket: topPocketTypes,
+  cuff: cuffTypes,
+  jabzour: jabzourTypes,
+};
+
+/** Friendly value lookup for picker / sentinel fields. Falls back to raw. */
+function resolveValueText(optName: string, value: unknown): string {
+  if (value == null || value === "") return "—";
+  const list = OPTION_VALUE_LIST[optName];
+  if (list) {
+    const found = list.find((o) => o.value === value || o.displayText === value);
+    if (found) return found.displayText;
+  }
+  if (optName === "collarPosition") {
+    if (value === "up") return "Up";
+    if (value === "down") return "Down";
+    if (value === "__standard__") return "Standard";
+  }
+  if (optName === "lines") {
+    return value === "1" || value === 1 ? "Single" : value === "2" || value === 2 ? "Double" : String(value);
+  }
+  return String(value);
+}
+
+/**
+ * Build the list of changes the sewer must apply this trip, derived from the
+ * prior-trip feedback's options_checklist. The post-save garment row already
+ * reflects the new state — this list tells the sewer *what to actually do*
+ * (remove the pen, add the tabaggi, change the collar) which the post-state
+ * alone can't convey.
+ */
+export function buildOptionChanges(
+  feedback: GarmentFeedback | null | undefined,
+): OptionChange[] {
+  if (!feedback) return [];
+  const options = parseJson<OptionChecklistEntry[]>(feedback.options_checklist) ?? [];
+  const out: OptionChange[] = [];
+
+  for (const opt of options) {
+    if (!opt?.option_name) continue;
+    const sections = OPTION_TO_SECTIONS[opt.option_name];
+    // Meta-row options (lines) — track as section: "meta".
+    const targetSections: Array<AlterationStyleSection | "meta"> = sections && sections.length > 0
+      ? sections
+      : opt.option_name === "lines" || opt.option_name === "style"
+        ? ["meta"]
+        : [];
+    if (targetSections.length === 0) continue;
+
+    const label = OPTION_LABELS[opt.option_name] ?? opt.option_name;
+
+    // Main rejection — figure out kind from the stored expected_value.
+    if (opt.rejected) {
+      let change: OptionChange | null = null;
+      // Boolean toggle: expected_value is the literal "Yes" / "No" string we
+      // wrote at feedback time. Direction of the flip is implicit.
+      if (opt.expected_value === "Yes") {
+        change = { kind: "remove", label, section: targetSections[0]! };
+      } else if (opt.expected_value === "No") {
+        change = { kind: "add", label, section: targetSections[0]! };
+      } else if (opt.new_value != null && opt.new_value !== "") {
+        // Picker / enum change — surface both ends.
+        change = {
+          kind: "change",
+          label,
+          section: targetSections[0]!,
+          fromText: resolveValueText(opt.option_name, opt.expected_value),
+          toText: resolveValueText(opt.option_name, opt.new_value),
+        };
+      }
+      if (change) {
+        // Replicate across each affected section so e.g. walletPocket shows on
+        // sidePocket even though it only has one section today.
+        for (const sec of targetSections) {
+          out.push({ ...change, section: sec });
+        }
+      }
+    }
+
+    // Hashwa rejection (thickness change) — separate row in the banner. We
+    // only have the new value stored, not the prior, so render "→ TRIPLE".
+    if (opt.hashwa_rejected && opt.hashwa_new_value != null && opt.hashwa_new_value !== "") {
+      for (const sec of targetSections) {
+        out.push({
+          kind: "hashwa",
+          label: `${label} Hashwa`,
+          section: sec,
+          toText: String(opt.hashwa_new_value).toUpperCase(),
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
+/** Tailwind class strings for OptionChange chip rendering — picked to mirror
+ *  the feedback-page color language (green = add, red = remove, amber = change). */
+export const OPTION_CHANGE_KIND_CLASS: Record<OptionChangeKind, string> = {
+  add: "bg-emerald-100 border-emerald-400 text-emerald-900",
+  remove: "bg-red-100 border-red-400 text-red-900",
+  change: "bg-amber-100 border-amber-400 text-amber-900",
+  hashwa: "bg-amber-100 border-amber-400 text-amber-900",
+};
+
+/** Symbol prefix for each change kind. Kept ASCII so it prints clean. */
+export const OPTION_CHANGE_KIND_SYMBOL: Record<OptionChangeKind, string> = {
+  add: "+",
+  remove: "−",
+  change: "→",
+  hashwa: "→",
 };
 
 // ── Alt-out (alteration-order garments brought from outside) ─────────────────

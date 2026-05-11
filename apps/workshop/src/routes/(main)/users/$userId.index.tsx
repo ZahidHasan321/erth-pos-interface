@@ -9,18 +9,19 @@ import { Skeleton } from "@repo/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@repo/ui/dialog";
+import { SectionCard, StatusBanner } from "@/components/shared/PageShell";
 import { cn, TIMEZONE } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft, Power, Pencil, Trash2, AlertTriangle,
-  Mail, Phone, Loader2,
+  Phone, Loader2, ShieldAlert,
 } from "lucide-react";
 import type { Role, Department, JobFunction, ProductionStage } from "@repo/database";
 
 const STAGE_LABELS: Record<ProductionStage, string> = {
   soaking: "Soaking",
   cutting: "Cutting",
-  post_cutting: "Post-Cut",
+  post_cutting: "Post-cut",
   sewing: "Sewing",
   finishing: "Finishing",
   ironing: "Ironing",
@@ -59,10 +60,6 @@ function Field({ label, value, mono }: { label: string; value: string | null | u
       </span>
     </div>
   );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-sm font-semibold text-foreground mb-1">{children}</h2>;
 }
 
 function UserDetailPage() {
@@ -115,25 +112,25 @@ function UserDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
         <Skeleton className="h-6 w-32 mb-6" />
-        <Skeleton className="h-40 rounded-lg mb-4" />
-        <Skeleton className="h-64 rounded-lg" />
+        <Skeleton className="h-32 rounded-md mb-4" />
+        <Skeleton className="h-64 rounded-md" />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
         <Button variant="ghost" size="sm" asChild className="mb-4 gap-2 text-muted-foreground -ml-2">
           <Link to="/users">
             <ArrowLeft className="w-4 h-4" />
             Back to Users
           </Link>
         </Button>
-        <div className="text-center py-20 rounded-lg border border-dashed">
-          <p className="text-base font-semibold mb-1">User not found</p>
+        <div className="text-center py-16 rounded-md border border-dashed border-border bg-card">
+          <p className="text-base font-medium mb-1">User not found</p>
           <p className="text-sm text-muted-foreground">This user may have been removed.</p>
         </div>
       </div>
@@ -149,8 +146,8 @@ function UserDetailPage() {
   const phoneValue = user.phone ? `${user.country_code ?? ""} ${user.phone}`.trim() : null;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-      <Button variant="ghost" size="sm" asChild className="mb-4 gap-2 text-muted-foreground -ml-2">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <Button variant="ghost" size="sm" asChild className="gap-2 text-muted-foreground -ml-2">
         <Link to="/users">
           <ArrowLeft className="w-4 h-4" />
           Users
@@ -158,73 +155,69 @@ function UserDetailPage() {
       </Button>
 
       {/* Header */}
-      <div className="rounded-lg border bg-card mb-6">
-        <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-5">
-          <div className={cn(
-            "w-14 h-14 rounded-md border flex items-center justify-center text-lg font-semibold shrink-0",
-            isInactive ? "bg-muted text-muted-foreground" : "bg-foreground text-background border-foreground",
-          )}>
-            {user.name.slice(0, 2).toUpperCase()}
-          </div>
+      <div className="rounded-md border border-border bg-card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className={cn(
+          "w-12 h-12 rounded-md flex items-center justify-center text-base font-medium shrink-0",
+          isInactive ? "bg-muted text-muted-foreground" : "bg-foreground text-background",
+        )}>
+          {user.name.slice(0, 2).toUpperCase()}
+        </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h1 className="text-xl font-semibold tracking-tight">{user.name}</h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
+            <span className={cn(
+              "inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-md",
+              isInactive
+                ? "bg-muted text-muted-foreground"
+                : "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+            )}>
               <span className={cn(
-                "inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm border",
-                isInactive
-                  ? "bg-muted text-muted-foreground border-border"
-                  : "bg-emerald-50 text-emerald-700 border-emerald-200",
-              )}>
-                <span className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  isInactive ? "bg-muted-foreground/50" : "bg-emerald-500",
-                )} />
-                {isInactive ? "Inactive" : "Active"}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">@{user.username}</p>
+                "w-1.5 h-1.5 rounded-full",
+                isInactive ? "bg-muted-foreground/50" : "bg-[var(--status-ok)]",
+              )} />
+              {isInactive ? "Inactive" : "Active"}
+            </span>
           </div>
+          <p className="text-sm text-muted-foreground mt-0.5">@{user.username}</p>
+        </div>
 
-          <div className="flex gap-2 sm:shrink-0">
-            <Button size="sm" asChild className="gap-1.5">
-              <Link to="/users/$userId/edit" params={{ userId: user.id }}>
-                <Pencil className="w-3.5 h-3.5" />
-                Edit
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleToggleActive}
-              disabled={togglePending}
-              className="gap-1.5"
-            >
-              {togglePending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
-              {isInactive ? "Reactivate" : "Deactivate"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteOpen(true)}
-              disabled={deleteMut.isPending}
-              className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200"
-            >
-              {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-              Delete
-            </Button>
-          </div>
+        <div className="flex gap-2 sm:shrink-0">
+          <Button size="sm" asChild className="gap-1.5">
+            <Link to="/users/$userId/edit" params={{ userId: user.id }}>
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToggleActive}
+            disabled={togglePending}
+            className="gap-1.5"
+          >
+            {togglePending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+            {isInactive ? "Reactivate" : "Deactivate"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDeleteOpen(true)}
+            disabled={deleteMut.isPending}
+            className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5"
+          >
+            {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            Delete
+          </Button>
         </div>
       </div>
 
       {/* Body grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main column */}
-        <div className="lg:col-span-2 space-y-6">
-          <section className="rounded-lg border bg-card p-6">
-            <SectionTitle>Role & access</SectionTitle>
-            <p className="text-xs text-muted-foreground mb-4">Determines what this user can do in the system.</p>
-            <div className="divide-y">
+        <div className="lg:col-span-2 space-y-4">
+          <SectionCard title="Role & access">
+            <div className="divide-y divide-border">
               <Field label="Role" value={ROLE_LABELS[role]} />
               <Field label="Department" value={DEPARTMENT_LABELS[department]} />
               {jobFunctions.length > 0 && (
@@ -234,38 +227,36 @@ function UserDetailPage() {
                 <Field label="Brands" value={brands.map((b) => BRAND_LABELS[b] ?? b).join(", ")} />
               )}
             </div>
-          </section>
+          </SectionCard>
 
-          <section className="rounded-lg border bg-card p-6">
-            <SectionTitle>Contact</SectionTitle>
-            <div className="divide-y">
+          <SectionCard title="Contact">
+            <div className="divide-y divide-border">
               <Field label="Email" value={user.email} />
               <Field label="Phone" value={phoneValue} mono />
             </div>
-          </section>
+          </SectionCard>
 
-          <section className="rounded-lg border bg-card p-6">
-            <SectionTitle>Employment</SectionTitle>
-            <div className="divide-y">
+          <SectionCard title="Employment">
+            <div className="divide-y divide-border">
               <Field label="Employee ID" value={user.employee_id} mono />
               <Field label="Nationality" value={user.nationality} />
               <Field label="Hire date" value={formatDate(user.hire_date)} />
             </div>
-          </section>
+          </SectionCard>
 
           {user.notes && (
-            <section className="rounded-lg border bg-card p-6">
-              <SectionTitle>Notes</SectionTitle>
-              <p className="mt-2 text-sm text-foreground whitespace-pre-wrap leading-relaxed">{user.notes}</p>
-            </section>
+            <SectionCard title="Notes">
+              <p className="text-sm text-foreground whitespace-pre-wrap">{user.notes}</p>
+            </SectionCard>
           )}
         </div>
 
         {/* Side column */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {linkedResources.length > 0 && (
-            <section className="rounded-lg border bg-card p-6">
-              <SectionTitle>Production profile</SectionTitle>
+            <SectionCard
+              title="Production profile"
+            >
               <p className="text-xs text-muted-foreground mb-3">
                 Per-stage assignments. Targets, units, and KPIs are tracked separately per stage.
               </p>
@@ -276,11 +267,11 @@ function UserDetailPage() {
                     : "Unassigned stage";
                   const unitName = r.unit_id ? unitNameById.get(r.unit_id) ?? null : null;
                   return (
-                    <div key={r.id} className="p-3 rounded-md border bg-muted/30">
+                    <div key={r.id} className="p-3 rounded-md border border-border bg-muted/20">
                       <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span className="text-sm font-semibold">{stageLabel}</span>
+                        <span className="text-sm font-medium">{stageLabel}</span>
                         {r.resource_type && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-background border">
+                          <span className="text-xs font-medium text-muted-foreground bg-card px-2 py-0.5 rounded-md">
                             {r.resource_type}
                           </span>
                         )}
@@ -303,28 +294,25 @@ function UserDetailPage() {
                   );
                 })}
               </div>
-            </section>
+            </SectionCard>
           )}
 
-          <section className="rounded-lg border bg-card p-6">
-            <SectionTitle>System</SectionTitle>
-            <div className="divide-y">
+          <SectionCard title="System">
+            <div className="divide-y divide-border">
               <Field label="Created" value={formatDate(user.created_at)} />
               {user.updated_at && <Field label="Updated" value={formatDate(user.updated_at)} />}
             </div>
-          </section>
+          </SectionCard>
 
           {(role === "admin" || role === "super_admin") && (
-            <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-md bg-amber-50 border border-amber-200">
-              <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-700" />
-              <span>This user has elevated privileges.</span>
-            </div>
+            <StatusBanner tone="warn" icon={ShieldAlert}>
+              This user has elevated privileges.
+            </StatusBanner>
           )}
           {!user.email && !phoneValue && (
-            <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-md border bg-muted/30">
-              <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>No contact information on file.</span>
-            </div>
+            <StatusBanner tone="info" icon={Phone}>
+              No contact information on file.
+            </StatusBanner>
           )}
         </div>
       </div>
@@ -332,12 +320,12 @@ function UserDetailPage() {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <div className="mx-auto w-10 h-10 rounded-md border border-destructive/30 flex items-center justify-center mb-2 bg-destructive/10">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
-            </div>
-            <DialogTitle className="text-center text-base font-bold">Delete user permanently?</DialogTitle>
-            <DialogDescription className="text-center text-sm">
-              <span className="font-semibold text-foreground">{user.name}</span> and their login will be removed for good. This cannot be undone. If they have any order or production history, the delete will be blocked — deactivate them instead.
+            <DialogTitle className="text-base font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[var(--status-bad)]" />
+              Delete user permanently?
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              <span className="font-medium text-foreground">{user.name}</span> and their login will be removed for good. This cannot be undone. If they have any order or production history, the delete will be blocked — deactivate them instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">

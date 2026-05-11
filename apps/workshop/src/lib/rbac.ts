@@ -58,13 +58,28 @@ const PERMISSIONS: PermissionMatrix = {
   "/pricing":     { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
   "/dashboard":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/completed":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/store":       { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store":           { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store/transfers": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store/reports":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
 
   // Inventory type permissions — controls create/edit visibility within the inventory page.
   // Workshop manages accessories + shelf; fabrics are owned by the shop.
   "inventory:fabrics":     { admin: "full", "manager:workshop": "view", "staff:workshop": "view" },
   "inventory:accessories": { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
   "inventory:shelf":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+
+  // Stock action permissions
+  "inventory:restock":     { admin: "full", "manager:workshop": "full" },
+  "inventory:adjust":      { admin: "full", "manager:workshop": "full" },
+  "inventory:delete":      { admin: "full" },
+  "suppliers:manage":      { admin: "full", "manager:workshop": "full" },
+
+  // Transfers — request anywhere; approve/dispatch/receive gated by side at render-time
+  "transfers:request":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "transfers:approve":     { admin: "full", "manager:workshop": "full" },
+  "transfers:dispatch":    { admin: "full", "manager:workshop": "full" },
+  "transfers:receive":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "transfers:cancel":      { admin: "full", "manager:workshop": "full" },
   "/profile":     { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
   "/notifications": { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
 

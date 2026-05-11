@@ -10,7 +10,7 @@ export type QualityTemplateField = {
 };
 
 export const qualityCheckTemplateFields = [
-  { id: "collar", left: 46.1, top: 7.1, width: 8.8, height: 3.1 },
+  { id: "collar", left: 46.1, top: 8.6, width: 8.8, height: 3.1 },
   { id: "wk1", left: 54.8, top: 10.9, width: 10.6, height: 3.1 },
   { id: "lengthFront", left: 36.6, top: 26.7, width: 10.6, height: 3.3 },
   { id: "lengthBack", left: 52.9, top: 26.7, width: 10.6, height: 3.3 },

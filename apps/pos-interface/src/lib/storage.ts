@@ -11,8 +11,8 @@
 
 import { db } from "./db";
 
-/** Default bucket for all feedback media (photos, voice notes, signatures). */
-const FEEDBACK_BUCKET = "feedback-media";
+/** Single bucket for all uploaded media (feedback photos/voice/video/signatures + inventory images). */
+const MEDIA_BUCKET = "media";
 
 export interface UploadResult {
   /** Public or signed URL to access the file. */
@@ -32,7 +32,7 @@ export interface UploadResult {
 export async function uploadFile(
   file: File | Blob,
   path: string,
-  bucket = FEEDBACK_BUCKET,
+  bucket = MEDIA_BUCKET,
 ): Promise<UploadResult> {
   const { data, error } = await db.storage.from(bucket).upload(path, file, {
     cacheControl: "3600",
@@ -59,7 +59,7 @@ export async function uploadFile(
  */
 export async function deleteFile(
   paths: string | string[],
-  bucket = FEEDBACK_BUCKET,
+  bucket = MEDIA_BUCKET,
 ): Promise<void> {
   const arr = Array.isArray(paths) ? paths : [paths];
   const { error } = await db.storage.from(bucket).remove(arr);
@@ -74,7 +74,7 @@ export async function deleteFile(
  * @param path    Bucket-relative path.
  * @param bucket  Storage bucket name. Defaults to `feedback-media`.
  */
-export function getPublicUrl(path: string, bucket = FEEDBACK_BUCKET): string {
+export function getPublicUrl(path: string, bucket = MEDIA_BUCKET): string {
   const { data } = db.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }
@@ -144,4 +144,26 @@ export async function uploadFeedbackSignature(
   const blob = await res.blob();
   const path = buildFeedbackPath(orderId, garmentId, tripNumber, "signature", "png");
   return uploadFile(blob, path);
+}
+
+// ── Convenience helpers for inventory item images ───────────────────────────
+
+/** Upload an inventory item image. Replaces any existing image at the same path. */
+export async function uploadInventoryImage(
+  file: File | Blob,
+  itemType: "fabric" | "shelf" | "accessory",
+  itemId: number,
+): Promise<UploadResult> {
+  const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
+  const path = `inventory/${itemType}/${itemId}/image-${Date.now()}.${ext}`;
+  return uploadFile(file, path);
+}
+
+/** Delete an inventory image by full URL (extracts path from public URL). */
+export async function deleteInventoryImageByUrl(url: string): Promise<void> {
+  const marker = `/${MEDIA_BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return;
+  const path = url.substring(idx + marker.length);
+  await deleteFile(path);
 }

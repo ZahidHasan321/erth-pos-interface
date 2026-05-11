@@ -6,6 +6,7 @@ import { getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import {
   buildAlterationFilter,
   buildAltOutFilter,
+  buildOptionChanges,
   getAltOutEffectiveMeasurement,
 } from "@/lib/alteration-filter";
 import { buildQcFailContext } from "@/lib/qc-corrections";
@@ -19,6 +20,7 @@ import { HISTORY_KEY_MAP, GarmentHeader } from "@/components/shared/GarmentDetai
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { QualityCheckForm } from "@/components/terminals/QualityCheckForm";
+import { StatusBanner } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
 import {
@@ -84,8 +86,8 @@ function TerminalGarmentPage() {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-64 rounded-md" />
+        <Skeleton className="h-48 rounded-md" />
       </div>
     );
   }
@@ -93,7 +95,7 @@ function TerminalGarmentPage() {
   if (!garment) {
     return (
       <div className="p-4 sm:p-6 max-w-4xl mx-auto text-center py-24">
-        <p className="text-lg font-semibold text-muted-foreground">
+        <p className="text-base font-medium text-muted-foreground">
           Garment not found
         </p>
         <Button
@@ -133,6 +135,12 @@ function TerminalGarmentPage() {
   // precedence over the prior-trip alteration filter when both are present.
   const alterationFilter = qcFailContext?.filter ?? baseAlterationFilter;
   const qcFailActuals = qcFailContext?.actuals ?? null;
+  const qcFailOptionActuals = qcFailContext?.optionActuals ?? null;
+  // Option diffs (add/remove/change/hashwa) derived from prior-trip feedback —
+  // tells the sewer what to physically do, not just what the final state is.
+  // QC-fail rework re-uses the alteration filter but option changes don't
+  // apply (worker is fixing a defect, not enacting a spec change).
+  const optionChanges = (isAltIn && !hasQcFail) ? buildOptionChanges(priorFeedback) : [];
   const effectiveMeasurement = isAltOut
     ? getAltOutEffectiveMeasurement(garment)
     : garment.measurement;
@@ -171,23 +179,23 @@ function TerminalGarmentPage() {
         </div>
 
         {!isQC && (
-          <div className="mb-3 flex items-center gap-2.5 flex-wrap rounded-lg border bg-card px-3 py-2">
+          <div className="mb-3 flex items-center gap-2.5 flex-wrap rounded-md border bg-card px-3 py-2">
             <span className={cn(
-              "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border shrink-0",
+              "text-xs font-medium capitalize px-2 py-0.5 rounded-md border border-transparent shrink-0",
               garment.garment_type === "brova"
-                ? "bg-purple-100 text-purple-800 border-purple-200"
-                : "bg-blue-100 text-blue-800 border-blue-200",
+                ? "bg-[var(--status-info-bg)] text-[var(--status-info)]"
+                : "bg-muted text-foreground",
             )}>
               {garment.garment_type}
             </span>
-            <span className="font-mono font-black text-base shrink-0">
+            <span className="font-mono text-base shrink-0">
               {garment.garment_id ?? garment.id.slice(0, 8)}
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground shrink-0">
               {stageLabel}
             </span>
             {garment.customer_name && (
-              <span className="text-sm text-muted-foreground truncate min-w-0">
+              <span className="text-sm text-muted-foreground truncate min-w-0 tracking-tight">
                 {garment.customer_name}
               </span>
             )}
@@ -195,7 +203,7 @@ function TerminalGarmentPage() {
               <span className="text-xs text-muted-foreground shrink-0">#{garment.invoice_number}</span>
             )}
             {garment.delivery_date_order && (
-              <span className="text-xs text-amber-700 font-medium ml-auto shrink-0">
+              <span className="text-xs text-[var(--status-warn)] font-medium ml-auto shrink-0">
                 Due {formatDate(garment.delivery_date_order)}
               </span>
             )}
@@ -203,21 +211,12 @@ function TerminalGarmentPage() {
         )}
 
         {isRepair && (
-          <div className={cn(
-            "mb-3 flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5",
-            hasQcFail
-              ? "bg-red-50 border-red-200 text-red-800"
-              : isAltOut
-                ? "bg-amber-50 border-amber-200 text-amber-800"
-                : "bg-orange-50 border-orange-200 text-orange-800",
-          )}>
-            {hasQcFail ? (
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-            ) : (
-              <RotateCcw className="w-5 h-5 shrink-0" />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-bold">
+          <div className="mb-3">
+            <StatusBanner
+              tone={hasQcFail ? "bad" : "warn"}
+              icon={hasQcFail ? AlertTriangle : RotateCcw}
+            >
+              <p className="text-sm font-medium">
                 {hasQcFail
                   ? "QC Fix (alt_p)"
                   : isAltOut
@@ -232,17 +231,20 @@ function TerminalGarmentPage() {
               {hasQcFail && lastQcFail?.fail_reason && (
                 <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
               )}
-            </div>
+            </StatusBanner>
           </div>
         )}
 
         {(isAltIn || isAltOut) && alterationFilter && alterationFilter.fieldReasons.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs">
-            <span className="font-semibold text-zinc-700">Cell colors:</span>
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border bg-card px-3.5 py-2 text-xs">
+            <span className="font-medium text-muted-foreground">Cell colors:</span>
+            {/* Swatch colors must match the printed QC sheet palette in index.css (terminal-qc-measure-cell-reason-*) so the worker sees the same hues on screen and on paper. */}
+            {/* eslint-disable-next-line no-restricted-syntax */}
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rounded-sm border-2 border-emerald-500 bg-emerald-100" />
               Customer Request
             </span>
+            {/* eslint-disable-next-line no-restricted-syntax */}
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rounded-sm border-2 border-red-500 bg-red-100" />
               Workshop Error
@@ -260,6 +262,8 @@ function TerminalGarmentPage() {
             measurement={effectiveMeasurement}
             alterationFilter={alterationFilter}
             qcFailActuals={qcFailActuals}
+            qcFailOptionActuals={qcFailOptionActuals}
+            optionChanges={optionChanges}
             notes={garment.notes}
           />
         )}
@@ -290,6 +294,8 @@ function TerminalGarmentPage() {
           alterationFilter={alterationFilter}
           measurement={effectiveMeasurement}
           qcFailActuals={qcFailActuals}
+          qcFailOptionActuals={qcFailOptionActuals}
+          optionChanges={optionChanges}
         />
       </div>
     </div>
@@ -315,7 +321,7 @@ function ElapsedTimer({ since }: { since: string | Date }) {
     hrs > 0 ? `${hrs}h ${remainMins}m` : mins > 0 ? `${mins}m` : "just now";
 
   return (
-    <span className="text-xs font-mono text-emerald-600 tabular-nums">
+    <span className="text-xs font-mono text-[var(--status-ok)] tabular-nums">
       {display}
     </span>
   );
@@ -411,7 +417,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
     <>
       {/* Worker selection card — only visible once started */}
       {showStarted && (
-        <div className="bg-card border rounded-xl shadow-sm p-4 mb-4">
+        <div className="bg-card border rounded-md p-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               {worker && !workerOverride ? (
@@ -419,10 +425,10 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                   onClick={() => setWorkerOverride(true)}
                   className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80 transition-opacity"
                 >
-                  <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
+                  <span className="text-sm font-medium text-muted-foreground">
                     {isSewing ? "Unit" : "By"}
                   </span>
-                  <span className="font-bold text-emerald-900 truncate text-base">
+                  <span className="text-base font-medium truncate">
                     {worker}
                   </span>
                   <span className="text-xs text-muted-foreground">(change)</span>
@@ -439,9 +445,9 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 />
               )}
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-sm font-bold text-emerald-700">
+            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--status-ok-bg)] border border-[color:var(--status-ok)]/30 rounded-md">
+              <div className="w-2 h-2 rounded-full bg-[var(--status-ok)] animate-pulse shrink-0" />
+              <span className="text-sm font-medium text-[var(--status-ok)]">
                 In Progress
               </span>
               <ElapsedTimer since={garment.start_time!} />
@@ -457,14 +463,14 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
             <Button
               key="start"
               size="lg"
-              className="h-16 px-8 text-2xl font-bold rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg animate-in fade-in zoom-in-95 duration-200"
+              className="h-14 px-7 text-lg font-medium shadow-md animate-in fade-in zoom-in-95 duration-200"
               onClick={handleStart}
               disabled={visualMode === "starting"}
             >
               {visualMode === "starting" ? (
-                <Loader2 className="w-6 h-6 mr-2.5 animate-spin" />
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               ) : (
-                <Play className="w-6 h-6 mr-2.5" />
+                <Play className="w-5 h-5 mr-2" />
               )}
               {visualMode === "starting" ? "Starting…" : "Start"}
             </Button>
@@ -474,25 +480,25 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
                 key="cancel"
                 variant="outline"
                 size="lg"
-                className="h-16 px-8 text-2xl font-bold rounded-full shadow-lg animate-in fade-in slide-in-from-right-4 duration-200"
+                className="h-14 px-7 text-lg font-medium shadow-md animate-in fade-in slide-in-from-right-4 duration-200"
                 onClick={handleCancel}
                 disabled={visualMode === "cancelling"}
               >
                 {visualMode === "cancelling" ? (
-                  <Loader2 className="w-6 h-6 mr-2.5 animate-spin" />
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 ) : (
-                  <X className="w-6 h-6 mr-2.5" />
+                  <X className="w-5 h-5 mr-2" />
                 )}
                 {visualMode === "cancelling" ? "Cancelling…" : "Cancel"}
               </Button>
               <Button
                 key="done"
                 size="lg"
-                className="h-16 px-8 text-2xl font-bold rounded-full bg-emerald-600 hover:bg-emerald-700 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                className="h-14 px-7 text-lg font-medium shadow-md animate-in fade-in slide-in-from-right-4 duration-300"
                 onClick={() => setConfirmOpen(true)}
                 disabled={!worker || completeMut.isPending}
               >
-                <Check className="w-6 h-6 mr-2.5" />
+                <Check className="w-5 h-5 mr-2" />
                 Done
               </Button>
             </>
@@ -504,22 +510,22 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-lg">Confirm Completion</DialogTitle>
+            <DialogTitle className="text-base font-medium">Confirm Completion</DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-2">
             <p className="text-sm text-muted-foreground">
               Mark{" "}
-              <span className="font-bold text-foreground">
+              <span className="font-medium text-foreground">
                 {garment.garment_id}
               </span>{" "}
               as done and move to{" "}
-              <span className="font-bold text-foreground">{nextLabel}</span>?
+              <span className="font-medium text-foreground">{nextLabel}</span>?
             </p>
-            <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-3">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">
+            <div className="bg-muted rounded-md p-3 flex items-center gap-3">
+              <span className="text-sm font-medium text-muted-foreground">
                 {isSewing ? "Unit" : "By"}
               </span>
-              <span className="font-bold text-base">{worker}</span>
+              <span className="text-base font-medium">{worker}</span>
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -531,7 +537,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
               Cancel
             </Button>
             <Button
-              className="h-11 flex-1 text-base font-bold bg-emerald-600 hover:bg-emerald-700"
+              className="h-11 flex-1 text-base font-medium"
               onClick={handleComplete}
               disabled={completeMut.isPending}
             >

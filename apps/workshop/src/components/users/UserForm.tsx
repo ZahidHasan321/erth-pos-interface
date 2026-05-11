@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { Switch } from "@repo/ui/switch";
@@ -7,13 +8,17 @@ import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { ChipToggle } from "@repo/ui/chip-toggle";
 import { Combobox } from "@repo/ui/combobox";
 import { FlagIcon } from "@repo/ui/flag-icon";
+import { Button } from "@repo/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
+import { toast } from "sonner";
+import { useUnits, useCreateUnit } from "@/hooks/useUnits";
 import { ROLE_LABELS, DEPARTMENT_LABELS, JOB_FUNCTION_LABELS } from "@/lib/rbac";
 import { getSortedCountries } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import {
   UserCog, Shield, Phone, Mail, Hash,
   Store, Briefcase,
-  Factory, ShoppingBag, Info,
+  Factory, ShoppingBag, Info, Plus,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { Role, Department, JobFunction } from "@repo/database";
@@ -67,6 +72,9 @@ export type UserFormState = {
   nationality: string;
   hire_date: string;
   notes: string;
+  // Sewers belong to a specific sewing unit (manager picks at create/edit).
+  // Other terminal roles auto-assign to the lowest-id unit for their stage.
+  sewing_unit_id: string | null;
 };
 
 export const EMPTY_USER_FORM: UserFormState = {
@@ -85,46 +93,41 @@ export const EMPTY_USER_FORM: UserFormState = {
   nationality: "",
   hire_date: "",
   notes: "",
+  sewing_unit_id: null,
 };
 
 // ── Section card ─────────────────────────────────────────────────────────────
 
 function Section({
-  number,
   icon: Icon,
   title,
   description,
   children,
 }: {
-  number: string;
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-card shadow-sm overflow-hidden">
-      <header className="px-5 pt-4 pb-3 border-b border-zinc-200 bg-zinc-50/60">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-black tracking-[0.2em] text-zinc-400 tabular-nums">
-            {number}
-          </span>
-          <span className="h-px w-4 bg-zinc-300" />
-          <Icon className="w-3.5 h-3.5 text-zinc-500" />
-          <h3 className="text-sm font-bold tracking-tight">{title}</h3>
+    <section className="rounded-md border border-border bg-card overflow-hidden">
+      <header className="px-4 py-3 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+          <h3 className="text-sm font-medium">{title}</h3>
         </div>
-        <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
       </header>
-      <div className="p-5 space-y-4">{children}</div>
+      <div className="p-4 space-y-4">{children}</div>
     </section>
   );
 }
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <Label className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+    <Label className="text-xs font-medium text-muted-foreground">
       {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
+      {required && <span className="text-[var(--status-bad)] ml-0.5">*</span>}
     </Label>
   );
 }
@@ -163,9 +166,7 @@ export function UserForm({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* LEFT COLUMN ─────────────────────────── */}
       <div className="space-y-4">
-        {/* 01 · Identity */}
         <Section
-          number="01"
           icon={UserCog}
           title="Identity"
           description="How this person appears in the system and to other staff."
@@ -225,11 +226,9 @@ export function UserForm({
           </div>
         </Section>
 
-        {/* 03 · HR */}
         <Section
-          number={form.department === "shop" ? "04" : "03"}
           icon={Briefcase}
-          title="Employee Record"
+          title="Employee record"
           description="HR details for reporting. All optional."
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -277,11 +276,9 @@ export function UserForm({
 
       {/* RIGHT COLUMN ────────────────────────── */}
       <div className="space-y-4">
-        {/* 02 · Access */}
         <Section
-          number="02"
           icon={Shield}
-          title="Access & Role"
+          title="Access & role"
           description="What this user can see and do. Terminal workers get a focused single-page view."
         >
           <div className="space-y-1.5">
@@ -306,10 +303,10 @@ export function UserForm({
                     <span className="flex items-center gap-2">
                       <Shield className={cn(
                         "w-3 h-3",
-                        r === "super_admin" ? "text-amber-500"
-                        : r === "admin" ? "text-zinc-900"
-                        : r === "manager" ? "text-zinc-500"
-                        : "text-zinc-300",
+                        r === "super_admin" ? "text-[var(--status-warn)]"
+                        : r === "admin" ? "text-foreground"
+                        : r === "manager" ? "text-muted-foreground"
+                        : "text-muted-foreground/50",
                       )} />
                       {ROLE_LABELS[r]}
                     </span>
@@ -319,9 +316,9 @@ export function UserForm({
             </Select>
           </div>
 
-          <div className="flex items-start gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2">
-            <Info className="w-3 h-3 text-zinc-500 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-zinc-600 leading-relaxed">
+          <div className="flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2">
+            <Info className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
               {form.role === "super_admin" && "Full access to all pages across all apps. Can manage everything."}
               {form.role === "admin" && "Full access to all pages. Can manage users, schedules, pricing, and operations."}
               {form.role === "manager" && form.department === "workshop" && "Full workshop operations: scheduling, receiving, dispatch, team, performance."}
@@ -335,8 +332,8 @@ export function UserForm({
 
           {form.role === "staff" && form.department === "workshop" && (
             <div className="space-y-2">
-              <FieldLabel>Terminal Assignments</FieldLabel>
-              <p className="text-[11px] text-muted-foreground">
+              <FieldLabel>Terminal assignments</FieldLabel>
+              <p className="text-xs text-muted-foreground">
                 Pick every station this worker can run. One resource is created per station so the scheduler tracks each skill's capacity separately.
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -352,6 +349,8 @@ export function UserForm({
                           job_functions: selected
                             ? p.job_functions.filter((x) => x !== j)
                             : [...p.job_functions, j],
+                          // Drop unit selection if sewer is being deselected
+                          sewing_unit_id: selected && j === "sewer" ? null : p.sewing_unit_id,
                         }))
                       }
                     >
@@ -361,14 +360,20 @@ export function UserForm({
                 })}
               </div>
               {form.job_functions.length === 0 && (
-                <p className="text-[11px] text-muted-foreground italic pt-1">
+                <p className="text-xs text-muted-foreground pt-1">
                   No stations selected — this user will be office staff.
                 </p>
+              )}
+              {form.job_functions.includes("sewer") && (
+                <SewingUnitPicker
+                  value={form.sewing_unit_id}
+                  onChange={(id) => setForm((p) => ({ ...p, sewing_unit_id: id }))}
+                />
               )}
             </div>
           )}
 
-          <div className="flex items-end gap-4 pt-2 border-t border-dashed flex-wrap">
+          <div className="flex items-end gap-4 pt-3 border-t border-border flex-wrap">
             <div className="space-y-1.5 w-[180px]">
               <FieldLabel required={mode === "add"}>PIN</FieldLabel>
               <div className="relative">
@@ -391,7 +396,7 @@ export function UserForm({
                 onCheckedChange={(v) => setForm((p) => ({ ...p, is_active: v }))}
               />
               <span className={cn(
-                "text-xs font-semibold",
+                "text-sm font-medium",
                 form.is_active ? "text-foreground" : "text-muted-foreground",
               )}>
                 {form.is_active ? "Active" : "Inactive"}
@@ -400,16 +405,14 @@ export function UserForm({
           </div>
         </Section>
 
-        {/* 03 · Brands (shop only) */}
         {form.department === "shop" && (
           <Section
-            number="03"
             icon={Store}
-            title="Brand Access"
+            title="Brand access"
             description="Shop staff only see the brand interfaces they're assigned to."
           >
             <div className="space-y-2">
-              <FieldLabel required>Assigned Brands</FieldLabel>
+              <FieldLabel required>Assigned brands</FieldLabel>
               <div className="flex flex-wrap gap-2 pt-1">
                 {ALL_BRANDS.map((brand) => {
                   const isSelected = form.brands.includes(brand);
@@ -433,7 +436,7 @@ export function UserForm({
                 })}
               </div>
               {form.brands.length === 0 && (
-                <p className="text-[11px] text-red-500 pt-1">Select at least one brand.</p>
+                <p className="text-xs text-[var(--status-bad)] pt-1">Select at least one brand.</p>
               )}
             </div>
           </Section>
@@ -448,5 +451,129 @@ export function isUserFormValid(form: UserFormState, mode: "add" | "edit"): bool
   if (!form.role || !form.department) return false;
   if (form.department === "shop" && form.brands.length === 0) return false;
   if (mode === "add" && (!form.pin || form.pin.length !== 4)) return false;
+  // Sewers must be assigned to a sewing unit.
+  if (
+    form.role === "staff" &&
+    form.department === "workshop" &&
+    form.job_functions.includes("sewer") &&
+    !form.sewing_unit_id
+  ) {
+    return false;
+  }
   return true;
+}
+
+// ── Sewing unit picker ───────────────────────────────────────────────────────
+
+function SewingUnitPicker({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const { data: units = [] } = useUnits();
+  const sewingUnits = units.filter((u) => u.stage === "sewing");
+  const [createOpen, setCreateOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5 pt-3 mt-2 border-t border-border">
+      <FieldLabel required>Sewing team</FieldLabel>
+      <p className="text-xs text-muted-foreground">
+        Which sewing unit does this sewer belong to. Other stations auto-assign to their default unit.
+      </p>
+      <div className="flex gap-2 pt-1">
+        <div className="flex-1 min-w-0">
+          <Select
+            value={value ?? ""}
+            onValueChange={(v) => onChange(v || null)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={sewingUnits.length === 0 ? "No sewing units — create one" : "Select sewing team"} />
+            </SelectTrigger>
+            <SelectContent>
+              {sewingUnits.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5 shrink-0"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New
+        </Button>
+      </div>
+      <CreateSewingUnitDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(id) => {
+          onChange(id);
+          setCreateOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function CreateSewingUnitDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreated: (id: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const createMut = useCreateUnit();
+
+  const submit = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      const created = await createMut.mutateAsync({ stage: "sewing", name: trimmed });
+      toast.success(`Created sewing team "${created.name}"`);
+      setName("");
+      onCreated(created.id);
+    } catch (err) {
+      toast.error(`Could not create sewing team: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setName(""); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>New sewing team</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <FieldLabel required>Team name</FieldLabel>
+            <Input
+              autoFocus
+              placeholder="Team A"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); submit(); }
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button size="sm" disabled={!name.trim() || createMut.isPending} onClick={submit} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              {createMut.isPending ? "Creating..." : "Create team"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }

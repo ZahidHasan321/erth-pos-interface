@@ -41,6 +41,7 @@ interface DataTableProps<TData, TValue> {
     tempStockUsage?: Map<string, number>;
     stockValidationActive?: boolean;
     stitchingPrice?: number;
+    stylePricingRules?: any[];
 }
 
 export function DataTable<TData, TValue>({
@@ -61,6 +62,7 @@ export function DataTable<TData, TValue>({
     tempStockUsage,
     stockValidationActive,
     stitchingPrice,
+    stylePricingRules,
 }: DataTableProps<TData, TValue>) {
     const table = useReactTable({
         data,
@@ -82,6 +84,7 @@ export function DataTable<TData, TValue>({
             tempStockUsage,
             stockValidationActive,
             stitchingPrice,
+            stylePricingRules,
         } as {
             measurementOptions?: { id: string; MeasurementID: string }[];
             removeRow: (rowIndex: number) => void;
@@ -98,6 +101,7 @@ export function DataTable<TData, TValue>({
             tempStockUsage?: Map<string, number>;
             stockValidationActive?: boolean;
             stitchingPrice?: number;
+            stylePricingRules?: any[];
         },
     });
 

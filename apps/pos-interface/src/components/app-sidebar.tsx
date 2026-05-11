@@ -1,4 +1,4 @@
-import { Link, useMatchRoute, useParams } from "@tanstack/react-router";
+import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import * as React from "react";
 import {
   ChevronDown,
@@ -7,9 +7,7 @@ import {
   Users,
   Store,
   ClipboardList,
-  ClipboardCheck,
   Truck,
-  PackageOpen,
   ArrowUpFromLine,
   Link2,
   Unlink,
@@ -21,7 +19,6 @@ import {
   History,
   Banknote,
   CalendarDays,
-  ListChecks,
   Package,
 } from "lucide-react";
 
@@ -136,38 +133,23 @@ const data = {
       url: "",
       items: [
         {
-          title: "Request Delivery",
-          url: "store/request-delivery",
-          icon: Truck,
-        },
-        {
-          title: "Active Requests",
-          url: "store/active-requests",
-          icon: ListChecks,
-        },
-        {
-          title: "Approve Requests",
-          url: "store/approve-requests",
-          icon: ClipboardCheck,
-        },
-        {
-          title: "Receiving Deliveries",
-          url: "store/receiving-deliveries",
-          icon: PackageOpen,
-        },
-        {
-          title: "Transfer History",
-          url: "store/transfer-history",
-          icon: History,
-        },
-        {
           title: "Inventory",
           url: "store/inventory",
           icon: Package,
         },
         {
-          title: "Stock Report",
-          url: "store/stock-report",
+          title: "Transfers",
+          url: "store/transfers",
+          icon: Truck,
+        },
+        {
+          title: "Suppliers",
+          url: "store/suppliers",
+          icon: Users,
+        },
+        {
+          title: "Reports",
+          url: "store/reports",
           icon: BarChart,
         },
         {
@@ -188,6 +170,10 @@ export function AppSidebar({
   brandName: string;
   brandLogo: string;
 }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isPathActive = (to: string, exact = false) =>
+    exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
+
   type SidebarLinkProps = {
     to: string;
     title: string;
@@ -207,10 +193,7 @@ export function AppSidebar({
     count,
     badgeColor = "bg-blue-100 text-blue-700",
   }) => {
-    const matchRoute = useMatchRoute();
-    const match = exactMatch
-      ? matchRoute({ to })
-      : matchRoute({ to, fuzzy: true });
+    const active = isPathActive(to, exactMatch);
 
     const isNewOrderPage =
       typeof window !== "undefined" &&
@@ -220,7 +203,7 @@ export function AppSidebar({
       <SidebarMenuItem>
         <SidebarMenuButton
           asChild
-          isActive={!!match}
+          isActive={active}
           disabled={disabled}
           tooltip={title}
         >
@@ -260,12 +243,11 @@ export function AppSidebar({
     mainSegment,
   }) => {
     const [isOpen, setIsOpen] = React.useState(false);
-    const matchRoute = useMatchRoute();
     const { setOpen } = useSidebar();
     const totalCount = items.reduce((sum, item) => sum + (item.count ?? 0), 0);
 
     const hasActiveChild = items.some((item) =>
-      matchRoute({ to: `${mainSegment}/${item.url}`, fuzzy: true })
+      isPathActive(`${mainSegment}/${item.url}`)
     );
 
     React.useEffect(() => {
@@ -304,17 +286,14 @@ export function AppSidebar({
           <div className="overflow-hidden">
             <SidebarMenuSub className="mt-1 space-y-0.5 border-l-2 border-primary/15">
               {items.map((subItem) => {
-                const match = matchRoute({
-                  to: `${mainSegment}/${subItem.url}`,
-                  fuzzy: true,
-                });
+                const match = isPathActive(`${mainSegment}/${subItem.url}`);
                 const isNewOrderPage =
                   typeof window !== "undefined" &&
                   /^\/orders\/new-/.test(window.location.pathname);
 
                 return (
                   <SidebarMenuSubItem key={subItem.title}>
-                    <SidebarMenuSubButton asChild isActive={!!match}>
+                    <SidebarMenuSubButton asChild isActive={match}>
                       <Link
                         to={`${mainSegment}/${subItem.url}`}
                         {...(isNewOrderPage
@@ -345,10 +324,10 @@ export function AppSidebar({
   const isErth = main === BRAND_NAMES.showroom;
   const { data: badgeCounts } = useTransferBadgeCounts(isErth);
 
+  // Sum of states that need user action — surfaced on Transfers as a single badge
+  const transfersBadgeCount = (badgeCounts?.activeRequests ?? 0) + (badgeCounts?.receivingDeliveries ?? 0) + (badgeCounts?.approveRequests ?? 0);
   const storeCounts: Record<string, { count: number; badgeColor: string }> = {
-    "store/active-requests": { count: badgeCounts?.activeRequests ?? 0, badgeColor: "bg-blue-100 text-blue-700" },
-    "store/receiving-deliveries": { count: badgeCounts?.receivingDeliveries ?? 0, badgeColor: "bg-blue-100 text-blue-700" },
-    "store/approve-requests": { count: badgeCounts?.approveRequests ?? 0, badgeColor: "bg-amber-100 text-amber-700" },
+    "store/transfers": { count: transfersBadgeCount, badgeColor: "bg-amber-100 text-amber-700" },
   };
 
   return (

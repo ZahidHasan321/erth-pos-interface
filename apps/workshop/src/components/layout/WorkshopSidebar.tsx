@@ -16,10 +16,12 @@ import {
 } from "@repo/ui/sidebar";
 import { useSidebarCounts } from "@/hooks/useSidebarCounts";
 import { useTransferRequests } from "@/hooks/useTransfers";
-import { Link, useRouterState, useMatchRoute } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
+  ArrowRightLeft,
+  BarChart,
   CirclePause,
   CalendarClock,
   Columns3,
@@ -27,7 +29,6 @@ import {
   Droplets,
   Scissors,
   Truck,
-  ClipboardCheck,
   CircleCheckBig,
   Users,
   DollarSign,
@@ -36,8 +37,7 @@ import {
   TrendingUp,
   UserCog,
   Package,
-  Send,
-  History,
+  Building2,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,10 @@ export function WorkshopSidebar() {
   const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
-  const matchRoute = useMatchRoute();
   const { user: authUser } = useAuth();
+
+  const isActive = (href: string) =>
+    routerState === href || routerState.startsWith(href + "/");
 
   // Auto-close sidebar on navigation on mobile/tablet
   useEffect(() => {
@@ -66,9 +68,9 @@ export function WorkshopSidebar() {
   }, [isOnTerminal]);
 
   const operationItems = [
-    { label: "Receiving",          icon: ArrowDownToLine, href: "/receiving",  count: counts?.receiving,  badgeColor: "bg-blue-100 text-blue-700" },
-    { label: "Parking",            icon: CirclePause,     href: "/parking",    count: counts?.parking,    badgeColor: "bg-amber-100 text-amber-700" },
-    { label: "Scheduler",          icon: CalendarClock,   href: "/scheduler",  count: counts?.scheduler,  badgeColor: "bg-purple-100 text-purple-700" },
+    { label: "Receiving",          icon: ArrowDownToLine, href: "/receiving",  count: counts?.receiving },
+    { label: "Parking",            icon: CirclePause,     href: "/parking",    count: counts?.parking },
+    { label: "Scheduler",          icon: CalendarClock,   href: "/scheduler",  count: counts?.scheduler },
     { label: "Production Board",   icon: Columns3,        href: "/board" },
     { label: "Production Tracker", icon: Activity,        href: "/assigned" },
   ];
@@ -79,33 +81,31 @@ export function WorkshopSidebar() {
     ...((isAdmin(authUser) || isManager(authUser)) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
   ];
 
-  const postProductionItems = [
-    { label: "Dispatch",        icon: Truck,            href: "/dispatch",   count: counts?.dispatch,   badgeColor: "bg-green-100 text-green-700" },
+  const fulfillmentItems = [
+    { label: "Dispatch",        icon: Truck,            href: "/dispatch",   count: counts?.dispatch },
     { label: "Completed",       icon: CircleCheckBig,   href: "/completed" },
     { label: "Pricing",         icon: DollarSign,       href: "/pricing" },
   ];
 
-  const { data: activeDeliveries = [] } = useTransferRequests({ status: ["requested", "approved", "dispatched"], direction: "shop_to_workshop" });
+  // Combined "needs my action" count for the Transfers tab — warrants warn tone
+  const transfersBadge = receivingDeliveries.length + approveRequests.length;
 
   const storeItems = [
-    { label: "Inventory",            icon: Package,          href: "/store/inventory" },
-    { label: "Send to Shop",         icon: Send,             href: "/store/send-to-shop" },
-    { label: "Request Delivery",     icon: Truck,            href: "/store/request-delivery" },
-    { label: "Active Deliveries",    icon: Activity,         href: "/store/active-deliveries",    count: activeDeliveries.length,    badgeColor: "bg-sky-100 text-sky-700" },
-    { label: "Receiving Deliveries", icon: ArrowDownToLine,  href: "/store/receiving-deliveries", count: receivingDeliveries.length, badgeColor: "bg-blue-100 text-blue-700" },
-    { label: "Approve Requests",     icon: ClipboardCheck,   href: "/store/approve-requests",     count: approveRequests.length,     badgeColor: "bg-amber-100 text-amber-700" },
-    { label: "Transfer History",     icon: History,          href: "/store/transfer-history" },
+    { label: "Inventory", icon: Package,        href: "/store/inventory" },
+    { label: "Transfers", icon: ArrowRightLeft, href: "/store/transfers", count: transfersBadge, badgeTone: "warn" as const },
+    { label: "Suppliers", icon: Building2,      href: "/store/suppliers" },
+    { label: "Reports",   icon: BarChart,       href: "/store/reports" },
   ];
 
   const terminalItems = [
-    { label: "Soaking",       icon: Droplets,     href: "/terminals/soaking",       count: counts?.soaking,       color: "text-sky-500" },
-    { label: "Cutting",       icon: Scissors,     href: "/terminals/cutting",       count: counts?.cutting,       color: "text-amber-500" },
+    { label: "Soaking",       icon: Droplets,     href: "/terminals/soaking",       count: counts?.soaking,       color: "text-sky-700" },
+    { label: "Cutting",       icon: Scissors,     href: "/terminals/cutting",       count: counts?.cutting,       color: "text-amber-700" },
     // TEMP DISABLED: post_cutting terminal hidden
-    // { label: "Post-Cutting",  icon: IconStack2,    href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-500" },
-    { label: "Sewing",        icon: IconNeedle,   href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-500" },
-    { label: "Finishing",     icon: IconSparkles, href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-500" },
-    { label: "Ironing",       icon: IconIroning1, href: "/terminals/ironing",       count: counts?.ironing,       color: "text-rose-500" },
-    { label: "Quality Check", icon: IconRosette,  href: "/terminals/quality-check", count: counts?.quality_check, color: "text-indigo-500" },
+    // { label: "Post-Cutting",  icon: IconStack2,    href: "/terminals/post-cutting",  count: counts?.post_cutting,  color: "text-orange-700" },
+    { label: "Sewing",        icon: IconNeedle,   href: "/terminals/sewing",        count: counts?.sewing,        color: "text-purple-700" },
+    { label: "Finishing",     icon: IconSparkles, href: "/terminals/finishing",     count: counts?.finishing,     color: "text-emerald-700" },
+    { label: "Ironing",       icon: IconIroning1, href: "/terminals/ironing",       count: counts?.ironing,       color: "text-rose-700" },
+    { label: "Quality Check", icon: IconRosette,  href: "/terminals/quality-check", count: counts?.quality_check, color: "text-indigo-700" },
   ];
 
   const totalTerminalCount = terminalItems.reduce((s, t) => s + (t.count ?? 0), 0);
@@ -116,10 +116,10 @@ export function WorkshopSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-4 border-b group-data-[collapsible=icon]:px-1.5">
         <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
+          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm shrink-0">
             W
           </div>
-          <span className="font-bold text-sm uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+          <span className="font-semibold text-sm group-data-[collapsible=icon]:hidden">
             Workshop
           </span>
         </div>
@@ -131,7 +131,7 @@ export function WorkshopSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={isActive("/dashboard")}>
                   <Link to="/dashboard">
                     <LayoutDashboard className="w-4 h-4" aria-hidden="true" />
                     <span>Dashboard</span>
@@ -148,14 +148,14 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {operationItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
                   {!!item.count && (
-                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                    <SidebarMenuBadge className="bg-muted text-foreground">
                       {item.count}
                     </SidebarMenuBadge>
                   )}
@@ -179,7 +179,7 @@ export function WorkshopSidebar() {
               {!isCollapsedDesktop && (
                 <>
                   {!terminalsOpen && totalTerminalCount > 0 && (
-                    <span className="text-[10px] font-bold tabular-nums text-muted-foreground mr-1">
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground mr-1">
                       {totalTerminalCount}
                     </span>
                   )}
@@ -200,14 +200,14 @@ export function WorkshopSidebar() {
                 <SidebarMenu>
                   {terminalItems.map((item) => (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.href)}>
                         <Link to={item.href}>
                           <item.icon className={cn("w-4 h-4", item.color)} aria-hidden="true" />
                           <span>{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
                       {!!item.count && (
-                        <SidebarMenuBadge className="font-bold">
+                        <SidebarMenuBadge className="bg-muted text-foreground">
                           {item.count}
                         </SidebarMenuBadge>
                       )}
@@ -228,7 +228,7 @@ export function WorkshopSidebar() {
             <SidebarMenu>
               {peopleItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
@@ -243,18 +243,19 @@ export function WorkshopSidebar() {
         <SidebarSeparator />
 
         <SidebarGroup>
+          <SidebarGroupLabel>Fulfillment</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {postProductionItems.map((item) => (
+              {fulfillmentItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
                   {!!item.count && (
-                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                    <SidebarMenuBadge className="bg-muted text-foreground">
                       {item.count}
                     </SidebarMenuBadge>
                   )}
@@ -267,19 +268,25 @@ export function WorkshopSidebar() {
         <SidebarSeparator />
 
         <SidebarGroup>
-          <SidebarGroupLabel>Store Management</SidebarGroupLabel>
+          <SidebarGroupLabel>Store</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {storeItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={!!matchRoute({ to: item.href, fuzzy: true })}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
                     <Link to={item.href}>
                       <item.icon className="w-4 h-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
                   {!!item.count && (
-                    <SidebarMenuBadge className={cn("font-bold", item.badgeColor)}>
+                    <SidebarMenuBadge
+                      className={cn(
+                        item.badgeTone === "warn"
+                          ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
+                          : "bg-muted text-foreground",
+                      )}
+                    >
                       {item.count}
                     </SidebarMenuBadge>
                   )}

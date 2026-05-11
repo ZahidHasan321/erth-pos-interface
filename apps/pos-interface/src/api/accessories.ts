@@ -1,11 +1,10 @@
 import { db } from "@/lib/db";
 import type { Accessory } from '@repo/database';
 
-export const getAccessories = async (): Promise<Accessory[]> => {
-  const { data, error } = await db
-    .from('accessories')
-    .select('*');
-
+export const getAccessories = async (includeArchived = false): Promise<Accessory[]> => {
+  let query = db.from('accessories').select('*');
+  if (!includeArchived) query = query.eq('is_archived', false);
+  const { data, error } = await query;
   if (error) throw error;
   return data as Accessory[];
 };
@@ -36,4 +35,20 @@ export const updateAccessory = async (
 
   if (error) throw error;
   return data as Accessory;
+};
+
+export const deleteAccessory = async (id: number): Promise<{ mode: "deleted" | "archived" }> => {
+  const { error } = await db.from('accessories').delete().eq('id', id);
+  if (!error) return { mode: "deleted" };
+  if (error.code === '23503') {
+    const { error: updErr } = await db.from('accessories').update({ is_archived: true }).eq('id', id);
+    if (updErr) throw new Error(`Could not archive accessory: ${updErr.message}`);
+    return { mode: "archived" };
+  }
+  throw new Error(`Could not delete accessory: ${error.message}`);
+};
+
+export const unarchiveAccessory = async (id: number): Promise<void> => {
+  const { error } = await db.from('accessories').update({ is_archived: false }).eq('id', id);
+  if (error) throw new Error(`Could not unarchive accessory: ${error.message}`);
 };

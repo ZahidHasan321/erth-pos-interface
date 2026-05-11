@@ -1,4 +1,4 @@
-import type { Style } from "@repo/database";
+import type { Style, StylePricingRule } from "@repo/database";
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import { type GarmentSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 
@@ -22,45 +22,143 @@ function thicknessCode(thickness: string): string {
     return thickness.replace(/\s+/g, "_");
 }
 
+/** garment.style enum → style code in styles/rules tables */
+const STYLE_BASE_CODE: Record<string, string> = {
+    kuwaiti: "STY_KUWAITI",
+    design: "STY_DESIGNER",
+};
+
 /**
- * Calculate the total price for style options based on selected codes from GarmentSchema
+ * Build rule lookup: code -> highest-priority active rule.
+ * Used by the override engine.
+ */
+function buildRuleMap(rules: StylePricingRule[] | undefined): Map<string, StylePricingRule> {
+    const map = new Map<string, StylePricingRule>();
+    for (const r of rules ?? []) {
+        if (!r.active) continue;
+        const existing = map.get(r.style_code);
+        if (!existing || r.priority > existing.priority) {
+            map.set(r.style_code, r);
+        }
+    }
+    return map;
+}
+
+/**
+ * Apply flat_override rules to a set of selected style codes.
+ * Returns the flat rate if any selected code has a matching active flat_override rule
+ * (highest priority wins). Returns null when no override applies — caller sums additively.
+ *
+ * Fallback when flat_rate is missing on the rule row: use priceMap (styles.rate_per_item).
+ */
+function evaluateFlatOverride(
+    codes: string[],
+    ruleMap: Map<string, StylePricingRule>,
+    priceMap: Map<string, number>,
+): number | null {
+    let best: { priority: number; rate: number } | null = null;
+    for (const code of codes) {
+        const rule = ruleMap.get(code);
+        if (!rule || rule.rule_type !== "flat_override") continue;
+        const rate = rule.flat_rate != null
+            ? Number(rule.flat_rate)
+            : (priceMap.get(code) ?? 0);
+        if (!best || rule.priority > best.priority) {
+            best = { priority: rule.priority, rate };
+        }
+    }
+    return best ? best.rate : null;
+}
+
+function collectGarmentStyleCodes(garment: GarmentSchema): string[] {
+    const codes: string[] = [];
+    if (garment.style && STYLE_BASE_CODE[garment.style]) {
+        codes.push(STYLE_BASE_CODE[garment.style]);
+    }
+    if (garment.lines === 1) codes.push("STY_LINE");
+    if (garment.lines === 2) codes.push("STY_LINE", "STY_LINE_2");
+    if (garment.collar_type) codes.push(garment.collar_type);
+    if (garment.collar_button) codes.push(garment.collar_button);
+    if (garment.jabzour_1) codes.push(garment.jabzour_1);
+    if (garment.jabzour_thickness) {
+        codes.push(`JAB_THICKNESS_${thicknessCode(garment.jabzour_thickness)}`);
+    }
+    if (garment.front_pocket_type) codes.push(garment.front_pocket_type);
+    if (garment.front_pocket_thickness) {
+        codes.push(`FRO_THICKNESS_${thicknessCode(garment.front_pocket_thickness)}`);
+    }
+    if (garment.cuffs_type) codes.push(garment.cuffs_type);
+    if (garment.cuffs_thickness) {
+        codes.push(`CUF_THICKNESS_${thicknessCode(garment.cuffs_thickness)}`);
+    }
+    return codes;
+}
+
+function collectStyleOptionCodes(opts: StyleOptionsSchema): string[] {
+    const codes: string[] = [];
+    if (opts.style && STYLE_BASE_CODE[opts.style]) {
+        codes.push(STYLE_BASE_CODE[opts.style]);
+    }
+    if (opts.lines?.line1) codes.push("STY_LINE");
+    if (opts.lines?.line2) codes.push("STY_LINE_2");
+    if (opts.collar?.collar_type) codes.push(opts.collar.collar_type);
+    if (opts.collar?.collar_button) codes.push(opts.collar.collar_button);
+    if (opts.collar?.small_tabaggi) codes.push("COL_SMALL_TABBAGI");
+    if (opts.jabzour?.jabzour_1) codes.push(opts.jabzour.jabzour_1);
+    if (opts.jabzour?.jabzour_thickness) {
+        codes.push(`JAB_THICKNESS_${thicknessCode(opts.jabzour.jabzour_thickness)}`);
+    }
+    if (opts.front_pocket?.front_pocket_type) codes.push(opts.front_pocket.front_pocket_type);
+    if (opts.front_pocket?.front_pocket_thickness) {
+        codes.push(`FRO_THICKNESS_${thicknessCode(opts.front_pocket.front_pocket_thickness)}`);
+    }
+    if (opts.cuffs?.cuffs_type) codes.push(opts.cuffs.cuffs_type);
+    if (opts.cuffs?.cuffs_thickness) {
+        codes.push(`CUF_THICKNESS_${thicknessCode(opts.cuffs.cuffs_thickness)}`);
+    }
+    return codes;
+}
+
+/**
+ * Calculate the total price for style options based on selected codes from GarmentSchema.
+ *
+ * Rules engine:
+ * - If any selected code has an active `flat_override` rule, return that flat rate
+ *   (highest priority wins). Style options are wiped — stitching/express/etc are
+ *   added separately by the caller.
+ * - Otherwise sum additively from `styles.rate_per_item`.
  */
 export function calculateGarmentStylePrice(
     garment: GarmentSchema,
-    styles: Style[]
+    styles: Style[],
+    rules?: StylePricingRule[],
 ): number {
     if (!styles || styles.length === 0) {
         return 0;
     }
 
     const priceMap = buildStylePriceMap(styles);
+    const ruleMap = buildRuleMap(rules);
+    const codes = collectGarmentStyleCodes(garment);
 
-    // Designer style edge case: Use DB price (usually 6)
-    if (garment.style === "design") return priceMap.get("STY_DESIGNER") || 6;
-
-    // Qallabi collar edge case: flat DB price (usually 5), ignore all other options
-    if (garment.collar_type === "COL_QALLABI") return priceMap.get("COL_QALLABI") || 5;
+    const override = evaluateFlatOverride(codes, ruleMap, priceMap);
+    if (override !== null) return override;
 
     let total = 0;
 
-    // Lines
     if (garment.lines === 1) {
         total += priceMap.get("STY_LINE") || 0;
     } else if (garment.lines === 2) {
         total += (priceMap.get("STY_LINE") || 0) + (priceMap.get("STY_LINE_2") || 0);
     }
 
-    // Collar Type
     if (garment.collar_type) {
         total += priceMap.get(garment.collar_type) || 0;
     }
-
-    // Collar Button
     if (garment.collar_button) {
         total += priceMap.get(garment.collar_button) || 0;
     }
 
-    // Jabzour type + thickness
     if (garment.jabzour_1) {
         total += priceMap.get(garment.jabzour_1) || 0;
     }
@@ -68,7 +166,6 @@ export function calculateGarmentStylePrice(
         total += priceMap.get(`JAB_THICKNESS_${thicknessCode(garment.jabzour_thickness)}`) || 0;
     }
 
-    // Front pocket type + thickness
     if (garment.front_pocket_type) {
         total += priceMap.get(garment.front_pocket_type) || 0;
     }
@@ -76,7 +173,6 @@ export function calculateGarmentStylePrice(
         total += priceMap.get(`FRO_THICKNESS_${thicknessCode(garment.front_pocket_thickness)}`) || 0;
     }
 
-    // Cuffs type + thickness
     if (garment.cuffs_type) {
         total += priceMap.get(garment.cuffs_type) || 0;
     }
@@ -98,7 +194,6 @@ function generateStyleHash(styleOptions: StyleOptionsSchema): string {
         collar: styleOptions.collar,
         jabzour: styleOptions.jabzour,
         front_pocket: styleOptions.front_pocket,
-        accessories: styleOptions.accessories,
         cuffs: styleOptions.cuffs,
     };
     return JSON.stringify(relevantFields);
@@ -125,16 +220,14 @@ export function areStylesIdentical(
 export function assignMatchingStyleIds(
     styleOptions: StyleOptionsSchema[]
 ): StyleOptionsSchema[] {
-    // Safety check for empty or invalid arrays
     if (!styleOptions || styleOptions.length === 0) {
         return styleOptions;
     }
 
-    const styleGroups = new Map<string, string>(); // hash -> assigned ID
+    const styleGroups = new Map<string, string>();
     let nextStyleId = 1;
 
     return styleOptions.map((style) => {
-        // Skip if style is undefined or null
         if (!style) {
             return style;
         }
@@ -142,7 +235,6 @@ export function assignMatchingStyleIds(
         const hash = generateStyleHash(style);
 
         if (!styleGroups.has(hash)) {
-            // First occurrence of this style - assign new ID
             styleGroups.set(hash, `S-${nextStyleId}`);
             nextStyleId++;
         }
@@ -155,35 +247,31 @@ export function assignMatchingStyleIds(
 }
 
 /**
- * Calculate the total price for style options based on selected codes
- * @param styleOptions - The style options data for a single row
- * @param styles - The array of all available styles from the styles table
- * @returns The total price calculated from rate_per_item for all selected styles
+ * Calculate total price for a single StyleOptionsSchema row, using the same
+ * rules engine as `calculateGarmentStylePrice`.
  */
 export function calculateStylePrice(
     styleOptions: StyleOptionsSchema,
-    styles: Style[]
+    styles: Style[],
+    rules?: StylePricingRule[],
 ): number {
     if (!styles || styles.length === 0) {
         return 0;
     }
 
     const priceMap = buildStylePriceMap(styles);
+    const ruleMap = buildRuleMap(rules);
+    const codes = collectStyleOptionCodes(styleOptions);
 
-    // Designer style edge case: Use DB price (usually 6)
-    if (styleOptions.style === "design") return priceMap.get("STY_DESIGNER") || 6;
-
-    // Qallabi collar edge case: flat DB price (usually 5), ignore all other options
-    if (styleOptions.collar?.collar_type === "COL_QALLABI") return priceMap.get("COL_QALLABI") || 5;
+    const override = evaluateFlatOverride(codes, ruleMap, priceMap);
+    if (override !== null) return override;
 
     let total = 0;
 
-    // Style (kuwaiti or design)
     if (styleOptions.style === "kuwaiti") {
         total += priceMap.get("STY_KUWAITI") || 0;
     }
 
-    // Lines (add line price for each checked line)
     if (styleOptions.lines?.line1) {
         total += priceMap.get("STY_LINE") || 0;
     }
@@ -191,22 +279,18 @@ export function calculateStylePrice(
         total += priceMap.get("STY_LINE_2") || 0;
     }
 
-    // Collar Type
     if (styleOptions.collar?.collar_type) {
         total += priceMap.get(styleOptions.collar.collar_type) || 0;
     }
 
-    // Collar Button
     if (styleOptions.collar?.collar_button) {
         total += priceMap.get(styleOptions.collar.collar_button) || 0;
     }
 
-    // Small Tabaggi
     if (styleOptions.collar?.small_tabaggi) {
         total += priceMap.get("COL_SMALL_TABBAGI") || 0;
     }
 
-    // Jabzour type + thickness
     if (styleOptions.jabzour?.jabzour_1) {
         total += priceMap.get(styleOptions.jabzour.jabzour_1) || 0;
     }
@@ -214,7 +298,6 @@ export function calculateStylePrice(
         total += priceMap.get(`JAB_THICKNESS_${thicknessCode(styleOptions.jabzour.jabzour_thickness)}`) || 0;
     }
 
-    // Front pocket type + thickness
     if (styleOptions.front_pocket?.front_pocket_type) {
         total += priceMap.get(styleOptions.front_pocket.front_pocket_type) || 0;
     }
@@ -222,7 +305,6 @@ export function calculateStylePrice(
         total += priceMap.get(`FRO_THICKNESS_${thicknessCode(styleOptions.front_pocket.front_pocket_thickness)}`) || 0;
     }
 
-    // Cuffs type + thickness
     if (styleOptions.cuffs?.cuffs_type) {
         total += priceMap.get(styleOptions.cuffs.cuffs_type) || 0;
     }

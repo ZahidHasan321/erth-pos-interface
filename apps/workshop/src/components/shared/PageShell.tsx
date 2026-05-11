@@ -14,16 +14,90 @@ interface PageHeaderProps {
 
 export function PageHeader({ icon: Icon, title, subtitle, children }: PageHeaderProps) {
   return (
-    <div className="mb-4 flex items-end justify-between gap-4">
+    <div className="mb-6 flex items-end justify-between gap-4">
       <div>
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <Icon className="w-5 h-5 text-primary shrink-0" aria-hidden="true" /> {title}
+        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2.5">
+          <Icon className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden="true" />
+          {title}
         </h1>
         {subtitle && (
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70 mt-0.5">{subtitle}</p>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         )}
       </div>
       {children}
+    </div>
+  );
+}
+
+// ── Section Card ────────────────────────────────────────────────────────────
+// Bordered card with an optional muted header. Use this instead of writing
+// `bg-card border border-border rounded-md` by hand.
+
+interface SectionCardProps {
+  title?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}
+
+export function SectionCard({ title, action, children, className, bodyClassName }: SectionCardProps) {
+  return (
+    <section className={cn("bg-card border border-border rounded-md overflow-hidden", className)}>
+      {(title || action) && (
+        <header className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between gap-2">
+          {title && <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>}
+          {action}
+        </header>
+      )}
+      <div className={cn("p-4", bodyClassName)}>{children}</div>
+    </section>
+  );
+}
+
+// ── Section Label ───────────────────────────────────────────────────────────
+// Small label for inline section headings inside lists/forms. Replaces the
+// `uppercase tracking-wider font-bold` pattern.
+
+export function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn("text-sm font-medium text-muted-foreground", className)}>
+      {children}
+    </span>
+  );
+}
+
+// ── Status Banner ───────────────────────────────────────────────────────────
+// Inline alert bar with semantic tone. Replaces raw `bg-red-50 text-red-800`
+// patterns. Use sparingly — `tone` should match real state, not decoration.
+
+type StatusTone = "ok" | "warn" | "bad" | "info";
+
+interface StatusBannerProps {
+  tone: StatusTone;
+  icon?: IconComponent;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const BANNER_TONE: Record<StatusTone, string> = {
+  ok:   "bg-[var(--status-ok-bg)]   text-[var(--status-ok)]   border-[color:var(--status-ok)]/30",
+  warn: "bg-[var(--status-warn-bg)] text-[var(--status-warn)] border-[color:var(--status-warn)]/30",
+  bad:  "bg-[var(--status-bad-bg)]  text-[var(--status-bad)]  border-[color:var(--status-bad)]/30",
+  info: "bg-[var(--status-info-bg)] text-[var(--status-info)] border-[color:var(--status-info)]/30",
+};
+
+export function StatusBanner({ tone, icon: Icon, children, className }: StatusBannerProps) {
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-md border p-3 text-sm",
+        BANNER_TONE[tone],
+        className,
+      )}
+    >
+      {Icon && <Icon className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />}
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
@@ -39,26 +113,30 @@ interface StatsCardProps {
   dimOnZero?: boolean;
 }
 
-const STAT_COLORS = {
-  blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    label: "text-blue-600/80",    icon: "text-blue-600" },
-  purple:  { bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-700",  label: "text-purple-600/80",  icon: "text-purple-600" },
-  orange:  { bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-700",  label: "text-orange-600/80",  icon: "text-orange-600" },
-  green:   { bg: "bg-green-50",   border: "border-green-200",   text: "text-green-700",   label: "text-green-600/80",   icon: "text-green-600" },
-  red:     { bg: "bg-red-50",     border: "border-red-200",     text: "text-red-700",     label: "text-red-600/80",     icon: "text-red-600" },
-  emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", label: "text-emerald-600/80", icon: "text-emerald-600" },
-  amber:   { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700",   label: "text-amber-600/80",   icon: "text-amber-600" },
-  zinc:    { bg: "bg-zinc-50",    border: "border-zinc-200",    text: "text-zinc-500",    label: "text-zinc-400",       icon: "text-zinc-400" },
+// Neutral card surface; semantic accent only on icon + value. Background tints
+// previously made every metric scream — flat cards let the number do the talking.
+const STAT_ACCENT = {
+  blue:    "text-[var(--status-info)]",
+  purple:  "text-[var(--status-info)]",
+  orange:  "text-[var(--status-warn)]",
+  green:   "text-[var(--status-ok)]",
+  red:     "text-[var(--status-bad)]",
+  emerald: "text-[var(--status-ok)]",
+  amber:   "text-[var(--status-warn)]",
+  zinc:    "text-muted-foreground",
 } as const;
 
 export function StatsCard({ icon: Icon, value, label, color, dimOnZero }: StatsCardProps) {
   const isDimmed = dimOnZero && value === 0;
-  const c = isDimmed ? STAT_COLORS.zinc : STAT_COLORS[color];
+  const accent = isDimmed ? STAT_ACCENT.zinc : STAT_ACCENT[color];
 
   return (
-    <div className={cn("rounded-lg px-3 py-2 text-center border", c.bg, c.border)}>
-      <Icon className={cn("w-3.5 h-3.5 mx-auto mb-0.5 opacity-60", c.icon)} aria-hidden="true" />
-      <p className={cn("text-xl font-black tabular-nums leading-none", c.text)}>{value}</p>
-      <p className={cn("text-[10px] font-bold uppercase tracking-wider mt-0.5", c.label)}>{label}</p>
+    <div className="rounded-md border border-border bg-card px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <Icon className={cn("w-4 h-4 shrink-0", isDimmed ? "text-muted-foreground/50" : accent)} aria-hidden="true" />
+        <p className={cn("text-xs text-muted-foreground", isDimmed && "text-muted-foreground/60")}>{label}</p>
+      </div>
+      <p className={cn("text-xl font-semibold tabular-nums leading-tight mt-1", isDimmed ? "text-muted-foreground/60" : "text-foreground")}>{value}</p>
     </div>
   );
 }
@@ -76,16 +154,16 @@ export function EmptyState({ icon: IconOrNode, message }: EmptyStateProps) {
     || typeof IconOrNode === "function";
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-xl bg-muted/5 animate-fade-in">
+    <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed border-border rounded-md bg-card animate-fade-in">
       {isComponent ? (
         (() => {
           const Icon = IconOrNode as IconComponent;
-          return <Icon className="w-8 h-8 text-muted-foreground/20 mb-2" />;
+          return <Icon className="w-6 h-6 text-muted-foreground/40 mb-2" />;
         })()
       ) : IconOrNode ? (
-        <div className="opacity-20 mb-2 scale-125">{IconOrNode}</div>
+        <div className="opacity-40 mb-2">{IconOrNode}</div>
       ) : null}
-      <p className="text-sm font-medium text-muted-foreground/50">{message}</p>
+      <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   );
 }
@@ -94,9 +172,9 @@ export function EmptyState({ icon: IconOrNode, message }: EmptyStateProps) {
 
 export function LoadingSkeleton({ count = 3 }: { count?: number }) {
   return (
-    <div className="space-y-3 stagger-children">
+    <div className="space-y-2 stagger-children">
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="h-20 rounded-xl skeleton-shimmer" />
+        <Skeleton key={i} className="h-16 rounded-md skeleton-shimmer" />
       ))}
     </div>
   );
@@ -112,9 +190,9 @@ interface MetadataChipProps {
 }
 
 const CHIP_VARIANTS = {
-  muted:  "text-muted-foreground bg-muted/60",
-  amber:  "text-amber-700 bg-amber-100 font-semibold",
-  indigo: "text-indigo-700 bg-indigo-100 font-bold uppercase tracking-wide border border-indigo-200",
+  muted:  "text-muted-foreground bg-muted",
+  amber:  "text-[var(--status-warn)] bg-[var(--status-warn-bg)]",
+  indigo: "text-[var(--status-info)] bg-[var(--status-info-bg)]",
 } as const;
 
 export function MetadataChip({ icon: Icon, children, variant = "muted", className }: MetadataChipProps) {
@@ -136,12 +214,12 @@ export function GarmentTypeBadge({ type }: { type: string | null | undefined }) 
   return (
     <span
       className={cn(
-        "text-xs font-black uppercase tracking-wide px-2 py-0.5 rounded-md border",
+        "text-xs font-medium capitalize px-2 py-0.5 rounded-md border",
         type === "brova"
-          ? "bg-purple-50 text-purple-800 border-purple-200"
+          ? "bg-[var(--status-info-bg)] text-[var(--status-info)] border-transparent"
           : type === "alteration"
-            ? "bg-amber-50 text-amber-800 border-amber-200"
-            : "bg-blue-50 text-blue-800 border-blue-200",
+            ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)] border-transparent"
+            : "bg-muted text-foreground border-border",
       )}
     >
       {type}
@@ -153,12 +231,12 @@ export function GarmentTypeBadgeCompact({ type }: { type: string }) {
   return (
     <span
       className={cn(
-        "px-2 py-0.5 rounded-md text-xs font-black uppercase",
+        "px-1.5 py-0.5 rounded-sm text-xs font-semibold tabular-nums",
         type === "brova"
-          ? "bg-purple-100 text-purple-800"
+          ? "bg-[var(--status-info-bg)] text-[var(--status-info)]"
           : type === "alteration"
-            ? "bg-amber-100 text-amber-800"
-            : "bg-blue-100 text-blue-800",
+            ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
+            : "bg-muted text-foreground",
       )}
     >
       {type === "brova" ? "B" : type === "alteration" ? "A" : "F"}

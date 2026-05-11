@@ -248,7 +248,7 @@ export const IfInsideCell = ({
 
     const { data: fabrics = [], isLoading: isLoadingFabrics } = useQuery({
         queryKey: ["fabrics"],
-        queryFn: getFabrics,
+        queryFn: () => getFabrics(),
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -457,7 +457,7 @@ export const FabricLengthCell = ({
 
     const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
-        queryFn: getFabrics,
+        queryFn: () => getFabrics(),
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -636,7 +636,7 @@ export const FabricAmountCell = ({
     const { control, setValue } = useFormContext();
     const { data: fabrics = [] } = useQuery({
         queryKey: ["fabrics"],
-        queryFn: getFabrics,
+        queryFn: () => getFabrics(),
         staleTime: Infinity,
         gcTime: Infinity,
     });

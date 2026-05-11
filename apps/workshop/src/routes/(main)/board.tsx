@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { Calendar } from "@repo/ui/calendar";
 import { Skeleton } from "@repo/ui/skeleton";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
-import { PageHeader, EmptyState, GarmentTypeBadgeCompact } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState, GarmentTypeBadgeCompact, MetadataChip } from "@/components/shared/PageShell";
 import { useBoardGarments } from "@/hooks/useWorkshopGarments";
 import { BOARD_STAGES } from "@/api/garments";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
@@ -29,15 +29,18 @@ const STAGE_TO_PLAN_KEY: Record<string, keyof ProductionPlan> = {
   quality_check: "quality_checker",
 };
 
-const STAGE_ACCENT: Record<string, string> = {
-  soaking: "border-sky-300 bg-sky-50/60",
-  cutting: "border-amber-300 bg-amber-50/60",
-  post_cutting: "border-orange-300 bg-orange-50/60",
-  sewing: "border-purple-300 bg-purple-50/60",
-  finishing: "border-emerald-300 bg-emerald-50/60",
-  ironing: "border-rose-300 bg-rose-50/60",
-  quality_check: "border-indigo-300 bg-indigo-50/60",
-  ready_for_dispatch: "border-green-400 bg-green-50/60",
+// Per-stage indicator dots — small, semantic. Column chrome stays neutral
+// so the eye reads the data (cards), not the chrome. Ready-for-dispatch
+// is the only stage that's a true "OK" terminal state.
+const STAGE_DOT: Record<string, string> = {
+  soaking: "bg-[var(--status-info)]",
+  cutting: "bg-[var(--status-warn)]",
+  post_cutting: "bg-[var(--status-warn)]",
+  sewing: "bg-[var(--status-info)]",
+  finishing: "bg-[var(--status-info)]",
+  ironing: "bg-[var(--status-info)]",
+  quality_check: "bg-[var(--status-info)]",
+  ready_for_dispatch: "bg-[var(--status-ok)]",
 };
 
 function parseLocalDate(dateStr: string): Date {
@@ -138,7 +141,7 @@ function BoardPage() {
               >
                 Today
               </Button>
-              <div className="flex items-center rounded-lg border bg-card shadow-sm">
+              <div className="flex items-center rounded-md border border-border bg-card">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -152,7 +155,7 @@ function BoardPage() {
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      className="flex items-center justify-center gap-1.5 h-8 px-3 border-x text-xs font-bold tabular-nums whitespace-nowrap hover:bg-muted/50 w-[200px]"
+                      className="flex items-center justify-center gap-1.5 h-8 px-3 border-x border-border text-sm font-medium tabular-nums whitespace-nowrap hover:bg-muted/50 w-[200px]"
                     >
                       <CalendarIcon className="w-3.5 h-3.5 text-primary shrink-0" />
                       {formatBoardDate(dateStr)}
@@ -230,23 +233,24 @@ interface ColumnProps {
 
 function BoardColumn({ stage, garments, isLoading }: ColumnProps) {
   const label = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
-  const accent = STAGE_ACCENT[stage] ?? "border-zinc-200 bg-zinc-50/60";
+  const dot = STAGE_DOT[stage] ?? "bg-muted-foreground";
 
   return (
-    <div className="w-[260px] shrink-0 snap-start flex flex-col rounded-xl border bg-card shadow-sm max-h-[calc(100vh-230px)]">
-      <div className={cn("px-3 py-2 rounded-t-xl border-b-2", accent)}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black uppercase tracking-wider text-foreground">{label}</span>
-          <span className="text-xs font-bold tabular-nums text-muted-foreground bg-background/60 px-1.5 rounded">
-            {garments.length}
-          </span>
+    <div className="w-[260px] shrink-0 snap-start flex flex-col rounded-md border border-border bg-card max-h-[calc(100vh-230px)]">
+      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />
+          <span className="text-sm font-medium text-foreground truncate">{label}</span>
         </div>
+        <span className="text-sm font-medium tabular-nums text-muted-foreground">
+          {garments.length}
+        </span>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {isLoading ? (
           <>
-            <Skeleton className="h-16 rounded-lg" />
-            <Skeleton className="h-16 rounded-lg" />
+            <Skeleton className="h-16 rounded-md" />
+            <Skeleton className="h-16 rounded-md" />
           </>
         ) : garments.length === 0 ? (
           <div className="py-6">
@@ -276,50 +280,48 @@ function GarmentBoardCard({ g, stage }: { g: WorkshopGarment; stage: string }) {
   return (
     <div
       className={cn(
-        "rounded-lg border bg-background px-2.5 py-2 shadow-sm transition-all",
-        g.express && "border-l-[4px] border-l-orange-400",
-        started ? "border-emerald-400 ring-1 ring-emerald-300/60" : "border-border hover:border-primary/40",
+        "rounded-md border bg-background px-2.5 py-2 transition-colors",
+        // Express = exceptional state, encoded by left-stripe in semantic bad token.
+        g.express && "border-l-2 border-l-[var(--status-bad)]",
+        // Started = exceptional state, encoded by green border. No ring (rule: shadows/rings for popovers only).
+        started ? "border-[var(--status-ok)]" : "border-border hover:border-primary/40",
       )}
     >
-      <div className="flex items-start gap-1.5 mb-1">
+      <div className="flex items-start gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-sm font-black tracking-tight">{invoice}</span>
+          <span className="font-mono text-base font-medium">{invoice}</span>
           {g.garment_id && (
-            <span className="text-[10px] font-bold text-muted-foreground tabular-nums truncate">{g.garment_id}</span>
+            <span className="font-mono text-xs text-muted-foreground tabular-nums truncate">{g.garment_id}</span>
           )}
           {g.express && (
-            <Zap className="w-3 h-3 text-orange-500 fill-orange-500 shrink-0" aria-label="Express" />
+            <Zap className="w-3.5 h-3.5 text-red-700 shrink-0" aria-label="Express" />
           )}
         </div>
         {deliveryRaw && (
           <div className={cn("ml-auto flex flex-col items-end leading-tight tabular-nums", urgency.text)}>
-            <span className="text-[10px] font-bold whitespace-nowrap">{formatDate(deliveryRaw)}</span>
+            <span className="text-xs font-medium whitespace-nowrap">{formatDate(deliveryRaw)}</span>
             {urgency.label && urgency.status !== "normal" && (
-              <span className="text-[9px] font-black uppercase tracking-wide">{urgency.label}</span>
+              <span className="text-xs font-medium">{urgency.label}</span>
             )}
           </div>
         )}
       </div>
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <GarmentTypeBadgeCompact type={g.garment_type ?? "final"} />
-        {altNum != null && (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-200">
-            Alt {altNum}
-          </span>
-        )}
+        {altNum != null && <MetadataChip variant="amber">Alt {altNum}</MetadataChip>}
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <div className="text-[11px] font-medium truncate flex-1 min-w-0">
+        <div className="text-sm truncate flex-1 min-w-0">
           {worker ? (
             <span className="text-foreground">{worker}</span>
           ) : (
-            <span className="text-muted-foreground/60 italic">Unassigned</span>
+            <span className="text-muted-foreground italic">Unassigned</span>
           )}
         </div>
         {started && (
           <span className="relative flex w-2 h-2 shrink-0" aria-label="In progress">
-            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
-            <span className="relative rounded-full w-2 h-2 bg-emerald-500" />
+            <span className="absolute inset-0 rounded-full bg-[var(--status-ok)] animate-ping opacity-75" />
+            <span className="relative rounded-full w-2 h-2 bg-[var(--status-ok)]" />
           </span>
         )}
       </div>

@@ -18,6 +18,18 @@
   --radius-xl: 12px;
   --radius-2xl: 12px;
   --radius-3xl: 12px;
+
+  /* Line-height overrides — Tailwind defaults (1.5 on text-base) make Inter
+     feel airy in dense data UIs. Tighten globally; larger sizes get
+     proportionally tighter leading (standard practice for headings). */
+  --text-xs--line-height:   1.4;
+  --text-sm--line-height:   1.4;
+  --text-base--line-height: 1.4;
+  --text-lg--line-height:   1.35;
+  --text-xl--line-height:   1.3;
+  --text-2xl--line-height:  1.25;
+  --text-3xl--line-height:  1.2;
+  --text-4xl--line-height:  1.15;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -50,17 +62,18 @@
   --radius: 0.5rem; /* 8px — softened. Cards default to this. */
 
   /* ── Semantic status tokens ──────────────────────────
-     Color reserved for meaning, not decoration. Use these instead of raw
-     tailwind palette classes (bg-red-50, text-emerald-600, etc.) so future
-     theme shifts stay coherent. */
-  --status-ok: oklch(0.62 0.13 150);
-  --status-ok-bg: oklch(0.96 0.03 150);
-  --status-warn: oklch(0.72 0.15 75);
-  --status-warn-bg: oklch(0.97 0.04 80);
-  --status-bad: oklch(0.55 0.20 27);
-  --status-bad-bg: oklch(0.96 0.03 27);
-  --status-info: oklch(0.55 0.10 240);
-  --status-info-bg: oklch(0.96 0.02 240);
+     Color reserved for meaning, not decoration. Deep, saturated foregrounds
+     (L ≈ 0.45-0.50, C ≈ 0.16-0.22) so each status reads instantly distinct
+     on a white card. Backgrounds are very pale tinted versions of the same
+     hue so the bg + fg pair always feels harmonised. */
+  --status-ok:     oklch(0.48 0.16 150);  /* deep green   — done / ready */
+  --status-ok-bg:  oklch(0.95 0.05 150);
+  --status-warn:   oklch(0.55 0.16 65);   /* deep amber   — waiting / action */
+  --status-warn-bg: oklch(0.96 0.05 75);
+  --status-bad:    oklch(0.50 0.22 27);   /* deep red     — express / fail */
+  --status-bad-bg: oklch(0.96 0.04 27);
+  --status-info:   oklch(0.45 0.18 255);  /* deep blue    — in progress */
+  --status-info-bg: oklch(0.95 0.05 250);
 
   /* ── Atelier palette ─────────────────────────────────
      Warm off-white background, pure-white elevated surfaces (cards, sidebar,
@@ -111,6 +124,54 @@
   --sidebar-ring: oklch(0.42 0.12 58);
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY SYSTEM — workshop app
+   ════════════════════════════════════════════════════════════════════════════
+
+   One source of truth. Match every text element to a role below. If a new
+   case doesn't fit a role, add a role here first — don't invent ad-hoc sizes.
+
+   ROLE              CLASS                                            USE
+   ──────────────────────────────────────────────────────────────────────────
+   Page title        text-2xl font-semibold tracking-tight            <h1> page headers
+   Section title     text-base font-medium                            <h2> groups in a page
+   Card title        text-sm font-medium                              <h3> inside cards
+   Primary data      text-base                                        names, statuses, key values
+   Secondary data    text-sm text-muted-foreground                    metadata next to primary
+   Caption           text-xs text-muted-foreground                    timestamps, footnotes
+   Table header      text-sm font-medium text-muted-foreground        <th> — NOT bold, not uppercase
+   Table cell        text-base                                        <td> primary value
+   Table cell meta   text-sm text-muted-foreground                    <td> secondary value
+   Mono ID           font-mono text-base                              order #, garment ID
+   Mono meta         font-mono text-sm text-muted-foreground          INV-####, phone numbers
+   Pill / chip       text-xs font-medium                              status pills, badges
+   Button label      text-sm font-medium                              buttons, links
+
+   WEIGHT RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • 600 (semibold)  page titles only
+   • 500 (medium)    section/card titles, table headers, emphasis, button labels
+   • 400 (regular)   body, all data, captions
+   • NEVER use 700 (bold) or 900 (black) in UI — fake hierarchy. If a value
+     looks weak, fix it with color contrast, size, or surrounding whitespace
+     instead.
+
+   COLOR RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • text-foreground          primary data
+   • text-muted-foreground    labels, metadata, headers (the hierarchy comes
+                              from color contrast against primary data, not
+                              from font weight)
+   • text-[var(--status-*)]   semantic status only (ok/warn/bad/info)
+   • Brand colors             dark-saturated shades only (-900) — see BrandBadge
+
+   CASE & TRACKING RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • NEVER use uppercase + tracking-wider for UI labels. That's a sticker
+     pattern from marketing pages. Sentence case is always correct.
+   • The one exception is true acronyms (INV-, QC, ID).
+   ════════════════════════════════════════════════════════════════════════════ */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -119,11 +180,21 @@
 
   html {
     touch-action: manipulation;
+    /* Root size bumped from 16 → 17px. Every rem-based utility scales up ~6%,
+       so text-xs (0.75rem) reads ~12.75px and text-sm (0.875rem) reads ~14.9px.
+       Inter has a smaller x-height than Montserrat — the bump compensates so
+       data labels stay legible at a distance from a workshop monitor.
+
+       Line-height 1.4 (not 1.5) — Inter renders taller than Montserrat at the
+       same px. 1.5 makes data rows feel airy and double-line cells eat
+       vertical real estate. 1.4 matches Linear / Datadog density. */
+    font-size: 17px;
+    line-height: 1.4;
   }
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Montserrat", "Cairo", sans-serif;
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
     overscroll-behavior: none;
   }
 
@@ -133,7 +204,19 @@
   h4,
   h5,
   h6 {
-    font-family: "Marcellus", "Cairo", serif;
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    letter-spacing: -0.01em;
+  }
+
+  /* IDs, order numbers, measurements — use JetBrains Mono for that
+     warehouse-terminal feel. Tabular numerals also avoid digit jitter. */
+  .font-mono,
+  code,
+  pre,
+  kbd {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-feature-settings: "tnum";
   }
 
   button,
@@ -142,7 +225,7 @@
   label[for],
   select,
   summary {
-    font-family: "Montserrat", "Cairo", sans-serif;
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
     touch-action: manipulation;
   }
 
@@ -152,7 +235,7 @@
   }
 
   label {
-    font-family: "Montserrat", "Cairo", sans-serif;
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
     font-weight: 500;
   }
 

@@ -30,9 +30,9 @@ export const FEEDBACK_STATUS_LABELS = {
 } as const;
 
 export const FEEDBACK_STATUS_COLORS = {
-  accepted: "bg-emerald-200 text-emerald-900",
-  needs_repair: "bg-amber-200 text-amber-900",
-  needs_redo: "bg-red-200 text-red-900",
+  accepted:     "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+  needs_repair: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
+  needs_redo:   "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
 } as const;
 
 export const RESPONSIBILITY_LABELS = {

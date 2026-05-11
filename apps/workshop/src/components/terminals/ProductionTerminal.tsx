@@ -6,7 +6,6 @@ import { useCurrentUserUnit } from "@/hooks/useCurrentUserUnit";
 import { isTerminalUser } from "@/lib/rbac";
 import {
   PageHeader,
-  EmptyState,
   LoadingSkeleton,
   GarmentTypeBadge,
 } from "@/components/shared/PageShell";
@@ -153,7 +152,7 @@ function ElapsedTimer({ since }: { since: string }) {
   const display =
     hrs > 0 ? `${hrs}h ${remainMins}m` : mins > 0 ? `${mins}m` : "just now";
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-mono font-bold text-emerald-700 tabular-nums">
+    <span className="inline-flex items-center gap-0.5 text-xs font-mono font-medium text-[var(--status-ok)] tabular-nums">
       <Timer className="w-3 h-3" />
       {display}
     </span>
@@ -164,12 +163,14 @@ function ElapsedTimer({ since }: { since: string }) {
 
 function AltBadge({ label }: { label: string }) {
   const isQc = label === "alt_p";
-  const isOut = label.startsWith("alt_out");
   return (
     <Badge
+      variant="outline"
       className={cn(
-        "font-semibold text-xs uppercase tracking-wide border-0 text-white",
-        isQc ? "bg-red-600" : isOut ? "bg-amber-600" : "bg-orange-500",
+        "border-transparent text-xs font-medium",
+        isQc
+          ? "bg-[var(--status-bad-bg)] text-[var(--status-bad)]"
+          : "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
       )}
     >
       {label}
@@ -186,6 +187,7 @@ function InlineActions({
   garment: WorkshopGarment;
   stage: string;
 }) {
+  const { user } = useAuth();
   const startMut = useStartGarment();
   const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
@@ -196,7 +198,9 @@ function InlineActions({
     plan as Record<string, string> | null,
     garment.qc_rework_stages,
   );
-  const plannedWorker = (plan as any)?.soaker ?? "";
+  // Soaking has no planned worker — anyone in the soaking group can act.
+  // Record the actor (whoever pressed Done) in worker_history.
+  const actor = user?.name ?? "";
   const working = isWorking(garment);
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -223,12 +227,8 @@ function InlineActions({
       toast.error("No next stage in production plan");
       return;
     }
-    if (!plannedWorker) {
-      toast.error("No soaker assigned to this garment");
-      return;
-    }
     completeMut.mutate(
-      { id: garment.id, worker: plannedWorker, stage, nextStage },
+      { id: garment.id, worker: actor, stage, nextStage },
       {
         onError: (err) =>
           toast.error(`Failed to advance: ${err?.message ?? "Unknown error"}`),
@@ -240,7 +240,7 @@ function InlineActions({
     return (
       <Button
         size="sm"
-        className="h-8 bg-blue-600 hover:bg-blue-700"
+        className="h-8"
         onClick={onStart}
         disabled={startMut.isPending}
       >
@@ -258,7 +258,7 @@ function InlineActions({
     <div className="flex items-center gap-1.5">
       <Button
         size="sm"
-        className="h-8 bg-emerald-600 hover:bg-emerald-700"
+        className="h-8"
         onClick={onDone}
         disabled={completeMut.isPending}
       >
@@ -295,6 +295,7 @@ function GarmentRow({
   showAlt,
   showExpressFlag,
   showActions,
+  showType = true,
 }: {
   garment: WorkshopGarment;
   stage: string;
@@ -302,6 +303,7 @@ function GarmentRow({
   showAlt?: boolean;
   showExpressFlag?: boolean;
   showActions?: boolean;
+  showType?: boolean;
 }) {
   const { user } = useAuth();
   const showAssignee = !isTerminalUser(user);
@@ -318,18 +320,18 @@ function GarmentRow({
       {...(onClick ? { ...clickableProps(onClick), onClick } : {})}
       className={cn(
         onClick && "cursor-pointer hover:bg-muted/40",
-        working && "bg-emerald-50/40",
+        working && "bg-[var(--status-ok-bg)]/40",
       )}
     >
       <TableCell className="px-3 py-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-sm font-bold">
+          <span className="font-mono text-base">
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </span>
           <div className="flex items-center gap-1 flex-wrap">
             {showExpressFlag && garment.express && <ExpressBadge />}
             {garment.soaking && (
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md">
                 <Droplets className="w-3 h-3" /> Soak{(garment as any).soaking_hours ? ` ${(garment as any).soaking_hours}h` : ""}
               </span>
             )}
@@ -337,9 +339,11 @@ function GarmentRow({
           </div>
         </div>
       </TableCell>
-      <TableCell className="px-3 py-3">
-        <GarmentTypeBadge type={garment.garment_type ?? "final"} />
-      </TableCell>
+      {showType && (
+        <TableCell className="px-3 py-3">
+          <GarmentTypeBadge type={garment.garment_type ?? "final"} />
+        </TableCell>
+      )}
       {showAlt && (
         <TableCell className="px-3 py-3">
           {altLabel && <AltBadge label={altLabel} />}
@@ -347,7 +351,7 @@ function GarmentRow({
       )}
       <TableCell className="px-3 py-3 font-mono">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold">#{garment.order_id}</span>
+          <span className="text-base">#{garment.order_id}</span>
           {garment.invoice_number && (
             <span className="text-xs text-muted-foreground">
               INV-{garment.invoice_number}
@@ -357,7 +361,7 @@ function GarmentRow({
       </TableCell>
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold">{garment.customer_name ?? "—"}</span>
+          <span className="text-base">{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
             <span className="text-xs font-mono text-muted-foreground">
               {garment.customer_mobile}
@@ -392,15 +396,12 @@ function GarmentRow({
           {assignee ? (
             <span
               className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium",
-                stage === "sewing"
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "bg-slate-100 text-slate-700",
-                working && "ring-1 ring-emerald-400",
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-muted text-foreground",
+                working && "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
               )}
               title={`${assigneeLabel}: ${assignee}${working ? " (working)" : ""}`}
             >
-              {working && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+              {working && <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-ok)]" />}
               {assignee}
             </span>
           ) : (
@@ -426,6 +427,7 @@ function SectionTable({
   showAlt,
   showExpressFlag,
   showActions,
+  showType = true,
 }: {
   garments: WorkshopGarment[];
   stage: string;
@@ -433,6 +435,7 @@ function SectionTable({
   showAlt?: boolean;
   showExpressFlag?: boolean;
   showActions?: boolean;
+  showType?: boolean;
 }) {
   const { user } = useAuth();
   const showAssignee = !isTerminalUser(user);
@@ -443,7 +446,7 @@ function SectionTable({
         <TableHeader>
           <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
             <TableHead className="w-[120px]">Garment</TableHead>
-            <TableHead className="w-[80px]">Type</TableHead>
+            {showType && <TableHead className="w-[80px]">Type</TableHead>}
             {showAlt && <TableHead className="w-[80px]">Alt</TableHead>}
             <TableHead className="w-[110px]">Order / Invoice</TableHead>
             <TableHead className="w-[170px]">Customer</TableHead>
@@ -468,6 +471,7 @@ function SectionTable({
               showAlt={showAlt}
               showExpressFlag={showExpressFlag}
               showActions={showActions}
+              showType={showType}
             />
           ))}
         </TableBody>
@@ -482,21 +486,43 @@ function Section({
   title,
   icon: Icon,
   count,
-  accent,
+  tone,
+  emptyLabel,
   children,
 }: {
   title: string;
   icon: LucideIcon;
   count: number;
-  accent?: string;
+  tone?: "ok" | "warn" | "bad" | "info";
+  emptyLabel?: string;
   children: React.ReactNode;
 }) {
+  if (count === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
+        <Icon className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground/70 text-xs ml-auto">
+          {emptyLabel ?? "Empty"}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
-        <h2 className="font-semibold text-base text-foreground">{title}</h2>
-        <Badge variant="secondary" className={cn("text-xs", accent)}>
+        <h2 className="text-base font-medium">{title}</h2>
+        <Badge
+          variant="secondary"
+          className={cn(
+            "text-xs font-medium",
+            tone === "ok" && "bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
+            tone === "warn" && "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
+            tone === "bad" && "bg-[var(--status-bad-bg)] text-[var(--status-bad)]",
+            tone === "info" && "bg-[var(--status-info-bg)] text-[var(--status-info)]",
+          )}
+        >
           {count}
         </Badge>
       </div>
@@ -560,6 +586,11 @@ export function ProductionTerminal({
     }
     const planKey = STAGE_TO_PLAN_KEY[terminalStage];
     if (!planKey) return stageGarments;
+    // Soaking is group-scoped: there is no per-worker (or per-unit) assignment;
+    // any user with the soaker job function sees every soaking garment.
+    if (terminalStage === "soaking") {
+      return stageGarments;
+    }
     // Sewing is unit-scoped: production_plan.sewer holds the unit name; show
     // garments where the user's sewing unit matches. If the user has no unit,
     // show nothing.
@@ -677,23 +708,17 @@ export function ProductionTerminal({
             title="Currently Working"
             icon={PlayCircle}
             count={sections.working.length}
-            accent="bg-emerald-100 text-emerald-700"
+            tone="ok"
+            emptyLabel="Nothing in production"
           >
-            {sections.working.length === 0 ? (
-              <EmptyState
-                icon={PlayCircle}
-                message="Nothing in production right now"
-              />
-            ) : (
-              <SectionTable
-                garments={sections.working}
-                stage={terminalStage}
-                onRowClick={variant === "simple" ? undefined : handleClick}
-                showAlt
-                showExpressFlag
-                showActions={variant === "simple"}
-              />
-            )}
+            <SectionTable
+              garments={sections.working}
+              stage={terminalStage}
+              onRowClick={variant === "simple" ? undefined : handleClick}
+              showAlt
+              showExpressFlag
+              showActions={variant === "simple"}
+            />
           </Section>
 
           {variant === "simple" ? (
@@ -702,18 +727,15 @@ export function ProductionTerminal({
               title="Assigned"
               icon={Clock}
               count={sections.assigned.length}
-              accent="bg-blue-100 text-blue-700"
+              tone="info"
+              emptyLabel="No garments assigned"
             >
-              {sections.assigned.length === 0 ? (
-                <EmptyState icon={Clock} message="No garments assigned" />
-              ) : (
-                <SectionTable
-                  garments={sections.assigned}
-                  stage={terminalStage}
-                  showExpressFlag
-                  showActions
-                />
-              )}
+              <SectionTable
+                garments={sections.assigned}
+                stage={terminalStage}
+                showExpressFlag
+                showActions
+              />
             </Section>
           ) : (
             <>
@@ -722,20 +744,14 @@ export function ProductionTerminal({
                 title="Express"
                 icon={Zap}
                 count={sections.express.length}
-                accent="bg-orange-100 text-orange-700"
+                tone="bad"
+                emptyLabel="No express garments"
               >
-                {sections.express.length === 0 ? (
-                  <EmptyState
-                    icon={Zap}
-                    message="No express garments waiting"
-                  />
-                ) : (
-                  <SectionTable
-                    garments={sections.express}
-                    stage={terminalStage}
-                    onRowClick={handleClick}
-                  />
-                )}
+                <SectionTable
+                  garments={sections.express}
+                  stage={terminalStage}
+                  onRowClick={handleClick}
+                />
               </Section>
 
               {/* ── Brova ── */}
@@ -743,20 +759,15 @@ export function ProductionTerminal({
                 title="Brova"
                 icon={Package}
                 count={sections.brova.length}
-                accent="bg-amber-100 text-amber-700"
+                tone="info"
+                emptyLabel="No brova garments"
               >
-                {sections.brova.length === 0 ? (
-                  <EmptyState
-                    icon={Package}
-                    message="No brova garments waiting"
-                  />
-                ) : (
-                  <SectionTable
-                    garments={sections.brova}
-                    stage={terminalStage}
-                    onRowClick={handleClick}
-                  />
-                )}
+                <SectionTable
+                  garments={sections.brova}
+                  stage={terminalStage}
+                  onRowClick={handleClick}
+                  showType={false}
+                />
               </Section>
 
               {/* ── Final ── */}
@@ -764,20 +775,14 @@ export function ProductionTerminal({
                 title="Final"
                 icon={Package}
                 count={sections.final.length}
-                accent="bg-emerald-100 text-emerald-700"
+                emptyLabel="No final garments"
               >
-                {sections.final.length === 0 ? (
-                  <EmptyState
-                    icon={Package}
-                    message="No final garments waiting"
-                  />
-                ) : (
-                  <SectionTable
-                    garments={sections.final}
-                    stage={terminalStage}
-                    onRowClick={handleClick}
-                  />
-                )}
+                <SectionTable
+                  garments={sections.final}
+                  stage={terminalStage}
+                  onRowClick={handleClick}
+                  showType={false}
+                />
               </Section>
 
               {/* ── Alterations In (work-order returns + QC-fail rework) ── */}
@@ -785,19 +790,16 @@ export function ProductionTerminal({
                 title="Alterations In"
                 icon={Wrench}
                 count={sections.alterations_in.length}
-                accent="bg-purple-100 text-purple-700"
+                tone="warn"
+                emptyLabel="No alterations in"
               >
-                {sections.alterations_in.length === 0 ? (
-                  <EmptyState icon={Wrench} message="No alterations in waiting" />
-                ) : (
-                  <SectionTable
-                    garments={sections.alterations_in}
-                    stage={terminalStage}
-                    onRowClick={handleClick}
-                    showAlt
-                    showExpressFlag
-                  />
-                )}
+                <SectionTable
+                  garments={sections.alterations_in}
+                  stage={terminalStage}
+                  onRowClick={handleClick}
+                  showAlt
+                  showExpressFlag
+                />
               </Section>
 
               {/* ── Alterations Out (customer-brought alteration_orders) ── */}
@@ -805,19 +807,17 @@ export function ProductionTerminal({
                 title="Alterations Out"
                 icon={Wrench}
                 count={sections.alterations_out.length}
-                accent="bg-amber-100 text-amber-700"
+                tone="warn"
+                emptyLabel="No alterations out"
               >
-                {sections.alterations_out.length === 0 ? (
-                  <EmptyState icon={Wrench} message="No alterations out waiting" />
-                ) : (
-                  <SectionTable
-                    garments={sections.alterations_out}
-                    stage={terminalStage}
-                    onRowClick={handleClick}
-                    showAlt
-                    showExpressFlag
-                  />
-                )}
+                <SectionTable
+                  garments={sections.alterations_out}
+                  stage={terminalStage}
+                  onRowClick={handleClick}
+                  showAlt
+                  showExpressFlag
+                  showType={false}
+                />
               </Section>
             </>
           )}

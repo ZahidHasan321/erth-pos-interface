@@ -15,7 +15,7 @@ export function FabricFields() {
   const source = watch("fabric_source");
   const { data: fabrics = [], isLoading: loadingFabrics } = useQuery({
     queryKey: ["fabrics"],
-    queryFn: getFabrics,
+    queryFn: () => getFabrics(),
   });
 
   return (
