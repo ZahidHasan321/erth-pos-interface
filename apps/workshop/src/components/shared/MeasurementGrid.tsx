@@ -26,7 +26,6 @@ const MEASUREMENT_GROUPS: { title: string; fields: { key: keyof Measurement; lab
       { key: "sleeve_length", label: "Length" },
       { key: "sleeve_width", label: "Width" },
       { key: "elbow", label: "Elbow" },
-      { key: "armhole", label: "Armhole" },
       { key: "armhole_front", label: "AH front" },
     ],
   },

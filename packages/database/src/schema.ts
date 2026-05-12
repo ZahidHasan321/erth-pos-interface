@@ -457,7 +457,6 @@ export const measurements = pgTable("measurements", {
     collar_width: numeric("collar_width", { precision: 5, scale: 2 }),
     collar_height: numeric("collar_height", { precision: 5, scale: 2 }),
     shoulder: numeric("shoulder", { precision: 5, scale: 2 }),
-    armhole: numeric("armhole", { precision: 5, scale: 2 }),
     chest_upper: numeric("chest_upper", { precision: 5, scale: 2 }),
     chest_full: numeric("chest_full", { precision: 5, scale: 2 }),
     sleeve_length: numeric("sleeve_length", { precision: 5, scale: 2 }),
@@ -484,7 +483,6 @@ export const measurements = pgTable("measurements", {
     // Provisions
     chest_provision: numeric("chest_provision", { precision: 5, scale: 2 }),
     waist_provision: numeric("waist_provision", { precision: 5, scale: 2 }),
-    armhole_provision: numeric("armhole_provision", { precision: 5, scale: 2 }),
 
     // Degree (size grade adjustment — subtracted from real measurements)
     degree: numeric("degree", { precision: 5, scale: 2 }),
@@ -499,10 +497,9 @@ export const measurements = pgTable("measurements", {
     // Buttons
     second_button_distance: numeric("second_button_distance", { precision: 5, scale: 2 }),
 
-    // Basma
+    // Basma — optional, populated only when garment has basma trim
     basma_length: numeric("basma_length", { precision: 5, scale: 2 }),
     basma_width: numeric("basma_width", { precision: 5, scale: 2 }),
-    basma_sleeve_length: numeric("basma_sleeve_length", { precision: 5, scale: 2 }),
 
     // Hemming
     sleeve_hemming: numeric("sleeve_hemming", { precision: 5, scale: 2 }),

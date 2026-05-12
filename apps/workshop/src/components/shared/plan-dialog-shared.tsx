@@ -4,7 +4,7 @@ import { useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { cn, formatDate } from "@/lib/utils";
 import { STYLE_IMAGE_MAP, THICKNESS_LABELS } from "@/lib/style-images";
 import type { ProductionPlan, QcAttempt, TripHistoryEntry } from "@repo/database";
-import { getQcReturnStages } from "@repo/database";
+import { getQcReturnStages, getLabel as getMeasurementLabel } from "@repo/database";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -319,28 +319,10 @@ const STAGE_LABELS: Record<string, string> = {
   quality_check: "Quality Check",
 };
 
-const MEASUREMENT_FIELD_LABELS: Record<string, string> = {
-  collar_width: "Collar Width",
-  collar_height: "Collar Height",
-  length_front: "Length (Front)",
-  length_back: "Length (Back)",
-  top_pocket_length: "Top Pocket Length",
-  top_pocket_width: "Top Pocket Width",
-  top_pocket_distance: "Top Pocket Distance",
-  side_pocket_length: "Side Pocket Length",
-  side_pocket_width: "Side Pocket Width",
-  side_pocket_distance: "Side Pocket Distance",
-  side_pocket_opening: "Side Pocket Opening",
-  waist_front: "Waist (Front)",
-  waist_back: "Waist (Back)",
-  armhole: "Arm Hole",
-  chest_upper: "Chest (Upper)",
-  chest_full: "Chest (Full)",
-  chest_front: "Chest (Half)",
-  elbow: "Elbow",
-  sleeve_length: "Sleeves",
-  bottom: "Bottom",
-};
+// Label resolver — derives from the measurement spec so every key (basma,
+// jabzour, hemming, etc.) flows through automatically. Falls back to the
+// raw key if the spec has no entry (defensive — shouldn't happen).
+const labelForMeasurementField = (key: string): string => getMeasurementLabel(key);
 
 const OPTION_LABELS: Record<string, string> = {
   collar: "Collar Type",
@@ -556,7 +538,7 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
           </div>
           <ul className="space-y-0.5 text-sm">
             {measurementDiffs.map((d, i) => {
-              const fieldLabel = MEASUREMENT_FIELD_LABELS[d.field] ?? d.field;
+              const fieldLabel = labelForMeasurementField(d.field);
               const diff = d.difference != null ? (d.difference > 0 ? `+${d.difference}` : `${d.difference}`) : null;
               return (
                 <li key={`${d.field}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">

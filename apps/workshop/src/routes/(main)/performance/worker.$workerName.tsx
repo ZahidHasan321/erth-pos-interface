@@ -21,15 +21,16 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+// TEMP DISABLED: post_cutting hidden from production flow
 const STAGE_LABELS: Record<string, string> = {
-  soaking: "Soaking", cutting: "Cutting", post_cutting: "Post-cut",
+  soaking: "Soaking", cutting: "Cutting",
   sewing: "Sewing", finishing: "Finishing", ironing: "Ironing", quality_check: "QC",
 };
 
 const STAGE_DOT: Record<string, string> = {
   soaking: "var(--status-info)",
   cutting: "var(--status-warn)",
-  post_cutting: "var(--status-warn)",
+  // post_cutting: "var(--status-warn)", // TEMP DISABLED
   sewing: "var(--foreground)",
   finishing: "var(--status-ok)",
   ironing: "var(--status-bad)",

@@ -48,9 +48,7 @@ import {
   QC_RETURN_STAGES,
   QC_TOLERANCE,
   QC_QUALITY_THRESHOLD,
-  QC_BASMA_HIDDEN_KEYS,
   evaluateQc,
-  hasBasmaMeasurements,
   normalizeExpectedJabzour,
   type QcInputs,
   type QcOptionSpec,
@@ -102,18 +100,13 @@ export function QualityCheckForm({
 
   const isRework = !!lastFail;
 
-  // Basma is implicit — driven by whether the measurement snapshot has any
-  // basma value. When active, basma_sleeve_length supersedes sleeve_width.
-  const basma = hasBasmaMeasurements(measurement as unknown as Record<string, unknown> | null);
+  // Basma group always renders — fields are optional, never block submit.
+  // Operator leaves them blank if the garment has no basma.
   const visibleMeasurementKeys = useMemo(() => {
     const set = new Set<string>();
-    for (const m of QC_MEASUREMENTS) {
-      if (m.basma && !basma) continue;
-      if (basma && QC_BASMA_HIDDEN_KEYS.has(m.key)) continue;
-      set.add(m.key);
-    }
+    for (const m of QC_MEASUREMENTS) set.add(m.key);
     return set;
-  }, [basma]);
+  }, []);
 
   const enabledKeys = useMemo(() => {
     // QC-fail rework takes precedence: re-check only the previous fail's flagged fields.
@@ -692,15 +685,39 @@ function MeasurementGrid({
                 disabled={!enabled}
                 value={measuredVal}
                 onChange={(e) => onChange(key, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const all = Array.from(
+                      document.querySelectorAll<HTMLInputElement>(
+                        'input[data-qc-measure="true"]:not(:disabled)',
+                      ),
+                    );
+                    const idx = all.indexOf(e.currentTarget);
+                    const next = idx >= 0 ? all[idx + 1] : null;
+                    if (next) {
+                      next.focus();
+                      next.select();
+                    } else {
+                      e.currentTarget.blur();
+                    }
+                  }
+                }}
+                data-qc-measure="true"
                 className={cn(
-                  "h-10 w-full text-center text-base tabular-nums bg-transparent border-0 shadow-none px-1 focus:ring-1 focus:ring-primary",
+                  "h-10 w-full text-center text-lg font-medium tabular-nums bg-background border border-input px-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
                   !enabled && "bg-muted/30 text-muted-foreground",
                 )}
                 placeholder="—"
               />
-              <div className="h-5 flex items-center justify-center mt-1">
-                {measuredNum != null && Number.isFinite(measuredNum) && (
-                  <FractionPreview value={measuredNum} />
+              <div className="h-5 flex items-center justify-center mt-1 text-[10px] text-muted-foreground/70">
+                {measuredNum != null && Number.isFinite(measuredNum) ? (
+                  <span className="inline-flex items-center gap-0.5">
+                    <span>=</span>
+                    <FractionPreview value={measuredNum} />
+                  </span>
+                ) : (
+                  <span className="opacity-0">=</span>
                 )}
               </div>
             </div>

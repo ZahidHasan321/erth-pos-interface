@@ -12,7 +12,7 @@ const VALUE_POSITIONS: { key: keyof Measurement; x: number; y: number }[] = [
   { key: "shoulder", x: 398, y: 404 },
   { key: "elbow", x: 188, y: 378 },
   { key: "sleeve_length", x: 309, y: 517 },
-  { key: "armhole", x: 406, y: 517 },
+  { key: "armhole_front", x: 406, y: 517 },
   { key: "sleeve_width", x: 498, y: 517 },
   { key: "chest_upper", x: 404, y: 656 },
   { key: "chest_back", x: 330, y: 764 },

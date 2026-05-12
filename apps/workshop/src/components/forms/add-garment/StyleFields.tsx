@@ -8,20 +8,8 @@ import {
   type BaseOption,
 } from "./constants";
 import type { AddGarmentFormValues } from "./schema";
+import { SectionCard } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-      <header className="px-4 py-2.5 border-b bg-muted/30">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </h3>
-      </header>
-      <div className="p-4 space-y-4">{children}</div>
-    </section>
-  );
-}
 
 export function ImageOptionGrid({
   options, value, onChange, allowClear = false, cols = "auto", disabled = false, failed = false,
@@ -32,7 +20,7 @@ export function ImageOptionGrid({
   allowClear?: boolean;
   cols?: "auto" | "tight";
   disabled?: boolean;
-  /** When true, the selected option renders in red — QC fail indicator. */
+  /** When true, the selected option renders in the bad-status tone — QC fail indicator. */
   failed?: boolean;
 }) {
   return (
@@ -54,12 +42,12 @@ export function ImageOptionGrid({
             disabled={disabled}
             onClick={() => onChange(allowClear && selected ? null : o.value)}
             className={cn(
-              "group relative flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 bg-background transition-all",
-              !disabled && !showFail && "hover:border-primary/60 hover:shadow-sm",
+              "group relative flex flex-col items-center gap-1.5 p-2 rounded-md border bg-background transition-colors",
+              !disabled && !showFail && "hover:border-primary/60",
               showFail
-                ? "border-red-500 bg-red-50 shadow-sm"
+                ? "border-[color:var(--status-bad)] bg-[var(--status-bad-bg)]"
                 : selected
-                  ? "border-primary bg-primary/5 shadow-sm"
+                  ? "border-primary bg-primary/5"
                   : "border-border",
               disabled && "opacity-50 cursor-not-allowed",
             )}
@@ -67,9 +55,9 @@ export function ImageOptionGrid({
             {selected && (
               <span
                 className={cn(
-                  "absolute top-1 right-1 rounded-full p-0.5 shadow",
+                  "absolute top-1 right-1 rounded-full p-0.5",
                   showFail
-                    ? "bg-red-500 text-white"
+                    ? "bg-[color:var(--status-bad)] text-white"
                     : "bg-primary text-primary-foreground",
                 )}
               >
@@ -83,13 +71,13 @@ export function ImageOptionGrid({
                 className="h-14 w-14 object-contain"
               />
             ) : (
-              <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center text-[10px] text-muted-foreground font-semibold uppercase">
+              <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
                 None
               </div>
             )}
             <span
               className={cn(
-                "text-[11px] font-medium text-center leading-tight",
+                "text-xs font-medium text-center leading-tight",
                 selected ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -108,15 +96,15 @@ export function ThicknessPicker({
   value: string | null;
   onChange: (v: string) => void;
   disabled?: boolean;
-  /** When true, the selected option renders in red — QC fail indicator. */
+  /** When true, the selected option renders in the bad-status tone — QC fail indicator. */
   failed?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "inline-flex rounded-lg border bg-background p-0.5",
+        "inline-flex rounded-md border bg-background p-0.5",
         disabled && "opacity-50",
-        failed && "border-red-400",
+        failed && "border-[color:var(--status-bad)]",
       )}
     >
       {thicknessOptions.map((t) => {
@@ -130,11 +118,11 @@ export function ThicknessPicker({
             onClick={() => onChange(t.value)}
             title={t.full}
             className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-bold transition-colors min-w-[36px]",
+              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-w-[36px]",
               showFail
-                ? "bg-red-500 text-white shadow-sm"
+                ? "bg-[color:var(--status-bad)] text-white"
                 : selected
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground",
               !disabled && !selected && "hover:text-foreground hover:bg-muted",
               disabled && "cursor-not-allowed",
@@ -156,7 +144,7 @@ export function IconToggle({
   icon: string;
   label: string;
   disabled?: boolean;
-  /** When true, the toggle renders in red — QC fail indicator. Applies in
+  /** When true, the toggle renders in the bad-status tone — QC fail indicator. Applies in
    *  both checked and unchecked states because boolean OFF is a real answer
    *  the QC operator might need to flag. */
   failed?: boolean;
@@ -167,10 +155,10 @@ export function IconToggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 bg-background transition-all min-w-[72px]",
+        "relative flex flex-col items-center gap-1 p-2.5 rounded-md border bg-background transition-colors min-w-[72px]",
         !disabled && !failed && "hover:border-primary/60",
         failed
-          ? "border-red-500 bg-red-50"
+          ? "border-[color:var(--status-bad)] bg-[var(--status-bad-bg)]"
           : checked
             ? "border-primary bg-primary/5"
             : "border-border",
@@ -181,7 +169,7 @@ export function IconToggle({
         <span
           className={cn(
             "absolute top-1 right-1 rounded-full p-0.5",
-            failed ? "bg-red-500 text-white" : "bg-primary text-primary-foreground",
+            failed ? "bg-[color:var(--status-bad)] text-white" : "bg-primary text-primary-foreground",
           )}
         >
           <Check className="w-3 h-3" />
@@ -190,8 +178,8 @@ export function IconToggle({
       <img src={icon} alt={label} className="h-8 w-8 object-contain" />
       <span
         className={cn(
-          "text-[10px] font-medium",
-          failed ? "text-red-700" : checked ? "text-foreground" : "text-muted-foreground",
+          "text-xs font-medium",
+          failed ? "text-[color:var(--status-bad)]" : checked ? "text-foreground" : "text-muted-foreground",
         )}
       >
         {label}
@@ -208,7 +196,7 @@ export function StyleFields() {
 
   return (
     <div className="space-y-4">
-      <SectionCard title="General">
+      <SectionCard title="General" bodyClassName="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="style">Style</Label>
@@ -226,16 +214,16 @@ export function StyleFields() {
                   { value: 2, label: "2" },
                 ];
                 return (
-                  <div className="inline-flex rounded-lg border bg-background p-0.5">
+                  <div className="inline-flex rounded-md border bg-background p-0.5">
                     {options.map((o) => (
                       <button
                         key={o.label}
                         type="button"
                         onClick={() => field.onChange(o.value)}
                         className={cn(
-                          "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
+                          "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                           field.value === o.value
-                            ? "bg-primary text-primary-foreground shadow-sm"
+                            ? "bg-primary text-primary-foreground"
                             : "text-muted-foreground hover:bg-muted",
                         )}
                       >
@@ -250,239 +238,250 @@ export function StyleFields() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Collar">
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
-          <Controller
-            control={control}
-            name="collar_type"
-            render={({ field }) => (
-              <ImageOptionGrid
-                options={collarTypes}
-                value={field.value}
-                onChange={field.onChange}
-                allowClear
-              />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Button</Label>
-          <Controller
-            control={control}
-            name="collar_button"
-            render={({ field }) => (
-              <ImageOptionGrid
-                options={collarButtons}
-                value={field.value}
-                onChange={field.onChange}
-                allowClear
-              />
-            )}
-          />
-        </div>
-        <div>
-          <Controller
-            control={control}
-            name="small_tabaggi"
-            render={({ field }) => (
-              <IconToggle
-                checked={!!field.value}
-                onChange={field.onChange}
-                icon={smallTabaggiImage}
-                label="Small Tabaggi"
-              />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Position</Label>
-          <Controller
-            control={control}
-            name="collar_position"
-            render={({ field }) => (
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={field.value === "up"}
-                    onChange={(e) => field.onChange(e.target.checked ? "up" : null)}
-                  />
-                  UP
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={field.value === "down"}
-                    onChange={(e) => field.onChange(e.target.checked ? "down" : null)}
-                  />
-                  DOWN
-                </label>
-                <span className="text-xs text-muted-foreground self-center">
-                  (none = ordinary)
-                </span>
-              </div>
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Thickness</Label>
-          <Controller
-            control={control}
-            name="collar_thickness"
-            render={({ field }) => (
-              <ThicknessPicker value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Jabzour">
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
-          <Controller
-            control={control}
-            name="jabzour_1"
-            render={({ field }) => (
-              <ImageOptionGrid
-                options={jabzourTypes}
-                value={field.value}
-                onChange={field.onChange}
-                allowClear
-              />
-            )}
-          />
-        </div>
-        {showJab2 && (
+      {/* Detailed style sections — pair up on wide screens so the tailor sees
+          collar + jabzour and pocket + cuffs side-by-side instead of scrolling
+          through five stacked cards. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SectionCard title="Collar" bodyClassName="space-y-3">
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
-              Jabzour 2 <span className="text-red-600">*</span>
-            </Label>
+            <Label className="text-sm text-muted-foreground">Type</Label>
             <Controller
               control={control}
-              name="jabzour_2"
+              name="collar_type"
               render={({ field }) => (
                 <ImageOptionGrid
-                  options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                  options={collarTypes}
                   value={field.value}
                   onChange={field.onChange}
                   allowClear
-                />
-              )}
-            />
-            {errors.jabzour_2 && (
-              <p className="text-xs text-red-600">{errors.jabzour_2.message as string}</p>
-            )}
-          </div>
-        )}
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Thickness</Label>
-          <Controller
-            control={control}
-            name="jabzour_thickness"
-            render={({ field }) => (
-              <ThicknessPicker value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Front pocket">
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
-          <Controller
-            control={control}
-            name="front_pocket_type"
-            render={({ field }) => (
-              <ImageOptionGrid
-                options={topPocketTypes}
-                value={field.value}
-                onChange={field.onChange}
-                allowClear
-              />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Thickness</Label>
-          <Controller
-            control={control}
-            name="front_pocket_thickness"
-            render={({ field }) => (
-              <ThicknessPicker value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Accessories</Label>
-          <div className="flex flex-wrap gap-2">
-            <Controller
-              control={control}
-              name="wallet_pocket"
-              render={({ field }) => (
-                <IconToggle
-                  checked={!!field.value}
-                  onChange={field.onChange}
-                  icon={walletIcon}
-                  label="Wallet"
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="pen_holder"
-              render={({ field }) => (
-                <IconToggle
-                  checked={!!field.value}
-                  onChange={field.onChange}
-                  icon={penIcon}
-                  label="Pen"
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="mobile_pocket"
-              render={({ field }) => (
-                <IconToggle
-                  checked={!!field.value}
-                  onChange={field.onChange}
-                  icon={phoneIcon}
-                  label="Mobile"
+                  cols="tight"
                 />
               )}
             />
           </div>
-        </div>
-      </SectionCard>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Button</Label>
+            <Controller
+              control={control}
+              name="collar_button"
+              render={({ field }) => (
+                <ImageOptionGrid
+                  options={collarButtons}
+                  value={field.value}
+                  onChange={field.onChange}
+                  allowClear
+                  cols="tight"
+                />
+              )}
+            />
+          </div>
+          <div>
+            <Controller
+              control={control}
+              name="small_tabaggi"
+              render={({ field }) => (
+                <IconToggle
+                  checked={!!field.value}
+                  onChange={field.onChange}
+                  icon={smallTabaggiImage}
+                  label="Small Tabaggi"
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Position</Label>
+            <Controller
+              control={control}
+              name="collar_position"
+              render={({ field }) => (
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={field.value === "up"}
+                      onChange={(e) => field.onChange(e.target.checked ? "up" : null)}
+                    />
+                    UP
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={field.value === "down"}
+                      onChange={(e) => field.onChange(e.target.checked ? "down" : null)}
+                    />
+                    DOWN
+                  </label>
+                  <span className="text-sm text-muted-foreground self-center">
+                    (none = ordinary)
+                  </span>
+                </div>
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Thickness</Label>
+            <Controller
+              control={control}
+              name="collar_thickness"
+              render={({ field }) => (
+                <ThicknessPicker value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
+        </SectionCard>
 
-      <SectionCard title="Cuffs">
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
-          <Controller
-            control={control}
-            name="cuffs_type"
-            render={({ field }) => (
-              <ImageOptionGrid
-                options={cuffTypes}
-                value={field.value}
-                onChange={field.onChange}
-                allowClear
+        <SectionCard title="Jabzour" bodyClassName="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Type</Label>
+            <Controller
+              control={control}
+              name="jabzour_1"
+              render={({ field }) => (
+                <ImageOptionGrid
+                  options={jabzourTypes}
+                  value={field.value}
+                  onChange={field.onChange}
+                  allowClear
+                  cols="tight"
+                />
+              )}
+            />
+          </div>
+          {showJab2 && (
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">
+                Jabzour 2 <span className="text-[color:var(--status-bad)]">*</span>
+              </Label>
+              <Controller
+                control={control}
+                name="jabzour_2"
+                render={({ field }) => (
+                  <ImageOptionGrid
+                    options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                    value={field.value}
+                    onChange={field.onChange}
+                    allowClear
+                    cols="tight"
+                  />
+                )}
               />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Thickness</Label>
-          <Controller
-            control={control}
-            name="cuffs_thickness"
-            render={({ field }) => (
-              <ThicknessPicker value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </div>
-      </SectionCard>
+              {errors.jabzour_2 && (
+                <p className="text-xs text-[color:var(--status-bad)]">{errors.jabzour_2.message as string}</p>
+              )}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Thickness</Label>
+            <Controller
+              control={control}
+              name="jabzour_thickness"
+              render={({ field }) => (
+                <ThicknessPicker value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Front pocket" bodyClassName="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Type</Label>
+            <Controller
+              control={control}
+              name="front_pocket_type"
+              render={({ field }) => (
+                <ImageOptionGrid
+                  options={topPocketTypes}
+                  value={field.value}
+                  onChange={field.onChange}
+                  allowClear
+                  cols="tight"
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Thickness</Label>
+            <Controller
+              control={control}
+              name="front_pocket_thickness"
+              render={({ field }) => (
+                <ThicknessPicker value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Accessories</Label>
+            <div className="flex flex-wrap gap-2">
+              <Controller
+                control={control}
+                name="wallet_pocket"
+                render={({ field }) => (
+                  <IconToggle
+                    checked={!!field.value}
+                    onChange={field.onChange}
+                    icon={walletIcon}
+                    label="Wallet"
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name="pen_holder"
+                render={({ field }) => (
+                  <IconToggle
+                    checked={!!field.value}
+                    onChange={field.onChange}
+                    icon={penIcon}
+                    label="Pen"
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name="mobile_pocket"
+                render={({ field }) => (
+                  <IconToggle
+                    checked={!!field.value}
+                    onChange={field.onChange}
+                    icon={phoneIcon}
+                    label="Mobile"
+                  />
+                )}
+              />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Cuffs" bodyClassName="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Type</Label>
+            <Controller
+              control={control}
+              name="cuffs_type"
+              render={({ field }) => (
+                <ImageOptionGrid
+                  options={cuffTypes}
+                  value={field.value}
+                  onChange={field.onChange}
+                  allowClear
+                  cols="tight"
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Thickness</Label>
+            <Controller
+              control={control}
+              name="cuffs_thickness"
+              render={({ field }) => (
+                <ThicknessPicker value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
+        </SectionCard>
+      </div>
     </div>
   );
 }

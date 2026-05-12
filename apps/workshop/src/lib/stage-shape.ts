@@ -24,7 +24,7 @@ export function getStageShape(stage: ProductionStage): StageShape {
 
 export const WORKER_SCOPED_STAGES: ProductionStage[] = [
   "cutting",
-  "post_cutting",
+  // "post_cutting", // TEMP DISABLED: hidden from production flow
   "finishing",
   "ironing",
   "quality_check",

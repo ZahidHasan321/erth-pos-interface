@@ -9,7 +9,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
 import { OrderTypeBadge } from "@repo/ui/order-type-badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
-import { cn, formatDate, toLocalDateStr } from "@/lib/utils";
+import { cn, formatDate, parseUtcTimestamp, toLocalDateStr } from "@/lib/utils";
 import { getGarmentStatusLabel } from "@/lib/garment-status";
 import type { AssignedOrderRow } from "@/api/garments";
 import {
@@ -32,12 +32,35 @@ type Brand = (typeof BRANDS)[number];
 
 type DeliverySort = "none" | "asc" | "desc";
 
+type AssignedSearch = { express?: boolean };
+
 export const Route = createFileRoute("/(main)/assigned/")({
   component: AssignedPage,
   head: () => ({ meta: [{ title: "Production Tracker" }] }),
+  validateSearch: (raw: Record<string, unknown>): AssignedSearch => ({
+    express: raw.express === true || raw.express === "1" || raw.express === "true",
+  }),
 });
 
 // ── Helpers ───────────────────────────────────────────────────
+
+type UrgencyTone = "bad" | "warn" | "muted";
+
+/** Days between today and a delivery timestamp, in local (Kuwait) calendar days. */
+function deliveryUrgency(value: string | null | undefined): { tone: UrgencyTone; days: number | null; label: string | null } {
+  if (!value) return { tone: "muted", days: null, label: null };
+  const diff = Math.ceil((parseUtcTimestamp(value).getTime() - Date.now()) / 86_400_000);
+  if (diff < 0)  return { tone: "bad",  days: diff, label: `${Math.abs(diff)}d overdue` };
+  if (diff === 0) return { tone: "bad", days: 0,    label: "Due today" };
+  if (diff <= 2) return { tone: "warn", days: diff, label: `${diff}d` };
+  return { tone: "muted", days: diff, label: `${diff}d` };
+}
+
+const URGENCY_TEXT: Record<UrgencyTone, string> = {
+  bad:   "text-[var(--status-bad)]",
+  warn:  "text-[var(--status-warn)]",
+  muted: "text-foreground",
+};
 
 /**
  * Delivery date display. Shows the order-level delivery date always. When any
@@ -49,12 +72,20 @@ function DeliveryDisplay({ row, align = "center" }: { row: AssignedOrderRow; ali
     return <span className="text-muted-foreground">—</span>;
   }
 
+  const u = deliveryUrgency(row.delivery_date);
+  const toneClass = URGENCY_TEXT[u.tone];
+
   return (
     <div className={cn("flex flex-col gap-1 text-base", align === "center" ? "items-center" : "items-start")}>
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-foreground font-medium">
-        <Clock className="w-4 h-4 text-muted-foreground" />
+      <span className={cn("flex items-center gap-1.5 whitespace-nowrap font-medium", toneClass)}>
+        <Clock className={cn("w-4 h-4", u.tone === "muted" ? "text-muted-foreground" : toneClass)} />
         <span>{formatDate(row.delivery_date)}</span>
       </span>
+      {u.label && u.tone !== "muted" && (
+        <span className={cn("text-sm font-medium tabular-nums", toneClass)}>
+          {u.label}
+        </span>
+      )}
       {row.home_delivery && (
         <span className="inline-flex items-center gap-1 text-sm font-medium text-indigo-50 bg-indigo-900 px-2 py-0.5 rounded-md">
           <Home className="w-3.5 h-3.5" /> Home
@@ -191,12 +222,19 @@ function GarmentBreakdown({ row }: { row: AssignedOrderRow }) {
           {grp.hasExpress && <Zap className="w-3.5 h-3.5 text-[var(--status-bad)] fill-current shrink-0" />}
 
           {/* Per-garment delivery date (only shown when different from order) */}
-          {grp.garmentDelivery && (
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--status-warn)] bg-[var(--status-warn-bg)] rounded-md px-2 py-0.5 shrink-0">
-              <Clock className="w-3.5 h-3.5" />
-              {formatDate(grp.garmentDelivery)}
-            </span>
-          )}
+          {grp.garmentDelivery && (() => {
+            const u = deliveryUrgency(grp.garmentDelivery);
+            const bgVar =
+              u.tone === "bad"  ? "bg-[var(--status-bad-bg)] text-[var(--status-bad)]" :
+              u.tone === "warn" ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" :
+                                  "bg-muted text-foreground";
+            return (
+              <span className={cn("inline-flex items-center gap-1 text-sm font-medium rounded-md px-2 py-0.5 shrink-0", bgVar)}>
+                <Clock className="w-3.5 h-3.5" />
+                {formatDate(grp.garmentDelivery)}
+              </span>
+            );
+          })()}
         </div>
       ))}
     </div>
@@ -406,8 +444,9 @@ function AssignedPage() {
   const isLoading = pageQuery.isLoading;
 
   // ── Filters ─────────────────────────────────────────────────────────────
+  const initialExpress = Route.useSearch({ select: (s) => s.express ?? false });
   const [search, setSearch] = useState("");
-  const [expressOnly, setExpressOnly] = useState(false);
+  const [expressOnly, setExpressOnly] = useState(initialExpress);
   const [brovaOnly, setBrovaOnly] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<Brand[]>([]);
   const [deliverySort, setDeliverySort] = useState<DeliverySort>("none");

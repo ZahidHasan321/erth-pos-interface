@@ -24,8 +24,9 @@ export const Route = createFileRoute("/(main)/performance/")({
   head: () => ({ meta: [{ title: "Performance" }] }),
 });
 
+// TEMP DISABLED: post_cutting hidden from production flow
 const STAGE_LABELS: Record<string, string> = {
-  soaking: "Soaking", cutting: "Cutting", post_cutting: "Post-cut",
+  soaking: "Soaking", cutting: "Cutting",
   sewing: "Sewing", finishing: "Finishing", ironing: "Ironing", quality_check: "QC",
 };
 
@@ -44,14 +45,14 @@ function formatDuration(minutes: number | null): string {
 const STAGE_COLORS: Record<string, string> = {
   soaking: "var(--status-info)",
   cutting: "var(--status-warn)",
-  post_cutting: "var(--status-warn)",
+  // post_cutting: "var(--status-warn)", // TEMP DISABLED
   sewing: "var(--foreground)",
   finishing: "var(--status-ok)",
   ironing: "var(--status-bad)",
   quality_check: "var(--status-info)",
 };
 
-const STAGE_ORDER = ["soaking", "cutting", "post_cutting", "sewing", "finishing", "ironing", "quality_check"];
+const STAGE_ORDER = ["soaking", "cutting", "sewing", "finishing", "ironing", "quality_check"];
 
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date();

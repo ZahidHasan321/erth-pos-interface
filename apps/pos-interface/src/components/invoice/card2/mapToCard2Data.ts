@@ -153,7 +153,7 @@ const buildMeasurements = (m: Measurement | null | undefined): Card2PdfData['mea
       length: { front: toNum(m.length_front), back: toNum(m.length_back) },
       shoulder: toNum(m.shoulder),
       sleeves: toNum(m.sleeve_length),
-      armholes: toNum(m.armhole),
+      armholes: toNum(m.armhole_front),
       width: toNum(m.sleeve_width),
       upChest: toNum(m.chest_upper),
       chest: toNum(m.chest_full),

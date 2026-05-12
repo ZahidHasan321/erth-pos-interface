@@ -1,42 +1,18 @@
-import type { AlterationMeasurementField, AlterationStyleField } from "./alteration-form.schema";
+import { getLabel } from "@repo/database";
+import type {
+    AlterationMeasurementField,
+    AlterationStyleField,
+} from "./alteration-form.schema";
+import { ALTERATION_MEASUREMENT_FIELDS } from "./alteration-form.schema";
 
-export const MEASUREMENT_FIELD_LABELS: Record<AlterationMeasurementField, string> = {
-    collar_width: "Collar Width",
-    collar_height: "Collar Height",
-    shoulder: "Shoulder",
-    armhole: "Armhole",
-    chest_upper: "Upper Chest",
-    chest_full: "Full Chest",
-    chest_front: "Front Chest",
-    chest_back: "Back Chest",
-    sleeve_length: "Sleeve Length",
-    sleeve_width: "Sleeve Width",
-    elbow: "Elbow",
-    armhole_front: "Armhole Front",
-    top_pocket_length: "Top Pkt Len",
-    top_pocket_width: "Top Pkt W",
-    top_pocket_distance: "Top Pkt Dist",
-    side_pocket_length: "Side Pkt Len",
-    side_pocket_width: "Side Pkt W",
-    side_pocket_distance: "Side Pkt Dist",
-    side_pocket_opening: "Side Pkt Open",
-    waist_full: "Full Waist",
-    waist_front: "Front Waist",
-    waist_back: "Back Waist",
-    length_front: "Front Length",
-    length_back: "Back Length",
-    bottom: "Bottom",
-    jabzour_width: "Jabzour W",
-    jabzour_length: "Jabzour Len",
-    second_button_distance: "2nd Button Dist",
-    basma_length: "Basma Len",
-    basma_width: "Basma W",
-    basma_sleeve_length: "Basma Sleeve L",
-    sleeve_hemming: "Sleeve Hem",
-    bottom_hemming: "Bottom Hem",
-    pen_pocket_length: "Pen Pkt Len",
-    pen_pocket_width: "Pen Pkt W",
-};
+/**
+ * Display labels for alteration measurement fields. Derived from the central
+ * measurements spec so renames stay in sync across the app.
+ */
+export const MEASUREMENT_FIELD_LABELS: Record<AlterationMeasurementField, string> =
+    Object.fromEntries(
+        ALTERATION_MEASUREMENT_FIELDS.map((f) => [f, getLabel(f)]),
+    ) as Record<AlterationMeasurementField, string>;
 
 type StyleFieldDef = {
     label: string;

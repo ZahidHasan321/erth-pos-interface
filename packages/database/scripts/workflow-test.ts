@@ -320,11 +320,11 @@ async function seed() {
 
   const [m] = await sql`
     INSERT INTO measurements (customer_id, measurer_id, measurement_date, type,
-      collar_width, collar_height, shoulder, armhole, chest_upper, chest_full,
+      collar_width, collar_height, shoulder, chest_upper, chest_full,
       sleeve_length, sleeve_width, elbow, waist_front, waist_back, waist_full,
       length_front, length_back, bottom, notes)
     VALUES (${state.customerId}, ${state.staffUserId}, NOW(), 'Body',
-      17.5, 4.0, 47.0, 24.0, 52.0, 54.0, 62.0, 18.0, 20.0, 46.0, 48.0, 94.0, 140.0, 142.0, 56.0, 'WF test')
+      17.5, 4.0, 47.0, 52.0, 54.0, 62.0, 18.0, 20.0, 46.0, 48.0, 94.0, 140.0, 142.0, 56.0, 'WF test')
     RETURNING id
   `;
   state.measurementId = m.id;

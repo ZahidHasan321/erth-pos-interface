@@ -23,7 +23,7 @@ import {
   AlertTriangle, UserX, ChevronDown, FolderPlus,
   Info, Star,
 } from "lucide-react";
-import { IconNeedle, IconIroning1, IconRosette, IconStack2, IconSparkles } from "@tabler/icons-react";
+import { IconNeedle, IconIroning1, IconRosette, IconSparkles } from "@tabler/icons-react";
 
 export const Route = createFileRoute("/(main)/team")({
   component: TeamPage,
@@ -33,7 +33,8 @@ export const Route = createFileRoute("/(main)/team")({
 const STAGES = [
   { key: "soaking",       label: "Soaking",       icon: Droplets,      color: "sky" },
   { key: "cutting",       label: "Cutting",       icon: Scissors,      color: "amber" },
-  { key: "post_cutting",  label: "Post-Cut",      icon: IconStack2,    color: "orange" },
+  // TEMP DISABLED: post_cutting hidden from production flow
+  // { key: "post_cutting",  label: "Post-Cut",      icon: IconStack2,    color: "orange" },
   { key: "sewing",        label: "Sewing",        icon: IconNeedle,    color: "purple" },
   { key: "finishing",     label: "Finishing",      icon: IconSparkles,  color: "emerald" },
   { key: "ironing",       label: "Ironing",       icon: IconIroning1,  color: "rose" },
@@ -46,7 +47,7 @@ type StageKey = (typeof STAGES)[number]["key"];
 const STAGE_CLASSES: Record<string, { iconColor: string }> = {
   soaking:       { iconColor: "text-sky-700" },
   cutting:       { iconColor: "text-amber-700" },
-  post_cutting:  { iconColor: "text-orange-700" },
+  // post_cutting:  { iconColor: "text-orange-700" }, // TEMP DISABLED
   sewing:        { iconColor: "text-purple-700" },
   finishing:     { iconColor: "text-emerald-700" },
   ironing:       { iconColor: "text-rose-700" },

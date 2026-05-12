@@ -4,7 +4,8 @@ import { RotateCcw } from "lucide-react";
 const PIPELINE_STAGES = [
   { key: "soaking",       label: "Soak" },
   { key: "cutting",       label: "Cut" },
-  { key: "post_cutting",  label: "Post-Cut" },
+  // TEMP DISABLED: post_cutting hidden from production flow
+  // { key: "post_cutting",  label: "Post-Cut" },
   { key: "sewing",        label: "Sew" },
   { key: "finishing",     label: "Finish" },
   { key: "ironing",       label: "Iron" },

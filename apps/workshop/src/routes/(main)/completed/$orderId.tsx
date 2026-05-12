@@ -2,9 +2,9 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { StageBadge, BrandBadge, ExpressBadge, TrialBadge } from "@/components/shared/StageBadge";
-import { MetadataChip } from "@/components/shared/PageShell";
+import { MetadataChip, SectionLabel, GarmentTypeBadge } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
-import { cn, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import {
   ArrowLeft,
   Check,
@@ -49,8 +49,8 @@ function CompletedOrderDetailPage() {
     return (
       <div className="p-4 max-w-5xl mx-auto space-y-3">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-32 rounded-md" />
+        <Skeleton className="h-64 rounded-md" />
       </div>
     );
   }
@@ -59,8 +59,8 @@ function CompletedOrderDetailPage() {
     return (
       <div className="p-4 max-w-5xl mx-auto">
         <BackButton onClick={() => router.history.back()} />
-        <div className="text-center py-12 border border-dashed rounded-xl bg-muted/5">
-          <p className="text-lg font-semibold text-muted-foreground">
+        <div className="text-center py-12 border border-dashed border-border rounded-md bg-card">
+          <p className="text-sm text-muted-foreground">
             No garments found for this order
           </p>
         </div>
@@ -81,10 +81,10 @@ function CompletedOrderDetailPage() {
       <div className="mt-4 space-y-4">
         {brovas.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-              <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-xs">Brova</span>
-              {brovas.length} garment{brovas.length !== 1 ? "s" : ""}
-            </h3>
+            <SectionLabel className="flex items-center gap-1.5">
+              <GarmentTypeBadge type="brova" />
+              <span>{brovas.length} garment{brovas.length !== 1 ? "s" : ""}</span>
+            </SectionLabel>
             {brovas.map((g) => (
               <CompletedGarmentCard key={g.id} garment={g} />
             ))}
@@ -92,10 +92,10 @@ function CompletedOrderDetailPage() {
         )}
         {finals.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-xs">Final</span>
-              {finals.length} garment{finals.length !== 1 ? "s" : ""}
-            </h3>
+            <SectionLabel className="flex items-center gap-1.5">
+              <GarmentTypeBadge type="final" />
+              <span>{finals.length} garment{finals.length !== 1 ? "s" : ""}</span>
+            </SectionLabel>
             {finals.map((g) => (
               <CompletedGarmentCard key={g.id} garment={g} />
             ))}
@@ -134,35 +134,34 @@ function OrderHeader({ garments, orderId }: { garments: WorkshopGarment[]; order
   const maxTrip = Math.max(...garments.map((g) => g.trip_number ?? 1));
 
   return (
-    <div className="bg-card border rounded-xl p-4 shadow-sm">
+    <div className="bg-card border border-border rounded-md p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-black text-lg">#{orderId}</span>
-            <span className="font-semibold text-sm tracking-tight">{first.customer_name ?? "—"}</span>
+            <span className="font-mono text-lg font-medium tabular-nums">#{orderId}</span>
+            <span className="text-base">{first.customer_name ?? "—"}</span>
             {brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {hasExpress && <ExpressBadge />}
             {first.home_delivery_order && (
               <MetadataChip icon={Home} variant="indigo">Delivery</MetadataChip>
             )}
-            <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded-md bg-green-100 text-green-800 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
+            <MetadataChip icon={CheckCircle2} className="text-[var(--status-ok)] bg-[var(--status-ok-bg)]">
               Completed
-            </span>
+            </MetadataChip>
           </div>
 
           <div className="flex items-center flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-            {first.invoice_number && <span>INV-{first.invoice_number}</span>}
+            {first.invoice_number && <span className="tabular-nums">INV-{first.invoice_number}</span>}
             <span className="flex items-center gap-1">
               <Package className="w-3.5 h-3.5" /> {summary}
             </span>
             {first.customer_mobile && (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 tabular-nums">
                 <Phone className="w-3.5 h-3.5" /> {first.customer_mobile}
               </span>
             )}
             {maxTrip > 1 && (
-              <span className="text-xs font-semibold text-amber-700">
+              <span className="text-xs font-medium text-[var(--status-warn)]">
                 {maxTrip - 1} return{maxTrip > 2 ? "s" : ""}
               </span>
             )}
@@ -171,7 +170,7 @@ function OrderHeader({ garments, orderId }: { garments: WorkshopGarment[]; order
 
         {first.delivery_date_order && (
           <div className="shrink-0 text-right">
-            <span className="inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-1 rounded-md bg-muted text-foreground">
+            <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums px-2 py-1 rounded-md bg-muted text-foreground">
               <Clock className="w-3.5 h-3.5" />
               {formatDate(first.delivery_date_order)}
             </span>
@@ -198,39 +197,27 @@ function CompletedGarmentCard({ garment }: { garment: WorkshopGarment }) {
   const fulfillment = garment.fulfillment_type;
 
   return (
-    <div className={cn(
-      "bg-card border rounded-xl p-3 shadow-sm",
-      garment.express && "border-orange-200",
-    )}>
+    <div className="bg-card border border-border rounded-md p-3">
       {/* Garment header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <span
-            className={cn(
-              "text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border",
-              garment.garment_type === "brova"
-                ? "bg-purple-100 text-purple-800 border-purple-200"
-                : "bg-blue-100 text-blue-800 border-blue-200",
-            )}
-          >
-            {garment.garment_type}
-          </span>
-          <span className="font-mono font-bold text-sm">
+          <GarmentTypeBadge type={garment.garment_type} />
+          <span className="font-mono text-base">
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </span>
           {garment.express && <ExpressBadge />}
           {tripNum > 1 && <TrialBadge tripNumber={tripNum} />}
           <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />
           {fulfillment && (
-            <span className="text-xs font-semibold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-800">
+            <MetadataChip className="text-[var(--status-ok)] bg-[var(--status-ok-bg)]">
               {fulfillment === "collected" ? "Collected" : "Delivered"}
-            </span>
+            </MetadataChip>
           )}
         </div>
 
         {garment.delivery_date && (
-          <div className="shrink-0 text-right text-[11px] tabular-nums leading-tight text-muted-foreground">
-            Due <span className="font-semibold">{formatDate(String(garment.delivery_date))}</span>
+          <div className="shrink-0 text-right text-xs tabular-nums leading-tight text-muted-foreground">
+            Due <span className="text-foreground">{formatDate(String(garment.delivery_date))}</span>
           </div>
         )}
       </div>
@@ -238,10 +225,10 @@ function CompletedGarmentCard({ garment }: { garment: WorkshopGarment }) {
       {/* Fabric & style info */}
       {(garment.fabric_name || garment.style_name) && (
         <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-          {garment.style_name && <span>Style: <span className="font-medium text-foreground">{garment.style_name}</span></span>}
+          {garment.style_name && <span>Style: <span className="text-foreground">{garment.style_name}</span></span>}
           {garment.fabric_name && (
             <span>
-              Fabric: <span className="font-medium text-foreground">{garment.fabric_name}</span>
+              Fabric: <span className="text-foreground">{garment.fabric_name}</span>
               {garment.fabric_color && <span className="ml-0.5">({garment.fabric_color})</span>}
             </span>
           )}
@@ -262,10 +249,10 @@ function CompletedGarmentCard({ garment }: { garment: WorkshopGarment }) {
             const worker = history[step.key] ?? plan[step.key];
             if (!worker) return null;
             return (
-              <span key={step.key} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
-                <Check className="w-2.5 h-2.5" />
-                <span className="font-medium">{step.label}:</span>
-                <span className="font-semibold">{worker}</span>
+              <span key={step.key} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+                <Check className="w-2.5 h-2.5 text-[var(--status-ok)]" />
+                <span>{step.label}:</span>
+                <span className="text-foreground">{worker}</span>
               </span>
             );
           })}
@@ -274,16 +261,16 @@ function CompletedGarmentCard({ garment }: { garment: WorkshopGarment }) {
 
       {/* Trip history for garments that had returns */}
       {tripNum > 1 && tripEntries.length > 0 && (
-        <div className="mt-2 border-t pt-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+        <div className="mt-2 border-t border-border pt-2">
+          <SectionLabel className="block mb-1">
             Trip History ({tripEntries.length} trip{tripEntries.length > 1 ? "s" : ""})
-          </p>
+          </SectionLabel>
           <div className="space-y-1">
             {tripEntries.map((entry) => (
               <div key={entry.trip} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-mono font-bold text-foreground">Trip {entry.trip}</span>
+                <span className="font-mono tabular-nums text-foreground">Trip {entry.trip}</span>
                 {entry.reentry_stage && (
-                  <span className="px-1 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground text-xs">
                     Re-entered at {entry.reentry_stage.replace(/_/g, " ")}
                   </span>
                 )}

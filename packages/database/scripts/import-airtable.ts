@@ -400,7 +400,6 @@ async function importMeasurements() {
             collar_width: num(r["COLLAR L"]),
             collar_height: num(r["COLLAR HE"]),
             shoulder: num(r["SHOULDER"]),
-            armhole: num(r["ARMHOLE"]),
             chest_upper: num(r["UP CHEST"]),
             chest_full: num(r["CHEST"]),
             chest_front: num(r["HALF CHEST"]),
@@ -424,7 +423,6 @@ async function importMeasurements() {
             bottom: num(r["BOTTOM"]),
             jabzour_width: num(r["JABZOUR W"]),
             jabzour_length: num(r["JABZOUR L"]) ?? num(r["JABZ L inv"]),
-            armhole_provision: num(r["ArmholeProvision"]),
             chest_provision: num(r["ChestProvision"]),
             waist_provision: num(r["Waist Provision"]),
         };

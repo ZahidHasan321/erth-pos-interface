@@ -22,7 +22,7 @@ export const Route = createFileRoute("/(main)/board")({
 const STAGE_TO_PLAN_KEY: Record<string, keyof ProductionPlan> = {
   soaking: "soaker",
   cutting: "cutter",
-  post_cutting: "post_cutter",
+  // post_cutting: "post_cutter", // TEMP DISABLED
   sewing: "sewer",
   finishing: "finisher",
   ironing: "ironer",
@@ -35,7 +35,7 @@ const STAGE_TO_PLAN_KEY: Record<string, keyof ProductionPlan> = {
 const STAGE_DOT: Record<string, string> = {
   soaking: "bg-[var(--status-info)]",
   cutting: "bg-[var(--status-warn)]",
-  post_cutting: "bg-[var(--status-warn)]",
+  // post_cutting: "bg-[var(--status-warn)]", // TEMP DISABLED
   sewing: "bg-[var(--status-info)]",
   finishing: "bg-[var(--status-info)]",
   ironing: "bg-[var(--status-info)]",

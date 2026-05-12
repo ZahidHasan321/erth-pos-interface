@@ -843,7 +843,6 @@ const QC_MEASUREMENT_LABELS: Record<string, string> = {
   sleeve_length: "Sleeve length",
   sleeve_width: "Sleeve width",
   elbow: "Elbow",
-  armhole: "Armhole",
   armhole_front: "Armhole (front)",
   waist_full: "Waist (full)",
   waist_front: "Waist (front)",

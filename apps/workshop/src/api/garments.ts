@@ -357,7 +357,7 @@ export const markSoakComplete = async (ids: string[]): Promise<void> => {
  *  Soaking is a parallel track (see SoakTerminal) — not a board column. */
 export const BOARD_STAGES = [
   'cutting',
-  'post_cutting',
+  // 'post_cutting', // TEMP DISABLED: hidden from production flow
   'sewing',
   'finishing',
   'ironing',

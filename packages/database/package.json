@@ -8,6 +8,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reset": "tsx scripts/reset.ts",
     "db:triggers": "tsx scripts/apply-triggers.ts",
+    "db:setup-storage": "tsx scripts/apply-storage-setup.ts",
     "db:add-alteration-orders": "tsx scripts/add-alteration-orders.ts",
     "db:add-qc-rework-stages": "tsx scripts/add-qc-rework-stages-col.ts",
     "db:add-soaking-completed-at": "tsx scripts/add-soaking-completed-at-col.ts",

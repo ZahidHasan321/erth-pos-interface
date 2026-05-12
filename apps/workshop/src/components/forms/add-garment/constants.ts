@@ -106,9 +106,7 @@ export const MEASUREMENT_GROUPS: {
     title: "Shoulder & Arm",
     fields: [
       { key: "shoulder", label: "Shoulder" },
-      { key: "armhole", label: "Armhole" },
       { key: "armhole_front", label: "A. Front" },
-      { key: "armhole_provision", label: "A. Prov." },
       { key: "sleeve_length", label: "Sleeve L" },
       { key: "sleeve_width", label: "Sleeve W" },
       { key: "elbow", label: "Elbow" },

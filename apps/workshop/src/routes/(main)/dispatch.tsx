@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useWorkshopGarments, useOrderLocationBreakdown } from "@/hooks/useWorkshopGarments";
 import type { OrderLocationBreakdown } from "@/api/garments";
 import { useDispatchGarments } from "@/hooks/useGarmentMutations";
-import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge } from "@/components/shared/PageShell";
+import { PageHeader, EmptyState, LoadingSkeleton, GarmentTypeBadge, GarmentTypeBadgeCompact, StatusBanner } from "@/components/shared/PageShell";
 import { StageBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
@@ -30,9 +30,15 @@ function deliveryUrgency(deliveryDate: string | null | undefined) {
   const delivery = getKuwaitMidnight(parseUtcTimestamp(deliveryDate));
   const daysLeft = Math.ceil((delivery.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (daysLeft < 0)
-    return { label: `+${Math.abs(daysLeft)}d`, className: "text-red-700 bg-red-100 px-1.5 py-0.5 rounded" };
+    return {
+      label: `+${Math.abs(daysLeft)}d`,
+      className: "text-[var(--status-bad)] bg-[var(--status-bad-bg)] px-1.5 py-0.5 rounded-md",
+    };
   if (daysLeft <= 2)
-    return { label: null, className: "text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded" };
+    return {
+      label: null,
+      className: "text-[var(--status-warn)] bg-[var(--status-warn-bg)] px-1.5 py-0.5 rounded-md",
+    };
   return { label: null, className: "text-muted-foreground" };
 }
 
@@ -125,10 +131,10 @@ function ReadyOrderCard({
   const isPending = groupIds.some((id) => dispatchPendingIds.has(id));
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden">
       {/* Header */}
       <div
-        className="px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
+        className="px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center justify-between gap-3">
@@ -141,20 +147,20 @@ function ReadyOrderCard({
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="font-semibold text-sm">Order {group.orderId}</span>
+                <span className="text-base font-medium tabular-nums">Order {group.orderId}</span>
                 {group.invoiceNumber != null && (
                   <span className="text-xs text-muted-foreground">· Inv {group.invoiceNumber}</span>
                 )}
                 {hasExpress && <ExpressBadge />}
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/80 tracking-tight">{group.customerName ?? "Unknown"}</span>
+                <span className="text-foreground">{group.customerName ?? "Unknown"}</span>
                 {group.customerMobile && <span>{group.customerMobile}</span>}
-                <span className="w-px h-3 bg-border/60 shrink-0" />
+                <span className="w-px h-3 bg-border shrink-0" />
                 <span>{groupIds.length} pcs</span>
-                {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
-                {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
-                {alterationCount > 0 && <span className="font-semibold">{alterationCount}A</span>}
+                {brovaCount > 0 && <GarmentTypeBadgeCompact type="brova" />}
+                {finalCount > 0 && <GarmentTypeBadgeCompact type="final" />}
+                {alterationCount > 0 && <GarmentTypeBadgeCompact type="alteration" />}
                 {breakdown && breakdown.workshop > 0 && <span>{breakdown.workshop} in prod</span>}
                 {breakdown && breakdown.transit > 0 && <span>{breakdown.transit} in transit</span>}
                 {breakdown && breakdown.shop > 0 && <span>{breakdown.shop} at shop</span>}
@@ -166,7 +172,7 @@ function ReadyOrderCard({
           <div className="flex items-center gap-2 shrink-0">
             <Button
               size="sm"
-              className="h-8 text-xs font-semibold"
+              className="h-8 text-xs font-medium"
               onClick={handleDispatch}
               disabled={isPending || selected.size === 0}
             >
@@ -192,10 +198,10 @@ function ReadyOrderCard({
         "grid transition-[grid-template-rows] duration-300 ease-in-out",
         expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
       )}>
-        <div className={cn("overflow-hidden", expanded && "border-t border-border/60 bg-muted/5")}>
+        <div className={cn("overflow-hidden", expanded && "border-t border-border bg-muted/10")}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/40">
+              <tr className="text-sm font-medium text-muted-foreground border-b border-border">
                 <th className="text-left py-2 px-4 w-8" />
                 <th className="text-left py-2 px-4">Garment</th>
                 <th className="text-left py-2 px-4">Type</th>
@@ -209,7 +215,7 @@ function ReadyOrderCard({
                   <tr
                     key={g.id}
                     className={cn(
-                      "border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer",
+                      "border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer",
                       !isSelected && "opacity-40",
                     )}
                     onClick={() => toggleOne(g.id, !isSelected)}
@@ -221,7 +227,7 @@ function ReadyOrderCard({
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-sm">
+                    <td className="py-2.5 px-4 font-mono text-base">
                       <div className="flex items-center gap-1.5">
                         {g.garment_id}
                         <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
@@ -283,33 +289,33 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
   const alterationCount = group.garments.filter((g) => g.garment_type === "alteration").length;
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden">
       {/* Header */}
       <div
-        className="px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
+        className="px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="font-semibold text-sm">Order {group.orderId}</span>
+              <span className="text-base font-medium tabular-nums">Order {group.orderId}</span>
               {group.invoiceNumber != null && (
                 <span className="text-xs text-muted-foreground">· Inv {group.invoiceNumber}</span>
               )}
               {hasExpress && <ExpressBadge />}
             </div>
             <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/80 tracking-tight">{group.customerName ?? "Unknown"}</span>
+              <span className="text-foreground">{group.customerName ?? "Unknown"}</span>
               {group.customerMobile && <span>{group.customerMobile}</span>}
-              <span className="w-px h-3 bg-border/60 shrink-0" />
+              <span className="w-px h-3 bg-border shrink-0" />
               <span>{group.garments.length} pcs</span>
-              {brovaCount > 0 && <span className="font-semibold">{brovaCount}B</span>}
-              {finalCount > 0 && <span className="font-semibold">{finalCount}F</span>}
-              {alterationCount > 0 && <span className="font-semibold">{alterationCount}A</span>}
+              {brovaCount > 0 && <GarmentTypeBadgeCompact type="brova" />}
+              {finalCount > 0 && <GarmentTypeBadgeCompact type="final" />}
+              {alterationCount > 0 && <GarmentTypeBadgeCompact type="alteration" />}
               {group.deliveryDate && (
-                <span className={cn("font-medium rounded", urgency.className)}>
+                <span className={cn("font-medium tabular-nums", urgency.className)}>
                   {formatDate(group.deliveryDate)}
-                  {urgency.label && <span className="ml-1 font-bold">{urgency.label}</span>}
+                  {urgency.label && <span className="ml-1">{urgency.label}</span>}
                 </span>
               )}
             </div>
@@ -329,10 +335,10 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
         "grid transition-[grid-template-rows] duration-300 ease-in-out",
         expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
       )}>
-        <div className={cn("overflow-hidden", expanded && "border-t border-border/60 bg-muted/5")}>
+        <div className={cn("overflow-hidden", expanded && "border-t border-border bg-muted/10")}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/40">
+              <tr className="text-sm font-medium text-muted-foreground border-b border-border">
                 <th className="text-left py-2 px-4">Garment</th>
                 <th className="text-left py-2 px-4">Type</th>
                 <th className="text-left py-2 px-4">Stage</th>
@@ -340,8 +346,8 @@ function InTransitOrderCard({ group }: { group: InTransitOrderGroup }) {
             </thead>
             <tbody>
               {group.garments.map((g) => (
-                <tr key={g.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors">
-                  <td className="py-2.5 px-4 font-mono font-bold text-sm">
+                <tr key={g.id} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+                  <td className="py-2.5 px-4 font-mono text-base">
                     <div className="flex items-center gap-1.5">
                       {g.garment_id}
                       <AlterationBadge tripNumber={g.trip_number} garmentType={g.garment_type} />
@@ -426,11 +432,11 @@ function DispatchHistoryTab() {
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <SlidingPillSwitcher value={period} options={PERIOD_OPTIONS} onChange={setPeriod} />
 
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <span className="text-sm font-medium text-muted-foreground">
           {periodLabel}
         </span>
 
-        <Badge variant="secondary" className="text-xs font-bold">
+        <Badge variant="secondary" className="text-xs font-medium">
           {rows.length} dispatched → Shop
         </Badge>
 
@@ -449,7 +455,7 @@ function DispatchHistoryTab() {
 
       {/* Print header */}
       <div className="hidden print:block mb-4">
-        <h1 className="text-xl font-bold">Dispatch History — {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
+        <h1 className="text-xl font-semibold">Dispatch History — {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
         <p className="text-sm text-muted-foreground">
           Workshop → Shop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
         </p>
@@ -459,18 +465,16 @@ function DispatchHistoryTab() {
       {isLoading ? (
         <LoadingSkeleton />
       ) : isError ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-center">
-          <p className="font-bold text-destructive">
-            Error: {error instanceof Error ? error.message : 'Fetch Failed'}
-          </p>
-        </div>
+        <StatusBanner tone="bad">
+          Error: {error instanceof Error ? error.message : 'Fetch Failed'}
+        </StatusBanner>
       ) : rows.length === 0 ? (
         <EmptyState icon={History} message={`No dispatches in ${periodLabel}`} />
       ) : (
         <TableContainer className="print:border-0 print:shadow-none">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+              <TableRow className="bg-muted/40 border-b border-border hover:bg-muted/40">
                 <TableHead className="w-32">Date</TableHead>
                 <TableHead>Order</TableHead>
                 <TableHead>Invoice</TableHead>
@@ -487,22 +491,22 @@ function DispatchHistoryTab() {
                 return (
                   <TableRow key={r.id}>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-xs font-bold">{d.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-sm tabular-nums">{d.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
+                      <div className="text-xs text-muted-foreground tabular-nums">
                         {d.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </TableCell>
-                    <TableCell className="font-bold text-sm">#{r.order_id}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="text-base tabular-nums">#{r.order_id}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">
                       {r.invoice_number ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <div className="text-xs font-bold tracking-tight">{r.customer_name ?? 'Unknown'}</div>
+                      <div className="text-sm">{r.customer_name ?? 'Unknown'}</div>
                       {r.customer_phone && (
-                        <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
+                        <div className="text-xs text-muted-foreground tabular-nums">{r.customer_phone}</div>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="font-mono text-sm">
                       {r.garment_code ?? r.garment_id.slice(0, 8)}
                     </TableCell>
                     <TableCell>
@@ -510,8 +514,8 @@ function DispatchHistoryTab() {
                         <GarmentTypeBadge type={r.garment_type as 'brova' | 'final'} />
                       )}
                     </TableCell>
-                    <TableCell className="text-xs font-bold">{r.trip_number ?? '—'}</TableCell>
-                    <TableCell className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <TableCell className="text-sm tabular-nums">{r.trip_number ?? '—'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
                       {r.brand ?? '—'}
                     </TableCell>
                   </TableRow>

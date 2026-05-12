@@ -20,6 +20,40 @@ import {
     type AlterationStyleField,
 } from "./alteration-form.schema";
 import { AlterationMeasurementTable } from "./AlterationMeasurementTable";
+import { getNumberedLabel, getLabel } from "@repo/database";
+
+// Same field grouping as the customer-measurements form — kept here so the
+// alteration form mirrors the entry experience.
+const AUTO_TAPE_GROUP_1 = [
+    "chest_full", "shoulder", "sleeve_length", "sleeve_width",
+    "elbow", "armhole_front", "chest_upper", "chest_front", "waist_front",
+];
+const AUTO_TAPE_GROUP_2 = [
+    "top_pocket_distance", "jabzour_length", "length_front", "bottom",
+    "chest_back", "waist_back", "length_back", "collar_width", "collar_height",
+];
+const MANUAL_GROUP_1 = [
+    "waist_full", "jabzour_width",
+    "top_pocket_length", "top_pocket_width",
+    "side_pocket_length", "side_pocket_width",
+    "side_pocket_distance", "side_pocket_opening",
+];
+const MANUAL_GROUP_2 = [
+    "second_button_distance",
+    "basma_length", "basma_width",
+    "sleeve_hemming", "bottom_hemming",
+    "pen_pocket_length", "pen_pocket_width",
+];
+
+function alterationColumns(
+    keys: readonly string[],
+    numbered = false,
+): { name: string; label: string }[] {
+    return keys.map((name) => ({
+        name,
+        label: numbered ? getNumberedLabel(name) : getLabel(name),
+    }));
+}
 import {
     collarButtons,
     collarTypes,
@@ -252,67 +286,28 @@ export function AlterationGarmentForm({
                             values={value.alteration_measurements}
                             masterValueFor={masterValueFor}
                             onChange={setMeasurementField}
-                            columns={[
-                                { name: "chest_full", label: "1. Full Chest" },
-                                { name: "shoulder", label: "2. Shoulder" },
-                                { name: "sleeve_length", label: "3. Sleeve Len" },
-                                { name: "sleeve_width", label: "4. Sleeve W" },
-                                { name: "elbow", label: "5. Elbow" },
-                                { name: "armhole_front", label: "6. Armhole F" },
-                                { name: "chest_upper", label: "7. Upper Chest" },
-                                { name: "chest_front", label: "8. Front Chest" },
-                                { name: "waist_front", label: "9. Front Waist" },
-                            ]}
+                            columns={alterationColumns(AUTO_TAPE_GROUP_1, true)}
                         />
                         <AlterationMeasurementTable
-                            title="Waist, Collar & Back"
+                            title="Waist, Back & Collar"
                             values={value.alteration_measurements}
                             masterValueFor={masterValueFor}
                             onChange={setMeasurementField}
-                            columns={[
-                                { name: "top_pocket_distance", label: "10. Pocket Dist" },
-                                { name: "jabzour_length", label: "11. Jabzour Len" },
-                                { name: "length_front", label: "12. Front Len" },
-                                { name: "bottom", label: "13. Bottom" },
-                                { name: "chest_back", label: "14. Back Chest" },
-                                { name: "waist_back", label: "15. Back Waist" },
-                                { name: "length_back", label: "16. Back Len" },
-                                { name: "collar_width", label: "17. Collar Len" },
-                                { name: "collar_height", label: "18. Collar H" },
-                            ]}
+                            columns={alterationColumns(AUTO_TAPE_GROUP_2, true)}
                         />
                         <AlterationMeasurementTable
-                            title="Armhole, Pockets & Jabzour"
+                            title="Pockets & Jabzour"
                             values={value.alteration_measurements}
                             masterValueFor={masterValueFor}
                             onChange={setMeasurementField}
-                            columns={[
-                                { name: "armhole", label: "Armhole Full" },
-                                { name: "waist_full", label: "Waist Full" },
-                                { name: "jabzour_width", label: "Jabzour W" },
-                                { name: "top_pocket_length", label: "Top Pkt Len" },
-                                { name: "top_pocket_width", label: "Top Pkt W" },
-                                { name: "side_pocket_length", label: "Side Pkt Len" },
-                                { name: "side_pocket_width", label: "Side Pkt W" },
-                                { name: "side_pocket_distance", label: "Side Pkt Dist" },
-                                { name: "side_pocket_opening", label: "Side Pkt Open" },
-                            ]}
+                            columns={alterationColumns(MANUAL_GROUP_1)}
                         />
                         <AlterationMeasurementTable
                             title="Basma, Hemming & Pen Pocket"
                             values={value.alteration_measurements}
                             masterValueFor={masterValueFor}
                             onChange={setMeasurementField}
-                            columns={[
-                                { name: "second_button_distance", label: "2nd Button Dist" },
-                                { name: "basma_length", label: "Basma Len" },
-                                { name: "basma_width", label: "Basma W" },
-                                { name: "basma_sleeve_length", label: "Basma Sleeve L" },
-                                { name: "sleeve_hemming", label: "Sleeve Hem" },
-                                { name: "bottom_hemming", label: "Bottom Hem" },
-                                { name: "pen_pocket_length", label: "Pen Pkt Len" },
-                                { name: "pen_pocket_width", label: "Pen Pkt W" },
-                            ]}
+                            columns={alterationColumns(MANUAL_GROUP_2)}
                         />
                     </div>
                 </div>

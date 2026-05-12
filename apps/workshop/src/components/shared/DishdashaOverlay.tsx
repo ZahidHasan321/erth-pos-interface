@@ -495,13 +495,13 @@ export function DishdashaOverlay({
             Portrait: width-driven (full width, stacks above panel). */}
         <div
           className="relative shrink-0 border-b landscape:border-b-0 landscape:border-r border-zinc-200 w-full landscape:w-auto landscape:h-full"
-          style={{ aspectRatio: "793.76001 / 1122.5601" }}
+          style={{ aspectRatio: "952.512 / 1122.5601" }}
         >
           <div className="relative w-full h-full">
           <img
             src={templateSvg}
             alt="Measurement template"
-            className="absolute inset-0 w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-fill"
           />
 
           {qualityCheckTemplateFields.map((field) => {

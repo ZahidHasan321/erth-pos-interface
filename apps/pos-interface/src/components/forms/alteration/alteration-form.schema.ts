@@ -1,21 +1,14 @@
 import { z } from "zod";
+import { INPUT_MEASUREMENT_KEYS } from "@repo/database";
 
-export const ALTERATION_MEASUREMENT_FIELDS = [
-    "collar_width", "collar_height", "shoulder", "armhole",
-    "chest_upper", "chest_full", "chest_front", "chest_back",
-    "sleeve_length", "sleeve_width", "elbow", "armhole_front",
-    "top_pocket_length", "top_pocket_width", "top_pocket_distance",
-    "side_pocket_length", "side_pocket_width", "side_pocket_distance", "side_pocket_opening",
-    "waist_full", "waist_front", "waist_back",
-    "length_front", "length_back", "bottom",
-    "jabzour_width", "jabzour_length",
-    "second_button_distance",
-    "basma_length", "basma_width", "basma_sleeve_length",
-    "sleeve_hemming", "bottom_hemming",
-    "pen_pocket_length", "pen_pocket_width",
-] as const;
+/**
+ * Alteration measurement fields = every user-entered measurement in the central
+ * spec. Sourced from INPUT_MEASUREMENT_KEYS (excludes derived provisions).
+ * Cast back to a string-literal tuple so the resulting type is a useful union.
+ */
+export const ALTERATION_MEASUREMENT_FIELDS = INPUT_MEASUREMENT_KEYS as readonly string[];
 
-export type AlterationMeasurementField = (typeof ALTERATION_MEASUREMENT_FIELDS)[number];
+export type AlterationMeasurementField = string;
 
 export const ALTERATION_STYLE_FIELDS = [
     "collar_type", "collar_button", "collar_position", "collar_thickness",

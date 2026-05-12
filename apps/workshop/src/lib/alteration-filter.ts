@@ -97,7 +97,6 @@ const MEASUREMENT_TO_SECTION: Record<string, AlterationStyleSection> = {
   // customer asking for basma changes lights up the right sidebar group.
   basma_length: "cuffs",
   basma_width: "cuffs",
-  basma_sleeve_length: "cuffs",
 };
 
 /**

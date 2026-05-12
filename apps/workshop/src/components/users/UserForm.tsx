@@ -9,6 +9,7 @@ import { ChipToggle } from "@repo/ui/chip-toggle";
 import { Combobox } from "@repo/ui/combobox";
 import { FlagIcon } from "@repo/ui/flag-icon";
 import { Button } from "@repo/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@repo/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { toast } from "sonner";
 import { useUnits, useCreateUnit } from "@/hooks/useUnits";
@@ -101,22 +102,29 @@ export const EMPTY_USER_FORM: UserFormState = {
 function Section({
   icon: Icon,
   title,
-  description,
+  hint,
   children,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
-  description: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-md border border-border bg-card overflow-hidden">
-      <header className="px-4 py-3 border-b border-border bg-muted/30">
-        <div className="flex items-center gap-2">
-          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-          <h3 className="text-sm font-medium">{title}</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      <header className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center gap-2">
+        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+        <h3 className="text-sm font-medium">{title}</h3>
+        {hint && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="ml-0.5 text-muted-foreground/60 hover:text-muted-foreground" aria-label={`About ${title}`}>
+                <Info className="w-3 h-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">{hint}</TooltipContent>
+          </Tooltip>
+        )}
       </header>
       <div className="p-4 space-y-4">{children}</div>
     </section>
@@ -153,6 +161,39 @@ const DEPARTMENT_OPTIONS = [
   },
 ] as const;
 
+function describeAccess(role: Role, department: Department, jobFunctions: JobFunction[]): { label: string; detail: string } {
+  if (role === "super_admin") return { label: "Full access — all apps", detail: "Full access to all pages across all apps. Can manage everything." };
+  if (role === "admin") return { label: "Full access", detail: "Full access to all pages. Can manage users, schedules, pricing, and operations." };
+  if (role === "manager" && department === "workshop") return { label: "Workshop manager", detail: "Full workshop operations: scheduling, receiving, dispatch, team, performance." };
+  if (role === "manager" && department === "shop") return { label: "Shop manager — workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
+  if (role === "staff" && department === "shop") return { label: "Shop staff", detail: "Shop-only access. No workshop pages." };
+  // staff + workshop
+  if (jobFunctions.length === 0) return { label: "Office staff", detail: "Dashboard / tracker / performance access. No terminals." };
+  if (jobFunctions.length === 1) {
+    const station = JOB_FUNCTION_LABELS[jobFunctions[0]];
+    return { label: `Terminal: ${station}`, detail: `Sees only the ${station} terminal. No sidebar.` };
+  }
+  const stations = jobFunctions.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ");
+  return { label: `Cross-trained: ${stations}`, detail: `Switches between ${stations} via a tab bar. No sidebar.` };
+}
+
+function AccessSummary({ role, department, jobFunctions }: { role: Role; department: Department; jobFunctions: JobFunction[] }) {
+  const { label, detail } = describeAccess(role, department, jobFunctions);
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span>Result: <span className="text-foreground font-medium">{label}</span></span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label="Access detail">
+            <Info className="w-3 h-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">{detail}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function UserForm({
   mode,
   form,
@@ -166,11 +207,7 @@ export function UserForm({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* LEFT COLUMN ─────────────────────────── */}
       <div className="space-y-4">
-        <Section
-          icon={UserCog}
-          title="Identity"
-          description="How this person appears in the system and to other staff."
-        >
+        <Section icon={UserCog} title="Identity">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <FieldLabel required>Username</FieldLabel>
@@ -226,11 +263,7 @@ export function UserForm({
           </div>
         </Section>
 
-        <Section
-          icon={Briefcase}
-          title="Employee record"
-          description="HR details for reporting. All optional."
-        >
+        <Section icon={Briefcase} title="Employee record" hint="Optional HR details for reporting.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <FieldLabel>Employee ID</FieldLabel>
@@ -276,11 +309,7 @@ export function UserForm({
 
       {/* RIGHT COLUMN ────────────────────────── */}
       <div className="space-y-4">
-        <Section
-          icon={Shield}
-          title="Access & role"
-          description="What this user can see and do. Terminal workers get a focused single-page view."
-        >
+        <Section icon={Shield} title="Access & role" hint="What this user can see and do. Terminal workers get a focused single-page view.">
           <div className="space-y-1.5">
             <FieldLabel required>Department</FieldLabel>
             <div>
@@ -316,26 +345,23 @@ export function UserForm({
             </Select>
           </div>
 
-          <div className="flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2">
-            <Info className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
-            <p className="text-xs text-muted-foreground">
-              {form.role === "super_admin" && "Full access to all pages across all apps. Can manage everything."}
-              {form.role === "admin" && "Full access to all pages. Can manage users, schedules, pricing, and operations."}
-              {form.role === "manager" && form.department === "workshop" && "Full workshop operations: scheduling, receiving, dispatch, team, performance."}
-              {form.role === "manager" && form.department === "shop" && "View-only access to workshop data. Dashboard, tracker, performance."}
-              {form.role === "staff" && form.department === "workshop" && form.job_functions.length === 0 && "Office staff — dashboard / tracker / performance access."}
-              {form.role === "staff" && form.department === "workshop" && form.job_functions.length === 1 && `Terminal worker — sees only the ${JOB_FUNCTION_LABELS[form.job_functions[0]]} terminal. No sidebar.`}
-              {form.role === "staff" && form.department === "workshop" && form.job_functions.length > 1 && `Cross-trained terminal worker — switches between ${form.job_functions.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ")} via a tab bar. No sidebar.`}
-              {form.role === "staff" && form.department === "shop" && "Shop-only access. No workshop pages."}
-            </p>
-          </div>
+          <AccessSummary role={form.role} department={form.department} jobFunctions={form.job_functions} />
 
           {form.role === "staff" && form.department === "workshop" && (
             <div className="space-y-2">
-              <FieldLabel>Terminal assignments</FieldLabel>
-              <p className="text-xs text-muted-foreground">
-                Pick every station this worker can run. One resource is created per station so the scheduler tracks each skill's capacity separately.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <FieldLabel>Terminal assignments</FieldLabel>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label="About terminal assignments">
+                      <Info className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    Pick every station this worker can run. One resource per station so the scheduler tracks each skill's capacity separately.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {JOB_FUNCTIONS.map((j) => {
                   const selected = form.job_functions.includes(j);
@@ -360,9 +386,7 @@ export function UserForm({
                 })}
               </div>
               {form.job_functions.length === 0 && (
-                <p className="text-xs text-muted-foreground pt-1">
-                  No stations selected — this user will be office staff.
-                </p>
+                <p className="text-xs text-muted-foreground pt-1">No stations — office staff.</p>
               )}
               {form.job_functions.includes("sewer") && (
                 <SewingUnitPicker
@@ -406,11 +430,7 @@ export function UserForm({
         </Section>
 
         {form.department === "shop" && (
-          <Section
-            icon={Store}
-            title="Brand access"
-            description="Shop staff only see the brand interfaces they're assigned to."
-          >
+          <Section icon={Store} title="Brand access" hint="Shop staff only see the brand interfaces they're assigned to.">
             <div className="space-y-2">
               <FieldLabel required>Assigned brands</FieldLabel>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -478,10 +498,19 @@ function SewingUnitPicker({
 
   return (
     <div className="space-y-1.5 pt-3 mt-2 border-t border-border">
-      <FieldLabel required>Sewing team</FieldLabel>
-      <p className="text-xs text-muted-foreground">
-        Which sewing unit does this sewer belong to. Other stations auto-assign to their default unit.
-      </p>
+      <div className="flex items-center gap-1.5">
+        <FieldLabel required>Sewing team</FieldLabel>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label="About sewing team">
+              <Info className="w-3 h-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            Which sewing unit this sewer belongs to. Other stations auto-assign to their default unit.
+          </TooltipContent>
+        </Tooltip>
+      </div>
       <div className="flex gap-2 pt-1">
         <div className="flex-1 min-w-0">
           <Select

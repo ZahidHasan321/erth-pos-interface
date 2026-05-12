@@ -16,15 +16,16 @@ import { Button } from "@repo/ui/button";
 import { Label } from "@repo/ui/label";
 import { Input } from "@repo/ui/input";
 import { Skeleton } from "@repo/ui/skeleton";
-import { ArrowLeft, Save, Replace, PlusCircle, MessageSquare, ChevronDown } from "lucide-react";
+import { ArrowLeft, Save, Replace, PlusCircle, MessageSquare } from "lucide-react";
 import { FabricFields } from "@/components/forms/add-garment/FabricFields";
 import { StyleFields } from "@/components/forms/add-garment/StyleFields";
 import { MeasurementFields } from "@/components/forms/add-garment/MeasurementFields";
 import { addGarmentSchema, type AddGarmentFormValues } from "@/components/forms/add-garment/schema";
 import { buildPrefillValues } from "@/components/forms/add-garment/prefill";
 import { CustomerFeedbackPanel } from "@/components/shared/GarmentDetailSections";
-import { SectionCard, SectionLabel, StatusBanner } from "@/components/shared/PageShell";
+import { SectionCard, StatusBanner } from "@/components/shared/PageShell";
 import { canEdit } from "@/lib/rbac";
+import { cn } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
 
 interface AddGarmentSearch {
@@ -94,8 +95,7 @@ function AddGarmentPage() {
   });
 
   // Feedback history for the original garment — surfaces *why* this redo was
-  // triggered (rejection reason, measurement diffs, customer notes). Hidden by
-  // default; tailor opens the panel only if context is needed.
+  // triggered (rejection reason, measurement diffs, customer notes).
   const feedbackQuery = useQuery({
     queryKey: ["garmentFeedbackAll", replacesId],
     queryFn: () => getAllFeedbackForGarment(replacesId!),
@@ -189,14 +189,15 @@ function AddGarmentPage() {
   });
 
   const mode = replacesId ? "replace" : "add";
-
   const showForm = !loading && !(replacesId && !original) && !(replacesId && alreadyReplaced);
 
   return (
     <div className="min-h-full bg-muted/20">
-      {/* Sticky header */}
+      {/* Sticky header — order link, page title, primary actions. The title
+          stays compact (text-base) so the sticky bar doesn't dominate the
+          viewport on smaller workshop monitors. */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
               to="/assigned/$orderId"
@@ -209,15 +210,15 @@ function AddGarmentPage() {
             <div className="h-6 w-px bg-border shrink-0" />
             <div className="flex items-center gap-2 min-w-0">
               {mode === "replace" ? (
-                <Replace className="w-5 h-5 text-[color:var(--status-bad)] shrink-0" />
+                <Replace className="w-4 h-4 text-[color:var(--status-bad)] shrink-0" />
               ) : (
-                <PlusCircle className="w-5 h-5 text-primary shrink-0" />
+                <PlusCircle className="w-4 h-4 text-muted-foreground shrink-0" />
               )}
-              <h1 className="text-lg sm:text-xl font-semibold truncate">
-                {mode === "replace" ? "Replacement Garment" : "Add Garment"}
+              <h1 className="text-base font-medium truncate">
+                {mode === "replace" ? "Replacement garment" : "Add garment"}
               </h1>
               {mode === "replace" && original && (
-                <span className="hidden md:inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                <span className="hidden md:inline text-sm text-muted-foreground tabular-nums">
                   replaces {original.garment_id}
                 </span>
               )}
@@ -248,7 +249,7 @@ function AddGarmentPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 pb-20">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5 pb-20">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-24 rounded-md" />
@@ -266,44 +267,43 @@ function AddGarmentPage() {
             <form
               id="add-garment-form"
               onSubmit={form.handleSubmit((v) => submitMutation.mutate(v))}
-              className="space-y-4"
+              className={cn(
+                // Replace mode runs a 2-col grid (context rail + form).
+                // Blank-add keeps a single centered column.
+                mode === "replace"
+                  ? "grid grid-cols-1 lg:grid-cols-12 gap-4"
+                  : "max-w-4xl mx-auto space-y-4",
+              )}
             >
               {mode === "replace" && original && (
-                <StatusBanner tone="bad" icon={Replace}>
-                  <div>
-                    <span className="font-medium">Replacing </span>
-                    <span className="font-mono text-xs">
-                      {original.garment_id} · {original.garment_type} · trip {original.trip_number}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Original kept for history. No extra pricing — this replaces the old garment.
-                  </p>
-                </StatusBanner>
+                <aside className="lg:col-span-4 space-y-4 lg:sticky lg:top-[72px] lg:self-start lg:max-h-[calc(100vh-88px)] lg:overflow-y-auto">
+                  <ReplacesSummary original={original} />
+                  {feedbackHistory.length > 0 && (
+                    <SectionCard
+                      title={`Why this redo · ${feedbackHistory.length}`}
+                      bodyClassName="space-y-4"
+                    >
+                      {feedbackHistory.map((fb) => (
+                        <CustomerFeedbackPanel key={fb.id} fb={fb} />
+                      ))}
+                    </SectionCard>
+                  )}
+                  {feedbackHistory.length === 0 && (
+                    <SectionCard title="Why this redo">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        No feedback recorded for this garment.
+                      </p>
+                    </SectionCard>
+                  )}
+                </aside>
               )}
 
-              {mode === "replace" && feedbackHistory.length > 0 && (
-                <details className="bg-card border border-border rounded-md group">
-                  <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer list-none select-none hover:bg-muted/30 transition-colors">
-                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                    <SectionLabel>Feedback history</SectionLabel>
-                    <span className="text-xs font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
-                      {feedbackHistory.length}
-                    </span>
-                    <span className="ml-auto text-xs text-muted-foreground group-open:hidden">
-                      Why this redo
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                  </summary>
-                  <div className="px-4 pb-4 space-y-3">
-                    {feedbackHistory.map((fb) => (
-                      <CustomerFeedbackPanel key={fb.id} fb={fb} />
-                    ))}
-                  </div>
-                </details>
-              )}
-
-              <SectionCard title="Meta" bodyClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className={cn("space-y-4", mode === "replace" && "lg:col-span-8")}>
+                <SectionCard
+                  title="Garment meta"
+                  bodyClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                >
                   <div className="space-y-1.5">
                     <Label>Garment type</Label>
                     <div className="inline-flex rounded-md border bg-background p-0.5">
@@ -312,11 +312,12 @@ function AddGarmentPage() {
                           key={t}
                           type="button"
                           onClick={() => form.setValue("garment_type", t)}
-                          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          className={cn(
+                            "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                             form.watch("garment_type") === t
                               ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:bg-muted"
-                          }`}
+                              : "text-muted-foreground hover:bg-muted",
+                          )}
                         >
                           {t}
                         </button>
@@ -344,24 +345,77 @@ function AddGarmentPage() {
                         type="date"
                         {...form.register("assigned_date")}
                       />
-                      <p className="text-[11px] text-muted-foreground">
-                        Inherits the original garment's production plan. Set a new workshop date.
+                      <p className="text-sm text-muted-foreground">
+                        Inherits the original garment's plan. Set a new workshop date.
                       </p>
                     </div>
                   )}
-                  <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
+                  <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
                     <Label htmlFor="notes">Notes</Label>
                     <Input id="notes" {...form.register("notes")} placeholder="Optional" />
                   </div>
-              </SectionCard>
+                </SectionCard>
 
-              <FabricFields />
-              <StyleFields />
-              <MeasurementFields />
+                <FabricFields />
+                <StyleFields />
+                <MeasurementFields />
+              </div>
             </form>
           </FormProvider>
         )}
       </div>
     </div>
+  );
+}
+
+// ── Context rail: replaces summary ──────────────────────────────────────────
+// Quick-reference card of what the original garment was — type, trip, fabric,
+// style summary. Sits at the top of the left rail so the tailor knows what
+// the prefill is based on without scrolling through the form.
+
+function ReplacesSummary({ original }: { original: WorkshopGarment }) {
+  const fabric = original.fabric_source === "OUT"
+    ? `OUT · ${original.shop_name || "—"}`
+    : `IN · #${original.fabric_id ?? "—"}`;
+  const color = original.color || null;
+  const length = original.fabric_length != null ? `${original.fabric_length} m` : null;
+
+  return (
+    <SectionCard title="Replaces" bodyClassName="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-base font-medium tabular-nums">{original.garment_id}</span>
+        <span className="text-sm text-muted-foreground capitalize">{original.garment_type}</span>
+        {original.trip_number != null && (
+          <span className="text-sm text-muted-foreground tabular-nums">
+            · trip {original.trip_number}
+          </span>
+        )}
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="text-muted-foreground">Fabric</dt>
+        <dd className="text-foreground">{fabric}</dd>
+        {color && (
+          <>
+            <dt className="text-muted-foreground">Color</dt>
+            <dd className="text-foreground">{color}</dd>
+          </>
+        )}
+        {length && (
+          <>
+            <dt className="text-muted-foreground">Length</dt>
+            <dd className="text-foreground tabular-nums">{length}</dd>
+          </>
+        )}
+        {original.style && (
+          <>
+            <dt className="text-muted-foreground">Style</dt>
+            <dd className="text-foreground">{original.style}</dd>
+          </>
+        )}
+      </dl>
+      <p className="text-sm text-muted-foreground border-t border-border pt-2.5">
+        Original kept for history. No extra pricing — this replaces the old garment.
+      </p>
+    </SectionCard>
   );
 }

@@ -1,19 +1,22 @@
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
-import { useResources } from "@/hooks/useResources";
-import { PageHeader } from "@/components/shared/PageShell";
+import {
+  PageHeader,
+  SectionCard,
+  StatsCard,
+  EmptyState,
+} from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, getLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
-  Cell,
 } from "recharts";
 import {
   Inbox, CalendarDays, ClipboardList, LayoutDashboard,
   Truck, ArrowRight, Zap, AlertTriangle,
-  Unlock, PackageCheck, RotateCcw, Clock,
-  ParkingSquare, Users,
+  Unlock, PackageCheck, RotateCcw,
+  ParkingSquare,
 } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/dashboard")({
@@ -21,30 +24,50 @@ export const Route = createFileRoute("/(main)/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard" }] }),
 });
 
-// Stage colors for pipeline chart — vibrant, distinct per stage
-const PIPELINE_COLORS: Record<string, string> = {
-  Soaking:   "#0ea5e9",
-  Cutting:   "#f59e0b",
-  "Post-Cut": "#f97316",
-  Sewing:    "#8b5cf6",
-  Finishing:  "#10b981",
-  Ironing:   "#ef4444",
-  QC:        "#6366f1",
-  Dispatch:  "#22c55e",
+type ActionTone = "bad" | "warn" | "info";
+
+const ACTION_TONE: Record<ActionTone, { card: string; icon: string }> = {
+  bad: {
+    card: "bg-[var(--status-bad-bg)] border-[color:var(--status-bad)]/30 hover:border-[color:var(--status-bad)]/60",
+    icon: "text-[var(--status-bad)]",
+  },
+  warn: {
+    card: "bg-[var(--status-warn-bg)] border-[color:var(--status-warn)]/30 hover:border-[color:var(--status-warn)]/60",
+    icon: "text-[var(--status-warn)]",
+  },
+  info: {
+    card: "bg-[var(--status-info-bg)] border-[color:var(--status-info)]/30 hover:border-[color:var(--status-info)]/60",
+    icon: "text-[var(--status-info)]",
+  },
 };
 
-const URGENCY_COLORS: Record<string, string> = {
-  Overdue:    "#ef4444",
-  "Due Today": "#f97316",
-  "1-2 Days": "#f59e0b",
-  "3-5 Days": "#eab308",
-  "6+ Days":  "#22c55e",
-  "No Date":  "#94a3b8",
+// Delivery urgency uses a single tone progression (ok→warn→bad) — one signal
+// per region. CSS vars only; no Tailwind palette.
+const URGENCY_TONE: Record<string, string> = {
+  Overdue:    "var(--status-bad)",
+  "Due Today": "var(--status-bad)",
+  "1-2 Days":  "var(--status-warn)",
+  "3-5 Days":  "var(--status-warn)",
+  "6+ Days":   "var(--status-ok)",
+  "No Date":   "var(--muted-foreground)",
+};
+
+// TEMP DISABLED: post_cutting hidden from production flow
+const STAGE_MAP: Record<string, string> = {
+  soaking: "Soaking", cutting: "Cutting",
+  sewing: "Sewing", finishing: "Finishing", ironing: "Ironing",
+  quality_check: "QC", ready_for_dispatch: "Dispatch",
+};
+
+const PIPELINE_ORDER = ["Soaking", "Cutting", "Sewing", "Finishing", "Ironing", "QC", "Dispatch"];
+
+const PLAN_KEY_TO_STAGE: Record<string, string> = {
+  soaker: "Soak", cutter: "Cut",
+  sewer: "Sew", finisher: "Finish", ironer: "Iron", quality_checker: "QC",
 };
 
 function DashboardPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
-  useResources();
 
   // ── Action items (PM attention needed) ────────────────────────────
   const actionItems = useMemo(() => {
@@ -86,15 +109,17 @@ function DashboardPage() {
         overdueOrderIds.add(g.order_id);
       }
     }
-    const overdueOrders = overdueOrderIds.size;
     const express = allGarments.filter(
       (g) => g.express && g.location === "workshop" && g.in_production
     );
 
-    return { finalsToRelease, incoming, needsScheduling, qcReturns, readyToDispatch, overdueOrders, express };
+    return {
+      finalsToRelease, incoming, needsScheduling, qcReturns, readyToDispatch,
+      overdueOrders: overdueOrderIds.size, express,
+    };
   }, [allGarments]);
 
-  // Build the action cards array (only items with count > 0 appear)
+  // Cards only render when count > 0. Tone is semantic, not decorative.
   const actionCards = useMemo(() => {
     const cards: {
       key: string;
@@ -102,89 +127,87 @@ function DashboardPage() {
       count: number;
       desc: string;
       href: string;
-      search?: Record<string, string>;
+      search?: Record<string, unknown>;
       icon: typeof Inbox;
-      urgency: "critical" | "warning" | "info";
+      tone: ActionTone;
     }[] = [];
 
     if (actionItems.overdueOrders > 0) {
       cards.push({
         key: "overdue",
-        label: "Overdue Orders",
+        label: "Overdue orders",
         count: actionItems.overdueOrders,
         desc: "Past delivery date — still at workshop",
         href: "/assigned",
-        search: { tab: "attention" },
         icon: AlertTriangle,
-        urgency: "critical",
+        tone: "bad",
       });
     }
     if (actionItems.express.length > 0) {
       cards.push({
         key: "express",
-        label: "Express Priority",
+        label: "Express priority",
         count: actionItems.express.length,
         desc: "Rush orders in production",
         href: "/assigned",
-        search: { tab: "production", filter: "express" },
+        search: { express: true },
         icon: Zap,
-        urgency: "critical",
+        tone: "bad",
       });
     }
     if (actionItems.finalsToRelease.length > 0) {
       cards.push({
         key: "finals",
-        label: "Release Finals",
+        label: "Release finals",
         count: actionItems.finalsToRelease.length,
         desc: "Finals waiting — release to production",
         href: "/parking",
         icon: Unlock,
-        urgency: "warning",
+        tone: "warn",
       });
     }
     if (actionItems.qcReturns.length > 0) {
       cards.push({
         key: "qc-returns",
-        label: "QC Returns",
+        label: "QC returns",
         count: actionItems.qcReturns.length,
         desc: "Failed QC — need rescheduling",
         href: "/scheduler",
         icon: RotateCcw,
-        urgency: "warning",
+        tone: "warn",
       });
     }
     if (actionItems.incoming.length > 0) {
       cards.push({
         key: "incoming",
-        label: "Incoming Shipments",
+        label: "Incoming shipments",
         count: actionItems.incoming.length,
         desc: "In transit to workshop — receive them",
         href: "/receiving",
-        search: { tab: "incoming" },
         icon: Inbox,
-        urgency: "info",
+        tone: "info",
       });
     }
     if (actionItems.needsScheduling.length > 0) {
       cards.push({
         key: "schedule",
-        label: "Needs Scheduling",
+        label: "Needs scheduling",
         count: actionItems.needsScheduling.length,
         desc: "In production but no plan assigned",
         href: "/scheduler",
         icon: CalendarDays,
-        urgency: "info",
+        tone: "info",
       });
     }
     if (actionItems.readyToDispatch.length > 0) {
       cards.push({
         key: "dispatch",
-        label: "Ready to Dispatch",
+        label: "Ready to dispatch",
         count: actionItems.readyToDispatch.length,
         desc: "Passed QC — send back to shop",
         href: "/dispatch",
         icon: PackageCheck,
-        urgency: "info",
+        tone: "info",
       });
     }
 
@@ -192,12 +215,6 @@ function DashboardPage() {
   }, [actionItems]);
 
   // ── Production pipeline (from actual garment data) ────────────────
-  const STAGE_MAP: Record<string, string> = {
-    soaking: "Soaking", cutting: "Cutting", post_cutting: "Post-Cut",
-    sewing: "Sewing", finishing: "Finishing", ironing: "Ironing",
-    quality_check: "QC", ready_for_dispatch: "Dispatch",
-  };
-
   const pipelineData = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const g of allGarments) {
@@ -206,8 +223,7 @@ function DashboardPage() {
       if (!label) continue;
       counts[label] = (counts[label] ?? 0) + 1;
     }
-    const order = ["Soaking", "Cutting", "Post-Cut", "Sewing", "Finishing", "Ironing", "QC", "Dispatch"];
-    return order.map((stage) => ({ stage, count: counts[stage] ?? 0 }));
+    return PIPELINE_ORDER.map((stage) => ({ stage, count: counts[stage] ?? 0 }));
   }, [allGarments]);
 
   // ── Delivery urgency (order-level) ────────────────────────────────
@@ -239,12 +255,6 @@ function DashboardPage() {
   }, [allGarments]);
 
   // ── Top workers by workload ───────────────────────────────────────
-  const PLAN_KEY_TO_STAGE: Record<string, string> = {
-    soaker: "Soak", cutter: "Cut", post_cutter: "Post-Cut",
-    sewer: "Sew", finisher: "Finish", ironer: "Iron", quality_checker: "QC",
-  };
-
-  // Aggregate workload per worker (combine across stages)
   const topWorkersData = useMemo(() => {
     const map: Record<string, { name: string; stages: Set<string>; count: number }> = {};
     for (const g of allGarments) {
@@ -277,13 +287,16 @@ function DashboardPage() {
       g.location === "transit_to_workshop" || g.location === "transit_to_shop"
     ).length;
 
-    // Count unique orders
     const orderIds = new Set(allGarments.map((g) => g.order_id));
 
     const todayStr = getLocalDateStr();
     const overdueOrderIds = new Set<number>();
     for (const g of allGarments) {
-      if (g.location === "workshop" && g.delivery_date_order && g.delivery_date_order < todayStr) {
+      if (
+        g.location === "workshop" &&
+        g.delivery_date_order &&
+        getLocalDateStr(parseUtcTimestamp(g.delivery_date_order)) < todayStr
+      ) {
         overdueOrderIds.add(g.order_id);
       }
     }
@@ -298,46 +311,22 @@ function DashboardPage() {
     };
   }, [allGarments]);
 
-  const URGENCY_STYLES = {
-    critical: {
-      card: "bg-red-50 border-red-200 hover:bg-red-100/80",
-      badge: "bg-red-600 text-white",
-      icon: "text-red-600",
-      pulse: true,
-    },
-    warning: {
-      card: "bg-amber-50 border-amber-200 hover:bg-amber-100/80",
-      badge: "bg-amber-600 text-white",
-      icon: "text-amber-600",
-      pulse: false,
-    },
-    info: {
-      card: "bg-sky-50 border-sky-200 hover:bg-sky-100/80",
-      badge: "bg-sky-600 text-white",
-      icon: "text-sky-600",
-      pulse: false,
-    },
-  };
-
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-10">
-      <PageHeader icon={LayoutDashboard} title="Workshop Overview" subtitle="Live production status" />
+      <PageHeader icon={LayoutDashboard} title="Workshop overview" subtitle="Live production status" />
 
-      {/* ── ACTION REQUIRED ────────────────────────────────────────── */}
+      {/* ── Action required ───────────────────────────────────────── */}
       {!isLoading && actionCards.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Action Required
-            </h2>
-            <span className="text-xs bg-foreground/10 rounded-full px-2 py-0.5 font-bold">
-              {actionCards.reduce((s, c) => s + c.count, 0)}
+            <h2 className="text-base font-medium">Action required</h2>
+            <span className="text-xs font-medium text-muted-foreground tabular-nums">
+              {actionCards.reduce((s, c) => s + c.count, 0)} item{actionCards.reduce((s, c) => s + c.count, 0) === 1 ? "" : "s"}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {actionCards.map((card) => {
-              const style = URGENCY_STYLES[card.urgency];
+              const tone = ACTION_TONE[card.tone];
               const Icon = card.icon;
               return (
                 <Link
@@ -345,29 +334,21 @@ function DashboardPage() {
                   to={card.href}
                   search={card.search}
                   className={cn(
-                    "border rounded-xl p-4 flex items-start gap-3 transition-all hover:shadow-md group",
-                    style.card,
+                    "border rounded-md p-3 flex items-start gap-3 transition-colors group",
+                    tone.card,
                   )}
                 >
-                  <div className={cn("mt-0.5 shrink-0", style.icon)}>
-                    <Icon className="w-5 h-5" aria-hidden="true" />
-                  </div>
+                  <Icon className={cn("w-5 h-5 shrink-0 mt-0.5", tone.icon)} aria-hidden="true" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="font-bold text-sm">{card.label}</p>
-                      <span
-                        className={cn(
-                          "text-xs font-black rounded-full px-2 py-0.5 min-w-[24px] text-center leading-tight",
-                          style.badge,
-                          style.pulse && "animate-pulse",
-                        )}
-                      >
+                    <div className="flex items-baseline gap-2 mb-0.5">
+                      <p className="text-sm font-medium">{card.label}</p>
+                      <span className={cn("text-base font-semibold tabular-nums", tone.icon)}>
                         {card.count}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-snug">{card.desc}</p>
+                    <p className="text-xs text-muted-foreground">{card.desc}</p>
                   </div>
-                  <ArrowRight className="w-4 h-4 opacity-30 group-hover:opacity-60 transition-opacity shrink-0 mt-1" aria-hidden="true" />
+                  <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0 mt-1" aria-hidden="true" />
                 </Link>
               );
             })}
@@ -375,123 +356,107 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* Top KPIs */}
+      {/* KPIs */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-4">
-          {[1,2,3,4,5,6].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-6">
+          {[1,2,3,4,5,6].map((i) => <Skeleton key={i} className="h-16 rounded-md" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
-          <KpiCard label="Orders" value={stats.totalOrders} icon={<ClipboardList className="w-5 h-5" />} />
-          <KpiCard label="Garments" value={stats.totalGarments} icon={<Inbox className="w-5 h-5" />} />
-          <KpiCard label="In Production" value={stats.inProduction} icon={<Zap className="w-5 h-5" />} />
-          <KpiCard label="Parked" value={stats.parked} icon={<ParkingSquare className="w-5 h-5" />} />
-          <KpiCard label="In Transit" value={stats.inTransit} icon={<Truck className="w-5 h-5" />} />
-          <KpiCard label="Overdue" value={stats.overdueOrders} icon={<AlertTriangle className="w-5 h-5" />}
-            color={stats.overdueOrders > 0 ? "text-red-600" : undefined}
-            highlight={stats.overdueOrders > 0 ? "bg-red-50/60 border-red-200" : undefined}
-          />
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
+          <StatsCard icon={ClipboardList} value={stats.totalOrders} label="Orders" color="zinc" />
+          <StatsCard icon={Inbox} value={stats.totalGarments} label="Garments" color="zinc" />
+          <StatsCard icon={Zap} value={stats.inProduction} label="In production" color="blue" />
+          <StatsCard icon={ParkingSquare} value={stats.parked} label="Parked" color="zinc" dimOnZero />
+          <StatsCard icon={Truck} value={stats.inTransit} label="In transit" color="blue" dimOnZero />
+          <StatsCard icon={AlertTriangle} value={stats.overdueOrders} label="Overdue" color="red" dimOnZero />
         </div>
       )}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        {/* Production pipeline — from actual garment stages */}
-        <div className="lg:col-span-2 bg-[#F9F9FA] rounded-xl p-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Production Pipeline
-          </h2>
+        <SectionCard title="Production pipeline" className="lg:col-span-2">
           {isLoading ? (
             <Skeleton className="h-56" />
+          ) : pipelineData.every((d) => d.count === 0) ? (
+            <EmptyState message="No garments in production" />
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={pipelineData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <XAxis
                   dataKey="stage"
-                  tick={{ fontSize: 11, fontWeight: 600 }}
+                  tick={{ fontSize: 12 }}
                   interval={0}
-                  angle={-30}
+                  angle={-25}
                   textAnchor="end"
-                  height={45}
+                  height={50}
                 />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <RechartsTooltip
-                  contentStyle={{ borderRadius: 8, fontSize: 12, border: "1px solid #e5e7eb" }}
+                  contentStyle={{ borderRadius: 6, fontSize: 12, border: "1px solid var(--border)" }}
+                  cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                 />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} animationDuration={800}>
-                  {pipelineData.map((entry) => (
-                    <Cell key={entry.stage} fill={PIPELINE_COLORS[entry.stage] ?? "#94a3b8"} />
-                  ))}
-                </Bar>
+                <Bar
+                  dataKey="count"
+                  radius={[4, 4, 0, 0]}
+                  fill="var(--status-info)"
+                  animationDuration={600}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </SectionCard>
 
-        {/* Delivery urgency — orders by due date */}
-        <div className="bg-[#F9F9FA] rounded-xl p-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Delivery Urgency
-          </h2>
+        <SectionCard title="Delivery urgency">
           {isLoading ? (
             <Skeleton className="h-56" />
           ) : deliveryData.length === 0 ? (
-            <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">No orders</div>
+            <EmptyState message="No orders at workshop" />
           ) : (
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2.5">
               {deliveryData.map((d) => {
                 const maxCount = Math.max(...deliveryData.map((x) => x.count));
                 const pct = maxCount > 0 ? (d.count / maxCount) * 100 : 0;
-                const color = URGENCY_COLORS[d.name] ?? "#94a3b8";
+                const color = URGENCY_TONE[d.name] ?? "var(--muted-foreground)";
                 return (
                   <div key={d.name}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-xs font-semibold">{d.name}</span>
-                      <span className="text-xs font-black">{d.count}</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm">{d.name}</span>
+                      <span className="text-sm font-medium tabular-nums">{d.count}</span>
                     </div>
-                    <div className="h-5 bg-muted/30 rounded-md overflow-hidden">
+                    <div className="h-2 bg-muted rounded-md overflow-hidden">
                       <div
-                        className="h-full rounded-md transition-all flex items-center justify-end pr-1.5"
-                        style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: color }}
-                      >
-                        {pct > 20 && (
-                          <span className="text-xs font-bold text-white">
-                            {d.count} order{d.count !== 1 ? "s" : ""}
-                          </span>
-                        )}
-                      </div>
+                        className="h-full rounded-md transition-all"
+                        style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: color }}
+                      />
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
       {/* Top 5 Busiest Workers */}
       {!isLoading && topWorkersData.length > 0 && (
-        <div className="bg-[#F9F9FA] rounded-xl p-4 mb-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4" aria-hidden="true" /> Busiest Workers
-          </h2>
-          <div className="space-y-2">
+        <SectionCard title="Busiest workers" className="mb-4">
+          <div className="space-y-2.5">
             {topWorkersData.map((w, i) => {
               const maxCount = topWorkersData[0].count;
               const pct = maxCount > 0 ? (w.count / maxCount) * 100 : 0;
               return (
                 <div key={w.name} className="flex items-center gap-3">
-                  <span className="text-xs font-black text-muted-foreground w-4 text-right">{i + 1}</span>
+                  <span className="text-sm font-medium text-muted-foreground tabular-nums w-4 text-right">{i + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-sm font-semibold truncate">{w.name}</span>
-                      <span className="text-xs font-black shrink-0 ml-2">{w.count} garments</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium truncate">{w.name}</span>
+                      <span className="text-sm tabular-nums shrink-0 ml-2 text-muted-foreground">{w.count} garments</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-muted/30 rounded-full overflow-hidden">
+                      <div className="flex-1 h-1.5 bg-muted rounded-md overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-indigo-500 transition-all"
-                          style={{ width: `${Math.max(pct, 5)}%` }}
+                          className="h-full rounded-md bg-[var(--status-info)] transition-all"
+                          style={{ width: `${Math.max(pct, 4)}%` }}
                         />
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">{w.stages}</span>
@@ -501,61 +466,36 @@ function DashboardPage() {
               );
             })}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* Quick actions */}
       <div>
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-          Quick Actions
-        </h2>
+        <h2 className="text-base font-medium mb-3">Quick actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { label: "Receive Orders", desc: `${actionItems.incoming.length} incoming`, href: "/receiving", search: { tab: "incoming" }, icon: Inbox },
-            { label: "Schedule Production", desc: `${actionItems.needsScheduling.length} awaiting`, href: "/scheduler", icon: CalendarDays },
-            { label: "Dispatch Ready", desc: `${actionItems.readyToDispatch.length} ready`, href: "/dispatch", icon: Truck },
+            { label: "Receive orders", desc: `${actionItems.incoming.length} incoming`, href: "/receiving", icon: Inbox },
+            { label: "Schedule production", desc: `${actionItems.needsScheduling.length} awaiting`, href: "/scheduler", icon: CalendarDays },
+            { label: "Dispatch ready", desc: `${actionItems.readyToDispatch.length} ready`, href: "/dispatch", icon: Truck },
           ].map((action) => {
             const Icon = action.icon;
             return (
               <Link
                 key={action.href}
                 to={action.href}
-                search={(action as any).search}
-                className="bg-card border rounded-xl p-4 flex items-center gap-3 transition-all hover:shadow-md hover:bg-muted/40"
+                className="bg-card border border-border rounded-md p-3 flex items-center gap-3 transition-colors hover:bg-muted/40 group"
               >
-                <Icon className="w-6 h-6 opacity-60 shrink-0" aria-hidden="true" />
+                <Icon className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm">{action.label}</p>
+                  <p className="text-sm font-medium">{action.label}</p>
                   <p className="text-xs text-muted-foreground">{action.desc}</p>
                 </div>
-                <ArrowRight className="w-4 h-4 opacity-40" aria-hidden="true" />
+                <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" aria-hidden="true" />
               </Link>
             );
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  icon,
-  color,
-  highlight,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  color?: string;
-  highlight?: string;
-}) {
-  return (
-    <div className={cn("border rounded-xl p-3 shadow-sm text-center", highlight ?? "bg-card")}>
-      <div className={cn("mx-auto mb-1 opacity-60 w-fit", color ?? "text-foreground/50")}>{icon}</div>
-      <p className="text-2xl font-black">{value}</p>
-      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
     </div>
   );
 }

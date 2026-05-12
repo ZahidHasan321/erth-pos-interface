@@ -1,4 +1,9 @@
 import type { PieceStage } from "@repo/database";
+import {
+  MEASUREMENTS_SPEC,
+  BASMA_MEASUREMENT_KEYS,
+  hasBasmaMeasurements as specHasBasmaMeasurements,
+} from "@repo/database";
 
 /** Tolerance in inches for measurement comparison. */
 export const QC_TOLERANCE = 0.125;
@@ -13,8 +18,14 @@ export interface QcMeasurementSpec {
   label: string;
   /** Optional measure — appended at end of QC list, never gates completion. */
   optional?: boolean;
-  /** Basma-only — shown only when garment has basma values, hides sleeve_width. */
+  /** Basma-only — shown only when garment has basma values. */
   basma?: boolean;
+}
+
+/** Operator-facing labels in QC are uppercase. Convert the central spec's
+ *  sentence-case label to upper-snake form expected on the spec sheet. */
+function qcLabel(label: string): string {
+  return label.toUpperCase();
 }
 
 export interface QcOptionSpec {
@@ -30,48 +41,40 @@ export interface QcQualitySpec {
   label: string;
 }
 
-/** Measurements in PDF order. Numbered 1-18 first, then unnumbered extras,
- *  conditional basma, then optional measures at end. */
-export const QC_MEASUREMENTS: QcMeasurementSpec[] = [
-  // 1-18 — numbered standard measures
-  { key: "chest_full",             label: "FULL CHEST" },
-  { key: "shoulder",               label: "SHOULDER" },
-  { key: "sleeve_length",          label: "SLEEVES LEN" },
-  { key: "sleeve_width",           label: "SLEEVES W" },
-  { key: "elbow",                  label: "ELBOW" },
-  { key: "armhole_front",          label: "ARMHOLE F" },
-  { key: "chest_upper",            label: "UPPER CHEST" },
-  { key: "chest_front",            label: "FRONT CHEST" },
-  { key: "waist_front",            label: "FRONT WAIST" },
-  { key: "top_pocket_distance",    label: "TOP POCKET DIST" },
-  { key: "jabzour_length",         label: "JABZOUR LEN" },
-  { key: "length_front",           label: "FRONT LEN" },
-  { key: "bottom",                 label: "BOTTOM" },
-  { key: "chest_back",             label: "BACK CHEST" },
-  { key: "waist_back",             label: "BACK WAIST" },
-  { key: "length_back",            label: "BACK LEN" },
-  { key: "collar_width",           label: "COLLAR/GALLABI LEN" },
-  { key: "collar_height",          label: "COLLAR/GALLABI W" },
-  // Unnumbered extras
-  { key: "waist_full",             label: "WAIST FULL" },
-  { key: "jabzour_width",          label: "JABZOUR W" },
-  { key: "top_pocket_length",      label: "TOP PKT LEN" },
-  { key: "top_pocket_width",       label: "TOP PKT W" },
-  { key: "side_pocket_length",     label: "SIDE PKT LEN" },
-  { key: "side_pocket_width",      label: "SIDE PKT W" },
-  { key: "side_pocket_distance",   label: "SIDE PKT DIST" },
-  { key: "side_pocket_opening",    label: "SIDE PKT OPEN" },
-  { key: "second_button_distance", label: "2ND BOTTOM DIST", optional: true },
-  // Basma — only if garment uses Basma
-  { key: "basma_sleeve_length",    label: "BASMA SLEEVE L", basma: true },
-  { key: "basma_length",           label: "BASMA LEN",      basma: true },
-  { key: "basma_width",            label: "BASMA W",        basma: true },
-  // Optional — end of QC, never gates completion
-  { key: "sleeve_hemming",         label: "SLEEVE HEM",     optional: true },
-  { key: "bottom_hemming",         label: "BOTTOM HEM",     optional: true },
-  { key: "pen_pocket_length",      label: "PEN PKT LEN",    optional: true },
-  { key: "pen_pocket_width",       label: "PEN PKT W",      optional: true },
-];
+/**
+ * QC measurement list — derived from the central spec.
+ *
+ * Order: numbered 1-18 (PDF tape order) first, then unnumbered required,
+ * then basma group, then optional fields. The central spec carries the
+ * canonical labels; QC just uppercases them to match the operator's spec
+ * sheet conventions. Derived (provisions) excluded — workshop doesn't QC
+ * computed values.
+ */
+function buildQcMeasurements(): QcMeasurementSpec[] {
+  const numbered = MEASUREMENTS_SPEC
+    .filter((s) => !s.derived && typeof s.pdfOrder === "number")
+    .slice()
+    .sort((a, b) => (a.pdfOrder! - b.pdfOrder!));
+
+  const unnumberedRequired = MEASUREMENTS_SPEC.filter(
+    (s) => !s.derived && s.pdfOrder == null && !s.optional && !s.basma,
+  );
+
+  const basma = MEASUREMENTS_SPEC.filter((s) => s.basma);
+
+  const optional = MEASUREMENTS_SPEC.filter(
+    (s) => !s.derived && s.optional && !s.basma,
+  );
+
+  return [...numbered, ...unnumberedRequired, ...basma, ...optional].map((s) => ({
+    key: s.key,
+    label: qcLabel(s.label),
+    optional: s.optional,
+    basma: s.basma,
+  }));
+}
+
+export const QC_MEASUREMENTS: QcMeasurementSpec[] = buildQcMeasurements();
 
 /** UI grouping for measurement tables. Groups split into ~7-col chunks, with
  *  basma + optional carved off as separate (conditionally rendered) groups. */
@@ -105,9 +108,11 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
     ],
   },
   // Basma group — rendered only when basma applies (see hasBasmaMeasurements).
+  // Keys pulled from the central spec so adding a new basma field surfaces
+  // here automatically.
   {
     title: "Basma",
-    keys: ["basma_sleeve_length", "basma_length", "basma_width"],
+    keys: [...BASMA_MEASUREMENT_KEYS],
   },
   // Optional group — rendered last; never gates completion.
   {
@@ -119,19 +124,13 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   },
 ];
 
-/** True when the garment has any basma measurement on file. Used to gate the
- *  Basma group on QC and to hide sleeve_width (basma_sleeve_length replaces it). */
-export function hasBasmaMeasurements(measurement: Record<string, unknown> | null | undefined): boolean {
-  if (!measurement) return false;
-  for (const k of ["basma_length", "basma_width", "basma_sleeve_length"]) {
-    const v = measurement[k];
-    if (v != null && v !== "" && Number(v) > 0) return true;
-  }
-  return false;
-}
+/** Re-exported from the central spec so existing imports keep working. */
+export const hasBasmaMeasurements = specHasBasmaMeasurements;
 
-/** Keys hidden when Basma is active (basma_sleeve_length supersedes sleeve_width). */
-export const QC_BASMA_HIDDEN_KEYS = new Set(["sleeve_width"]);
+/** Keys hidden when Basma is active. Currently none — sleeve_length /
+ *  sleeve_width always apply (whether or not basma is present). Kept for
+ *  the call-site signature so consumers don't have to change. */
+export const QC_BASMA_HIDDEN_KEYS: Set<string> = new Set();
 
 /** 14 garment option fields. */
 export const QC_OPTIONS: QcOptionSpec[] = [

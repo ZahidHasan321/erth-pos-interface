@@ -108,7 +108,6 @@ const MEASUREMENT_ROWS = [
   { type: "Side Pocket", subType: "Opening", key: "side_pocket_opening" },
   { type: "Waist", subType: "Front", key: "waist_front" },
   { type: "Waist", subType: "Back", key: "waist_back" },
-  { type: "Arm Hole", subType: "Arm Hole", key: "armhole" },
   { type: "Arm Hole", subType: "Front", key: "armhole_front" },
   { type: "Chest", subType: "Upper", key: "chest_upper" },
   { type: "Chest", subType: "Full", key: "chest_full" },
@@ -124,7 +123,6 @@ const MEASUREMENT_ROWS = [
   { type: "Jabzour", subType: "2nd Btn Dist", key: "second_button_distance" },
   { type: "Basma", subType: "Length", key: "basma_length" },
   { type: "Basma", subType: "Width", key: "basma_width" },
-  { type: "Basma", subType: "Sleeve Length", key: "basma_sleeve_length" },
 ] as const;
 
 type MeasurementRow = (typeof MEASUREMENT_ROWS)[number];
@@ -145,7 +143,7 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
   {
     title: "Waist, Arms & Bottom",
     rows: MEASUREMENT_ROWS.filter(r =>
-      ["waist_front", "waist_back", "armhole", "armhole_front", "shoulder", "elbow", "sleeve_length", "sleeve_width", "bottom"].includes(r.key)
+      ["waist_front", "waist_back", "armhole_front", "shoulder", "elbow", "sleeve_length", "sleeve_width", "bottom"].includes(r.key)
     ),
   },
   {
@@ -157,7 +155,7 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
   {
     title: "Basma",
     rows: MEASUREMENT_ROWS.filter(r =>
-      ["basma_length", "basma_width", "basma_sleeve_length"].includes(r.key)
+      ["basma_length", "basma_width"].includes(r.key)
     ),
   },
 ];
@@ -224,6 +222,11 @@ interface GarmentFeedbackState {
   hashwaChanges: Record<string, string>;
   sharedPhotos: Array<{ type: "photo" | "video"; url: string }>;
   sharedVoiceNotes: string[];
+  // Local cache of File/Blob for blob: preview URLs. Photos and voice notes
+  // are uploaded to storage only on submit so abandoned drafts don't leave
+  // orphan files in the bucket. Signatures take a separate path (data URL →
+  // upload at submit, see onConfirmClick).
+  pendingUploads: Record<string, { kind: "photo" | "voice"; blob: File | Blob }>;
   satisfaction: string | null;
   feedbackAction: string | null;
   distributionAction: string | null;
@@ -249,6 +252,7 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   hashwaChanges: {},
   sharedPhotos: [],
   sharedVoiceNotes: [],
+  pendingUploads: {},
   satisfaction: null,
   feedbackAction: null,
   distributionAction: null,
@@ -710,59 +714,41 @@ function UnifiedFeedbackInterface() {
     });
   };
 
-  const handleAddPhoto = async (file: File | null) => {
+  const handleAddPhoto = (file: File | null) => {
     if (!file) return;
-    if (!activeGarment || !activeOrder) {
-      toast.error("Cannot upload photo: order or garment not loaded");
-      return;
-    }
+    if (!selectedGarmentId) return;
     const previewUrl = URL.createObjectURL(file);
-    // Optimistic preview; will be replaced with public URL after upload
-    updateGarmentState(selectedGarmentId, {
-      sharedPhotos: [...currentState.sharedPhotos, { type: "photo", url: previewUrl }],
+    setGarmentStates(prev => {
+      const st = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...st,
+          sharedPhotos: [...st.sharedPhotos, { type: "photo", url: previewUrl }],
+          pendingUploads: { ...st.pendingUploads, [previewUrl]: { kind: "photo", blob: file } },
+        },
+      };
     });
-    try {
-      const { url } = await uploadFeedbackPhoto(
-        file,
-        activeOrder.id,
-        activeGarment.id,
-        activeGarment.trip_number || 1,
-      );
-      // Replace preview with uploaded URL
-      setGarmentStates(prev => {
-        const st = prev[selectedGarmentId!];
-        if (!st) return prev;
-        return {
-          ...prev,
-          [selectedGarmentId!]: {
-            ...st,
-            sharedPhotos: st.sharedPhotos.map(p => (p.url === previewUrl ? { ...p, url } : p)),
-          },
-        };
-      });
-      URL.revokeObjectURL(previewUrl);
-    } catch (err) {
-      toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
-      // Roll back preview entry
-      setGarmentStates(prev => {
-        const st = prev[selectedGarmentId!];
-        if (!st) return prev;
-        return {
-          ...prev,
-          [selectedGarmentId!]: {
-            ...st,
-            sharedPhotos: st.sharedPhotos.filter(p => p.url !== previewUrl),
-          },
-        };
-      });
-      URL.revokeObjectURL(previewUrl);
-    }
   };
 
   const handleRemovePhoto = (idx: number) => {
-    updateGarmentState(selectedGarmentId, {
-      sharedPhotos: currentState.sharedPhotos.filter((_, i) => i !== idx),
+    if (!selectedGarmentId) return;
+    const removed = currentState.sharedPhotos[idx];
+    setGarmentStates(prev => {
+      const st = prev[selectedGarmentId];
+      if (!st) return prev;
+      const nextPending = { ...st.pendingUploads };
+      if (removed && nextPending[removed.url]) delete nextPending[removed.url];
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...st,
+          sharedPhotos: st.sharedPhotos.filter((_, i) => i !== idx),
+          pendingUploads: nextPending,
+        },
+      };
     });
+    if (removed?.url.startsWith("blob:")) URL.revokeObjectURL(removed.url);
   };
 
   const startRecording = async () => {
@@ -776,55 +762,24 @@ function UnifiedFeedbackInterface() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         stream.getTracks().forEach(t => t.stop());
         setRecordingOptionId(null);
 
-        if (!activeGarment || !activeOrder) {
-          toast.error("Cannot upload voice note: order or garment not loaded");
-          return;
-        }
-
+        if (!selectedGarmentId) return;
         const previewUrl = URL.createObjectURL(blob);
-        // Optimistic entry; replaced after upload succeeds
-        updateGarmentState(selectedGarmentId, {
-          sharedVoiceNotes: [...currentState.sharedVoiceNotes, previewUrl],
+        setGarmentStates(prev => {
+          const st = prev[selectedGarmentId] || createEmptyGarmentState();
+          return {
+            ...prev,
+            [selectedGarmentId]: {
+              ...st,
+              sharedVoiceNotes: [...st.sharedVoiceNotes, previewUrl],
+              pendingUploads: { ...st.pendingUploads, [previewUrl]: { kind: "voice", blob } },
+            },
+          };
         });
-        try {
-          const { url } = await uploadFeedbackVoiceNote(
-            blob,
-            activeOrder.id,
-            activeGarment.id,
-            activeGarment.trip_number || 1,
-          );
-          setGarmentStates(prev => {
-            const st = prev[selectedGarmentId!];
-            if (!st) return prev;
-            return {
-              ...prev,
-              [selectedGarmentId!]: {
-                ...st,
-                sharedVoiceNotes: st.sharedVoiceNotes.map(v => (v === previewUrl ? url : v)),
-              },
-            };
-          });
-          URL.revokeObjectURL(previewUrl);
-        } catch (err) {
-          toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
-          setGarmentStates(prev => {
-            const st = prev[selectedGarmentId!];
-            if (!st) return prev;
-            return {
-              ...prev,
-              [selectedGarmentId!]: {
-                ...st,
-                sharedVoiceNotes: st.sharedVoiceNotes.filter(v => v !== previewUrl),
-              },
-            };
-          });
-          URL.revokeObjectURL(previewUrl);
-        }
       };
 
       mediaRecorder.start();
@@ -841,9 +796,23 @@ function UnifiedFeedbackInterface() {
   };
 
   const removeVoiceNote = (idx: number) => {
-    updateGarmentState(selectedGarmentId, {
-      sharedVoiceNotes: currentState.sharedVoiceNotes.filter((_, i) => i !== idx),
+    if (!selectedGarmentId) return;
+    const removed = currentState.sharedVoiceNotes[idx];
+    setGarmentStates(prev => {
+      const st = prev[selectedGarmentId];
+      if (!st) return prev;
+      const nextPending = { ...st.pendingUploads };
+      if (removed && nextPending[removed]) delete nextPending[removed];
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...st,
+          sharedVoiceNotes: st.sharedVoiceNotes.filter((_, i) => i !== idx),
+          pendingUploads: nextPending,
+        },
+      };
     });
+    if (removed?.startsWith("blob:")) URL.revokeObjectURL(removed);
   };
 
   const onConfirmClick = () => {
@@ -1117,9 +1086,73 @@ function UnifiedFeedbackInterface() {
           }
         }
 
-        // Only persist photos that already uploaded (skip unresolved blob: previews)
-        const persistedPhotos = state.sharedPhotos.filter(p => !p.url.startsWith("blob:"));
-        const persistedVoiceNotes = state.sharedVoiceNotes.filter(u => !u.startsWith("blob:"));
+        // Upload any pending photos/voice notes to storage now. Files captured
+        // earlier sit in pendingUploads as blob: previews — they only become
+        // real URLs at submit time so abandoned drafts don't leave orphans.
+        const uploadedPhotos: Array<{ type: "photo" | "video"; url: string }> = [];
+        for (const entry of state.sharedPhotos) {
+          if (!entry.url.startsWith("blob:")) {
+            uploadedPhotos.push(entry);
+            continue;
+          }
+          const pending = state.pendingUploads[entry.url];
+          if (!pending || pending.kind !== "photo") continue;
+          try {
+            const { url } = await uploadFeedbackPhoto(
+              pending.blob,
+              activeOrder.id,
+              activeGarment.id,
+              activeGarment.trip_number || 1,
+            );
+            uploadedPhotos.push({ type: entry.type, url });
+            URL.revokeObjectURL(entry.url);
+          } catch (err) {
+            toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+          }
+        }
+
+        const uploadedVoiceNotes: string[] = [];
+        for (const u of state.sharedVoiceNotes) {
+          if (!u.startsWith("blob:")) {
+            uploadedVoiceNotes.push(u);
+            continue;
+          }
+          const pending = state.pendingUploads[u];
+          if (!pending || pending.kind !== "voice") continue;
+          try {
+            const { url } = await uploadFeedbackVoiceNote(
+              pending.blob,
+              activeOrder.id,
+              activeGarment.id,
+              activeGarment.trip_number || 1,
+            );
+            uploadedVoiceNotes.push(url);
+            URL.revokeObjectURL(u);
+          } catch (err) {
+            toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+          }
+        }
+
+        // Reflect uploaded URLs back into garment state so subsequent edits see
+        // them, and drop the pending blob entries we just consumed.
+        setGarmentStates(prev => {
+          const st = prev[selectedGarmentId!];
+          if (!st) return prev;
+          return {
+            ...prev,
+            [selectedGarmentId!]: {
+              ...st,
+              sharedPhotos: uploadedPhotos,
+              sharedVoiceNotes: uploadedVoiceNotes,
+              pendingUploads: {},
+            },
+          };
+        });
+
+        const persistedPhotos = uploadedPhotos;
+        const persistedVoiceNotes = uploadedVoiceNotes;
 
         const feedbackPayload = {
           garment_id: activeGarment.id,

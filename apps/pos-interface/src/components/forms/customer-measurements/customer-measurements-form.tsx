@@ -31,6 +31,52 @@ import {
   customerMeasurementsDefaults,
   type CustomerMeasurementsSchema,
 } from "./measurement-form.schema";
+import { getNumberedLabel, getLabel } from "@repo/database";
+
+/**
+ * Helper: build a MeasurementTable `columns` array from spec keys, using the
+ * PDF-numbered label for tape fields and the plain label for manual fields.
+ */
+function toColumns(
+  keys: readonly string[],
+  opts?: { numbered?: boolean; options?: Record<string, number[]> },
+) {
+  const numbered = opts?.numbered ?? false;
+  const optionMap = opts?.options ?? {};
+  return keys.map((name) => {
+    const col: { name: string; label: string; options?: number[] } = {
+      name,
+      label: numbered ? getNumberedLabel(name) : getLabel(name),
+    };
+    if (optionMap[name]) col.options = optionMap[name];
+    return col;
+  });
+}
+
+// Auto-tape fields, in PDF order 1-18.
+const AUTO_TAPE_FIELDS_FIRST = [
+  "chest_full", "shoulder", "sleeve_length", "sleeve_width",
+  "elbow", "armhole_front", "chest_upper", "chest_front", "waist_front",
+];
+const AUTO_TAPE_FIELDS_SECOND = [
+  "top_pocket_distance", "jabzour_length", "length_front", "bottom",
+  "chest_back", "waist_back", "length_back", "collar_width", "collar_height",
+];
+
+// Manual fields — everything not in the PDF tape sequence, except derived provisions.
+const MANUAL_FIELDS_FIRST = [
+  "waist_full",
+  "jabzour_width",
+  "top_pocket_length", "top_pocket_width",
+  "side_pocket_length", "side_pocket_width",
+  "side_pocket_distance", "side_pocket_opening",
+];
+const MANUAL_FIELDS_SECOND = [
+  "second_button_distance",
+  "basma_length", "basma_width",
+  "sleeve_hemming", "bottom_hemming",
+  "pen_pocket_length", "pen_pocket_width",
+];
 
 import {
   mapMeasurementToFormValues,
@@ -65,23 +111,6 @@ interface CustomerMeasurementsFormProps {
 // Custom hook for auto provision updates
 // ---------------------------------------
 function useAutoProvision(form: UseFormReturn<CustomerMeasurementsSchema>) {
-  // Armhole Provision
-  const [armhole, armhole_front, armhole_provision] = useWatch({
-    control: form.control,
-    name: ["armhole", "armhole_front", "armhole_provision"],
-  });
-
-  React.useEffect(() => {
-    if (armhole !== undefined && armhole_front !== undefined) {
-      const val = armhole ?? 0;
-      const front = armhole_front ?? 0;
-      const newProvision = Math.max(0, front * 2 - val);
-      if (armhole_provision !== newProvision) {
-        form.setValue("armhole_provision", newProvision);
-      }
-    }
-  }, [armhole, armhole_front, armhole_provision, form]);
-
   // Full Chest Provision
   const [chest_full, chest_front, chest_provision] = useWatch({
     control: form.control,
@@ -638,35 +667,15 @@ export function CustomerMeasurementsForm({
             form={form}
             title="Chest & Shoulder"
             isDisabled={!isEditing}
-            columns={[
-              { name: "chest_full", label: "1. Full Chest" },
-              { name: "shoulder", label: "2. Shoulder" },
-              { name: "sleeve_length", label: "3. Sleeve Len" },
-              { name: "sleeve_width", label: "4. Sleeve W" },
-              { name: "elbow", label: "5. Elbow" },
-              { name: "armhole_front", label: "6. Armhole F" },
-              { name: "chest_upper", label: "7. Upper Chest" },
-              { name: "chest_front", label: "8. Front Chest" },
-              { name: "waist_front", label: "9. Front Waist" },
-            ]}
+            columns={toColumns(AUTO_TAPE_FIELDS_FIRST, { numbered: true })}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
           <MeasurementTable
             form={form}
-            title="Waist, Collar & Back"
+            title="Waist, Back & Collar"
             isDisabled={!isEditing}
-            columns={[
-              { name: "top_pocket_distance", label: "10. Pocket Dist" },
-              { name: "jabzour_length", label: "11. Jabzour Len" },
-              { name: "length_front", label: "12. Front Len" },
-              { name: "bottom", label: "13. Bottom" },
-              { name: "chest_back", label: "14. Back Chest" },
-              { name: "waist_back", label: "15. Back Waist" },
-              { name: "length_back", label: "16. Back Len" },
-              { name: "collar_width", label: "17. Collar Len" },
-              { name: "collar_height", label: "18. Collar H" },
-            ]}
+            columns={toColumns(AUTO_TAPE_FIELDS_SECOND, { numbered: true })}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
@@ -677,19 +686,11 @@ export function CustomerMeasurementsForm({
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Manual Measurements</h3>
           <MeasurementTable
             form={form}
-            title="Armhole, Pockets & Jabzour"
+            title="Pockets & Jabzour"
             isDisabled={!isEditing}
-            columns={[
-              { name: "armhole", label: "Armhole Full" },
-              { name: "waist_full", label: "Waist Full" },
-              { name: "jabzour_width", label: "Jabzour W", options: JABZOUR_SIDEPOCKET_OPTIONS },
-              { name: "top_pocket_length", label: "Top Pkt Len" },
-              { name: "top_pocket_width", label: "Top Pkt W" },
-              { name: "side_pocket_length", label: "Side Pkt Len" },
-              { name: "side_pocket_width", label: "Side Pkt W" },
-              { name: "side_pocket_distance", label: "Side Pkt Dist" },
-              { name: "side_pocket_opening", label: "Side Pkt Open" },
-            ]}
+            columns={toColumns(MANUAL_FIELDS_FIRST, {
+              options: { jabzour_width: JABZOUR_SIDEPOCKET_OPTIONS },
+            })}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
@@ -697,16 +698,7 @@ export function CustomerMeasurementsForm({
             form={form}
             title="Basma, Hemming & Pen Pocket"
             isDisabled={!isEditing}
-            columns={[
-              { name: "second_button_distance", label: "2nd Button Dist" },
-              { name: "basma_length", label: "Basma Len" },
-              { name: "basma_width", label: "Basma W" },
-              { name: "basma_sleeve_length", label: "Basma Sleeve L" },
-              { name: "sleeve_hemming", label: "Sleeve Hem" },
-              { name: "bottom_hemming", label: "Bottom Hem" },
-              { name: "pen_pocket_length", label: "Pen Pkt Len" },
-              { name: "pen_pocket_width", label: "Pen Pkt W" },
-            ]}
+            columns={toColumns(MANUAL_FIELDS_SECOND)}
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
