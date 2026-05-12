@@ -24,6 +24,7 @@ interface DiscountControlsProps {
     currentReason?: string | null;
     orderTotal: number;
     totalPaid?: number;
+    onSaved?: () => void;
 }
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
@@ -36,10 +37,11 @@ export function DiscountControls({
     currentReferralCode,
     orderTotal,
     totalPaid = 0,
+    onSaved,
 }: DiscountControlsProps) {
     const subtotal = orderTotal + currentDiscountValue;
 
-    const [discountType, setDiscountType] = useState<string>(currentDiscountType || "");
+    const [discountType, setDiscountType] = useState<string>(currentDiscountType || "flat");
     const [percentage, setPercentage] = useState<string>(currentDiscountPercentage ? String(currentDiscountPercentage) : "");
     const [kwdValue, setKwdValue] = useState<string>(currentDiscountValue ? currentDiscountValue.toFixed(3) : "");
     const [referralCode, setReferralCode] = useState<string>(currentReferralCode || "");
@@ -48,7 +50,7 @@ export function DiscountControls({
 
     // Sync from props when order data changes (server response)
     useEffect(() => {
-        setDiscountType(currentDiscountType || "");
+        setDiscountType(currentDiscountType || "flat");
         setPercentage(currentDiscountPercentage ? String(currentDiscountPercentage) : "");
         setKwdValue(currentDiscountValue ? currentDiscountValue.toFixed(3) : "");
         setReferralCode(currentReferralCode || "");
@@ -89,6 +91,10 @@ export function DiscountControls({
             discountPercentage: discountType === "by_value" ? undefined : (pctVal || undefined),
             referralCode: discountType === "referral" ? referralCode : undefined,
             newOrderTotal: Math.max(0, newTotal),
+        }, {
+            onSuccess: (res: any) => {
+                if (!res || res.status !== "error") onSaved?.();
+            },
         });
     };
 
@@ -100,17 +106,20 @@ export function DiscountControls({
             discountPercentage: undefined,
             referralCode: undefined,
             newOrderTotal: subtotal,
+        }, {
+            onSuccess: (res: any) => {
+                if (!res || res.status !== "error") onSaved?.();
+            },
         });
     };
 
     return (
-        <div className="space-y-1.5">
+        <div className="flex flex-col h-full space-y-3">
             {/* Type selector */}
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-2">
                 {discountOptions.map((opt) => {
                     const isActive = discountType === opt.value;
                     const hasSavedDiscount = currentDiscountValue > 0;
-                    // If a discount is already saved, disable other types — must remove first
                     const isLocked = hasSavedDiscount && !isActive && !!currentDiscountType;
                     return (
                         <ChipToggle
@@ -121,13 +130,12 @@ export function DiscountControls({
                                 if (isLocked) return;
                                 setDiscountType(isActive ? "" : opt.value);
                                 if (!isActive) {
-                                    // Switching to a new type — reset values
                                     setPercentage("");
                                     setKwdValue("");
                                     setReferralCode("");
                                 }
                             }}
-                            className={`py-1 px-2.5 text-[11px] ${isLocked ? "opacity-40 cursor-not-allowed" : ""}`}>
+                            className={`h-10 px-4 text-sm font-semibold ${isLocked ? "opacity-40 cursor-not-allowed" : ""}`}>
                             {opt.label}
                         </ChipToggle>
                     );
@@ -143,12 +151,12 @@ export function DiscountControls({
                 }}
             >
                 <div className="overflow-hidden">
-                    <div className="space-y-1.5 py-0.5 px-0.5">
-                        <div className="flex gap-1.5">
+                    <div className="space-y-3 py-1 px-0.5">
+                        <div className="flex gap-3">
                             {isPercentageType ? (
                                 <>
-                                    <div className="flex-1 space-y-0.5">
-                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">%</Label>
+                                    <div className="flex-1 space-y-1">
+                                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Percentage (%)</Label>
                                         <Input
                                             type="number"
                                             min="0"
@@ -163,17 +171,17 @@ export function DiscountControls({
                                                 setPercentage(String(Math.max(0, Math.min(100, n))));
                                             }}
                                             onFocus={(e) => e.target.select()}
-                                            className="h-8 text-sm"
+                                            className="h-12 text-lg tabular-nums"
                                         />
                                     </div>
-                                    <div className="flex-1 space-y-0.5">
-                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">KWD</Label>
-                                        <Input value={kwdValue} readOnly className="h-8 text-sm bg-muted" />
+                                    <div className="flex-1 space-y-1">
+                                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Value (KWD)</Label>
+                                        <Input value={kwdValue} readOnly className="h-12 text-lg tabular-nums bg-muted" />
                                     </div>
                                 </>
                             ) : (
-                                <div className="flex-1 space-y-0.5">
-                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Value (KWD)</Label>
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Value (KWD)</Label>
                                     <Input
                                         type="number"
                                         min="0"
@@ -188,61 +196,61 @@ export function DiscountControls({
                                             setKwdValue(String(Math.max(0, Math.min(subtotal, n))));
                                         }}
                                         onFocus={(e) => e.target.select()}
-                                        className="h-8 text-sm"
+                                        className="h-12 text-lg tabular-nums"
                                     />
                                 </div>
                             )}
                         </div>
 
                         {discountType === "referral" && (
-                            <div className="space-y-0.5">
-                                <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Referral Code</Label>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Referral Code</Label>
                                 <Input
                                     placeholder="Enter code"
                                     value={referralCode}
                                     onChange={(e) => setReferralCode(e.target.value)}
-                                    className="h-8 text-sm"
+                                    onFocus={(e) => e.target.select()}
+                                    className="h-11 text-base"
                                 />
                             </div>
                         )}
 
                         {blocksBelowPaid && (
-                            <div className="rounded-md bg-red-50 border border-red-200 px-2 py-1.5 text-[11px] text-red-700">
+                            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
                                 Discount leaves total ({fmt(prospectiveTotal)} KWD) below already-paid ({fmt(totalPaid)} KWD).
                                 Refund <span className="font-bold">{fmt(refundNeededFirst)} KWD</span> first.
                             </div>
                         )}
-
-                        <div className="flex items-center gap-1.5">
-                            {isDirty && (
-                                <Button
-                                    size="sm"
-                                    className="h-7 text-xs px-3"
-                                    onClick={handleApply}
-                                    disabled={discountMutation.isPending || discountVal === 0 || blocksBelowPaid}
-                                >
-                                    {discountMutation.isPending ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Saving...</> : "Apply"}
-                                </Button>
-                            )}
-                            {!isDirty && discountMutation.isPending && (
-                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <Loader2 className="h-3 w-3 animate-spin" /> Saving...
-                                </span>
-                            )}
-                            <div className="flex-1" />
-                            {currentDiscountValue > 0 && (
-                                <button
-                                    type="button"
-                                    className="text-[10px] text-red-500 hover:text-red-600 font-medium cursor-pointer"
-                                    onClick={handleRemove}
-                                    disabled={discountMutation.isPending}
-                                >
-                                    Remove
-                                </button>
-                            )}
-                        </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Action row — pinned at bottom, Apply always on the right */}
+            <div className="mt-auto flex items-center gap-2 pt-1">
+                {currentDiscountValue > 0 && (
+                    <button
+                        type="button"
+                        className="text-sm text-red-500 hover:text-red-600 font-medium cursor-pointer px-2 py-1"
+                        onClick={handleRemove}
+                        disabled={discountMutation.isPending}
+                    >
+                        Remove
+                    </button>
+                )}
+                <div className="flex-1" />
+                {!isDirty && discountMutation.isPending && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
+                    </span>
+                )}
+                <Button
+                    size="lg"
+                    className="h-11 text-sm px-5 font-semibold"
+                    onClick={handleApply}
+                    disabled={!discountType || !isDirty || discountMutation.isPending || discountVal === 0 || blocksBelowPaid}
+                >
+                    {discountMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Saving...</> : "Apply"}
+                </Button>
             </div>
         </div>
     );

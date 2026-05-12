@@ -1115,7 +1115,7 @@ function TeamPage() {
   const openEditUnit = (u: Unit) => {
     setUnitDialogMode("edit");
     setEditingUnitId(u.id);
-    setUnitDialogStage(u.stage);
+    setUnitDialogStage(u.stage as StageKey);
     setUnitName(u.name);
     setUnitNotes(u.notes ?? "");
     setUnitDailyTarget(u.daily_target != null ? String(u.daily_target) : "");

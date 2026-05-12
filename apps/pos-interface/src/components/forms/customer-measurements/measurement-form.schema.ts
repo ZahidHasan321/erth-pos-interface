@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MEASUREMENTS_SPEC } from "@repo/database";
+import { MEASUREMENTS_SPEC, type MeasurementKey } from "@repo/database";
 
 // Required numeric field — operator must enter a value.
 const requiredDecimal = z.number({ message: "Required" });
@@ -31,7 +31,9 @@ export const customerMeasurementsSchema = z.object({
   ...measurementFields,
 });
 
-export type CustomerMeasurementsSchema = z.infer<typeof customerMeasurementsSchema>;
+export type CustomerMeasurementsSchema =
+  z.infer<typeof customerMeasurementsSchema> &
+  { [K in MeasurementKey]?: number | null };
 
 /**
  * Default form values. Required measurement fields stay `undefined` so RHF
@@ -55,4 +57,4 @@ export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   measurement_date: new Date().toISOString(),
   notes: "",
   ...measurementDefaults,
-} as CustomerMeasurementsSchema;
+} as unknown as CustomerMeasurementsSchema;

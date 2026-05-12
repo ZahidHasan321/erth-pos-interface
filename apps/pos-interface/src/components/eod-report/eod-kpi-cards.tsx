@@ -1,5 +1,14 @@
 import { Card } from "@repo/ui/card";
-import { ArrowDownRight, ArrowUpRight, Banknote, TrendingUp } from "lucide-react";
+import {
+    ArrowDownRight,
+    ArrowUpRight,
+    Banknote,
+    TrendingUp,
+    HandCoins,
+    Receipt,
+    ShoppingBag,
+    PackageCheck,
+} from "lucide-react";
 import type { EodReportSummary } from "@/api/cashier";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
@@ -9,8 +18,18 @@ interface EodKpiCardsProps {
     data: EodReportSummary;
 }
 
+interface Kpi {
+    label: string;
+    value: string;
+    icon: typeof ArrowUpRight;
+    color: string;
+    bg: string;
+    iconBg: string;
+    sub: string | null;
+}
+
 export function EodKpiCards({ data }: EodKpiCardsProps) {
-    const kpis = [
+    const cashRow: Kpi[] = [
         {
             label: "Total Collected",
             value: fmtK(data.total_collected),
@@ -36,26 +55,74 @@ export function EodKpiCards({ data }: EodKpiCardsProps) {
             color: "text-primary",
             bg: "bg-primary/5",
             iconBg: "bg-primary/10",
-            sub: `Billed: ${fmtK(data.total_billed)}`,
+            sub: "Collected − Refunded",
         },
         {
-            label: "Outstanding",
-            value: fmtK(data.outstanding),
+            label: "AR Outstanding",
+            value: fmtK(data.ar_outstanding),
             icon: Banknote,
             color: "text-amber-600",
             bg: "bg-amber-50",
             iconBg: "bg-amber-100",
-            sub: `${data.order_count} orders`,
+            sub: "All open balances",
         },
     ];
 
+    const tailoringRow: Kpi[] = [
+        {
+            label: "Deposits Collected",
+            value: fmtK(data.deposit_collected),
+            icon: HandCoins,
+            color: "text-sky-700",
+            bg: "bg-sky-50",
+            iconBg: "bg-sky-100",
+            sub: "First payment per order",
+        },
+        {
+            label: "Balance Payments",
+            value: fmtK(data.balance_collected),
+            icon: Receipt,
+            color: "text-indigo-700",
+            bg: "bg-indigo-50",
+            iconBg: "bg-indigo-100",
+            sub: "Settlements on prior orders",
+        },
+        {
+            label: "New Orders Booked",
+            value: `${data.order_count}`,
+            icon: ShoppingBag,
+            color: "text-slate-700",
+            bg: "bg-slate-50",
+            iconBg: "bg-slate-100",
+            sub: `Billed: ${fmtK(data.gross_sales)}`,
+        },
+        {
+            label: "Delivered / Collected",
+            value: `${data.delivered_count}`,
+            icon: PackageCheck,
+            color: "text-emerald-700",
+            bg: "bg-emerald-50",
+            iconBg: "bg-emerald-100",
+            sub: "Garments handed over",
+        },
+    ];
+
+    return (
+        <div className="space-y-3">
+            <KpiRow kpis={cashRow} offset={0} />
+            <KpiRow kpis={tailoringRow} offset={4} />
+        </div>
+    );
+}
+
+function KpiRow({ kpis, offset }: { kpis: Kpi[]; offset: number }) {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {kpis.map((kpi, i) => (
                 <Card
                     key={kpi.label}
                     className={`p-4 ${kpi.bg} border-none`}
-                    style={{ animation: `cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) ${i * 80}ms both` }}
+                    style={{ animation: `cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) ${(i + offset) * 60}ms both` }}
                 >
                     <div className="flex items-start justify-between mb-3">
                         <span className="text-xs font-medium text-muted-foreground">{kpi.label}</span>

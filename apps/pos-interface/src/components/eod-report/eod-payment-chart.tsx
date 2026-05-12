@@ -42,32 +42,32 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
 
                     {/* Detailed breakdown */}
                     <div className="w-full space-y-2">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground pb-1 border-b border-border">
+                            <span className="w-2.5 h-2.5 shrink-0" />
+                            <span className="flex-1">Method</span>
+                            <span className="font-medium w-12 text-right">Txns</span>
+                            <span className="font-medium w-24 text-right">Collected</span>
+                            <span className="font-medium w-20 text-right">Refunded</span>
+                            <span className="font-medium w-10 text-right">%</span>
+                        </div>
                         {data.by_payment_method.map(m => {
                             const pct = totalCollected > 0 ? Math.round((Number(m.total) / totalCollected) * 100) : 0;
                             const label = PAYMENT_TYPE_LABELS[m.payment_type as keyof typeof PAYMENT_TYPE_LABELS] || m.payment_type;
                             const color = PAYMENT_METHOD_COLORS[m.payment_type] || "#888";
+                            const refund = Number(m.refund_total) || 0;
                             return (
                                 <div key={m.payment_type} className="flex items-center gap-3 text-sm">
                                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                                     <span className="flex-1 text-muted-foreground">{label}</span>
-                                    <span className="tabular-nums font-medium text-xs text-muted-foreground">{m.count} txn</span>
+                                    <span className="tabular-nums font-medium text-xs text-muted-foreground w-12 text-right">{m.count}</span>
                                     <span className="tabular-nums font-semibold w-24 text-right">{fmtK(m.total)}</span>
+                                    <span className={`tabular-nums w-20 text-right text-xs ${refund > 0 ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
+                                        {refund > 0 ? `−${fmtK(refund)}` : "—"}
+                                    </span>
                                     <span className="tabular-nums text-xs text-muted-foreground w-10 text-right">{pct}%</span>
                                 </div>
                             );
                         })}
-                        {Number(data.total_refunded) > 0 && (
-                            <>
-                                <div className="border-t border-border my-1" />
-                                <div className="flex items-center gap-3 text-sm">
-                                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-red-400" />
-                                    <span className="flex-1 text-red-600">Refunds</span>
-                                    <span className="tabular-nums font-medium text-xs text-muted-foreground" />
-                                    <span className="tabular-nums font-semibold w-24 text-right text-red-600">-{fmtK(data.total_refunded)}</span>
-                                    <span className="w-10" />
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
             )}
@@ -76,11 +76,9 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
 }
 
 export function EodOrderBreakdown({ data }: { data: EodReportSummary }) {
-    const fmt3 = (n: number): string => Number(Number(n).toFixed(3)).toString();
-
     return (
         <Card className="p-5" style={{ animation: "cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) 280ms both" }}>
-            <h3 className="font-semibold text-sm mb-4">Order Breakdown</h3>
+            <h3 className="font-semibold text-sm mb-4">Order Mix</h3>
 
             {data.order_count === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No orders in this period</p>
@@ -88,7 +86,7 @@ export function EodOrderBreakdown({ data }: { data: EodReportSummary }) {
                 <div className="space-y-4">
                     <div>
                         <p className="text-3xl font-bold tabular-nums">{data.order_count}</p>
-                        <p className="text-xs text-muted-foreground">Total Orders</p>
+                        <p className="text-xs text-muted-foreground">Total Orders Booked</p>
                     </div>
 
                     <div className="flex gap-3">
@@ -102,20 +100,12 @@ export function EodOrderBreakdown({ data }: { data: EodReportSummary }) {
                         </div>
                     </div>
 
-                    <div className="border-t border-border pt-3 space-y-2">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Total Billed</span>
-                            <span className="font-semibold tabular-nums">{fmtK(data.total_billed)}</span>
+                    {data.cancelled_count > 0 && (
+                        <div className="border-t border-border pt-3 flex justify-between text-sm">
+                            <span className="text-muted-foreground">Cancelled</span>
+                            <span className="font-semibold tabular-nums text-red-600">{data.cancelled_count}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Avg. Order Value</span>
-                            <span className="font-semibold tabular-nums">{fmt3(data.avg_order_value)} KWD</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Outstanding</span>
-                            <span className="font-semibold tabular-nums text-amber-600">{fmtK(data.outstanding)}</span>
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
         </Card>

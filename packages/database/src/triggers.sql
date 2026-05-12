@@ -2014,6 +2014,11 @@ RETURNS JSONB AS $$
 DECLARE
   v_order_stats JSONB;
   v_tx_stats JSONB;
+  v_deposit_stats JSONB;
+  v_cancel_stats JSONB;
+  v_invoice_stats JSONB;
+  v_ar_outstanding NUMERIC;
+  v_delivered_count INT;
   v_by_method JSONB;
   v_daily JSONB;
   v_by_cashier JSONB;
@@ -2026,13 +2031,15 @@ BEGIN
   v_tx_start := p_date_from::timestamp - v_tz_interval;
   v_tx_end := (p_date_to + INTERVAL '1 day')::timestamp - v_tz_interval;
 
-  -- 1. Order-level aggregates for the date range
+  -- 1. Order-level aggregates for confirmed orders in range
   --    order_date is stored as local date, so direct comparison is correct
   SELECT jsonb_build_object(
     'order_count',     COUNT(*),
     'work_count',      COUNT(*) FILTER (WHERE order_type = 'WORK'),
     'sales_count',     COUNT(*) FILTER (WHERE order_type = 'SALES'),
+    'gross_sales',     COALESCE(SUM(order_total::decimal), 0),
     'total_billed',    COALESCE(SUM(order_total::decimal), 0),
+    'discount_total',  COALESCE(SUM(discount_value::decimal), 0),
     'outstanding',     COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0),
     'avg_order_value', COALESCE(
       CASE WHEN COUNT(*) > 0 THEN ROUND(SUM(order_total::decimal) / COUNT(*), 3) ELSE 0 END,
@@ -2044,6 +2051,48 @@ BEGIN
     AND checkout_status = 'confirmed'
     AND order_date >= p_date_from::timestamp
     AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+
+  -- 1b. Cancellation aggregates (separate because they're excluded from confirmed filter)
+  SELECT jsonb_build_object(
+    'cancelled_count',  COUNT(*),
+    'cancelled_billed', COALESCE(SUM(order_total::decimal), 0)
+  ) INTO v_cancel_stats
+  FROM orders
+  WHERE brand = p_brand::brand
+    AND checkout_status = 'cancelled'
+    AND order_date >= p_date_from::timestamp
+    AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+
+  -- 1c. Invoice number range (WORK orders only — SALES don't carry invoice_number)
+  SELECT jsonb_build_object(
+    'invoice_first', MIN(wo.invoice_number),
+    'invoice_last',  MAX(wo.invoice_number)
+  ) INTO v_invoice_stats
+  FROM work_orders wo
+  JOIN orders o ON o.id = wo.order_id
+  WHERE o.brand = p_brand::brand
+    AND o.checkout_status = 'confirmed'
+    AND wo.invoice_number IS NOT NULL
+    AND o.order_date >= p_date_from::timestamp
+    AND o.order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+
+  -- 1d. AR Outstanding (all-time, not date-scoped — total customer balances owed)
+  SELECT COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0)
+  INTO v_ar_outstanding
+  FROM orders
+  WHERE brand = p_brand::brand
+    AND checkout_status = 'confirmed'
+    AND order_total::decimal > paid::decimal;
+
+  -- 1e. Garments collected/delivered in range (customer hand-over events)
+  SELECT COUNT(DISTINCT gf.garment_id)
+  INTO v_delivered_count
+  FROM garment_feedback gf
+  JOIN orders o ON o.id = gf.order_id
+  WHERE o.brand = p_brand::brand
+    AND gf.action IN ('collected', 'delivered')
+    AND gf.created_at >= v_tx_start
+    AND gf.created_at < v_tx_end;
 
   -- 2. Transaction-level aggregates (actual money movement)
   --    created_at is UTC, so use timezone-corrected boundaries
@@ -2061,6 +2110,37 @@ BEGIN
     AND o.checkout_status = 'confirmed'
     AND pt.created_at >= v_tx_start
     AND pt.created_at < v_tx_end;
+
+  -- 2b. Deposit vs Balance split
+  --     Derive: a payment_transaction is a "deposit" if it is the chronologically
+  --     first 'payment' (non-refund) row for its order. All subsequent payments
+  --     against the same order are "balance" settlements. Refunds are excluded
+  --     from both buckets (they're already in total_refunded).
+  --     The deposit may have been recorded BEFORE the range — what matters here
+  --     is which payments INSIDE the range count as deposit vs balance.
+  WITH ranked_payments AS (
+    SELECT
+      pt.id,
+      pt.amount,
+      pt.created_at,
+      pt.order_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY pt.order_id
+        ORDER BY pt.created_at, pt.id
+      ) AS payment_seq
+    FROM payment_transactions pt
+    JOIN orders o ON o.id = pt.order_id
+    WHERE o.brand = p_brand::brand
+      AND o.checkout_status = 'confirmed'
+      AND pt.transaction_type = 'payment'
+  )
+  SELECT jsonb_build_object(
+    'deposit_collected', COALESCE(SUM(amount) FILTER (WHERE payment_seq = 1), 0),
+    'balance_collected', COALESCE(SUM(amount) FILTER (WHERE payment_seq > 1), 0)
+  ) INTO v_deposit_stats
+  FROM ranked_payments
+  WHERE created_at >= v_tx_start
+    AND created_at < v_tx_end;
 
   -- 3. Breakdown by payment method
   SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_by_method
@@ -2119,7 +2199,9 @@ BEGIN
     ORDER BY collected DESC
   ) sub;
 
-  RETURN v_order_stats || v_tx_stats
+  RETURN v_order_stats || v_tx_stats || v_deposit_stats || v_cancel_stats || v_invoice_stats
+    || jsonb_build_object('ar_outstanding', v_ar_outstanding)
+    || jsonb_build_object('delivered_count', v_delivered_count)
     || jsonb_build_object('by_payment_method', v_by_method)
     || jsonb_build_object('daily', v_daily)
     || jsonb_build_object('by_cashier', v_by_cashier);
@@ -2137,7 +2219,14 @@ CREATE OR REPLACE FUNCTION get_register_session(p_brand TEXT, p_date DATE DEFAUL
 RETURNS JSONB AS $$
 DECLARE
   v_session JSONB;
+  v_today DATE;
 BEGIN
+  -- Always use Kuwait server time, not the client's p_date. A laptop in another
+  -- timezone (or with a drifted clock) would otherwise compute a date past
+  -- Kuwait midnight and trigger the stale-session fallback against today's
+  -- legitimate open session. p_date kept in the signature for client compat.
+  v_today := (now() AT TIME ZONE 'Asia/Kuwait')::date;
+
   SELECT jsonb_build_object(
     'id', rs.id,
     'brand', rs.brand,
@@ -2173,11 +2262,11 @@ BEGIN
   LEFT JOIN users ru ON ru.id = rs.reopened_by
   WHERE rs.brand = p_brand::brand
     AND (
-      rs.date = p_date
-      OR (rs.status = 'open' AND rs.date < p_date)
+      rs.date = v_today
+      OR (rs.status = 'open' AND rs.date < v_today)
     )
   ORDER BY
-    (rs.date = p_date) DESC,  -- prefer today's session
+    (rs.date = v_today) DESC,  -- prefer today's session
     rs.date DESC               -- then most recent open session
   LIMIT 1;
 
@@ -2191,6 +2280,7 @@ RETURNS JSONB AS $$
 DECLARE
   v_id INT;
   v_my_user_id UUID;
+  v_today DATE;
 BEGIN
   PERFORM assert_active_user();
 
@@ -2205,19 +2295,24 @@ BEGIN
     RAISE EXCEPTION 'Cannot open register under another user';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND date = p_date) THEN
-    RAISE EXCEPTION 'Register already opened for % on %', p_brand, p_date;
+  -- Always use Kuwait server time, not the client's p_date (clock-skew safety).
+  v_today := (now() AT TIME ZONE 'Asia/Kuwait')::date;
+
+  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND date = v_today) THEN
+    RAISE EXCEPTION 'Register already opened for % on %', p_brand, v_today;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND status = 'open' AND date < p_date) THEN
+  IF EXISTS (SELECT 1 FROM register_sessions WHERE brand = p_brand::brand AND status = 'open' AND date < v_today) THEN
     RAISE EXCEPTION 'A previous register session is still open. Close it before opening a new one.';
   END IF;
 
   INSERT INTO register_sessions (brand, date, opened_by, opening_float, status)
-  VALUES (p_brand::brand, p_date, p_user_id, p_opening_float, 'open')
+  VALUES (p_brand::brand, v_today, p_user_id, p_opening_float, 'open')
   RETURNING id INTO v_id;
 
-  RETURN jsonb_build_object('id', v_id, 'status', 'open');
+  -- Return the full session payload (same shape as get_register_session) so
+  -- callers can populate their cache without waiting on a refetch round-trip.
+  RETURN get_register_session(p_brand, v_today);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2403,7 +2498,8 @@ BEGIN
     reopened_at = NOW()
   WHERE id = p_session_id;
 
-  RETURN jsonb_build_object('id', p_session_id, 'status', 'open');
+  -- Return the full session payload so callers can update cache directly.
+  RETURN get_register_session(v_session.brand::text, v_session.date);
 END;
 $$ LANGUAGE plpgsql;
 

@@ -16,7 +16,7 @@ import {
 import type { CashierOrderListItem, CashierSummary } from "@/api/cashier";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
-import { CashierOrderDetailView } from "./cashier-order-detail";
+import { OrderDetailShell } from "./order-detail-shell";
 import { RegisterGate } from "./register-gate";
 import "./cashier-keyframes";
 
@@ -466,7 +466,7 @@ export function CashierListBody({ onSelectOrder }: { onSelectOrder: (id: string)
 export function CashierOrderDetailBody({ orderId, onBack }: { orderId: string; onBack: () => void }) {
     return (
         <RegisterGate>
-            <CashierOrderDetailView orderId={orderId} onBack={onBack} />
+            <OrderDetailShell orderId={orderId} onBack={onBack} />
         </RegisterGate>
     );
 }

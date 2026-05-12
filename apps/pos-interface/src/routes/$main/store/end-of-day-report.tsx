@@ -6,12 +6,14 @@ import { Card, CardContent } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Printer, FileText, Loader2, AlertCircle, RefreshCw, ReceiptText } from "lucide-react";
 import { useEodReport } from "@/hooks/useCashier";
-import { getEodTransactions } from "@/api/cashier";
+import { getEodTransactions, getRegisterSession } from "@/api/cashier";
 import { EodDateFilter, type DatePreset } from "@/components/eod-report/eod-date-filter";
 import { EodKpiCards } from "@/components/eod-report/eod-kpi-cards";
 import { EodPaymentChart, EodOrderBreakdown } from "@/components/eod-report/eod-payment-chart";
 import { EodTransactionTable } from "@/components/eod-report/eod-transaction-table";
 import { RevenueTrendChart, CollectionsVsRefundsChart, CashierLeaderboard } from "@/components/eod-report/eod-charts";
+import { EodCashDrawer } from "@/components/eod-report/eod-cash-drawer";
+import { EodSalesSummary } from "@/components/eod-report/eod-sales-summary";
 
 export const Route = createFileRoute("/$main/store/end-of-day-report")({
     component: EndOfDayReport,
@@ -54,12 +56,15 @@ function getPresetDates(preset: DatePreset): { from: Date; to: Date } {
 }
 
 function EndOfDayReport() {
-    const [preset, setPreset] = useState<DatePreset>("this_month");
+    const [preset, setPreset] = useState<DatePreset>("today");
     const [dateFrom, setDateFrom] = useState<Date>(() => {
         const now = new Date();
-        return new Date(now.getFullYear(), now.getMonth(), 1);
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     });
-    const [dateTo, setDateTo] = useState<Date>(() => new Date());
+    const [dateTo, setDateTo] = useState<Date>(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    });
     const [printLoading, setPrintLoading] = useState(false);
 
     const dateFromStr = toDateStr(dateFrom);
@@ -93,11 +98,19 @@ function EndOfDayReport() {
         if (!summary) return;
         setPrintLoading(true);
         try {
-            const [txRes, printMod] = await Promise.all([
+            // Single-day prints include the register session for cash drawer reconciliation.
+            const [txRes, sessionRes, printMod] = await Promise.all([
                 getEodTransactions(dateFromStr, dateToStr),
+                isMultiDay ? Promise.resolve({ data: null }) : getRegisterSession(undefined, dateFromStr),
                 import("@/components/eod-report/eod-print-view"),
             ]);
-            const params = { summary, transactions: txRes.data, dateFrom: dateFromStr, dateTo: dateToStr };
+            const params = {
+                summary,
+                transactions: txRes.data,
+                dateFrom: dateFromStr,
+                dateTo: dateToStr,
+                registerSession: sessionRes.data,
+            };
             if (action === "view") await printMod.viewEodReport(params);
             else await printMod.printEodReport(params);
         } catch (err) {
@@ -105,7 +118,7 @@ function EndOfDayReport() {
         } finally {
             setPrintLoading(false);
         }
-    }, [summary, dateFromStr, dateToStr]);
+    }, [summary, dateFromStr, dateToStr, isMultiDay]);
 
     return (
         <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10 space-y-6">
@@ -115,6 +128,12 @@ function EndOfDayReport() {
                     <h1 className="text-xl font-bold tracking-tight">End of Day Report</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Financial summary and transaction history
+                        {summary && !isMultiDay && summary.invoice_first !== null && summary.invoice_last !== null && (
+                            <span className="ml-2 text-xs">
+                                · Invoices #{summary.invoice_first}
+                                {summary.invoice_last !== summary.invoice_first ? `–#${summary.invoice_last}` : ""}
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -190,6 +209,14 @@ function EndOfDayReport() {
                 <div className="space-y-6">
                     {/* KPI Cards */}
                     <EodKpiCards data={summary} />
+
+                    {/* Cash Drawer Reconciliation — single-day only */}
+                    {!isMultiDay && (
+                        <EodCashDrawer date={dateFromStr} report={summary} />
+                    )}
+
+                    {/* Sales Summary (gross / discounts / net) */}
+                    <EodSalesSummary data={summary} />
 
                     {/* Payment Methods + Order Breakdown */}
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

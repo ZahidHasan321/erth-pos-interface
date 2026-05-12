@@ -126,7 +126,19 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   { key: "waist_provision",        label: "Waist Provision",    shortLabel: "Waist Prov.",group: "provision",    derived: true },
 ];
 
-export type MeasurementKey = (typeof MEASUREMENTS_SPEC)[number]["key"];
+export type MeasurementKey =
+  | "collar_width" | "collar_height"
+  | "shoulder" | "armhole_front" | "sleeve_length" | "sleeve_width" | "elbow"
+  | "chest_upper" | "chest_full" | "chest_front" | "chest_back"
+  | "top_pocket_distance" | "top_pocket_length" | "top_pocket_width"
+  | "side_pocket_length" | "side_pocket_width" | "side_pocket_distance" | "side_pocket_opening"
+  | "waist_full" | "waist_front" | "waist_back" | "length_front" | "length_back" | "bottom"
+  | "jabzour_length" | "jabzour_width"
+  | "second_button_distance"
+  | "basma_length" | "basma_width"
+  | "sleeve_hemming" | "bottom_hemming"
+  | "pen_pocket_length" | "pen_pocket_width"
+  | "chest_provision" | "waist_provision";
 
 const SPEC_BY_KEY: Record<string, MeasurementSpec> = Object.fromEntries(
   MEASUREMENTS_SPEC.map((s) => [s.key, s]),

@@ -173,6 +173,15 @@ export function useRegisterSession() {
     });
 }
 
+export function useRegisterSessionByDate(date: string | null) {
+    return useQuery({
+        queryKey: ["register-session", date],
+        queryFn: () => getRegisterSession(undefined, date!),
+        enabled: !!date,
+        staleTime: 1000 * 30,
+    });
+}
+
 export function useOpenRegisterMutation() {
     const queryClient = useQueryClient();
     return useMutation({
@@ -182,6 +191,10 @@ export function useOpenRegisterMutation() {
                 toast.error(`Failed to open register: ${response.message}`);
                 return;
             }
+            // Seed the cache directly with the freshly opened session so the
+            // RegisterGate switches out of OpenRegisterScreen on this render —
+            // an invalidate-only path raced the refetch and left the lock on.
+            queryClient.setQueryData(["register-session"], { status: "success", data: response.data });
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Could not open register: ${error.message}`),
@@ -197,6 +210,7 @@ export function useReopenRegisterMutation() {
                 toast.error(`Failed to reopen register: ${response.message}`);
                 return;
             }
+            queryClient.setQueryData(["register-session"], { status: "success", data: response.data });
             queryClient.invalidateQueries({ queryKey: ["register-session"] });
         },
         onError: (error) => toast.error(`Could not reopen register: ${error.message}`),

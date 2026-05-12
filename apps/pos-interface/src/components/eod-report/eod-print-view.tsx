@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
-import type { EodReportSummary, EodTransaction } from "@/api/cashier";
+import type { EodReportSummary, EodTransaction, RegisterSessionData } from "@/api/cashier";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
@@ -13,6 +13,7 @@ export interface PrintEodReportParams {
     transactions: EodTransaction[];
     dateFrom: string;
     dateTo: string;
+    registerSession?: RegisterSessionData | null;
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -109,10 +110,11 @@ function TableRow({ widths, cells, isLast }: { widths: string[]; cells: string[]
 
 // ── Document ──────────────────────────────────────────────────────────────────
 
-function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEodReportParams) {
+function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSession }: PrintEodReportParams) {
     const fromLabel = dateFmt.format(new Date(dateFrom + "T12:00:00+03:00"));
     const toLabel = dateFmt.format(new Date(dateTo + "T12:00:00+03:00"));
-    const dateLabel = dateFrom === dateTo ? fromLabel : `${fromLabel} – ${toLabel}`;
+    const isSingleDay = dateFrom === dateTo;
+    const dateLabel = isSingleDay ? fromLabel : `${fromLabel} – ${toLabel}`;
     const now = new Date().toLocaleString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
     const totalCollected = Number(summary.total_collected) || 0;
@@ -120,9 +122,26 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEod
 
     const cashiers = (summary.by_cashier || []).filter(c => Number(c.collected) > 0 || Number(c.refunded) > 0);
 
-    const pmWidths = ["35%", "15%", "30%", "20%"];
+    const pmWidths = ["28%", "12%", "24%", "22%", "14%"];
     const cashierWidths = ["30%", "17%", "18%", "18%", "17%"];
     const txWidths = ["12%", "8%", "10%", "10%", "12%", "16%", "16%", "16%"];
+
+    // Cash drawer derived totals (single-day only)
+    const cashTender = summary.by_payment_method.find(m => m.payment_type === "cash");
+    const cashPayments = Number(cashTender?.total) || 0;
+    const cashRefunds = Number(cashTender?.refund_total) || 0;
+    const cashIn = (registerSession?.cash_movements || []).filter(m => m.type === "cash_in");
+    const cashOut = (registerSession?.cash_movements || []).filter(m => m.type === "cash_out");
+    const cashInTotal = cashIn.reduce((s, m) => s + Number(m.amount), 0);
+    const cashOutTotal = cashOut.reduce((s, m) => s + Number(m.amount), 0);
+    const showDrawer = isSingleDay && !!registerSession;
+    const netSales = Number(summary.gross_sales) - Number(summary.discount_total);
+    const invoiceRange =
+        summary.invoice_first !== null && summary.invoice_last !== null
+            ? summary.invoice_first === summary.invoice_last
+                ? `#${summary.invoice_first}`
+                : `#${summary.invoice_first} – #${summary.invoice_last}`
+            : null;
 
     return (
         <Document>
@@ -133,6 +152,9 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEod
                     <Text style={s.brandName}>ERTH</Text>
                     <Text style={s.reportTitle}>End of Day Report</Text>
                     <Text style={s.reportPeriod}>{dateLabel}</Text>
+                    {invoiceRange && (
+                        <Text style={s.reportPeriod}>Invoices {invoiceRange}</Text>
+                    )}
                     <Text style={s.reportGenerated}>Generated on {now}</Text>
                 </View>
 
@@ -151,62 +173,154 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo }: PrintEod
                     <View style={[s.summaryCell, s.summaryCellBottom]}>
                         <Text style={s.summaryLabel}>Net Revenue</Text>
                         <Text style={s.summaryValue}>{fmtK(summary.net_revenue)}</Text>
-                        <Text style={s.summarySub}>Total billed: {fmtK(summary.total_billed)}</Text>
+                        <Text style={s.summarySub}>Collected − Refunded</Text>
                     </View>
                     <View style={[s.summaryCell, s.summaryCellRight, s.summaryCellBottom]}>
-                        <Text style={s.summaryLabel}>Outstanding Balance</Text>
-                        <Text style={s.summaryValue}>{fmtK(summary.outstanding)}</Text>
-                        <Text style={s.summarySub}>{summary.order_count} orders</Text>
+                        <Text style={s.summaryLabel}>AR Outstanding</Text>
+                        <Text style={s.summaryValue}>{fmtK(summary.ar_outstanding)}</Text>
+                        <Text style={s.summarySub}>All open balances</Text>
                     </View>
                 </View>
 
-                {/* Payment Methods + Order Summary side by side */}
-                <View style={s.twoCol}>
-                    <View style={s.col}>
-                        <Text style={s.sectionHeading}>Payment Method Breakdown</Text>
-                        <View style={s.table}>
-                            <TableHeader widths={pmWidths} labels={["Method", "Txns", "Amount", "Share"]} />
-                            {summary.by_payment_method.map((m, i) => {
-                                const pct = totalCollected > 0 ? ((Number(m.total) / totalCollected) * 100).toFixed(1) : "0.0";
-                                return (
-                                    <TableRow
-                                        key={i}
-                                        widths={pmWidths}
-                                        cells={[paymentLabel(m.payment_type), String(m.count), fmtK(m.total), `${pct}%`]}
-                                    />
-                                );
-                            })}
-                            {Number(summary.total_refunded) > 0 && (
-                                <TableRow
-                                    widths={pmWidths}
-                                    cells={["Less: Refunds", "–", `(${fmtK(summary.total_refunded)})`, "–"]}
-                                    isLast
-                                />
-                            )}
-                            <View style={s.totalRow}>
-                                <Text style={[s.totalCell, { width: pmWidths[0] }]}>Net Total</Text>
-                                <Text style={[s.totalCellNum, { width: pmWidths[1] }]}></Text>
-                                <Text style={[s.totalCellNum, { width: pmWidths[2] }]}>{fmtK(summary.net_revenue)}</Text>
-                                <Text style={[s.totalCellNum, { width: pmWidths[3] }]}></Text>
-                            </View>
-                        </View>
+                {/* Tailoring Metrics */}
+                <Text style={s.sectionHeading}>Tailoring Activity</Text>
+                <View style={s.summaryGrid}>
+                    <View style={s.summaryCell}>
+                        <Text style={s.summaryLabel}>Deposits Collected</Text>
+                        <Text style={s.summaryValue}>{fmtK(summary.deposit_collected)}</Text>
+                        <Text style={s.summarySub}>First payment per order</Text>
                     </View>
+                    <View style={[s.summaryCell, s.summaryCellRight]}>
+                        <Text style={s.summaryLabel}>Balance Payments</Text>
+                        <Text style={s.summaryValue}>{fmtK(summary.balance_collected)}</Text>
+                        <Text style={s.summarySub}>Settlements on prior orders</Text>
+                    </View>
+                    <View style={[s.summaryCell, s.summaryCellBottom]}>
+                        <Text style={s.summaryLabel}>New Orders Booked</Text>
+                        <Text style={s.summaryValue}>{summary.order_count}</Text>
+                        <Text style={s.summarySub}>Billed: {fmtK(summary.gross_sales)}</Text>
+                    </View>
+                    <View style={[s.summaryCell, s.summaryCellRight, s.summaryCellBottom]}>
+                        <Text style={s.summaryLabel}>Delivered / Collected</Text>
+                        <Text style={s.summaryValue}>{summary.delivered_count}</Text>
+                        <Text style={s.summarySub}>Garments handed over</Text>
+                    </View>
+                </View>
 
-                    <View style={s.col}>
-                        <Text style={s.sectionHeading}>Order Summary</Text>
-                        {[
-                            ["Total Orders", String(summary.order_count)],
-                            ["Work Orders", String(summary.work_count)],
-                            ["Sales Orders", String(summary.sales_count)],
-                            ["Total Billed", fmtK(summary.total_billed)],
-                            ["Avg. Order Value", fmtK(summary.avg_order_value)],
-                            ["Outstanding", fmtK(summary.outstanding)],
-                        ].map(([label, value], i, arr) => (
-                            <View key={i} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
-                                <Text style={s.kvLabel}>{label}</Text>
-                                <Text style={s.kvValue}>{value}</Text>
-                            </View>
-                        ))}
+                {/* Cash Drawer Reconciliation (single day only) */}
+                {showDrawer && (
+                    <>
+                        <Text style={s.sectionHeading}>Cash Drawer Reconciliation</Text>
+                        <View style={s.table}>
+                            {[
+                                ["Opening Float", fmtK(Number(registerSession!.opening_float))],
+                                ["Cash Payments", `+ ${fmtK(cashPayments)}`],
+                                ["Cash Refunds", `− ${fmtK(cashRefunds)}`],
+                                ["Paid In", `+ ${fmtK(cashInTotal)}`],
+                                ["Paid Out", `− ${fmtK(cashOutTotal)}`],
+                                [
+                                    "Expected Cash",
+                                    fmtK(
+                                        Number(registerSession!.opening_float) +
+                                            cashPayments -
+                                            cashRefunds +
+                                            cashInTotal -
+                                            cashOutTotal
+                                    ),
+                                ],
+                                [
+                                    "Counted Cash",
+                                    registerSession!.closing_counted_cash !== null
+                                        ? fmtK(Number(registerSession!.closing_counted_cash))
+                                        : "Pending close",
+                                ],
+                                [
+                                    "Variance",
+                                    registerSession!.variance !== null
+                                        ? `${Number(registerSession!.variance) > 0 ? "+" : ""}${fmt(Number(registerSession!.variance))} KWD`
+                                        : "—",
+                                ],
+                            ].map(([label, value], i, arr) => (
+                                <View key={i} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
+                                    <Text style={s.kvLabel}>{label}</Text>
+                                    <Text style={s.kvValue}>{value}</Text>
+                                </View>
+                            ))}
+                        </View>
+                        {(cashIn.length > 0 || cashOut.length > 0) && (
+                            <>
+                                <Text style={[s.sectionHeading, { fontSize: 9 }]}>Cash Movements Detail</Text>
+                                {[...cashIn, ...cashOut].map((m, i, arr) => (
+                                    <View key={m.id} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
+                                        <Text style={s.kvLabel}>
+                                            {m.type === "cash_in" ? "+ " : "− "}
+                                            {timeFmt.format(new Date(m.created_at))} · {m.reason} ({m.performed_by_name})
+                                        </Text>
+                                        <Text style={s.kvValue}>
+                                            {m.type === "cash_in" ? "+" : "−"}
+                                            {fmtK(Number(m.amount))}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </>
+                        )}
+                        {registerSession!.status === "closed" && (
+                            <Text style={[s.summarySub, { marginTop: 4 }]}>
+                                Closed by {registerSession!.closed_by_name ?? "—"} at{" "}
+                                {registerSession!.closed_at ? timeFmt.format(new Date(registerSession!.closed_at)) : "—"}
+                                {registerSession!.closing_notes ? ` · ${registerSession!.closing_notes}` : ""}
+                            </Text>
+                        )}
+                    </>
+                )}
+
+                {/* Sales Summary */}
+                <Text style={s.sectionHeading}>Sales Summary (Accrual Basis)</Text>
+                <View style={s.table}>
+                    {[
+                        ["Gross Sales", fmtK(summary.gross_sales)],
+                        ["Discounts", `− ${fmtK(summary.discount_total)}`],
+                        ["Cancellations", `${summary.cancelled_count}${summary.cancelled_billed > 0 ? ` (${fmtK(summary.cancelled_billed)})` : ""}`],
+                        ["Net Sales", fmtK(netSales)],
+                        ["Avg. Order Value", fmtK(summary.avg_order_value)],
+                        ["Work Orders", String(summary.work_count)],
+                        ["Sales Orders", String(summary.sales_count)],
+                    ].map(([label, value], i, arr) => (
+                        <View key={i} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
+                            <Text style={s.kvLabel}>{label}</Text>
+                            <Text style={s.kvValue}>{value}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {/* Payment Method Breakdown */}
+                <Text style={s.sectionHeading}>Payment Method Breakdown</Text>
+                <View style={s.table}>
+                    <TableHeader widths={pmWidths} labels={["Method", "Txns", "Collected", "Refunded", "Share"]} />
+                    {summary.by_payment_method.map((m, i, arr) => {
+                        const pct = totalCollected > 0 ? ((Number(m.total) / totalCollected) * 100).toFixed(1) : "0.0";
+                        const refund = Number(m.refund_total) || 0;
+                        return (
+                            <TableRow
+                                key={i}
+                                widths={pmWidths}
+                                cells={[
+                                    paymentLabel(m.payment_type),
+                                    String(m.count),
+                                    fmtK(m.total),
+                                    refund > 0 ? `(${fmtK(refund)})` : "–",
+                                    `${pct}%`,
+                                ]}
+                                isLast={i === arr.length - 1}
+                            />
+                        );
+                    })}
+                    <View style={s.totalRow}>
+                        <Text style={[s.totalCell, { width: pmWidths[0] }]}>Net Total</Text>
+                        <Text style={[s.totalCellNum, { width: pmWidths[1] }]}></Text>
+                        <Text style={[s.totalCellNum, { width: pmWidths[2] }]}>{fmtK(summary.total_collected)}</Text>
+                        <Text style={[s.totalCellNum, { width: pmWidths[3] }]}>({fmtK(summary.total_refunded)})</Text>
+                        <Text style={[s.totalCellNum, { width: pmWidths[4] }]}></Text>
                     </View>
                 </View>
 

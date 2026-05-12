@@ -11,7 +11,7 @@ interface SlidingPillSwitcherProps<T extends string> {
   options: ReadonlyArray<SlidingPillOption<T>>;
   onChange: (value: T) => void;
   className?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   indicatorClassName?: string;
 }
 
@@ -44,7 +44,9 @@ export function SlidingPillSwitcher<T extends string>({
   const sizeClasses =
     size === "sm"
       ? "text-[11px] px-3 py-1"
-      : "text-xs px-4 py-1.5";
+      : size === "lg"
+        ? "text-sm px-6 py-2.5"
+        : "text-xs px-4 py-1.5";
 
   return (
     <div
@@ -55,7 +57,7 @@ export function SlidingPillSwitcher<T extends string>({
     >
       {indicator && (
         <div
-          className={cn("absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out", indicatorClassName)}
+          className={cn("absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-150 ease-out", indicatorClassName)}
           style={{ left: indicator.left, width: indicator.width }}
         />
       )}
@@ -68,7 +70,7 @@ export function SlidingPillSwitcher<T extends string>({
           }}
           onClick={() => onChange(o.value)}
           className={cn(
-            "relative z-10 font-black uppercase tracking-wider rounded-md transition-colors duration-300 whitespace-nowrap",
+            "relative z-10 font-black uppercase tracking-wider rounded-md transition-colors duration-150 whitespace-nowrap",
             sizeClasses,
             value === o.value ? "text-white" : "text-muted-foreground hover:text-foreground",
           )}

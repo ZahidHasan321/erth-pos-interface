@@ -12,7 +12,7 @@ const CASHIER_ORDER_QUERY = `
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, stitching_charge, fabric_charge, style_charge, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
     discount_approver:users!discount_approved_by(id, name),
-    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, collar_type, collar_button, collar_position, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
+    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, delivery_date, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, collar_type, collar_button, collar_position, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type, brand)),
     payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
 `;
@@ -470,16 +470,38 @@ export interface EodCashierData {
 }
 
 export interface EodReportSummary {
+    // Cash basis — money that actually moved in the range
     total_collected: number;
     total_refunded: number;
     net_revenue: number;
     transaction_count: number;
+    deposit_collected: number;       // First payment per order, in range
+    balance_collected: number;       // Subsequent payments per order, in range
+
+    // Accrual basis — orders booked in the range
     order_count: number;
     work_count: number;
     sales_count: number;
-    total_billed: number;
-    outstanding: number;
+    gross_sales: number;             // Sum of order_total for confirmed orders in range
+    total_billed: number;            // Same as gross_sales — kept for backward-compat
+    discount_total: number;          // Sum of orders.discount_value in range
+    outstanding: number;             // Unpaid balance for orders BOOKED in range
     avg_order_value: number;
+
+    // Cancellations (excluded from confirmed-only stats above)
+    cancelled_count: number;
+    cancelled_billed: number;
+
+    // Audit
+    invoice_first: number | null;
+    invoice_last: number | null;
+
+    // All-time receivables snapshot
+    ar_outstanding: number;          // Sum of unpaid balances across ALL open orders
+
+    // Throughput
+    delivered_count: number;         // Garments collected/delivered in range
+
     by_payment_method: EodPaymentMethodBreakdown[];
     daily: EodDailyData[];
     by_cashier: EodCashierData[];
@@ -539,9 +561,14 @@ export const getEodReport = async (
             status: 'success',
             data: {
                 total_collected: 0, total_refunded: 0, net_revenue: 0, transaction_count: 0,
-                order_count: 0, work_count: 0, sales_count: 0, total_billed: 0,
-                outstanding: 0, avg_order_value: 0, by_payment_method: [],
-                daily: [], by_cashier: [],
+                deposit_collected: 0, balance_collected: 0,
+                order_count: 0, work_count: 0, sales_count: 0,
+                gross_sales: 0, total_billed: 0, discount_total: 0,
+                outstanding: 0, avg_order_value: 0,
+                cancelled_count: 0, cancelled_billed: 0,
+                invoice_first: null, invoice_last: null,
+                ar_outstanding: 0, delivered_count: 0,
+                by_payment_method: [], daily: [], by_cashier: [],
             },
         };
     }
@@ -673,7 +700,7 @@ export const openRegister = async (params: {
         p_opening_float: params.openingFloat,
     });
     if (error) return { status: 'error' as const, message: error.message };
-    return { status: 'success' as const, data };
+    return { status: 'success' as const, data: data as RegisterSessionData };
 };
 
 export const closeRegister = async (params: {
@@ -702,7 +729,7 @@ export const reopenRegister = async (params: {
         p_user_id: params.userId,
     });
     if (error) return { status: 'error' as const, message: error.message };
-    return { status: 'success' as const, data };
+    return { status: 'success' as const, data: data as RegisterSessionData };
 };
 
 export const addCashMovement = async (params: {
