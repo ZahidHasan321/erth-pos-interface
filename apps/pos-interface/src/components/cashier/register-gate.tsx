@@ -2,12 +2,13 @@ import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, LockKeyhole, ArrowDownUp, XCircle, CheckCircle2, AlertTriangle, CalendarDays } from "lucide-react";
+import { Loader2, LockKeyhole, ArrowDownUp, XCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { Card } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { useRegisterSession, useOpenRegisterMutation, useReopenRegisterMutation } from "@/hooks/useCashier";
 import { useAuth } from "@/context/auth";
 import type { RegisterSessionData } from "@/api/cashier";
@@ -93,6 +94,11 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
     const isShort = variance < 0;
     const isExact = variance === 0;
 
+    // Prior closes = every close before the latest one. Surfaces shortages that
+    // would otherwise be erased by a reopen + clean reclose.
+    const events = session.close_events ?? [];
+    const priorCloses = events.slice(0, -1);
+
     const handleReopen = () => {
         if (!user) return;
         reopenMutation.mutate({ sessionId: session.id, userId: user.id });
@@ -143,6 +149,36 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                     <p className="text-xs text-muted-foreground italic">"{session.closing_notes}"</p>
                 )}
 
+                {priorCloses.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left space-y-2">
+                        <p className="text-xs font-semibold text-amber-800">
+                            Prior close{priorCloses.length > 1 ? "s" : ""} ({priorCloses.length})
+                        </p>
+                        <ul className="space-y-2 text-xs text-amber-900">
+                            {priorCloses.map((ev) => {
+                                const v = Number(ev.variance) || 0;
+                                const label = v === 0 ? "exact" : v < 0 ? "short" : "over";
+                                return (
+                                    <li key={ev.id} className="border-t border-amber-200/60 pt-2 first:border-t-0 first:pt-0">
+                                        <div className="flex justify-between tabular-nums">
+                                            <span>{timeFmt.format(new Date(ev.closed_at))} · {ev.closed_by_name}</span>
+                                            <span className="font-semibold">
+                                                {v > 0 ? "+" : ""}{fmtK(v)} ({label})
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-amber-700/80 tabular-nums">
+                                            <span>counted {fmtK(ev.counted_cash)} / expected {fmtK(ev.expected_cash)}</span>
+                                        </div>
+                                        {ev.notes && (
+                                            <p className="italic mt-0.5">"{ev.notes}"</p>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                )}
+
                 <Button
                     variant="outline"
                     className="w-full"
@@ -158,80 +194,85 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
     );
 }
 
-// ── Register Status Bar ───────────────────────────────────────────────────────
+// ── Register Menu (popover trigger + details) ─────────────────────────────────
 
-function RegisterStatusBar({ session }: { session: RegisterSessionData }) {
+export function RegisterMenu({ session }: { session: RegisterSessionData }) {
+    const [open, setOpen] = useState(false);
     const [cashMovementOpen, setCashMovementOpen] = useState(false);
     const [closeRegisterOpen, setCloseRegisterOpen] = useState(false);
 
     const movementCount = session.cash_movements.length;
-    // Compare YYYY-MM-DD strings to avoid TZ pitfalls (session.date is a local date).
     const isStale = session.date < getLocalDateStr();
     const sessionDateLabel = sessionDateFmt.format(new Date(`${session.date}T00:00:00`));
 
-    // Stale = session opened on a previous day and never closed. Surfaces
-    // the risk that a cashier is transacting against yesterday's session and
-    // didn't notice (otherwise expected_cash variance gets weird).
-    const barClass = isStale
-        ? "bg-amber-50 border-amber-300"
-        : "bg-emerald-50 border-emerald-200";
     const dotClass = isStale ? "bg-amber-500" : "bg-emerald-500";
-    const labelClass = isStale ? "text-amber-800" : "text-emerald-700";
-    const subClass = isStale ? "text-amber-700" : "text-emerald-600";
-    const dividerClass = isStale ? "text-amber-600/70" : "text-emerald-600/70";
+    const triggerClass = isStale
+        ? "border-amber-300 text-amber-800 hover:bg-amber-50"
+        : "border-border text-foreground hover:bg-muted";
 
     return (
         <>
-            <div className={`flex items-center justify-between px-4 py-2 border-b text-sm ${barClass}`}>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-1.5">
+            <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={`h-8 text-xs gap-2 ${triggerClass}`}>
                         <span className={`w-2 h-2 rounded-full animate-pulse ${dotClass}`} />
-                        <span className={`font-medium ${labelClass}`}>
-                            {isStale ? "Register Open (stale)" : "Register Open"}
+                        <span className="font-medium">
+                            {isStale ? "Register (stale)" : "Register"}
                         </span>
-                    </div>
-                    <span className={dividerClass}>|</span>
-                    <span className={`flex items-center gap-1 text-xs tabular-nums ${subClass}`}>
-                        <CalendarDays className="h-3 w-3" />
-                        {sessionDateLabel}
-                        {isStale && <span className="font-semibold ml-1">— close & reopen for today</span>}
-                    </span>
-                    <span className={dividerClass}>|</span>
-                    <span className={`text-xs tabular-nums ${subClass}`}>
-                        Float: {fmtK(session.opening_float)}
-                    </span>
-                    {movementCount > 0 && (
-                        <>
-                            <span className={dividerClass}>|</span>
-                            <span className={`text-xs ${subClass}`}>
-                                {movementCount} movement{movementCount !== 1 ? "s" : ""}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-0">
+                    <div className="px-4 py-3 border-b border-border">
+                        <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+                            <span className="text-sm font-semibold">
+                                {isStale ? "Register Open (stale)" : "Register Open"}
                             </span>
-                        </>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className={`h-7 text-xs ${isStale
-                            ? "border-amber-300 text-amber-800 hover:bg-amber-100"
-                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}
-                        onClick={() => setCashMovementOpen(true)}
-                    >
-                        <ArrowDownUp className="h-3.5 w-3.5 mr-1" />
-                        Cash In/Out
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
-                        onClick={() => setCloseRegisterOpen(true)}
-                    >
-                        <LockKeyhole className="h-3.5 w-3.5 mr-1" />
-                        Close Register
-                    </Button>
-                </div>
-            </div>
+                        </div>
+                        {isStale && (
+                            <p className="text-xs text-amber-700 mt-1">
+                                Opened {sessionDateLabel} — close & reopen for today.
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="px-4 py-3 space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Session date</span>
+                            <span className="tabular-nums">{sessionDateLabel}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Opening float</span>
+                            <span className="tabular-nums font-medium">{fmtK(session.opening_float)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Cash movements</span>
+                            <span className="tabular-nums">{movementCount}</span>
+                        </div>
+                    </div>
+
+                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-border">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-8 text-xs justify-start"
+                            onClick={() => { setOpen(false); setCashMovementOpen(true); }}
+                        >
+                            <ArrowDownUp className="h-3.5 w-3.5 mr-2" />
+                            Cash In/Out
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-8 text-xs justify-start border-red-300 text-red-600 hover:bg-red-50"
+                            onClick={() => { setOpen(false); setCloseRegisterOpen(true); }}
+                        >
+                            <LockKeyhole className="h-3.5 w-3.5 mr-2" />
+                            Close Register
+                        </Button>
+                    </div>
+                </PopoverContent>
+            </Popover>
 
             <CashMovementDialog
                 open={cashMovementOpen}
@@ -286,23 +327,19 @@ export function RegisterGate({ children }: RegisterGateProps) {
     const isStale = session.date < getLocalDateStr();
 
     if (isStale) {
-        return (
-            <div className="h-full flex flex-col">
-                <RegisterStatusBar session={session} />
-                <StaleRegisterScreen session={session} />
-            </div>
-        );
+        return <StaleRegisterScreen session={session} />;
     }
 
-    // Session is open → render cashier terminal with status bar
-    return (
-        <div className="h-full flex flex-col">
-            <RegisterStatusBar session={session} />
-            <div className="flex-1 min-h-0">
-                {children}
-            </div>
-        </div>
-    );
+    return <>{children}</>;
+}
+
+// Renders the register menu in the global app header when an open session
+// exists. Non-cashier users have no session → returns null.
+export function RegisterHeaderMenu() {
+    const { data: sessionResult } = useRegisterSession();
+    const session = sessionResult?.data;
+    if (!session || session.status === "closed") return null;
+    return <RegisterMenu session={session} />;
 }
 
 // ── Stale Register Screen ─────────────────────────────────────────────────────
@@ -328,8 +365,8 @@ function StaleRegisterScreen({ session }: { session: RegisterSessionData }) {
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-left text-amber-900 space-y-1">
                     <p className="font-semibold">To continue:</p>
                     <ol className="list-decimal list-inside space-y-1 text-xs">
-                        <li>Click <span className="font-semibold">Close Register</span> in the bar above</li>
-                        <li>Count yesterday's drawer and submit</li>
+                        <li>Open the <span className="font-semibold">Register</span> menu (top-right)</li>
+                        <li>Click <span className="font-semibold">Close Register</span> and count yesterday's drawer</li>
                         <li>A fresh open-register prompt appears for today</li>
                     </ol>
                 </div>

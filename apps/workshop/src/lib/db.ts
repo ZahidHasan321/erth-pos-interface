@@ -23,6 +23,10 @@ if (!url || !anonKey) {
 // dead fetch — the "stuck, no API calls" symptom. Abort at 15s so the query
 // surfaces an error and our JWT-error recovery / retry logic takes over.
 const FETCH_TIMEOUT_MS = 15_000;
+// Edge functions can cold-start (Deno isolate boot + esm.sh deps + multiple
+// admin RPCs inside auth-login). 15s is too tight for the first request of
+// the day. Use a longer cap only for /functions/v1/*.
+const FUNCTIONS_FETCH_TIMEOUT_MS = 30_000;
 
 // Holder set after createClient returns. Used by the fetch wrapper to force
 // signOut when the server rejects our JWT (deactivated/wiped user, revoked
@@ -37,7 +41,10 @@ function getReqUrl(input: RequestInfo | URL): string {
 
 function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException('Request timeout', 'TimeoutError')), FETCH_TIMEOUT_MS);
+  const timeoutMs = getReqUrl(input).includes('/functions/v1/')
+    ? FUNCTIONS_FETCH_TIMEOUT_MS
+    : FETCH_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(new DOMException('Request timeout', 'TimeoutError')), timeoutMs);
   const upstream = init?.signal;
   if (upstream) {
     if (upstream.aborted) controller.abort(upstream.reason);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +7,7 @@ import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import {
     Dialog,
     DialogContent,
@@ -15,13 +16,31 @@ import {
 } from "@repo/ui/dialog";
 import { useAddCashMovementMutation } from "@/hooks/useCashier";
 import { useAuth } from "@/context/auth";
+import type { CashMovementReasonCategory } from "@/api/cashier";
 
 const schema = z.object({
     amount: z.coerce.number().positive("Amount must be greater than 0"),
-    reason: z.string().min(1, "Reason is required"),
+    reason: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+// Categories available per movement type. Mirrors the cash_movement_reason_category
+// enum in the DB but split so the dropdown only shows valid combinations.
+const CATEGORIES_BY_TYPE: Record<"cash_in" | "cash_out", { value: CashMovementReasonCategory; label: string }[]> = {
+    cash_in: [
+        { value: "pickup", label: "Pickup from safe" },
+        { value: "change_refill", label: "Change refill" },
+        { value: "other", label: "Other" },
+    ],
+    cash_out: [
+        { value: "drop", label: "Drop to safe" },
+        { value: "bank_deposit", label: "Bank deposit" },
+        { value: "petty_cash", label: "Petty cash / expense" },
+        { value: "tip_out", label: "Tip out" },
+        { value: "other", label: "Other" },
+    ],
+};
 
 interface CashMovementDialogProps {
     open: boolean;
@@ -31,6 +50,7 @@ interface CashMovementDialogProps {
 
 export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMovementDialogProps) {
     const [type, setType] = useState<"cash_in" | "cash_out">("cash_in");
+    const [category, setCategory] = useState<CashMovementReasonCategory>("pickup");
     const { user } = useAuth();
     const mutation = useAddCashMovementMutation();
 
@@ -39,10 +59,24 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
         defaultValues: { amount: undefined as unknown as number, reason: "" },
     });
 
+    // Reset the selected category when switching cash_in ↔ cash_out so the
+    // dropdown never shows a stale value that doesn't exist in the new list.
+    useEffect(() => {
+        const first = CATEGORIES_BY_TYPE[type][0];
+        if (first) setCategory(first.value);
+    }, [type]);
+
     const onSubmit = (values: FormValues) => {
         if (!user) return;
         mutation.mutate(
-            { sessionId, type, amount: values.amount, reason: values.reason, userId: user.id },
+            {
+                sessionId,
+                type,
+                reasonCategory: category,
+                amount: values.amount,
+                reason: values.reason || "",
+                userId: user.id,
+            },
             {
                 onSuccess: (res) => {
                     if (res.status === "success") {
@@ -54,6 +88,8 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
             }
         );
     };
+
+    const categories = CATEGORIES_BY_TYPE[type];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,6 +109,19 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
                         </ChipToggle>
                     </div>
 
+                    {/* Category */}
+                    <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Category</Label>
+                        <Select value={category} onValueChange={(v) => setCategory(v as CashMovementReasonCategory)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {categories.map((c) => (
+                                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     {/* Amount */}
                     <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">Amount (KWD)</Label>
@@ -89,16 +138,13 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
                         )}
                     </div>
 
-                    {/* Reason */}
+                    {/* Optional note */}
                     <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Reason</Label>
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Note (optional)</Label>
                         <Input
                             {...form.register("reason")}
-                            placeholder={type === "cash_in" ? "e.g. Change refill" : "e.g. Bank deposit"}
+                            placeholder="e.g. envelope #3, supplier invoice 412"
                         />
-                        {form.formState.errors.reason && (
-                            <p className="text-xs text-red-500">{form.formState.errors.reason.message}</p>
-                        )}
                     </div>
 
                     <Button type="submit" className="w-full" disabled={mutation.isPending}>

@@ -7,8 +7,11 @@ import { getTerminalPath, isTerminalUser, JOB_FUNCTION_LABELS, type AuthUser } f
 import type { JobFunction } from "@repo/database";
 
 // Post-login destination. Terminal-locked users go straight to their terminal;
-// everyone else lands on Receiving (the ops default).
+// everyone else lands on Receiving (the ops default). Cashiers belong to the
+// POS app, not the workshop — they're sent to access-denied so they can log
+// back out and head to the right URL.
 function getPostLoginPath(user: AuthUser | null): string {
+  if (user?.role === "cashier") return "/access-denied";
   if (isTerminalUser(user)) {
     const terminal = getTerminalPath(user);
     if (terminal) return terminal;

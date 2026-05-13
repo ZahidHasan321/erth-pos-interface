@@ -138,26 +138,6 @@ function ErthLoginPage() {
           .el-brand { display: flex; }
         }
 
-        /* Slow-drifting Arabic ghost */
-        .el-ghost {
-          position: absolute;
-          bottom: -40px;
-          right: -24px;
-          font-family: 'Cairo', sans-serif;
-          font-size: clamp(140px, 15vw, 210px);
-          font-weight: 700;
-          line-height: 0.9;
-          color: oklch(1 0 0 / 0.06);
-          user-select: none;
-          pointer-events: none;
-          direction: rtl;
-          animation: el-ghost-breathe 9s ease-in-out infinite alternate;
-        }
-        @keyframes el-ghost-breathe {
-          from { transform: translateY(0px); }
-          to   { transform: translateY(-16px); }
-        }
-
         /* ── RIGHT form panel ── */
         .el-form-panel {
           flex: 1;
@@ -291,7 +271,7 @@ function ErthLoginPage() {
         .el-users-reveal > div { overflow: hidden; }
 
         @media (prefers-reduced-motion: reduce) {
-          .el-card, .el-item, .el-ghost { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+          .el-card, .el-item { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
           .el-users-reveal { transition: none !important; }
         }
       `}</style>
@@ -302,8 +282,6 @@ function ErthLoginPage() {
 
           {/* ══ LEFT — Brand panel ══ */}
           <div className="el-brand">
-            <div className="el-ghost">أرث</div>
-
             {/* Top: logo + wordmark */}
             <div style={{ position: "relative", zIndex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>

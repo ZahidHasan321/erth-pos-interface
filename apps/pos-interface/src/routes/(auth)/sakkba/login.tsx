@@ -137,25 +137,6 @@ function SakkbaLoginPage() {
           .sl-brand { display: flex; }
         }
 
-        .sl-ghost {
-          position: absolute;
-          bottom: -40px;
-          right: -24px;
-          font-family: 'Cairo', sans-serif;
-          font-size: clamp(130px, 14vw, 200px);
-          font-weight: 700;
-          line-height: 0.9;
-          color: oklch(1 0 0 / 0.06);
-          user-select: none;
-          pointer-events: none;
-          direction: rtl;
-          animation: sl-ghost-breathe 10s ease-in-out infinite alternate;
-        }
-        @keyframes sl-ghost-breathe {
-          from { transform: translateY(0px); }
-          to   { transform: translateY(-14px); }
-        }
-
         /* ── RIGHT form panel ── */
         .sl-form-panel {
           flex: 1;
@@ -277,7 +258,7 @@ function SakkbaLoginPage() {
         .sl-users-reveal > div { overflow: hidden; }
 
         @media (prefers-reduced-motion: reduce) {
-          .sl-card, .sl-item, .sl-ghost { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+          .sl-card, .sl-item { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
           .sl-users-reveal { transition: none !important; }
         }
       `}</style>
@@ -288,8 +269,6 @@ function SakkbaLoginPage() {
 
           {/* ══ LEFT — Brand panel ══ */}
           <div className="sl-brand">
-            <div className="sl-ghost">سكبة</div>
-
             <div style={{ position: "relative", zIndex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>
                 <img

@@ -269,7 +269,6 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                     {garments.map(g => {
                         const sel = garmentSelections[g.id] || { fabric: false, stitching: false, style: false, express: false, soaking: false };
                         const isBrova = g.garment_type === "brova";
-                        const selectedAmount = allComponents.reduce((sum, c) => sum + (sel[c] ? getGarmentPrice(g, c) : 0), 0);
                         const fullyRefunded = isFullyRefundedGarment(g);
                         const hasAnySelection = allComponents.some(c => sel[c]);
 
@@ -312,9 +311,9 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                     )}
                                     <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
                                         {([
-                                            ["fabric", "Fabric", getGarmentPrice(g, "fabric"), isComponentRefunded(g, "fabric")],
-                                            ["stitching", "Stitching", getGarmentPrice(g, "stitching"), isComponentRefunded(g, "stitching")],
-                                            ["style", "Style", getGarmentPrice(g, "style"), isComponentRefunded(g, "style")],
+                                            ...(getGarmentPrice(g, "fabric") > 0 || isComponentRefunded(g, "fabric") ? [["fabric", "Fabric", getGarmentPrice(g, "fabric"), isComponentRefunded(g, "fabric")] as const] : []),
+                                            ...(getGarmentPrice(g, "stitching") > 0 || isComponentRefunded(g, "stitching") ? [["stitching", "Stitching", getGarmentPrice(g, "stitching"), isComponentRefunded(g, "stitching")] as const] : []),
+                                            ...(getGarmentPrice(g, "style") > 0 || isComponentRefunded(g, "style") ? [["style", "Style", getGarmentPrice(g, "style"), isComponentRefunded(g, "style")] as const] : []),
                                             ...(g.express ? [["express", "Express", getGarmentPrice(g, "express"), isComponentRefunded(g, "express")] as const] : []),
                                             ...(g.soaking ? [["soaking", `Soaking ${g.soaking_hours ?? 8}h`, getGarmentPrice(g, "soaking"), isComponentRefunded(g, "soaking")] as const] : []),
                                         ] as const).map(([key, label, price, alreadyRefunded]) => (
@@ -337,21 +336,16 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                         ))}
                                     </div>
                                 </div>
-                                {hasAnySelection && (
-                                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                                        {willBeFullyRefunded(g, sel) && g.fabric_id && getGarmentPrice(g, "fabric") > 0 ? (
-                                            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
-                                                <Checkbox
-                                                    checked={!!fabricRestock[g.id]}
-                                                    onCheckedChange={() => toggleFabricRestock(g.id)}
-                                                    aria-label="Return fabric to stock"
-                                                />
-                                                <span>Return fabric to stock (uncut)</span>
-                                            </label>
-                                        ) : <span />}
-                                        <span className="text-xs font-semibold text-red-600 tabular-nums">
-                                            Refund: {fmt(selectedAmount)} KWD
-                                        </span>
+                                {hasAnySelection && willBeFullyRefunded(g, sel) && g.fabric_id && getGarmentPrice(g, "fabric") > 0 && (
+                                    <div className="mt-1.5">
+                                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
+                                            <Checkbox
+                                                checked={!!fabricRestock[g.id]}
+                                                onCheckedChange={() => toggleFabricRestock(g.id)}
+                                                aria-label="Return fabric to stock"
+                                            />
+                                            <span>Return fabric to stock (uncut)</span>
+                                        </label>
                                     </div>
                                 )}
                             </div>
@@ -369,7 +363,6 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                         const refundable = totalQty - alreadyRefunded;
                         const sel = shelfSelections[s.id];
                         const selectedQty = sel?.quantity || 0;
-                        const selectedAmount = selectedQty * unitPrice;
 
                         if (refundable <= 0) {
                             return (
@@ -421,11 +414,6 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                         </Button>
                                     </div>
                                 </div>
-                                {selectedQty > 0 && (
-                                    <div className="mt-1 text-xs font-semibold text-red-600 tabular-nums">
-                                        Refund: {fmt(selectedAmount)} KWD
-                                    </div>
-                                )}
                             </div>
                         );
                     })}

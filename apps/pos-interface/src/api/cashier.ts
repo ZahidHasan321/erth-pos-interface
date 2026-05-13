@@ -630,13 +630,45 @@ export const getEodTransactionsPaginated = async (
 
 // ── Register Session ──────────────────────────────────────────────────────────
 
+export type CashMovementReasonCategory =
+    | "drop"
+    | "pickup"
+    | "petty_cash"
+    | "bank_deposit"
+    | "change_refill"
+    | "tip_out"
+    | "other";
+
 export interface CashMovementData {
     id: number;
     type: "cash_in" | "cash_out";
+    reason_category: CashMovementReasonCategory;
     amount: number;
     reason: string;
     performed_by_name: string;
     created_at: string;
+}
+
+/** Session-scoped cash transaction tally. Filled in by get_register_session. */
+export interface RegisterTxSummary {
+    cash_payment_count: number;
+    cash_payment_total: number;
+    cash_refund_count: number;
+    cash_refund_total: number;
+    noncash_payment_count: number;
+    noncash_payment_total: number;
+}
+
+/** Append-only close-event row. One per close (including reclose after reopen). */
+export interface CloseEventData {
+    id: number;
+    closed_by_name: string;
+    closed_at: string;
+    opening_float: number;
+    counted_cash: number;
+    expected_cash: number;
+    variance: number;
+    notes: string | null;
 }
 
 export interface RegisterSessionData {
@@ -661,6 +693,10 @@ export interface RegisterSessionData {
     reopened_by_name: string | null;
     reopened_at: string | null;
     cash_movements: CashMovementData[];
+    /** Full close history (latest is also reflected in closing_* fields on the row). */
+    close_events: CloseEventData[];
+    /** Cash/non-cash transaction tally for this session. */
+    tx_summary: RegisterTxSummary;
 }
 
 export interface CloseRegisterResult {
@@ -738,6 +774,7 @@ export const reopenRegister = async (params: {
 export const addCashMovement = async (params: {
     sessionId: number;
     type: "cash_in" | "cash_out";
+    reasonCategory: CashMovementReasonCategory;
     amount: number;
     reason: string;
     userId: string;
@@ -749,6 +786,7 @@ export const addCashMovement = async (params: {
         p_reason: params.reason,
         p_user_id: params.userId,
         p_tz_offset_minutes: getLocalTzOffsetMinutes(),
+        p_reason_category: params.reasonCategory,
     });
     if (error) return { status: 'error' as const, message: error.message };
     return { status: 'success' as const, data };

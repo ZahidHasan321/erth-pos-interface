@@ -27,17 +27,21 @@ export {
 
 // POS permission matrix.
 //
-// Scope today: POS is used by shop staff + managers + admins. Workshop terminal
-// users (sewer, cutter, etc.) have no business here and are blocked at the
-// route root (see $main/route.tsx — `isTerminalUser` redirect).
+// Scope today: POS is used by shop staff + managers + admins + cashiers.
+// Workshop terminal users (sewer, cutter, etc.) have no business here and are
+// blocked at the route root (see $main/route.tsx — `isTerminalUser` redirect).
 //
-// Cashier page stays accessible to manager/admin for now (explicit decision —
-// dedicated cashier role comes later).
+// The `cashier:shop` role is locked to a tiny surface: the cashier register,
+// order history (read-only navigation into cashier order details), and the
+// end-of-day report. Everything else in POS is off-limits to them, including
+// the $main shell — they live in the standalone /cashier shell.
 const PERMISSIONS: PermissionMatrix = {
   // Office pages — full access for shop staff and managers.
   "/home":            { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
   "/profile":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "/cashier":         { admin: "full", "manager:shop": "full", "staff:shop": "full" },
+  "/cashier":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "cashier:shop": "full" },
+  "/cashier/history": { admin: "full", "manager:shop": "full", "staff:shop": "full", "cashier:shop": "full" },
+  "/cashier/eod":     { admin: "full", "manager:shop": "full", "staff:shop": "full", "cashier:shop": "full" },
   "/store/inventory": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
   "/store/transfers": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
   "/store/reports":   { admin: "full", "manager:shop": "full", "staff:shop": "view" },

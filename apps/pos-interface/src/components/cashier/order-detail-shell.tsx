@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Receipt, User, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, Info, Receipt, User, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@repo/ui/alert";
 import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { Separator } from "@repo/ui/separator";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import {
     useCashierOrderSearch,
@@ -233,37 +234,30 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
 }
 
 function CustomerHeaderInline({ order, isCancelled }: { order: any; isCancelled: boolean }) {
+    const phone = order.customer?.phone;
+    const countryCode = order.customer?.country_code || "+965";
+    const phaseLabel = order.order_phase
+        ? ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase
+        : null;
+
     return (
-        <div className="flex items-center gap-2.5 flex-1 min-w-0 max-w-3xl">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <User className="h-5 w-5 text-primary" />
             </div>
-            <div className="min-w-0 flex items-baseline gap-2.5 truncate">
-                <span className="font-bold text-lg truncate leading-tight">{order.customer?.name || "N/A"}</span>
-                <span className="text-sm text-muted-foreground shrink-0 tabular-nums">
-                    {order.customer?.country_code || "+965"} {order.customer?.phone || "—"}
+            <div className="min-w-0 flex flex-col leading-tight">
+                <span className="font-bold text-lg truncate">{order.customer?.name || "N/A"}</span>
+                <span className="text-xs text-muted-foreground tabular-nums truncate">
+                    {phone ? `${countryCode} ${phone}` : "—"}
                 </span>
             </div>
             <span className="font-bold text-base tabular-nums shrink-0">#{order.id}</span>
-            {order.invoice_number && (
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-0.5">
-                    <Receipt className="h-3 w-3" />INV {order.invoice_number}
-                </span>
-            )}
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md border border-border shrink-0">
                 {order.order_type === "WORK" ? "Work" : "Sales"}
             </span>
-            {order.order_phase && (
-                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-secondary/10 text-secondary shrink-0">
-                    {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || order.order_phase}
-                </span>
-            )}
             {isCancelled && (
-                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive shrink-0">Cancelled</span>
-            )}
-            {order.order_date && (
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-0.5">
-                    <CalendarDays className="h-3 w-3" />Created {shortDateFmt.format(new Date(order.order_date))}
+                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive shrink-0">
+                    Cancelled
                 </span>
             )}
             {order.delivery_date && (
@@ -271,6 +265,39 @@ function CustomerHeaderInline({ order, isCancelled }: { order: any; isCancelled:
                     <CalendarDays className="h-3 w-3" />Due {shortDateFmt.format(new Date(order.delivery_date))}
                 </span>
             )}
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs shrink-0 text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5 mr-1" />Details
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 p-3">
+                    <div className="space-y-2.5 text-sm">
+                        {order.invoice_number && (
+                            <DetailRow icon={<Receipt className="h-3.5 w-3.5" />} label="Invoice">
+                                <span className="tabular-nums">INV {order.invoice_number}</span>
+                            </DetailRow>
+                        )}
+                        {phaseLabel && (
+                            <DetailRow label="Phase">
+                                <span>{phaseLabel}</span>
+                            </DetailRow>
+                        )}
+                    </div>
+                </PopoverContent>
+            </Popover>
+        </div>
+    );
+}
+
+function DetailRow({ icon, label, children }: { icon?: React.ReactNode; label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5 shrink-0">
+                {icon}
+                {label}
+            </span>
+            <span className="text-sm text-right min-w-0 truncate">{children}</span>
         </div>
     );
 }

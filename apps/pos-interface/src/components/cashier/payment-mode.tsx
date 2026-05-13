@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Banknote, History, Loader2, Package, Shirt, Tag, Truck } from "lucide-react";
+import { Banknote, CheckCircle2, History, Loader2, Package, Shirt, Tag, Truck } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -248,6 +248,18 @@ export function PaymentMode({
                     </div>
                 </div>
 
+                {isFullyPaid && !isOverpaid ? (
+                    <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                            <p className="font-semibold text-emerald-800">Paid in full</p>
+                            <p className="text-emerald-700/80 mt-0.5">
+                                No further payment needed. To refund, switch to the <span className="font-semibold">Refund</span> tab above.
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                <>
                 {/* Tendered */}
                 <div className="bg-card border-2 border-border rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -305,9 +317,12 @@ export function PaymentMode({
                         );
                     })}
                 </div>
+                </>
+                )}
                 </div>
 
-                {/* Bottom: numpad + charge — always visible */}
+                {/* Bottom: numpad + charge — hidden when fully paid */}
+                {!(isFullyPaid && !isOverpaid) && (
                 <div className="space-y-2 shrink-0">
                 <Numpad
                     value={tendered}
@@ -350,6 +365,7 @@ export function PaymentMode({
                     )}
                 </Button>
                 </div>
+                )}
             </div>
 
             <DiscountDialog

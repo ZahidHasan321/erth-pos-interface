@@ -19,7 +19,7 @@ const numeric = (name: string, config?: { precision?: number; scale?: number }) 
 
 // --- ENUMS (Normalized from JSON) ---
 
-export const roleEnum = pgEnum("role", ["super_admin", "admin", "staff", "manager"]);
+export const roleEnum = pgEnum("role", ["super_admin", "admin", "staff", "manager", "cashier"]);
 export type Role = (typeof roleEnum.enumValues)[number];
 
 export const departmentEnum = pgEnum("department", ["workshop", "shop"]);
@@ -146,6 +146,17 @@ export const transactionTypeEnum = pgEnum("transaction_type", ["payment", "refun
 
 export const registerSessionStatusEnum = pgEnum("register_session_status", ["open", "closed"]);
 export const cashMovementTypeEnum = pgEnum("cash_movement_type", ["cash_in", "cash_out"]);
+// Industry-standard cash drawer movement categories. The free-text `reason`
+// column is kept as an optional note alongside this enum.
+export const cashMovementReasonCategoryEnum = pgEnum("cash_movement_reason_category", [
+    "drop",            // cash pulled from drawer mid-shift, moved to safe
+    "pickup",          // cash returned from safe back into drawer
+    "petty_cash",      // out-of-drawer business expense
+    "bank_deposit",    // cash taken to the bank
+    "change_refill",   // small bills/coins added to drawer for change
+    "tip_out",         // cash paid out as tips
+    "other",
+]);
 
 export const appointmentStatusEnum = pgEnum("appointment_status", ["scheduled", "completed", "cancelled", "no_show"]);
 
@@ -1085,13 +1096,34 @@ export const registerCashMovements = pgTable("register_cash_movements", {
     id: serial("id").primaryKey(),
     register_session_id: integer("register_session_id").references(() => registerSessions.id).notNull(),
     type: cashMovementTypeEnum("type").notNull(),
+    // Categorized reason for reporting (drop/pickup/petty_cash/bank_deposit/etc).
+    // Defaults to 'other' so existing rows are valid after the column is added.
+    reason_category: cashMovementReasonCategoryEnum("reason_category").notNull().default("other"),
     amount: numeric("amount", { precision: 10, scale: 3 }).notNull(),
-    reason: text("reason").notNull(),
+    reason: text("reason").notNull(),  // free-text note (optional in UI, but historically required)
     performed_by: uuid("performed_by").references(() => users.id).notNull(),
     created_at: timestamp("created_at").defaultNow(),
 }, (t) => ({
     sessionIdx: index("cash_movements_session_idx").on(t.register_session_id),
     amountPositive: check("register_cash_movements_amount_positive", sql`${t.amount} > 0`),
+}));
+
+// --- 11b. REGISTER CLOSE EVENTS ---
+// Append-only audit log of every register close. When a session is reopened
+// and reclosed, register_sessions only keeps the LATEST close fields — this
+// table preserves all prior closes (counted_cash, variance, notes, who closed).
+export const registerCloseEvents = pgTable("register_close_events", {
+    id: serial("id").primaryKey(),
+    register_session_id: integer("register_session_id").references(() => registerSessions.id).notNull(),
+    closed_by: uuid("closed_by").references(() => users.id).notNull(),
+    closed_at: timestamp("closed_at").notNull().defaultNow(),
+    opening_float: numeric("opening_float", { precision: 10, scale: 3 }).notNull(),
+    counted_cash: numeric("counted_cash", { precision: 10, scale: 3 }).notNull(),
+    expected_cash: numeric("expected_cash", { precision: 10, scale: 3 }).notNull(),
+    variance: numeric("variance", { precision: 10, scale: 3 }).notNull(),
+    notes: text("notes"),
+}, (t) => ({
+    sessionIdx: index("register_close_events_session_idx").on(t.register_session_id),
 }));
 
 // --- 12. TRANSFER REQUESTS ---
@@ -1280,11 +1312,17 @@ export const registerSessionsRelations = relations(registerSessions, ({ one, man
     openedBy: one(users, { fields: [registerSessions.opened_by], references: [users.id], relationName: "register_opener" }),
     closedBy: one(users, { fields: [registerSessions.closed_by], references: [users.id], relationName: "register_closer" }),
     cashMovements: many(registerCashMovements),
+    closeEvents: many(registerCloseEvents),
 }));
 
 export const registerCashMovementsRelations = relations(registerCashMovements, ({ one }) => ({
     session: one(registerSessions, { fields: [registerCashMovements.register_session_id], references: [registerSessions.id] }),
     performedBy: one(users, { fields: [registerCashMovements.performed_by], references: [users.id] }),
+}));
+
+export const registerCloseEventsRelations = relations(registerCloseEvents, ({ one }) => ({
+    session: one(registerSessions, { fields: [registerCloseEvents.register_session_id], references: [registerSessions.id] }),
+    closedBy: one(users, { fields: [registerCloseEvents.closed_by], references: [users.id] }),
 }));
 
 export const transferRequestsRelations = relations(transferRequests, ({ one, many }) => ({
@@ -1400,6 +1438,8 @@ export type RegisterSession = InferSelectModel<typeof registerSessions>;
 export type NewRegisterSession = InferInsertModel<typeof registerSessions>;
 export type RegisterCashMovement = InferSelectModel<typeof registerCashMovements>;
 export type NewRegisterCashMovement = InferInsertModel<typeof registerCashMovements>;
+export type RegisterCloseEvent = InferSelectModel<typeof registerCloseEvents>;
+export type NewRegisterCloseEvent = InferInsertModel<typeof registerCloseEvents>;
 
 export type Accessory = InferSelectModel<typeof accessories>;
 export type NewAccessory = InferInsertModel<typeof accessories>;

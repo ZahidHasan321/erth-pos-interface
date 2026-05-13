@@ -16,6 +16,8 @@ import { Route as MainRouteRouteImport } from './routes/$main/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CashierIndexRouteImport } from './routes/cashier/index'
 import { Route as MainIndexRouteImport } from './routes/$main/index'
+import { Route as CashierHistoryRouteImport } from './routes/cashier/history'
+import { Route as CashierEodRouteImport } from './routes/cashier/eod'
 import { Route as CashierOrderIdRouteImport } from './routes/cashier/$orderId'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as MainProfileRouteImport } from './routes/$main/profile'
@@ -87,6 +89,16 @@ const MainIndexRoute = MainIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MainRouteRoute,
+} as any)
+const CashierHistoryRoute = CashierHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => CashierRouteRoute,
+} as any)
+const CashierEodRoute = CashierEodRouteImport.update({
+  id: '/eod',
+  path: '/eod',
+  getParentRoute: () => CashierRouteRoute,
 } as any)
 const CashierOrderIdRoute = CashierOrderIdRouteImport.update({
   id: '/$orderId',
@@ -294,6 +306,8 @@ export interface FileRoutesByFullPath {
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
   '/cashier/$orderId': typeof CashierOrderIdRoute
+  '/cashier/eod': typeof CashierEodRoute
+  '/cashier/history': typeof CashierHistoryRoute
   '/$main/': typeof MainIndexRoute
   '/cashier/': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
@@ -337,6 +351,8 @@ export interface FileRoutesByTo {
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
   '/cashier/$orderId': typeof CashierOrderIdRoute
+  '/cashier/eod': typeof CashierEodRoute
+  '/cashier/history': typeof CashierHistoryRoute
   '/$main': typeof MainIndexRoute
   '/cashier': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
@@ -382,6 +398,8 @@ export interface FileRoutesById {
   '/$main/profile': typeof MainProfileRoute
   '/(auth)/login': typeof authLoginRoute
   '/cashier/$orderId': typeof CashierOrderIdRoute
+  '/cashier/eod': typeof CashierEodRoute
+  '/cashier/history': typeof CashierHistoryRoute
   '/$main/': typeof MainIndexRoute
   '/cashier/': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
@@ -429,6 +447,8 @@ export interface FileRouteTypes {
     | '/$main/profile'
     | '/login'
     | '/cashier/$orderId'
+    | '/cashier/eod'
+    | '/cashier/history'
     | '/$main/'
     | '/cashier/'
     | '/$main/cashier/$orderId'
@@ -472,6 +492,8 @@ export interface FileRouteTypes {
     | '/$main/profile'
     | '/login'
     | '/cashier/$orderId'
+    | '/cashier/eod'
+    | '/cashier/history'
     | '/$main'
     | '/cashier'
     | '/$main/cashier/$orderId'
@@ -516,6 +538,8 @@ export interface FileRouteTypes {
     | '/$main/profile'
     | '/(auth)/login'
     | '/cashier/$orderId'
+    | '/cashier/eod'
+    | '/cashier/history'
     | '/$main/'
     | '/cashier/'
     | '/$main/cashier/$orderId'
@@ -612,6 +636,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$main/'
       preLoaderRoute: typeof MainIndexRouteImport
       parentRoute: typeof MainRouteRoute
+    }
+    '/cashier/history': {
+      id: '/cashier/history'
+      path: '/history'
+      fullPath: '/cashier/history'
+      preLoaderRoute: typeof CashierHistoryRouteImport
+      parentRoute: typeof CashierRouteRoute
+    }
+    '/cashier/eod': {
+      id: '/cashier/eod'
+      path: '/eod'
+      fullPath: '/cashier/eod'
+      preLoaderRoute: typeof CashierEodRouteImport
+      parentRoute: typeof CashierRouteRoute
     }
     '/cashier/$orderId': {
       id: '/cashier/$orderId'
@@ -973,11 +1011,15 @@ const MainRouteRouteWithChildren = MainRouteRoute._addFileChildren(
 
 interface CashierRouteRouteChildren {
   CashierOrderIdRoute: typeof CashierOrderIdRoute
+  CashierEodRoute: typeof CashierEodRoute
+  CashierHistoryRoute: typeof CashierHistoryRoute
   CashierIndexRoute: typeof CashierIndexRoute
 }
 
 const CashierRouteRouteChildren: CashierRouteRouteChildren = {
   CashierOrderIdRoute: CashierOrderIdRoute,
+  CashierEodRoute: CashierEodRoute,
+  CashierHistoryRoute: CashierHistoryRoute,
   CashierIndexRoute: CashierIndexRoute,
 }
 

@@ -2001,6 +2001,31 @@ CREATE POLICY "register_cash_movements_insert" ON register_cash_movements FOR IN
   )
 );
 
+-- ── Register Close Events ───────────────────────────────────────────
+-- Append-only audit log. Writes only via close_register RPC (SECURITY INVOKER
+-- runs as the caller, so the INSERT policy still applies). No UPDATE/DELETE
+-- policies — history must be immutable.
+ALTER TABLE register_close_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "register_close_events_select" ON register_close_events;
+CREATE POLICY "register_close_events_select" ON register_close_events FOR SELECT USING (
+  is_active_user() AND EXISTS (
+    SELECT 1 FROM register_sessions s
+    WHERE s.id = register_close_events.register_session_id
+      AND can_access_brand(s.brand::text)
+  )
+);
+
+DROP POLICY IF EXISTS "register_close_events_insert" ON register_close_events;
+CREATE POLICY "register_close_events_insert" ON register_close_events FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM register_sessions s
+    WHERE s.id = register_close_events.register_session_id
+      AND can_access_brand(s.brand::text)
+  )
+);
+
 -- ── Transfer Requests ───────────────────────────────────────────────
 -- RLS is required here not for access control (policies are permissive) but
 -- because Supabase Realtime's postgres_changes channel refuses to broadcast
@@ -2308,13 +2333,43 @@ BEGIN
     'reopened_at', rs.reopened_at,
     'cash_movements', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
-        'id', cm.id, 'type', cm.type, 'amount', cm.amount,
-        'reason', cm.reason, 'performed_by_name', pu.name, 'created_at', cm.created_at
+        'id', cm.id, 'type', cm.type, 'reason_category', cm.reason_category,
+        'amount', cm.amount, 'reason', cm.reason,
+        'performed_by_name', pu.name, 'created_at', cm.created_at
       ) ORDER BY cm.created_at)
       FROM register_cash_movements cm
       LEFT JOIN users pu ON pu.id = cm.performed_by
       WHERE cm.register_session_id = rs.id
-    ), '[]'::jsonb)
+    ), '[]'::jsonb),
+    'close_events', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', ce.id,
+        'closed_by_name', ceu.name,
+        'closed_at', ce.closed_at,
+        'opening_float', ce.opening_float,
+        'counted_cash', ce.counted_cash,
+        'expected_cash', ce.expected_cash,
+        'variance', ce.variance,
+        'notes', ce.notes
+      ) ORDER BY ce.closed_at)
+      FROM register_close_events ce
+      LEFT JOIN users ceu ON ceu.id = ce.closed_by
+      WHERE ce.register_session_id = rs.id
+    ), '[]'::jsonb),
+    -- Session-scoped cash transaction tally. Lets the close dialog preview
+    -- expected cash & variance client-side without a second round-trip.
+    'tx_summary', (
+      SELECT jsonb_build_object(
+        'cash_payment_count',  COUNT(*) FILTER (WHERE pt.transaction_type = 'payment' AND pt.payment_type = 'cash'),
+        'cash_payment_total',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment' AND pt.payment_type = 'cash'), 0),
+        'cash_refund_count',   COUNT(*) FILTER (WHERE pt.transaction_type = 'refund'  AND pt.payment_type = 'cash'),
+        'cash_refund_total',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund' AND pt.payment_type = 'cash'), 0),
+        'noncash_payment_count', COUNT(*) FILTER (WHERE pt.transaction_type = 'payment' AND pt.payment_type <> 'cash'),
+        'noncash_payment_total', COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment' AND pt.payment_type <> 'cash'), 0)
+      )
+      FROM payment_transactions pt
+      WHERE pt.register_session_id = rs.id
+    )
   ) INTO v_session
   FROM register_sessions rs
   LEFT JOIN users ou ON ou.id = rs.opened_by
@@ -2439,6 +2494,18 @@ BEGIN
     closing_notes = p_notes
   WHERE id = p_session_id;
 
+  -- Append-only close event. register_sessions only keeps the LATEST close
+  -- (overwritten on every reopen+reclose). This log preserves the full history
+  -- so a shortage recorded at first close isn't lost when the session is
+  -- reopened for a late sale and reclosed clean.
+  INSERT INTO register_close_events (
+    register_session_id, closed_by, opening_float,
+    counted_cash, expected_cash, variance, notes
+  ) VALUES (
+    p_session_id, p_user_id, v_session.opening_float,
+    p_counted_cash, v_expected, v_variance, p_notes
+  );
+
   RETURN jsonb_build_object(
     'status', 'closed',
     'opening_float', v_session.opening_float,
@@ -2456,13 +2523,17 @@ $$ LANGUAGE plpgsql;
 -- Add a cash movement (cash in or cash out).
 -- Uses register_session_id on payment_transactions for exact attribution.
 -- p_tz_offset_minutes is retained for client API compatibility but unused.
+-- Drop the prior signature first — adding p_reason_category as the trailing
+-- param creates a NEW function unless the old one is dropped explicitly.
+DROP FUNCTION IF EXISTS add_cash_movement(INT, TEXT, DECIMAL, TEXT, UUID, INT);
 CREATE OR REPLACE FUNCTION add_cash_movement(
   p_session_id INT,
   p_type TEXT,
   p_amount DECIMAL,
   p_reason TEXT,
   p_user_id UUID,
-  p_tz_offset_minutes INT DEFAULT 180
+  p_tz_offset_minutes INT DEFAULT 180,
+  p_reason_category TEXT DEFAULT 'other'
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -2510,8 +2581,15 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO register_cash_movements (register_session_id, type, amount, reason, performed_by)
-  VALUES (p_session_id, p_type::cash_movement_type, p_amount, p_reason, p_user_id)
+  INSERT INTO register_cash_movements (register_session_id, type, reason_category, amount, reason, performed_by)
+  VALUES (
+    p_session_id,
+    p_type::cash_movement_type,
+    p_reason_category::cash_movement_reason_category,
+    p_amount,
+    p_reason,
+    p_user_id
+  )
   RETURNING id INTO v_id;
 
   RETURN jsonb_build_object('id', v_id);

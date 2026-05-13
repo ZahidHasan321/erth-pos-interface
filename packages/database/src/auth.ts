@@ -124,6 +124,10 @@ export function isTerminalUser(user: AuthUser | null): boolean {
   return !!user && user.role === "staff" && user.job_functions.length > 0;
 }
 
+export function isCashier(user: AuthUser | null): boolean {
+  return user?.role === "cashier";
+}
+
 // Map job_function → terminal route path. URL slugs use hyphens;
 // enum values use underscores.
 const TERMINAL_PATHS: Record<JobFunction, string> = {
@@ -160,6 +164,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   manager: "Manager",
   staff: "Staff",
+  cashier: "Cashier",
 };
 
 export const DEPARTMENT_LABELS: Record<Department, string> = {

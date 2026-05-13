@@ -1,14 +1,43 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { createAdminClient } from "../_shared/supabase.ts";
 
 /**
  * POST /auth-login
  * Body: { username: string, pin: string }
  *
- * 1. Calls verify_pin RPC (handles lockout, bcrypt comparison)
- * 2. Finds or creates a Supabase Auth user for JWT-based RLS
- * 3. Returns session tokens + user data
+ * Implemented with raw fetch (no supabase-js) so the isolate has zero
+ * remote imports to resolve at boot. Boot-time remote-fetch was causing
+ * ~30% of cold isolates to fail their TLS handshake and drop the request.
+ *
+ * 1. POST /rest/v1/rpc/verify_pin   — PIN check, lockout, returns user
+ * 2. Ensure a Supabase Auth user exists / is linked (admin API)
+ * 3. POST /auth/v1/token?grant_type=password — issue session JWT
  */
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+function adminHeaders() {
+  return {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+  };
+}
+
+async function readJson(r: Response): Promise<unknown> {
+  const txt = await r.text();
+  if (!txt) return null;
+  try { return JSON.parse(txt); } catch { return txt; }
+}
+
+function errResp(message: string, status: number) {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -17,31 +46,33 @@ Deno.serve(async (req) => {
   try {
     const { username, pin } = await req.json();
     if (!username || !pin) {
-      return new Response(
-        JSON.stringify({ error: "Username and PIN are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return errResp("Username and PIN are required", 400);
     }
 
-    const supabase = createAdminClient();
-
-    // Step 1: Verify PIN (all security logic is in the DB function)
-    const { data: userData, error: pinError } = await supabase.rpc("verify_pin", {
-      p_username: username,
-      p_pin: pin,
+    // Step 1: Verify PIN via RPC (DB function handles lockout & bcrypt)
+    const pinRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_pin`, {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify({ p_username: username, p_pin: pin }),
     });
-
-    if (pinError) {
-      return new Response(
-        JSON.stringify({ error: pinError.message }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const pinBody = await readJson(pinRes);
+    if (!pinRes.ok) {
+      const msg = (pinBody as { message?: string } | null)?.message ?? "PIN verification failed";
+      return errResp(msg, 401);
     }
+    const userData = pinBody as {
+      id: string;
+      username: string;
+      name: string;
+      role: string;
+      department: string | null;
+      job_functions: string[];
+      brands: string[] | null;
+    };
 
-    const userId = String(userData.id); // ensure string for PostgREST .eq()
+    const userId = String(userData.id);
     const internalEmail = `${userData.username}@workshop.internal`;
-    // Internal password — not user-facing, just for Supabase Auth session creation
-    const internalPassword = `internal_${userId}_${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.slice(-12)}`;
+    const internalPassword = `internal_${userId}_${SERVICE_ROLE_KEY.slice(-12)}`;
 
     const appMetadata = {
       user_id: userId,
@@ -50,80 +81,111 @@ Deno.serve(async (req) => {
       job_functions: userData.job_functions ?? [],
     };
 
-    // Step 2: Find or create Supabase Auth user
-    // Check if auth user already linked (via auth_id on users table)
-    const { data: userRow } = await supabase
-      .from("users")
-      .select("auth_id")
-      .eq("id", userId)
-      .single();
-
-    let authUserId: string | null = userRow?.auth_id ?? null;
+    // Step 2: Find or create the linked Supabase Auth user
+    const rowRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=auth_id`,
+      { headers: { ...adminHeaders(), Accept: "application/json" } }
+    );
+    const rowBody = (await readJson(rowRes)) as Array<{ auth_id: string | null }> | null;
+    let authUserId: string | null = rowBody?.[0]?.auth_id ?? null;
 
     if (!authUserId) {
-      // Try to find existing auth user by email (may exist from a previous failed link)
-      const { data: existingList } = await supabase.auth.admin.listUsers();
-      const existingAuth = existingList?.users?.find((u) => u.email === internalEmail);
+      // Look for an existing auth user by email (recover from a half-linked state)
+      const listRes = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users?per_page=200`,
+        { headers: adminHeaders() }
+      );
+      const list = (await readJson(listRes)) as { users?: Array<{ id: string; email: string }> } | null;
+      const existing = list?.users?.find((u) => u.email === internalEmail);
 
-      if (existingAuth) {
-        authUserId = existingAuth.id;
-        // Update password + metadata
-        await supabase.auth.admin.updateUserById(authUserId, {
-          password: internalPassword,
-          app_metadata: appMetadata,
+      if (existing) {
+        authUserId = existing.id;
+        await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUserId}`, {
+          method: "PUT",
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            password: internalPassword,
+            app_metadata: appMetadata,
+          }),
         });
       } else {
-        // Create new Supabase Auth user
-        const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
-          email: internalEmail,
-          password: internalPassword,
-          email_confirm: true,
-          app_metadata: appMetadata,
+        const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            email: internalEmail,
+            password: internalPassword,
+            email_confirm: true,
+            app_metadata: appMetadata,
+          }),
         });
-
-        if (createError) {
-          throw new Error(`Failed to create auth account: ${createError.message}`);
+        const createBody = (await readJson(createRes)) as { id?: string; msg?: string; message?: string } | null;
+        if (!createRes.ok || !createBody?.id) {
+          throw new Error(`Failed to create auth account: ${createBody?.msg ?? createBody?.message ?? createRes.status}`);
         }
-        authUserId = authUser.user.id;
+        authUserId = createBody.id;
       }
 
-      // Link auth user to our users table via RPC (SECURITY DEFINER bypasses RLS)
-      const { error: linkError } = await supabase.rpc("link_auth_id", {
-        p_user_id: userId,
-        p_auth_id: authUserId,
+      // Link auth_id back to public.users via SECURITY DEFINER RPC
+      const linkRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/link_auth_id`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ p_user_id: userId, p_auth_id: authUserId }),
       });
-
-      if (linkError) {
-        console.error("Failed to link auth_id:", linkError.message);
+      if (!linkRes.ok) {
+        const linkErr = await readJson(linkRes);
+        console.error("Failed to link auth_id:", linkErr);
       }
     } else {
-      // Auth user exists — update password + metadata (role/department may have changed)
-      await supabase.auth.admin.updateUserById(authUserId, {
-        password: internalPassword,
-        app_metadata: appMetadata,
+      // Auth user already linked — sync password + metadata (role/dept may have changed)
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUserId}`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify({
+          password: internalPassword,
+          app_metadata: appMetadata,
+        }),
       });
     }
 
-    // Step 3: Sign in to get session tokens
-    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-    const anonClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
+    // Step 3: Sign in to get session tokens (anon key — this is the user-facing token endpoint)
+    const signInRes = await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+      {
+        method: "POST",
+        headers: {
+          apikey: ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: internalEmail, password: internalPassword }),
+      }
     );
-
-    const { data: signInData, error: signInErr } = await anonClient.auth.signInWithPassword({
-      email: internalEmail,
-      password: internalPassword,
-    });
-
-    if (signInErr) {
-      throw new Error(`Failed to create session: ${signInErr.message}`);
+    const signInBody = (await readJson(signInRes)) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      expires_at?: number;
+      token_type?: string;
+      user?: unknown;
+      msg?: string;
+      error_description?: string;
+    } | null;
+    if (!signInRes.ok || !signInBody?.access_token) {
+      throw new Error(
+        `Failed to create session: ${signInBody?.error_description ?? signInBody?.msg ?? signInRes.status}`
+      );
     }
 
     return new Response(
       JSON.stringify({
-        session: signInData.session,
+        session: {
+          access_token: signInBody.access_token,
+          refresh_token: signInBody.refresh_token,
+          expires_in: signInBody.expires_in,
+          expires_at: signInBody.expires_at,
+          token_type: signInBody.token_type,
+          user: signInBody.user,
+        },
         user: {
           id: userId,
           username: userData.username,

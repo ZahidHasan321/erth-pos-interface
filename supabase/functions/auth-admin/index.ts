@@ -1,5 +1,5 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { createAdminClient } from "../_shared/supabase.ts";
+import { auth, eqFilter, inFilter, pg } from "../_shared/supabase.ts";
 
 /**
  * POST /auth-admin
@@ -8,6 +8,9 @@ import { createAdminClient } from "../_shared/supabase.ts";
  *
  * User management endpoint. Verifies caller has admin or manager role.
  * Managers are restricted to non-admin targets in their own department.
+ *
+ * Implemented with raw fetch (see _shared/supabase.ts) — no supabase-js, so
+ * the isolate has zero remote imports to fetch at boot.
  */
 
 // Role hierarchy: admins outrank managers outrank staff.
@@ -45,56 +48,47 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createAdminClient();
-
-    // Verify the caller is an admin
+    // Verify the caller via their session JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonError("Missing authorization header", 401);
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: caller }, error: authError } = await supabase.auth.getUser(token);
+    const { data: caller, error: authError } = await auth.getUser(token);
 
     if (authError || !caller) {
-      return new Response(
-        JSON.stringify({ error: "Invalid session" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonError("Invalid session", 401);
     }
 
     // Check caller is admin or manager via users table. We need the caller's
     // own user_id too so handlers can reject self-targeted destructive ops.
-    const { data: callerData } = await supabase
-      .from("users")
-      .select("id, role, department, is_active")
-      .eq("auth_id", caller.id)
-      .single();
+    const { data: callerData } = await pg.select<{
+      id: string;
+      role: string;
+      department: string | null;
+      is_active: boolean;
+    }>(
+      "users",
+      `${eqFilter("auth_id", caller.id)}&select=id,role,department,is_active`,
+      { single: true },
+    );
 
     if (!callerData || !callerData.is_active) {
-      return new Response(
-        JSON.stringify({ error: "Caller account not found or deactivated" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonError("Caller account not found or deactivated", 403);
     }
 
     const isAdmin = ["admin", "super_admin"].includes(callerData.role);
     const isManager = callerData.role === "manager";
 
     if (!isAdmin && !isManager) {
-      return new Response(
-        JSON.stringify({ error: "Admin or manager access required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonError("Admin or manager access required", 403);
     }
 
-    const ctx = {
+    const ctx: Ctx = {
       isAdmin,
-      callerId: callerData.id as string,
-      callerDepartment: isAdmin ? null : (callerData.department as string),
+      callerId: callerData.id,
+      callerDepartment: isAdmin ? null : (callerData.department ?? null),
     };
 
     const body = await req.json();
@@ -102,29 +96,23 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case "create-user":
-        return await handleCreateUser(supabase, params, ctx);
+        return await handleCreateUser(params, ctx);
       case "update-user":
-        return await handleUpdateUser(supabase, params, ctx);
+        return await handleUpdateUser(params, ctx);
       case "deactivate-user":
-        return await handleDeactivateUser(supabase, params, ctx);
+        return await handleDeactivateUser(params, ctx);
       case "activate-user":
-        return await handleActivateUser(supabase, params, ctx);
+        return await handleActivateUser(params, ctx);
       case "delete-user":
-        return await handleDeleteUser(supabase, params, ctx);
+        return await handleDeleteUser(params, ctx);
       case "set-pin":
-        return await handleSetPin(supabase, params, ctx);
+        return await handleSetPin(params, ctx);
       default:
-        return new Response(
-          JSON.stringify({ error: `Unknown action: ${action}` }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return jsonError(`Unknown action: ${action}`, 400);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonError(message, 500);
   }
 });
 
@@ -137,12 +125,19 @@ type Ctx = {
 function jsonError(message: string, status = 400) {
   return new Response(
     JSON.stringify({ error: message }),
-    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
+function jsonOk(body: unknown, status = 200) {
+  return new Response(
+    JSON.stringify(body),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
+async function handleCreateUser(params: any, ctx: Ctx) {
   const { username, name, pin, role, department, job_functions, resources, ...rest } = params;
 
   if (!username || !name || !pin || !role || !department) {
@@ -164,24 +159,27 @@ async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
   const internalPassword = `internal_${crypto.randomUUID()}_${Date.now()}`;
 
   // 1. Create Supabase Auth user
-  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+  const { data: authUser, error: authErrCreate } = await auth.createUser({
     email: internalEmail,
     password: internalPassword,
     email_confirm: true,
     app_metadata: { role, department, job_functions: jobFns },
   });
 
-  if (authError) {
-    return jsonError(`Auth creation failed: ${authError.message}`);
+  if (authErrCreate || !authUser) {
+    return jsonError(`Auth creation failed: ${authErrCreate?.message ?? "unknown"}`);
   }
 
   // 2. Create users table row
-  const { data: userRow, error: insertError } = await supabase
-    .from("users")
-    .insert({
+  const { data: userRow, error: insertError } = await pg.insert<{
+    id: string;
+    name: string;
+  } & Record<string, unknown>>(
+    "users",
+    {
       username,
       name,
-      auth_id: authUser.user.id,
+      auth_id: authUser.id,
       role,
       department,
       job_functions: jobFns,
@@ -194,26 +192,26 @@ async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
       nationality: rest.nationality || null,
       hire_date: rest.hire_date || null,
       notes: rest.notes || null,
-    })
-    .select()
-    .single();
+    },
+    { returning: "single" },
+  );
 
-  if (insertError) {
+  if (insertError || !userRow) {
     // Rollback: delete the auth user we just created
-    await supabase.auth.admin.deleteUser(authUser.user.id);
-    return jsonError(`User creation failed: ${insertError.message}`);
+    await auth.deleteUser(authUser.id);
+    return jsonError(`User creation failed: ${insertError?.message ?? "unknown"}`);
   }
 
   // 3. Set PIN (hashed server-side)
-  const { error: pinError } = await supabase.rpc("set_user_pin", {
+  const { error: pinError } = await pg.rpc("set_user_pin", {
     p_user_id: userRow.id,
     p_pin: pin,
   });
 
   if (pinError) {
     // Rollback: delete users row + auth user
-    await supabase.from("users").delete().eq("id", userRow.id);
-    await supabase.auth.admin.deleteUser(authUser.user.id);
+    await pg.delete_("users", eqFilter("id", userRow.id));
+    await auth.deleteUser(authUser.id);
     return jsonError(`PIN setup failed: ${pinError.message}`);
   }
 
@@ -234,20 +232,17 @@ async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
       }));
 
     if (inserts.length > 0) {
-      const { error: resourceError } = await supabase.from("resources").insert(inserts);
+      const { error: resourceError } = await pg.insert("resources", inserts);
       if (resourceError) {
         // Rollback: undo everything we just created
-        await supabase.from("users").delete().eq("id", userRow.id);
-        await supabase.auth.admin.deleteUser(authUser.user.id);
+        await pg.delete_("users", eqFilter("id", userRow.id));
+        await auth.deleteUser(authUser.id);
         return jsonError(`Resource creation failed: ${resourceError.message}`);
       }
     }
   }
 
-  return new Response(
-    JSON.stringify({ user: userRow }),
-    { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ user: userRow }, 201);
 }
 
 // Update an existing user. Sensitive columns (role/department/job_functions/
@@ -255,7 +250,7 @@ async function handleCreateUser(supabase: any, params: any, ctx: Ctx) {
 // them directly because of column-level grants. Username changes also sync
 // the auth.users email so login keeps working.
 // deno-lint-ignore no-explicit-any
-async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
+async function handleUpdateUser(params: any, ctx: Ctx) {
   const { user_id, resources: resourcesParam, ...updates } = params;
   if (!user_id) return jsonError("user_id is required");
   const desiredResources: Array<{ responsibility: string; unit_id: string | null }> =
@@ -266,11 +261,20 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
   }
 
   // Load current row so we can do permission checks and detect what changed
-  const { data: target, error: targetErr } = await supabase
-    .from("users")
-    .select("id, auth_id, username, name, role, department, job_functions, is_active")
-    .eq("id", user_id)
-    .single();
+  const { data: target, error: targetErr } = await pg.select<{
+    id: string;
+    auth_id: string | null;
+    username: string;
+    name: string;
+    role: string;
+    department: string | null;
+    job_functions: string[] | null;
+    is_active: boolean;
+  }>(
+    "users",
+    `${eqFilter("id", user_id)}&select=id,auth_id,username,name,role,department,job_functions,is_active`,
+    { single: true },
+  );
 
   if (targetErr || !target) return jsonError("User not found", 404);
 
@@ -302,14 +306,19 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
   }
   allowed.updated_at = new Date().toISOString();
 
-  const { data: userRow, error: updateErr } = await supabase
-    .from("users")
-    .update(allowed)
-    .eq("id", user_id)
-    .select()
-    .single();
+  const { data: userRow, error: updateErr } = await pg.update<{
+    id: string;
+    role: string;
+    department: string | null;
+    job_functions: string[] | null;
+  } & Record<string, unknown>>(
+    "users",
+    eqFilter("id", user_id),
+    allowed,
+    { returning: "single" },
+  );
 
-  if (updateErr) return jsonError(`Update failed: ${updateErr.message}`);
+  if (updateErr || !userRow) return jsonError(`Update failed: ${updateErr?.message ?? "unknown"}`);
 
   // Sync auth.users when identifying or claim-affecting fields change.
   if (target.auth_id) {
@@ -338,21 +347,15 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
       };
     }
     if (Object.keys(authUpdate).length > 0) {
-      const { error: authErr } = await supabase.auth.admin.updateUserById(
-        target.auth_id,
-        authUpdate,
-      );
+      const { error: authErr } = await auth.updateUserById(target.auth_id, authUpdate);
       if (authErr) {
         // Roll the users row back to keep auth and users in sync
-        await supabase
-          .from("users")
-          .update({
-            username: target.username,
-            role: target.role,
-            department: target.department,
-            job_functions: target.job_functions,
-          })
-          .eq("id", user_id);
+        await pg.update("users", eqFilter("id", user_id), {
+          username: target.username,
+          role: target.role,
+          department: target.department,
+          job_functions: target.job_functions,
+        });
         return jsonError(`Auth sync failed: ${authErr.message}`);
       }
     }
@@ -370,13 +373,17 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
       : [];
     const desiredStages = new Set(desiredJobs.map(jobFunctionToStage).filter(Boolean));
 
-    const { data: existing } = await supabase
-      .from("resources")
-      .select("id, responsibility, unit_id")
-      .eq("user_id", user_id);
+    const { data: existing } = await pg.select<Array<{
+      id: string;
+      responsibility: string | null;
+      unit_id: string | null;
+    }>>(
+      "resources",
+      `${eqFilter("user_id", user_id)}&select=id,responsibility,unit_id`,
+    );
 
     const existingByStage = new Map<string, { id: string; unit_id: string | null }>();
-    for (const r of (existing ?? []) as Array<{ id: string; responsibility: string | null; unit_id: string | null }>) {
+    for (const r of (existing ?? [])) {
       if (r.responsibility) existingByStage.set(r.responsibility, { id: r.id, unit_id: r.unit_id });
     }
 
@@ -398,14 +405,11 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
         // /team page will assign later (preserves prior behavior).
         unit_id: desiredUnitByStage.has(stage) ? desiredUnitByStage.get(stage) ?? null : null,
       }));
-      const { error: addErr } = await supabase.from("resources").insert(inserts);
+      const { error: addErr } = await pg.insert("resources", inserts);
       if (addErr) return jsonError(`Adding resource rows failed: ${addErr.message}`);
     }
     if (idsToDelete.length > 0) {
-      const { error: delErr } = await supabase
-        .from("resources")
-        .delete()
-        .in("id", idsToDelete);
+      const { error: delErr } = await pg.delete_("resources", inFilter("id", idsToDelete));
       if (delErr) return jsonError(`Removing resource rows failed: ${delErr.message}`);
     }
 
@@ -417,22 +421,16 @@ async function handleUpdateUser(supabase: any, params: any, ctx: Ctx) {
       if (!desiredUnitByStage.has(stage)) continue;
       const newUnit = desiredUnitByStage.get(stage) ?? null;
       if (newUnit === info.unit_id) continue;
-      const { error: upErr } = await supabase
-        .from("resources")
-        .update({ unit_id: newUnit })
-        .eq("id", info.id);
+      const { error: upErr } = await pg.update("resources", eqFilter("id", info.id), { unit_id: newUnit });
       if (upErr) return jsonError(`Reassigning unit for ${stage} failed: ${upErr.message}`);
     }
   }
 
-  return new Response(
-    JSON.stringify({ user: userRow }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ user: userRow });
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleDeactivateUser(supabase: any, params: any, ctx: Ctx) {
+async function handleDeactivateUser(params: any, ctx: Ctx) {
   const { user_id } = params;
   if (!user_id) return jsonError("user_id is required");
 
@@ -441,11 +439,15 @@ async function handleDeactivateUser(supabase: any, params: any, ctx: Ctx) {
     return jsonError("You cannot deactivate your own account");
   }
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("auth_id, role, department")
-    .eq("id", user_id)
-    .single();
+  const { data: user } = await pg.select<{
+    auth_id: string | null;
+    role: string;
+    department: string | null;
+  }>(
+    "users",
+    `${eqFilter("id", user_id)}&select=auth_id,role,department`,
+    { single: true },
+  );
 
   if (!user) return jsonError("User not found", 404);
 
@@ -458,44 +460,47 @@ async function handleDeactivateUser(supabase: any, params: any, ctx: Ctx) {
     }
   }
 
-  const { error: updateErr } = await supabase
-    .from("users")
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("id", user_id);
+  const { error: updateErr } = await pg.update(
+    "users",
+    eqFilter("id", user_id),
+    { is_active: false, updated_at: new Date().toISOString() },
+  );
 
   if (updateErr) return jsonError(`Deactivate failed: ${updateErr.message}`);
 
   // Ban the Supabase Auth user (prevents JWT refresh)
   if (user.auth_id) {
-    const { error: banErr } = await supabase.auth.admin.updateUserById(user.auth_id, {
+    const { error: banErr } = await auth.updateUserById(user.auth_id, {
       ban_duration: "876000h", // ~100 years
     });
     if (banErr) {
       // Roll the users row back so the DB and Auth state stay aligned.
-      await supabase
-        .from("users")
-        .update({ is_active: true, updated_at: new Date().toISOString() })
-        .eq("id", user_id);
+      await pg.update(
+        "users",
+        eqFilter("id", user_id),
+        { is_active: true, updated_at: new Date().toISOString() },
+      );
       return jsonError(`Auth ban failed: ${banErr.message}`);
     }
   }
 
-  return new Response(
-    JSON.stringify({ success: true }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ success: true });
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleActivateUser(supabase: any, params: any, ctx: Ctx) {
+async function handleActivateUser(params: any, ctx: Ctx) {
   const { user_id } = params;
   if (!user_id) return jsonError("user_id is required");
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("auth_id, role, department")
-    .eq("id", user_id)
-    .single();
+  const { data: user } = await pg.select<{
+    auth_id: string | null;
+    role: string;
+    department: string | null;
+  }>(
+    "users",
+    `${eqFilter("id", user_id)}&select=auth_id,role,department`,
+    { single: true },
+  );
 
   if (!user) return jsonError("User not found", 404);
 
@@ -508,31 +513,30 @@ async function handleActivateUser(supabase: any, params: any, ctx: Ctx) {
     }
   }
 
-  const { error: updateErr } = await supabase
-    .from("users")
-    .update({ is_active: true, updated_at: new Date().toISOString() })
-    .eq("id", user_id);
+  const { error: updateErr } = await pg.update(
+    "users",
+    eqFilter("id", user_id),
+    { is_active: true, updated_at: new Date().toISOString() },
+  );
 
   if (updateErr) return jsonError(`Activate failed: ${updateErr.message}`);
 
   // Unban the Supabase Auth user
   if (user.auth_id) {
-    const { error: unbanErr } = await supabase.auth.admin.updateUserById(user.auth_id, {
+    const { error: unbanErr } = await auth.updateUserById(user.auth_id, {
       ban_duration: "none",
     });
     if (unbanErr) {
-      await supabase
-        .from("users")
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq("id", user_id);
+      await pg.update(
+        "users",
+        eqFilter("id", user_id),
+        { is_active: false, updated_at: new Date().toISOString() },
+      );
       return jsonError(`Auth unban failed: ${unbanErr.message}`);
     }
   }
 
-  return new Response(
-    JSON.stringify({ success: true }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ success: true });
 }
 
 // Hard delete a user. Removes the users row + auth.users row + non-historical
@@ -541,7 +545,7 @@ async function handleActivateUser(supabase: any, params: any, ctx: Ctx) {
 // feedback, etc.) — those FKs default to NO ACTION, and we surface a clear
 // "use deactivate instead" error rather than try to null them out.
 // deno-lint-ignore no-explicit-any
-async function handleDeleteUser(supabase: any, params: any, ctx: Ctx) {
+async function handleDeleteUser(params: any, ctx: Ctx) {
   const { user_id } = params;
   if (!user_id) return jsonError("user_id is required");
 
@@ -549,11 +553,15 @@ async function handleDeleteUser(supabase: any, params: any, ctx: Ctx) {
     return jsonError("You cannot delete your own account");
   }
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("auth_id, role, department")
-    .eq("id", user_id)
-    .single();
+  const { data: user } = await pg.select<{
+    auth_id: string | null;
+    role: string;
+    department: string | null;
+  }>(
+    "users",
+    `${eqFilter("id", user_id)}&select=auth_id,role,department`,
+    { single: true },
+  );
 
   if (!user) return jsonError("User not found", 404);
 
@@ -568,13 +576,10 @@ async function handleDeleteUser(supabase: any, params: any, ctx: Ctx) {
 
   // Clear non-historical dependents first so they don't trip the FK.
   // (notification_reads + notifications.recipient_user_id already CASCADE.)
-  await supabase.from("user_sessions").delete().eq("user_id", user_id);
-  await supabase.from("resources").delete().eq("user_id", user_id);
+  await pg.delete_("user_sessions", eqFilter("user_id", user_id));
+  await pg.delete_("resources", eqFilter("user_id", user_id));
 
-  const { error: deleteErr } = await supabase
-    .from("users")
-    .delete()
-    .eq("id", user_id);
+  const { error: deleteErr } = await pg.delete_("users", eqFilter("id", user_id));
 
   if (deleteErr) {
     // 23503 = foreign_key_violation. Means this user is referenced by orders,
@@ -592,33 +597,30 @@ async function handleDeleteUser(supabase: any, params: any, ctx: Ctx) {
   // row is orphaned (no users row), which is harmless (login goes nowhere)
   // but worth surfacing so the operator can clean it up.
   if (user.auth_id) {
-    const { error: authErr } = await supabase.auth.admin.deleteUser(user.auth_id);
-    if (authErr) {
+    const { error: authErrDel } = await auth.deleteUser(user.auth_id);
+    if (authErrDel) {
       return jsonError(
-        `User row deleted, but auth account cleanup failed: ${authErr.message}`,
+        `User row deleted, but auth account cleanup failed: ${authErrDel.message}`,
       );
     }
   }
 
-  return new Response(
-    JSON.stringify({ success: true }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ success: true });
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleSetPin(supabase: any, params: any, ctx: Ctx) {
+async function handleSetPin(params: any, ctx: Ctx) {
   const { user_id, pin } = params;
   if (!user_id || !pin) return jsonError("user_id and pin are required");
 
   // Hierarchy guards apply only to managers acting on someone else.
   // (Setting your own PIN is always allowed.)
   if (!ctx.isAdmin && user_id !== ctx.callerId) {
-    const { data: target } = await supabase
-      .from("users")
-      .select("role, department")
-      .eq("id", user_id)
-      .single();
+    const { data: target } = await pg.select<{ role: string; department: string | null }>(
+      "users",
+      `${eqFilter("id", user_id)}&select=role,department`,
+      { single: true },
+    );
     if (!target) return jsonError("User not found", 404);
     if (target.department !== ctx.callerDepartment) {
       return jsonError("Managers can only manage users in their own department", 403);
@@ -628,15 +630,12 @@ async function handleSetPin(supabase: any, params: any, ctx: Ctx) {
     }
   }
 
-  const { error } = await supabase.rpc("set_user_pin", {
+  const { error } = await pg.rpc("set_user_pin", {
     p_user_id: user_id,
     p_pin: pin,
   });
 
   if (error) return jsonError(error.message);
 
-  return new Response(
-    JSON.stringify({ success: true }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return jsonOk({ success: true });
 }

@@ -25,6 +25,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { RegisterHeaderMenu } from "@/components/cashier/register-gate";
 import { Avatar, AvatarFallback } from "@repo/ui/avatar";
 import {
   DropdownMenu,
@@ -87,6 +88,11 @@ export const Route = createFileRoute("/$main")<{
         to: `/${params.main}/login` as any,
         search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
       });
+    }
+    // Cashier role lives in the standalone /cashier shell. They have no
+    // business in any $main-scoped page — bounce them there.
+    if (user && user.role === "cashier") {
+      throw redirect({ to: "/cashier" });
     }
   },
   notFoundComponent: NotFoundPage,
@@ -232,6 +238,7 @@ function RouteComponent() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <RegisterHeaderMenu />
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -163,18 +163,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (fnError) {
-        // FunctionsHttpError exposes the raw Response on .context — parse the
-        // server's {error: "..."} body so the user sees the real reason
-        // (e.g. "Invalid PIN", "Account locked") instead of "non-2xx".
-        let serverMsg: string | null = null;
-        const ctx = (fnError as { context?: Response }).context;
-        if (ctx && typeof ctx.json === 'function') {
+        // functions-js wraps three error shapes on .context:
+        //   FunctionsHttpError  → context = Response (server returned non-2xx)
+        //   FunctionsFetchError → context = Error    (fetch threw: network/abort)
+        //   FunctionsRelayError → context = Error    (edge-runtime relay failed)
+        // The wrapper's own .message is generic ("Failed to send a request to
+        // the Edge Function") so always reach into context for the real cause.
+        let detail: string | null = null;
+        const ctx = (fnError as { context?: unknown }).context;
+        if (ctx instanceof Response) {
           try {
             const body = await ctx.json();
-            serverMsg = body?.error ?? null;
-          } catch { /* ignore */ }
+            detail = body?.error ?? `HTTP ${ctx.status}`;
+          } catch {
+            detail = `HTTP ${ctx.status}`;
+          }
+        } else if (ctx instanceof Error) {
+          detail = `${ctx.name}: ${ctx.message}`;
         }
-        throw new Error(`Login failed: ${serverMsg || fnError.message || 'no error message from server'}`);
+        console.error('[Auth] auth-login failed', { fnError, context: ctx });
+        throw new Error(`Login failed: ${detail || fnError.message || 'unknown error'}`);
       }
       if (!result) throw new Error('Login failed: empty response');
 

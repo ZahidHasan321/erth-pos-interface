@@ -2,6 +2,7 @@ import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import type { EodReportSummary, EodTransaction, RegisterSessionData } from "@/api/cashier";
+import { CASH_MOVEMENT_CATEGORY_LABEL } from "@/lib/cashMovementLabels";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
@@ -254,7 +255,8 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSe
                                     <View key={m.id} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
                                         <Text style={s.kvLabel}>
                                             {m.type === "cash_in" ? "+ " : "− "}
-                                            {timeFmt.format(new Date(m.created_at))} · {m.reason} ({m.performed_by_name})
+                                            {timeFmt.format(new Date(m.created_at))} · {CASH_MOVEMENT_CATEGORY_LABEL[m.reason_category] ?? "Other"}
+                                            {m.reason ? ` — ${m.reason}` : ""} ({m.performed_by_name})
                                         </Text>
                                         <Text style={s.kvValue}>
                                             {m.type === "cash_in" ? "+" : "−"}

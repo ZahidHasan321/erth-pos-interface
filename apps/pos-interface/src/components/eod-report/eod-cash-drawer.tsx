@@ -2,7 +2,8 @@ import { Card } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Wallet, ArrowDownToLine, ArrowUpFromLine, AlertTriangle, CheckCircle2, Lock, Unlock, RotateCcw } from "lucide-react";
 import { useRegisterSessionByDate } from "@/hooks/useCashier";
-import type { EodReportSummary } from "@/api/cashier";
+import type { EodReportSummary, CashMovementReasonCategory } from "@/api/cashier";
+import { CASH_MOVEMENT_CATEGORY_LABEL } from "@/lib/cashMovementLabels";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
@@ -100,10 +101,10 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
                     <p className="text-xs font-medium text-muted-foreground mb-2">Cash Movements</p>
                     <div className="space-y-1.5">
                         {cashIn.map((m) => (
-                            <MovementLine key={`in-${m.id}`} type="in" amount={Number(m.amount)} reason={m.reason} by={m.performed_by_name} at={m.created_at} />
+                            <MovementLine key={`in-${m.id}`} type="in" amount={Number(m.amount)} category={m.reason_category} reason={m.reason} by={m.performed_by_name} at={m.created_at} />
                         ))}
                         {cashOut.map((m) => (
-                            <MovementLine key={`out-${m.id}`} type="out" amount={Number(m.amount)} reason={m.reason} by={m.performed_by_name} at={m.created_at} />
+                            <MovementLine key={`out-${m.id}`} type="out" amount={Number(m.amount)} category={m.reason_category} reason={m.reason} by={m.performed_by_name} at={m.created_at} />
                         ))}
                     </div>
                 </div>
@@ -160,15 +161,19 @@ function VarianceRow({ variance, closed }: { variance: number | null; closed: bo
     );
 }
 
-function MovementLine({ type, amount, reason, by, at }: { type: "in" | "out"; amount: number; reason: string; by: string; at: string }) {
+function MovementLine({ type, amount, category, reason, by, at }: { type: "in" | "out"; amount: number; category: CashMovementReasonCategory; reason: string; by: string; at: string }) {
     const Icon = type === "in" ? ArrowDownToLine : ArrowUpFromLine;
     const color = type === "in" ? "text-emerald-700" : "text-red-600";
+    const label = CASH_MOVEMENT_CATEGORY_LABEL[category] ?? "Other";
     return (
         <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 min-w-0">
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${color}`} />
                 <span className="text-muted-foreground shrink-0">{fmtTime(at)}</span>
-                <span className="truncate">{reason}</span>
+                <span className="truncate">
+                    {label}
+                    {reason ? <span className="text-muted-foreground"> · {reason}</span> : null}
+                </span>
                 <span className="text-muted-foreground shrink-0">· {by}</span>
             </div>
             <span className={`tabular-nums font-medium ${color}`}>

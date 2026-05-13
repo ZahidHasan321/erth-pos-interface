@@ -16,8 +16,9 @@ const sql = postgres(process.env.DATABASE_URL!, { max: 3 });
 type Seed = {
   username: string;
   name: string;
-  role: "super_admin" | "admin" | "manager" | "staff";
+  role: "super_admin" | "admin" | "manager" | "staff" | "cashier";
   department: "workshop" | "shop" | null;
+  brands?: string[];
 };
 
 const USERS: Seed[] = [
@@ -26,6 +27,7 @@ const USERS: Seed[] = [
   { username: "shop_manager", name: "Shop Manager",      role: "manager",     department: "shop" },
   { username: "ws_office",    name: "Workshop Office",   role: "staff",       department: "workshop" },
   { username: "shop_office",  name: "Shop Office",       role: "staff",       department: "shop" },
+  { username: "cashier",      name: "Cashier",           role: "cashier",     department: "shop", brands: ["erth"] },
 ];
 
 const PIN = "1234";
@@ -34,11 +36,13 @@ async function main() {
   console.log(`\nSeeding ${USERS.length} office users (PIN=${PIN})...`);
 
   for (const u of USERS) {
+    const brandsArr = u.brands ?? null;
     const [user] = await sql<{ id: string; created: boolean }[]>`
-      INSERT INTO users (username, name, role, department, job_functions, is_active, pin)
+      INSERT INTO users (username, name, role, department, job_functions, brands, is_active, pin)
       VALUES (
         ${u.username}, ${u.name}, ${u.role}::role, ${u.department}::department,
-        '{}'::job_function[], true,
+        '{}'::job_function[], ${brandsArr as any},
+        true,
         crypt(${PIN}, gen_salt('bf', 8))
       )
       ON CONFLICT (username) DO UPDATE SET
@@ -46,6 +50,7 @@ async function main() {
         role          = EXCLUDED.role,
         department    = EXCLUDED.department,
         job_functions = EXCLUDED.job_functions,
+        brands        = EXCLUDED.brands,
         is_active     = true,
         pin           = crypt(${PIN}, gen_salt('bf', 8)),
         failed_login_attempts = 0,
@@ -55,7 +60,7 @@ async function main() {
     `;
 
     console.log(
-      `  ${user.created ? "+" : "~"} ${u.username.padEnd(14)} ${u.name.padEnd(22)} [${u.role}${u.department ? "/" + u.department : ""}]`
+      `  ${user.created ? "+" : "~"} ${u.username.padEnd(14)} ${u.name.padEnd(22)} [${u.role}${u.department ? "/" + u.department : ""}${u.brands ? "/" + u.brands.join(",") : ""}]`
     );
   }
 
