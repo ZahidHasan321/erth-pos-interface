@@ -634,11 +634,14 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Compute new phase from garment stages
+    -- Compute new phase from garment stages. Discarded counts as terminal
+    -- alongside completed so cancellations don't strand orders in_progress.
+    -- It's also allowed in the pre-dispatch preservation branch so a partial
+    -- cancellation on a still-'new' order doesn't fake-promote it to 'in_progress'.
     SELECT CASE
-        WHEN bool_and(g.piece_stage = 'completed')
+        WHEN bool_and(g.piece_stage IN ('completed', 'discarded'))
             THEN 'completed'::order_phase
-        WHEN bool_and(g.piece_stage IN ('waiting_for_acceptance', 'waiting_cut', 'brova_trialed'))
+        WHEN bool_and(g.piece_stage IN ('waiting_for_acceptance', 'waiting_cut', 'brova_trialed', 'discarded'))
             THEN v_current_phase -- preserve 'new' vs 'in_progress' distinction
         ELSE 'in_progress'::order_phase
     END INTO v_new_phase
@@ -742,6 +745,7 @@ DECLARE
   v_has_items BOOLEAN;
   v_my_user_id UUID;
   v_items_total DECIMAL;
+  v_garment_for_discard RECORD;
 BEGIN
   -- Block disabled users immediately — their JWT may still be valid even
   -- after an admin flipped is_active = false.
@@ -891,6 +895,50 @@ BEGIN
           refunded_soaking = refunded_soaking OR COALESCE((v_refund_item->>'soaking')::boolean, false)
         WHERE id = (v_refund_item->>'garment_id')::uuid
           AND order_id = p_order_id;
+
+        -- If every applicable price component is now refunded, treat the garment
+        -- as cancelled. "Applicable" = priced (snapshot > 0) or flag set
+        -- (express/soaking). Discarded counts as terminal for order_phase + is
+        -- filtered out of workshop pipelines.
+        SELECT id, fabric_id, fabric_length INTO v_garment_for_discard
+        FROM garments
+        WHERE id = (v_refund_item->>'garment_id')::uuid
+          AND order_id = p_order_id
+          AND piece_stage NOT IN ('discarded', 'completed')
+          AND (COALESCE(fabric_price_snapshot, 0) = 0 OR refunded_fabric)
+          AND (COALESCE(stitching_price_snapshot, 0) = 0 OR refunded_stitching)
+          AND (COALESCE(style_price_snapshot, 0) = 0 OR refunded_style)
+          AND (NOT COALESCE(express, false) OR refunded_express)
+          AND (NOT COALESCE(soaking, false) OR refunded_soaking);
+
+        IF FOUND THEN
+          -- Reset workflow flags too. A cancelled garment shouldn't keep a
+          -- 'needs_repair' feedback_status or stale acceptance — those drive
+          -- showroom labels and detail-view chips elsewhere.
+          UPDATE garments
+          SET piece_stage = 'discarded',
+              in_production = false,
+              start_time = NULL,
+              feedback_status = NULL,
+              acceptance_status = NULL
+          WHERE id = v_garment_for_discard.id;
+
+          IF COALESCE((v_refund_item->>'fabric_restock')::boolean, false)
+             AND v_garment_for_discard.fabric_id IS NOT NULL
+             AND COALESCE(v_garment_for_discard.fabric_length, 0) > 0 THEN
+            PERFORM set_config('app.movement_type', 'return', true);
+            PERFORM set_config('app.movement_ref_type', 'order', true);
+            PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
+            PERFORM set_config('app.movement_user_id', COALESCE(p_cashier_id::text, ''), true);
+            PERFORM set_config('app.movement_reason', 'garment cancelled — fabric returned', true);
+            PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
+
+            UPDATE fabrics
+            SET real_stock = COALESCE(real_stock, 0) + v_garment_for_discard.fabric_length,
+                shop_stock = COALESCE(shop_stock, 0) + v_garment_for_discard.fabric_length
+            WHERE id = v_garment_for_discard.fabric_id;
+          END IF;
+        END IF;
       ELSIF v_refund_item ? 'shelf_item_id' THEN
         v_shelf_item_id := (v_refund_item->>'shelf_item_id')::int;
         v_refund_qty := COALESCE((v_refund_item->>'quantity')::int, 0);
@@ -902,6 +950,18 @@ BEGIN
         -- Restore shelf stock only when restock=true (default true for backward compat).
         -- Set restock=false for damaged/consumed returns that shouldn't re-enter inventory.
         IF v_refund_qty > 0 AND COALESCE((v_refund_item->>'restock')::boolean, true) THEN
+          -- Stamp ledger context. Required: prior loop iterations (e.g. fabric
+          -- restock) may have set 'return'/'garment cancelled' — must overwrite
+          -- so the shelf row is logged as its own return, not piggybacked.
+          PERFORM set_config('app.movement_type', 'return', true);
+          PERFORM set_config('app.movement_ref_type', 'order', true);
+          PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
+          PERFORM set_config('app.movement_user_id', COALESCE(p_cashier_id::text, ''), true);
+          PERFORM set_config('app.movement_supplier_id', '', true);
+          PERFORM set_config('app.movement_unit_cost', '', true);
+          PERFORM set_config('app.movement_reason', 'shelf item refunded', true);
+          PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
+
           UPDATE shelf
           SET stock = stock + v_refund_qty,
               shop_stock = shop_stock + v_refund_qty
@@ -3331,9 +3391,9 @@ BEGIN
                     COALESCE(bool_and(NOT shop_active OR shop_item_done), true) AS all_shop_items_done
                 FROM (
                     SELECT
-                        g2.piece_stage::text <> 'completed' AS not_completed,
+                        g2.piece_stage::text NOT IN ('completed', 'discarded') AS not_completed,
                         g2.location::text = 'shop'
-                            AND g2.piece_stage::text <> 'completed'
+                            AND g2.piece_stage::text NOT IN ('completed', 'discarded')
                             AND (
                                 COALESCE(g2.trip_number, 0) > 0
                                 OR g2.garment_type::text = 'alteration'

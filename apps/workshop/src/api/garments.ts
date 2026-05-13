@@ -189,6 +189,7 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
     .from('garments')
     .select(WORKSHOP_QUERY)
     .in('location', ['workshop', 'transit_to_workshop', 'transit_to_shop', 'lost_in_transit'])
+    .neq('piece_stage', 'discarded')
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {

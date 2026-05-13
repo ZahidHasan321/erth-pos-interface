@@ -63,6 +63,7 @@ const fmt = (n: number): string => Number(n.toFixed(3)).toString();
 export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soaking8hPrice, soaking24hPrice, totalPaid, onRefundItemsChange }: RefundItemSelectorProps) {
     const [garmentSelections, setGarmentSelections] = useState<Record<string, GarmentRefundSelection>>({});
     const [shelfSelections, setShelfSelections] = useState<Record<number, ShelfRefundSelection>>({});
+    const [fabricRestock, setFabricRestock] = useState<Record<string, boolean>>({});
 
     type Component = "fabric" | "stitching" | "style" | "express" | "soaking";
 
@@ -89,50 +90,20 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
         }
     }, []);
 
-    // Compute refund items + total whenever selections change
-    const { refundTotal } = useMemo(() => {
-        const items: RefundItem[] = [];
-        let total = 0;
+    const isAvailable = useCallback((g: GarmentData, c: Component) =>
+        !isComponentRefunded(g, c) && getGarmentPrice(g, c) > 0,
+        [isComponentRefunded, getGarmentPrice]);
 
-        for (const g of garments) {
-            const sel = garmentSelections[g.id];
-            if (!sel || (!sel.fabric && !sel.stitching && !sel.style && !sel.express && !sel.soaking)) continue;
-            let amount = 0;
-            if (sel.fabric) amount += getGarmentPrice(g, "fabric");
-            if (sel.stitching) amount += getGarmentPrice(g, "stitching");
-            if (sel.style) amount += getGarmentPrice(g, "style");
-            if (sel.express) amount += getGarmentPrice(g, "express");
-            if (sel.soaking) amount += getGarmentPrice(g, "soaking");
-            items.push({
-                garment_id: g.id,
-                fabric: sel.fabric, stitching: sel.stitching, style: sel.style,
-                express: sel.express, soaking: sel.soaking,
-                soaking_hours: sel.soaking ? (g.soaking_hours ?? null) : undefined,
-                amount,
-            });
-            total += amount;
-        }
+    const willBeFullyRefunded = useCallback((g: GarmentData, sel: GarmentRefundSelection) => {
+        const comps: Component[] = ["fabric", "stitching", "style", "express", "soaking"];
+        return comps.every(c => !isAvailable(g, c) || sel[c]);
+    }, [isAvailable]);
 
-        for (const s of shelfItems) {
-            const sel = shelfSelections[s.id];
-            if (!sel || sel.quantity <= 0) continue;
-            const amount = sel.quantity * num(s.unit_price);
-            items.push({
-                shelf_item_id: s.id,
-                quantity: sel.quantity,
-                amount,
-            });
-            total += amount;
-        }
-
-        return { refundItems: items, refundTotal: total };
-    }, [garments, shelfItems, garmentSelections, shelfSelections, getGarmentPrice]);
-
-    // Notify parent of changes
-    const notifyChange = useCallback((
+    const buildItems = useCallback((
         nextGarment: Record<string, GarmentRefundSelection>,
-        nextShelf: Record<number, ShelfRefundSelection>
-    ) => {
+        nextShelf: Record<number, ShelfRefundSelection>,
+        nextFabricRestock: Record<string, boolean>,
+    ): { items: RefundItem[]; total: number } => {
         const items: RefundItem[] = [];
         let total = 0;
 
@@ -145,11 +116,13 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
             if (sel.style) amount += getGarmentPrice(g, "style");
             if (sel.express) amount += getGarmentPrice(g, "express");
             if (sel.soaking) amount += getGarmentPrice(g, "soaking");
+            const fullyRefund = willBeFullyRefunded(g, sel);
             items.push({
                 garment_id: g.id,
                 fabric: sel.fabric, stitching: sel.stitching, style: sel.style,
                 express: sel.express, soaking: sel.soaking,
                 soaking_hours: sel.soaking ? (g.soaking_hours ?? null) : undefined,
+                fabric_restock: fullyRefund ? !!nextFabricRestock[g.id] : undefined,
                 amount,
             });
             total += amount;
@@ -162,20 +135,31 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
             items.push({ shelf_item_id: s.id, quantity: sel.quantity, amount });
             total += amount;
         }
+        return { items, total };
+    }, [garments, shelfItems, getGarmentPrice, willBeFullyRefunded]);
 
+    const refundTotal = useMemo(
+        () => buildItems(garmentSelections, shelfSelections, fabricRestock).total,
+        [buildItems, garmentSelections, shelfSelections, fabricRestock],
+    );
+
+    const notifyChange = useCallback((
+        nextGarment: Record<string, GarmentRefundSelection>,
+        nextShelf: Record<number, ShelfRefundSelection>,
+        nextFabricRestock: Record<string, boolean>,
+    ) => {
+        const { items, total } = buildItems(nextGarment, nextShelf, nextFabricRestock);
         onRefundItemsChange(items, total);
-    }, [garments, shelfItems, getGarmentPrice, onRefundItemsChange]);
+    }, [buildItems, onRefundItemsChange]);
 
     const toggleGarmentComponent = (garmentId: string, component: Component) => {
         setGarmentSelections(prev => {
             const current = prev[garmentId] || { fabric: false, stitching: false, style: false, express: false, soaking: false };
             const next = { ...prev, [garmentId]: { ...current, [component]: !current[component] } };
-            notifyChange(next, shelfSelections);
+            notifyChange(next, shelfSelections, fabricRestock);
             return next;
         });
     };
-
-    const isAvailable = (g: GarmentData, c: Component) => !isComponentRefunded(g, c) && getGarmentPrice(g, c) > 0;
 
     const toggleAllGarmentComponents = (garmentId: string, garment: GarmentData) => {
         setGarmentSelections(prev => {
@@ -192,7 +176,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                     soaking: allSelected ? false : avail.soaking,
                 },
             };
-            notifyChange(next, shelfSelections);
+            notifyChange(next, shelfSelections, fabricRestock);
             return next;
         });
     };
@@ -200,7 +184,15 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
     const setShelfQty = (shelfItemId: number, qty: number) => {
         setShelfSelections(prev => {
             const next = { ...prev, [shelfItemId]: { quantity: qty } };
-            notifyChange(garmentSelections, next);
+            notifyChange(garmentSelections, next, fabricRestock);
+            return next;
+        });
+    };
+
+    const toggleFabricRestock = (garmentId: string) => {
+        setFabricRestock(prev => {
+            const next = { ...prev, [garmentId]: !prev[garmentId] };
+            notifyChange(garmentSelections, shelfSelections, next);
             return next;
         });
     };
@@ -228,9 +220,11 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
         if (isAllSelected) {
             const nextG: Record<string, GarmentRefundSelection> = {};
             const nextS: Record<number, ShelfRefundSelection> = {};
+            const nextR: Record<string, boolean> = {};
             setGarmentSelections(nextG);
             setShelfSelections(nextS);
-            notifyChange(nextG, nextS);
+            setFabricRestock(nextR);
+            notifyChange(nextG, nextS, nextR);
         } else {
             const nextG: Record<string, GarmentRefundSelection> = {};
             for (const g of refundableGarments) {
@@ -246,7 +240,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
             }
             setGarmentSelections(nextG);
             setShelfSelections(nextS);
-            notifyChange(nextG, nextS);
+            notifyChange(nextG, nextS, fabricRestock);
         }
     };
 
@@ -344,8 +338,20 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                     </div>
                                 </div>
                                 {hasAnySelection && (
-                                    <div className="mt-1.5 text-right text-xs font-semibold text-red-600 tabular-nums">
-                                        Refund: {fmt(selectedAmount)} KWD
+                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                        {willBeFullyRefunded(g, sel) && g.fabric_id && getGarmentPrice(g, "fabric") > 0 ? (
+                                            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
+                                                <Checkbox
+                                                    checked={!!fabricRestock[g.id]}
+                                                    onCheckedChange={() => toggleFabricRestock(g.id)}
+                                                    aria-label="Return fabric to stock"
+                                                />
+                                                <span>Return fabric to stock (uncut)</span>
+                                            </label>
+                                        ) : <span />}
+                                        <span className="text-xs font-semibold text-red-600 tabular-nums">
+                                            Refund: {fmt(selectedAmount)} KWD
+                                        </span>
                                     </div>
                                 )}
                             </div>

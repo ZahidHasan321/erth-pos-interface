@@ -329,6 +329,9 @@ export interface RefundItem {
     quantity?: number;
     /** Shelf refund only: whether to return units to stock. Defaults to true on the RPC side. */
     restock?: boolean;
+    /** Garment refund only: when the cancelled garment fully refunds, optionally
+     *  return its uncut fabric to shop stock. Default false (assume cut/started). */
+    fabric_restock?: boolean;
     amount: number;
 }
 

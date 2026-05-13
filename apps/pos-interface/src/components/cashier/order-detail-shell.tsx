@@ -54,11 +54,6 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
     const garments = Array.isArray(order?.garments) ? order.garments : [];
     const shelfItems = Array.isArray(order?.shelf_items) ? order.shelf_items : [];
 
-    const allGarmentsCompleted = useMemo(() => {
-        if (garments.length === 0) return true;
-        return garments.every((g: any) => g.piece_stage === "completed");
-    }, [garments]);
-
     const advance = useMemo(() => {
         if (!order) return 0;
         const stitching = Number((order as any)?.stitching_charge) || 0;
@@ -80,8 +75,7 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
 
     // Tab visibility rules
     const showHandoverTab = !isSalesOrder && !isCancelled;
-    const refundEligible = !isCancelled && totalPaid > 0 && (isFullyPaid && allGarmentsCompleted);
-    const showRefundTab = refundEligible || cancelledWithPayments;
+    const showRefundTab = totalPaid > 0;
 
     const modeOptions = useMemo(() => {
         const opts: Array<{ value: Mode; label: string }> = [{ value: "payment", label: "Payment" }];
