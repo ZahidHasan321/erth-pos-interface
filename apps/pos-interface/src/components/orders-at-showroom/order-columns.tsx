@@ -131,14 +131,6 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
           label = "Needs Action";
           colorClass = "bg-red-100 text-red-700 border-red-200";
           break;
-        case "awaiting_finals":
-          label = "Awaiting Finals";
-          colorClass = "bg-violet-100 text-violet-700 border-violet-200";
-          break;
-        case "partial_ready":
-          label = "Partial Ready";
-          colorClass = "bg-orange-100 text-orange-700 border-orange-200";
-          break;
         case "ready_for_pickup":
           label = "Ready for Pickup";
           colorClass = "bg-emerald-100 text-emerald-700 border-emerald-200";

@@ -313,12 +313,16 @@ describe("evaluateBrovaFeedback", () => {
       expect(r.brovaGoesBack).toBe(true);
     });
 
-    it("needs_redo -> no release, brova goes back", () => {
+    // CLAUDE.md §Branch Tree, Reject-Redo row: original is `discarded`
+    // (terminal), acceptance false, finals stay parked, and there is NO return
+    // trip — the workshop manually creates a fresh replacement row instead.
+    it("needs_redo -> discarded (terminal), no release, no return trip", () => {
       const r = evaluateBrovaFeedback("needs_redo", singleBrova, "b1");
       expect(r.feedbackStatus).toBe("needs_redo");
+      expect(r.newStage).toBe("discarded");
       expect(r.acceptanceStatus).toBe(false);
       expect(r.releaseFinals).toBe(false);
-      expect(r.brovaGoesBack).toBe(true);
+      expect(r.brovaGoesBack).toBe(false);
     });
   });
 
@@ -355,33 +359,41 @@ describe("evaluateBrovaFeedback", () => {
   describe("message content", () => {
     const singleBrova = [makeBrova("b1")];
 
-    it("accepted message mentions finals release", () => {
+    // CLAUDE.md defines brova *behaviour*, not message copy. Assert the
+    // spec vocabulary the message must carry, not exact wording, so a reword
+    // doesn't fail the suite while a wrong-outcome message still would.
+    it("accepted message conveys acceptance", () => {
       const r = evaluateBrovaFeedback("accepted", singleBrova, "b1");
-      expect(r.message).toContain("Finals can be released");
+      expect(r.message.toLowerCase()).toContain("accepted");
     });
 
-    it("needs_repair_accepted message mentions send back", () => {
+    it("needs_repair_accepted message conveys a later send-back to workshop", () => {
       const r = evaluateBrovaFeedback("needs_repair_accepted", singleBrova, "b1");
-      expect(r.message).toContain("Send brova back");
+      expect(r.message.toLowerCase()).toContain("workshop");
     });
 
-    it("needs_repair_rejected with no prior acceptance -> simple rejection", () => {
+    it("needs_repair_rejected with no prior acceptance -> rejection/repair message", () => {
       const r = evaluateBrovaFeedback("needs_repair_rejected", singleBrova, "b1");
-      expect(r.message).toBe("Brova rejected \u2014 needs repair.");
+      expect(r.message.toLowerCase()).toContain("repair");
     });
 
-    it("needs_redo with no prior acceptance -> full redo message", () => {
+    // Reject-Redo: spec says discarded + workshop creates a replacement \u2014
+    // the message must carry those two concepts, not "full redo".
+    it("needs_redo message conveys discard + replacement", () => {
       const r = evaluateBrovaFeedback("needs_redo", singleBrova, "b1");
-      expect(r.message).toBe("Brova rejected \u2014 full redo needed.");
+      expect(r.message.toLowerCase()).toContain("discarded");
+      expect(r.message.toLowerCase()).toContain("replacement");
     });
 
-    it("needs_redo but another brova accepted -> message mentions finals can start", () => {
+    it("needs_redo but another brova accepted -> still releases finals", () => {
       const brovas = [
         makeBrova("b1", { acceptance_status: true, piece_stage: "brova_trialed" }),
         makeBrova("b2"),
       ];
       const r = evaluateBrovaFeedback("needs_redo", brovas, "b2");
-      expect(r.message).toContain("finals can start");
+      // The spec contract here is the behaviour, not the copy: a prior
+      // accepted brova means finals release even though this one is redone.
+      expect(r.releaseFinals).toBe(true);
     });
   });
 });
@@ -406,12 +418,12 @@ describe("getShowroomStatus", () => {
     expect(r.hasPhysicalItems).toBe(false);
   });
 
-  it("no shop items but finals in transit -> awaiting_finals", () => {
+  it("no shop items but finals in transit -> ready_for_pickup", () => {
     const gs = [
       final_({ location: "transit_to_shop", piece_stage: "ready_for_dispatch" }),
     ];
     const r = getShowroomStatus(gs);
-    expect(r.label).toBe("awaiting_finals");
+    expect(r.label).toBe("ready_for_pickup");
     expect(r.hasPhysicalItems).toBe(false);
   });
 
@@ -556,7 +568,7 @@ describe("getShowroomStatus", () => {
     expect(getShowroomStatus(gs).label).toBe("needs_action");
   });
 
-  it("brovas done at shop, finals still at workshop -> awaiting_finals", () => {
+  it("brovas done at shop, finals still at workshop -> ready_for_pickup", () => {
     const gs = [
       brova({
         location: "shop",
@@ -566,10 +578,10 @@ describe("getShowroomStatus", () => {
       }),
       final_({ location: "workshop", piece_stage: "sewing" }),
     ];
-    expect(getShowroomStatus(gs).label).toBe("awaiting_finals");
+    expect(getShowroomStatus(gs).label).toBe("ready_for_pickup");
   });
 
-  it("all shop items done but garments still out -> partial_ready", () => {
+  it("all shop items done but garments still out -> ready_for_pickup", () => {
     const gs = [
       final_({
         location: "shop",
@@ -578,7 +590,7 @@ describe("getShowroomStatus", () => {
       }),
       brova({ location: "workshop", piece_stage: "sewing" }),
     ];
-    expect(getShowroomStatus(gs).label).toBe("partial_ready");
+    expect(getShowroomStatus(gs).label).toBe("ready_for_pickup");
   });
 
   it("all shop items done and nothing outstanding -> ready_for_pickup", () => {
@@ -592,7 +604,7 @@ describe("getShowroomStatus", () => {
     expect(getShowroomStatus(gs).label).toBe("ready_for_pickup");
   });
 
-  it("finals ready, one brova still being repaired at workshop -> partial_ready", () => {
+  it("finals ready, one brova still being repaired at workshop -> ready_for_pickup", () => {
     const gs = [
       final_({
         location: "shop",
@@ -601,7 +613,7 @@ describe("getShowroomStatus", () => {
       }),
       brova({ location: "workshop", piece_stage: "sewing" }),
     ];
-    expect(getShowroomStatus(gs).label).toBe("partial_ready");
+    expect(getShowroomStatus(gs).label).toBe("ready_for_pickup");
   });
 
   describe("priority ordering", () => {
@@ -641,7 +653,7 @@ describe("getShowroomStatus", () => {
       expect(getShowroomStatus(gs).label).toBe("brova_trial");
     });
 
-    it("needs_action wins over partial_ready", () => {
+    it("needs_action wins over ready_for_pickup", () => {
       const gs = [
         brova({
           location: "shop",

@@ -1,10 +1,18 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { computeStyleGroups } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
+
+// Bounded replay for write paths that the generic fetch layer refuses to
+// retry (it only auto-retries idempotent GET/HEAD — see lib/db.ts). Safe to
+// call ONLY when the operation is idempotent: either keyed by an
+// idempotency_key/unique constraint, or a server-side idempotent RPC.
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Brand is set by the $main route loader before any queries fire.
 // This avoids localStorage and keeps brand derived from the URL.
@@ -244,90 +252,21 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
 };
 
 export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
-    // 0. Look up order_type up front so we route the order_phase flip to the
-    //    correct extension table (work_orders vs alteration_orders) at the end.
-    //    If this fails we abort — falling through to updateOrder would write to
-    //    work_orders for an alteration order, creating a phantom row.
-    const { data: orderRow, error: typeErr } = await db
-        .from(TABLE_NAME)
-        .select('order_type')
-        .eq('id', orderId)
-        .single();
-    if (typeErr || !orderRow) {
-        return { status: 'error', message: `Could not load order ${orderId}: ${typeErr?.message ?? 'not found'}` };
-    }
-
-    // 1. Update selected garments (or all if no IDs provided).
-    //    Bumping trip_number from 0 → 1 is how we mark "first dispatch from shop"
-    //    — the dispatch page filters by trip_number = 0, and workshop receiving
-    //    already expects trip 1 for incoming-first-time garments.
-    //    Gate by trip_number = 0 so this path only ever touches first-time
-    //    dispatches. Returning garments (trip ≥ 1) must go through the
-    //    "Return to Workshop" tab → dispatchGarmentToWorkshop, which bumps
-    //    trip and clears stale production state. Without this gate, a bulk
-    //    dispatch on an order containing both fresh and returning garments
-    //    silently re-stamps a returned brova as trip=1 and leaves its plan /
-    //    completion_time intact, producing a stuck waiting_cut row.
-    let query = db
-        .from('garments')
-        .update({ location: 'transit_to_workshop', trip_number: 1 })
-        .eq('order_id', orderId)
-        .eq('trip_number', 0);
-
-    if (garmentIds) {
-        query = query.in('id', garmentIds);
-    }
-
-    const { error } = await query;
-
+    // Single atomic RPC (dispatch_order, triggers.sql). It does what the old
+    // client-side orchestration did — garment flip (gated by trip_number = 0
+    // so returning garments are untouched), append-only dispatch_log audit,
+    // and the order_phase → in_progress flip routed to work_orders or
+    // alteration_orders by order_type — but in one transaction, so a partial
+    // failure can't leave a half-dispatched order. The trip_number = 0 gate
+    // keeps it idempotent for retries.
+    const { error } = await db.rpc('dispatch_order', {
+        p_order_id: orderId,
+        p_garment_ids: garmentIds ?? null,
+    });
     if (error) {
-        console.error('Error updating garments location:', error);
+        return { status: 'error', message: `Failed to dispatch order ${orderId}: ${error.message}` };
     }
-
-    // 1b. Append dispatch log entries (append-only audit for Dispatch History view).
-    // Best-effort: log failures shouldn't block the user's dispatch action.
-    try {
-        let logQuery = db
-            .from('garments')
-            .select('id, trip_number')
-            .eq('order_id', orderId)
-            .eq('location', 'transit_to_workshop')
-            .eq('trip_number', 1);
-        if (garmentIds) logQuery = logQuery.in('id', garmentIds);
-        const { data: rows } = await logQuery;
-
-        if (rows && rows.length > 0) {
-            await db.from('dispatch_log').insert(
-                rows.map((g: any) => ({
-                    garment_id: g.id,
-                    order_id: orderId,
-                    direction: 'to_workshop',
-                    trip_number: g.trip_number ?? null,
-                }))
-            );
-        }
-    } catch (logErr) {
-        console.error('Failed to write dispatch_log (non-blocking):', logErr);
-    }
-
-    // 2. Flip order_phase to "in_progress" on the first dispatch. Partial-dispatched
-    //    orders remain on the dispatch page via the trip_number=0 filter on their
-    //    remaining garments — we no longer keep the order artificially in "new".
-    //    order_phase lives on work_orders for WORK orders and alteration_orders
-    //    for ALTERATION orders. updateOrder() routes only to work_orders, so for
-    //    alteration orders we update the extension table directly.
-    if (orderRow.order_type === 'ALTERATION') {
-        const { error: phaseErr } = await db
-            .from('alteration_orders')
-            .update({ order_phase: 'in_progress' })
-            .eq('order_id', orderId);
-        if (phaseErr) {
-            console.error('Error updating alteration_orders.order_phase:', phaseErr);
-        }
-        return getOrderById(orderId);
-    }
-
-    return updateOrder({ order_phase: "in_progress" }, orderId);
+    return getOrderById(orderId);
 };
 
 // ── Dispatch History ──────────────────────────────────────────────────────
@@ -421,7 +360,7 @@ export const createOrder = async (
     
     const coreFields: any = { ...order, brand: getBrand() };
     const workFields: any = {};
-    
+
     WORK_FIELDS.forEach(f => {
         if (f in coreFields) {
             workFields[f] = coreFields[f];
@@ -429,22 +368,64 @@ export const createOrder = async (
         }
     });
 
-    const { data, error } = await db
-        .from(TABLE_NAME)
-        .insert(coreFields)
-        .select()
-        .single();
+    // Idempotency key makes the insert safe to replay: a network drop that
+    // loses the response after the row committed (Firefox/HTTP-3 QUIC) would
+    // otherwise duplicate the order on retry / manual re-click. Caller
+    // (useOrderMutations) supplies a stable key; fall back to a per-call one
+    // so direct callers still get within-call protection.
+    const idempotencyKey: string =
+        coreFields.idempotency_key ?? crypto.randomUUID();
+    coreFields.idempotency_key = idempotencyKey;
 
-    if (error) {
-        console.error('Error creating order:', error);
-        return { status: 'error', message: error.message };
+    let data: { id: number } | null = null;
+    for (let attempt = 1; ; attempt++) {
+        const res = await db
+            .from(TABLE_NAME)
+            .insert(coreFields)
+            .select()
+            .single();
+
+        if (!res.error) {
+            data = res.data;
+            break;
+        }
+
+        // 23505 on the idempotency index = a prior attempt's response was lost
+        // but the row DID commit. Recover the original instead of duplicating.
+        if (res.error.code === '23505') {
+            const recovered = await db
+                .from(TABLE_NAME)
+                .select()
+                .eq('idempotency_key', idempotencyKey)
+                .single();
+            if (!recovered.error && recovered.data) {
+                data = recovered.data;
+                break;
+            }
+        }
+
+        // Transient connection failure (swallowed by supabase-js into `error`):
+        // replay is safe because the unique key dedupes a silent commit above.
+        if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+            await sleep(WRITE_RETRY_BASE_MS * attempt);
+            continue;
+        }
+
+        console.error('Error creating order:', res.error);
+        return { status: 'error', message: res.error.message };
+    }
+
+    if (!data) {
+        return { status: 'error', message: 'Order creation failed: insert returned no row and no error' };
     }
 
     if (Object.keys(workFields).length > 0 || order.order_type === 'WORK') {
+        // Upsert (not insert): work_orders.order_id is the PK, so a recovered /
+        // replayed createOrder must not error on a pre-existing extension row.
         const { error: workError } = await db
             .from('work_orders')
-            .insert({ order_id: data.id, ...workFields });
-        
+            .upsert({ order_id: data.id, ...workFields }, { onConflict: 'order_id' });
+
         if (workError) {
             console.error('Error creating work order extension:', workError);
         }
@@ -477,11 +458,14 @@ export const updateOrder = async (
     });
 
     if (Object.keys(coreUpdates).length > 0) {
-        const { error } = await db
-            .from(TABLE_NAME)
-            .update(coreUpdates)
-            .eq('id', orderId)
-            .eq('brand', getBrand());
+        const { error } = await withWriteRetry(
+            () => db
+                .from(TABLE_NAME)
+                .update(coreUpdates)
+                .eq('id', orderId)
+                .eq('brand', getBrand()),
+            (r) => isTransientNetworkError(r.error),
+        );
 
         if (error) {
             console.error('Error updating order core:', error);
@@ -490,10 +474,13 @@ export const updateOrder = async (
     }
 
     if (Object.keys(workUpdates).length > 0) {
-        const { error } = await db
-            .from('work_orders')
-            .upsert({ order_id: orderId, ...workUpdates });
-        
+        const { error } = await withWriteRetry(
+            () => db
+                .from('work_orders')
+                .upsert({ order_id: orderId, ...workUpdates }),
+            (r) => isTransientNetworkError(r.error),
+        );
+
         if (error) {
             console.error('Error updating work order extension:', error);
             return { status: 'error', message: error.message };
@@ -685,12 +672,17 @@ export const completeWorkOrder = async (
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[]
 ): Promise<ApiResponse<Order>> => {
-    const { data, error } = await db.rpc('complete_work_order', {
-        p_order_id: orderId,
-        p_checkout_details: checkoutDetails,
-        p_shelf_items: shelfItems,
-        p_fabric_items: fabricItems
-    });
+    const p_idempotency_key = crypto.randomUUID();
+    const { data, error } = await withWriteRetry(
+        () => db.rpc('complete_work_order', {
+            p_order_id: orderId,
+            p_checkout_details: checkoutDetails,
+            p_shelf_items: shelfItems,
+            p_fabric_items: fabricItems,
+            p_idempotency_key
+        }),
+        (r) => isTransientNetworkError(r.error),
+    );
 
     if (error) {
         console.error('Error completing work order:', error);
@@ -717,11 +709,16 @@ export const completeSalesOrder = async (
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
-    const { data, error } = await db.rpc('complete_sales_order', {
-        p_order_id: orderId,
-        p_checkout_details: checkoutDetails,
-        p_shelf_items: shelfItems
-    });
+    const p_idempotency_key = crypto.randomUUID();
+    const { data, error } = await withWriteRetry(
+        () => db.rpc('complete_sales_order', {
+            p_order_id: orderId,
+            p_checkout_details: checkoutDetails,
+            p_shelf_items: shelfItems,
+            p_idempotency_key
+        }),
+        (r) => isTransientNetworkError(r.error),
+    );
 
     if (error) {
         console.error('Error completing sales order:', error);
@@ -750,11 +747,16 @@ export const createCompleteSalesOrder = async (
     },
     shelfItems: { id: number; quantity: number; unitPrice: number }[]
 ): Promise<ApiResponse<Order>> => {
-    const { data, error } = await db.rpc('create_complete_sales_order', {
-        p_customer_id: customerId,
-        p_checkout_details: { ...checkoutDetails, brand: getBrand() },
-        p_shelf_items: shelfItems
-    });
+    const p_idempotency_key = crypto.randomUUID();
+    const { data, error } = await withWriteRetry(
+        () => db.rpc('create_complete_sales_order', {
+            p_customer_id: customerId,
+            p_checkout_details: { ...checkoutDetails, brand: getBrand() },
+            p_shelf_items: shelfItems,
+            p_idempotency_key
+        }),
+        (r) => isTransientNetworkError(r.error),
+    );
 
     if (error) {
         console.error('Error creating complete sales order:', error);
@@ -778,17 +780,29 @@ export const saveWorkOrderGarments = async (
 ): Promise<ApiResponse<any>> => {
     computeStyleGroups(garments);
 
-    const { data, error } = await db.rpc('save_work_order_garments', {
-        p_order_id: orderId,
-        p_garments: garments,
-        p_order_updates: orderUpdates
-    });
+    // save_work_order_garments is idempotent server-side (serializes on the
+    // order row, upserts work_orders ON CONFLICT, deletes-then-upserts
+    // garments) — same input always converges to the same state. So a replay
+    // after a dropped response can never duplicate rows, which makes a bounded
+    // retry on transient connection failure provably safe. This is the actual
+    // "Confirm order" button that fails 2-3 times on Firefox/HTTP-3.
+    for (let attempt = 1; ; attempt++) {
+        const { data, error } = await db.rpc('save_work_order_garments', {
+            p_order_id: orderId,
+            p_garments: garments,
+            p_order_updates: orderUpdates
+        });
 
-    if (error) {
+        if (!error) return { status: 'success', data };
+
+        if (isTransientNetworkError(error) && attempt < WRITE_RETRY_ATTEMPTS) {
+            await sleep(WRITE_RETRY_BASE_MS * attempt);
+            continue;
+        }
+
         console.error('Error saving work order garments:', error);
         return { status: 'error', message: error.message };
     }
-    return { status: 'success', data };
 };
 
 /**

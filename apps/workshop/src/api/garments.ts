@@ -1,7 +1,6 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
-import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry, QcAttempt } from '@repo/database';
-import { PRODUCTION_STAGES } from '@/lib/constants';
+import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 import {
   QC_OPTIONS,
@@ -9,13 +8,17 @@ import {
   normalizeExpectedJabzour,
   type QcInputs,
 } from '@/lib/qc-spec';
-
-/** Map piece_stage → worker_history key (role-based) */
-const HISTORY_KEY_MAP: Record<string, string> = {
-  soaking: "soaker", cutting: "cutter", post_cutting: "post_cutter",
-  sewing: "sewer", finishing: "finisher", ironing: "ironer",
-  quality_check: "quality_checker",
-};
+import { PRODUCTION_STAGES } from '@/lib/constants';
+import {
+  buildScheduleTripHistoryEntry,
+  resolveFirstScheduleStage,
+  validateStageAdvance,
+  mergeWorkerHistory,
+  computeQcAttemptNumber,
+  orderQcReturnStages,
+  buildQcAttempt,
+  resolveQcOutcome,
+} from '@/lib/production-logic';
 
 /** Safely parse trip_history — handles string, array, or null from Supabase */
 function parseTripHistory(raw: unknown): TripHistoryEntry[] {
@@ -333,10 +336,13 @@ export const getHistoryGarments = async (
  */
 export const startSoakingBatch = async (ids: string[]): Promise<void> => {
   if (ids.length === 0) return;
-  const { error } = await db
-    .from('garments')
-    .update({ soaking_started_at: new Date().toISOString() })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ soaking_started_at: new Date().toISOString() })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`startSoakingBatch: failed to start soak: ${error.message}`);
 };
 
@@ -347,10 +353,13 @@ export const startSoakingBatch = async (ids: string[]): Promise<void> => {
  * advanced to cutting) becomes eligible for the cutting terminal.
  */
 export const markSoakComplete = async (ids: string[]): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({ soaking_completed_at: new Date().toISOString() })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ soaking_completed_at: new Date().toISOString() })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`markSoakComplete: failed to mark soak complete: ${error.message}`);
 };
 
@@ -858,119 +867,42 @@ export const getCompletedOrdersPage = async (
 };
 
 export const receiveGarments = async (ids: string[]): Promise<void> => {
-  // Only update location & in_production — preserve existing piece_stage
-  // (finals with brovas arrive as waiting_for_acceptance and must stay that way)
-  const { error } = await db
-    .from('garments')
-    .update({ location: 'workshop' as any, in_production: false })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db.rpc('receive_garments', { p_ids: ids, p_start: false }),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`receiveGarments: failed to mark garments as received at workshop: ${error.message}`);
-
-  // Accepted brovas go straight to ready_for_dispatch — no production needed,
-  // they're just waiting to be dispatched back with the rest of the order
-  const { error: eAccepted } = await db
-    .from('garments')
-    .update({ piece_stage: 'ready_for_dispatch' as PieceStage })
-    .in('id', ids)
-    .eq('feedback_status', 'accepted');
-  if (eAccepted) throw new Error(`receiveGarments: failed to advance accepted brovas to ready_for_dispatch: ${eAccepted.message}`);
-
-  // For return garments with non-accepted feedback, set piece_stage to waiting_cut
-  const { error: e2 } = await db
-    .from('garments')
-    .update({ piece_stage: 'waiting_cut' as PieceStage })
-    .in('id', ids)
-    .not('feedback_status', 'is', null)
-    .neq('feedback_status', 'accepted')
-    .eq('piece_stage', 'brova_trialed');
-  if (e2) throw new Error(`receiveGarments: failed to reset returning garments to waiting_cut: ${e2.message}`);
-
-  // Clear stale production fields for returning garments (trip > 1)
-  // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
-  // Keep worker_history — needed by ReturnPlanDialog to auto-populate the same team.
-  const { error: e3 } = await db
-    .from('garments')
-    .update({ production_plan: null, completion_time: null, start_time: null })
-    .in('id', ids)
-    .gt('trip_number', 1);
-  if (e3) throw new Error(`receiveGarments: failed to clear stale production fields on returning garments: ${e3.message}`);
 };
 
 export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
-  // Receive all into workshop first
-  const { error: e1 } = await db
-    .from('garments')
-    .update({ location: 'workshop' as any })
-    .in('id', ids);
-  if (e1) throw new Error(`receiveAndStartGarments: failed to mark garments as received at workshop: ${e1.message}`);
-
-  // Accepted brovas go straight to ready_for_dispatch — no production needed
-  const { error: eAccepted } = await db
-    .from('garments')
-    .update({ piece_stage: 'ready_for_dispatch' as PieceStage, in_production: false })
-    .in('id', ids)
-    .eq('feedback_status', 'accepted');
-  if (eAccepted) throw new Error(`receiveAndStartGarments: failed to advance accepted brovas to ready_for_dispatch: ${eAccepted.message}`);
-
-  // Only set in_production=true for garments NOT waiting_for_acceptance and NOT accepted
-  // (finals parked for brova trial must stay out of production).
-  // Filter in JS rather than chaining two .or() filters — PostgREST's behavior
-  // with multiple top-level or= params is finicky enough to be worth avoiding.
-  const { data: candidates, error: eFetch } = await db
-    .from('garments')
-    .select('id, piece_stage, feedback_status')
-    .in('id', ids);
-  if (eFetch) throw new Error(`receiveAndStartGarments: failed to read garments for production gating: ${eFetch.message}`);
-
-  const startIds = (candidates ?? [])
-    .filter((g) => g.piece_stage !== 'waiting_for_acceptance' && g.feedback_status !== 'accepted')
-    .map((g) => g.id);
-
-  if (startIds.length > 0) {
-    const { error: e2 } = await db
-      .from('garments')
-      .update({ in_production: true })
-      .in('id', startIds);
-    if (e2) throw new Error(`receiveAndStartGarments: failed to start production on garments: ${e2.message}`);
-  }
-
-  // For return brovas with non-accepted feedback, reset piece_stage to waiting_cut
-  // so they appear in the scheduler
-  const { error: e3 } = await db
-    .from('garments')
-    .update({ piece_stage: 'waiting_cut' as PieceStage })
-    .in('id', ids)
-    .not('feedback_status', 'is', null)
-    .neq('feedback_status', 'accepted')
-    .eq('piece_stage', 'brova_trialed');
-  if (e3) throw new Error(`receiveAndStartGarments: failed to reset returning brovas to waiting_cut: ${e3.message}`);
-
-  // Clear stale production fields for returning garments (trip > 1)
-  // so they appear fresh in the scheduler and don't ghost in terminal "Done" lists.
-  // Keep worker_history — needed by ReturnPlanDialog to auto-populate the same team.
-  const { error: e4 } = await db
-    .from('garments')
-    .update({ production_plan: null, completion_time: null, start_time: null })
-    .in('id', ids)
-    .gt('trip_number', 1);
-  if (e4) throw new Error(`receiveAndStartGarments: failed to clear stale production fields on returning garments: ${e4.message}`);
+  const { error } = await withWriteRetry(
+    () => db.rpc('receive_garments', { p_ids: ids, p_start: true }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) throw new Error(`receiveAndStartGarments: failed to mark garments as received at workshop: ${error.message}`);
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
   // Mark all as in_production
-  const { error: err1 } = await db
-    .from('garments')
-    .update({ in_production: true })
-    .in('id', ids);
+  const { error: err1 } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ in_production: true })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (err1) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${err1.message}`);
 
   // Release any finals still at waiting_for_acceptance (customer approved → straight to scheduler).
   // Clear the inherited brova plan so Scheduler picks them up — its filter requires production_plan IS NULL.
-  const { error: err2 } = await db
-    .from('garments')
-    .update({ piece_stage: 'waiting_cut' as PieceStage, production_plan: null })
-    .in('id', ids)
-    .eq('piece_stage', 'waiting_for_acceptance');
+  const { error: err2 } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ piece_stage: 'waiting_cut' as PieceStage, production_plan: null })
+      .in('id', ids)
+      .eq('piece_stage', 'waiting_for_acceptance'),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (err2) throw new Error(`sendToScheduler: failed to release waiting_for_acceptance finals: ${err2.message}`);
 };
 
@@ -978,15 +910,18 @@ export const sendReturnToProduction = async (id: string, _reentryStage: PieceSta
   // Set in_production so it appears in Scheduler's alteration tab.
   // Set piece_stage to waiting_cut (feedback_status already has the context).
   // Clear old production_plan so Scheduler knows it needs a new plan.
-  const { error } = await db
-    .from('garments')
-    .update({
-      in_production: true,
-      location: 'workshop' as any,
-      production_plan: null,
-      piece_stage: 'waiting_cut' as PieceStage,
-    })
-    .eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({
+        in_production: true,
+        location: 'workshop' as any,
+        production_plan: null,
+        piece_stage: 'waiting_cut' as PieceStage,
+      })
+      .eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`sendReturnToProduction: failed to send garment back to production: ${error.message}`);
 };
 
@@ -997,21 +932,20 @@ export const scheduleGarments = async (
   _assignedUnit?: string,
   reentryStage?: PieceStage,
 ): Promise<void> => {
-  const baseUpdate = {
-    production_plan: plan,
-    assigned_date: assignedDate,
-    in_production: true,
-    qc_rework_stages: null,
-  };
-
-  // Soaking is a parallel track now — never set piece_stage='soaking' here.
-  // First production stage is always cutting; cutting terminal gates on
-  // soaking_completed_at so soak-pending garments wait there.
-  const firstStage: PieceStage = reentryStage ?? ('cutting' as PieceStage);
-  const { error } = await db
-    .from('garments')
-    .update({ ...baseUpdate, piece_stage: firstStage })
-    .in('id', ids);
+  const firstStage = resolveFirstScheduleStage(reentryStage);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({
+        production_plan: plan,
+        assigned_date: assignedDate,
+        in_production: true,
+        qc_rework_stages: null,
+        piece_stage: firstStage,
+      })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`scheduleGarments: failed to schedule garments: ${error.message}`);
 
   // Append trip_history entry for each garment
@@ -1023,15 +957,12 @@ export const scheduleGarments = async (
   if (garments?.length) {
     await Promise.all(garments.map((g: any) => {
       const history = parseTripHistory(g.trip_history);
-      history.push({
-        trip: g.trip_number ?? 1,
-        reentry_stage: reentryStage ?? null,
-        production_plan: plan,
-        worker_history: null,
-        assigned_date: assignedDate,
-        completed_date: null,
-        qc_attempts: [],
-      });
+      history.push(buildScheduleTripHistoryEntry({
+        tripNumber: g.trip_number ?? 1,
+        plan,
+        assignedDate,
+        reentryStage,
+      }));
       return db.from('garments').update({ trip_history: history }).eq('id', g.id);
     }));
   }
@@ -1044,11 +975,14 @@ export const scheduleGarments = async (
       .in('id', ids);
     if (scheduled?.length) {
       const orderIds = [...new Set(scheduled.map((g: any) => g.order_id))];
-      await db
-        .from('garments')
-        .update({ production_plan: plan })
-        .in('order_id', orderIds)
-        .eq('piece_stage', 'waiting_for_acceptance');
+      await withWriteRetry(
+        () => db
+          .from('garments')
+          .update({ production_plan: plan })
+          .in('order_id', orderIds)
+          .eq('piece_stage', 'waiting_for_acceptance'),
+        (r) => isTransientNetworkError(r.error),
+      );
     }
   }
 };
@@ -1068,10 +1002,13 @@ export const startGarment = async (id: string): Promise<void> => {
     ? openStageSession(parseStageTimings(existing?.stage_timings), stage, now)
     : parseStageTimings(existing?.stage_timings);
 
-  const { error } = await db
-    .from('garments')
-    .update({ start_time: now, stage_timings: nextTimings })
-    .eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ start_time: now, stage_timings: nextTimings })
+      .eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`startGarment: failed to record garment start time: ${error.message}`);
 };
 
@@ -1087,10 +1024,13 @@ export const cancelStartGarment = async (id: string): Promise<void> => {
     ? discardOpenStageSession(parseStageTimings(existing?.stage_timings), stage)
     : parseStageTimings(existing?.stage_timings);
 
-  const { error } = await db
-    .from('garments')
-    .update({ start_time: null, stage_timings: nextTimings })
-    .eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ start_time: null, stage_timings: nextTimings })
+      .eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`cancelStartGarment: failed to clear start time: ${error.message}`);
 };
 
@@ -1110,27 +1050,30 @@ export const completeAndAdvance = async (
   if (fetchErr) throw new Error(`completeAndAdvance: failed to fetch garment for stage advance: ${fetchErr.message}`);
 
   // Stage validation: reject if garment is not at the claimed stage
-  if (existing?.piece_stage !== stage) {
-    throw new Error(`Cannot advance: garment is at "${existing?.piece_stage}", not "${stage}"`);
-  }
+  validateStageAdvance(existing?.piece_stage, stage);
 
-  const history = (existing?.worker_history as Record<string, string>) ?? {};
-  const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
-  history[historyKey] = workerName;
+  const history = mergeWorkerHistory(
+    (existing?.worker_history as Record<string, string>) ?? {},
+    stage,
+    workerName,
+  );
 
   const now = new Date().toISOString();
   const nextTimings = closeStageSession(parseStageTimings(existing?.stage_timings), stage, workerName, now);
 
-  const { error } = await db
-    .from('garments')
-    .update({
-      piece_stage: nextStage as PieceStage,
-      completion_time: now,
-      start_time: null,
-      worker_history: history,
-      stage_timings: nextTimings,
-    })
-    .eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({
+        piece_stage: nextStage as PieceStage,
+        completion_time: now,
+        start_time: null,
+        worker_history: history,
+        stage_timings: nextTimings,
+      })
+      .eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`completeAndAdvance: failed to advance garment to next stage: ${error.message}`);
 };
 
@@ -1202,32 +1145,26 @@ export const submitQc = async (
   }
   if (!Array.isArray(tripEntry.qc_attempts)) tripEntry.qc_attempts = [];
 
-  const attemptNumber = tripEntry.qc_attempts.filter((a) => a.trip === currentTrip || a.trip == null).length + 1;
+  const orderedStages = orderQcReturnStages(returnStages, PRODUCTION_STAGES);
+  const attemptNumber = computeQcAttemptNumber(tripEntry, currentTrip);
 
-  const orderedStages = returnStages
-    ? [...returnStages].sort(
-        (a, b) => PRODUCTION_STAGES.indexOf(a as any) - PRODUCTION_STAGES.indexOf(b as any),
-      )
-    : null;
-
-  const attempt: QcAttempt = {
+  const attempt = buildQcAttempt({
     inspector,
     date: getLocalDateStr(),
     result: evalResult.result,
     trip: currentTrip,
-    attempt_number: attemptNumber,
-    measurements: inputs.measurements,
-    options: inputs.options,
-    quality_ratings: inputs.quality_ratings,
-    failed_measurements: evalResult.failed_measurements,
-    failed_options: evalResult.failed_options,
-    failed_quality: evalResult.failed_quality,
-    return_stages: orderedStages,
-  };
+    attemptNumber,
+    inputs,
+    evalResult,
+    orderedStages,
+  });
   tripEntry.qc_attempts.push(attempt);
 
-  const history = (existing?.worker_history as Record<string, string>) ?? {};
-  history['quality_checker'] = inspector;
+  const history = mergeWorkerHistory(
+    (existing?.worker_history as Record<string, string>) ?? {},
+    'quality_check',
+    inspector,
+  );
   tripEntry.worker_history = history;
 
   const nextTimings = closeStageSession(
@@ -1237,33 +1174,40 @@ export const submitQc = async (
     now,
   );
 
+  const { piece_stage: nextStage, qc_rework_stages } = resolveQcOutcome(evalResult, orderedStages);
+
   if (evalResult.result === 'pass') {
     tripEntry.completed_date = getLocalDateStr();
-    const { error } = await db
-      .from('garments')
-      .update({
-        piece_stage: 'ready_for_dispatch' as PieceStage,
-        worker_history: history,
-        completion_time: now,
-        start_time: null,
-        trip_history: tripHistory,
-        stage_timings: nextTimings,
-        qc_rework_stages: null,
-      })
-      .eq('id', id);
+    const { error } = await withWriteRetry(
+      () => db
+        .from('garments')
+        .update({
+          piece_stage: nextStage,
+          worker_history: history,
+          completion_time: now,
+          start_time: null,
+          trip_history: tripHistory,
+          stage_timings: nextTimings,
+          qc_rework_stages,
+        })
+        .eq('id', id),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (error) throw new Error(`submitQc: failed to record QC pass: ${error.message}`);
   } else {
-    const firstStage = orderedStages![0]!;
-    const { error } = await db
-      .from('garments')
-      .update({
-        piece_stage: firstStage,
-        start_time: null,
-        trip_history: tripHistory,
-        stage_timings: nextTimings,
-        qc_rework_stages: orderedStages,
-      })
-      .eq('id', id);
+    const { error } = await withWriteRetry(
+      () => db
+        .from('garments')
+        .update({
+          piece_stage: nextStage,
+          start_time: null,
+          trip_history: tripHistory,
+          stage_timings: nextTimings,
+          qc_rework_stages,
+        })
+        .eq('id', id),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (error) throw new Error(`submitQc: failed to record QC fail: ${error.message}`);
   }
 
@@ -1271,31 +1215,11 @@ export const submitQc = async (
 };
 
 export const dispatchGarments = async (ids: string[]): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({ location: 'transit_to_shop', in_production: false, feedback_status: null })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db.rpc('dispatch_garments_to_shop', { p_ids: ids }),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`dispatchGarments: failed to dispatch garments to shop: ${error.message}`);
-
-  // Append dispatch log entries (best-effort; don't block on failure).
-  try {
-    const { data: rows } = await db
-      .from('garments')
-      .select('id, order_id, trip_number')
-      .in('id', ids);
-    if (rows && rows.length > 0) {
-      await db.from('dispatch_log').insert(
-        rows.map((g: any) => ({
-          garment_id: g.id,
-          order_id: g.order_id,
-          direction: 'to_shop',
-          trip_number: g.trip_number ?? null,
-        }))
-      );
-    }
-  } catch (logErr) {
-    console.error('Failed to write dispatch_log (non-blocking):', logErr);
-  }
 };
 
 // ── Dispatch History ──────────────────────────────────────────────────────
@@ -1370,11 +1294,10 @@ export const getDispatchHistory = async (
 
 /** Release finals from waiting_for_acceptance → waiting_cut so they can enter production */
 export const releaseFinals = async (ids: string[]): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({ piece_stage: 'waiting_cut' as PieceStage, in_production: false })
-    .in('id', ids)
-    .eq('piece_stage', 'waiting_for_acceptance');
+  const { error } = await withWriteRetry(
+    () => db.rpc('release_finals', { p_ids: ids }),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`releaseFinals: failed to release finals from waiting_for_acceptance: ${error.message}`);
 };
 
@@ -1387,15 +1310,18 @@ export const releaseFinalsWithPlan = async (
   assignedDate: string,
   _assignedUnit?: string,
 ): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({
-      piece_stage: 'cutting' as PieceStage,
-      in_production: true,
-      production_plan: plan,
-      assigned_date: assignedDate,
-    })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({
+        piece_stage: 'cutting' as PieceStage,
+        in_production: true,
+        production_plan: plan,
+        assigned_date: assignedDate,
+      })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`releaseFinalsWithPlan: failed to release finals with production plan: ${error.message}`);
 };
 
@@ -1495,10 +1421,13 @@ export const updateGarmentDetails = async (
   // If nothing left to update, skip
   if (Object.keys(filtered).length === 0) return;
 
-  const { error } = await db
-    .from('garments')
-    .update(filtered)
-    .eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update(filtered)
+      .eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`updateGarmentDetails: failed to update garment details: ${error.message}`);
 };
 
@@ -1518,19 +1447,25 @@ export const updateOrderDeliveryDate = async (orderId: number, date: string): Pr
 
   const oldDate = wo.delivery_date as string | null;
 
-  const { error: orderErr } = await db
-    .from('work_orders')
-    .update({ delivery_date: date })
-    .eq('order_id', orderId);
+  const { error: orderErr } = await withWriteRetry(
+    () => db
+      .from('work_orders')
+      .update({ delivery_date: date })
+      .eq('order_id', orderId),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (orderErr) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${orderErr.message}`);
 
   // Cascade to garments that currently share the old order date.
   if (oldDate) {
-    const { error: gErr } = await db
-      .from('garments')
-      .update({ delivery_date: date })
-      .eq('order_id', orderId)
-      .eq('delivery_date', oldDate);
+    const { error: gErr } = await withWriteRetry(
+      () => db
+        .from('garments')
+        .update({ delivery_date: date })
+        .eq('order_id', orderId)
+        .eq('delivery_date', oldDate),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (gErr) throw new Error(`updateOrderDeliveryDate: failed to cascade to garments: ${gErr.message}`);
   }
 };
@@ -1643,20 +1578,26 @@ export const getOrderLocationBreakdown = async (
 
 /** Mark garments as lost in transit — they were dispatched but never arrived */
 export const markLostInTransit = async (ids: string[]): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({ location: 'lost_in_transit' as any, in_production: false })
-    .in('id', ids);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ location: 'lost_in_transit' as any, in_production: false })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`markLostInTransit: failed to mark garments as lost in transit: ${error.message}`);
 };
 
 /** Bulk update assigned_date for all garments in an order */
 export const updateOrderAssignedDate = async (orderId: number, date: string): Promise<void> => {
-  const { error } = await db
-    .from('garments')
-    .update({ assigned_date: date })
-    .eq('order_id', orderId)
-    .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null');
+  const { error } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ assigned_date: date })
+      .eq('order_id', orderId)
+      .or('piece_stage.neq.waiting_for_acceptance,piece_stage.is.null'),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`updateOrderAssignedDate: failed to update order assigned date: ${error.message}`);
 };
 
@@ -1803,15 +1744,39 @@ export const createGarmentForOrder = async (
   if (!inserted) throw new Error('createGarmentForOrder: insert returned no row');
 
   if (replacesGarmentId) {
-    const { error: linkErr } = await db
-      .from('garments')
-      .update({ replaced_by_garment_id: inserted.id })
-      .eq('id', replacesGarmentId)
-      .is('replaced_by_garment_id', null);
+    const { error: linkErr } = await withWriteRetry(
+      () => db
+        .from('garments')
+        .update({ replaced_by_garment_id: inserted.id })
+        .eq('id', replacesGarmentId)
+        .is('replaced_by_garment_id', null),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (linkErr) {
       throw new Error(`createGarmentForOrder: failed to link replacement on original: ${linkErr.message}`);
     }
   }
 
   return inserted as { id: string; garment_id: string };
+};
+
+/**
+ * Create a replacement garment by cloning the original server-side via RPC.
+ * Used for the Reject-Redo path where the original garment row is discarded
+ * and the server creates a new row inheriting the original's specs + linking
+ * the replaced_by_garment_id FK on the original.
+ *
+ * CLAUDE.md: "Workshop manually creates a new garment row (createGarmentForOrder
+ * with replaces_garment_id FK link); it inherits specs, starts fresh at
+ * trip 1 / waiting_cut."
+ */
+export const createReplacementGarment = async (
+  replacesGarmentId: string,
+): Promise<{ id: string; garment_id: string }> => {
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('create_replacement_garment', { p_replaces_garment_id: replacesGarmentId }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) throw new Error(`createReplacementGarment: failed to create replacement garment: ${error.message}`);
+  return data as { id: string; garment_id: string };
 };

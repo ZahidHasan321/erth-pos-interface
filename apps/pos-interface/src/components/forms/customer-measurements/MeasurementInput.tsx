@@ -69,7 +69,7 @@ export const MeasurementInput = forwardRef<
         const hasError = !!fieldState.error;
         return (
           <FormItem className={className}>
-            <FormLabel className={cn("text-xs text-muted-foreground", labelClassName)}>{label}</FormLabel>
+            <FormLabel className={cn("text-sm text-muted-foreground", labelClassName)}>{label}</FormLabel>
             {isComputed ? (
               <div className="text-sm font-semibold text-foreground/70 tabular-nums h-10 flex items-center">
                 {typeof field.value === "number" && field.value !== 0

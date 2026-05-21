@@ -8,6 +8,10 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reset": "tsx scripts/reset.ts",
     "db:triggers": "tsx scripts/apply-triggers.ts",
+    "db:apply-login-rpc": "tsx scripts/apply-login-rpc.ts",
+    "db:apply-approve-reject-rpc": "tsx scripts/apply-approve-reject-rpc.ts",
+    "db:apply-restock-ref-fix": "tsx scripts/apply-restock-ref-fix.ts",
+    "db:test-approve-reject": "tsx scripts/test-approve-reject-transfer.ts",
     "db:setup-storage": "tsx scripts/apply-storage-setup.ts",
     "db:add-alteration-orders": "tsx scripts/add-alteration-orders.ts",
     "db:add-qc-rework-stages": "tsx scripts/add-qc-rework-stages-col.ts",
@@ -17,13 +21,16 @@
     "db:add-inventory-extras": "tsx scripts/add-inventory-extras.ts",
     "db:backfill-stock-movements": "tsx scripts/backfill-stock-movements.ts",
     "db:test": "tsx scripts/test-queries.ts",
+    "db:test-idempotency": "tsx scripts/test-idempotency.ts",
     "db:seed-receiving": "tsx scripts/seed-receiving.ts",
+    "db:seed-shelf": "tsx scripts/seed-shelf.ts",
     "db:seed-terminal-users": "tsx scripts/seed-terminal-users.ts",
     "db:seed-office-users": "tsx scripts/seed-office-users.ts",
     "db:migrate-styles-pricing": "tsx scripts/migrate-styles-pricing.ts",
     "db:import-airtable": "tsx scripts/import-airtable.ts",
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:workflow": "vitest run --config vitest.workflow.config.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.1",

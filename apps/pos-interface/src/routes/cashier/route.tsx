@@ -11,7 +11,7 @@ import { Banknote, History, FileText, LogOut } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { useAuth } from "@/context/auth";
 import { getBrand, setCurrentBrand } from "@/api/orders";
-import { BRAND_NAMES } from "@/lib/constants";
+import { BRAND_NAMES, brandUsesCashier } from "@/lib/constants";
 import { router } from "@/router";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import ErthLogo from "@/assets/erth-light.svg";
@@ -40,12 +40,18 @@ export const Route = createFileRoute("/cashier")({
                 search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
             });
         }
+        // Brand gate: the cashier shell only exists for brands on the
+        // deferred-payment model (BRANDS_WITH_CASHIER). Deny direct-URL
+        // access for any other brand, regardless of role.
+        const userBrand = Array.isArray(user?.brands) ? user.brands[0] : null;
+        if (!brandUsesCashier(userBrand)) {
+            throw redirect({ to: "/" });
+        }
         // Cashier role is bound to a single brand stamped on their user row.
         // Without setting it here their API calls would fall back to the
         // module-level default ("ERTH") and silently leak across brands.
-        if (user?.role === "cashier") {
-            const first = Array.isArray(user.brands) ? user.brands[0] : null;
-            if (first) setCurrentBrand(first);
+        if (user?.role === "cashier" && userBrand) {
+            setCurrentBrand(userBrand);
         }
     },
     head: () => ({

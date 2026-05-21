@@ -79,6 +79,19 @@ export function TransferDetailDrawer({ open, onClose, transfer }: Props) {
     return items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
   }, [items, action]);
 
+  // The DB rejects a dispatch that exceeds source stock; block it client-side
+  // too so the user gets a clear in-place signal instead of a server error
+  // toast after submit.
+  const dispatchOverStock = useMemo(() => {
+    if (action !== "dispatch" || !transfer) return false;
+    return items.some((i) => {
+      const it = transfer.items.find((t) => t.id === i.id);
+      if (!it) return false;
+      const src = sourceStockOf(transfer, it);
+      return src != null && (Number(i.qty) || 0) > src;
+    });
+  }, [items, action, transfer]);
+
   if (!transfer) return null;
 
   const srcSide = sourceSideOf(transfer.direction);
@@ -130,6 +143,10 @@ export function TransferDetailDrawer({ open, onClose, transfer }: Props) {
   function handleDispatch() {
     if (totalDispatchQty <= 0) {
       toast.error("Dispatch quantity must be greater than zero");
+      return;
+    }
+    if (dispatchOverStock) {
+      toast.error("A line exceeds available source stock — lower it before dispatching");
       return;
     }
     const payload = items.map((i) => ({ id: i.id, dispatched_qty: Number(i.qty) }));
@@ -392,7 +409,7 @@ export function TransferDetailDrawer({ open, onClose, transfer }: Props) {
 
           {action === "dispatch" && (
             <div className="flex gap-2 justify-end">
-              <Button onClick={handleDispatch} disabled={dispatchMut.isPending || totalDispatchQty <= 0}>
+              <Button onClick={handleDispatch} disabled={dispatchMut.isPending || totalDispatchQty <= 0 || dispatchOverStock}>
                 {dispatchMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                 <Send className="h-4 w-4 mr-1" /> Dispatch
               </Button>

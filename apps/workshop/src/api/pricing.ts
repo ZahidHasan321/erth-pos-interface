@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Brand, Price, Style, StylePricingRule, StyleRuleType } from "@repo/database";
 
 // ── Prices (key-value system prices) ────────────────────────────────────────
@@ -21,13 +21,16 @@ export const updatePrice = async (
 ): Promise<Price> => {
   const updates: Record<string, unknown> = { value, updated_at: new Date().toISOString() };
   if (description !== undefined) updates.description = description;
-  const { data, error } = await db
-    .from("prices")
-    .update(updates)
-    .eq("key", key)
-    .eq("brand", brand)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from("prices")
+      .update(updates)
+      .eq("key", key)
+      .eq("brand", brand)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`updatePrice: failed to update price for key=${key} brand=${brand}: ${error.message}`);
   return data;
 };
@@ -49,12 +52,15 @@ export const updateStylePrice = async (
   id: number,
   rate_per_item: number,
 ): Promise<Style> => {
-  const { data, error } = await db
-    .from("styles")
-    .update({ rate_per_item })
-    .eq("id", id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from("styles")
+      .update({ rate_per_item })
+      .eq("id", id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`updateStylePrice: failed to update style price for id=${id}: ${error.message}`);
   return data;
 };
@@ -98,12 +104,15 @@ export const upsertStylePricingRule = async (
   };
 
   if (input.id) {
-    const { data, error } = await db
-      .from("style_pricing_rules")
-      .update(payload)
-      .eq("id", input.id)
-      .select()
-      .single();
+    const { data, error } = await withWriteRetry(
+      () => db
+        .from("style_pricing_rules")
+        .update(payload)
+        .eq("id", input.id)
+        .select()
+        .single(),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (error) throw new Error(`upsertStylePricingRule: failed to update rule id=${input.id}: ${error.message}`);
     return data;
   }
@@ -118,9 +127,12 @@ export const upsertStylePricingRule = async (
 };
 
 export const deleteStylePricingRule = async (id: number): Promise<void> => {
-  const { error } = await db
-    .from("style_pricing_rules")
-    .delete()
-    .eq("id", id);
+  const { error } = await withWriteRetry(
+    () => db
+      .from("style_pricing_rules")
+      .delete()
+      .eq("id", id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`deleteStylePricingRule: failed to delete rule id=${id}: ${error.message}`);
 };

@@ -1,6 +1,6 @@
 import type { ApiResponse } from "../types/api";
 import type { Garment } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { getBrand } from "./orders";
 
@@ -10,12 +10,15 @@ export const updateGarment = async (
   id: string,
   garment: Partial<Garment>
 ): Promise<ApiResponse<Garment>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update(garment)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .update(garment)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error('updateGarment: failed to update garment:', error);
@@ -33,12 +36,15 @@ export const bulkRepointMeasurement = async (
   oldMeasurementId: string,
   newMeasurementId: string,
 ): Promise<ApiResponse<Garment[]>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update({ measurement_id: newMeasurementId })
-    .eq('order_id', orderId)
-    .eq('measurement_id', oldMeasurementId)
-    .select();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .update({ measurement_id: newMeasurementId })
+      .eq('order_id', orderId)
+      .eq('measurement_id', oldMeasurementId)
+      .select(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error('bulkRepointMeasurement: failed to repoint sibling brova garments:', error);
@@ -56,12 +62,15 @@ export const bulkUpdateStyleFields = async (
   styleId: number,
   fields: Partial<Garment>,
 ): Promise<ApiResponse<Garment[]>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update(fields)
-    .eq('order_id', orderId)
-    .eq('style_id', styleId)
-    .select();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .update(fields)
+      .eq('order_id', orderId)
+      .eq('style_id', styleId)
+      .select(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error('bulkUpdateStyleFields: failed to update sibling style fields:', error);

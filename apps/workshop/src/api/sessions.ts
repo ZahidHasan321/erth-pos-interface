@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { UserSession } from "@repo/database";
 
 const ONLINE_THRESHOLD_SECONDS = 90;
@@ -8,25 +8,31 @@ export const upsertSession = async (
   userId: string,
   deviceInfo?: string
 ): Promise<void> => {
-  const { error } = await db
-    .from("user_sessions")
-    .upsert(
-      {
-        user_id: userId,
-        last_active_at: new Date().toISOString(),
-        device_info: deviceInfo,
-      },
-      { onConflict: "user_id" },
-    );
+  const { error } = await withWriteRetry(
+    () => db
+      .from("user_sessions")
+      .upsert(
+        {
+          user_id: userId,
+          last_active_at: new Date().toISOString(),
+          device_info: deviceInfo,
+        },
+        { onConflict: "user_id" },
+      ),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`upsertSession: failed to upsert heartbeat for user ${userId}: ${error.message}`);
 };
 
 /** Remove session on logout */
 export const endSession = async (userId: string): Promise<void> => {
-  const { error } = await db
-    .from("user_sessions")
-    .delete()
-    .eq("user_id", userId);
+  const { error } = await withWriteRetry(
+    () => db
+      .from("user_sessions")
+      .delete()
+      .eq("user_id", userId),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`endSession: failed to delete session for user ${userId}: ${error.message}`);
 };
 

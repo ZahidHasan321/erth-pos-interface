@@ -38,7 +38,7 @@ const Step: React.FC<StepProps> = ({
             isCompleted
               ? "border-primary bg-linear-to-br from-primary to-primary/90 text-primary-foreground shadow-primary/25"
               : isActive
-                ? "border-secondary bg-linear-to-br from-secondary/10 to-secondary/20 text-secondary font-bold shadow-secondary/20 scale-105"
+                ? "border-primary bg-primary/10 text-primary font-bold shadow-primary/20 scale-105"
                 : "border-border bg-background text-muted-foreground"
           )}
         >
@@ -55,7 +55,7 @@ const Step: React.FC<StepProps> = ({
           className={cn(
             "text-xs sm:text-xs font-medium transition-all max-w-[60px] sm:max-w-[80px] md:max-w-none line-clamp-2 md:line-clamp-1",
             isActive
-              ? "text-secondary font-semibold"
+              ? "text-primary font-semibold"
               : isCompleted
                 ? "text-primary font-medium"
                 : "text-muted-foreground"
@@ -107,7 +107,7 @@ export const HorizontalStepper: React.FC<StepperProps> = ({
                     completedSteps.includes(index)
                       ? "bg-linear-to-r from-primary to-primary/80"
                       : index === currentStep
-                        ? "bg-linear-to-r from-secondary/60 to-secondary/30"
+                        ? "bg-primary/40"
                         : "bg-border"
                   )}
                 />

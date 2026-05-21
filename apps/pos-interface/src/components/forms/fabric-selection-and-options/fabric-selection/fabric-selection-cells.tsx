@@ -502,7 +502,7 @@ export const FabricLengthCell = ({
                                 }}
                             />
                             {exceedsStock && !error && (
-                                <span className="text-xs text-destructive">
+                                <span className="text-sm text-destructive">
                                     Exceeds stock ({available.toFixed(1)}m)
                                 </span>
                             )}
@@ -541,7 +541,7 @@ export const SoakingCell = ({
                 control={control}
                 render={({ field }) => (
                     <>
-                        <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
+                        <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
                             <Checkbox
                                 checked={field.value === 8}
                                 onCheckedChange={(c) => setHours(8, !!c)}
@@ -549,7 +549,7 @@ export const SoakingCell = ({
                             />
                             <span>8h</span>
                         </label>
-                        <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
+                        <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
                             <Checkbox
                                 checked={field.value === 24}
                                 onCheckedChange={(c) => setHours(24, !!c)}

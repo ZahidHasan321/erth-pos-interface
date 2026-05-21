@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
@@ -55,15 +55,26 @@ interface RefundItemSelectorProps {
     soaking24hPrice: number;
     totalPaid?: number;
     onRefundItemsChange: (items: RefundItem[], total: number) => void;
+    resetKey?: number | string;
 }
 
 const num = (v: string | number | null | undefined): number => Number(v) || 0;
 const fmt = (n: number): string => Number(n.toFixed(3)).toString();
 
-export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soaking8hPrice, soaking24hPrice, totalPaid, onRefundItemsChange }: RefundItemSelectorProps) {
+export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soaking8hPrice, soaking24hPrice, totalPaid, onRefundItemsChange, resetKey }: RefundItemSelectorProps) {
     const [garmentSelections, setGarmentSelections] = useState<Record<string, GarmentRefundSelection>>({});
     const [shelfSelections, setShelfSelections] = useState<Record<number, ShelfRefundSelection>>({});
     const [fabricRestock, setFabricRestock] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        if (resetKey === undefined) return;
+        setGarmentSelections({});
+        setShelfSelections({});
+        setFabricRestock({});
+        onRefundItemsChange([], 0);
+        // onRefundItemsChange is referenced but should fire once per resetKey change
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resetKey]);
 
     type Component = "fabric" | "stitching" | "style" | "express" | "soaking";
 
@@ -258,9 +269,6 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                         />
                         <span className="text-sm font-medium">Select All</span>
                     </label>
-                    {refundTotal > 0 && (
-                        <span className="text-xs font-bold text-red-600 tabular-nums">{fmt(refundTotal)} KWD</span>
-                    )}
                 </div>
             )}
 
@@ -271,6 +279,9 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                         const isBrova = g.garment_type === "brova";
                         const fullyRefunded = isFullyRefundedGarment(g);
                         const hasAnySelection = allComponents.some(c => sel[c]);
+                        const allAvailableSelected = allComponents.every(c => !isAvailable(g, c) || sel[c]);
+                        const headerCheckState: boolean | "indeterminate" =
+                            hasAnySelection && allAvailableSelected ? true : hasAnySelection ? "indeterminate" : false;
 
                         if (fullyRefunded) {
                             return (
@@ -291,7 +302,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                             >
                                 <div className="flex items-center gap-2">
                                     <Checkbox
-                                        checked={hasAnySelection}
+                                        checked={headerCheckState}
                                         onCheckedChange={() => toggleAllGarmentComponents(g.id, g)}
                                         aria-label="Select all components"
                                     />
@@ -420,16 +431,10 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                 </div>
             )}
 
-            {refundTotal > 0 && (
-                <div className="pt-2 border-t border-red-200 space-y-1">
-                    <div className="flex justify-between items-center">
-                        <span className="text-sm font-semibold text-red-700">Selected refund total</span>
-                        <span className="text-sm font-bold text-red-700 tabular-nums">{fmt(refundTotal)} KWD</span>
-                    </div>
-                    {totalPaid !== undefined && refundTotal > totalPaid && (
-                        <p className="text-[11px] text-red-600 font-medium">Exceeds total paid ({fmt(totalPaid)} KWD) — amount will need to be adjusted</p>
-                    )}
-                </div>
+            {totalPaid !== undefined && refundTotal > totalPaid && (
+                <p className="pt-2 text-[11px] text-red-600 font-medium border-t border-red-200">
+                    Exceeds total paid ({fmt(totalPaid)} KWD) — amount will need to be adjusted
+                </p>
             )}
         </div>
     );

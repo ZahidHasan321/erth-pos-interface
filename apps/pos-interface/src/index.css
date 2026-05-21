@@ -55,52 +55,47 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 
-  /* Base surface and text - subtle off-white so cards stand out */
-  --background: oklch(0.965 0.005 100);
-  /* warm off-white background */
-  --foreground: oklch(0.15 0.03 100);
-  /* deep neutral text */
+  /* Neutral operational base — cool near-white page, white cards pop via border.
+     Brand hue lives ONLY in --primary (see .erth / .sakkba) so chrome stays
+     neutral regardless of brand. */
+  --background: oklch(0.971 0.002 250);
+  /* cool near-white (Stripe #f6f8fa) */
+  --foreground: oklch(0.21 0.012 255);
+  /* deep cool ink */
 
   --card: oklch(1 0 0);
-  /* pure white for modern look */
-  --card-foreground: oklch(0.18 0.03 100);
+  /* pure white */
+  --card-foreground: oklch(0.21 0.012 255);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.21 0.012 255);
 
-  /* Brand colors - enhanced vibrancy while staying muted */
-  --primary: oklch(0.38 0.12 165);
-  /* richer forest green with more saturation */
-  --primary-foreground: oklch(0.98 0.01 165);
-  /* crisp white for contrast */
+  /* Primary — neutral dark slate by default; brand classes recolor this only */
+  --primary: oklch(0.30 0.018 255);
+  --primary-foreground: oklch(0.985 0 0);
 
-  --secondary: oklch(0.55 0.18 35);
-  /* warmer earthy terracotta with more color */
-  --secondary-foreground: oklch(0.99 0.01 35);
-  /* clean white text */
+  /* Secondary — neutral surface, not a second brand color */
+  --secondary: oklch(0.955 0.003 255);
+  --secondary-foreground: oklch(0.30 0.015 255);
 
-  --accent: oklch(0.88 0.08 85);
-  /* soft golden-beige with more warmth */
-  --accent-foreground: oklch(0.25 0.04 85);
-  /* darker text for better contrast */
+  /* Accent — neutral hover/active surface (ghost & outline buttons) */
+  --accent: oklch(0.945 0.004 255);
+  --accent-foreground: oklch(0.24 0.015 255);
 
-  /* Supporting colors - more defined */
-  --muted: oklch(0.96 0 0);
-  /* pure neutral gray, no tint */
-  --muted-foreground: oklch(0.40 0 0);
-  /* darker neutral gray text for legibility */
+  /* Supporting neutrals */
+  --muted: oklch(0.955 0.003 255);
+  --muted-foreground: oklch(0.47 0.012 255);
 
   /* Utility colors */
   --destructive: oklch(0.58 0.22 25);
-  /* muted red with better saturation */
-  --border: oklch(0.88 0 0);
-  /* neutral border */
-  --input: oklch(0.82 0 0);
-  /* visible input border */
-  --ring: oklch(0.60 0.08 165);
-  /* primary-based ring color */
+  --border: oklch(0.905 0.004 255);
+  /* visible neutral border (~#d6dde6) — carries card depth */
+  --input: oklch(0.87 0.005 255);
+  /* slightly darker so inputs read as fields */
+  --ring: oklch(0.55 0.02 255);
+  /* follows primary; brand classes recolor */
 
   /* Chart colors - harmonious palette */
   --chart-1: oklch(0.65 0.20 40);
@@ -114,65 +109,37 @@
   --chart-5: oklch(0.68 0.16 25);
   /* coral-red */
 
-  /* Sidebar */
+  /* Sidebar — white panel, neutral chrome; only the active item carries brand */
   --sidebar: oklch(1 0 0);
-  /* pure white for modern look */
-  --sidebar-foreground: oklch(0.18 0.03 100);
+  --sidebar-foreground: oklch(0.21 0.012 255);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: oklch(0.90 0 0);
-  /* pure neutral sidebar border */
-  --sidebar-ring: oklch(0.60 0.08 165);
+  --sidebar-accent: oklch(0.955 0.003 255);
+  --sidebar-accent-foreground: oklch(0.24 0.015 255);
+  --sidebar-border: oklch(0.91 0.004 255);
+  --sidebar-ring: var(--ring);
 }
 
-/* Erth Brand Theme - Deep Green */
+/* Brand themes recolor ONLY the primary/accent role — logo, primary buttons,
+   active nav, focus ring. All chrome (borders, surfaces, muted, inputs) stays
+   the neutral base above so the app reads professional on any brand. */
+
+/* Erth — very dark green */
 .erth {
-  --primary: oklch(0.25 0.12 155);
-  /* deep forest green ~950 */
-  --primary-foreground: oklch(0.98 0.01 155);
-  --secondary: oklch(0.45 0.15 165);
-  /* vibrant emerald green */
-  --secondary-foreground: oklch(0.99 0.01 165);
-  --accent: oklch(0.88 0.08 140);
-  /* soft sage green */
-  --accent-foreground: oklch(0.25 0.06 155);
-  --muted: oklch(0.95 0.02 150);
-  /* very light green-tinted gray */
-  --muted-foreground: oklch(0.37 0.04 155);
-  --border: oklch(0.86 0.03 150);
-  /* green-tinted border */
-  --input: oklch(0.80 0.03 155);
-  /* visible input border */
-  --ring: oklch(0.35 0.10 155);
-  --sidebar-primary: oklch(0.30 0.12 155);
-  --sidebar-accent: oklch(0.88 0.08 140);
-  --sidebar-border: oklch(0.88 0.03 150);
-  --sidebar-ring: oklch(0.35 0.10 155);
+  --primary: oklch(0.26 0.075 158);
+  --primary-foreground: oklch(0.98 0.01 158);
+  --ring: oklch(0.40 0.075 158);
+  --sidebar-primary: var(--primary);
+  --sidebar-ring: var(--ring);
 }
 
-/* Sakkba Brand Theme - Muted Navy Blue */
+/* Sakkba — very dark navy blue */
 .sakkba {
-  --primary: oklch(0.25 0.06 250);
-  /* muted navy blue ~950 */
-  --primary-foreground: oklch(0.98 0.01 250);
-  --secondary: oklch(0.48 0.08 255);
-  /* soft muted blue */
-  --secondary-foreground: oklch(0.99 0.01 255);
-  --accent: oklch(0.88 0.03 245);
-  /* very subtle slate blue */
-  --accent-foreground: oklch(0.28 0.04 250);
-  --muted: oklch(0.95 0.008 245);
-  /* barely tinted cool gray */
-  --muted-foreground: oklch(0.48 0.025 250);
-  --border: oklch(0.88 0.015 245);
-  /* subtle cool border */
-  --ring: oklch(0.35 0.06 250);
-  --sidebar-primary: oklch(0.30 0.06 250);
-  --sidebar-accent: oklch(0.88 0.03 245);
-  --sidebar-border: oklch(0.88 0.015 245);
-  --sidebar-ring: oklch(0.35 0.06 250);
+  --primary: oklch(0.26 0.065 258);
+  --primary-foreground: oklch(0.98 0.01 258);
+  --ring: oklch(0.40 0.065 258);
+  --sidebar-primary: var(--primary);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
@@ -223,7 +190,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: 'Inter', 'Cairo', sans-serif;
     overscroll-behavior: none;
   }
 
@@ -232,7 +199,7 @@
   }
 
   button, [role="button"], a, label[for], select, summary {
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: 'Inter', 'Cairo', sans-serif;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
@@ -240,12 +207,12 @@
   }
 
   button {
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
   }
 
   label {
-    font-family: 'Montserrat', 'Cairo', sans-serif;
+    font-family: 'Inter', 'Cairo', sans-serif;
     font-weight: 500;
   }
 }

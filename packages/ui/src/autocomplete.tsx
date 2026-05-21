@@ -135,7 +135,7 @@ export function Autocomplete({
                   handleCreate();
                 } else if (filtered.length === 1) {
                   e.preventDefault();
-                  commitOption(filtered[0]);
+                  commitOption(filtered[0]!);
                 } else if (filtered.length > 0 || trimmedQuery) {
                   // Suppress accidental form submit while the popover is open.
                   e.preventDefault();

@@ -146,8 +146,8 @@ function DashboardPage() {
           title="Active Orders"
           value={stats.activeOrders}
           icon={ShoppingBag}
-          color="text-secondary"
-          bg="bg-secondary/10"
+          color="text-primary"
+          bg="bg-primary/10"
           index={1}
           to="/$main/orders/order-history"
           search={{ statusFilter: "confirmed", phaseFilter: "in_progress" }}

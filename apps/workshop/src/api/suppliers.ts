@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Supplier, NewSupplier } from "@repo/database";
 
 export async function getSuppliers(includeArchived = false): Promise<Supplier[]> {
@@ -16,12 +16,18 @@ export async function createSupplier(input: Pick<NewSupplier, "name"> & Partial<
 }
 
 export async function updateSupplier(id: number, patch: Partial<Omit<Supplier, "id" | "created_at">>): Promise<Supplier> {
-  const { data, error } = await db.from("suppliers").update(patch).eq("id", id).select().single();
+  const { data, error } = await withWriteRetry(
+    () => db.from("suppliers").update(patch).eq("id", id).select().single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Could not update supplier: ${error.message}`);
   return data as Supplier;
 }
 
 export async function archiveSupplier(id: number): Promise<void> {
-  const { error } = await db.from("suppliers").update({ is_archived: true }).eq("id", id);
+  const { error } = await withWriteRetry(
+    () => db.from("suppliers").update({ is_archived: true }).eq("id", id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Could not archive supplier: ${error.message}`);
 }

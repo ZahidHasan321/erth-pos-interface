@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Fabric } from "@repo/database";
 
 export async function getFabrics(includeArchived = false): Promise<Fabric[]> {
@@ -31,12 +31,15 @@ export async function updateFabric(
   id: number,
   fabric: Partial<Omit<Fabric, "id">>,
 ): Promise<Fabric> {
-  const { data, error } = await db
-    .from("fabrics")
-    .update(fabric)
-    .eq("id", id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from("fabrics")
+      .update(fabric)
+      .eq("id", id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw error;
   return data as Fabric;
 }

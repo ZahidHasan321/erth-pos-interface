@@ -919,7 +919,8 @@ async function step8TrialRedo() {
   `;
   assertEq(Number(active), 3, "Active (non-terminal) = 3: B2 brova_trialed + 2 finals parked");
 
-  // Showroom label after feedback: awaiting_finals (brovas done, finals still out)
+  // Showroom label after feedback: ready_for_pickup (brovas done, finals still
+  // out — informational distinction collapsed; x/y count carries the detail)
   const gs = await sql`
     SELECT garment_type, piece_stage, location, acceptance_status, feedback_status, trip_number
     FROM garments WHERE order_id = ${state.workOrderId}
@@ -928,8 +929,8 @@ async function step8TrialRedo() {
   // Expected: B2 brova_trialed at shop (acceptance_status=true → shop_item_done).
   // Finals still parked at workshop (location!='shop') → finalsStillOut=true.
   // hasBrovaAwaitingTrial=false (B1 discarded, B2 trialed).
-  // → awaiting_finals.
-  assertEq(label, "awaiting_finals", "getShowroomStatus = 'awaiting_finals'");
+  // → ready_for_pickup (formerly awaiting_finals).
+  assertEq(label, "ready_for_pickup", "getShowroomStatus = 'ready_for_pickup'");
 
   log("✅ Step 8 complete");
 }

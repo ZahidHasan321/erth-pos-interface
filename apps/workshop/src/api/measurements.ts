@@ -1,4 +1,12 @@
-import { db } from '@/lib/db';
+import { db, isTransientNetworkError } from '@/lib/db';
+
+// Bounded replay for write paths that the generic fetch layer refuses to
+// retry (it only auto-retries idempotent GET/HEAD — see lib/db.ts). Safe to
+// call ONLY when the operation is idempotent: either keyed by an
+// idempotency_key/unique constraint, or a server-side idempotent RPC.
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Measurement row shape — mirrors measurements table columns used by the
  *  Add Garment form. Columns not listed here (created_at, etc.) are managed
@@ -33,19 +41,43 @@ export const cloneMeasurement = async (
   if (!source) throw new Error(`cloneMeasurement: source measurement ${sourceId} not found`);
   const { id: _id, created_at: _c, updated_at: _u, ...rest } = source as Record<string, unknown>;
   void _id; void _c; void _u;
+  const idempotencyKey: string = crypto.randomUUID();
   const row = {
     ...rest,
     ...overrides,
     measurement_date: new Date().toISOString(),
+    idempotency_key: idempotencyKey,
   };
-  const { data, error } = await db
-    .from('measurements')
-    .insert(row)
-    .select('id')
-    .single();
-  if (error) throw new Error(`cloneMeasurement: failed to insert cloned measurement: ${error.message}`);
+  let data: { id: string } | null = null;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from('measurements')
+      .insert(row)
+      .select('id')
+      .single();
+    if (!res.error) {
+      data = res.data as { id: string };
+      break;
+    }
+    if (res.error.code === '23505') {
+      const recovered = await db
+        .from('measurements')
+        .select('id')
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!recovered.error && recovered.data) {
+        data = recovered.data as { id: string };
+        break;
+      }
+    }
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+    throw new Error(`cloneMeasurement: failed to insert cloned measurement: ${res.error.message}`);
+  }
   if (!data) throw new Error('cloneMeasurement: insert returned no row');
-  return data as { id: string };
+  return data;
 };
 
 /** Insert a brand-new measurement row for a customer with the given fields. */
@@ -53,19 +85,44 @@ export const createMeasurement = async (
   customerId: string,
   fields: Record<string, unknown>,
 ): Promise<{ id: string }> => {
+  const idempotencyKey: string =
+    (fields.idempotency_key as string | undefined) ?? crypto.randomUUID();
   const row = {
     ...fields,
     customer_id: customerId,
     measurement_date: new Date().toISOString(),
+    idempotency_key: idempotencyKey,
   };
-  const { data, error } = await db
-    .from('measurements')
-    .insert(row)
-    .select('id')
-    .single();
-  if (error) throw new Error(`createMeasurement: failed to insert measurement: ${error.message}`);
+  let data: { id: string } | null = null;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from('measurements')
+      .insert(row)
+      .select('id')
+      .single();
+    if (!res.error) {
+      data = res.data as { id: string };
+      break;
+    }
+    if (res.error.code === '23505') {
+      const recovered = await db
+        .from('measurements')
+        .select('id')
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!recovered.error && recovered.data) {
+        data = recovered.data as { id: string };
+        break;
+      }
+    }
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+    throw new Error(`createMeasurement: failed to insert measurement: ${res.error.message}`);
+  }
   if (!data) throw new Error('createMeasurement: insert returned no row');
-  return data as { id: string };
+  return data;
 };
 
 /** Fetch the latest measurement on file for a customer. Used to prefill the

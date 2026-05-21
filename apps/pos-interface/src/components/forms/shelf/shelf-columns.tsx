@@ -5,129 +5,44 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { type ShelfProduct } from './shelf-form.schema'
 import { Button } from '@repo/ui/button'
 import { Input } from '@repo/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/select'
 import { Trash2 } from 'lucide-react'
 
 export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'serial_number',
     header: '#',
-    size: 40,
-    minSize: 40,
+    size: 6,
     cell: ({ row }) => (
-      <span className="text-xs font-bold text-muted-foreground">{row.index + 1}</span>
+      <span className="text-sm text-muted-foreground">{row.index + 1}</span>
     ),
   },
   {
     accessorKey: 'product_type',
-    header: 'Product Type',
-    size: 160,
-    minSize: 140,
-    cell: ({ row, table }) => {
-        const { updateData, serverProducts, errors, isOrderDisabled } = table.options.meta as any
-        const error = errors?.[row.index]?.product_type
-
-        // Get unique product types from server data
-        const productTypes: string[] = Array.from(
-          new Set(serverProducts?.map((p: any) => p.type).filter(Boolean) || [])
-        )
-
-        return (
-            <div className="flex flex-col gap-1">
-                <Select
-                    value={row.original.product_type}
-                    onValueChange={(value) => updateData(row.index, 'product_type', value)}
-                    disabled={isOrderDisabled}
-                >
-                    <SelectTrigger className={`bg-background border-border/60 ${error ? 'border-red-500' : ''}`}>
-                        <SelectValue placeholder="Select Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {productTypes.map((type: string, idx: number) => (
-                            <SelectItem key={`type-${idx}-${type}`} value={type}>
-                                {type}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {error && <span className="text-xs text-red-500 text-left">{error.message}</span>}
-            </div>
-        )
-    }
-  },
-  {
-    accessorKey: 'brand',
-    header: 'Brand',
-    size: 160,
-    minSize: 140,
-    cell: ({ row, table }) => {
-        const { updateData, serverProducts, selectedProducts, errors, isOrderDisabled } = table.options.meta as any
-        const error = errors?.[row.index]?.brand
-
-        // Filter brands based on selected product type
-        const selectedType = row.original.product_type
-        const brands: string[] = serverProducts
-            ?.filter((p: any) => !selectedType || p.type === selectedType)
-            .map((p: any) => p.brand)
-            .filter(Boolean) || []
-        const uniqueBrands: string[] = Array.from(new Set(brands))
-
-        return (
-            <div className="flex flex-col gap-1">
-                <Select
-                    value={row.original.brand}
-                    onValueChange={(value) => updateData(row.index, 'brand', value)}
-                    disabled={!selectedType || isOrderDisabled}
-                >
-                    <SelectTrigger className={`bg-background border-border/60 ${error ? 'border-red-500' : ''}`}>
-                        <SelectValue placeholder="Select Brand" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {uniqueBrands.map((brand: string, idx: number) => {
-                            const combination = `${selectedType}-${brand}`
-                            const isCurrentlySelectedInThisRow = row.original.brand === brand
-                            const isAlreadySelectedElsewhere = selectedProducts?.includes(combination) && !isCurrentlySelectedInThisRow
-
-                            const product = serverProducts?.find(
-                                (p: any) => p.brand === brand && p.type === selectedType
-                            )
-                            const hasStock = (product?.shop_stock && product.shop_stock > 0) || isCurrentlySelectedInThisRow
-
-                            if (isAlreadySelectedElsewhere) return null;
-
-                            return (
-                                <SelectItem
-                                    key={`brand-${idx}-${brand}`}
-                                    value={brand}
-                                    disabled={!hasStock}
-                                >
-                                    {brand}
-                                    {!hasStock && ' (Out of stock)'}
-                                </SelectItem>
-                            )
-                        }).filter(Boolean)}
-                    </SelectContent>
-                </Select>
-                {error && <span className="text-xs text-red-500 text-left">{error.message}</span>}
-            </div>
-        )
-    }
+    header: 'Item',
+    size: 29,
+    cell: ({ row }) => (
+      <div className="flex flex-col text-left min-w-0">
+        <span className="text-sm font-medium text-foreground truncate">
+          {row.original.product_type || '—'}
+        </span>
+        {row.original.brand && (
+          <span className="text-xs text-muted-foreground truncate">{row.original.brand}</span>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: 'stock',
     header: 'Stock',
-    size: 60,
-    minSize: 60,
+    size: 9,
     cell: ({ row }) => {
-      const isProductSelected = !!row.original.product_type && !!row.original.brand
-      if (!isProductSelected) return <span className="text-muted-foreground">-</span>
-
-      const stock = row.original.stock || 0;
+      const stock = row.original.stock || 0
       const colorClass =
-        stock <= 0 ? "text-red-600 font-bold" :
-        stock < 5 ? "text-orange-600 font-bold" :
-        stock <= 11 ? "text-green-600 font-bold" :
-        "text-foreground font-bold";
+        stock <= 0
+          ? 'text-red-600 font-medium'
+          : stock < 5
+            ? 'text-orange-600 font-medium'
+            : 'text-foreground'
 
       return <span className={colorClass}>{stock}</span>
     },
@@ -135,43 +50,29 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   {
     accessorKey: 'quantity',
     header: 'Quantity',
-    size: 120,
-    minSize: 110,
+    size: 22,
     cell: QuantityCell,
   },
   {
     accessorKey: 'unit_price',
     header: 'Unit Price',
-    size: 80,
-    minSize: 90,
-    cell: ({ row }) => {
-        const isProductSelected = !!row.original.product_type && !!row.original.brand
-        if (!isProductSelected) return <span className="text-muted-foreground">-</span>
-
-        return (
-            <span className="font-bold">
-                {Number(row.original.unit_price).toFixed(2)}
-            </span>
-        )
-    }
+    size: 12,
+    cell: ({ row }) => (
+      <span className="font-medium">{Number(row.original.unit_price).toFixed(2)}</span>
+    ),
   },
   {
     id: 'totalAmount',
     header: 'Total',
-    size: 100,
-    minSize: 90,
+    size: 15,
     cell: ({ row }) => {
-      const isProductSelected = !!row.original.product_type && !!row.original.brand
-      if (!isProductSelected) return <span className="text-muted-foreground">-</span>
-
       const total = row.original.quantity * row.original.unit_price
-      return <span className="font-bold text-primary">{total.toFixed(2)}</span>
+      return <span className="font-medium text-primary">{total.toFixed(2)}</span>
     },
   },
   {
     id: 'actions',
-    size: 50,
-    minSize: 50,
+    size: 7,
     cell: ({ row, table }) => {
       const { removeRow, isOrderDisabled } = table.options.meta as any
       if (isOrderDisabled) return null
@@ -250,8 +151,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
     e.target.select()
   }
 
-  const isProductSelected = !!row.original.product_type && !!row.original.brand
-  const hasStockError = isProductSelected && (maxStock === 0 || quantity > maxStock)
+  const hasStockError = maxStock === 0 || quantity > maxStock
   const hasError = hasStockError || !!error
 
   return (
@@ -274,7 +174,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           onChange={handleChange}
           onBlur={handleBlur}
           onFocus={handleFocus}
-          className={`w-14 text-center font-bold ${hasError ? 'border-red-500' : 'border-border/60'}`}
+          className={`w-14 text-center font-medium ${hasError ? 'border-red-500' : 'border-border/60'}`}
           max={maxStock}
           min={1}
           disabled={isOrderDisabled}
@@ -283,7 +183,7 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           type="button"
           size="icon"
           onClick={handleIncrement}
-          disabled={quantity >= maxStock || (isProductSelected && maxStock === 0) || isOrderDisabled}
+          disabled={quantity >= maxStock || maxStock === 0 || isOrderDisabled}
           variant="outline"
           className="size-8"
           aria-label="Increase quantity"
@@ -291,13 +191,15 @@ function QuantityCell({ row, table }: { row: any; table: any }) {
           +
         </Button>
       </div>
-      {isProductSelected && maxStock === 0 && (
-        <span className="text-xs text-red-600 font-bold text-center">No stock</span>
+      {maxStock === 0 && (
+        <span className="text-sm text-red-600 font-medium text-center">No stock</span>
       )}
-      {isProductSelected && quantity > maxStock && maxStock > 0 && (
-        <span className="text-xs text-red-600 font-bold text-center">Exceeds stock ({maxStock})</span>
+      {quantity > maxStock && maxStock > 0 && (
+        <span className="text-sm text-red-600 font-medium text-center">
+          Exceeds stock ({maxStock})
+        </span>
       )}
-      {error && <span className="text-xs text-red-500 text-center">{error.message}</span>}
+      {error && <span className="text-sm text-red-500 text-center">{error.message}</span>}
     </div>
   )
 }

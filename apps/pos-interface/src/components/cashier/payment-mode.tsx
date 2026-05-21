@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Banknote, CheckCircle2, History, Loader2, Package, Shirt, Tag, Truck } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -40,6 +40,16 @@ const DISCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 const MAX_DECIMALS = 3;
+
+function BreakdownRow({ label, value, className = "" }: { label: ReactNode; value: ReactNode; className?: string }) {
+    return (
+        <div className={`flex items-baseline gap-2 ${className}`}>
+            <span className="shrink-0">{label}</span>
+            <span aria-hidden className="flex-1 border-b border-dotted border-border/70 translate-y-[-4px]" />
+            <span className="shrink-0 tabular-nums">{value}</span>
+        </div>
+    );
+}
 
 /** Sanitize a string so it represents a valid decimal with up to MAX_DECIMALS places. */
 function sanitizeAmount(raw: string): string | null {
@@ -119,6 +129,10 @@ export function PaymentMode({
         setRefError(null);
         setAmountError(null);
         if (!tenderedValid) { setAmountError("Enter an amount"); return; }
+        if (tenderedNum > remainingBalance + 0.001) {
+            setAmountError(`Amount exceeds remaining ${fmtK(Math.max(0, remainingBalance))}`);
+            return;
+        }
         if (method !== "cash" && !refNo.trim()) { setRefError("Reference number required"); return; }
         paymentMutation.mutate({
             orderId: order.id,
@@ -152,47 +166,44 @@ export function PaymentMode({
                     <Label className="text-xs text-muted-foreground uppercase tracking-wider">Breakdown</Label>
                     <div className="mt-2 space-y-1 text-sm">
                         {charges.map(([label, value]) => {
-                            const show = isWorkOrder || value > 0;
-                            if (!show) return null;
+                            if (value <= 0) return null;
                             return (
-                                <div key={label} className="flex justify-between text-muted-foreground">
-                                    <span>{label}</span>
-                                    <span className="tabular-nums">{fmtK(value)}</span>
-                                </div>
+                                <BreakdownRow key={label} className="text-muted-foreground" label={label} value={fmtK(value)} />
                             );
                         })}
                         {hasDiscount && (
                             <>
-                                <div className="flex justify-between pt-1">
-                                    <span className="text-muted-foreground">Subtotal</span>
-                                    <span className="tabular-nums">{fmtK(subtotal)}</span>
-                                </div>
-                                <div className="flex justify-between text-amber-600">
-                                    <span className="flex items-center gap-1">
-                                        <Tag className="h-3.5 w-3.5" />
-                                        Discount
-                                        {discountType && <span className="text-xs">({DISCOUNT_TYPE_LABELS[discountType] || discountType})</span>}
-                                        {discountPercentage > 0 && <span className="text-xs">{discountPercentage}%</span>}
-                                    </span>
-                                    <span className="tabular-nums">-{fmtK(discountValue)}</span>
-                                </div>
+                                <BreakdownRow
+                                    className="pt-1"
+                                    label={<span className="text-muted-foreground">Subtotal</span>}
+                                    value={fmtK(subtotal)}
+                                />
+                                <BreakdownRow
+                                    className="text-amber-600"
+                                    label={
+                                        <span className="flex items-center gap-1">
+                                            <Tag className="h-3.5 w-3.5" />
+                                            Discount
+                                            {discountType && <span className="text-xs">({DISCOUNT_TYPE_LABELS[discountType] || discountType})</span>}
+                                            {discountPercentage > 0 && <span className="text-xs">{discountPercentage}%</span>}
+                                        </span>
+                                    }
+                                    value={`-${fmtK(discountValue)}`}
+                                />
                             </>
                         )}
-                        <div className="flex justify-between font-semibold pt-1 text-base">
-                            <span>Total</span>
-                            <span className="tabular-nums">{fmtK(orderTotal)}</span>
-                        </div>
+                        <BreakdownRow className="font-semibold pt-1 text-base" label="Total" value={fmtK(orderTotal)} />
                         <Separator className="my-1.5" />
-                        <div className="flex justify-between text-emerald-600">
-                            <span>Payments</span>
-                            <span className="tabular-nums">{fmtK(totalPayments)}</span>
-                        </div>
+                        <BreakdownRow className="text-emerald-600" label="Payments" value={fmtK(totalPayments)} />
                         {totalRefunds > 0 && (
-                            <div className="flex justify-between text-red-600">
-                                <span>Refunds</span>
-                                <span className="tabular-nums">-{fmtK(totalRefunds)}</span>
-                            </div>
+                            <BreakdownRow className="text-red-600" label="Refunds" value={`-${fmtK(totalRefunds)}`} />
                         )}
+                        <Separator className="my-1.5" />
+                        <BreakdownRow
+                            className={`font-semibold text-base ${isOverpaid ? "text-amber-600" : remainingBalance > 0.001 ? "text-red-600" : "text-emerald-600"}`}
+                            label={isOverpaid ? "Overpaid" : remainingBalance <= 0.001 ? "Fully Paid" : "Balance"}
+                            value={isOverpaid ? `+${fmtK(Math.abs(remainingBalance))}` : fmtK(Math.max(0, remainingBalance))}
+                        />
                     </div>
                 </div>
 
@@ -397,6 +408,10 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
     const hasShelf = shelfItems.length > 0;
     if (!hasGarments && !hasShelf) return null;
 
+    const isPartialRefunded = (g: any) =>
+        g.piece_stage !== "discarded" &&
+        (g.refunded_fabric || g.refunded_stitching || g.refunded_style || g.refunded_express || g.refunded_soaking);
+
     return (
         <div className="bg-card border-2 border-border rounded-xl p-4 space-y-3">
             {hasGarments && (
@@ -410,25 +425,36 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                     <ul className="space-y-1">
                         {garments.map((g: any, i: number) => {
                             const showOwnDate = g.delivery_date && !sameDay(g.delivery_date, orderDeliveryDate);
+                            const isDiscarded = g.piece_stage === "discarded";
+                            const wasReplaced = isDiscarded && g.replaced_by_garment_id;
+                            const partialRefund = isPartialRefunded(g);
                             return (
-                            <li key={g.id} className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md bg-muted/40">
+                            <li key={g.id} className={`flex items-center gap-2 text-sm py-1.5 px-2 rounded-md ${isDiscarded ? "bg-red-50/60 border border-red-200" : "bg-muted/40"}`}>
                                 <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-6">#{i + 1}</span>
-                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
+                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"} ${isDiscarded ? "opacity-50" : ""}`}>
                                     {g.garment_type === "brova" ? "Brova" : "Final"}
                                 </span>
-                                <span className="font-medium truncate">{g.fabric?.name || "Outside"}</span>
-                                {g.express && (
+                                <span className={`font-medium truncate ${isDiscarded ? "line-through text-muted-foreground" : ""}`}>{g.fabric?.name || "Outside"}</span>
+                                {isDiscarded && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">
+                                        {wasReplaced ? "Replaced" : "Cancelled"}
+                                    </span>
+                                )}
+                                {partialRefund && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">Partial refund</span>
+                                )}
+                                {!isDiscarded && g.express && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">Express</span>
                                 )}
-                                {g.soaking && (
+                                {!isDiscarded && g.soaking && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 shrink-0">Soak</span>
                                 )}
-                                {showOwnDate && (
+                                {!isDiscarded && showOwnDate && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0 tabular-nums">
                                         Due {itemDateFmt.format(new Date(g.delivery_date))}
                                     </span>
                                 )}
-                                <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
+                                <span className={`ml-auto text-xs text-muted-foreground tabular-nums shrink-0 ${isDiscarded ? "line-through" : ""}`}>
                                     {Number(g.fabric_length) || 0}m
                                 </span>
                             </li>
@@ -444,13 +470,27 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                         Shelf items ({shelfItems.length})
                     </Label>
                     <ul className="space-y-1">
-                        {shelfItems.map((it: any) => (
-                            <li key={it.id} className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md bg-muted/40">
-                                <span className="font-medium truncate">{it.shelf?.type || `Item #${it.shelf_id}`}</span>
-                                <span className="text-xs text-muted-foreground shrink-0">× {it.quantity}</span>
-                                <span className="ml-auto font-semibold tabular-nums shrink-0">{fmtK(it.unit_price * it.quantity)}</span>
+                        {shelfItems.map((it: any) => {
+                            const refundedQty = Number(it.refunded_qty) || 0;
+                            const qty = Number(it.quantity) || 0;
+                            const fullyRefunded = refundedQty >= qty && qty > 0;
+                            const partialRefund = refundedQty > 0 && !fullyRefunded;
+                            return (
+                            <li key={it.id} className={`flex items-center gap-2 text-sm py-1.5 px-2 rounded-md ${fullyRefunded ? "bg-red-50/60 border border-red-200" : "bg-muted/40"}`}>
+                                <span className={`font-medium truncate ${fullyRefunded ? "line-through text-muted-foreground" : ""}`}>{it.shelf?.type || `Item #${it.shelf_id}`}</span>
+                                <span className={`text-xs text-muted-foreground shrink-0 ${fullyRefunded ? "line-through" : ""}`}>× {qty}</span>
+                                {fullyRefunded && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">Refunded</span>
+                                )}
+                                {partialRefund && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+                                        Refunded {refundedQty}/{qty}
+                                    </span>
+                                )}
+                                <span className={`ml-auto font-semibold tabular-nums shrink-0 ${fullyRefunded ? "line-through text-muted-foreground" : ""}`}>{fmtK(it.unit_price * qty)}</span>
                             </li>
-                        ))}
+                            );
+                        })}
                     </ul>
                 </div>
             )}

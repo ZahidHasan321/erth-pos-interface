@@ -1,9 +1,13 @@
 import type { ApiResponse } from "../types/api";
 import type { Appointment, NewAppointment } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getBrand } from "./orders";
 
 const TABLE_NAME = "appointments";
+
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const APPOINTMENT_SELECT = `
   *,
@@ -64,16 +68,45 @@ export const getAppointmentById = async (
 export const createAppointment = async (
   appointment: Omit<NewAppointment, "id" | "created_at" | "updated_at" | "brand">,
 ): Promise<ApiResponse<Appointment>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .insert({ ...appointment, brand: getBrand() })
-    .select()
-    .single();
+  const payload: any = { ...appointment, brand: getBrand() };
+  const idempotencyKey: string =
+    (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
+  payload.idempotency_key = idempotencyKey;
 
-  if (error) {
-    console.error("Error creating appointment:", error);
-    return { status: "error", message: error.message };
+  let data: any = null;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from(TABLE_NAME)
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!res.error) {
+      data = res.data;
+      break;
+    }
+
+    if (res.error.code === '23505') {
+      const recovered = await db
+        .from(TABLE_NAME)
+        .select()
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!recovered.error && recovered.data) {
+        data = recovered.data;
+        break;
+      }
+    }
+
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+
+    console.error("Error creating appointment:", res.error);
+    return { status: "error", message: res.error.message };
   }
+
   return { status: "success", data: data as any };
 };
 
@@ -81,13 +114,16 @@ export const updateAppointment = async (
   id: string,
   updates: Partial<Appointment>,
 ): Promise<ApiResponse<Appointment>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("brand", getBrand())
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("brand", getBrand())
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error("Error updating appointment:", error);
@@ -99,11 +135,14 @@ export const updateAppointment = async (
 export const deleteAppointment = async (
   id: string,
 ): Promise<ApiResponse<null>> => {
-  const { error } = await db
-    .from(TABLE_NAME)
-    .delete()
-    .eq("id", id)
-    .eq("brand", getBrand());
+  const { error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .delete()
+      .eq("id", id)
+      .eq("brand", getBrand()),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error("Error deleting appointment:", error);

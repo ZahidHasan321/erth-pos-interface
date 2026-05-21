@@ -1,5 +1,13 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { TransferRequest, TransferRequestItem } from '@repo/database';
+
+// Bounded replay for write paths that the generic fetch layer refuses to
+// retry (it only auto-retries idempotent GET/HEAD — see lib/db.ts). Safe to
+// call ONLY when the operation is idempotent: either keyed by an
+// idempotency_key/unique constraint, or a server-side idempotent RPC.
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type UserRef = { id: string; username: string; name: string } | null;
 
@@ -83,13 +91,44 @@ export async function createTransferRequest(request: {
 }): Promise<TransferRequest> {
   const { items, ...requestData } = request;
 
-  const { data: transferData, error: transferError } = await db
-    .from('transfer_requests')
-    .insert(requestData)
-    .select()
-    .single();
+  // Idempotency key makes the parent insert safe to replay: a dropped response
+  // after the row committed (Firefox/HTTP-3 QUIC) would otherwise duplicate the
+  // transfer request on retry / manual re-click.
+  const idempotencyKey: string = crypto.randomUUID();
+  let transferData: TransferRequest | null = null;
+  let recovered = false;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from('transfer_requests')
+      .insert({ ...requestData, idempotency_key: idempotencyKey })
+      .select()
+      .single();
+    if (!res.error) {
+      transferData = res.data as TransferRequest;
+      break;
+    }
+    if (res.error.code === '23505') {
+      const rec = await db
+        .from('transfer_requests')
+        .select()
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!rec.error && rec.data) {
+        transferData = rec.data as TransferRequest;
+        recovered = true;
+        break;
+      }
+    }
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+    throw res.error;
+  }
 
-  if (transferError) throw transferError;
+  // A recovered parent means a prior committed attempt already inserted its
+  // items — re-inserting would duplicate them. Same accepted bar as createOrder.
+  if (recovered) return transferData as TransferRequest;
 
   const itemsToInsert = items.map(item => ({
     ...item,
@@ -104,42 +143,44 @@ export async function createTransferRequest(request: {
   return transferData as TransferRequest;
 }
 
+// Approve/reject go through status-guarded, idempotent RPCs (not raw PostgREST
+// updates). The guard rejects re-approving an already-dispatched transfer
+// (which would re-enable a second stock decrement); the idem key makes a
+// lost-response retry a safe no-op.
 export async function approveTransferRequest(
   id: number,
   items: { id: number; approved_qty: number }[],
-): Promise<TransferRequest> {
-  for (const item of items) {
-    const { error } = await db
-      .from('transfer_request_items')
-      .update({ approved_qty: item.approved_qty })
-      .eq('id', item.id);
-    if (error) throw error;
-  }
-
-  const { data, error } = await db
-    .from('transfer_requests')
-    .update({ status: 'approved', approved_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+): Promise<{ success: boolean; transfer_id: number }> {
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('approve_transfer', {
+      p_transfer_id: id,
+      p_items: items,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
-  return data as TransferRequest;
+  return data as { success: boolean; transfer_id: number };
 }
 
 export async function rejectTransferRequest(
   id: number,
   rejection_reason: string,
-): Promise<TransferRequest> {
-  const { data, error } = await db
-    .from('transfer_requests')
-    .update({ status: 'rejected', rejection_reason })
-    .eq('id', id)
-    .select()
-    .single();
+): Promise<{ success: boolean; transfer_id: number }> {
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('reject_transfer', {
+      p_transfer_id: id,
+      p_rejection_reason: rejection_reason,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
-  return data as TransferRequest;
+  return data as { success: boolean; transfer_id: number };
 }
 
 export async function reviseTransferRequest(
@@ -156,13 +197,44 @@ export async function reviseTransferRequest(
 ): Promise<TransferRequest> {
   const { items, ...requestData } = request;
 
-  const { data: transferData, error: transferError } = await db
-    .from('transfer_requests')
-    .insert({ ...requestData, parent_request_id: originalId, status: 'requested' })
-    .select()
-    .single();
+  // Idempotency key makes the parent insert safe to replay: a dropped response
+  // after the row committed (Firefox/HTTP-3 QUIC) would otherwise duplicate the
+  // revised transfer request on retry / manual re-click.
+  const idempotencyKey: string = crypto.randomUUID();
+  let transferData: TransferRequest | null = null;
+  let recovered = false;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from('transfer_requests')
+      .insert({ ...requestData, parent_request_id: originalId, status: 'requested', idempotency_key: idempotencyKey })
+      .select()
+      .single();
+    if (!res.error) {
+      transferData = res.data as TransferRequest;
+      break;
+    }
+    if (res.error.code === '23505') {
+      const rec = await db
+        .from('transfer_requests')
+        .select()
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!rec.error && rec.data) {
+        transferData = rec.data as TransferRequest;
+        recovered = true;
+        break;
+      }
+    }
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+    throw res.error;
+  }
 
-  if (transferError) throw transferError;
+  // A recovered parent means a prior committed attempt already inserted its
+  // items — re-inserting would duplicate them. Same accepted bar as createOrder.
+  if (recovered) return transferData as TransferRequest;
 
   const itemsToInsert = items.map(item => ({
     ...item,
@@ -182,11 +254,16 @@ export async function dispatchTransfer(
   dispatchedBy: string,
   items: { id: number; dispatched_qty: number }[],
 ): Promise<{ success: boolean; transfer_id: number }> {
-  const { data, error } = await db.rpc('dispatch_transfer', {
-    p_transfer_id: transferId,
-    p_dispatched_by: dispatchedBy,
-    p_items: items,
-  });
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('dispatch_transfer', {
+      p_transfer_id: transferId,
+      p_dispatched_by: dispatchedBy,
+      p_items: items,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as { success: boolean; transfer_id: number };
@@ -218,13 +295,18 @@ export async function createTransferRequestsBatch(request: {
   notes?: string;
   groups: TransferGroup[];
 }): Promise<BatchTransferResult> {
-  const { data, error } = await db.rpc('create_transfer_requests_batch', {
-    p_requested_by: request.requested_by,
-    p_brand: request.brand,
-    p_direction: request.direction,
-    p_notes: request.notes ?? null,
-    p_groups: request.groups,
-  });
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('create_transfer_requests_batch', {
+      p_requested_by: request.requested_by,
+      p_brand: request.brand,
+      p_direction: request.direction,
+      p_notes: request.notes ?? null,
+      p_groups: request.groups,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as BatchTransferResult;
@@ -241,13 +323,18 @@ export async function directSendTransfersBatch(request: {
   notes?: string;
   groups: SendGroup[];
 }): Promise<BatchTransferResult> {
-  const { data, error } = await db.rpc('direct_send_transfers_batch', {
-    p_sender: request.sender,
-    p_brand: request.brand,
-    p_direction: request.direction,
-    p_notes: request.notes ?? null,
-    p_groups: request.groups,
-  });
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('direct_send_transfers_batch', {
+      p_sender: request.sender,
+      p_brand: request.brand,
+      p_direction: request.direction,
+      p_notes: request.notes ?? null,
+      p_groups: request.groups,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as BatchTransferResult;
@@ -261,14 +348,19 @@ export async function directSendTransfer(request: {
   notes?: string;
   items: { fabric_id?: number; shelf_id?: number; accessory_id?: number; qty: number }[];
 }): Promise<{ success: boolean; transfer_id: number }> {
-  const { data, error } = await db.rpc('direct_send_transfer', {
-    p_sender: request.sender,
-    p_brand: request.brand,
-    p_direction: request.direction,
-    p_item_type: request.item_type,
-    p_items: request.items,
-    p_notes: request.notes ?? null,
-  });
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('direct_send_transfer', {
+      p_sender: request.sender,
+      p_brand: request.brand,
+      p_direction: request.direction,
+      p_item_type: request.item_type,
+      p_items: request.items,
+      p_notes: request.notes ?? null,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as { success: boolean; transfer_id: number };
@@ -278,11 +370,14 @@ export async function deleteTransferRequest(id: number): Promise<void> {
   // Hard-delete is only allowed while the request is still in 'requested' status.
   // Guarding by status here prevents wiping an already-approved row if an approver
   // races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
-  const { error } = await db
-    .from('transfer_requests')
-    .delete()
-    .eq('id', id)
-    .eq('status', 'requested');
+  const { error } = await withWriteRetry(
+    () => db
+      .from('transfer_requests')
+      .delete()
+      .eq('id', id)
+      .eq('status', 'requested'),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
 }
@@ -292,11 +387,16 @@ export async function receiveTransfer(
   receivedBy: string,
   items: { id: number; received_qty: number; discrepancy_note?: string }[],
 ): Promise<{ success: boolean; transfer_id: number; has_discrepancy: boolean }> {
-  const { data, error } = await db.rpc('receive_transfer', {
-    p_transfer_id: transferId,
-    p_received_by: receivedBy,
-    p_items: items,
-  });
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('receive_transfer', {
+      p_transfer_id: transferId,
+      p_received_by: receivedBy,
+      p_items: items,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as { success: boolean; transfer_id: number; has_discrepancy: boolean };

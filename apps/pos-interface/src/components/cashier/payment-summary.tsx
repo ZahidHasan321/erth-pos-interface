@@ -1,5 +1,6 @@
 import { Separator } from "@repo/ui/separator";
 import { Tag } from "lucide-react";
+import type { ReactNode } from "react";
 
 const DISCOUNT_TYPE_LABELS: Record<string, string> = {
     flat: "Flat",
@@ -12,6 +13,16 @@ interface PaymentSummaryProps {
     order: any;
     totalPayments: number;
     totalRefunds: number;
+}
+
+function Row({ label, value, className = "", valueClassName = "" }: { label: ReactNode; value: ReactNode; className?: string; valueClassName?: string }) {
+    return (
+        <div className={`flex items-baseline gap-2 ${className}`}>
+            <span className="shrink-0">{label}</span>
+            <span aria-hidden className="flex-1 border-b border-dotted border-border/70 translate-y-[-4px]" />
+            <span className={`shrink-0 tabular-nums ${valueClassName}`}>{value}</span>
+        </div>
+    );
 }
 
 export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSummaryProps) {
@@ -46,91 +57,66 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
             {/* Charge breakdown — always show for work orders, only non-zero for sales */}
             <div className="space-y-1">
                 {(isWorkOrder || stitchingCharge > 0) && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Stitching</span>
-                        <span className="tabular-nums">{fmt(stitchingCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Stitching" value={`${fmt(stitchingCharge)} KD`} />
                 )}
                 {(isWorkOrder || fabricCharge > 0) && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Fabric</span>
-                        <span className="tabular-nums">{fmt(fabricCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Fabric" value={`${fmt(fabricCharge)} KD`} />
                 )}
                 {(isWorkOrder || styleCharge > 0) && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Style</span>
-                        <span className="tabular-nums">{fmt(styleCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Style" value={`${fmt(styleCharge)} KD`} />
                 )}
                 {(isWorkOrder || deliveryCharge > 0) && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Delivery</span>
-                        <span className="tabular-nums">{fmt(deliveryCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Delivery" value={`${fmt(deliveryCharge)} KD`} />
                 )}
                 {expressCharge > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Express</span>
-                        <span className="tabular-nums">{fmt(expressCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Express" value={`${fmt(expressCharge)} KD`} />
                 )}
                 {soakingCharge > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Soaking</span>
-                        <span className="tabular-nums">{fmt(soakingCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Soaking" value={`${fmt(soakingCharge)} KD`} />
                 )}
                 {shelfCharge > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Shelf Items</span>
-                        <span className="tabular-nums">{fmt(shelfCharge)} KD</span>
-                    </div>
+                    <Row className="text-muted-foreground" label="Shelf Items" value={`${fmt(shelfCharge)} KD`} />
                 )}
             </div>
 
             {discountValue > 0 && (
                 <>
-                    <div className="flex justify-between pt-1">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="tabular-nums">{fmt(subtotal)} KD</span>
-                    </div>
-                    <div className="flex justify-between text-amber-600">
-                        <span className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" />
-                            Discount
-                            {discountType && <span className="text-xs">({DISCOUNT_TYPE_LABELS[discountType] || discountType})</span>}
-                            {discountPercentage > 0 && <span className="text-xs">{discountPercentage}%</span>}
-                        </span>
-                        <span className="tabular-nums">-{fmt(discountValue)} KD</span>
-                    </div>
+                    <Row
+                        className="pt-1"
+                        label={<span className="text-muted-foreground">Subtotal</span>}
+                        value={`${fmt(subtotal)} KD`}
+                    />
+                    <Row
+                        className="text-amber-600"
+                        label={
+                            <span className="flex items-center gap-1">
+                                <Tag className="h-3 w-3" />
+                                Discount
+                                {discountType && <span className="text-xs">({DISCOUNT_TYPE_LABELS[discountType] || discountType})</span>}
+                                {discountPercentage > 0 && <span className="text-xs">{discountPercentage}%</span>}
+                            </span>
+                        }
+                        value={`-${fmt(discountValue)} KD`}
+                    />
                 </>
             )}
 
-            <div className="flex justify-between font-medium pt-0.5">
-                <span>Order Total</span>
-                <span className="tabular-nums">{fmt(orderTotal)} KD</span>
-            </div>
+            <Row className="font-medium pt-0.5" label="Order Total" value={`${fmt(orderTotal)} KD`} />
 
             <Separator />
 
-            <div className="flex justify-between text-green-600">
-                <span>Payments</span>
-                <span className="tabular-nums">{fmt(totalPayments)} KD</span>
-            </div>
+            <Row className="text-green-600" label="Payments" value={`${fmt(totalPayments)} KD`} />
             {totalRefunds > 0 && (
-                <div className="flex justify-between text-red-600">
-                    <span>Refunds</span>
-                    <span className="tabular-nums">-{fmt(totalRefunds)} KD</span>
-                </div>
+                <Row className="text-red-600" label="Refunds" value={`-${fmt(totalRefunds)} KD`} />
             )}
 
             <Separator />
 
-            <div className={`flex justify-between font-bold text-base ${isOverpaid ? "text-amber-600" : remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                <span>{isOverpaid ? "Overpaid" : remainingBalance <= 0 ? "Fully Paid" : "Remaining"}</span>
-                <span className="tabular-nums">{isOverpaid ? `+${fmt(Math.abs(remainingBalance))}` : fmt(Math.max(0, remainingBalance))} KD</span>
-            </div>
+            <Row
+                className={`font-bold text-base ${isOverpaid ? "text-amber-600" : remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}
+                label={isOverpaid ? "Overpaid" : remainingBalance <= 0 ? "Fully Paid" : "Remaining"}
+                value={`${isOverpaid ? `+${fmt(Math.abs(remainingBalance))}` : fmt(Math.max(0, remainingBalance))} KD`}
+            />
 
             {/* Advance reference — only when not yet covered */}
             {isWorkOrder && advance > 0 && totalPaid < advance && (

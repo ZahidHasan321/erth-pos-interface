@@ -1,10 +1,10 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { CashierListBody } from "@/components/cashier/cashier-terminal";
-import { BRAND_NAMES } from "@/lib/constants";
+import { brandUsesCashier } from "@/lib/constants";
 
 export const Route = createFileRoute("/$main/cashier/")({
     beforeLoad: ({ params }) => {
-        if (params.main !== BRAND_NAMES.showroom) {
+        if (!brandUsesCashier(params.main)) {
             throw redirect({ to: "/$main", params: { main: params.main } });
         }
     },

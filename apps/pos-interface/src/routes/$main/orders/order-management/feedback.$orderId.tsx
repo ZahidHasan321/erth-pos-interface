@@ -61,6 +61,7 @@ import { getMeasurementById, createMeasurement } from "@/api/measurements";
 import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/api/garments";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
+import { buildFinalGarmentPayload } from "@/lib/feedback-payload";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
 import { evaluateBrovaFeedback, isAlteration, getAlterationNumber } from "@repo/database";
 
@@ -891,29 +892,16 @@ function UnifiedFeedbackInterface() {
                 toast.info(result.message);
             }
         } else {
-            const updatePayload: any = {};
             const isAlterationGarment = activeGarment.garment_type === "alteration";
+            const isHomeDelivery = isAlterationGarment
+                ? !!(activeGarment as any).home_delivery
+                : (activeOrder as any).home_delivery;
 
-            if (state.feedbackAction === "accepted") {
-                const isHomeDelivery = isAlterationGarment
-                    ? !!(activeGarment as any).home_delivery
-                    : (activeOrder as any).home_delivery;
-                updatePayload.piece_stage = "completed";
-                updatePayload.fulfillment_type = isHomeDelivery ? "delivered" : "collected";
-                updatePayload.acceptance_status = true;
-                updatePayload.feedback_status = "accepted";
-            } else if (state.feedbackAction === "needs_redo" && !isAlterationGarment) {
-                // Redo = discard original. Workshop creates a replacement garment.
-                // Alteration orders skip this branch — the same physical garment goes
-                // back to workshop for another pass; we never discard customer property.
-                updatePayload.piece_stage = "discarded";
-                updatePayload.feedback_status = "needs_redo";
-                updatePayload.acceptance_status = false;
-            } else {
-                updatePayload.piece_stage = "brova_trialed";
-                updatePayload.feedback_status = state.feedbackAction;
-                updatePayload.acceptance_status = false;
-            }
+            const updatePayload = buildFinalGarmentPayload({
+                feedbackAction: state.feedbackAction,
+                isAlterationGarment,
+                isHomeDelivery,
+            });
 
             await updateGarment(activeGarment.id, updatePayload);
         }

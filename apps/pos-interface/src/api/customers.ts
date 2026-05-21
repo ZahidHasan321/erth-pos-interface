@@ -1,9 +1,13 @@
 import type { ApiResponse, UpsertApiResponse } from "../types/api";
 import type { Customer } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { sanitizeFilterValue } from "@/lib/utils";
 
 const TABLE_NAME = "customers";
+
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const getCustomers = async (): Promise<ApiResponse<Customer[]>> => {
   const { data, error } = await db
@@ -119,16 +123,45 @@ export const getCustomerById = async (
 export const createCustomer = async (
   customer: Partial<Customer>,
 ): Promise<ApiResponse<Customer>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .insert(customer)
-    .select()
-    .single();
+  const payload: any = { ...customer };
+  const idempotencyKey: string =
+    (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
+  payload.idempotency_key = idempotencyKey;
 
-  if (error) {
-    console.error('Error creating customer:', error);
-    return { status: 'error', message: error.message };
+  let data: any = null;
+  for (let attempt = 1; ; attempt++) {
+    const res = await db
+      .from(TABLE_NAME)
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!res.error) {
+      data = res.data;
+      break;
+    }
+
+    if (res.error.code === '23505') {
+      const recovered = await db
+        .from(TABLE_NAME)
+        .select()
+        .eq('idempotency_key', idempotencyKey)
+        .single();
+      if (!recovered.error && recovered.data) {
+        data = recovered.data;
+        break;
+      }
+    }
+
+    if (isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+      await sleep(WRITE_RETRY_BASE_MS * attempt);
+      continue;
+    }
+
+    console.error('Error creating customer:', res.error);
+    return { status: 'error', message: res.error.message };
   }
+
   return { status: 'success', data: data as any };
 };
 
@@ -136,12 +169,15 @@ export const updateCustomer = async (
   id: number,
   customer: Partial<Customer>,
 ): Promise<ApiResponse<Customer>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update(customer)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .update(customer)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error('Error updating customer:', error);
@@ -172,10 +208,13 @@ export const getCustomerCount = async (): Promise<number> => {
 export const upsertCustomer = async (
   customers: Partial<Customer>[],
 ): Promise<UpsertApiResponse<Customer>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .upsert(customers) // Phone is not unique anymore, default to PK (id)
-    .select();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from(TABLE_NAME)
+      .upsert(customers) // Phone is not unique anymore, default to PK (id)
+      .select(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     throw error;

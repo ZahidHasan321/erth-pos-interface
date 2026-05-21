@@ -40,8 +40,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@repo/ui/sidebar";
-import { BRAND_NAMES } from "@/lib/constants";
-import { IconRulerMeasure } from "@tabler/icons-react";
+import { BRAND_NAMES, brandUsesCashier } from "@/lib/constants";
 import { useTransferBadgeCounts } from "@/hooks/useTransfers";
 
 const data = {
@@ -92,12 +91,7 @@ const data = {
           title: "Cashier",
           url: "cashier",
           icon: Banknote,
-          erthOnly: true,
-        },
-        {
-          title: "Alterations",
-          url: "orders/order-management/alterations",
-          icon: IconRulerMeasure,
+          cashierBrandOnly: true,
         },
         {
           title: "Order Management",
@@ -404,7 +398,7 @@ export function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 {item.items.filter((subItem: any) => {
-                  if (subItem.erthOnly && !isErth) return false;
+                  if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;
                   if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
                   return true;
                 }).map((subItem: any) => {

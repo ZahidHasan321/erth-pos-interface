@@ -84,24 +84,24 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
     }, [searchTerm, statusFilter, phaseFilter, typeFilter, sortOrder, dateFilter, pageSize]);
 
     return (
-        <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-3">
-            <div className="space-y-1">
-                <h1 className="text-xl font-bold tracking-tight flex items-center gap-2 text-foreground">
-                    <History className="w-5 h-5 text-primary" />
+        <div className="p-4 md:p-5 max-w-[1600px] mx-auto space-y-4">
+            <div className="space-y-0.5">
+                <h1 className="text-2xl flex items-center gap-2 text-foreground">
+                    <History className="w-5 h-5 text-muted-foreground" />
                     Order History
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    Manage your previous work and sales orders
+                    Previous work, sales, and alteration orders
                 </p>
             </div>
 
-            <div className="bg-white border border-border/60 rounded-xl shadow-sm p-2.5 sm:p-3 space-y-2.5 overflow-hidden">
-                <div className="flex items-center gap-2">
-                    <div className="relative flex-1 min-w-0 group">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+            <div className="bg-card border rounded-lg p-3 space-y-3">
+                <div className="flex items-center gap-3">
+                    <div className="relative flex-1 min-w-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                         <Input
                             placeholder="Search customer, phone, or #ID..."
-                            className="pl-8 pr-8 h-8 text-xs bg-muted/30 border-transparent focus-visible:bg-white focus-visible:border-border shadow-none rounded-lg font-medium placeholder:font-normal"
+                            className="pl-9 pr-8 h-9 text-sm rounded-md"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -109,44 +109,43 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                             <button
                                 type="button"
                                 onClick={() => setSearchTerm("")}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                                 aria-label="Clear search"
                             >
-                                <X className="size-3" />
+                                <X className="size-3.5" />
                             </button>
                         )}
                     </div>
-                    <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1.5 rounded-lg border border-primary/10 text-primary font-black text-xs tabular-nums shrink-0">
-                        <Package className="size-3.5" />
-                        <span>{totalCount}</span>
-                    </div>
+                    <span className="text-sm text-muted-foreground tabular-nums shrink-0">
+                        {totalCount} {totalCount === 1 ? "order" : "orders"}
+                    </span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
                     <Tabs value={typeFilter} onValueChange={setTypeFilter} className="w-auto gap-0">
                         <TabsList className="h-auto p-1">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
-                            <TabsTrigger value="WORK" className="text-[11px] font-bold px-2.5 py-1">Work</TabsTrigger>
-                            <TabsTrigger value="SALES" className="text-[11px] font-bold px-2.5 py-1">Sales</TabsTrigger>
-                            <TabsTrigger value="ALTERATION" className="text-[11px] font-bold px-2.5 py-1">Alter</TabsTrigger>
+                            <TabsTrigger value="all" className="text-xs font-medium px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="WORK" className="text-xs font-medium px-2.5 py-1">Work</TabsTrigger>
+                            <TabsTrigger value="SALES" className="text-xs font-medium px-2.5 py-1">Sales</TabsTrigger>
+                            <TabsTrigger value="ALTERATION" className="text-xs font-medium px-2.5 py-1">Alter</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
                     <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto gap-0">
                         <TabsList className="h-auto p-1">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
-                            <TabsTrigger value="confirmed" className="text-[11px] font-bold px-2.5 py-1">Confirmed</TabsTrigger>
-                            <TabsTrigger value="draft" className="text-[11px] font-bold px-2.5 py-1">Draft</TabsTrigger>
-                            <TabsTrigger value="cancelled" className="text-[11px] font-bold px-2.5 py-1">Cancelled</TabsTrigger>
+                            <TabsTrigger value="all" className="text-xs font-medium px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="confirmed" className="text-xs font-medium px-2.5 py-1">Confirmed</TabsTrigger>
+                            <TabsTrigger value="draft" className="text-xs font-medium px-2.5 py-1">Draft</TabsTrigger>
+                            <TabsTrigger value="cancelled" className="text-xs font-medium px-2.5 py-1">Cancelled</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
                     <Tabs value={phaseFilter} onValueChange={setPhaseFilter} className="w-auto gap-0">
                         <TabsList className="h-auto p-1">
-                            <TabsTrigger value="all" className="text-[11px] font-bold px-2.5 py-1">All</TabsTrigger>
-                            <TabsTrigger value="new" className="text-[11px] font-bold px-2.5 py-1">New</TabsTrigger>
-                            <TabsTrigger value="in_progress" className="text-[11px] font-bold px-2.5 py-1">In Prog</TabsTrigger>
-                            <TabsTrigger value="completed" className="text-[11px] font-bold px-2.5 py-1">Done</TabsTrigger>
+                            <TabsTrigger value="all" className="text-xs font-medium px-2.5 py-1">All</TabsTrigger>
+                            <TabsTrigger value="new" className="text-xs font-medium px-2.5 py-1">New</TabsTrigger>
+                            <TabsTrigger value="in_progress" className="text-xs font-medium px-2.5 py-1">In Prog</TabsTrigger>
+                            <TabsTrigger value="completed" className="text-xs font-medium px-2.5 py-1">Done</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
@@ -157,7 +156,7 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                             clearable
                             placeholder="Any date"
                             displayFormat="dd MMM yy"
-                            className="h-8 bg-transparent border-border/40 rounded-lg shadow-none text-[11px] font-bold"
+                            className="h-9 rounded-md text-xs"
                         />
                     </div>
 
@@ -166,9 +165,9 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                     <button
                         type="button"
                         onClick={() => setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"))}
-                        className="flex items-center gap-1 h-8 px-2.5 text-[11px] font-bold text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-colors shrink-0"
+                        className="flex items-center gap-1.5 h-9 px-3 text-xs font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors shrink-0"
                     >
-                        <ArrowUpDown className="size-3" />
+                        <ArrowUpDown className="size-3.5" />
                         {sortOrder === "newest" ? "Newest" : "Oldest"}
                     </button>
 
@@ -182,9 +181,9 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                                 setTypeFilter("all");
                                 setDateFilter(null);
                             }}
-                            className="flex items-center gap-0.5 h-8 px-1.5 text-[11px] font-bold text-destructive/70 hover:text-destructive transition-colors shrink-0"
+                            className="flex items-center gap-1 h-9 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
                         >
-                            <X className="size-3" />
+                            <X className="size-3.5" />
                             Clear
                         </button>
                     )}
@@ -194,25 +193,21 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
             <div className="flex flex-col gap-2 min-h-100">
                 {(isLoading || (isFetching && orders.length === 0)) ? (
                     Array.from({ length: 8 }).map((_, i) => (
-                        <Card key={i} className="border-none shadow-sm animate-pulse py-0 gap-0">
-                            <CardContent className="p-4 h-18 bg-muted/20 rounded-xl" />
-                        </Card>
+                        <div key={i} className="h-[68px] border rounded-lg bg-muted/20 animate-pulse" />
                     ))
                 ) : isError ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
-                        <XCircle className="w-12 h-12 text-destructive opacity-50" />
+                    <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 border border-dashed rounded-lg">
+                        <XCircle className="w-10 h-10 text-destructive opacity-60" />
                         <div className="space-y-1">
-                            <h3 className="font-bold text-lg">Failed to load orders</h3>
+                            <h3 className="text-lg">Failed to load orders</h3>
                             <p className="text-muted-foreground text-sm">There was an error connecting to the server.</p>
                         </div>
                         <Button onClick={() => window.location.reload()} variant="outline" size="sm" className="h-9 px-4">Retry</Button>
                     </div>
                 ) : orders.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 border-2 border-dashed border-muted rounded-xl bg-muted/5">
-                        <ShoppingBag className="w-12 h-12 text-muted-foreground opacity-20" />
-                        <div className="space-y-0.5">
-                            <h3 className="font-bold text-lg text-muted-foreground">No orders found</h3>
-                        </div>
+                    <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 border border-dashed rounded-lg">
+                        <ShoppingBag className="w-10 h-10 text-muted-foreground opacity-30" />
+                        <h3 className="text-lg text-muted-foreground">No orders found</h3>
                         <Button size="sm" variant="outline" className="h-9 px-4" onClick={() => { setSearchTerm(""); setStatusFilter("all"); setPhaseFilter("all"); setTypeFilter("all"); setDateFilter(null); }}>
                             Clear filters
                         </Button>
@@ -225,12 +220,12 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                             ))}
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 py-2">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rows</span>
+                                    <span className="text-sm text-muted-foreground">Rows</span>
                                     <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
-                                        <SelectTrigger className="h-8 w-16 bg-white border-border/80 text-xs">
+                                        <SelectTrigger className="h-9 w-16 text-sm">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -243,8 +238,8 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                                 <span className="text-sm text-muted-foreground">
                                     {totalCount > 0 ? (
                                         <>
-                                            Showing <span className="font-bold text-foreground">{orders.length}</span> of{" "}
-                                            <span className="font-bold text-foreground">{totalCount}</span>
+                                            Showing <span className="text-foreground">{orders.length}</span> of{" "}
+                                            <span className="text-foreground">{totalCount}</span>
                                         </>
                                     ) : (
                                         "No orders"
@@ -258,20 +253,20 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                                         size="sm"
                                         onClick={() => setPage((p) => Math.max(0, p - 1))}
                                         disabled={page === 0 || isFetching}
-                                        className="h-9 gap-2 pr-4 shadow-sm"
+                                        className="h-9 gap-2 pr-4"
                                     >
                                         <ChevronLeft className="w-4 h-4" />
                                         Previous
                                     </Button>
-                                    <div className="flex items-center gap-1 text-sm font-bold px-4 h-9 bg-muted/50 rounded-md border border-border/50 shadow-inner">
+                                    <span className="text-sm text-muted-foreground tabular-nums">
                                         Page {page + 1} of {totalPages}
-                                    </div>
+                                    </span>
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                                         disabled={page >= totalPages - 1 || isFetching}
-                                        className="h-9 gap-2 pl-4 shadow-sm"
+                                        className="h-9 gap-2 pl-4"
                                     >
                                         Next
                                         <ChevronRight className="w-4 h-4" />
@@ -286,67 +281,58 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
     );
 }
 
-const PHASE_BADGE_STYLES: Record<string, string> = {
-    new: "bg-gray-500/15 text-gray-600",
-    in_progress: "bg-amber-500/15 text-amber-600",
-    completed: "bg-primary/15 text-primary",
-};
-
 const StatusBadge = ({ status }: { status: string }) => {
     switch (status) {
         case "confirmed":
-            return <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] px-1.5 py-0 h-5 shadow-none"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
+            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-primary border-primary/30"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
         case "cancelled":
-            return <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[11px] px-1.5 py-0 h-5 shadow-none"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>;
+            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-destructive border-destructive/30"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>;
         default:
-            return <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-200 text-[11px] px-1.5 py-0 h-5 shadow-none"><Clock className="w-3 h-3 mr-1" />Draft</Badge>;
+            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-amber-700 border-amber-300"><Clock className="w-3 h-3 mr-1" />Draft</Badge>;
     }
 };
 
 const PhaseBadge = ({ phase }: { phase: string }) => (
-    <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-black uppercase border-none shadow-xs", PHASE_BADGE_STYLES[phase])}>
+    <span className="text-xs text-muted-foreground">
         {ORDER_PHASE_LABELS[phase as keyof typeof ORDER_PHASE_LABELS]}
-    </Badge>
+    </span>
 );
 
 const TypeBadge = ({ type }: { type: string }) => <OrderTypeBadge type={type} />;
 
 const DeliveryBadge = ({ homeDelivery }: { homeDelivery: boolean }) => (
-    <span className={cn(
-        "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border leading-none",
-        homeDelivery ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-slate-50 text-slate-600 border-slate-200"
-    )}>
-        {homeDelivery ? <><Truck className="w-2.5 h-2.5" />Delivery</> : <><ShoppingBag className="w-2.5 h-2.5" />Pickup</>}
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        {homeDelivery ? <><Truck className="w-3 h-3" />Delivery</> : <><ShoppingBag className="w-3 h-3" />Pickup</>}
     </span>
 );
 
 const ItemCount = ({ isWork, count }: { isWork: boolean; count: number }) => (
-    <div className="bg-muted/50 px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 border border-border/10">
-        {isWork ? <Package className="w-3 h-3 text-primary/70" /> : <ShoppingBag className="w-3 h-3 text-amber-500/70" />}
-        <span className="text-xs font-bold tabular-nums">{count}</span>
-    </div>
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+        {isWork ? <Package className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+        {count} {count === 1 ? "item" : "items"}
+    </span>
 );
 
 const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrder: boolean }) => {
     if (!isWorkOrder) {
         return (
-            <div className="flex items-center gap-1 text-foreground">
-                <span className="font-black text-sm tabular-nums leading-none">{order.total_amount.toFixed(2)}</span>
-                <span className="text-[10px] font-bold text-muted-foreground">KWD</span>
+            <div className="flex items-baseline gap-1 text-foreground">
+                <span className="text-sm font-medium tabular-nums">{order.total_amount.toFixed(2)}</span>
+                <span className="text-[11px] text-muted-foreground">KWD</span>
             </div>
         );
     }
     return (
-        <div className="flex items-center gap-2 tabular-nums text-[11px]">
-            <span className="text-muted-foreground font-bold">{order.total_amount.toFixed(2)}</span>
+        <div className="flex items-center gap-2 tabular-nums text-sm">
+            <span className="text-foreground font-medium">{order.total_amount.toFixed(2)}</span>
             <span className="text-muted-foreground/50">/</span>
-            <span className="text-muted-foreground font-bold">{order.paid_amount.toFixed(2)}</span>
+            <span className="text-foreground">{order.paid_amount.toFixed(2)}</span>
             {order.balance > 0 ? (
-                <span className="text-destructive font-black bg-destructive/5 px-1 py-0.5 rounded border border-destructive/10 leading-none">
+                <span className="text-destructive font-semibold">
                     Due {order.balance.toFixed(2)}
                 </span>
             ) : (
-                <span className="text-primary font-bold uppercase text-[10px] tracking-tight">Paid</span>
+                <span className="text-primary font-medium">Paid</span>
             )}
         </div>
     );
@@ -367,22 +353,20 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
             search={target.search as any}
             className="group block"
         >
-            <Card className="overflow-hidden border border-border/50 group-hover:border-primary/40 group-hover:shadow-md transition-all bg-card/50 relative py-0 gap-0 shadow-sm rounded-xl">
-                <div className={cn("absolute left-0 top-0 bottom-0 w-1", isAlterationOrder ? "bg-purple-500" : isWorkOrder ? "bg-primary" : "bg-amber-500")} />
-
-                <CardContent className="pl-4 pr-3 py-2.5 sm:pl-5 sm:pr-4 space-y-1.5">
+            <Card className="overflow-hidden border bg-card group-hover:border-primary/40 group-hover:bg-muted/30 transition-colors py-0 gap-0 rounded-lg">
+                <CardContent className="px-4 py-2.5 sm:px-5 space-y-1.5">
                     {/* ===== DESKTOP (lg+): 2-row layout ===== */}
                     <div className="hidden lg:block space-y-1.5">
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-sm font-bold tabular-nums">#{order.id}</span>
+                                <span className="text-sm font-semibold tabular-nums text-foreground">#{order.id}</span>
                                 <TypeBadge type={order.order_type} />
                             </div>
                             <div className="w-px h-4 bg-border/30 shrink-0" />
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
-                                <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                                <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
+                                <span className="text-xs text-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                                 <StatusBadge status={order.checkout_status} />
@@ -391,19 +375,19 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                             </div>
                         </div>
                         <div className="flex items-center gap-3 pl-0.5">
-                            <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
+                            <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />{orderDate}
                             </span>
                             {isGarmentOrder && order.delivery_date && (
-                                <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
+                                <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
                                     <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
                             {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
                             <ItemCount isWork={isGarmentOrder} count={itemCount} />
                             {isWorkOrder && order.charges.discount > 0 && (
-                                <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded leading-none">
-                                    -{order.charges.discount.toFixed(2)} disc
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                    −{order.charges.discount.toFixed(2)} disc
                                 </span>
                             )}
                             <div className="flex-1" />
@@ -414,23 +398,23 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                     {/* ===== TABLET (sm to lg): 2-row grid ===== */}
                     <div className="hidden sm:block lg:hidden space-y-1.5">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold tabular-nums shrink-0">#{order.id}</span>
+                            <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">#{order.id}</span>
                             <TypeBadge type={order.order_type} />
                             <div className="w-px h-4 bg-border/30 shrink-0" />
                             <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                            <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
-                            <span className="text-xs text-muted-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
+                            <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
+                            <span className="text-xs text-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
                             <div className="flex-1" />
                             <StatusBadge status={order.checkout_status} />
                             {order.order_phase && <PhaseBadge phase={order.order_phase} />}
                             <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
+                            <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />{orderDate}
                             </span>
                             {isGarmentOrder && order.delivery_date && (
-                                <span className="text-[11px] tabular-nums text-muted-foreground flex items-center gap-1">
+                                <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
                                     <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                                 </span>
                             )}
@@ -445,20 +429,20 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                     <div className="sm:hidden space-y-1.5">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold tabular-nums">#{order.id}</span>
+                                <span className="text-sm font-semibold tabular-nums text-foreground">#{order.id}</span>
                                 <TypeBadge type={order.order_type} />
-                                <span className="text-[11px] text-muted-foreground tabular-nums">{orderDate}</span>
+                                <span className="text-xs text-foreground tabular-nums">{orderDate}</span>
                             </div>
                             <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                         </div>
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="font-semibold text-sm truncate">{order.customer_name}</span>
+                                <span className="font-medium text-sm truncate">{order.customer_name}</span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                                 {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
-                                <span className="text-[11px] text-muted-foreground font-mono tabular-nums">{order.customer_phone}</span>
+                                <span className="text-xs text-foreground font-mono tabular-nums">{order.customer_phone}</span>
                             </div>
                         </div>
                         <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/30">
@@ -470,7 +454,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                             <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>
                         {isGarmentOrder && order.delivery_date && (
-                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                            <div className="flex items-center gap-1 text-xs text-foreground tabular-nums">
                                 <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
                             </div>
                         )}

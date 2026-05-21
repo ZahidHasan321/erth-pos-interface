@@ -51,7 +51,6 @@ import { Route as MainOrdersOrderManagementDispatchRouteImport } from './routes/
 import { Route as MainOrdersOrderManagementChangeOptionsRouteImport } from './routes/$main/orders/order-management/change-options'
 import { Route as MainOrdersOrderManagementCancelOrderRouteImport } from './routes/$main/orders/order-management/cancel-order'
 import { Route as MainOrdersOrderManagementBrovaFeedbackRouteImport } from './routes/$main/orders/order-management/brova-feedback'
-import { Route as MainOrdersOrderManagementAlterationsRouteImport } from './routes/$main/orders/order-management/alterations'
 import { Route as MainStoreInventoryItemTypeItemIdRouteImport } from './routes/$main/store/inventory.$itemType.$itemId'
 import { Route as MainOrdersOrderManagementFeedbackOrderIdRouteImport } from './routes/$main/orders/order-management/feedback.$orderId'
 
@@ -276,12 +275,6 @@ const MainOrdersOrderManagementBrovaFeedbackRoute =
     path: '/orders/order-management/brova-feedback',
     getParentRoute: () => MainRouteRoute,
   } as any)
-const MainOrdersOrderManagementAlterationsRoute =
-  MainOrdersOrderManagementAlterationsRouteImport.update({
-    id: '/orders/order-management/alterations',
-    path: '/orders/order-management/alterations',
-    getParentRoute: () => MainRouteRoute,
-  } as any)
 const MainStoreInventoryItemTypeItemIdRoute =
   MainStoreInventoryItemTypeItemIdRouteImport.update({
     id: '/$itemType/$itemId',
@@ -328,7 +321,6 @@ export interface FileRoutesByFullPath {
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
-  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -372,7 +364,6 @@ export interface FileRoutesByTo {
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/cashier': typeof MainCashierIndexRoute
   '/$main/customers': typeof MainCustomersIndexRoute
-  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -420,7 +411,6 @@ export interface FileRoutesById {
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
-  '/$main/orders/order-management/alterations': typeof MainOrdersOrderManagementAlterationsRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -469,7 +459,6 @@ export interface FileRouteTypes {
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
-    | '/$main/orders/order-management/alterations'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -513,7 +502,6 @@ export interface FileRouteTypes {
     | '/$main/appointments'
     | '/$main/cashier'
     | '/$main/customers'
-    | '/$main/orders/order-management/alterations'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -560,7 +548,6 @@ export interface FileRouteTypes {
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
-    | '/$main/orders/order-management/alterations'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -882,13 +869,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersOrderManagementBrovaFeedbackRouteImport
       parentRoute: typeof MainRouteRoute
     }
-    '/$main/orders/order-management/alterations': {
-      id: '/$main/orders/order-management/alterations'
-      path: '/orders/order-management/alterations'
-      fullPath: '/$main/orders/order-management/alterations'
-      preLoaderRoute: typeof MainOrdersOrderManagementAlterationsRouteImport
-      parentRoute: typeof MainRouteRoute
-    }
     '/$main/store/inventory/$itemType/$itemId': {
       id: '/$main/store/inventory/$itemType/$itemId'
       path: '/$itemType/$itemId'
@@ -957,7 +937,6 @@ interface MainRouteRouteChildren {
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCashierIndexRoute: typeof MainCashierIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
-  MainOrdersOrderManagementAlterationsRoute: typeof MainOrdersOrderManagementAlterationsRoute
   MainOrdersOrderManagementBrovaFeedbackRoute: typeof MainOrdersOrderManagementBrovaFeedbackRoute
   MainOrdersOrderManagementCancelOrderRoute: typeof MainOrdersOrderManagementCancelOrderRoute
   MainOrdersOrderManagementChangeOptionsRoute: typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -985,8 +964,6 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCashierIndexRoute: MainCashierIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,
-  MainOrdersOrderManagementAlterationsRoute:
-    MainOrdersOrderManagementAlterationsRoute,
   MainOrdersOrderManagementBrovaFeedbackRoute:
     MainOrdersOrderManagementBrovaFeedbackRoute,
   MainOrdersOrderManagementCancelOrderRoute:

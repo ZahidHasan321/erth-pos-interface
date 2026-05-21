@@ -23,7 +23,6 @@ import {
 // UI Components
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
-import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Skeleton } from "@repo/ui/skeleton";
 import { ErrorBoundary } from "@/components/global/error-boundary";
@@ -47,36 +46,40 @@ interface OrderCardProps {
   order: OrderWithDetails;
   onDispatch: (orderId: number, garmentIds?: string[]) => Promise<void>;
   isUpdating: boolean;
+  /** True when this order also has garment(s) waiting in the Return to Workshop tab. */
+  hasReturning?: boolean;
+  onGoToTab?: (tab: string) => void;
 }
 
-const PHASE_STYLE: Record<string, string> = {
-    new: "bg-gray-100 text-gray-700",
-    in_progress: "bg-amber-100 text-amber-700",
-    completed: "bg-emerald-100 text-emerald-700",
-};
+// A garment row that's a final still parked on brova acceptance. Never
+// auto-selected for dispatch — staff opts in deliberately.
+const isParkedFinal = (g: { garment_type?: string | null; piece_stage?: string | null }) =>
+    g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance";
 
 const PHASE_LABEL: Record<string, string> = {
     new: "New",
-    in_progress: "In Progress",
+    in_progress: "In progress",
     completed: "Completed",
 };
 
-const TYPE_BADGE_STYLE: Record<string, string> = {
-    brova: "bg-blue-100 text-blue-700",
-    final: "bg-emerald-100 text-emerald-700",
-    alteration: "bg-purple-100 text-purple-700",
+// Neutral chrome only. POS direction: neutral base + single brand accent — no
+// per-type colour fills. Type is distinguished by its label, not by colour.
+const PILL = "inline-flex items-center rounded-md border bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground";
+
+const TYPE_LABEL: Record<string, string> = {
+    brova: "Brova",
+    final: "Final",
+    alteration: "Alteration",
 };
 
 // --- Tab state helpers (shared empty / error / loading) ---
 
 function TabEmptyState({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle: string }) {
     return (
-        <div className="py-10 text-center">
-            <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
-                <Icon className="w-8 h-8 text-muted-foreground/40" />
-            </div>
-            <h2 className="text-base font-bold text-muted-foreground">{title}</h2>
-            <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">{subtitle}</p>
+        <div className="py-16 text-center">
+            <Icon className="w-7 h-7 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-base font-medium text-muted-foreground">{title}</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">{subtitle}</p>
         </div>
     );
 }
@@ -84,12 +87,12 @@ function TabEmptyState({ icon: Icon, title, subtitle }: { icon: React.ElementTyp
 function TabError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
     return (
         <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="p-4 text-center">
-                <p className="font-bold text-destructive uppercase tracking-widest mb-3">
-                    Error: {error instanceof Error ? error.message : "Fetch Failed"}
+            <CardContent className="p-4 text-center space-y-3">
+                <p className="font-medium text-destructive">
+                    {error instanceof Error ? error.message : "Failed to load"}
                 </p>
-                <Button variant="outline" className="font-bold" onClick={onRetry}>
-                    Retry Connection
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                    Retry
                 </Button>
             </CardContent>
         </Card>
@@ -98,9 +101,9 @@ function TabError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
 
 function TabLoading({ count = 3, height = "h-28" }: { count?: number; height?: string }) {
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {Array.from({ length: count }).map((_, i) => (
-                <Skeleton key={i} className={cn(height, "w-full rounded-xl")} />
+                <Skeleton key={i} className={cn(height, "w-full rounded-lg")} />
             ))}
         </div>
     );
@@ -128,12 +131,14 @@ interface OrderCardShellProps extends OrderHeader {
     children?: React.ReactNode;
     collapsible?: boolean;
     defaultOpen?: boolean;
+    note?: React.ReactNode;
 }
 
 function OrderCardShell({
     children,
     collapsible = false,
     defaultOpen = false,
+    note,
     ...h
 }: OrderCardShellProps) {
     const [isExpanded, setIsExpanded] = useState(defaultOpen);
@@ -147,33 +152,30 @@ function OrderCardShell({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
             <div className="flex items-center gap-2 min-w-0">
                 <Hash className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="font-bold text-sm shrink-0">#{h.orderId}</span>
+                <span className="font-medium text-sm shrink-0">{h.orderId}</span>
                 {h.invoiceNumber != null && (
-                    <span className="text-xs font-bold text-primary/70 shrink-0">Inv {h.invoiceNumber}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">INV {h.invoiceNumber}</span>
                 )}
                 {h.phase && (
-                    <Badge variant="outline" className={cn(
-                        "text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs shrink-0",
-                        PHASE_STYLE[h.phase] || "bg-muted text-muted-foreground"
-                    )}>
+                    <span className="text-xs text-muted-foreground shrink-0">
                         {PHASE_LABEL[h.phase] ?? h.phase}
-                    </Badge>
+                    </span>
                 )}
             </div>
             <div className="flex items-center gap-2 min-w-0">
                 <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-sm font-bold truncate">{h.customerName || "Unknown Customer"}</span>
+                <span className="text-sm font-medium truncate">{h.customerName || "Unknown customer"}</span>
                 {h.customerPhone && (
-                    <span className="text-xs text-muted-foreground font-medium shrink-0">{h.customerPhone}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{h.customerPhone}</span>
                 )}
             </div>
             {orderDateStr && <span className="text-xs text-muted-foreground shrink-0">{orderDateStr}</span>}
-            <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{h.pieceCount} Pcs</Badge>
-                {h.brovaCount ? <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{h.brovaCount} Brova</span> : null}
-                {h.finalCount ? <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{h.finalCount} Final</span> : null}
-                {h.alterationCount ? <span className="text-[11px] font-black bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{h.alterationCount} Alteration</span> : null}
-                {h.hasExpress && <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Express</span>}
+            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                <span>{h.pieceCount} pcs</span>
+                {h.brovaCount ? <span>· {h.brovaCount} brova</span> : null}
+                {h.finalCount ? <span>· {h.finalCount} final</span> : null}
+                {h.alterationCount ? <span>· {h.alterationCount} alteration</span> : null}
+                {h.hasExpress && <span className="text-red-700 font-medium">· Express</span>}
             </div>
             <div className="flex items-center gap-2 ml-auto shrink-0">
                 {h.rightBadges}
@@ -193,7 +195,7 @@ function OrderCardShell({
     );
 
     return (
-        <Card className="overflow-hidden py-0 gap-0">
+        <Card className="overflow-hidden py-0 gap-0 rounded-lg">
             <CardContent className="p-0">
                 {collapsible ? (
                     <div
@@ -206,8 +208,11 @@ function OrderCardShell({
                 ) : (
                     <div className="bg-muted/20 border-b border-border/40">{header}</div>
                 )}
+                {note && (
+                    <div className="px-4 py-2 border-t border-border/40 bg-muted/10">{note}</div>
+                )}
                 {showBody && children && (
-                    <div className={cn(collapsible && "border-t-2 border-border/40 bg-muted/5")}>
+                    <div className={cn(collapsible && "border-t border-border/40")}>
                         {children}
                     </div>
                 )}
@@ -220,22 +225,15 @@ function OrderCardShell({
 
 function GarmentTypeBadge({ type }: { type?: string | null }) {
     if (!type) return null;
-    return (
-        <Badge className={cn(
-            "text-[10px] font-black uppercase border-none h-4 px-1.5",
-            TYPE_BADGE_STYLE[type] || "bg-muted text-muted-foreground"
-        )}>
-            {type}
-        </Badge>
-    );
+    return <span className={PILL}>{TYPE_LABEL[type] ?? type}</span>;
 }
 
 function FabricChip({ source, name }: { source?: string | null; name?: string | null }) {
     if (source === "IN") {
-        return <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">{name || "IN"}</span>;
+        return <span className="text-xs text-muted-foreground">{name || "In-house fabric"}</span>;
     }
     if (source === "OUT") {
-        return <span className="text-xs font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded">OUT</span>;
+        return <span className="text-xs text-muted-foreground">Outside fabric</span>;
     }
     return null;
 }
@@ -265,7 +263,7 @@ function GarmentRow({ leading, garmentId, type, badges, info, action, selected, 
         >
             {leading}
             <div className="flex items-center gap-2 min-w-[140px] shrink-0">
-                <span className="font-black text-sm">{garmentId}</span>
+                <span className="font-medium text-sm">{garmentId}</span>
                 <GarmentTypeBadge type={type} />
             </div>
             {badges && <div className="flex items-center gap-2 flex-wrap">{badges}</div>}
@@ -286,11 +284,15 @@ function tripLabel(tripNumber: number | null | undefined, garmentType?: string |
 
 // --- New Orders tab card ---
 
-function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
+function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab }: OrderCardProps) {
     const garments = order.garments || [];
     const numGarments = garments.length || order.num_of_fabrics || 0;
 
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(garments.map(g => g.id)));
+    // Everything selected by default — parked finals are dispatched
+    // alongside brovas and stay parked at the workshop (spec §2.4).
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(
+        () => new Set(garments.map(g => g.id))
+    );
 
     const toggleGarment = (id: string, checked: boolean) => {
         setSelectedIds(prev => {
@@ -319,7 +321,8 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
 
     const dispatchButton = (
         <Button
-            className="h-9 font-bold uppercase tracking-wider text-xs shadow-sm"
+            size="sm"
+            className="h-9"
             onClick={handleDispatch}
             disabled={isUpdating || selectedIds.size === 0}
         >
@@ -349,21 +352,33 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
             hasExpress={garments.some(g => g.express)}
             action={dispatchButton}
             collapsible
+            note={hasReturning ? (
+                <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onGoToTab?.("return-workshop"); }}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    <RotateCcw className="w-3 h-3" />
+                    This order also has garment(s) returning — see Return to Workshop
+                    <ChevronRight className="w-3 h-3" />
+                </button>
+            ) : undefined}
         >
             {garments.length > 0 && (
                 <div className="p-3">
                     <div className="flex items-center gap-2 mb-2 px-1" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleAll(!!checked)} />
-                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Select All</span>
+                        <span className="text-xs font-medium text-muted-foreground">Select all</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
                         {garments.map((g) => {
                             const isSelected = selectedIds.has(g.id);
+                            const parked = isParkedFinal(g);
                             return (
                                 <div
                                     key={g.id}
                                     className={cn(
-                                        "flex items-start gap-2.5 rounded-lg border border-border/50 bg-background p-3 cursor-pointer hover:bg-muted/20 transition-colors",
+                                        "flex items-start gap-2.5 rounded-md border bg-background p-3 cursor-pointer hover:bg-muted/20 transition-colors",
                                         !isSelected && "opacity-50"
                                     )}
                                     onClick={() => toggleGarment(g.id, !isSelected)}
@@ -376,10 +391,13 @@ function OrderListItem({ order, onDispatch, isUpdating }: OrderCardProps) {
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                                            <span className="font-black text-sm">{g.garment_id}</span>
+                                            <span className="font-medium text-sm">{g.garment_id}</span>
                                             <GarmentTypeBadge type={g.garment_type} />
                                             {g.express && (
-                                                <span className="text-xs font-black uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">Express</span>
+                                                <span className="text-xs font-medium text-red-700">Express</span>
+                                            )}
+                                            {parked && (
+                                                <span className="text-xs text-muted-foreground">Parked</span>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
@@ -418,7 +436,15 @@ interface RedispatchGarment extends Garment {
   }>;
 }
 
-function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.MutableRefObject<(() => void) | null> }) {
+function ReturnToWorkshopTab({
+  bulkDispatchRef,
+  newOrderIds,
+  onGoToTab,
+}: {
+  bulkDispatchRef: React.MutableRefObject<(() => void) | null>;
+  newOrderIds: Set<number>;
+  onGoToTab?: (tab: string) => void;
+}) {
   const queryClient = useQueryClient();
   const [dispatchingIds, setDispatchingIds] = useState<Set<string>>(new Set());
   const [isBulkDispatching, setIsBulkDispatching] = useState(false);
@@ -480,7 +506,7 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
   if (isLoading) return <TabLoading height="h-32" />;
   if (isError) return <TabError error={error} onRetry={() => queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] })} />;
   if (garments.length === 0) {
-    return <TabEmptyState icon={RotateCcw} title="No Returns Pending" subtitle="No garments need to be sent back to workshop" />;
+    return <TabEmptyState icon={RotateCcw} title="No returns pending" subtitle="No garments need to be sent back to the workshop" />;
   }
 
   // Expose bulk dispatch to parent via ref
@@ -494,51 +520,62 @@ function ReturnToWorkshopTab({ bulkDispatchRef }: { bulkDispatchRef: React.Mutab
         const fbStatus = (g as { feedback_status?: string | null }).feedback_status;
         const orderId = g.orders?.id ?? g.order_id;
         const invoice = g.orders?.work_orders?.invoice_number;
-        const customerName = g.orders?.customers?.name || "Unknown Customer";
+        const customerName = g.orders?.customers?.name || "Unknown customer";
         const customerPhone = g.orders?.customers?.phone;
+        const alsoNew = orderId != null && newOrderIds.has(orderId);
 
         return (
-          <Card key={g.id} className="overflow-hidden py-0 gap-0">
+          <Card key={g.id} className="overflow-hidden py-0 gap-0 rounded-lg">
             <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
               <div className="flex items-center gap-2 min-w-[150px] shrink-0">
-                <span className="font-black text-sm">{g.garment_id || g.id.slice(0, 8)}</span>
+                <span className="font-medium text-sm">{g.garment_id || g.id.slice(0, 8)}</span>
                 <GarmentTypeBadge type={g.garment_type} />
               </div>
               <div className="flex items-center gap-2 min-w-0 shrink-0">
                 <Hash className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-xs font-bold shrink-0">#{orderId}</span>
+                <span className="text-xs shrink-0">{orderId}</span>
                 {invoice != null && (
-                  <span className="text-xs font-bold text-primary/70 shrink-0">Inv {invoice}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">INV {invoice}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 min-w-0">
                 <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-sm font-bold truncate">{customerName}</span>
+                <span className="text-sm font-medium truncate">{customerName}</span>
                 {customerPhone && (
-                  <span className="text-xs text-muted-foreground font-medium shrink-0">{customerPhone}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{customerPhone}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge className={cn(
-                  "text-xs font-black uppercase border-none",
-                  fbStatus === "needs_redo" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                <span className={cn(
+                  "text-xs font-medium",
+                  fbStatus === "needs_redo" ? "text-destructive" : "text-foreground"
                 )}>
-                  {fbStatus === "needs_redo" ? "Needs Redo" : fbStatus === "needs_repair" ? "Needs Repair" : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
-                </Badge>
-                <span className="text-xs font-bold text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
+                  {fbStatus === "needs_redo" ? "Needs redo" : fbStatus === "needs_repair" ? "Needs repair" : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
+                </span>
+                <span className="text-xs text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
               </div>
               {feedback && (
                 <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">
                   <MessageSquare className="w-3 h-3" />
-                  <span className="font-bold capitalize">{feedback.action?.replace(/_/g, " ")}</span>
-                  {feedback.satisfaction_level && <span>Sat: {feedback.satisfaction_level}/5</span>}
+                  <span className="capitalize">{feedback.action?.replace(/_/g, " ")}</span>
+                  {feedback.satisfaction_level && <span>Sat {feedback.satisfaction_level}/5</span>}
                   {feedback.notes && <span className="max-w-[200px] truncate italic">"{feedback.notes}"</span>}
                 </div>
+              )}
+              {alsoNew && (
+                <button
+                  type="button"
+                  onClick={() => onGoToTab?.("new-orders")}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Also has new garments
+                  <ChevronRight className="w-3 h-3" />
+                </button>
               )}
               <Button
                 size="sm"
                 variant="outline"
-                className="ml-auto shrink-0 font-black uppercase tracking-widest text-xs h-8 border-2 border-amber-500/50 hover:bg-amber-50 hover:border-amber-500"
+                className="ml-auto shrink-0 h-8"
                 onClick={() => handleDispatchGarment(g)}
                 disabled={isDispatching}
               >
@@ -578,7 +615,7 @@ function InTransitToWorkshopTab() {
   if (isLoading) return <TabLoading />;
   if (isError) return <TabError error={error} onRetry={() => queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] })} />;
   if (orders.length === 0) {
-    return <TabEmptyState icon={Truck} title="No Garments In Transit" subtitle="Nothing is currently on its way to the workshop" />;
+    return <TabEmptyState icon={Truck} title="No garments in transit" subtitle="Nothing is currently on its way to the workshop" />;
   }
 
   return (
@@ -592,20 +629,20 @@ function InTransitToWorkshopTab() {
         const alterationCount = garments.filter(g => g.garment_type === "alteration").length;
 
         const rightBadges = (
-          <>
+          <div className="flex items-center gap-3 text-xs">
             {transitCount > 0 && (
-              <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
-                <Truck className="w-3 h-3 mr-1" />
-                {transitCount} In Transit
-              </Badge>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Truck className="w-3 h-3" />
+                {transitCount} in transit
+              </span>
             )}
             {lostCount > 0 && (
-              <Badge className="bg-red-100 text-red-700 font-black text-xs border-none">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                {lostCount} Lost
-              </Badge>
+              <span className="flex items-center gap-1 text-destructive font-medium">
+                <AlertTriangle className="w-3 h-3" />
+                {lostCount} lost
+              </span>
             )}
-          </>
+          </div>
         );
 
         return (
@@ -630,10 +667,9 @@ function InTransitToWorkshopTab() {
                     key={g.id}
                     garmentId={g.garment_id}
                     type={g.garment_type}
-                    className={isLost ? "bg-red-50/50" : undefined}
                     badges={
                       <>
-                        <span className="text-xs font-bold text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
+                        <span className="text-xs text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
                         <span className="text-xs text-muted-foreground">
                           {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
                         </span>
@@ -642,15 +678,15 @@ function InTransitToWorkshopTab() {
                     }
                     action={
                       isLost ? (
-                        <Badge className="bg-red-100 text-red-700 font-black text-xs border-none">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          Lost in Transit
-                        </Badge>
+                        <span className="flex items-center gap-1 text-xs font-medium text-destructive">
+                          <AlertTriangle className="w-3 h-3" />
+                          Lost in transit
+                        </span>
                       ) : (
-                        <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
-                          <Truck className="w-3 h-3 mr-1" />
-                          In Transit
-                        </Badge>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Truck className="w-3 h-3" />
+                          In transit
+                        </span>
                       )
                     }
                   />
@@ -700,7 +736,7 @@ function getPeriodRange(period: HistoryPeriod): { from: Date; to: Date; label: s
 }
 
 const HISTORY_PERIODS: readonly HistoryPeriod[] = ['today', 'week', 'month'] as const;
-const PERIOD_LABELS: Record<HistoryPeriod, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
+const PERIOD_LABELS: Record<HistoryPeriod, string> = { today: 'Today', week: 'This week', month: 'This month' };
 
 const VIEW_MODES: readonly HistoryViewMode[] = ['garment', 'order'] as const;
 const VIEW_MODE_LABELS: Record<HistoryViewMode, string> = { garment: 'Garments', order: 'Orders' };
@@ -721,10 +757,10 @@ function ViewModeSwitcher({ mode, onChange }: { mode: HistoryViewMode; onChange:
   }, [mode]);
 
   return (
-    <div className="relative inline-flex items-center border-2 rounded-lg p-0.5">
+    <div className="relative inline-flex items-center border rounded-md p-0.5">
       {indicator && (
         <div
-          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
+          className="absolute top-0.5 bottom-0.5 bg-primary rounded-sm transition-all duration-300 ease-out"
           style={{ left: indicator.left, width: indicator.width }}
         />
       )}
@@ -734,8 +770,8 @@ function ViewModeSwitcher({ mode, onChange }: { mode: HistoryViewMode; onChange:
           ref={el => { buttonsRef.current[i] = el; }}
           onClick={() => onChange(m)}
           className={cn(
-            'relative z-10 text-xs font-black uppercase tracking-wider px-4 py-1.5 rounded-md transition-colors duration-300 whitespace-nowrap',
-            mode === m ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+            'relative z-10 text-sm font-medium px-4 py-1.5 rounded-sm transition-colors duration-300 whitespace-nowrap',
+            mode === m ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {VIEW_MODE_LABELS[m]}
@@ -765,11 +801,11 @@ function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onCha
   }, [period]);
 
   return (
-    <div className="relative inline-flex items-center border-2 rounded-lg p-0.5">
+    <div className="relative inline-flex items-center border rounded-md p-0.5">
       {/* Sliding indicator — hidden until first measurement to avoid a flash at 0,0 */}
       {indicator && (
         <div
-          className="absolute top-0.5 bottom-0.5 bg-primary rounded-md shadow-sm transition-all duration-300 ease-out"
+          className="absolute top-0.5 bottom-0.5 bg-primary rounded-sm transition-all duration-300 ease-out"
           style={{ left: indicator.left, width: indicator.width }}
         />
       )}
@@ -779,8 +815,8 @@ function PeriodPillSwitcher({ period, onChange }: { period: HistoryPeriod; onCha
           ref={(el) => { buttonsRef.current[i] = el; }}
           onClick={() => onChange(p)}
           className={cn(
-            'relative z-10 text-xs font-black uppercase tracking-wider px-4 py-1.5 rounded-md transition-colors duration-300 whitespace-nowrap',
-            period === p ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+            'relative z-10 text-sm font-medium px-4 py-1.5 rounded-sm transition-colors duration-300 whitespace-nowrap',
+            period === p ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {PERIOD_LABELS[p]}
@@ -812,30 +848,30 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
       <tr
         className={cn(
           "border-b border-border/30 cursor-pointer transition-colors",
-          isExpanded ? "bg-primary/5" : "hover:bg-muted/20"
+          isExpanded ? "bg-muted/30" : "hover:bg-muted/20"
         )}
         onClick={() => setIsExpanded(v => !v)}
       >
         <td className="py-2.5 px-4">
           <div className="flex items-center gap-1.5">
             <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-300 shrink-0", isExpanded && "rotate-180")} />
-            <span className="font-bold text-sm">#{group.orderId}</span>
+            <span className="font-medium text-sm">{group.orderId}</span>
           </div>
         </td>
         <td className="py-2.5 px-4 text-xs text-muted-foreground">{group.invoiceNumber ?? '—'}</td>
         <td className="py-2.5 px-4">
-          <div className="font-bold text-xs">{group.customerName ?? 'Unknown'}</div>
+          <div className="font-medium text-xs">{group.customerName ?? 'Unknown'}</div>
           {group.customerPhone && <div className="text-[10px] text-muted-foreground">{group.customerPhone}</div>}
         </td>
         <td className="py-2.5 px-4">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{group.rows.length} Pcs</Badge>
-            {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
-            {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
+          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+            <span>{group.rows.length} pcs</span>
+            {brovaCount > 0 && <span>· {brovaCount} brova</span>}
+            {finalCount > 0 && <span>· {finalCount} final</span>}
           </div>
         </td>
         <td className="py-2.5 px-4 whitespace-nowrap">
-          <div className="font-bold text-xs">{lastDispatch.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
+          <div className="font-medium text-xs">{lastDispatch.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
           <div className="text-[10px] text-muted-foreground">{lastDispatch.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}</div>
         </td>
       </tr>
@@ -846,7 +882,7 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
           colSpan={5}
           className={cn(
             "p-0 transition-colors",
-            isExpanded ? "bg-muted/10 border-b border-border/40 shadow-inner" : "border-0"
+            isExpanded ? "bg-muted/10 border-b border-border/40" : "border-0"
           )}
         >
           <div className={cn(
@@ -855,38 +891,30 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
           )}>
             <div className="overflow-hidden">
               <div className="p-3 sm:pl-10">
-                <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
-                  Garments
-                  <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{group.rows.length}</span>
+                <h4 className="text-xs font-medium mb-2 text-muted-foreground">
+                  Garments ({group.rows.length})
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                   {group.rows.map(r => {
                     const d = new Date(r.dispatched_at);
                     return (
-                      <div key={r.id} className="p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm">
+                      <div key={r.id} className="p-2 bg-background rounded-md border text-sm">
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="font-mono font-medium text-xs text-muted-foreground">{r.garment_code ?? r.garment_id.slice(0, 8)}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{r.garment_code ?? r.garment_id.slice(0, 8)}</span>
                           {r.garment_type && (
-                            <span className={cn(
-                              'inline-flex items-center rounded border px-1 py-0 text-xs font-bold',
-                              r.garment_type === 'brova'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : r.garment_type === 'alteration'
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            )}>
-                              {r.garment_type === 'brova' ? 'Brova' : r.garment_type === 'alteration' ? 'Alteration' : 'Final'}
+                            <span className={PILL}>
+                              {TYPE_LABEL[r.garment_type] ?? r.garment_type}
                             </span>
                           )}
                         </div>
                         <div className="space-y-1">
                           <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground text-xs uppercase font-bold">Trip</span>
-                            <span className="font-bold text-xs bg-muted px-1.5 py-0.5 rounded">{r.trip_number ?? '—'}</span>
+                            <span className="text-muted-foreground text-xs">Trip</span>
+                            <span className="text-xs">{r.trip_number ?? '—'}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground text-xs uppercase font-bold">Time</span>
-                            <span className="font-bold text-xs">{d.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="text-muted-foreground text-xs">Time</span>
+                            <span className="text-xs">{d.toLocaleTimeString([], { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </div>
                       </div>
@@ -938,20 +966,20 @@ function DispatchHistoryTab() {
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <PeriodPillSwitcher period={period} onChange={setPeriod} />
 
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+        <span className="text-xs text-muted-foreground">
           {periodLabel}
         </span>
 
-        <Badge className="bg-cyan-100 text-cyan-700 font-black text-xs border-none">
-          {rows.length} dispatched → Workshop
-        </Badge>
+        <span className="text-xs text-muted-foreground">
+          {rows.length} dispatched → workshop
+        </span>
 
         <div className="ml-auto flex items-center gap-2">
           <ViewModeSwitcher mode={viewMode} onChange={setViewMode} />
 
           <Button
             size="sm"
-            className="font-black uppercase tracking-widest text-xs h-9 bg-primary hover:bg-primary/90"
+            className="h-9"
             onClick={handlePrint}
             disabled={rows.length === 0}
           >
@@ -963,9 +991,9 @@ function DispatchHistoryTab() {
 
       {/* Print header (only visible when printing) */}
       <div className="hidden print:block mb-4">
-        <h1 className="text-xl font-bold">Dispatch History — {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
+        <h1 className="text-xl font-medium">Dispatch history — {period === 'today' ? 'Today' : period === 'week' ? 'This week' : 'This month'}</h1>
         <p className="text-sm text-muted-foreground">
-          Shop → Workshop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
+          Shop → workshop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
         </p>
       </div>
 
@@ -973,38 +1001,30 @@ function DispatchHistoryTab() {
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full rounded" />
+            <Skeleton key={i} className="h-10 w-full rounded-md" />
           ))}
         </div>
       ) : isError ? (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="p-4 text-center">
-            <p className="font-bold text-destructive uppercase tracking-widest mb-3">
-              Error: {error instanceof Error ? error.message : 'Fetch Failed'}
+            <p className="font-medium text-destructive">
+              {error instanceof Error ? error.message : 'Failed to load'}
             </p>
           </CardContent>
         </Card>
       ) : rows.length === 0 ? (
-        <div className="py-10 text-center">
-          <div className="inline-flex p-6 bg-muted/30 rounded-full mb-3 border-2 border-dashed border-border">
-            <History className="w-8 h-8 text-muted-foreground/40" />
-          </div>
-          <h2 className="text-base font-bold text-muted-foreground">No Dispatches This Period</h2>
-          <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
-            Nothing was dispatched in {periodLabel}
-          </p>
-        </div>
+        <TabEmptyState icon={History} title="No dispatches this period" subtitle={`Nothing was dispatched in ${periodLabel}`} />
       ) : viewMode === 'order' ? (
-        <Card className="overflow-hidden print:border-0 print:shadow-none">
+        <Card className="overflow-hidden rounded-lg print:border-0">
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b-2 border-border bg-muted/20">
+                <tr className="text-xs font-medium text-muted-foreground border-b bg-muted/20">
                   <th className="text-left py-2.5 px-4">Order</th>
                   <th className="text-left py-2.5 px-4">Invoice</th>
                   <th className="text-left py-2.5 px-4">Customer</th>
                   <th className="text-left py-2.5 px-4">Pieces</th>
-                  <th className="text-left py-2.5 px-4">Last Dispatch</th>
+                  <th className="text-left py-2.5 px-4">Last dispatch</th>
                 </tr>
               </thead>
               <tbody>
@@ -1014,11 +1034,11 @@ function DispatchHistoryTab() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden print:border-0 print:shadow-none">
+        <Card className="overflow-hidden rounded-lg print:border-0">
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b-2 border-border bg-muted/20">
+                <tr className="text-xs font-medium text-muted-foreground border-b bg-muted/20">
                   <th className="text-left py-2.5 px-4">Date</th>
                   <th className="text-left py-2.5 px-4">Order</th>
                   <th className="text-left py-2.5 px-4">Invoice</th>
@@ -1036,15 +1056,15 @@ function DispatchHistoryTab() {
                   return (
                     <tr key={r.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
                       <td className="py-2 px-4 whitespace-nowrap">
-                        <div className="font-bold text-xs">{dateStr}</div>
+                        <div className="font-medium text-xs">{dateStr}</div>
                         <div className="text-[10px] text-muted-foreground">{timeStr}</div>
                       </td>
-                      <td className="py-2 px-4 font-bold">#{r.order_id}</td>
+                      <td className="py-2 px-4 font-medium">{r.order_id}</td>
                       <td className="py-2 px-4 text-xs text-muted-foreground">
                         {r.invoice_number ?? '—'}
                       </td>
                       <td className="py-2 px-4">
-                        <div className="font-bold text-xs">{r.customer_name ?? 'Unknown'}</div>
+                        <div className="font-medium text-xs">{r.customer_name ?? 'Unknown'}</div>
                         {r.customer_phone && (
                           <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
                         )}
@@ -1052,19 +1072,12 @@ function DispatchHistoryTab() {
                       <td className="py-2 px-4 font-mono text-xs">{r.garment_code ?? r.garment_id.slice(0, 8)}</td>
                       <td className="py-2 px-4">
                         {r.garment_type && (
-                          <span className={cn(
-                            'inline-block text-[10px] font-black uppercase px-1.5 py-0.5 rounded',
-                            r.garment_type === 'brova'
-                              ? 'bg-blue-50 text-blue-700'
-                              : r.garment_type === 'alteration'
-                                ? 'bg-purple-50 text-purple-700'
-                                : 'bg-emerald-50 text-emerald-700'
-                          )}>
-                            {r.garment_type}
+                          <span className={PILL}>
+                            {TYPE_LABEL[r.garment_type] ?? r.garment_type}
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-4 text-xs font-bold">{r.trip_number ?? '—'}</td>
+                      <td className="py-2 px-4 text-xs">{r.trip_number ?? '—'}</td>
                     </tr>
                   );
                 })}
@@ -1116,7 +1129,25 @@ export default function DispatchOrderPage() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
-  const returnCount = redispatchResponse?.data?.length || 0;
+  const returnData = redispatchResponse?.data;
+  const returnCount = returnData?.length || 0;
+
+  // Cross-link sets: which order ids appear in both queues, so each tab can
+  // point staff at the other half of the same order.
+  const returningOrderIds = useMemo(() => {
+    const s = new Set<number>();
+    const items = (returnData ?? []) as Array<{ order_id?: number | null; orders?: { id?: number | null } | null }>;
+    for (const g of items) {
+      const id = g.orders?.id ?? g.order_id;
+      if (id != null) s.add(id);
+    }
+    return s;
+  }, [returnData]);
+  const newOrderIds = useMemo(
+    () => new Set<number>(orders.map((o) => o.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ordersResponse?.data],
+  );
 
   // Count for in-transit tab badge
   const { data: transitResponse } = useQuery<ApiResponse<OrderWithDetails[]>>({
@@ -1169,81 +1200,82 @@ export default function DispatchOrderPage() {
   return (
     <ErrorBoundary showDetails={true}>
       <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-border pb-5">
           <div className="space-y-1">
-            <h1 className="text-xl font-bold text-foreground tracking-tight">
+            <h1 className="text-xl text-foreground">
               Dispatch Center
             </h1>
             <p className="text-sm text-muted-foreground">
-               Workshop Transmission Hub
+               Send garments to the workshop
             </p>
           </div>
           <div className="flex items-center gap-3">
             {activeTab === "new-orders" && (
               <Button
                 size="sm"
-                className="font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-6 shadow-md"
+                className="h-10"
                 onClick={handleBulkDispatch}
                 disabled={orders.length === 0 || isLoading || isBulkUpdating}
               >
                 <PackageCheck className="w-4 h-4 mr-2" />
-                Dispatch All
+                Dispatch all
               </Button>
             )}
             {activeTab === "return-workshop" && returnCount > 0 && (
               <Button
                 size="sm"
-                className="font-black uppercase tracking-widest bg-amber-600 hover:bg-amber-700 text-white h-10 px-6 shadow-md"
+                variant="outline"
+                className="h-10"
                 onClick={() => bulkRedispatchRef.current?.()}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
-                Dispatch All ({returnCount})
+                Dispatch all ({returnCount})
               </Button>
             )}
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-auto p-1 rounded-xl w-full md:w-auto">
+          <TabsList className="h-auto p-1 rounded-md w-full md:w-auto">
             <TabsTrigger
               value="new-orders"
-              className="group font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+              className="text-sm font-medium px-5 py-2 rounded-sm"
             >
-              New Orders
+              New orders
               {orders.length > 0 && (
-                <Badge className="ml-2 bg-primary/20 text-primary group-data-[state=active]:bg-primary-foreground/25 group-data-[state=active]:text-primary-foreground font-bold text-xs h-5 px-1.5">
+                <span className="ml-2 text-xs text-muted-foreground">
                   {orders.length}
-                </Badge>
+                </span>
               )}
             </TabsTrigger>
             <TabsTrigger
               value="return-workshop"
-              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+              className="text-sm font-medium px-5 py-2 rounded-sm"
             >
-              Return to Workshop
+              Return to workshop
               {returnCount > 0 && (
-                <Badge className="ml-2 bg-amber-500 text-white font-bold text-xs h-5 px-1.5">
+                <span className="ml-2 text-xs text-muted-foreground">
                   {returnCount}
-                </Badge>
+                </span>
               )}
             </TabsTrigger>
             <TabsTrigger
               value="in-transit"
-              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+              className="text-sm font-medium px-5 py-2 rounded-sm"
             >
-              In Transit
+              In transit
               {transitGarmentCount > 0 && (
-                <Badge className={cn(
-                  "ml-2 font-bold text-xs h-5 px-1.5",
-                  lostGarmentCount > 0 ? "bg-red-500 text-white" : "bg-cyan-500 text-white"
+                <span className={cn(
+                  "ml-2 text-xs",
+                  lostGarmentCount > 0 ? "text-destructive font-medium" : "text-muted-foreground"
                 )}>
                   {transitGarmentCount}{lostGarmentCount > 0 ? ` (${lostGarmentCount} lost)` : ""}
-                </Badge>
+                </span>
               )}
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="font-bold uppercase tracking-wide text-xs px-6 py-2.5 rounded-lg"
+              className="text-sm font-medium px-5 py-2 rounded-sm"
             >
               <History className="w-3 h-3 mr-1.5" />
               History
@@ -1256,7 +1288,7 @@ export default function DispatchOrderPage() {
             ) : isError ? (
               <TabError error={error} onRetry={() => queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })} />
             ) : orders.length === 0 ? (
-              <TabEmptyState icon={PackageCheck} title="Queue is Empty" subtitle="No pending dispatches at this time" />
+              <TabEmptyState icon={PackageCheck} title="Queue is empty" subtitle="No pending dispatches at this time" />
             ) : (
               <div className="space-y-4">
                 {orders.map((order) => (
@@ -1265,6 +1297,8 @@ export default function DispatchOrderPage() {
                     order={order}
                     onDispatch={handleDispatch}
                     isUpdating={updatingOrderIds.has(order.id)}
+                    hasReturning={returningOrderIds.has(order.id)}
+                    onGoToTab={setActiveTab}
                   />
                 ))}
               </div>
@@ -1272,7 +1306,11 @@ export default function DispatchOrderPage() {
           </TabsContent>
 
           <TabsContent value="return-workshop" className="mt-6">
-            <ReturnToWorkshopTab bulkDispatchRef={bulkRedispatchRef} />
+            <ReturnToWorkshopTab
+              bulkDispatchRef={bulkRedispatchRef}
+              newOrderIds={newOrderIds}
+              onGoToTab={setActiveTab}
+            />
           </TabsContent>
 
           <TabsContent value="in-transit" className="mt-6">

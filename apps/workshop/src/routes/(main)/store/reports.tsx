@@ -25,6 +25,11 @@ function rangeToDates(range: Range): { from: string; to: string } {
   else if (range === "30d") from.setDate(to.getDate() - 30);
   else if (range === "90d") from.setDate(to.getDate() - 90);
   else from.setMonth(0, 1);
+  // Anchor the lower bound to local start-of-day so the window is "since the
+  // start of that calendar day" — otherwise YTD/Nd start at the current
+  // time-of-day and silently drop that day's earlier movements. toISOString()
+  // then converts this local instant to the correct absolute UTC bound.
+  from.setHours(0, 0, 0, 0);
   return { from: from.toISOString(), to: to.toISOString() };
 }
 

@@ -42,6 +42,7 @@ import { ScrollProgress } from "@repo/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
 import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
 import { useStepNavigation } from "@/hooks/useStepNavigation";
+import { useFormDraft, workOrderDraftKey, readFormDraft, clearFormDraft } from "@/hooks/useFormDraft";
 import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 import { usePricing } from "@/hooks/usePricing";
 import {
@@ -60,6 +61,7 @@ import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
+import { brandUsesCashier } from "@/lib/constants";
 import { useAuth } from "@/context/auth";
 import { format } from "date-fns";
 import { CalendarClock } from "lucide-react";
@@ -133,7 +135,7 @@ function NewWorkOrder() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { main } = useParams({ strict: false });
-    const cashierHandlesPayment = main === "erth";
+    const cashierHandlesPayment = brandUsesCashier(main);
     const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
     const { styles, stylePricingRules, stitchingAdult, stitchingChild } = usePricing();
 
@@ -300,6 +302,24 @@ function NewWorkOrder() {
         ) ?? 0;
 
     // ============================================================================
+    // LOCAL DRAFT BUFFER (unsaved in-form window of the heavy steps)
+    // ============================================================================
+    // The DB draft only persists AFTER a save; these buffer the gap where a
+    // reload/crash mid-edit on the measurements or garments form would lose
+    // typed-but-unsaved work. Scoped to this order so drafts never cross orders.
+    const draftScope = orderId && !isOrderClosed ? orderId : null;
+    const { clearDraft: clearMeasurementsDraft } = useFormDraft({
+        form: measurementsForm,
+        storageKey: draftScope ? workOrderDraftKey(draftScope, "measurements") : null,
+        enabled: !!draftScope && !isLoadingOrderData,
+    });
+    const { clearDraft: clearGarmentsDraft } = useFormDraft({
+        form: fabricSelectionForm,
+        storageKey: draftScope ? workOrderDraftKey(draftScope, "garments") : null,
+        enabled: !!draftScope && !isLoadingOrderData,
+    });
+
+    // ============================================================================
     // NAVIGATION & UI HOOKS
     // ============================================================================
     const { dialog, openDialog, closeDialog } = useConfirmationDialog();
@@ -393,15 +413,14 @@ function NewWorkOrder() {
         demographicsForm.reset(formValues);
         setCustomerDemographics(formValues);
 
+        // Warm the measurements cache only — selecting a customer never completes
+        // the measurement step. A reused past measurement needs an explicit
+        // Continue; a saved one auto-completes (CLAUDE.md §7.10).
         const custId = Number(customer.id);
-        queryClient.fetchQuery({
+        void queryClient.prefetchQuery({
             queryKey: ["measurements", custId],
             queryFn: () => getMeasurementsByCustomerId(custId),
             staleTime: Infinity,
-        }).then(res => {
-            if (res.status === "success" && res.data && res.data.length > 0) {
-                addSavedStep(1);
-            }
         });
 
         if (orderId) {
@@ -419,7 +438,7 @@ function NewWorkOrder() {
         } else {
             setCurrentStep(0);
         }
-    }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep, queryClient, addSavedStep]);
+    }, [orderId, demographicsForm, setCustomerDemographics, handleProceed, setCurrentStep, queryClient]);
 
     const handlePendingOrderSelected = React.useCallback(async (order: Order) => {
         // Set loading state
@@ -441,25 +460,24 @@ function NewWorkOrder() {
                 const isConfirmed = orderData.checkout_status === "confirmed";
 
 
-                // 1. Load Customer (fire measurements check in parallel — don't await it)
-                let measurementsPromise: Promise<void> | null = null;
+                // 1. Load Customer
                 if (orderData.customer) {
                     const customerFormValues = mapCustomerToFormValues(orderData.customer);
                     demographicsForm.reset(customerFormValues);
                     setCustomerDemographics(customerFormValues);
                     addSavedStep(0);
 
-                    // Fire measurements check without blocking — populates TanStack Query cache
-                    // so CustomerMeasurementsForm's useQuery reads from cache instead of refetching
+                    // Warm the measurements cache so CustomerMeasurementsForm reads
+                    // from cache instead of refetching. Reloading an order never
+                    // completes the measurement step on its own — a reused past
+                    // measurement needs an explicit Continue, a saved one
+                    // auto-completes (CLAUDE.md §7.10). Confirmed orders mark every
+                    // step complete below, since the order itself is finalized.
                     const custId = Number(orderData.customer.id);
-                    measurementsPromise = queryClient.fetchQuery({
+                    void queryClient.prefetchQuery({
                         queryKey: ["measurements", custId],
                         queryFn: () => getMeasurementsByCustomerId(custId),
                         staleTime: Infinity,
-                    }).then(measurementsRes => {
-                        if (measurementsRes.status === "success" && measurementsRes.data && measurementsRes.data.length > 0) {
-                            addSavedStep(1);
-                        }
                     });
                 } else {
                     demographicsForm.reset(customerDemographicsDefaults);
@@ -475,7 +493,12 @@ function NewWorkOrder() {
                     // the net delta on re-save (same fabric amount = always OK).
                     setSavedFabricUsage(computeSavedFabricUsage(mappedGarments));
 
-                    // Mark as complete if confirmed, or if it's a reload of a draft that had garments saved
+                    // Saved garments mean the user already passed through the
+                    // measurement step in a prior session (the stepper is
+                    // sequential — fabric is unreachable otherwise), so step 1
+                    // was explicitly completed then. This is earned-by-prior-act,
+                    // not inferred from data existence (CLAUDE.md §7.10).
+                    addSavedStep(1);
                     addSavedStep(2);
                 } else {
                     fabricSelectionForm.reset({ garments: [], signature: "" });
@@ -526,11 +549,61 @@ function NewWorkOrder() {
                     OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
                 }
 
-                // Wait for measurements check to finish (was running in parallel)
-                if (measurementsPromise) await measurementsPromise;
-
                 // Force-mount all sections when loading a pending order
                 setMountedSections(new Set([1, 2, 3, 4]));
+
+                // Offer to restore unsaved in-form edits buffered locally for THIS
+                // order. A confirmed order is finalized — any leftover draft is
+                // stale (§7.10). Otherwise content-diff the draft against the
+                // freshly DB-loaded form values: equal => nothing new (e.g. crash
+                // right after save), differ => genuine unsaved edits worth a prompt.
+                // Capture + clear immediately so a dismissed prompt can't nag on the
+                // next load. Restore re-fills field values only — step completion
+                // stays earned by an explicit Save/Continue (§7.10).
+                // Resolve keys from the loaded order id directly — the store's
+                // orderId / keyRef are not render-synced inside this async fn yet.
+                const mKey = workOrderDraftKey(orderData.id, "measurements");
+                const gKey = workOrderDraftKey(orderData.id, "garments");
+                if (isConfirmed) {
+                    clearFormDraft(mKey);
+                    clearFormDraft(gKey);
+                } else {
+                    const mEnv = readFormDraft(mKey);
+                    const gEnv = readFormDraft(gKey);
+                    const mDiffers =
+                        !!mEnv &&
+                        JSON.stringify(mEnv.values) !==
+                            JSON.stringify(measurementsForm.getValues());
+                    const gDiffers =
+                        !!gEnv &&
+                        JSON.stringify(gEnv.values) !==
+                            JSON.stringify(fabricSelectionForm.getValues());
+                    if (mEnv) clearFormDraft(mKey);
+                    if (gEnv) clearFormDraft(gKey);
+                    if (mDiffers || gDiffers) {
+                        const what = [
+                            mDiffers && "measurements",
+                            gDiffers && "garments",
+                        ]
+                            .filter(Boolean)
+                            .join(" and ");
+                        const savedAt = (gDiffers ? gEnv : mEnv)!.savedAt;
+                        openDialog(
+                            "Restore unsaved changes?",
+                            `Unsaved ${what} changes from a previous session (${format(
+                                new Date(savedAt),
+                                "d MMM, HH:mm",
+                            )}) were found for this order. Restore them?`,
+                            () => {
+                                if (mDiffers && mEnv)
+                                    measurementsForm.reset(mEnv.values as any);
+                                if (gDiffers && gEnv)
+                                    fabricSelectionForm.reset(gEnv.values as any);
+                                closeDialog();
+                            },
+                        );
+                    }
+                }
 
                 // Navigate to review step if confirmed, otherwise to measurements
                 setCurrentStep(isConfirmed ? 4 : 1);
@@ -544,7 +617,7 @@ function NewWorkOrder() {
         } finally {
             setIsLoadingOrderData(false);
         }
-    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep, user?.id]);
+    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep, user?.id, measurementsForm, openDialog, closeDialog]);
 
     const loadCustomerFresh = React.useCallback((customer: Customer) => {
         resetWorkOrder();
@@ -554,17 +627,16 @@ function NewWorkOrder() {
         setCustomerDemographics(formValues);
         setCurrentStep(0);
 
+        // Warm the measurements cache only — loading a customer for a fresh order
+        // never completes the measurement step. The user must explicitly Continue
+        // (reused past measurement) or Save (new/edited one) (CLAUDE.md §7.10).
         const custId = Number(customer.id);
-        queryClient.fetchQuery({
+        void queryClient.prefetchQuery({
             queryKey: ["measurements", custId],
             queryFn: () => getMeasurementsByCustomerId(custId),
             staleTime: Infinity,
-        }).then(res => {
-            if (res.status === "success" && res.data && res.data.length > 0) {
-                addSavedStep(1);
-            }
         });
-    }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep, queryClient, addSavedStep]);
+    }, [resetWorkOrder, resetLocalState, demographicsForm, setCustomerDemographics, setCurrentStep, queryClient]);
 
     const handleTopLevelCustomerFound = React.useCallback((customer: Customer) => {
         if (orderId) {
@@ -674,6 +746,9 @@ function NewWorkOrder() {
     // MEASUREMENTS FORM HANDLERS
     // ============================================================================
     const handleMeasurementsProceed = () => {
+        // Measurement saved (or an existing one explicitly reused) — the unsaved
+        // buffer is no longer needed.
+        clearMeasurementsDraft();
         handleProceed(1);
     };
 
@@ -723,6 +798,8 @@ function NewWorkOrder() {
         signature: string;
     }) => {
         setFabricSelections(data.garments);
+        // Garments committed to the DB — the unsaved buffer is no longer needed.
+        clearGarmentsDraft();
         // Snapshot the committed fabric amounts so the next save only validates
         // the net delta (re-saving unchanged amounts always passes).
         setSavedFabricUsage(computeSavedFabricUsage(data.garments));
@@ -1133,6 +1210,30 @@ function NewWorkOrder() {
                     activeSteps={visibleSteps}
                     onStepChange={handleStepChange}
                 />
+                {!isOrderClosed && orderId && (
+                    <div className="flex justify-end px-4 md:px-5 py-1.5 border-b border-border bg-background">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                openDialog(
+                                    "Clear this order?",
+                                    "This clears the in-progress order from this screen and discards any unsaved measurement or garment changes. The saved draft order is kept and can be reloaded from the customer's pending orders.",
+                                    () => {
+                                        clearMeasurementsDraft();
+                                        clearGarmentsDraft();
+                                        resetWorkOrder();
+                                        resetLocalState();
+                                        navigate({ to: "/$main/orders/new-work-order", params: { main: main || "erth" }, search: {} });
+                                        closeDialog();
+                                    },
+                                )
+                            }
+                            className="text-xs font-medium text-muted-foreground hover:text-destructive cursor-pointer touch-manipulation pointer-coarse:active:scale-[0.97]"
+                        >
+                            Clear &amp; start over
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Step Content */}

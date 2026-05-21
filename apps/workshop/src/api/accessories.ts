@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Accessory } from '@repo/database';
 
 export async function getAccessories(includeArchived = false): Promise<Accessory[]> {
@@ -32,12 +32,15 @@ export async function updateAccessory(
   id: number,
   accessory: Partial<Accessory>,
 ): Promise<Accessory> {
-  const { data, error } = await db
-    .from('accessories')
-    .update(accessory)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from('accessories')
+      .update(accessory)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as Accessory;

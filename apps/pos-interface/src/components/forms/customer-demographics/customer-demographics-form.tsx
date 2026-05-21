@@ -309,7 +309,7 @@ export function CustomerDemographicsForm({
         <div className="flex justify-between items-start mb-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-lg font-bold text-transparent bg-linear-to-r from-primary to-secondary bg-clip-text">
+              <h1 className="text-lg font-bold text-foreground">
                 {header}
               </h1>
             </div>
@@ -321,13 +321,13 @@ export function CustomerDemographicsForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* LEFT COLUMN: Basic Information */}
           <div className="flex flex-col gap-3">
-            <div className="flex-1 space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+            <div className="flex-1 space-y-3 bg-card p-4 rounded-lg border border-border shadow-sm">
               <div className="flex justify-between items-center">
                 <h3 className="text-base font-semibold text-foreground">
                   Basic Information
                 </h3>
                 {form.watch("id") && (
-                  <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
+                  <span className="px-3 py-1 rounded-md bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
                     ID: {form.watch("id")}
                   </span>
                 )}
@@ -413,8 +413,8 @@ export function CustomerDemographicsForm({
                               className={cn(
                                 "size-9 flex items-center justify-center rounded-md border transition-colors shrink-0",
                                 field.value
-                                  ? "bg-green-500 border-green-500 text-white"
-                                  : "bg-background border-border/60 text-muted-foreground hover:border-green-400 hover:text-green-500",
+                                  ? "bg-primary border-primary text-primary-foreground"
+                                  : "bg-background border-border/60 text-muted-foreground hover:border-primary hover:text-primary",
                                 isReadOnly && "opacity-50 cursor-not-allowed"
                               )}
                               title={field.value ? "WhatsApp enabled" : "Enable WhatsApp"}
@@ -434,13 +434,13 @@ export function CustomerDemographicsForm({
                             exit={{ opacity: 0, height: 0 }}
                             className="mt-2 overflow-hidden"
                           >
-                            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 shadow-xs">
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-muted border border-border shadow-xs">
                               <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                                <div className="p-2 rounded-full bg-primary/10 text-primary">
                                   <Users className="size-4" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Linked Primary Account</span>
+                                  <span className="text-xs font-semibold text-foreground">Linked Primary Account</span>
                                   <span className="text-sm font-bold text-foreground">{primaryAccount.name}</span>
                                 </div>
                               </div>
@@ -448,7 +448,7 @@ export function CustomerDemographicsForm({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-100/50"
+                                className="text-primary hover:bg-accent"
                                 onClick={() => setIsPrimaryDetailsOpen(true)}
                               >
                                 <Eye className="size-4 mr-2" />
@@ -604,8 +604,8 @@ export function CustomerDemographicsForm({
                               className={cn(
                                 "size-9 flex items-center justify-center rounded-md border transition-colors shrink-0",
                                 field.value
-                                  ? "bg-green-500 border-green-500 text-white"
-                                  : "bg-background border-border/60 text-muted-foreground hover:border-green-400 hover:text-green-500",
+                                  ? "bg-primary border-primary text-primary-foreground"
+                                  : "bg-background border-border/60 text-muted-foreground hover:border-primary hover:text-primary",
                                 isReadOnly && "opacity-50 cursor-not-allowed"
                               )}
                               title={field.value ? "WhatsApp enabled" : "Enable WhatsApp"}
@@ -625,7 +625,7 @@ export function CustomerDemographicsForm({
 
           {/* RIGHT COLUMN: Personal Details */}
           <div className="flex flex-col gap-3">
-            <div className="flex-1 space-y-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+            <div className="flex-1 space-y-3 bg-card p-4 rounded-lg border border-border shadow-sm">
               <h3 className="text-base font-semibold text-foreground">
                 Personal Details
               </h3>
@@ -828,7 +828,7 @@ export function CustomerDemographicsForm({
 
         {/* Address - full width below, conditionally hidden */}
         {!hideAddress && (
-          <div className="bg-card p-4 rounded-xl space-y-3 border border-border shadow-sm">
+          <div className="bg-card p-4 rounded-lg space-y-3 border border-border shadow-sm">
             <ErrorBoundary fallback={<div>Address fields crashed</div>}>
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
@@ -1031,7 +1031,7 @@ export function CustomerDemographicsForm({
         </div>
                                     
                                         <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
-                                          <DialogContent className="max-w-3xl p-0 overflow-visible border-none shadow-2xl">
+                                          <DialogContent className="max-w-3xl p-0 overflow-visible border-none">
                                             <DialogHeader className="p-4 pb-0">
                                               <DialogTitle className="text-lg font-bold">Change Customer</DialogTitle>
                                               <DialogDescription>
@@ -1093,7 +1093,7 @@ export function CustomerDemographicsForm({
                   )}
                 </div>
 
-                <div className="p-4 bg-muted/50 rounded-lg border border-border/50 text-xs text-muted-foreground">
+                <div className="p-4 bg-muted/50 rounded-lg border border-border/50 text-sm text-muted-foreground">
                   <p className="flex items-start gap-2">
                     <Info className="size-3.5 mt-0.5 shrink-0" />
                     This account serves as the billing and communication head for all linked secondary accounts using this mobile number.

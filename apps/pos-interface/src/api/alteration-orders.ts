@@ -1,7 +1,11 @@
 import type { ApiResponse } from "../types/api";
 import type { Order, Measurement } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError } from "@/lib/db";
 import { getBrand } from "./orders";
+
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Alteration orders — customers bring garments in from outside.
@@ -103,24 +107,53 @@ export const createAlterationOrder = async (
         };
     }
 
-    const { data: orderRow, error: orderErr } = await db
-        .from("orders")
-        .insert({
-            customer_id: input.customer_id,
-            brand,
-            order_type: "ALTERATION",
-            checkout_status: "confirmed",
-            order_taker_id: input.order_taker_id,
-            order_total: input.order_total,
-            order_date: new Date().toISOString(),
-        })
-        .select()
-        .single();
+    const idempotencyKey: string = crypto.randomUUID();
 
-    if (orderErr || !orderRow) {
+    let orderRow: any = null;
+    for (let attempt = 1; ; attempt++) {
+        const res = await db
+            .from("orders")
+            .insert({
+                customer_id: input.customer_id,
+                brand,
+                order_type: "ALTERATION",
+                checkout_status: "confirmed",
+                order_taker_id: input.order_taker_id,
+                order_total: input.order_total,
+                order_date: new Date().toISOString(),
+                idempotency_key: idempotencyKey,
+            })
+            .select()
+            .single();
+
+        if (!res.error && res.data) {
+            orderRow = res.data;
+            break;
+        }
+
+        // 23505 = a prior attempt's response was lost but the order (and its
+        // alteration_orders / garments children, inserted by that committed
+        // attempt) DID commit. Recover the order and early-return it WITHOUT
+        // re-inserting the child rows.
+        if (res.error?.code === '23505') {
+            const recovered = await db
+                .from("orders")
+                .select()
+                .eq('idempotency_key', idempotencyKey)
+                .single();
+            if (!recovered.error && recovered.data) {
+                return getAlterationOrderById(recovered.data.id);
+            }
+        }
+
+        if (res.error && isTransientNetworkError(res.error) && attempt < WRITE_RETRY_ATTEMPTS) {
+            await sleep(WRITE_RETRY_BASE_MS * attempt);
+            continue;
+        }
+
         return {
             status: "error",
-            message: `Could not create alteration order row: ${orderErr?.message ?? "unknown error"}`,
+            message: `Could not create alteration order row: ${res.error?.message ?? "unknown error"}`,
         };
     }
 

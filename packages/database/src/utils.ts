@@ -387,9 +387,7 @@ export type ShowroomLabel =
     | "alteration_out"     // Alteration order — single label, no sub-classification
     | "brova_trial"        // Brovas at shop, customer needs to try them on
     | "needs_action"       // Garments rejected, need to be sent back to workshop
-    | "awaiting_finals"    // Brovas done, waiting for finals from workshop
-    | "partial_ready"      // Some items ready at shop, others still out (generic)
-    | "ready_for_pickup"   // Everything done, customer can collect
+    | "ready_for_pickup"   // At least one item ready at shop (x/y count carries the detail)
     | null;
 
 export function getShowroomStatus(garments: GarmentInfo[]) {
@@ -426,7 +424,7 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
     if (shopItems.length === 0) {
         // No items at shop, but finals heading this way
         if (finalsInTransit) {
-            return { label: "awaiting_finals" as ShowroomLabel, hasPhysicalItems: false };
+            return { label: "ready_for_pickup" as ShowroomLabel, hasPhysicalItems: false };
         }
         return { label: null as ShowroomLabel, hasPhysicalItems: false };
     }
@@ -456,15 +454,17 @@ export function getShowroomStatus(garments: GarmentInfo[]) {
          g.piece_stage === 'ready_for_pickup' &&
          g.feedback_status !== 'needs_repair' && g.feedback_status !== 'needs_redo'));
 
-    // Priority: alteration > brova trial > needs action > awaiting finals > partial ready > ready
+    // Priority: alteration > brova trial > needs action > ready_for_pickup.
+    // The former awaiting_finals / partial_ready / ready cases all collapse to
+    // ready_for_pickup — the x/y received count on the list carries the detail.
     let label: ShowroomLabel = null;
 
     if (hasAlterationNeedingWork) label = "alteration_in";
     else if (hasBrovaAwaitingTrial) label = "brova_trial";
     else if (hasGarmentNeedingAction) label = "needs_action";
-    else if (shopBrovas.length > 0 && finalsStillOut) label = "awaiting_finals";
+    else if (shopBrovas.length > 0 && finalsStillOut) label = "ready_for_pickup";
     else if (allShopItemsDone && !garmentsStillOut) label = "ready_for_pickup";
-    else if (garmentsStillOut) label = "partial_ready";
+    else if (garmentsStillOut) label = "ready_for_pickup";
 
     return { label, hasPhysicalItems: true };
 }

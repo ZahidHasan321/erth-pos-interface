@@ -144,8 +144,6 @@ export function OrderFilters({
               <SelectItem value="all">All Showroom Orders</SelectItem>
               <SelectItem value="brova_trial">Brova Trial</SelectItem>
               <SelectItem value="needs_action">Needs Action</SelectItem>
-              <SelectItem value="awaiting_finals">Awaiting Finals</SelectItem>
-              <SelectItem value="partial_ready">Partial Ready</SelectItem>
               <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
               <SelectItem value="alteration_in">Alteration (In)</SelectItem>
               <SelectItem value="alteration_out">Alteration (Out)</SelectItem>

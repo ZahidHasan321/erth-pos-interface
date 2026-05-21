@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Pencil, Loader2, AlertCircle, Settings2, Hammer, Store, Plus, ScanBarcode } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, AlertCircle, Settings2, Hammer, Store, Plus, ScanBarcode, Package } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -31,6 +31,7 @@ import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { BarcodeScannerDialog } from "@/components/inventory/BarcodeScannerDialog";
 import { getAccessories } from "@/api/accessories";
+import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
 import type { Fabric, Shelf, Accessory, StockItemType, UnitOfMeasure, StockLocation, Supplier } from "@repo/database";
 
 type ItemType = "fabric" | "shelf" | "accessory";
@@ -143,9 +144,8 @@ function NotFound({ type }: { type: ItemType }) {
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto">
       <BackLink />
-      <div className="border border-border rounded-md py-12 text-center bg-card mt-6">
-        <AlertCircle className="h-6 w-6 mx-auto mb-2 text-[var(--status-bad)] opacity-70" />
-        <p className="text-sm text-muted-foreground">This {type} could not be found.</p>
+      <div className="mt-6">
+        <EmptyState icon={AlertCircle} message={`This ${type} could not be found.`} />
       </div>
     </div>
   );
@@ -233,6 +233,11 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
   // New supplier dialog
   const [newSupplierOpen, setNewSupplierOpen] = useState(false);
 
+  // Stable storage key for images uploaded before the row exists (create mode).
+  // The full public URL is what gets persisted via buildPayload, so the temp
+  // path prefix is cosmetic and never needs reconciling.
+  const [newImageKey] = useState(() => `new-${crypto.randomUUID()}`);
+
   // ── Mutations ────────────────────────────────────────────────────
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -290,9 +295,8 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
     return (
       <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto">
         <BackLink />
-        <div className="border border-border rounded-md py-10 text-center bg-card mt-6">
-          <AlertCircle className="h-6 w-6 mx-auto mb-2 text-[var(--status-bad)] opacity-70" />
-          <p className="text-sm text-muted-foreground">Failed to load item</p>
+        <div className="mt-6">
+          <EmptyState icon={AlertCircle} message="Failed to load item" />
         </div>
       </div>
     );
@@ -315,27 +319,26 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
         <BackLink />
       </div>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground mb-1">{headingPrefix}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{heading || "—"}</h1>
-        </div>
+      <PageHeader icon={Package} title={heading || "—"} subtitle={headingPrefix}>
         {!isNew && !editing && canEdit && (
           <Button size="sm" variant="outline" onClick={startEdit}>
             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
           </Button>
         )}
-      </div>
+      </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className={cn(isNew ? "max-w-3xl mx-auto space-y-5" : "grid grid-cols-1 lg:grid-cols-3 gap-5")}>
         {/* LEFT — details */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className={cn("space-y-5", !isNew && "lg:col-span-2")}>
           {/* Image */}
-          <div className="border border-border rounded-md bg-card p-4">
-            <Label className="text-sm font-medium text-muted-foreground mb-3 block">Image</Label>
+          <SectionCard title="Image">
             {isNew ? (
-              <p className="text-xs text-muted-foreground">Save the item first, then add an image.</p>
+              <ImageUpload
+                itemType={type}
+                itemId={newImageKey}
+                value={form.image_url}
+                onChange={(url) => setEditForm({ ...editForm, image_url: url })}
+              />
             ) : id != null && (
               <ImageUpload
                 itemType={type}
@@ -357,36 +360,31 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
                 readOnly={!canEdit}
               />
             )}
-          </div>
+          </SectionCard>
 
           {/* Details */}
-          <div className="border border-border rounded-md bg-card">
-            <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-muted-foreground">Details</h3>
-            </div>
-            <div className="p-4 space-y-4">
-              <DetailsForm
-                type={type}
-                form={form}
-                onChange={setForm}
-                editing={editing}
-                suppliers={suppliersQ.data ?? []}
-                existingCategories={existingCategories}
-                onNewSupplier={() => setNewSupplierOpen(true)}
-              />
-              {editing && (
-                <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                  <Button variant="ghost" size="sm" onClick={handleCancel} disabled={saveMut.isPending}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave} disabled={saveMut.isPending}>
-                    {saveMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-                    {isNew ? "Create" : "Save changes"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
+          <SectionCard title="Details" bodyClassName="p-4 space-y-4">
+            <DetailsForm
+              type={type}
+              form={form}
+              onChange={setForm}
+              editing={editing}
+              suppliers={suppliersQ.data ?? []}
+              existingCategories={existingCategories}
+              onNewSupplier={() => setNewSupplierOpen(true)}
+            />
+            {editing && (
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={saveMut.isPending}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saveMut.isPending}>
+                  {saveMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                  {isNew ? "Create" : "Save changes"}
+                </Button>
+              </div>
+            )}
+          </SectionCard>
         </div>
 
         {/* RIGHT — stock + movements (hidden in create mode) */}
@@ -714,45 +712,39 @@ function StockPanel({
   onRestock: (loc: StockLocation) => void;
   onAdjust: (loc: StockLocation) => void;
 }) {
-  const effectiveThreshold = threshold ?? undefined;
-  const lowWorkshop = effectiveThreshold != null ? workshopStock < effectiveThreshold : isLowStock(type, workshopStock);
-  const lowShop = effectiveThreshold != null ? shopStock < effectiveThreshold : isLowStock(type, shopStock);
+  const lowWorkshop = isLowStock(type, workshopStock, threshold);
+  const lowShop = isLowStock(type, shopStock, threshold);
   const total = workshopStock + shopStock;
 
   return (
-    <div className="border border-border rounded-md bg-card">
-      <div className="px-4 py-2.5 border-b bg-muted/30">
-        <h3 className="text-sm font-medium text-muted-foreground">Stock</h3>
+    <SectionCard title="Stock" bodyClassName="p-4 space-y-3">
+      <StockRow label="Workshop" qty={workshopStock} type={type} unit={unit} low={lowWorkshop} />
+      <StockRow label="Shop" qty={shopStock} type={type} unit={unit} low={lowShop} />
+      <div className="pt-2 border-t flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Total</span>
+        <span className="text-base font-semibold tabular-nums">{formatQty(type, total, unit)}</span>
       </div>
-      <div className="p-4 space-y-3">
-        <StockRow label="Workshop" qty={workshopStock} type={type} unit={unit} low={lowWorkshop} />
-        <StockRow label="Shop" qty={shopStock} type={type} unit={unit} low={lowShop} />
-        <div className="pt-2 border-t flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Total</span>
-          <span className="text-base font-semibold tabular-nums">{formatQty(type, total, unit)}</span>
-        </div>
 
-        {(canRestock || canAdjust) && (
-          <div className="flex flex-col gap-1.5 pt-2">
-            {canRestock && (
-              <>
-                <Button size="sm" variant="default" onClick={() => onRestock("workshop")}>
-                  <Hammer className="h-3.5 w-3.5 mr-1.5" /> Restock workshop
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => onRestock("shop")}>
-                  <Store className="h-3.5 w-3.5 mr-1.5" /> Restock shop
-                </Button>
-              </>
-            )}
-            {canAdjust && (
-              <Button size="sm" variant="ghost" onClick={() => onAdjust(workshopStock >= shopStock ? "workshop" : "shop")}>
-                <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Adjust stock
+      {(canRestock || canAdjust) && (
+        <div className="flex flex-col gap-1.5 pt-2">
+          {canRestock && (
+            <>
+              <Button size="sm" variant="default" onClick={() => onRestock("workshop")}>
+                <Hammer className="h-3.5 w-3.5 mr-1.5" /> Restock workshop
               </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+              <Button size="sm" variant="outline" onClick={() => onRestock("shop")}>
+                <Store className="h-3.5 w-3.5 mr-1.5" /> Restock shop
+              </Button>
+            </>
+          )}
+          {canAdjust && (
+            <Button size="sm" variant="ghost" onClick={() => onAdjust(workshopStock >= shopStock ? "workshop" : "shop")}>
+              <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Adjust stock
+            </Button>
+          )}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -777,11 +769,8 @@ function MovementsPanel({ itemType, itemId, unit }: { itemType: StockItemType; i
   });
 
   return (
-    <div className="border border-border rounded-md bg-card">
-      <div className="px-4 py-2.5 border-b bg-muted/30">
-        <h3 className="text-sm font-medium text-muted-foreground">Recent movements</h3>
-      </div>
-      <div className="p-2">
+    <SectionCard title="Recent movements" bodyClassName="p-2">
+      <>
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -810,8 +799,8 @@ function MovementsPanel({ itemType, itemId, unit }: { itemType: StockItemType; i
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </>
+    </SectionCard>
   );
 }
 

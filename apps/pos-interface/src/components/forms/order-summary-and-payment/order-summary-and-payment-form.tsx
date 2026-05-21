@@ -390,12 +390,12 @@ export function OrderSummaryAndPaymentForm({
                     return (
                       <div key={g.garment_id || i} className="bg-card rounded-lg border border-border p-2.5 space-y-1">
                         <div className="flex items-center gap-1.5">
-                          <span className={`font-semibold px-1.5 py-0.5 rounded text-[10px] shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                          <span className={`font-semibold px-1.5 py-0.5 rounded text-xs shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
                             {g.garment_type === "brova" ? "B" : "F"}
                           </span>
-                          <span className="text-xs font-semibold truncate">{fabricName}</span>
+                          <span className="text-sm font-semibold truncate">{fabricName}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {[
                             g.style && <span key="style" className="capitalize">{g.style}</span>,
                             fabric?.color,
@@ -406,22 +406,22 @@ export function OrderSummaryAndPaymentForm({
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {g.express && (
-                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-red-100 text-red-600">Express</span>
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Express</span>
                           )}
                           {g.soaking && (
-                            <span className="text-[9px] font-semibold px-1 py-px rounded-full bg-sky-100 text-sky-600">
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600">
                               Soak{g.soaking_hours ? ` ${g.soaking_hours}h` : ""}
                             </span>
                           )}
                           {g.delivery_date && (
-                            <span className="text-[9px] px-1 py-px rounded-full bg-muted text-muted-foreground">
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
                               {parseUtcTimestamp(g.delivery_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short" })}
                             </span>
                           )}
                         </div>
                         {g.notes && (
-                          <p className="text-[10px] text-muted-foreground italic truncate">
-                            <StickyNote className="w-2.5 h-2.5 inline mr-0.5 -mt-px" />{g.notes}
+                          <p className="text-xs text-muted-foreground italic truncate">
+                            <StickyNote className="w-3 h-3 inline mr-0.5 -mt-px" />{g.notes}
                           </p>
                         )}
                       </div>
@@ -436,12 +436,12 @@ export function OrderSummaryAndPaymentForm({
                   {invoiceData.shelfProducts.map((p, i) => (
                     <div key={i} className="bg-card rounded-lg border border-border p-2.5 flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs font-medium truncate">{p.product_type || `Item ${i + 1}`}</p>
-                        {p.brand && <p className="text-[10px] text-muted-foreground">{p.brand}</p>}
+                        <p className="text-sm font-medium truncate">{p.product_type || `Item ${i + 1}`}</p>
+                        {p.brand && <p className="text-xs text-muted-foreground">{p.brand}</p>}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-xs font-semibold tabular-nums">{((p.unit_price ?? 0) * (p.quantity ?? 0)).toFixed(3)}</p>
-                        <p className="text-[10px] text-muted-foreground">x{p.quantity}</p>
+                        <p className="text-sm font-semibold tabular-nums">{((p.unit_price ?? 0) * (p.quantity ?? 0)).toFixed(3)}</p>
+                        <p className="text-xs text-muted-foreground">x{p.quantity}</p>
                       </div>
                     </div>
                   ))}
@@ -453,7 +453,7 @@ export function OrderSummaryAndPaymentForm({
                 {/* LEFT: Price breakdown */}
                 <section className="bg-card rounded-xl border border-border shadow-sm p-3 flex flex-col">
                   {deliveryDate && (
-                    <div className="flex items-center gap-2 p-1.5 rounded-md bg-muted/40 mb-2 text-xs">
+                    <div className="flex items-center gap-2 p-1.5 rounded-md bg-muted/40 mb-2 text-sm">
                       <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
                       <span className="text-muted-foreground">Delivery</span>
                       <span className="font-semibold ml-auto tabular-nums">
@@ -502,7 +502,7 @@ export function OrderSummaryAndPaymentForm({
                       </div>
                     )}
                     {Number(soaking_charge) > 0 && (soaking8hCount > 0 && soaking24hCount > 0) && (
-                      <div className="flex justify-between py-0.5 text-xs">
+                      <div className="flex justify-between py-0.5 text-sm">
                         <span className="text-muted-foreground italic">Soaking total</span>
                         <span className="font-semibold tabular-nums">{Number(soaking_charge).toFixed(3)} KWD</span>
                       </div>
@@ -518,7 +518,7 @@ export function OrderSummaryAndPaymentForm({
                   <div className="border-t border-border pt-2 mt-2 flex justify-between items-baseline">
                     <div>
                       <span className="text-sm font-bold">Order Total</span>
-                      <p className="text-[11px] text-muted-foreground">Discounts & payment at the cashier</p>
+                      <p className="text-xs text-muted-foreground">Discounts & payment at the cashier</p>
                     </div>
                     <span className="text-lg font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
                   </div>
@@ -531,7 +531,7 @@ export function OrderSummaryAndPaymentForm({
                     name="notes"
                     render={({ field }) => (
                       <FormItem className="flex-1 flex flex-col">
-                        <FormLabel className="text-xs font-semibold">Order Notes</FormLabel>
+                        <FormLabel className="text-sm font-semibold">Order Notes</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder="Special instructions or internal notes..."
@@ -550,7 +550,7 @@ export function OrderSummaryAndPaymentForm({
                     name="order_taker_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-semibold">Order Taker</FormLabel>
+                        <FormLabel className="text-sm font-semibold">Order Taker</FormLabel>
                         <FormControl>
                           <Combobox
                             options={employees.map((emp) => ({ value: emp.id, label: emp.name }))}
@@ -573,7 +573,7 @@ export function OrderSummaryAndPaymentForm({
                   <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-emerald-700">Order Confirmed</p>
-                    <p className="text-xs text-emerald-600">Proceed to cashier for payment & invoicing</p>
+                    <p className="text-sm text-emerald-600">Proceed to cashier for payment & invoicing</p>
                   </div>
                   {onPrintLabels && fabricSelections.length > 0 && (
                     <Button
@@ -899,7 +899,7 @@ export function OrderSummaryAndPaymentForm({
                                 <img src={option.img} alt={option.label} className="max-h-full object-contain" />
                               ) : option.icon}
                             </div>
-                            <span className="text-xs font-medium">{option.label}</span>
+                            <span className="text-sm font-medium">{option.label}</span>
                             <RadioGroupItem value={option.value} className="sr-only" />
                           </label>
                         ))}
@@ -984,7 +984,7 @@ export function OrderSummaryAndPaymentForm({
                       <span>Total</span>
                       <span>{totalDue.toFixed(3)} KWD</span>
                     </div>
-                    <div className="flex justify-between text-secondary text-sm">
+                    <div className="flex justify-between text-muted-foreground text-sm">
                       <span>Discount</span>
                       <span>-{safeDiscountValue.toFixed(3)} KWD</span>
                     </div>
@@ -1008,7 +1008,7 @@ export function OrderSummaryAndPaymentForm({
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 text-xs font-semibold"
+                                  className="h-8 text-sm font-semibold"
                                   onClick={() => field.onChange(parseFloat(finalAmount.toFixed(3)))}
                                 >
                                   Pay Full
@@ -1148,7 +1148,7 @@ export function OrderSummaryAndPaymentForm({
                     </div>
                   )}
                   {Number(soaking_charge) > 0 && (soaking8hCount > 0 && soaking24hCount > 0) && (
-                    <div className="flex justify-between text-xs italic">
+                    <div className="flex justify-between text-sm italic">
                       <span>Soaking total</span>
                       <span className="font-semibold">{Number(soaking_charge).toFixed(3)} KWD</span>
                     </div>
@@ -1158,7 +1158,7 @@ export function OrderSummaryAndPaymentForm({
 
                 <div className="space-y-2">
                   <div className="flex justify-between font-semibold"><span>Total Due</span><span>{totalDue.toFixed(3)} KWD</span></div>
-                  <div className="flex justify-between text-secondary"><span>Discount</span><span>-{safeDiscountValue.toFixed(3)} KWD</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>-{safeDiscountValue.toFixed(3)} KWD</span></div>
                   <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                     <span>Final Total</span>
                     <span className="text-primary">{finalAmount.toFixed(3)} KWD</span>
@@ -1183,7 +1183,7 @@ export function OrderSummaryAndPaymentForm({
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs font-semibold"
+                                className="h-8 text-sm font-semibold"
                                 onClick={() => field.onChange(parseFloat(finalAmount.toFixed(3)))}
                               >
                                 Pay Full

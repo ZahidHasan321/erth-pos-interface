@@ -3,6 +3,32 @@ export const BRAND_NAMES = {
   fromHome: "sakkba",
 } as const;
 
+/**
+ * Single source of truth for which brands use the deferred-payment /
+ * cashier model. When a brand is in this set, the order-taker confirms
+ * the order with `paid: 0` and payment is handled by the separate
+ * `/cashier` shell; otherwise payment is collected inline.
+ *
+ * To enable the cashier flow for another brand later, add its lowercase
+ * brand key here — it is the ONLY change required (new-work-order step
+ * labels, the `/$main/cashier` routes, the standalone `/cashier` shell
+ * guard, and the sidebar entry all read from `brandUsesCashier`).
+ *
+ * Brand appears in two forms across the app:
+ *  - route param `main` — lowercase ("erth" / "sakkba" / "qass")
+ *  - auth / API enum    — uppercase ("ERTH" / "SAKKBA" / "QASS")
+ * `brandUsesCashier` normalizes both before comparing.
+ */
+export const BRANDS_WITH_CASHIER: ReadonlySet<string> = new Set([
+  BRAND_NAMES.showroom, // "erth" — only brand on the cashier model today
+]);
+
+/** True if the given brand (either case form) uses the cashier flow. */
+export function brandUsesCashier(brand: string | null | undefined): boolean {
+  if (!brand) return false;
+  return BRANDS_WITH_CASHIER.has(brand.toLowerCase());
+}
+
 export const ORDER_PHASE_LABELS = {
     new: "New",
     in_progress: "In Progress",

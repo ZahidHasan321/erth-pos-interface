@@ -76,7 +76,7 @@ export function CustomerSelectionDialog({
               key={customer.id}
               onClick={() => handleSelect(customer)}
               {...clickableProps(() => handleSelect(customer))}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex flex-col gap-2 ${
+              className={`p-4 border rounded-lg cursor-pointer transition-all flex flex-col gap-2 ${
                 selectedIndex === index
                   ? "border-primary bg-primary/5 shadow-md"
                   : "border-border hover:border-primary/50 hover:bg-accent/10"

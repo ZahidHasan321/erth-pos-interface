@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 type Props = {
   itemType: "fabric" | "shelf" | "accessory";
-  itemId: number;
+  itemId: number | string;
   value: string | null;
   onChange: (url: string | null) => void;
   readOnly?: boolean;

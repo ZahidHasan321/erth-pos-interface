@@ -58,6 +58,7 @@ export function RefundMode({
     const [refError, setRefError] = useState<string | null>(null);
     const [amountError, setAmountError] = useState<string | null>(null);
     const [reasonError, setReasonError] = useState<string | null>(null);
+    const [selectorResetKey, setSelectorResetKey] = useState(0);
 
     useEffect(() => {
         setTendered("");
@@ -67,6 +68,7 @@ export function RefundMode({
         setAmountError(null);
         setReasonError(null);
         idempotencyKeyRef.current = crypto.randomUUID();
+        setSelectorResetKey(k => k + 1);
     }, [order?.id]);
 
     // Auto-fill tendered when items selected
@@ -122,6 +124,7 @@ export function RefundMode({
                     setRefNo("");
                     setReason("");
                     idempotencyKeyRef.current = crypto.randomUUID();
+                    setSelectorResetKey(k => k + 1);
                 }
             },
         });
@@ -130,7 +133,7 @@ export function RefundMode({
     return (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 pt-3 lg:items-stretch lg:h-full lg:min-h-0">
             {/* LEFT — items to refund + reason + ref no */}
-            <div className="lg:col-span-3 space-y-3 lg:overflow-y-auto lg:min-h-0 lg:pr-1 scrollbar-thin">
+            <div className="lg:col-span-3 space-y-3 lg:overflow-y-auto lg:min-h-0 lg:px-1 lg:py-1 scrollbar-thin">
                 {cancelledWithPayments && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
@@ -166,17 +169,17 @@ export function RefundMode({
                             soaking24hPrice={getPrice("SOAKING_24H_CHARGE") || 0}
                             totalPaid={totalPaid}
                             onRefundItemsChange={(items, total) => { setRefundItems(items); setRefundTotal(total); }}
+                            resetKey={selectorResetKey}
                         />
                     </div>
 
                     <div className="space-y-1">
-                        <Label className="text-xs text-red-600 uppercase tracking-wider">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
                             Refund Reason <span className="text-red-500">*</span>
                         </Label>
                         <Input
                             value={reason}
                             onChange={(e) => { setReason(e.target.value); setReasonError(null); }}
-                            onFocus={(e) => e.target.select()}
                             placeholder="Reason for refund (required)"
                             className="h-11 text-sm"
                         />

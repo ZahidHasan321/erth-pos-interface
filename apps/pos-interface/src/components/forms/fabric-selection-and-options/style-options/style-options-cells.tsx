@@ -281,7 +281,7 @@ export const CollarCell = ({
                 alt="Small Tabaggi"
                 className="min-w-8 h-8 object-contain"
               />
-              <span className="text-[9px] text-muted-foreground leading-tight">small tabbagi</span>
+              <span className="text-xs text-muted-foreground leading-tight">small tabbagi</span>
             </label>
           </div>
         )}
@@ -300,7 +300,7 @@ export const CollarCell = ({
                 }
                 disabled={isFormDisabled}
               />
-              <label htmlFor={`collar_up-${row.index}`} className="text-[10px] leading-none">
+              <label htmlFor={`collar_up-${row.index}`} className="text-xs leading-none">
                 UP
               </label>
             </div>
@@ -313,7 +313,7 @@ export const CollarCell = ({
                 }
                 disabled={isFormDisabled}
               />
-              <label htmlFor={`collar_down-${row.index}`} className="text-[10px] leading-none">
+              <label htmlFor={`collar_down-${row.index}`} className="text-xs leading-none">
                 DOWN
               </label>
             </div>
@@ -419,7 +419,7 @@ export const JabzourCell = ({
               </SelectContent>
             </Select>
             {fieldState.error && (
-              <p className="text-xs text-destructive">
+              <p className="text-sm text-destructive">
                 {fieldState.error.message}
               </p>
             )}
@@ -520,7 +520,7 @@ export const JabzourCell = ({
               </SelectContent>
             </Select>
             {fieldState.error && (
-              <p className="text-xs text-destructive">
+              <p className="text-sm text-destructive">
                 {fieldState.error.message}
               </p>
             )}

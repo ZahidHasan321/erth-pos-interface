@@ -79,6 +79,7 @@ function collectGarmentStyleCodes(garment: GarmentSchema): string[] {
     if (garment.lines === 2) codes.push("STY_LINE", "STY_LINE_2");
     if (garment.collar_type) codes.push(garment.collar_type);
     if (garment.collar_button) codes.push(garment.collar_button);
+    if (garment.small_tabaggi) codes.push("COL_SMALL_TABBAGI");
     if (garment.jabzour_1) codes.push(garment.jabzour_1);
     if (garment.jabzour_thickness) {
         codes.push(`JAB_THICKNESS_${thicknessCode(garment.jabzour_thickness)}`);
@@ -157,6 +158,9 @@ export function calculateGarmentStylePrice(
     }
     if (garment.collar_button) {
         total += priceMap.get(garment.collar_button) || 0;
+    }
+    if (garment.small_tabaggi) {
+        total += priceMap.get("COL_SMALL_TABBAGI") || 0;
     }
 
     if (garment.jabzour_1) {

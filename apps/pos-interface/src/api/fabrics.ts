@@ -1,5 +1,5 @@
 import type { Fabric } from "@repo/database";
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 
 export const getFabrics = async (includeArchived = false): Promise<Fabric[]> => {
   let query = db.from('fabrics').select('*');
@@ -18,22 +18,31 @@ export const createFabric = async (
 };
 
 export const updateFabric = async (id: number, fabric: Partial<Fabric>): Promise<Fabric> => {
-  const { data, error } = await db
-    .from('fabrics')
-    .update(fabric)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from('fabrics')
+      .update(fabric)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as Fabric;
 };
 
 export const deleteFabric = async (id: number): Promise<{ mode: "deleted" | "archived" }> => {
-  const { error } = await db.from('fabrics').delete().eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('fabrics').delete().eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (!error) return { mode: "deleted" };
   if (error.code === '23503') {
-    const { error: updErr } = await db.from('fabrics').update({ is_archived: true }).eq('id', id);
+    const { error: updErr } = await withWriteRetry(
+      () => db.from('fabrics').update({ is_archived: true }).eq('id', id),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (updErr) throw new Error(`Could not archive fabric: ${updErr.message}`);
     return { mode: "archived" };
   }
@@ -41,6 +50,9 @@ export const deleteFabric = async (id: number): Promise<{ mode: "deleted" | "arc
 };
 
 export const unarchiveFabric = async (id: number): Promise<void> => {
-  const { error } = await db.from('fabrics').update({ is_archived: false }).eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('fabrics').update({ is_archived: false }).eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Could not unarchive fabric: ${error.message}`);
 };

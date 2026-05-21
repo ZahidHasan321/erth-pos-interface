@@ -33,7 +33,7 @@ export function AlterationMeasurementTable({
                         {columns.map((col) => (
                             <th
                                 key={col.name}
-                                className="border border-border px-2 py-2 text-[11px] text-muted-foreground font-medium text-center leading-tight bg-muted/40"
+                                className="border border-border px-2 py-2 text-xs text-muted-foreground font-medium text-center leading-tight bg-muted/40"
                             >
                                 {col.label}
                             </th>
@@ -82,11 +82,11 @@ export function AlterationMeasurementTable({
                                     className="border border-border px-1.5 py-1 bg-muted/20 text-center"
                                 >
                                     {master != null ? (
-                                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                                        <span className="text-xs tabular-nums text-muted-foreground">
                                             {master}
                                         </span>
                                     ) : (
-                                        <span className="text-[11px] text-muted-foreground/40">—</span>
+                                        <span className="text-xs text-muted-foreground/40">—</span>
                                     )}
                                 </td>
                             );

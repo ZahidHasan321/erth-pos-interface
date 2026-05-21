@@ -35,7 +35,7 @@ const SKELETON_COUNT = 2;
  * Skeleton loader for order cards
  */
 const OrderCardSkeleton = () => (
-    <div className="p-4 border rounded-xl animate-pulse bg-card">
+    <div className="p-4 border rounded-lg animate-pulse bg-card">
         <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-2">
                 <div className="w-5 h-5 bg-muted rounded" />
@@ -92,7 +92,7 @@ const OrderCard = React.memo<OrderCardProps>(
                 tabIndex={-1}
                 onClick={handleClick}
                 className={cn(
-                    "p-4 border rounded-xl cursor-pointer transition-all relative",
+                    "p-4 border rounded-lg cursor-pointer transition-all relative",
                     isSelected
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-border bg-card hover:bg-muted/30",
@@ -105,7 +105,7 @@ const OrderCard = React.memo<OrderCardProps>(
                             <span className="font-bold text-lg text-foreground">
                                 Order #{order.id}
                             </span>
-                                                                        <span className="text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase">                                Draft
+                                                                        <span className="text-xs px-1.5 py-0.5 rounded border border-border bg-muted text-muted-foreground font-medium uppercase">                                Draft
                             </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -161,7 +161,7 @@ const OrderCard = React.memo<OrderCardProps>(
                 </div>
 
                 {order.notes && (
-                    <div className="mt-3 text-xs text-muted-foreground line-clamp-1 italic">
+                    <div className="mt-3 text-sm text-muted-foreground line-clamp-1 italic">
                         Note: {order.notes}
                     </div>
                 )}
@@ -329,7 +329,7 @@ export function PendingOrdersDialog({
                                     />
                                 ))
                             ) : (
-                                <div className="p-8 text-center text-muted-foreground border-2 border-dashed rounded-xl">
+                                <div className="p-8 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                                     <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
                                     <p>No pending orders found</p>
                                 </div>

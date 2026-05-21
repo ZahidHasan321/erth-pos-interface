@@ -94,7 +94,7 @@ function CustomersListComponent() {
           <h1 className="text-xl font-bold text-foreground tracking-tight">
             Customer <span className="text-primary">Directory</span>
           </h1>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+          <p className="text-xs text-muted-foreground">
             Manage and view your customer database
           </p>
         </div>
@@ -140,11 +140,11 @@ function CustomersListComponent() {
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Customer</TableHead>
-                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Contact</TableHead>
-                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Location</TableHead>
-                <TableHead className="font-bold uppercase text-xs tracking-widest py-3">Account</TableHead>
-                <TableHead className="text-right font-bold uppercase text-xs tracking-widest py-3">Actions</TableHead>
+                <TableHead className="font-medium uppercase text-xs tracking-wide text-muted-foreground py-3">Customer</TableHead>
+                <TableHead className="font-medium uppercase text-xs tracking-wide text-muted-foreground py-3">Contact</TableHead>
+                <TableHead className="font-medium uppercase text-xs tracking-wide text-muted-foreground py-3">Location</TableHead>
+                <TableHead className="font-medium uppercase text-xs tracking-wide text-muted-foreground py-3">Account</TableHead>
+                <TableHead className="text-right font-medium uppercase text-xs tracking-wide text-muted-foreground py-3">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -229,7 +229,7 @@ function CustomersListComponent() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2 text-xs text-secondary hover:text-secondary hover:bg-secondary/10"
+                            className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
                             onClick={() => openMeasurements(customer.id, customer.name)}
                           >
                             <Ruler className="h-3.5 w-3.5 mr-1.5" />
@@ -341,7 +341,7 @@ function CustomersListComponent() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-secondary hover:text-secondary hover:bg-secondary/10"
+                        className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
                         onClick={() => openMeasurements(customer.id, customer.name)}
                         title="Measurements"
                       >
@@ -383,12 +383,12 @@ function CustomersListComponent() {
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-5">
           <SheetHeader className="mb-3 p-0">
-            <SheetTitle className="text-2xl font-black uppercase tracking-tighter">
-              <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
+            <span className="text-xs font-medium text-primary mb-1">Customer measurements</span>
+            <SheetTitle className="text-lg font-semibold">
               {selectedCustomer?.name}
             </SheetTitle>
-            <SheetDescription className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
-              manage and update body measurements for this profile
+            <SheetDescription className="text-xs text-muted-foreground">
+              Manage and update body measurements for this profile
             </SheetDescription>
           </SheetHeader>
           {selectedCustomer && (
@@ -403,7 +403,7 @@ function CustomersListComponent() {
       </Sheet>
 
       {/* Pagination */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-3 bg-muted/30 p-3 rounded-xl border border-border/50">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-3 bg-muted/30 p-3 rounded-lg border border-border/50">
         <div className="text-sm text-muted-foreground order-2 sm:order-1">
           {totalCount > 0 ? (
             <>

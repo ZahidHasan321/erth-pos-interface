@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Shelf } from '@repo/database';
 
 export const getShelf = async (includeArchived = false): Promise<Shelf[]> => {
@@ -21,22 +21,31 @@ export const updateShelf = async (
   id: string,
   shelf: Partial<Shelf>,
 ): Promise<Shelf> => {
-  const { data, error } = await db
-    .from('shelf')
-    .update(shelf)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from('shelf')
+      .update(shelf)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as Shelf;
 };
 
 export const deleteShelfItem = async (id: number): Promise<{ mode: "deleted" | "archived" }> => {
-  const { error } = await db.from('shelf').delete().eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('shelf').delete().eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (!error) return { mode: "deleted" };
   if (error.code === '23503') {
-    const { error: updErr } = await db.from('shelf').update({ is_archived: true }).eq('id', id);
+    const { error: updErr } = await withWriteRetry(
+      () => db.from('shelf').update({ is_archived: true }).eq('id', id),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (updErr) throw new Error(`Could not archive shelf item: ${updErr.message}`);
     return { mode: "archived" };
   }
@@ -44,6 +53,9 @@ export const deleteShelfItem = async (id: number): Promise<{ mode: "deleted" | "
 };
 
 export const unarchiveShelfItem = async (id: number): Promise<void> => {
-  const { error } = await db.from('shelf').update({ is_archived: false }).eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('shelf').update({ is_archived: false }).eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Could not unarchive shelf item: ${error.message}`);
 };

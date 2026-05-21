@@ -6,17 +6,34 @@ export const LOW_STOCK_THRESHOLDS: Record<StockItemType, number> = {
   accessory: 10,
 };
 
-export function isLowStock(itemType: StockItemType, qty: number): boolean {
-  return qty > 0 && qty < LOW_STOCK_THRESHOLDS[itemType];
+/** Resolve effective threshold: per-item override (if set) else type default. */
+export function getLowStockThreshold(
+  itemType: StockItemType,
+  override?: number | string | null,
+): number {
+  const n = override == null ? NaN : Number(override);
+  return Number.isFinite(n) && n > 0 ? n : LOW_STOCK_THRESHOLDS[itemType];
+}
+
+export function isLowStock(
+  itemType: StockItemType,
+  qty: number,
+  threshold?: number | string | null,
+): boolean {
+  return qty > 0 && qty < getLowStockThreshold(itemType, threshold);
 }
 
 export function isOutOfStock(qty: number): boolean {
   return qty <= 0;
 }
 
-export function stockStatus(itemType: StockItemType, qty: number): "out" | "low" | "ok" {
+export function stockStatus(
+  itemType: StockItemType,
+  qty: number,
+  threshold?: number | string | null,
+): "out" | "low" | "ok" {
   if (isOutOfStock(qty)) return "out";
-  if (isLowStock(itemType, qty)) return "low";
+  if (isLowStock(itemType, qty, threshold)) return "low";
   return "ok";
 }
 

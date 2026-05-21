@@ -248,7 +248,7 @@ export function SearchCustomer({
           subtitle="Checking for pending orders..." 
         />
       )}
-      <div ref={containerRef} className="bg-muted/40 px-5 py-4 rounded-2xl space-y-3 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">
+      <div ref={containerRef} className="bg-muted/40 px-5 py-4 rounded-lg space-y-3 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">
         <div className="flex justify-between items-center px-1">
           <div className="flex items-center gap-3">
             <div className={cn(
@@ -282,7 +282,7 @@ export function SearchCustomer({
               }}
               onFocus={() => setIsFocused(true)}
               className={cn(
-                "h-9 pl-12 pr-12 text-base bg-white rounded-xl border-border shadow-sm focus-visible:ring-primary/20 transition-[color,background-color,border-color,box-shadow] font-bold",
+                "h-9 pl-12 pr-12 text-base bg-card rounded-lg border-border shadow-sm focus-visible:ring-primary/20 transition-[color,background-color,border-color,box-shadow] font-bold",
                 selectedCustomerId && "border-primary ring-2 ring-primary/10 font-semibold text-primary"
               )}
             />
@@ -305,7 +305,7 @@ export function SearchCustomer({
 
           {/* Floating Results List */}
           {showList && (
-            <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-border bg-white shadow-lg overflow-hidden z-40 transition-all duration-150 transform origin-top">
+            <div className="absolute top-full left-0 right-0 mt-2 rounded-lg border border-border bg-card shadow-sm overflow-hidden z-40 transition-all duration-150 transform origin-top">
               <Command shouldFilter={false} className="bg-transparent">
                 <CommandList className="max-h-[400px] scrollbar-thin overflow-y-auto">
                   {showSkeleton ? (
@@ -319,7 +319,7 @@ export function SearchCustomer({
                               <Skeleton className="h-3 w-24" />
                             </div>
                           </div>
-                          <Skeleton className="h-6 w-16 rounded-full" />
+                          <Skeleton className="h-6 w-16 rounded-md" />
                         </div>
                       ))}
                     </div>
@@ -412,9 +412,9 @@ export function SearchCustomer({
                                 <Badge 
                                   variant={customer.account_type === 'Primary' ? 'default' : 'secondary'}
                                                                   className={cn(
-                                                                      "px-2.5 py-0.5 text-xs font-black uppercase tracking-wider border",                                  customer.account_type === 'Primary' 
-                                      ? "bg-primary border-primary shadow-sm" 
-                                      : "bg-white text-muted-foreground border-border"
+                                                                      "px-2.5 py-0.5 text-xs font-semibold border",                                  customer.account_type === 'Primary'
+                                      ? "bg-primary border-primary shadow-sm"
+                                      : "bg-card text-muted-foreground border-border"
                                   )}
                                 >
                                   {customer.account_type}

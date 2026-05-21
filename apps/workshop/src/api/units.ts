@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Unit, NewUnit } from "@repo/database";
 
 export const getUnits = async (): Promise<Unit[]> => {
@@ -32,12 +32,15 @@ export const updateUnit = async (
   id: string,
   updates: Partial<Pick<NewUnit, "name" | "notes" | "daily_target">>,
 ): Promise<Unit> => {
-  const { data, error } = await db
-    .from("units")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from("units")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) {
     if (error.code === "23505") {
       throw new Error(`A unit with that name already exists in this stage.`);

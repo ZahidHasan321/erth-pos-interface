@@ -13,6 +13,7 @@ import { type OrderSchema } from "@/components/forms/order-summary-and-payment/o
 import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
 import { type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import { type FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
+import { useRef } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Order } from "@repo/database";
@@ -114,18 +115,32 @@ function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): P
 export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
     const queryClient = useQueryClient();
 
+    // Stable idempotency key for the in-flight order. Generated once and
+    // reused across failed re-submits (network drop → user clicks Confirm
+    // again) so a silently-committed order is recovered instead of duplicated.
+    // Cleared only after a confirmed success, so the next order gets a fresh
+    // key. The order form is mounted per checkout flow, so the ref is scoped
+    // to one logical order.
+    const idempotencyKeyRef = useRef<string | undefined>(undefined);
+
     const createOrderMutation = useMutation({
         mutationFn: (additionalFields?: Partial<OrderSchema>) => {
             const orderType = options.orderType || "WORK";
+            if (!idempotencyKeyRef.current) {
+                idempotencyKeyRef.current = crypto.randomUUID();
+            }
             const order: Partial<Order> = {
                 checkout_status: "draft",
                 order_date: new Date(),
                 order_type: orderType,
+                idempotency_key: idempotencyKeyRef.current,
                 ...(orderType === "WORK" && { order_phase: "new" }),
             };
 
             if (additionalFields) {
                 Object.assign(order, mapSchemaToOrder(additionalFields));
+                // mapSchemaToOrder must not clobber the idempotency key.
+                order.idempotency_key = idempotencyKeyRef.current;
             }
 
             return createOrder(order);
@@ -139,8 +154,11 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
 
             if (response.data) {
                 const order = response.data;
+                // Order is committed — retire this key so the next distinct
+                // order can't accidentally recover this one.
+                idempotencyKeyRef.current = undefined;
                 const formattedOrder = mapOrderToFormValues(order);
-                
+
                 invalidateOrderQueries(queryClient, order.customer_id);
                 queryClient.invalidateQueries({ queryKey: ["customers"], refetchType: "active" });
 

@@ -262,6 +262,9 @@ export function FabricSelectionForm({
         const isoDate = date.toISOString();
         const garments = form.getValues("garments");
 
+        // The header date is the order-wide default: changing it re-stamps
+        // every garment. Per-garment overrides (express / split delivery) are
+        // applied afterward in the table and survive until the header changes.
         garments.forEach((_, index) => {
             form.setValue(
                 `garments.${index}.delivery_date`,
@@ -273,7 +276,7 @@ export function FabricSelectionForm({
                 },
             );
         });
-    }, [deliveryDate, garmentFields.length, form]);
+    }, [deliveryDate, form]);
 
     const { mutate: saveGarmentsMutation, isPending: isSaving } = useMutation({
         mutationFn: async (data: {
@@ -467,19 +470,40 @@ export function FabricSelectionForm({
         }
     }, [selectedMeasurementId, measurements]);
 
-    const measurementOptions =
-        measurementQuery?.data && measurementQuery.data.length > 0
-            ? measurementQuery.data
-                .filter((m) => !!m.id)
-                .map((m) => ({
-                    id: m.id as string,
-                    MeasurementID: m.measurement_id || m.id,
-                }))
-            : [];
+    const measurementOptions = React.useMemo(() => {
+        const rows = measurementQuery?.data ?? [];
+        if (rows.length === 0) return [];
+
+        // Measurement ids already saved on garments in this order. These must
+        // stay selectable even if dedupe would otherwise drop the older row.
+        const referencedIds = new Set(
+            (watchedGarments ?? [])
+                .map((g) => g?.measurement_id)
+                .filter(Boolean),
+        );
+
+        const byCode = new Map<string, { id: string; MeasurementID: string }>();
+        const result: { id: string; MeasurementID: string }[] = [];
+
+        for (const m of rows) {
+            if (!m.id) continue;
+            const opt = { id: m.id as string, MeasurementID: m.measurement_id || m.id };
+            // Query is ordered newest-first, so the first row per code wins.
+            if (!byCode.has(opt.MeasurementID)) {
+                byCode.set(opt.MeasurementID, opt);
+                result.push(opt);
+            } else if (referencedIds.has(opt.id)) {
+                // Keep the exact row a saved order points to.
+                result.push(opt);
+            }
+        }
+
+        return result;
+    }, [measurementQuery?.data, watchedGarments]);
 
     const addGarmentRow = (index: number, orderIdParam?: string | number) => {
-        const latestMeasurement =
-            measurements.length > 0 ? measurements[measurements.length - 1] : null;
+        // Query is ordered newest-first; index 0 is the latest measurement.
+        const latestMeasurement = measurements.length > 0 ? measurements[0] : null;
         const currentOrderId = orderIdParam || orderId || "";
         appendGarment({
             ...garmentDefaults,
@@ -613,7 +637,7 @@ export function FabricSelectionForm({
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                             {/* PIECES — input + sync as separate elements */}
                             <div className="flex items-center gap-2">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Pieces</label>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Pieces</label>
                                 <Input
                                     type="number"
                                     placeholder="0"
@@ -627,7 +651,7 @@ export function FabricSelectionForm({
                                     onClick={() => numRowsToAdd > 0 && syncRows(numRowsToAdd, garmentFields, { addRow: addGarmentRow, removeRow: removeGarmentRow })}
                                     disabled={isFormDisabled || numRowsToAdd <= 0}
                                     size="sm"
-                                    className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-md border-border/60 shadow-xs"
+                                    className="h-8 px-3 text-sm font-semibold gap-1.5 rounded-md border-border/60 shadow-xs"
                                 >
                                     <Plus className="size-3" /> Sync
                                 </Button>
@@ -638,15 +662,15 @@ export function FabricSelectionForm({
 
                             {/* STITCHING */}
                             <div className="flex items-center gap-2">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Stitching</label>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Stitching</label>
                                 <Tabs
                                     value={stitchingPrice.toString()}
                                     onValueChange={(val) => setStitchingPrice(parseFloat(val))}
                                     className="w-fit"
                                 >
                                     <TabsList className="h-8 p-0.5">
-                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-7 px-3.5 text-xs font-semibold">Child</TabsTrigger>
-                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-7 px-3.5 text-xs font-semibold">Adult</TabsTrigger>
+                                        <TabsTrigger value={stitchingChild.toString()} disabled={isFormDisabled} className="h-7 px-3.5 text-sm font-semibold">Child</TabsTrigger>
+                                        <TabsTrigger value={stitchingAdult.toString()} disabled={isFormDisabled} className="h-7 px-3.5 text-sm font-semibold">Adult</TabsTrigger>
                                     </TabsList>
                                 </Tabs>
                             </div>
@@ -656,40 +680,44 @@ export function FabricSelectionForm({
 
                             {/* DELIVERY DATE */}
                             <div className="flex items-center gap-2">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Delivery</label>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Delivery</label>
                                 <DatePicker
                                     placeholder={new Date().toISOString()}
                                     value={deliveryDate ? new Date(deliveryDate) : new Date()}
                                     onChange={(value) => value && setDeliveryDate(value.toISOString())}
                                     disabled={isFormDisabled}
-                                    className="h-8 border-border/60 rounded-md shadow-xs font-semibold text-xs"
+                                    className="h-8 border-border/60 rounded-md shadow-xs font-semibold text-sm"
                                 />
                             </div>
 
-                            {/* DIVIDER */}
-                            <div className="h-6 w-px bg-border/60 hidden sm:block" />
+                            {/* MEASUREMENT HELPER — hidden per request, logic kept */}
+                            {false && (
+                                <>
+                                    {/* DIVIDER */}
+                                    <div className="h-6 w-px bg-border/60 hidden sm:block" />
 
-                            {/* MEASUREMENT HELPER */}
-                            <div className="flex items-center gap-2">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Measurement</label>
-                                <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
-                                    <SelectTrigger className="w-28 border-border/60 shadow-xs font-semibold h-8 text-xs rounded-md">
-                                        <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {measurements.map((m) => (
-                                            <SelectItem key={m.id} value={m.id ?? ""} className="text-xs">{m.measurement_id}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {selectedMeasurementId && fabricMeter !== null && (
-                                    <div className="flex items-center gap-1.5 text-xs font-bold tabular-nums animate-in fade-in duration-200">
-                                        <span className="text-primary">{fabricMeter}m</span>
-                                        <span className="text-muted-foreground/40">/</span>
-                                        <span className="text-primary">{qallabi}m</span>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Measurement</label>
+                                        <Select onValueChange={setSelectedMeasurementId} value={selectedMeasurementId || ""}>
+                                            <SelectTrigger className="w-28 border-border/60 shadow-xs font-semibold h-8 text-xs rounded-md">
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {measurementOptions.map((m) => (
+                                                    <SelectItem key={m.id} value={m.id} className="text-xs">{m.MeasurementID}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {selectedMeasurementId && fabricMeter !== null && (
+                                            <div className="flex items-center gap-1.5 text-xs font-bold tabular-nums animate-in fade-in duration-200">
+                                                <span className="text-primary">{fabricMeter}m</span>
+                                                <span className="text-muted-foreground/40">/</span>
+                                                <span className="text-primary">{qallabi}m</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Row 2: Campaign offers */}
@@ -697,7 +725,7 @@ export function FabricSelectionForm({
                             <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-border/40">
                                 <div className="flex items-center gap-1.5 shrink-0">
                                     <Sparkles className="size-3 text-primary" />
-                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">Offers</span>
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-primary">Offers</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {activeCampaigns.map((campaign) => {
@@ -707,7 +735,7 @@ export function FabricSelectionForm({
                                                 key={campaign.id}
                                                 variant={isSelected ? "default" : "outline"}
                                                 className={cn(
-                                                    "cursor-pointer px-2.5 py-0.5 text-[11px] font-semibold transition-all",
+                                                    "cursor-pointer px-2.5 py-0.5 text-xs font-semibold transition-all",
                                                     isSelected ? "bg-primary shadow-sm shadow-primary/20" : "bg-background hover:bg-primary/5 hover:border-primary/30"
                                                 )}
                                                 onClick={() => {
@@ -744,7 +772,7 @@ export function FabricSelectionForm({
                                         size="sm"
                                         onClick={handlePrintAll}
                                         disabled={garmentFields.length === 0}
-                                        className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                                        className="h-8 px-2.5 text-sm text-muted-foreground hover:text-foreground gap-1.5"
                                     >
                                         <Printer className="size-3.5" />
                                         Print Labels
@@ -755,7 +783,7 @@ export function FabricSelectionForm({
                                         size="sm"
                                         onClick={copyFabricToAll}
                                         disabled={isFormDisabled || garmentFields.length < 2}
-                                        className="h-8 px-3 text-xs font-semibold gap-1.5 border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors"
+                                        className="h-8 px-3 text-sm font-semibold gap-1.5 border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors"
                                     >
                                         <Copy className="size-3" />
                                         Copy First Row
@@ -844,7 +872,7 @@ export function FabricSelectionForm({
                                     size="sm"
                                     onClick={copyGarmentToAll}
                                     disabled={isFormDisabled || garmentFields.length < 2}
-                                    className="h-8 px-3 text-xs font-semibold gap-1.5 border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors"
+                                    className="h-8 px-3 text-sm font-semibold gap-1.5 border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors"
                                 >
                                     <Copy className="size-3" />
                                     Copy First Row

@@ -64,11 +64,17 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
 function fmtThick(v: string | null | undefined): string {
   if (!v) return "—";
   const n = v.trim().toUpperCase();
-  if (n === "S" || n === "SINGLE") return "SINGLE";
-  if (n === "D" || n === "DOUBLE") return "DOUBLE";
-  if (n === "T" || n === "TRIPLE") return "TRIPLE";
-  if (n === "N" || n === "NO HASHWA") return "NO HASHWA";
-  return n;
+  if (n === "S" || n === "SINGLE") return "Single";
+  if (n === "D" || n === "DOUBLE") return "Double";
+  if (n === "T" || n === "TRIPLE") return "Triple";
+  if (n === "N" || n === "NO HASHWA") return "No hashwa";
+  return sentenceCase(n);
+}
+
+/** Domain labels arrive as ALL-CAPS literals; the workshop type rule is
+ *  sentence case (acronyms excepted). One place to normalize them. */
+function sentenceCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 // ── Shared sub-components ────────────────────────────────────────
@@ -87,19 +93,19 @@ function StyleImage({
       <img
         src={image}
         alt={alt}
-        className="h-14 w-full rounded-md border border-zinc-200 bg-white object-contain"
+        className="h-14 w-full rounded-md border border-border bg-card object-contain"
       />
     );
   }
   return (
-    <div className="h-14 w-full rounded-md border border-zinc-200 bg-white flex items-center justify-center text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-      {fallback}
+    <div className="h-14 w-full rounded-md border border-border bg-card flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+      {sentenceCase(fallback)}
     </div>
   );
 }
 
 const VALUE_BOX_INTERACTIVE =
-  "cursor-pointer transition-transform duration-100 hover:scale-110 hover:ring-2 hover:ring-blue-400 hover:shadow-md hover:z-10 active:scale-105";
+  "cursor-pointer transition-transform duration-100 hover:scale-110 hover:z-10 active:scale-105";
 
 function HoverValueBox({
   label,
@@ -148,11 +154,11 @@ function MeasureLayout({
   accessories?: React.ReactNode;
 }) {
   const heightBase =
-    "inline-flex h-14 w-8 items-center justify-center rounded-md border text-base font-semibold";
+    "inline-flex h-14 min-w-[2.75rem] px-1.5 items-center justify-center rounded-md border text-lg font-medium";
   const widthBase =
-    "flex items-center justify-center rounded-md border px-1 py-1 text-center text-sm font-semibold";
-  const heightDefault = "border-zinc-200 bg-white text-zinc-700";
-  const widthDefault = "border-zinc-200 bg-white text-zinc-700";
+    "flex items-center justify-center rounded-md border px-1 py-1 text-center text-base font-medium";
+  const heightDefault = "border-border bg-card text-foreground";
+  const widthDefault = "border-border bg-card text-foreground";
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
@@ -166,7 +172,7 @@ function MeasureLayout({
               label={heightLabel}
               className={cn(heightBase, heightTintClass || heightDefault)}
             >
-              <span className="inline-block rotate-90 whitespace-nowrap">{height ?? "—"}</span>
+              <span className="whitespace-nowrap">{height ?? "—"}</span>
             </HoverValueBox>
           </div>
           {width !== undefined && (
@@ -193,34 +199,13 @@ function MeasureLayout({
   );
 }
 
-const THICKNESS_COLORS: Record<string, string> = {
-  SINGLE: "bg-blue-100 border-blue-300 text-blue-800",
-  DOUBLE: "bg-emerald-100 border-emerald-300 text-emerald-800",
-  TRIPLE: "bg-orange-100 border-orange-300 text-orange-800",
-  "NO HASHWA": "bg-zinc-100 border-zinc-300 text-zinc-500",
-};
-
 function ThicknessBadge({ value }: { value: string | null | undefined }) {
-  const v = fmtThick(value);
-  const color = THICKNESS_COLORS[v] ?? "bg-zinc-100 border-zinc-300 text-zinc-700";
   return (
-    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${color}`}>
-      {v}
+    <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+      {fmtThick(value)}
     </span>
   );
 }
-
-const PILL_COLORS: Record<string, string> = {
-  PEN: "bg-amber-100 border-amber-300 text-amber-800",
-  MOBILE: "bg-sky-100 border-sky-300 text-sky-800",
-  WALLET: "bg-emerald-100 border-emerald-300 text-emerald-800",
-  ZIPPER: "bg-violet-100 border-violet-300 text-violet-800",
-  TABBAGI: "bg-rose-100 border-rose-300 text-rose-800",
-  "SMALL TABAGGI": "bg-teal-100 border-teal-300 text-teal-800",
-  ZARRAR: "bg-indigo-100 border-indigo-300 text-indigo-800",
-  "ARAVI ZARRAR": "bg-indigo-100 border-indigo-300 text-indigo-800",
-  "ZARRAR + TABBAGI": "bg-fuchsia-100 border-fuchsia-300 text-fuchsia-800",
-};
 
 function AccessoryPill({
   icon,
@@ -231,13 +216,12 @@ function AccessoryPill({
   label: string;
   rotate?: boolean;
 }) {
-  const color = PILL_COLORS[label.toUpperCase()] ?? "bg-zinc-100 border-zinc-300 text-zinc-700";
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold uppercase ${color}`}>
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground">
       {icon && (
         <img src={icon} alt="" className={`h-4 w-auto object-contain ${rotate ? "-rotate-90" : ""}`} />
       )}
-      {label}
+      {sentenceCase(label)}
     </span>
   );
 }
@@ -259,14 +243,14 @@ function StyleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-300 bg-zinc-50 p-2 shadow-sm">
-      <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
-        <h4 className="text-[11px] font-bold tracking-wide text-zinc-700 uppercase">{title}</h4>
+    <div className="rounded-md border border-border bg-background p-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border pb-1">
+        <h4 className="text-xs font-medium text-muted-foreground">{title}</h4>
         {thickness !== undefined && <ThicknessBadge value={thickness} />}
       </div>
       {changes && changes.length > 0 && (
-        <div className="mb-2 rounded-md border border-zinc-300 bg-white p-1.5">
-          <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+        <div className="mb-2 rounded-md border border-border bg-card p-1.5">
+          <div className="text-[10px] font-medium text-muted-foreground mb-1">
             Changes this trip
           </div>
           <div className="flex flex-wrap gap-1">
@@ -274,11 +258,11 @@ function StyleSection({
               <span
                 key={i}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium",
                   OPTION_CHANGE_KIND_CLASS[c.kind],
                 )}
               >
-                <span className="font-black">{OPTION_CHANGE_KIND_SYMBOL[c.kind]}</span>
+                <span className="font-medium">{OPTION_CHANGE_KIND_SYMBOL[c.kind]}</span>
                 {c.kind === "change"
                   ? <>{c.label}: {c.fromText} → {c.toText}</>
                   : c.kind === "hashwa"
@@ -292,14 +276,14 @@ function StyleSection({
       {children}
       {defects && defects.length > 0 && (
         <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-1.5">
-          <div className="text-[9px] font-black uppercase tracking-wider text-red-700 mb-1">
+          <div className="text-[10px] font-medium text-red-700 mb-1">
             QC defect — fix to spec
           </div>
           <div className="flex flex-wrap gap-1">
             {defects.map((d) => (
               <span
                 key={d.key}
-                className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-[10px] font-bold text-red-800"
+                className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-card px-2 py-0.5 text-[10px] font-medium text-red-800"
               >
                 <span className="opacity-70">{d.label}:</span> {d.actualText}
               </span>
@@ -359,18 +343,18 @@ function MeasureRow({
       label={tooltip}
       className={cn(
         "flex flex-col items-center justify-center rounded-md border px-2 py-1 text-center",
-        tintClass || "border-zinc-200 bg-white",
+        tintClass || "border-border bg-card",
       )}
     >
       <span className={cn(
-        "text-[8px] font-bold tracking-wide uppercase leading-tight",
-        tintClass ? "" : "text-zinc-500",
+        "text-[10px] font-medium leading-tight",
+        tintClass ? "" : "text-muted-foreground",
       )}>
         {label}
       </span>
       <span className={cn(
-        "text-sm font-semibold tabular-nums leading-tight",
-        tintClass ? "" : "text-zinc-700",
+        "text-base font-medium tabular-nums leading-tight",
+        tintClass ? "" : "text-foreground",
       )}>
         {value ?? "—"}
       </span>
@@ -449,7 +433,7 @@ export function DishdashaOverlay({
       <span className="inline-flex flex-col items-center justify-center gap-0.5">
         <MeasurementValue raw={m[key]} degree={0} correction={correction} />
         <span
-          className="text-red-600 font-black leading-none"
+          className="text-red-600 font-medium leading-none"
           style={{ fontSize: "0.7em" }}
           title={`QC measured ${qcActual}`}
         >
@@ -459,10 +443,10 @@ export function DishdashaOverlay({
     );
   };
 
-  const styleLabel = String(g.style ?? "kuwaiti").toUpperCase();
+  const styleLabel = sentenceCase(String(g.style ?? "kuwaiti"));
   const lineCount = String(g.lines ?? 1);
   const lineLabel =
-    lineCount === "1" ? "SINGLE" : lineCount === "2" ? "DOUBLE" : lineCount;
+    lineCount === "1" ? "Single" : lineCount === "2" ? "Double" : lineCount;
   const frontPocket = g.front_pocket_type
     ? STYLE_IMAGE_MAP[g.front_pocket_type]
     : null;
@@ -473,14 +457,19 @@ export function DishdashaOverlay({
   const cuffsEntry = g.cuffs_type ? STYLE_IMAGE_MAP[g.cuffs_type] : null;
   const cuffsType = cuffsEntry?.image ? cuffsEntry : null;
 
+  // Jabzour DB model (mirrors feedback.$orderId.tsx): jabzour_1 = "ZIPPER"
+  // → Shaab, a top zipper piece whose MAIN style sits in jabzour_2.
+  // jabzour_1 = "BUTTON" → no shaab; the MAIN style is still in jabzour_2
+  // ("Button" is just the jabzour_1 designation). Any other jabzour_1 value
+  // is a legacy row where jabzour_1 itself holds the style.
   const isShaab = g.jabzour_1 === "ZIPPER";
-  const jabzourPrimary = isShaab
-    ? STYLE_IMAGE_MAP["JAB_SHAAB"]
-    : g.jabzour_2
-      ? STYLE_IMAGE_MAP[g.jabzour_2]
-      : null;
-  const jabzourSecondary =
-    isShaab && g.jabzour_2 ? STYLE_IMAGE_MAP[g.jabzour_2] : null;
+  const isButtonJabzour = g.jabzour_1 === "BUTTON";
+  const jabzourMainKey =
+    isShaab || isButtonJabzour ? g.jabzour_2 : g.jabzour_1;
+  const jabzourMain = jabzourMainKey
+    ? STYLE_IMAGE_MAP[jabzourMainKey]
+    : null;
+  const shaabImage = isShaab ? STYLE_IMAGE_MAP["JAB_SHAAB"] : null;
 
   const sidePocket = STYLE_IMAGE_MAP["SID_MUDAWWAR_SIDE_POCKET"];
 
@@ -488,13 +477,13 @@ export function DishdashaOverlay({
 
   return (
     <div
-      className="bg-white border border-zinc-300 rounded-xl overflow-hidden text-zinc-900 flex flex-col landscape:flex-row landscape:h-[calc(100vh-180px)] landscape:max-h-[calc(100vh-180px)]"
+      className="bg-card border border-border rounded-md overflow-hidden text-foreground flex flex-col landscape:flex-row landscape:h-[calc(100vh-180px)] landscape:max-h-[calc(100vh-180px)]"
     >
         {/* Template frame with measurement cells.
             Landscape: height-driven (fits viewport vertically).
             Portrait: width-driven (full width, stacks above panel). */}
         <div
-          className="relative shrink-0 border-b landscape:border-b-0 landscape:border-r border-zinc-200 w-full landscape:w-auto landscape:h-full"
+          className="relative shrink-0 border-b landscape:border-b-0 landscape:border-r border-border w-full landscape:w-auto landscape:h-full"
           style={{ aspectRatio: "952.512 / 1122.5601" }}
         >
           <div className="relative w-full h-full">
@@ -539,7 +528,7 @@ export function DishdashaOverlay({
               <Tooltip key={field.id}>
                 <TooltipTrigger asChild>
                   <div
-                    className={`absolute flex ${hasQcActual && !isVertical ? "flex-col" : ""} items-center justify-center font-black leading-none cursor-pointer transition-all duration-100 hover:z-20 hover:scale-125 hover:ring-2 hover:ring-blue-500 hover:shadow-lg active:scale-110 active:ring-blue-700 ${tintClass}`}
+                    className={`absolute flex ${hasQcActual && !isVertical ? "flex-col" : ""} items-center justify-center font-medium leading-none cursor-pointer transition-all duration-100 hover:z-20 hover:scale-125 active:scale-110 ${tintClass}`}
                     style={{
                       left: `${field.left}%`,
                       top: `${field.top}%`,
@@ -561,7 +550,7 @@ export function DishdashaOverlay({
                     />
                     {hasQcActual && (
                       <span
-                        className="text-red-600 font-black"
+                        className="text-red-600 font-medium"
                         style={{ fontSize: "0.62em", lineHeight: 1 }}
                       >
                         <MeasurementValue raw={qcActual} degree={0} />
@@ -576,7 +565,7 @@ export function DishdashaOverlay({
 
           {!m && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm text-zinc-300 italic font-medium">
+              <span className="text-sm text-muted-foreground italic">
                 No measurements
               </span>
             </div>
@@ -589,21 +578,30 @@ export function DishdashaOverlay({
           {/* Meta row — tints when the underlying option (style / lines) changed
               this trip, with a small "(changed from X)" hint so the sewer
               doesn't miss a meta-level spec change. */}
-          <div className="grid grid-cols-3 gap-1.5 p-2 border-b border-zinc-200 shrink-0">
+          <div className="grid grid-cols-3 gap-1.5 p-2 border-b border-border shrink-0">
             {([
               { label: styleLabel, optName: "style" as const },
-              { label: `LINE ${lineLabel}`, optName: "lines" as const },
-              { label: (g.garment_type ?? "FINAL").toUpperCase(), optName: null },
+              { label: `Line ${lineLabel}`, optName: "lines" as const },
+              {
+                // Type lives in the page header strip — duplicating it here
+                // wastes the cell. Fabric is the one thing the worker needs
+                // and it appears nowhere else on this page.
+                label: g.fabric_name
+                  ? `${g.fabric_name}${g.fabric_color ? ` · ${g.fabric_color}` : ""}`
+                  : "Outside fabric",
+                optName: null,
+              },
             ]).map((meta, i) => {
               const change = meta.optName
                 ? metaChanges.find((c) => c.label.toLowerCase() === meta.optName)
                 : undefined;
-              const tone = change ? "border-amber-500 bg-amber-50 text-amber-900" : "border-zinc-800 bg-white text-zinc-900";
+              const tone = change ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border bg-card text-foreground";
               return (
                 <span
                   key={i}
+                  title={meta.label}
                   className={cn(
-                    "rounded-lg border px-2 py-1 text-center text-[11px] font-bold tracking-wide uppercase",
+                    "block truncate rounded-md border px-2 py-1 text-center text-xs font-medium",
                     tone,
                   )}
                 >
@@ -654,9 +652,9 @@ export function DishdashaOverlay({
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("jabzour")) && (
             <StyleSection title="Jabzour" thickness={g.jabzour_thickness} defects={buildSectionDefects(qcFailOptionActuals, "jabzour")} changes={sectionChanges("jabzour")}>
               <MeasureLayout
-                image={jabzourPrimary?.image}
-                imageAlt="Jabzour"
-                imageFallback={isShaab ? "JAB SHAAB" : "JAB"}
+                image={jabzourMain?.image}
+                imageAlt={jabzourMain?.label ?? "Jabzour"}
+                imageFallback="JAB"
                 height={measureVal("jabzour_width")}
                 heightLabel={qcLabel("jabzour_width")}
                 heightTintClass={tintForKey("jabzour_width")}
@@ -675,14 +673,13 @@ export function DishdashaOverlay({
                 }
                 accessories={
                   <>
-                    {isShaab && <AccessoryPill label="ZIPPER" />}
-                    {jabzourSecondary?.image && (
-                      <img
-                        src={jabzourSecondary.image}
-                        alt=""
-                        className="h-8 w-14 rounded-md border border-zinc-200 bg-white object-contain"
+                    {isShaab && (
+                      <AccessoryPill
+                        icon={shaabImage?.image}
+                        label="Zipper"
                       />
                     )}
+                    {isButtonJabzour && <AccessoryPill label="Button" />}
                   </>
                 }
               />
@@ -784,11 +781,11 @@ export function DishdashaOverlay({
             )}
 
             {notes && (
-              <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
-                <h4 className="text-[11px] font-bold tracking-wide text-amber-700 uppercase mb-1">
+              <div className="col-span-2 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2">
+                <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1">
                   Notes
                 </h4>
-                <p className="text-xs text-amber-900 whitespace-pre-wrap leading-snug">{notes}</p>
+                <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{notes}</p>
               </div>
             )}
           </div>

@@ -188,7 +188,7 @@ export function AlterationGarmentForm({
                                     type="button"
                                     onClick={() => update({ bufi_ext: selected ? null : opt })}
                                     className={
-                                        "flex-1 text-xs font-semibold transition border-r border-slate-300 last:border-r-0 " +
+                                        "flex-1 text-sm font-semibold transition border-r border-slate-300 last:border-r-0 " +
                                         (selected
                                             ? "bg-slate-900 text-white"
                                             : "bg-white text-slate-700 hover:bg-slate-50")
@@ -240,7 +240,7 @@ export function AlterationGarmentForm({
                                 type="button"
                                 onClick={() => update({ mode: m, full_measurement_set_id: m === "full_set" ? value.full_measurement_set_id : null })}
                                 className={
-                                    "px-3 text-xs font-semibold transition border-r border-slate-300 last:border-r-0 " +
+                                    "px-3 text-sm font-semibold transition border-r border-slate-300 last:border-r-0 " +
                                     (selected ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-100")
                                 }
                             >
@@ -272,10 +272,10 @@ export function AlterationGarmentForm({
             {value.mode === "changes_only" && (
                 <div className="space-y-3">
                     <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                             Measurement Changes
                         </h4>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm text-slate-500">
                             Fill only the cells that are changing. The row below each input shows the existing master value for reference.
                         </p>
                     </div>
@@ -316,10 +316,10 @@ export function AlterationGarmentForm({
             {/* Style overrides — image-driven */}
             <div className="space-y-3">
                 <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                         Style Changes
                     </h4>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm text-slate-500">
                         Pick only what should change from the original.
                     </p>
                 </div>
@@ -348,9 +348,9 @@ export function AlterationGarmentForm({
                             image={smallTabaggiImage}
                         />
                         <div className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-700">Position</span>
+                            <span className="text-sm font-medium text-slate-700">Position</span>
                             <div className="flex gap-3">
-                                <label className="flex items-center gap-1.5 text-xs">
+                                <label className="flex items-center gap-1.5 text-sm">
                                     <input
                                         type="checkbox"
                                         checked={styleStr("collar_position") === "up"}
@@ -360,7 +360,7 @@ export function AlterationGarmentForm({
                                     />
                                     UP
                                 </label>
-                                <label className="flex items-center gap-1.5 text-xs">
+                                <label className="flex items-center gap-1.5 text-sm">
                                     <input
                                         type="checkbox"
                                         checked={styleStr("collar_position") === "down"}
@@ -482,7 +482,7 @@ export function AlterationGarmentForm({
                                 <button
                                     type="button"
                                     onClick={() => setStyle("lines", null)}
-                                    className="text-xs text-slate-500 hover:text-slate-800 underline"
+                                    className="text-sm text-slate-500 hover:text-slate-800 underline"
                                 >
                                     clear
                                 </button>
@@ -507,7 +507,7 @@ export function AlterationGarmentForm({
 function StyleGroup({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {title}
             </div>
             <div className="flex flex-wrap items-end gap-3">{children}</div>
@@ -531,7 +531,7 @@ function ImagePickerField({
     const selected = options.find((o) => o.value === value);
     return (
         <div className="min-w-[8rem] flex-1 space-y-1">
-            <Label className="text-xs text-slate-600">{label}</Label>
+            <Label className="text-sm text-slate-600">{label}</Label>
             <Select
                 value={value || ""}
                 onValueChange={(v) => onChange(v === "__clear" ? null : v)}
@@ -586,7 +586,7 @@ function ThicknessField({
 }) {
     return (
         <div className="min-w-[7rem] space-y-1">
-            <Label className="text-xs text-slate-600">{label}</Label>
+            <Label className="text-sm text-slate-600">{label}</Label>
             <Select
                 value={value || ""}
                 onValueChange={(v) => onChange(v === "__clear" ? null : v)}
@@ -626,7 +626,7 @@ function CheckboxImage({
     return (
         <label
             className={
-                "relative flex cursor-pointer flex-col items-center gap-1 rounded-md border-2 bg-white px-2 py-1.5 text-[10px] text-slate-700 transition " +
+                "relative flex cursor-pointer flex-col items-center gap-1 rounded-md border-2 bg-white px-2 py-1.5 text-xs text-slate-700 transition " +
                 (checked
                     ? "border-slate-900 ring-2 ring-slate-900/20"
                     : "border-slate-200 hover:bg-slate-50")
@@ -638,7 +638,7 @@ function CheckboxImage({
                 className="sr-only"
             />
             {checked && (
-                <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-slate-900 text-[9px] font-bold text-white">
+                <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
                     ✓
                 </span>
             )}

@@ -12,6 +12,7 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
+import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { Truck, Package, History, Printer, ChevronDown, Loader2 } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
@@ -559,9 +560,47 @@ function DispatchPage() {
   );
   const inTransitGroups = useMemo(() => groupInTransitByOrder(inTransitGarments), [inTransitGarments]);
 
-  const handleDispatchGroup = async (ids: string[]) => {
+  // Accept-with-Fix brova must travel back with its order's finals (CLAUDE.md §2.4·6).
+  // If a dispatch batch carries an Accept-with-Fix brova (a brova back at the
+  // workshop, ready_for_dispatch, acceptance_status === true — plain-Accept brovas
+  // never return here and Reject-Repair brovas have acceptance_status === false)
+  // while the same order still has a final in production not in this batch,
+  // confirm before stranding the finals. No other case prompts.
+  const [pendingDispatch, setPendingDispatch] = useState<{ ids: string[]; finalCount: number } | null>(null);
+
+  const runDispatch = async (ids: string[]) => {
     if (ids.length === 0) return;
     await dispatchMut.mutateAsync(ids);
+  };
+
+  const handleDispatchGroup = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const batch = allGarments.filter((g) => idSet.has(g.id));
+    const hasAcceptWithFixBrova = batch.some(
+      (g) =>
+        g.garment_type === "brova" &&
+        g.acceptance_status === true &&
+        g.piece_stage === "ready_for_dispatch",
+    );
+    if (hasAcceptWithFixBrova) {
+      const orderIds = new Set(batch.map((g) => g.order_id));
+      const strandedFinals = allGarments.filter(
+        (g) =>
+          orderIds.has(g.order_id) &&
+          !idSet.has(g.id) &&
+          g.garment_type === "final" &&
+          (g.location === "workshop" || g.location === "transit_to_workshop") &&
+          g.piece_stage !== "ready_for_dispatch" &&
+          g.piece_stage !== "completed" &&
+          g.piece_stage !== "discarded",
+      );
+      if (strandedFinals.length > 0) {
+        setPendingDispatch({ ids, finalCount: strandedFinals.length });
+        return;
+      }
+    }
+    await runDispatch(ids);
   };
 
   const dispatchPendingIds = useMemo(
@@ -639,6 +678,24 @@ function DispatchPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ConfirmationDialog
+        isOpen={pendingDispatch !== null}
+        onClose={() => setPendingDispatch(null)}
+        onConfirm={() => {
+          const ids = pendingDispatch?.ids ?? [];
+          setPendingDispatch(null);
+          void runDispatch(ids);
+        }}
+        title="Finals not ready yet"
+        description={
+          pendingDispatch
+            ? `This order still has ${pendingDispatch.finalCount} final${pendingDispatch.finalCount === 1 ? "" : "s"} in production at the workshop. An Accept-with-Fix brova should travel back with its finals. Send the brova without the finals?`
+            : ""
+        }
+        confirmText="Send without finals"
+        cancelText="Cancel"
+      />
     </div>
   );
 }

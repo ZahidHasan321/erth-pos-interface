@@ -45,49 +45,49 @@ function CustomerSummaryCard({
     onShowMeasurements: () => void
 }) {
     return (
-        <Card className={cn("overflow-hidden border-primary/20 bg-linear-to-br from-card to-primary/5 shadow-md", ANIMATION_CLASSES.fadeInUp)}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className={cn("overflow-hidden", ANIMATION_CLASSES.fadeInUp)}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 pt-5 pb-4 border-b">
                 <div className="flex items-center gap-4">
                     <div className="bg-primary/10 p-3 rounded-full">
                         <User className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                        <CardTitle className="text-lg font-bold text-foreground">
+                        <CardTitle className="text-lg font-semibold text-foreground">
                             {customer.name}
                         </CardTitle>
                         {customer.arabic_name && (
-                            <p className="text-lg font-medium text-muted-foreground mt-1" dir="rtl">
+                            <p className="text-base text-muted-foreground mt-0.5" dir="rtl">
                                 {customer.arabic_name}
                             </p>
                         )}
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={onShowMeasurements} className="gap-2 border-secondary/30 hover:bg-secondary/10">
-                        <Ruler className="h-4 w-4 text-secondary" />
+                    <Button variant="outline" size="sm" onClick={onShowMeasurements} className="gap-2 hover:bg-primary/10">
+                        <Ruler className="h-4 w-4 text-primary" />
                         Measurements
                     </Button>
-                    <Button variant="outline" size="sm" onClick={onEdit} className="gap-2 border-primary/30 hover:bg-primary/10">
+                    <Button variant="outline" size="sm" onClick={onEdit} className="gap-2 hover:bg-primary/10">
                         <Pencil className="h-4 w-4 text-primary" />
                         Edit Profile
                     </Button>
                 </div>
             </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+            <CardContent className="pt-5 pb-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="flex items-start gap-3">
                         <div className="mt-1 p-1.5 rounded-md bg-muted text-muted-foreground">
                             <Phone className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Mobile</p>
+                            <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">Mobile</p>
                             <p className="font-mono font-bold text-foreground">
                                 {customer.country_code} {customer.phone}
                             </p>
                             {customer.whatsapp && (
-                                <div className="flex items-center gap-1 mt-1">
-                                    <div className="size-2 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-xs font-bold text-green-600 uppercase">WhatsApp Active</span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="size-1.5 rounded-full bg-emerald-600" />
+                                    <span className="text-xs font-medium text-emerald-700">WhatsApp active</span>
                                 </div>
                             )}
                         </div>
@@ -98,7 +98,7 @@ function CustomerSummaryCard({
                             <MapPin className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Location</p>
+                            <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">Location</p>
                             <p className="font-bold text-foreground">
                                 {customer.area || "N/A"}
                             </p>
@@ -118,12 +118,12 @@ function CustomerSummaryCard({
                             <Users className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Account Type</p>
+                            <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">Account Type</p>
                             <div className="flex items-center gap-2">
                                 <span className={cn(
-                                    "text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-sm",
-                                    customer.account_type === 'Primary' 
-                                        ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                    "text-xs font-medium px-2.5 py-0.5 rounded-full border",
+                                    customer.account_type === 'Primary'
+                                        ? "bg-primary/10 text-primary border-primary/20"
                                         : "bg-amber-50 text-amber-700 border-amber-200"
                                 )}>
                                     {customer.account_type}
@@ -142,7 +142,7 @@ function CustomerSummaryCard({
                             <Mail className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Email</p>
+                            <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">Email</p>
                             <p className="text-sm font-medium text-foreground truncate max-w-[150px]">
                                 {customer.email || "No email provided"}
                             </p>
@@ -154,7 +154,7 @@ function CustomerSummaryCard({
                     <div className="mt-3 p-3 rounded-lg bg-muted/30 border border-border/50 flex gap-3">
                         <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground uppercase font-black tracking-widest">Notes</p>
+                            <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">Notes</p>
                             <p className="text-sm text-muted-foreground italic leading-relaxed">
                                 "{customer.notes}"
                             </p>
@@ -206,8 +206,8 @@ function CustomerDetailComponent() {
         return (
             <div className="space-y-3 p-4 md:p-5 max-w-6xl mx-auto">
                 <Skeleton className="h-9 w-48 rounded-lg" />
-                <Card className="border-2 py-0 gap-0">
-                    <CardContent className="p-3 space-y-4">
+                <Card>
+                    <CardContent className="py-5 space-y-4">
                         <div className="flex items-center gap-4">
                             <Skeleton className="size-10 rounded-full" />
                             <div className="space-y-2 flex-1">
@@ -226,7 +226,7 @@ function CustomerDetailComponent() {
                         </div>
                     </CardContent>
                 </Card>
-                <Skeleton className="h-64 rounded-2xl" />
+                <Skeleton className="h-64 rounded-lg" />
             </div>
         );
     }
@@ -294,12 +294,12 @@ function CustomerDetailComponent() {
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetContent side="right" className="sm:max-w-4xl overflow-y-auto p-5">
                     <SheetHeader className="mb-4 p-0">
-                        <SheetTitle className="text-xl font-black uppercase tracking-tighter">
-                            <span className="text-primary block text-sm tracking-widest mb-1 opacity-70">Customer Measurements</span>
+                        <span className="text-xs font-medium text-primary mb-1">Customer measurements</span>
+                        <SheetTitle className="text-lg font-semibold">
                             {watchedCustomer.name}
                         </SheetTitle>
-                        <SheetDescription className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground opacity-70">
-                            manage and update body measurements for this profile
+                        <SheetDescription className="text-xs text-muted-foreground">
+                            Manage and update body measurements for this profile
                         </SheetDescription>
                     </SheetHeader>
                     <div className="mt-4">

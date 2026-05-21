@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Accessory } from '@repo/database';
 
 export const getAccessories = async (includeArchived = false): Promise<Accessory[]> => {
@@ -26,22 +26,31 @@ export const updateAccessory = async (
   id: number,
   accessory: Partial<Accessory>,
 ): Promise<Accessory> => {
-  const { data, error } = await db
-    .from('accessories')
-    .update(accessory)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from('accessories')
+      .update(accessory)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) throw error;
   return data as Accessory;
 };
 
 export const deleteAccessory = async (id: number): Promise<{ mode: "deleted" | "archived" }> => {
-  const { error } = await db.from('accessories').delete().eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('accessories').delete().eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (!error) return { mode: "deleted" };
   if (error.code === '23503') {
-    const { error: updErr } = await db.from('accessories').update({ is_archived: true }).eq('id', id);
+    const { error: updErr } = await withWriteRetry(
+      () => db.from('accessories').update({ is_archived: true }).eq('id', id),
+      (r) => isTransientNetworkError(r.error),
+    );
     if (updErr) throw new Error(`Could not archive accessory: ${updErr.message}`);
     return { mode: "archived" };
   }
@@ -49,6 +58,9 @@ export const deleteAccessory = async (id: number): Promise<{ mode: "deleted" | "
 };
 
 export const unarchiveAccessory = async (id: number): Promise<void> => {
-  const { error } = await db.from('accessories').update({ is_archived: false }).eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('accessories').update({ is_archived: false }).eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Could not unarchive accessory: ${error.message}`);
 };

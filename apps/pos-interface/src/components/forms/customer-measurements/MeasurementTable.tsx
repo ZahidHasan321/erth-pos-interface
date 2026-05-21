@@ -22,9 +22,9 @@ function StackedFraction({ value }: { value: number }) {
       {(parts.whole > 0 || parts.numerator === 0) && <span>{parts.whole}</span>}
       {parts.numerator > 0 && (
         <span className="inline-flex flex-col items-center leading-none">
-          <span className="text-[10px]">{parts.numerator}</span>
+          <span className="text-xs">{parts.numerator}</span>
           <span className="w-full h-px bg-muted-foreground/60" />
-          <span className="text-[10px]">{parts.denominator}</span>
+          <span className="text-xs">{parts.denominator}</span>
         </span>
       )}
       {parts.hasDegree && <span>°</span>}
@@ -63,10 +63,10 @@ function FractionCell({
 }) {
   const value = useWatch({ control: form.control, name });
   if (typeof value !== "number" || value === 0) {
-    return <div className="h-5" />;
+    return <div className="-mx-1.5 mt-1.5 h-7 border-t border-border" />;
   }
   return (
-    <div className="flex justify-center h-5">
+    <div className="-mx-1.5 mt-1.5 flex h-7 items-center justify-center border-t border-border">
       <StackedFraction value={value} />
     </div>
   );
@@ -104,6 +104,7 @@ function CellDropdown({
                   "h-9 w-full bg-transparent border-0 shadow-none px-1 justify-center text-sm font-semibold",
                   hasError && "ring-1 ring-red-500",
                   "focus:ring-1 focus:ring-primary",
+                  "disabled:opacity-100 disabled:cursor-not-allowed",
                 )}
               >
                 <SelectValue placeholder="—" />
@@ -121,9 +122,9 @@ function CellDropdown({
                             )}
                             {parts.numerator > 0 && (
                               <span className="inline-flex flex-col items-center leading-none">
-                                <span className="text-[10px]">{parts.numerator}</span>
+                                <span className="text-xs">{parts.numerator}</span>
                                 <span className="w-full h-px bg-muted-foreground/60" />
-                                <span className="text-[10px]">{parts.denominator}</span>
+                                <span className="text-xs">{parts.denominator}</span>
                               </span>
                             )}
                             {parts.hasDegree && <span>°</span>}
@@ -165,11 +166,11 @@ const CellInput = forwardRef<
 
         if (isComputed) {
           return (
-            <div className="text-sm font-semibold text-foreground/70 tabular-nums h-9 flex items-center justify-center">
+            <div className="text-sm font-semibold text-foreground tabular-nums h-9 flex items-center justify-center">
               {typeof field.value === "number" && field.value !== 0 ? (
                 field.value
               ) : (
-                <span className="text-muted-foreground/40">—</span>
+                <span className="text-muted-foreground">—</span>
               )}
             </div>
           );
@@ -201,7 +202,7 @@ const CellInput = forwardRef<
                 "h-9 w-full text-center tabular-nums bg-transparent border-0 shadow-none px-1",
                 hasError && "ring-1 ring-red-500",
                 "focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary",
-                "disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-gray-500",
+                "disabled:cursor-not-allowed disabled:bg-muted/20 disabled:opacity-100 disabled:text-foreground",
               )}
               disabled={isDisabled}
               placeholder="—"
@@ -223,17 +224,19 @@ export function MeasurementTable({
   getEnterHandler,
 }: MeasurementTableProps) {
   return (
-    <div className="bg-card rounded-xl shadow-sm overflow-hidden border border-border p-3">
+    <div className="bg-card rounded-lg overflow-hidden border border-border">
       {title && (
-        <h4 className="text-sm font-semibold pb-2 text-foreground">{title}</h4>
+        <h4 className="text-sm font-semibold px-3 py-2 text-foreground border-b border-border">
+          {title}
+        </h4>
       )}
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-t border-border">
+          <tr>
             {columns.map((col) => (
               <th
                 key={col.name}
-                className="border border-border px-2 py-2 text-[11px] text-muted-foreground font-medium text-center leading-tight bg-muted/40"
+                className="border border-border px-2 py-2 text-xs font-semibold text-foreground text-center leading-tight bg-muted/40"
               >
                 {col.label}
               </th>
@@ -241,12 +244,14 @@ export function MeasurementTable({
           </tr>
         </thead>
         <tbody>
-          {/* Decimal input row */}
           <tr>
             {columns.map((col) => {
               const fieldPath = col.name as Path<CustomerMeasurementsSchema>;
               return (
-                <td key={col.name} className="border border-border px-1.5 py-1.5">
+                <td
+                  key={col.name}
+                  className="border border-border px-1.5 py-2 align-top"
+                >
                   {col.options ? (
                     <CellDropdown
                       form={form}
@@ -264,23 +269,10 @@ export function MeasurementTable({
                       onEnterPress={getEnterHandler?.(fieldPath)}
                     />
                   )}
+                  <FractionCell form={form} name={fieldPath} />
                 </td>
               );
             })}
-          </tr>
-          {/* Fraction row */}
-          <tr>
-            {columns.map((col) => (
-              <td
-                key={col.name}
-                className="border border-border px-1.5 py-1 bg-muted/20"
-              >
-                <FractionCell
-                  form={form}
-                  name={col.name as Path<CustomerMeasurementsSchema>}
-                />
-              </td>
-            ))}
           </tr>
         </tbody>
       </table>

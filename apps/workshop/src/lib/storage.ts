@@ -26,7 +26,7 @@ export async function deleteFile(paths: string | string[], bucket: string = MEDI
 export async function uploadInventoryImage(
   file: File | Blob,
   itemType: "fabric" | "shelf" | "accessory",
-  itemId: number,
+  itemId: number | string,
 ): Promise<UploadResult> {
   const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
   const path = `inventory/${itemType}/${itemId}/image-${Date.now()}.${ext}`;

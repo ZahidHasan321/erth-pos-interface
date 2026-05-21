@@ -21,6 +21,7 @@ import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { StageChip } from "@/components/shared/plan-dialog-shared";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { QC_OPTION_TO_SECTION } from "@/lib/qc-corrections";
+import { deriveReworkEnabledKeys } from "@/lib/production-logic";
 import type { AlterationFilter } from "@/lib/alteration-filter";
 import {
   collarTypes,
@@ -111,11 +112,8 @@ export function QualityCheckForm({
   const enabledKeys = useMemo(() => {
     // QC-fail rework takes precedence: re-check only the previous fail's flagged fields.
     if (lastFail) {
-      const flagged = new Set<string>([
-        ...(lastFail.failed_measurements ?? []),
-        ...(lastFail.failed_options ?? []),
-        ...(lastFail.failed_quality ?? []),
-      ]);
+      // Core narrowing: union of last fail's failed_measurements ∪ failed_options ∪ failed_quality.
+      const flagged = deriveReworkEnabledKeys(lastFail);
       // Jabzour 1 ↔ Jabzour 2 are hard-coupled: switching jabzour_1 to JAB_SHAAB requires
       // re-entering jabzour_2 (and vice versa). Always enable both together.
       if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {

@@ -24,9 +24,9 @@ export const qualityCheckTemplateFields = [
     height: 12.8,
     orientation: "vertical",
   },
-  { id: "sleeves", left: 34.2, top: 47.3, width: 10.2, height: 3.4 },
-  { id: "armhole", left: 46.2, top: 47.3, width: 10.2, height: 3.4 },
-  { id: "width", left: 58.0, top: 47.3, width: 10.2, height: 3.4 },
+  { id: "sleeves", left: 34.2, top: 47.3, width: 9.0, height: 3.4 },
+  { id: "armhole", left: 46.2, top: 47.3, width: 9.0, height: 3.4 },
+  { id: "width", left: 58.0, top: 47.3, width: 9.0, height: 3.4 },
   {
     id: "sideLower",
     left: 70.0,

@@ -40,6 +40,7 @@ type StatusFilter = "all" | "low" | "out" | "ok";
 const UNITS: UnitOfMeasure[] = ["pieces", "meters", "rolls", "kg"];
 
 function InventoryPage() {
+  const { main } = Route.useParams();
   const { user } = useAuth();
   const canEditFabrics = getPermission(user, "inventory:fabrics") === "full";
   const canEditAccessories = getPermission(user, "inventory:accessories") === "full";
@@ -68,9 +69,9 @@ function InventoryPage() {
 
   const lowStockCount = useMemo(() => {
     let count = 0;
-    for (const f of activeFabrics) if (isLowStock("fabric", Number(f.shop_stock ?? 0))) count++;
-    for (const s of activeShelf) if (isLowStock("shelf", Number(s.shop_stock ?? 0))) count++;
-    for (const a of activeAccessories) if (isLowStock("accessory", Number(a.shop_stock ?? 0))) count++;
+    for (const f of activeFabrics) if (isLowStock("fabric", Number(f.shop_stock ?? 0), f.low_stock_threshold)) count++;
+    for (const s of activeShelf) if (isLowStock("shelf", Number(s.shop_stock ?? 0), s.low_stock_threshold)) count++;
+    for (const a of activeAccessories) if (isLowStock("accessory", Number(a.shop_stock ?? 0), a.low_stock_threshold)) count++;
     return count;
   }, [activeFabrics, activeShelf, activeAccessories]);
 
@@ -89,7 +90,7 @@ function InventoryPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Click any row to see history, restock, or adjust stock</p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link to="/$main/store/suppliers" params={{ main: "ERTH" }}>
+          <Link to="/$main/store/suppliers" params={{ main }}>
             <Users className="h-3.5 w-3.5 mr-1.5" /> Suppliers
           </Link>
         </Button>
@@ -126,7 +127,7 @@ function InventoryPage() {
             </p>
           </div>
           <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
-            <Link to="/$main/store/transfers" params={{ main: "ERTH" }}>
+            <Link to="/$main/store/transfers" params={{ main }}>
               Request transfer
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -262,11 +263,16 @@ function QueryErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function applyStatus(status: StatusFilter, type: StockItemType, qty: number): boolean {
+function applyStatus(
+  status: StatusFilter,
+  type: StockItemType,
+  qty: number,
+  threshold?: number | string | null,
+): boolean {
   if (status === "all") return true;
   if (status === "out") return qty <= 0;
-  if (status === "low") return isLowStock(type, qty);
-  return qty > 0 && !isLowStock(type, qty);
+  if (status === "low") return isLowStock(type, qty, threshold);
+  return qty > 0 && !isLowStock(type, qty, threshold);
 }
 
 function applySort<T extends { name?: string | null; type?: string | null; shop_stock?: any }>(items: T[], sort: SortKey, nameKey: "name" | "type"): T[] {
@@ -392,7 +398,7 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
     const q = search.toLowerCase();
     let out = fabrics.filter((f) =>
       (!q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q))
-      && applyStatus(status, "fabric", Number(f.shop_stock ?? 0))
+      && applyStatus(status, "fabric", Number(f.shop_stock ?? 0), f.low_stock_threshold)
     );
     out = applySort(out, sort, "name");
     return out;
@@ -478,7 +484,7 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                 {filtered.map((f) => {
                   const ws = Number(f.shop_stock ?? 0);
                   const wsh = Number(f.workshop_stock ?? 0);
-                  const low = isLowStock("fabric", ws);
+                  const low = isLowStock("fabric", ws, f.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!f.is_archived;
                   return (
@@ -628,7 +634,7 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
     const q = search.toLowerCase();
     let out = items.filter((s) =>
       (!q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q))
-      && applyStatus(status, "shelf", Number(s.shop_stock ?? 0))
+      && applyStatus(status, "shelf", Number(s.shop_stock ?? 0), s.low_stock_threshold)
     );
     out = applySort(out, sort, "type");
     return out;
@@ -704,7 +710,7 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
                 {filtered.map((s) => {
                   const ws = Number(s.shop_stock ?? 0);
                   const wsh = Number(s.workshop_stock ?? 0);
-                  const low = isLowStock("shelf", ws);
+                  const low = isLowStock("shelf", ws, s.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!s.is_archived;
                   return (
@@ -836,7 +842,7 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
     let out = items.filter((a) =>
       (!q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q))
       && (categoryFilter === "all" || a.category === categoryFilter)
-      && applyStatus(status, "accessory", Number(a.shop_stock ?? 0))
+      && applyStatus(status, "accessory", Number(a.shop_stock ?? 0), a.low_stock_threshold)
     );
     out = applySort(out, sort, "name");
     return out;
@@ -939,7 +945,7 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
                 {filtered.map((a) => {
                   const ws = Number(a.shop_stock ?? 0);
                   const wsh = Number(a.workshop_stock ?? 0);
-                  const low = isLowStock("accessory", ws);
+                  const low = isLowStock("accessory", ws, a.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!a.is_archived;
                   return (

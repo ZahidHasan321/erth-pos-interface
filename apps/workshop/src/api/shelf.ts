@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Shelf } from "@repo/database";
 
 export async function getShelf(includeArchived = false): Promise<Shelf[]> {
@@ -31,12 +31,15 @@ export async function updateShelfItem(
   id: number,
   item: Partial<Omit<Shelf, "id">>,
 ): Promise<Shelf> {
-  const { data, error } = await db
-    .from("shelf")
-    .update(item)
-    .eq("id", id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from("shelf")
+      .update(item)
+      .eq("id", id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw error;
   return data as Shelf;
 }

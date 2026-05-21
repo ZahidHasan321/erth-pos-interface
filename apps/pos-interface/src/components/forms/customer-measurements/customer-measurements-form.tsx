@@ -29,6 +29,7 @@ import { useAutoNavigation } from "./useAutoNavigation";
 
 import {
   customerMeasurementsDefaults,
+  JABZOUR_WIDTH_NEW_DEFAULT,
   type CustomerMeasurementsSchema,
 } from "./measurement-form.schema";
 import { getNumberedLabel, getLabel } from "@repo/database";
@@ -266,6 +267,10 @@ export function CustomerMeasurementsForm({
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
           });
+          // Saving a measurement during the order is an explicit act of work on
+          // this step — it completes the step and proceeds, no separate Continue
+          // click needed (see CLAUDE.md §7.10).
+          onProceed?.();
         } else {
           toast.error(response.message || "Failed to create measurement.");
         }
@@ -293,6 +298,9 @@ export function CustomerMeasurementsForm({
           queryClient.invalidateQueries({
             queryKey: ["measurements", customerId],
           });
+          // Editing + saving a measurement is explicit work on this step — it
+          // completes the step and proceeds (see CLAUDE.md §7.10).
+          onProceed?.();
         } else {
           toast.error(response.message || "Failed to update measurement.");
         }
@@ -341,10 +349,23 @@ export function CustomerMeasurementsForm({
       });
       setMeasurements(newMap);
 
-      // Only auto-select if nothing is currently selected (or selection is invalid)
+      // Only auto-select if nothing is currently selected (or selection is invalid).
+      // Deterministically pick the most recent measurement: newest measurement_date
+      // first, then highest measurement_id suffix as a same-date tiebreak (so the
+      // last one created always wins, regardless of DB row order on date ties).
       if (!selectedMeasurementId || !newMap.has(selectedMeasurementId)) {
-        const firstId = measurementQuery.data[0]?.measurement_id || measurementQuery.data[0]?.id || null;
-        setSelectedMeasurementId(firstId);
+        const idSuffix = (mId: string | null | undefined) => {
+          const n = parseInt((mId || "").split("-").pop() || "", 10);
+          return isNaN(n) ? 0 : n;
+        };
+        const latest = [...measurementQuery.data].sort((a, b) => {
+          const da = a.measurement_date ? new Date(a.measurement_date).getTime() : 0;
+          const dbt = b.measurement_date ? new Date(b.measurement_date).getTime() : 0;
+          if (dbt !== da) return dbt - da;
+          return idSuffix(b.measurement_id) - idSuffix(a.measurement_id);
+        })[0];
+        const latestId = latest?.measurement_id || latest?.id || null;
+        setSelectedMeasurementId(latestId);
       }
     } else {
       setMeasurements(new Map());
@@ -428,6 +449,11 @@ export function CustomerMeasurementsForm({
     delete (baseMeasurement as any).id;
     baseMeasurement.measurement_id = newId;
     baseMeasurement.measurement_date = new Date().toISOString();
+    // Seed the historical jabzour_width default for a fresh measurement
+    // (copying an existing one preserves its value).
+    if (baseMeasurement.jabzour_width == null) {
+      baseMeasurement.jabzour_width = JABZOUR_WIDTH_NEW_DEFAULT;
+    }
 
     addMeasurement(newId, baseMeasurement);
     setSelectedMeasurementId(newId);

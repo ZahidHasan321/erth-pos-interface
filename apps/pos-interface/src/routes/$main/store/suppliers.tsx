@@ -29,6 +29,7 @@ export const Route = createFileRoute("/$main/store/suppliers")({
 });
 
 function SuppliersPage() {
+  const { main } = Route.useParams();
   const { user } = useAuth();
   const canManage = getPermission(user, "suppliers:manage") === "full";
   const qc = useQueryClient();
@@ -119,7 +120,7 @@ function SuppliersPage() {
       <div className="mb-5 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-            <Link to="/$main/store/inventory" params={{ main: "ERTH" }}>
+            <Link to="/$main/store/inventory" params={{ main }}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>

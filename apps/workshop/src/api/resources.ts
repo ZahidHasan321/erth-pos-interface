@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Resource, NewResource } from '@repo/database';
 
 export const getResources = async (): Promise<Resource[]> => {
@@ -22,18 +22,24 @@ export const createResource = async (resource: Omit<NewResource, 'id' | 'created
 };
 
 export const updateResource = async (id: string, updates: Partial<NewResource>): Promise<Resource> => {
-  const { data, error } = await db
-    .from('resources')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withWriteRetry(
+    () => db
+      .from('resources')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single(),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`updateResource: failed to update resource ${id}: ${error.message}`);
   return data;
 };
 
 export const deleteResource = async (id: string): Promise<void> => {
-  const { error } = await db.from('resources').delete().eq('id', id);
+  const { error } = await withWriteRetry(
+    () => db.from('resources').delete().eq('id', id),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`deleteResource: failed to delete resource ${id}: ${error.message}`);
 };
 
@@ -52,17 +58,23 @@ export const getResourcesWithUsers = async (): Promise<ResourceWithUser[]> => {
 };
 
 export const linkResourceToUser = async (resourceId: string, userId: string): Promise<void> => {
-  const { error } = await db
-    .from('resources')
-    .update({ user_id: userId })
-    .eq('id', resourceId);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('resources')
+      .update({ user_id: userId })
+      .eq('id', resourceId),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`linkResourceToUser: failed to link resource ${resourceId} to user ${userId}: ${error.message}`);
 };
 
 export const unlinkResourceFromUser = async (resourceId: string): Promise<void> => {
-  const { error } = await db
-    .from('resources')
-    .update({ user_id: null })
-    .eq('id', resourceId);
+  const { error } = await withWriteRetry(
+    () => db
+      .from('resources')
+      .update({ user_id: null })
+      .eq('id', resourceId),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`unlinkResourceFromUser: failed to unlink resource ${resourceId} from user: ${error.message}`);
 };

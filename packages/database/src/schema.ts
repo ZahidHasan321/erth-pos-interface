@@ -352,8 +352,15 @@ export const customers = pgTable("customers", {
 
     notes: text("notes"),
     created_at: timestamp("created_at").defaultNow(),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     searchIdx: index("customers_search_idx").on(t.phone, t.name),
+    idempotencyIdx: uniqueIndex("customers_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 3. LOOKUPS ---
@@ -519,8 +526,15 @@ export const measurements = pgTable("measurements", {
     // Pen pocket
     pen_pocket_length: numeric("pen_pocket_length", { precision: 5, scale: 2 }),
     pen_pocket_width: numeric("pen_pocket_width", { precision: 5, scale: 2 }),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     customerIdx: index("measurements_customer_idx").on(t.customer_id),
+    idempotencyIdx: uniqueIndex("measurements_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 5. ORDERS ---
@@ -559,9 +573,18 @@ export const orders = pgTable("orders", {
 
     // Meta
     notes: text("notes"),
+
+    // Client-supplied UUID for idempotent order creation. Unique when present
+    // so a network retry / double-submit of createOrder returns the original
+    // order row instead of inserting a duplicate. Same pattern as
+    // payment_transactions.idempotency_key.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     customerIdx: index("orders_customer_idx").on(t.customer_id),
     dateIdx: index("orders_date_idx").on(t.order_date),
+    idempotencyIdx: uniqueIndex("orders_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 5.5 WORK ORDERS ---
@@ -632,8 +655,15 @@ export const alterationOrders = pgTable("alteration_orders", {
 
     // Meta
     comments: text("comments"),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     invoiceIdx: uniqueIndex("alteration_orders_invoice_idx").on(t.invoice_number),
+    idempotencyIdx: uniqueIndex("alteration_orders_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- Trip History (stored as JSONB array on garments) ---
@@ -937,10 +967,17 @@ export const garmentFeedback = pgTable("garment_feedback", {
 
     // --- Timestamps ---
     created_at: timestamp("created_at").defaultNow(),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     garmentIdx: index("feedback_garment_idx").on(t.garment_id),
     orderIdx: index("feedback_order_idx").on(t.order_id),
     typeIdx: index("feedback_type_idx").on(t.feedback_type),
+    idempotencyIdx: uniqueIndex("garment_feedback_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 6.6 UNITS (Workshop Groupings under each Stage) ---
@@ -1017,6 +1054,22 @@ export const paymentTransactions = pgTable("payment_transactions", {
         .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
+// --- 8.5 RPC IDEMPOTENCY LEDGER ---
+// Server-enforced dedupe for mutating RPCs whose replay would corrupt data
+// (stock = stock ± qty, duplicate inserts, counter bumps). A client-supplied
+// key is claimed in the SAME transaction as the RPC's side effects via
+// idem_claim() (see triggers.sql): first call inserts the key and proceeds;
+// a replay finds the key and short-circuits. Rollback releases the claim, so
+// a genuinely-failed call can still be retried.
+export const rpcIdempotency = pgTable("rpc_idempotency", {
+    idempotency_key: uuid("idempotency_key").primaryKey(),
+    rpc_name: text("rpc_name").notNull(),
+    result: jsonb("result"),
+    created_at: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+    createdAtIdx: index("rpc_idempotency_created_at_idx").on(t.created_at),
+}));
+
 // --- 9. APPOINTMENTS (Home Visit Bookings — SAKKBA) ---
 export const appointments = pgTable("appointments", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -1058,10 +1111,17 @@ export const appointments = pgTable("appointments", {
 
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow(),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     dateIdx: index("appointments_date_idx").on(t.appointment_date),
     assignedIdx: index("appointments_assigned_idx").on(t.assigned_to),
     customerIdx: index("appointments_customer_idx").on(t.customer_id),
+    idempotencyIdx: uniqueIndex("appointments_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 10. REGISTER SESSIONS ---
@@ -1144,9 +1204,16 @@ export const transferRequests = pgTable("transfer_requests", {
     approved_at: timestamp("approved_at"),
     dispatched_at: timestamp("dispatched_at"),
     received_at: timestamp("received_at"),
+
+    // Idempotent create: unique when present so a network retry / double-submit
+    // returns the original row instead of duplicating. Same as orders.
+    idempotency_key: uuid("idempotency_key"),
 }, (t) => ({
     statusIdx: index("transfer_requests_status_idx").on(t.status),
     createdAtIdx: index("transfer_requests_created_at_idx").on(t.created_at),
+    idempotencyIdx: uniqueIndex("transfer_requests_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
 }));
 
 // --- 13. TRANSFER REQUEST ITEMS ---

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, AlertCircle, RefreshCw, ArrowDownToLine, Settings2, Users } from "lucide-react";
+import { Plus, Search, AlertCircle, RefreshCw, ArrowDownToLine, Settings2, Users, Package } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -20,6 +20,7 @@ import { getAccessories } from "@/api/accessories";
 import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
+import { PageHeader } from "@/components/shared/PageShell";
 import type { Fabric, Shelf, Accessory, StockItemType } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/store/inventory")({
@@ -37,14 +38,13 @@ function InventoryPage() {
 
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1600px] mx-auto pb-10">
-      <div className="flex items-center justify-between gap-3 mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
+      <PageHeader icon={Package} title="Inventory" subtitle="Fabrics, shelf items and accessories across shop and workshop.">
         <Button variant="outline" size="sm" asChild>
           <Link to="/store/suppliers">
             <Users className="h-3.5 w-3.5 mr-1.5" /> Suppliers
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ItemType)}>
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
@@ -94,26 +94,24 @@ function OutBadge() {
 
 function TableSkeleton({ cols }: { cols: number }) {
   return (
-    <div className="border border-border rounded-md overflow-hidden">
-      <TableContainer>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30">
-              {Array.from({ length: cols }).map((_, i) => <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>)}
+    <TableContainer className="rounded-md shadow-none">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            {Array.from({ length: cols }).map((_, i) => <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>)}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <TableRow key={i}>
+              {Array.from({ length: cols }).map((_, j) => (
+                <TableCell key={j}><Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} /></TableCell>
+              ))}
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <TableRow key={i}>
-                {Array.from({ length: cols }).map((_, j) => (
-                  <TableCell key={j}><Skeleton className={j === cols - 1 ? "h-7 w-7 ml-auto" : "h-4 w-16"} /></TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </div>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -129,20 +127,23 @@ function QueryErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function applyStatus(status: StatusFilter, type: StockItemType, qty: number): boolean {
+function applyStatus(
+  status: StatusFilter,
+  type: StockItemType,
+  qty: number,
+  threshold?: number | string | null,
+): boolean {
   if (status === "all") return true;
   if (status === "out") return qty <= 0;
-  if (status === "low") return isLowStock(type, qty);
-  return qty > 0 && !isLowStock(type, qty);
+  if (status === "low") return isLowStock(type, qty, threshold);
+  return qty > 0 && !isLowStock(type, qty, threshold);
 }
 
 function TableShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border border-border rounded-md overflow-hidden bg-card">
-      <TableContainer>
-        <Table>{children}</Table>
-      </TableContainer>
-    </div>
+    <TableContainer className="rounded-md shadow-none">
+      <Table>{children}</Table>
+    </TableContainer>
   );
 }
 
@@ -224,13 +225,13 @@ function FabricsTab({ search, status }: { search: string; status: StatusFilter }
     return fabrics
       .filter((f) =>
         (!q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q))
-        && applyStatus(status, "fabric", Number(f.workshop_stock ?? 0))
+        && applyStatus(status, "fabric", Number(f.workshop_stock ?? 0), f.low_stock_threshold)
       )
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [fabrics, search, status]);
 
   const lowCount = useMemo(
-    () => fabrics.reduce((n, f) => n + (isLowStock("fabric", Number(f.workshop_stock ?? 0)) ? 1 : 0), 0),
+    () => fabrics.reduce((n, f) => n + (isLowStock("fabric", Number(f.workshop_stock ?? 0), f.low_stock_threshold) ? 1 : 0), 0),
     [fabrics],
   );
 
@@ -262,7 +263,7 @@ function FabricsTab({ search, status }: { search: string; status: StatusFilter }
           {filtered.map((f) => {
             const ws = Number(f.workshop_stock ?? 0);
             const wsh = Number(f.shop_stock ?? 0);
-            const low = isLowStock("fabric", ws);
+            const low = isLowStock("fabric", ws, f.low_stock_threshold);
             const out = ws <= 0;
             return (
               <TableRow key={f.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "fabric", id: String(f.id) } })}>
@@ -337,13 +338,13 @@ function ShelfTab({ search, status }: { search: string; status: StatusFilter }) 
     return items
       .filter((s) =>
         (!q || s.type?.toLowerCase().includes(q) || s.brand?.toLowerCase().includes(q))
-        && applyStatus(status, "shelf", Number(s.workshop_stock ?? 0))
+        && applyStatus(status, "shelf", Number(s.workshop_stock ?? 0), s.low_stock_threshold)
       )
       .sort((a, b) => (a.type ?? "").localeCompare(b.type ?? ""));
   }, [items, search, status]);
 
   const lowCount = useMemo(
-    () => items.reduce((n, s) => n + (isLowStock("shelf", Number(s.workshop_stock ?? 0)) ? 1 : 0), 0),
+    () => items.reduce((n, s) => n + (isLowStock("shelf", Number(s.workshop_stock ?? 0), s.low_stock_threshold) ? 1 : 0), 0),
     [items],
   );
 
@@ -375,7 +376,7 @@ function ShelfTab({ search, status }: { search: string; status: StatusFilter }) 
           {filtered.map((s) => {
             const ws = Number(s.workshop_stock ?? 0);
             const wsh = Number(s.shop_stock ?? 0);
-            const low = isLowStock("shelf", ws);
+            const low = isLowStock("shelf", ws, s.low_stock_threshold);
             const out = ws <= 0;
             return (
               <TableRow key={s.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "shelf", id: String(s.id) } })}>
@@ -454,13 +455,13 @@ function AccessoriesTab({ search, status }: { search: string; status: StatusFilt
       .filter((a) =>
         (!q || a.name?.toLowerCase().includes(q) || a.category?.toLowerCase().includes(q))
         && (categoryFilter === "all" || a.category === categoryFilter)
-        && applyStatus(status, "accessory", Number(a.workshop_stock ?? 0))
+        && applyStatus(status, "accessory", Number(a.workshop_stock ?? 0), a.low_stock_threshold)
       )
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [items, search, status, categoryFilter]);
 
   const lowCount = useMemo(
-    () => items.reduce((n, a) => n + (isLowStock("accessory", Number(a.workshop_stock ?? 0)) ? 1 : 0), 0),
+    () => items.reduce((n, a) => n + (isLowStock("accessory", Number(a.workshop_stock ?? 0), a.low_stock_threshold) ? 1 : 0), 0),
     [items],
   );
 
@@ -501,7 +502,7 @@ function AccessoriesTab({ search, status }: { search: string; status: StatusFilt
           {filtered.map((a) => {
             const ws = Number(a.workshop_stock ?? 0);
             const wsh = Number(a.shop_stock ?? 0);
-            const low = isLowStock("accessory", ws);
+            const low = isLowStock("accessory", ws, a.low_stock_threshold);
             const out = ws <= 0;
             return (
               <TableRow key={a.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "accessory", id: String(a.id) } })}>

@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { StockMovement, StockMovementType, StockItemType, StockLocation } from "@repo/database";
 
 export type MovementWithJoins = StockMovement & {
@@ -47,16 +47,23 @@ export type RestockArgs = {
 };
 
 export async function restockItem(args: RestockArgs): Promise<{ success: boolean; new_stock: number }> {
-  const { data, error } = await db.rpc("restock_item", {
-    p_item_type: args.itemType,
-    p_item_id: args.itemId,
-    p_location: args.location,
-    p_qty: args.qty,
-    p_supplier_id: args.supplierId ?? null,
-    p_unit_cost: args.unitCost ?? null,
-    p_notes: args.notes ?? null,
-    p_user_id: args.userId ?? null,
-  });
+  // Stable key generated once: every withWriteRetry replay reuses it, so a
+  // committed-but-lost first attempt is deduped server-side (idem_claim).
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc("restock_item", {
+      p_item_type: args.itemType,
+      p_item_id: args.itemId,
+      p_location: args.location,
+      p_qty: args.qty,
+      p_supplier_id: args.supplierId ?? null,
+      p_unit_cost: args.unitCost ?? null,
+      p_notes: args.notes ?? null,
+      p_user_id: args.userId ?? null,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Restock failed: ${error.message}`);
   return data as { success: boolean; new_stock: number };
 }
@@ -72,15 +79,20 @@ export type AdjustArgs = {
 };
 
 export async function adjustStock(args: AdjustArgs): Promise<{ success: boolean; old_stock: number; new_stock: number }> {
-  const { data, error } = await db.rpc("adjust_stock", {
-    p_item_type: args.itemType,
-    p_item_id: args.itemId,
-    p_location: args.location,
-    p_new_qty: args.newQty,
-    p_reason: args.reason,
-    p_notes: args.notes ?? null,
-    p_user_id: args.userId ?? null,
-  });
+  // adjust_stock sets an absolute value → naturally idempotent, safe to
+  // replay on transient failure without a key.
+  const { data, error } = await withWriteRetry(
+    () => db.rpc("adjust_stock", {
+      p_item_type: args.itemType,
+      p_item_id: args.itemId,
+      p_location: args.location,
+      p_new_qty: args.newQty,
+      p_reason: args.reason,
+      p_notes: args.notes ?? null,
+      p_user_id: args.userId ?? null,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
   if (error) throw new Error(`Stock adjustment failed: ${error.message}`);
   return data as { success: boolean; old_stock: number; new_stock: number };
 }

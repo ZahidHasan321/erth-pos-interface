@@ -155,48 +155,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: { username: string; pin: string }) => {
     loginInProgress.current = true;
     try {
-      const { data: result, error: fnError } = await db.functions.invoke<{
-        session: { access_token: string; refresh_token: string } | null;
-        user: { id: string };
-      }>('auth-login', {
-        body: { username: credentials.username, pin: credentials.pin },
+      // Login bridge moved out of the auth-login Edge Function — its Deno
+      // isolate dropped ~40% of requests at cold boot. login_with_pin does
+      // PIN verify + GoTrue user sync inside Postgres and returns a one-time
+      // credential; the session is minted via /auth/v1/token (healthy).
+      const { data: rpcData, error: rpcError } = await db.rpc('login_with_pin', {
+        p_username: credentials.username,
+        p_pin: credentials.pin,
       });
-
-      if (fnError) {
-        // functions-js wraps three error shapes on .context:
-        //   FunctionsHttpError  → context = Response (server returned non-2xx)
-        //   FunctionsFetchError → context = Error    (fetch threw: network/abort)
-        //   FunctionsRelayError → context = Error    (edge-runtime relay failed)
-        // The wrapper's own .message is generic ("Failed to send a request to
-        // the Edge Function") so always reach into context for the real cause.
-        let detail: string | null = null;
-        const ctx = (fnError as { context?: unknown }).context;
-        if (ctx instanceof Response) {
-          try {
-            const body = await ctx.json();
-            detail = body?.error ?? `HTTP ${ctx.status}`;
-          } catch {
-            detail = `HTTP ${ctx.status}`;
-          }
-        } else if (ctx instanceof Error) {
-          detail = `${ctx.name}: ${ctx.message}`;
-        }
-        console.error('[Auth] auth-login failed', { fnError, context: ctx });
-        throw new Error(`Login failed: ${detail || fnError.message || 'unknown error'}`);
+      if (rpcError) {
+        // PostgREST surfaces verify_pin's RAISE message verbatim
+        // (e.g. "Invalid PIN. 3 attempts remaining.").
+        console.error('[Auth] login_with_pin failed', rpcError);
+        throw new Error(`Login failed: ${rpcError.message || 'unknown error'}`);
       }
-      if (!result) throw new Error('Login failed: empty response');
+      const creds = rpcData as {
+        email: string;
+        password: string;
+        user: { id: string };
+      } | null;
+      if (!creds) throw new Error('Login failed: empty response');
 
-      if (result.session) {
-        await db.auth.setSession({
-          access_token: result.session.access_token,
-          refresh_token: result.session.refresh_token,
+      const { data: signIn, error: signInError } =
+        await db.auth.signInWithPassword({
+          email: creds.email,
+          password: creds.password,
         });
-        try { db.realtime.setAuth(result.session.access_token); } catch (e) {
-          console.warn('[Auth] realtime.setAuth failed after login', e);
-        }
+      if (signInError || !signIn.session) {
+        throw new Error(`Login failed: ${signInError?.message ?? 'no session'}`);
+      }
+      try { db.realtime.setAuth(signIn.session.access_token); } catch (e) {
+        console.warn('[Auth] realtime.setAuth failed after login', e);
       }
 
-      const fullUser = await fetchUserFromSession(result.user.id);
+      const fullUser = await fetchUserFromSession(creds.user.id);
       if (!fullUser) {
         // fetchUserFromSession returns null for deactivated accounts OR missing
         // rows. Either way we can't proceed — scrub the just-set session so the

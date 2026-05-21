@@ -64,8 +64,8 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-black uppercase tracking-tight">Order History</h3>
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-60">
+        <h3 className="text-lg font-semibold uppercase tracking-tight">Order History</h3>
+        <p className="text-sm font-bold text-muted-foreground opacity-60">
           {rows.length} Total Orders
         </p>
       </div>

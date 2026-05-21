@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -359,7 +359,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
       <MetadataCard
         item={item}
         canEdit={canEdit && !item.row.is_archived}
-        unitLocked={!!lockUnitQ.data}
+        unitLocked={lockUnitQ.data !== false}
         onSaved={invalidateAll}
       />
 
@@ -372,7 +372,6 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
           isLoading={usageQ.isLoading}
           topOrders={topOrdersQ.data ?? []}
           isTopLoading={topOrdersQ.isLoading}
-          main={main}
         />
       )}
 
@@ -388,6 +387,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
             unit={unit}
             movements={movementsQ.data ?? []}
             isLoading={movementsQ.isLoading}
+            isError={movementsQ.isError}
           />
         </TabsContent>
         <TabsContent value="restocks">
@@ -396,6 +396,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
             unit={unit}
             entries={restocksQ.data ?? []}
             isLoading={restocksQ.isLoading}
+            isError={restocksQ.isError}
           />
         </TabsContent>
       </Tabs>
@@ -649,9 +650,23 @@ function MetadataCard({
   }, [item]);
 
   const [draft, setDraft] = useState<MetadataDraft>(initial);
-  useEffect(() => { setDraft(initial); }, [initial]);
+  // Reset the edit buffer only when navigating to a *different* item — not on
+  // every background refetch of the same one. Keying on `initial` directly
+  // wiped in-progress unsaved edits whenever a list refetch / window refocus
+  // returned a new object reference.
+  const itemKey = `${item.kind}:${item.row.id}`;
+  const lastItemKeyRef = useRef(itemKey);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+
+  useEffect(() => {
+    const keyChanged = lastItemKeyRef.current !== itemKey;
+    if (keyChanged) lastItemKeyRef.current = itemKey;
+    // Re-sync on navigation to another item, or when there are no unsaved
+    // edits (picks up server-normalised values after a save). Never clobber
+    // an in-progress dirty edit from a background refetch.
+    if (keyChanged || !dirty) setDraft(initial);
+  }, [itemKey, initial, dirty]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -659,11 +674,22 @@ function MetadataCard({
       if (lst != null && (!Number.isFinite(lst) || lst < 0)) {
         throw new Error("Low-stock threshold must be a positive number");
       }
+      // Shelf low_stock_threshold is an integer column — a decimal would be
+      // rejected/truncated by Postgres. Catch it here with a clear message.
+      if (item.kind === "shelf" && lst != null && !Number.isInteger(lst)) {
+        throw new Error("Shelf low-stock threshold must be a whole number");
+      }
+      // Same NaN footgun for price: type=number can still be bypassed by paste
+      // / locale, and Number("abc") → NaN → opaque DB failure.
+      const priceStr = (draft.price ?? "").trim();
+      const price = priceStr === "" ? null : Number(priceStr);
+      if (price != null && (!Number.isFinite(price) || price < 0)) {
+        throw new Error("Price must be a positive number");
+      }
       const desc = draft.description.trim() === "" ? null : draft.description.trim();
       // numeric() columns round-trip as string in Drizzle; integer() as number.
       const lstNumeric = lst;
       if (item.kind === "fabric") {
-        const price = draft.price?.trim() ? Number(draft.price) : null;
         await updateFabric(item.row.id, {
           name: draft.name.trim(),
           color: draft.color?.trim() || null,
@@ -673,7 +699,6 @@ function MetadataCard({
           low_stock_threshold: lstNumeric,
         });
       } else if (item.kind === "shelf") {
-        const price = draft.price?.trim() ? Number(draft.price) : null;
         await updateShelf(String(item.row.id), {
           type: draft.name.trim(),
           brand: draft.brand?.trim() || null,
@@ -682,7 +707,6 @@ function MetadataCard({
           low_stock_threshold: lst,
         });
       } else {
-        const price = draft.price?.trim() ? Number(draft.price) : null;
         const patch: Partial<Accessory> = {
           name: draft.name.trim(),
           category: (draft.category ?? "").trim().toLowerCase(),
@@ -891,7 +915,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 // ─── Usage analytics ──────────────────────────────────────────────────────
 
 function UsageSection({
-  itemType, unit, stats, isLoading, topOrders, isTopLoading, main,
+  itemType, unit, stats, isLoading, topOrders, isTopLoading,
 }: {
   itemType: StockItemType;
   unit: UnitOfMeasure | null;
@@ -899,7 +923,6 @@ function UsageSection({
   isLoading: boolean;
   topOrders: Array<{ order_id: number; total: number; last_at: string }>;
   isTopLoading: boolean;
-  main: string;
 }) {
   return (
     <Card className="shadow-none">
@@ -923,13 +946,7 @@ function UsageSection({
             <ul className="space-y-1">
               {topOrders.map((o) => (
                 <li key={o.order_id} className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
-                  <Link
-                    to="/$main/orders/order-management"
-                    params={{ main }}
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    Order #{o.order_id}
-                  </Link>
+                  <span className="text-sm font-medium">Order #{o.order_id}</span>
                   <span className="text-xs text-muted-foreground">
                     last {new Date(o.last_at).toLocaleDateString()}
                   </span>
@@ -964,15 +981,26 @@ function UsageCard({
 // ─── Movements tab ────────────────────────────────────────────────────────
 
 function MovementsTab({
-  itemType, unit, movements, isLoading,
+  itemType, unit, movements, isLoading, isError,
 }: {
   itemType: StockItemType;
   unit: UnitOfMeasure | null;
   movements: MovementWithJoins[];
   isLoading: boolean;
+  isError: boolean;
 }) {
   if (isLoading) {
     return <Skeleton className="h-64 rounded-xl" />;
+  }
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500/60" />
+          <p className="text-sm text-muted-foreground">Couldn't load movement history. Try again shortly.</p>
+        </CardContent>
+      </Card>
+    );
   }
   if (movements.length === 0) {
     return (
@@ -1033,14 +1061,25 @@ function MovementsTab({
 // ─── Restock history tab ──────────────────────────────────────────────────
 
 function RestocksTab({
-  itemType, unit, entries, isLoading,
+  itemType, unit, entries, isLoading, isError,
 }: {
   itemType: StockItemType;
   unit: UnitOfMeasure | null;
   entries: Array<{ id: number; created_at: string; qty: number; unit_cost: number | null; supplier: { id: number; name: string } | null; notes: string | null }>;
   isLoading: boolean;
+  isError: boolean;
 }) {
   if (isLoading) return <Skeleton className="h-48 rounded-xl" />;
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500/60" />
+          <p className="text-sm text-muted-foreground">Couldn't load restock history. Try again shortly.</p>
+        </CardContent>
+      </Card>
+    );
+  }
   if (entries.length === 0) {
     return (
       <Card>

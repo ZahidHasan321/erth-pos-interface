@@ -36,6 +36,55 @@ const FETCH_TIMEOUT_MS = 15_000;
 // the day. Use a longer cap only for /functions/v1/*.
 const FUNCTIONS_FETCH_TIMEOUT_MS = 30_000;
 
+// Firefox over HTTP/3 (QUIC) intermittently drops the first request on a cold
+// connection to the Cloudflare edge in front of Supabase: the preflight
+// succeeds, the follow-up request never gets a response, and fetch() rejects
+// with a TypeError ("NetworkError when attempting to fetch resource"). The
+// symptom is "Confirm fails 2-3 times then works".
+//
+// A bare TypeError means NO HTTP response was received — but we can't prove
+// the request never reached PostgREST (a stream reset after the row committed
+// also rejects with TypeError). So this generic layer only auto-replays
+// IDEMPOTENT methods (GET/HEAD), where a replay is harmless by definition.
+// Non-idempotent writes (POST/PATCH/PUT/DELETE) are NOT retried here — that
+// would risk duplicate rows. Those paths get explicit, idempotency-keyed
+// retry at the API layer (see createOrder / saveWorkOrderGarments), which is
+// the only place that can replay a write safely. We also never replay
+// timeouts (server may have committed) or caller cancellations.
+const MAX_NETWORK_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 300;
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD']);
+
+// Shared by the API layer to decide whether a *swallowed* supabase-js error
+// (it resolves `{ error }` rather than throwing) was a transient connection
+// failure worth an idempotency-keyed replay.
+export function isTransientNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  const msg =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message: unknown }).message)
+      : String(err);
+  return /NetworkError|Failed to fetch|network ?error|fetch failed/i.test(msg);
+}
+
+// Bounded replay for write paths the generic fetch layer refuses to retry.
+// Safe to use ONLY when the operation is idempotent: keyed by an
+// idempotency_key / unique constraint, an UPDATE-by-PK, or a server-side
+// idempotent RPC (idem_claim-guarded). `isTransient` inspects the resolved
+// supabase result (it does not throw) to decide whether to replay.
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_BASE_MS = 300;
+export async function withWriteRetry<T>(
+  attempt: () => PromiseLike<T>,
+  isTransient: (result: T) => boolean,
+): Promise<T> {
+  for (let i = 1; ; i++) {
+    const res = await attempt();
+    if (i >= WRITE_RETRY_ATTEMPTS || !isTransient(res)) return res;
+    await new Promise((r) => setTimeout(r, WRITE_RETRY_BASE_MS * i));
+  }
+}
+
 // Holder set after createClient returns. Used by the fetch wrapper to force
 // signOut when the server rejects our JWT (deactivated/wiped user, revoked
 // session). Indirection avoids referencing `db` before it's assigned.
@@ -47,19 +96,24 @@ function getReqUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
+async function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const timeoutMs = getReqUrl(input).includes('/functions/v1/')
     ? FUNCTIONS_FETCH_TIMEOUT_MS
     : FETCH_TIMEOUT_MS;
-  const timer = setTimeout(() => controller.abort(new DOMException('Request timeout', 'TimeoutError')), timeoutMs);
   const upstream = init?.signal;
-  if (upstream) {
-    if (upstream.aborted) controller.abort(upstream.reason);
-    else upstream.addEventListener('abort', () => controller.abort(upstream.reason), { once: true });
-  }
-  return fetch(input, { ...init, signal: controller.signal })
-    .then((res) => {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const retryable = IDEMPOTENT_METHODS.has(method);
+
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('Request timeout', 'TimeoutError')), timeoutMs);
+    const onUpstreamAbort = () => controller.abort(upstream?.reason);
+    if (upstream) {
+      if (upstream.aborted) controller.abort(upstream.reason);
+      else upstream.addEventListener('abort', onUpstreamAbort, { once: true });
+    }
+    try {
+      const res = await fetch(input, { ...init, signal: controller.signal });
       // 401 from any non-auth endpoint means our JWT no longer satisfies the
       // server (gotrue revoked, user wiped, RLS rejected with PGRST301). Force
       // signOut so the UI bounces to login instead of looping on stale auth.
@@ -69,8 +123,23 @@ function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Res
         setTimeout(() => { dbRef?.auth.signOut().catch(() => {}); }, 0);
       }
       return res;
-    })
-    .finally(() => clearTimeout(timer));
+    } catch (err) {
+      // Caller cancelled or our own timeout fired → never replay. A timed-out
+      // request may have committed server-side. Only replay a bare TypeError
+      // (connection failure) AND only for idempotent methods — see the comment
+      // on IDEMPOTENT_METHODS. Writes are retried at the API layer instead.
+      const causedByUpstream = !!upstream?.aborted;
+      const isConnectionFailure = err instanceof TypeError;
+      if (retryable && !causedByUpstream && isConnectionFailure && attempt < MAX_NETWORK_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      if (upstream) upstream.removeEventListener('abort', onUpstreamAbort);
+    }
+  }
 }
 
 export const db = createClient(url, anonKey, {

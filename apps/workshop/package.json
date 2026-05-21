@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc -b"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

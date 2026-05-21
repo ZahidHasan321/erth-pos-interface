@@ -201,6 +201,7 @@ function NewTransferPage() {
 
   const hasInsufficientInCart = cartWithCurrentStock.some((l) => l.qty > l.sourceStock);
   const blockingInsufficient = mode === "send" && hasInsufficientInCart;
+  const hasZeroQtyInCart = cart.some((l) => l.qty <= 0);
   const totalQty = cartWithCurrentStock.reduce((s, l) => s + l.qty, 0);
 
   function addToCart(opt: (typeof options)[number]) {
@@ -238,6 +239,17 @@ function NewTransferPage() {
     e.preventDefault();
     if (cart.length === 0) {
       toast.error("Add at least one item to the cart");
+      return;
+    }
+    // The batch RPCs reject non-positive quantities and roll back the whole
+    // atomic batch — catch it here with an actionable message instead.
+    const zeroLines = cart.filter((l) => l.qty <= 0);
+    if (zeroLines.length > 0) {
+      toast.error(
+        zeroLines.length === cart.length
+          ? "Set a quantity for every item before submitting"
+          : `${zeroLines.length} item(s) have no quantity — set or remove them`,
+      );
       return;
     }
 
@@ -622,7 +634,7 @@ function NewTransferPage() {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={submitting || cart.length === 0 || blockingInsufficient}
+                    disabled={submitting || cart.length === 0 || blockingInsufficient || hasZeroQtyInCart}
                   >
                     {submitting && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
                     {mode === "send" ? (

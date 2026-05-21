@@ -38,8 +38,10 @@ export type CustomerMeasurementsSchema =
 /**
  * Default form values. Required measurement fields stay `undefined` so RHF
  * shows them as empty inputs and validation flags them on submit. Optional
- * fields default to `null` so they round-trip blank cleanly. `jabzour_width`
- * keeps its historical 1.5 seed value.
+ * fields default to `null` so they round-trip blank cleanly. (`jabzour_width`
+ * is seeded with its historical 1.5 value only when *creating* a new
+ * measurement — see JABZOUR_WIDTH_NEW_DEFAULT — not here, so the empty/
+ * read-only view doesn't surface a fabricated value.)
  */
 const measurementDefaults: Record<string, unknown> = Object.fromEntries(
   MEASUREMENTS_SPEC.map((s) => [
@@ -47,7 +49,9 @@ const measurementDefaults: Record<string, unknown> = Object.fromEntries(
     s.optional || s.basma ? null : (undefined as unknown),
   ]),
 );
-measurementDefaults.jabzour_width = 1.5;
+
+/** Historical seed for `jabzour_width`, applied only when creating a new measurement. */
+export const JABZOUR_WIDTH_NEW_DEFAULT = 1.5;
 
 export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   measurement_id: "",

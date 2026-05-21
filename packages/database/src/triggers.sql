@@ -20,6 +20,57 @@ BEGIN
   END LOOP;
 END $$;
 
+-- 0a-idem. Idempotency claim for mutating RPCs.
+-- Returns TRUE  → first time, caller must proceed with side effects.
+-- Returns FALSE → this key was already processed, caller must short-circuit.
+-- The INSERT runs in the caller's transaction: a rollback (RPC raised)
+-- releases the claim so a genuinely failed call stays retryable. The PK
+-- serializes concurrent replays (second waits, then sees the conflict).
+-- Requires table rpc_idempotency (migration 0016) — run db:migrate first.
+CREATE OR REPLACE FUNCTION idem_claim(p_key UUID, p_rpc TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  IF p_key IS NULL THEN
+    RETURN TRUE;
+  END IF;
+  INSERT INTO rpc_idempotency (idempotency_key, rpc_name)
+  VALUES (p_key, p_rpc)
+  ON CONFLICT (idempotency_key) DO NOTHING;
+  RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 0a-idem-store. Persist the original RPC result against its claimed key.
+-- Runs in the caller's transaction: a rollback discards this row alongside
+-- the released claim, so a failed call stays fully retryable. No-op on NULL.
+CREATE OR REPLACE FUNCTION idem_store(p_key UUID, p_result JSONB)
+RETURNS VOID AS $$
+BEGIN
+  IF p_key IS NULL THEN
+    RETURN;
+  END IF;
+  UPDATE rpc_idempotency SET result = p_result WHERE idempotency_key = p_key;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 0a-idem-replay. Return the persisted original result for an already-claimed key.
+-- If the row exists but result IS NULL the key was claimed by a still-in-flight
+-- concurrent call (KNOWN LIMITATION: the QUIC case is a sequential retry, not
+-- concurrent, so the original has committed its result before the retry lands;
+-- this branch only triggers under true concurrency, which is out of scope).
+CREATE OR REPLACE FUNCTION idem_replay(p_key UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  SELECT result INTO v_result FROM rpc_idempotency WHERE idempotency_key = p_key;
+  IF v_result IS NULL THEN
+    RETURN jsonb_build_object('success', true, 'idempotent_replay', true, 'result_pending', true);
+  END IF;
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
 -- 0a. Enable pg_trgm for fuzzy/trigram search (idempotent, available on Supabase)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -51,11 +102,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION next_alteration_invoice() TO authenticated, anon, service_role;
 
 -- 2. Transactional RPC for completing work order
+DROP FUNCTION IF EXISTS complete_work_order(integer, jsonb, jsonb, jsonb);
 CREATE OR REPLACE FUNCTION complete_work_order(
   p_order_id INT,
   p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, orderTotal, fabricCharge, stitchingCharge, styleCharge, deliveryCharge, shelfCharge, homeDelivery, deliveryDate, advance, stitchingPrice }
   p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
-  p_fabric_items JSONB      -- [{ id: number, length: number }]
+  p_fabric_items JSONB,     -- [{ id: number, length: number }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -65,7 +118,14 @@ DECLARE
   v_inv INT;
   v_paid DECIMAL;
   v_session_id INT;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not double-decrement stock or
+  -- re-bump the invoice. Returns the recorded original result on replay.
+  IF NOT idem_claim(p_idempotency_key, 'complete_work_order') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   -- 1. Get or Generate Invoice Number
   SELECT invoice_number INTO v_inv FROM work_orders WHERE order_id = p_order_id;
   IF v_inv IS NULL THEN
@@ -202,15 +262,19 @@ BEGIN
   END IF;
 
   -- 7. Return Flattened Result
-  RETURN to_jsonb(v_order_row) || to_jsonb(v_work_order_row);
+  v_result := to_jsonb(v_order_row) || to_jsonb(v_work_order_row);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
 -- 3. Transactional RPC for completing sales order (Shelf items only)
+DROP FUNCTION IF EXISTS complete_sales_order(integer, jsonb, jsonb);
 CREATE OR REPLACE FUNCTION complete_sales_order(
   p_order_id INT,
   p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, total, shelfCharge, deliveryCharge }
-  p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
+  p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -218,7 +282,13 @@ DECLARE
   v_order_row orders%ROWTYPE;
   v_paid DECIMAL;
   v_session_id INT;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not double-decrement shelf stock.
+  IF NOT idem_claim(p_idempotency_key, 'complete_sales_order') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   v_paid := (p_checkout_details->>'paid')::decimal;
 
   -- 1. Update Order
@@ -303,15 +373,19 @@ BEGIN
     );
   END IF;
 
-  RETURN to_jsonb(v_order_row);
+  v_result := to_jsonb(v_order_row);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
 -- 4. NEW: Transactional RPC for creating AND completing a sales order in one go
+DROP FUNCTION IF EXISTS create_complete_sales_order(integer, jsonb, jsonb);
 CREATE OR REPLACE FUNCTION create_complete_sales_order(
   p_customer_id INT,
   p_checkout_details JSONB, -- { paymentType, paid, paymentRefNo, orderTaker, discountType, discountValue, referralCode, discountPercentage, notes, total, shelfCharge, deliveryCharge, brand }
-  p_shelf_items JSONB       -- [{ id: number, quantity: number, unitPrice: number }]
+  p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -321,7 +395,14 @@ DECLARE
   v_paid DECIMAL;
   v_session_id INT;
   v_brand brand;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not create a second order +
+  -- payment and double-decrement shelf stock. Returns the original order row.
+  IF NOT idem_claim(p_idempotency_key, 'create_complete_sales_order') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   v_paid := (p_checkout_details->>'paid')::decimal;
   v_brand := (p_checkout_details->>'brand')::brand;
 
@@ -422,7 +503,9 @@ BEGIN
 
   -- 4. Return the full order row
   SELECT * FROM orders WHERE id = v_order_id INTO v_order_row;
-  RETURN to_jsonb(v_order_row);
+  v_result := to_jsonb(v_order_row);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1088,6 +1171,248 @@ BEGIN
     'collected_count', v_collected_count,
     'order_id', p_order_id
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11b. RPC: Dispatch order garments to workshop (first dispatch only).
+-- Promoted from the app-layer multi-step orchestration (was the client-side
+-- dispatchOrder in apps/pos-interface/src/api/orders.ts) so the app and the
+-- workflow test exercise IDENTICAL code instead of a hand-mirrored copy.
+-- Atomic: garment flip + dispatch_log append + order_phase route happen in
+-- one transaction. The trip_number = 0 gate makes it naturally idempotent
+-- (a re-run flips/logs nothing); driving the audit log off the
+-- UPDATE ... RETURNING set also fixes the prior best-effort double-log bug
+-- (the old code re-queried by location and could re-log on retry).
+CREATE OR REPLACE FUNCTION dispatch_order(
+  p_order_id INT,
+  p_garment_ids UUID[] DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_order_type TEXT;
+  v_dispatched UUID[];
+  v_count INT;
+BEGIN
+  SELECT order_type::text INTO v_order_type FROM orders WHERE id = p_order_id;
+  IF v_order_type IS NULL THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  -- 1. Flip first-time garments (trip_number = 0) to transit. The gate keeps
+  --    returning garments (trip >= 1) untouched — those go through
+  --    dispatchGarmentToWorkshop, which bumps trip and clears stale state.
+  WITH moved AS (
+    UPDATE garments
+       SET location = 'transit_to_workshop', trip_number = 1
+     WHERE order_id = p_order_id
+       AND trip_number = 0
+       AND (p_garment_ids IS NULL OR id = ANY(p_garment_ids))
+    RETURNING id
+  )
+  SELECT array_agg(id) INTO v_dispatched FROM moved;
+
+  v_count := COALESCE(array_length(v_dispatched, 1), 0);
+
+  -- 1b. Append-only dispatch audit (Dispatch History view). Only the rows
+  --     actually dispatched this call are logged.
+  IF v_count > 0 THEN
+    INSERT INTO dispatch_log (garment_id, order_id, direction, trip_number)
+    SELECT g_id, p_order_id, 'to_workshop', 1
+    FROM unnest(v_dispatched) AS g_id;
+  END IF;
+
+  -- 2. Flip order_phase to in_progress on first dispatch (unconditional, as
+  --    the original did). order_phase lives on work_orders for WORK and on
+  --    alteration_orders for ALTERATION.
+  IF v_order_type = 'ALTERATION' THEN
+    UPDATE alteration_orders SET order_phase = 'in_progress' WHERE order_id = p_order_id;
+  ELSE
+    UPDATE work_orders SET order_phase = 'in_progress' WHERE order_id = p_order_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'order_id', p_order_id,
+    'dispatched_count', v_count,
+    'order_type', v_order_type
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11c. RPC: Receive garments at workshop (park, or receive-and-start).
+-- Promoted from apps/workshop/src/api/garments.ts receiveGarments (:866) and
+-- receiveAndStartGarments (:917) so the app and the workflow test exercise
+-- IDENTICAL code instead of a hand-mirrored copy.
+--   p_start = false → "Receive"        (park: in_production=false for all)
+--   p_start = true  → "Receive & Start"(gate production on stage/feedback)
+-- Accepted brovas skip production (→ ready_for_dispatch); returning non-accepted
+-- brovas reset brova_trialed→waiting_cut; trip>1 returns clear stale prod fields.
+CREATE OR REPLACE FUNCTION receive_garments(
+  p_ids UUID[],
+  p_start BOOLEAN DEFAULT FALSE
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_count INT;
+BEGIN
+  IF p_ids IS NULL OR array_length(p_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'receive_garments: no garment ids provided';
+  END IF;
+
+  -- 1. Land at workshop. "Receive" parks everything; "Receive & Start"
+  --    defers the in_production decision to step 3.
+  IF p_start THEN
+    UPDATE garments SET location = 'workshop' WHERE id = ANY(p_ids);
+  ELSE
+    UPDATE garments SET location = 'workshop', in_production = false
+     WHERE id = ANY(p_ids);
+  END IF;
+
+  -- 2. Accepted brovas need no production — straight to ready_for_dispatch
+  --    (force in_production=false; the start path must not pick them up).
+  UPDATE garments
+     SET piece_stage = 'ready_for_dispatch', in_production = false
+   WHERE id = ANY(p_ids) AND feedback_status = 'accepted';
+
+  -- 3. Receive & Start: begin production on everything that is neither a
+  --    parked final (waiting_for_acceptance) nor an accepted brova.
+  IF p_start THEN
+    UPDATE garments
+       SET in_production = true
+     WHERE id = ANY(p_ids)
+       AND piece_stage <> 'waiting_for_acceptance'
+       AND feedback_status IS DISTINCT FROM 'accepted';
+  END IF;
+
+  -- 4. Returning non-accepted brovas: brova_trialed → waiting_cut so the
+  --    scheduler picks them up.
+  UPDATE garments
+     SET piece_stage = 'waiting_cut'
+   WHERE id = ANY(p_ids)
+     AND feedback_status IS NOT NULL
+     AND feedback_status <> 'accepted'
+     AND piece_stage = 'brova_trialed';
+
+  -- 5. Clear stale production fields on returning garments (trip > 1) so they
+  --    appear fresh in the scheduler. worker_history kept (ReturnPlanDialog).
+  UPDATE garments
+     SET production_plan = NULL, completion_time = NULL, start_time = NULL
+   WHERE id = ANY(p_ids) AND trip_number > 1;
+
+  v_count := COALESCE(array_length(p_ids, 1), 0);
+  RETURN jsonb_build_object('received_count', v_count, 'started', p_start);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11d. RPC: Release parked finals (waiting_for_acceptance → waiting_cut).
+-- Promoted from apps/workshop/src/api/garments.ts releaseFinals (:1438).
+CREATE OR REPLACE FUNCTION release_finals(p_ids UUID[])
+RETURNS JSONB AS $$
+DECLARE
+  v_count INT;
+BEGIN
+  WITH released AS (
+    UPDATE garments
+       SET piece_stage = 'waiting_cut', in_production = false
+     WHERE id = ANY(p_ids) AND piece_stage = 'waiting_for_acceptance'
+    RETURNING id
+  )
+  SELECT COUNT(*) INTO v_count FROM released;
+  RETURN jsonb_build_object('released_count', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11e. RPC: Workshop dispatches finished garments to the shop.
+-- Promoted from apps/workshop/src/api/garments.ts dispatchGarments (:1336).
+-- feedback_status is cleared (the trip's verdict is consumed on dispatch).
+-- The dispatch_log append is now atomic with the move (the app version was
+-- best-effort/non-blocking and could silently drop audit rows on failure).
+CREATE OR REPLACE FUNCTION dispatch_garments_to_shop(p_ids UUID[])
+RETURNS JSONB AS $$
+DECLARE
+  v_count INT;
+BEGIN
+  IF p_ids IS NULL OR array_length(p_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'dispatch_garments_to_shop: no garment ids provided';
+  END IF;
+
+  WITH moved AS (
+    UPDATE garments
+       SET location = 'transit_to_shop', in_production = false,
+           feedback_status = NULL
+     WHERE id = ANY(p_ids)
+    RETURNING id, order_id, trip_number
+  )
+  INSERT INTO dispatch_log (garment_id, order_id, direction, trip_number)
+  SELECT id, order_id, 'to_shop', trip_number FROM moved;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN jsonb_build_object('dispatched_count', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11f. RPC: Create a replacement garment after a Reject-Redo.
+-- Promoted from apps/workshop/src/api/garments.ts createGarmentForOrder (:1817)
+-- replacement path (+ nextGarmentIdForOrder :1801). Clones the original's
+-- spec columns server-side (one read of truth), starts fresh at
+-- trip 1 / waiting_cut / workshop, and links original.replaced_by_garment_id
+-- (double-replacement guard preserved).
+CREATE OR REPLACE FUNCTION create_replacement_garment(
+  p_replaces_garment_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_orig garments%ROWTYPE;
+  v_next INT;
+  v_new_garment_id TEXT;
+  v_new_id UUID;
+BEGIN
+  SELECT * INTO v_orig FROM garments WHERE id = p_replaces_garment_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'create_replacement_garment: original garment % not found', p_replaces_garment_id;
+  END IF;
+  IF v_orig.replaced_by_garment_id IS NOT NULL THEN
+    RAISE EXCEPTION 'create_replacement_garment: original garment already has a replacement';
+  END IF;
+
+  -- nextGarmentIdForOrder: max numeric suffix of "<order_id>-<n>" siblings + 1.
+  SELECT COALESCE(MAX((split_part(garment_id, '-', 2))::int), 0) + 1
+    INTO v_next
+    FROM garments
+   WHERE order_id = v_orig.order_id
+     AND garment_id LIKE v_orig.order_id || '-%'
+     AND split_part(garment_id, '-', 2) ~ '^[0-9]+$';
+  v_new_garment_id := v_orig.order_id || '-' || v_next;
+
+  INSERT INTO garments (
+    order_id, garment_id, measurement_id, garment_type, fabric_id,
+    fabric_source, color, shop_name, fabric_length, style, style_id,
+    collar_type, collar_button, collar_position, collar_thickness,
+    cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness,
+    wallet_pocket, pen_holder, mobile_pocket, small_tabaggi,
+    jabzour_1, jabzour_2, jabzour_thickness, lines, soaking, express,
+    delivery_date, notes, quantity,
+    piece_stage, location, in_production, trip_number
+  )
+  SELECT
+    order_id, v_new_garment_id, measurement_id, garment_type, fabric_id,
+    fabric_source, color, shop_name, fabric_length,
+    COALESCE(style, 'kuwaiti'), style_id,
+    collar_type, collar_button, collar_position, collar_thickness,
+    cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness,
+    COALESCE(wallet_pocket, false), COALESCE(pen_holder, false),
+    COALESCE(mobile_pocket, false), COALESCE(small_tabaggi, false),
+    jabzour_1, jabzour_2, jabzour_thickness,
+    COALESCE(lines, 1), COALESCE(soaking, false), COALESCE(express, false),
+    delivery_date, notes, COALESCE(quantity, 1),
+    'waiting_cut', 'workshop', false, 1
+  FROM garments WHERE id = p_replaces_garment_id
+  RETURNING id INTO v_new_id;
+
+  UPDATE garments
+     SET replaced_by_garment_id = v_new_id
+   WHERE id = p_replaces_garment_id AND replaced_by_garment_id IS NULL;
+
+  RETURN jsonb_build_object('id', v_new_id, 'garment_id', v_new_garment_id);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2435,12 +2760,14 @@ $$ LANGUAGE plpgsql;
 -- Uses register_session_id on payment_transactions for exact attribution
 -- (replaces the old time-window approach that mis-handled cross-midnight sessions).
 -- p_tz_offset_minutes is retained for client API compatibility but unused.
+DROP FUNCTION IF EXISTS close_register(integer, uuid, numeric, text, integer);
 CREATE OR REPLACE FUNCTION close_register(
   p_session_id INT,
   p_user_id UUID,
   p_counted_cash DECIMAL,
   p_notes TEXT DEFAULT NULL,
-  p_tz_offset_minutes INT DEFAULT 180
+  p_tz_offset_minutes INT DEFAULT 180,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -2451,7 +2778,14 @@ DECLARE
   v_cash_out DECIMAL;
   v_expected DECIMAL;
   v_variance DECIMAL;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not write a duplicate close event.
+  -- Returns the original close summary (variance/expected) on replay.
+  IF NOT idem_claim(p_idempotency_key, 'close_register') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   PERFORM assert_active_user();
 
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
@@ -2506,7 +2840,7 @@ BEGIN
     p_counted_cash, v_expected, v_variance, p_notes
   );
 
-  RETURN jsonb_build_object(
+  v_result := jsonb_build_object(
     'status', 'closed',
     'opening_float', v_session.opening_float,
     'cash_payments', v_cash_payments,
@@ -2517,6 +2851,8 @@ BEGIN
     'counted_cash', p_counted_cash,
     'variance', v_variance
   );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2526,6 +2862,7 @@ $$ LANGUAGE plpgsql;
 -- Drop the prior signature first — adding p_reason_category as the trailing
 -- param creates a NEW function unless the old one is dropped explicitly.
 DROP FUNCTION IF EXISTS add_cash_movement(INT, TEXT, DECIMAL, TEXT, UUID, INT);
+DROP FUNCTION IF EXISTS add_cash_movement(INT, TEXT, DECIMAL, TEXT, UUID, INT, TEXT);
 CREATE OR REPLACE FUNCTION add_cash_movement(
   p_session_id INT,
   p_type TEXT,
@@ -2533,7 +2870,8 @@ CREATE OR REPLACE FUNCTION add_cash_movement(
   p_reason TEXT,
   p_user_id UUID,
   p_tz_offset_minutes INT DEFAULT 180,
-  p_reason_category TEXT DEFAULT 'other'
+  p_reason_category TEXT DEFAULT 'other',
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -2544,7 +2882,14 @@ DECLARE
   v_cash_in DECIMAL;
   v_cash_out DECIMAL;
   v_drawer_balance DECIMAL;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not insert a duplicate cash
+  -- movement (accumulating ledger row). Returns the original {id} on replay.
+  IF NOT idem_claim(p_idempotency_key, 'add_cash_movement') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   PERFORM assert_active_user();
 
   SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
@@ -2592,7 +2937,9 @@ BEGIN
   )
   RETURNING id INTO v_id;
 
-  RETURN jsonb_build_object('id', v_id);
+  v_result := jsonb_build_object('id', v_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2753,10 +3100,12 @@ $$ LANGUAGE plpgsql;
 -- ============================================================
 
 -- Dispatch a transfer: deduct stock from source location
+DROP FUNCTION IF EXISTS dispatch_transfer(integer, uuid, jsonb);
 CREATE OR REPLACE FUNCTION dispatch_transfer(
   p_transfer_id INT,
   p_dispatched_by UUID,
-  p_items JSONB  -- [{ id: number, dispatched_qty: number }]
+  p_items JSONB,  -- [{ id: number, dispatched_qty: number }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -2765,7 +3114,13 @@ DECLARE
   v_transfer_item RECORD;
   v_dispatched_qty DECIMAL;
   v_current_stock DECIMAL;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not double-decrement source stock.
+  IF NOT idem_claim(p_idempotency_key, 'dispatch_transfer') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   -- 1. Lock and verify transfer
   SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -2849,7 +3204,9 @@ BEGIN
   SET status = 'dispatched', dispatched_at = NOW(), dispatched_by = p_dispatched_by
   WHERE id = p_transfer_id;
 
-  RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
+  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2858,10 +3215,12 @@ $$ LANGUAGE plpgsql;
 -- and is NOT refunded to source stock — those units are treated as lost in
 -- transit. Source stock was already debited at dispatch time, so doing nothing
 -- here is the correct accounting for missing units.
+DROP FUNCTION IF EXISTS receive_transfer(integer, uuid, jsonb);
 CREATE OR REPLACE FUNCTION receive_transfer(
   p_transfer_id INT,
   p_received_by UUID,
-  p_items JSONB  -- [{ id: number, received_qty: number, discrepancy_note?: string }]
+  p_items JSONB,  -- [{ id: number, received_qty: number, discrepancy_note?: string }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -2872,7 +3231,14 @@ DECLARE
   v_all_received BOOLEAN;
   v_received_qty DECIMAL;
   v_missing_qty DECIMAL;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: replay of the SAME receive submission must not re-credit
+  -- stock. (A distinct later partial-receive uses a fresh key — still valid.)
+  IF NOT idem_claim(p_idempotency_key, 'receive_transfer') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   -- 1. Lock and verify transfer
   SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -3009,7 +3375,93 @@ BEGIN
       received_by = COALESCE(v_transfer.received_by, p_received_by)
   WHERE id = p_transfer_id;
 
-  RETURN jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
+  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id, 'has_discrepancy', v_has_discrepancy);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Approve a transfer request: set per-item approved_qty and advance the header
+-- to 'approved'. Atomic + idempotent + status-guarded. Previously this was a
+-- per-item PostgREST loop plus a separate header update with no status guard —
+-- a stale drawer / double-click could re-approve an already-dispatched transfer
+-- and a mid-loop network drop left approved_qty partially applied. The
+-- status='requested' guard + single transaction + idem key close both holes.
+CREATE OR REPLACE FUNCTION approve_transfer(
+  p_transfer_id INT,
+  p_items JSONB,  -- [{ id: number, approved_qty: number }]
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_transfer RECORD;
+  v_item JSONB;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'approve_transfer') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
+  END IF;
+  IF v_transfer.status != 'requested' THEN
+    RAISE EXCEPTION 'Transfer % is not awaiting approval (current: %)', p_transfer_id, v_transfer.status;
+  END IF;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    IF (v_item->>'approved_qty')::decimal < 0 THEN
+      RAISE EXCEPTION 'Approved quantity cannot be negative (item %)', v_item->>'id';
+    END IF;
+    UPDATE transfer_request_items
+    SET approved_qty = (v_item->>'approved_qty')::decimal
+    WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
+  END LOOP;
+
+  UPDATE transfer_requests
+  SET status = 'approved', approved_at = NOW()
+  WHERE id = p_transfer_id;
+
+  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Reject a transfer request. Same status guard as approve: only a still-
+-- 'requested' transfer can be rejected, so a dispatched/received transfer
+-- can't have its lifecycle blanked out while stock is already moved.
+CREATE OR REPLACE FUNCTION reject_transfer(
+  p_transfer_id INT,
+  p_rejection_reason TEXT,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_transfer RECORD;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'reject_transfer') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
+  END IF;
+  IF v_transfer.status != 'requested' THEN
+    RAISE EXCEPTION 'Transfer % is not awaiting approval (current: %)', p_transfer_id, v_transfer.status;
+  END IF;
+
+  UPDATE transfer_requests
+  SET status = 'rejected', rejection_reason = p_rejection_reason
+  WHERE id = p_transfer_id;
+
+  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -4636,6 +5088,7 @@ CREATE TRIGGER accessory_stock_audit
 
 -- ─── RPC: restock_item ────────────────────────────────────────────────
 -- Add stock from external supplier delivery. Logs as movement_type='restock'.
+DROP FUNCTION IF EXISTS restock_item(stock_item_type, integer, stock_location, numeric, integer, numeric, text, uuid);
 CREATE OR REPLACE FUNCTION restock_item(
   p_item_type stock_item_type,
   p_item_id INT,
@@ -4644,18 +5097,28 @@ CREATE OR REPLACE FUNCTION restock_item(
   p_supplier_id INT DEFAULT NULL,
   p_unit_cost NUMERIC DEFAULT NULL,
   p_notes TEXT DEFAULT NULL,
-  p_user_id UUID DEFAULT NULL
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
   v_new_qty NUMERIC;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not add stock twice.
+  IF NOT idem_claim(p_idempotency_key, 'restock_item') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   IF p_qty <= 0 THEN
     RAISE EXCEPTION 'Restock quantity must be positive (got %)', p_qty;
   END IF;
 
   PERFORM set_config('app.movement_type', 'restock', true);
-  PERFORM set_config('app.movement_ref_type', 'restock', true);
+  -- No restock/PO entity to reference: leave ref_type/ref_id empty so the
+  -- ledger doesn't carry an orphan ref_type with a NULL ref_id. Attribution
+  -- for a restock is the supplier_id + reason, not a ref.
+  PERFORM set_config('app.movement_ref_type', '', true);
   PERFORM set_config('app.movement_ref_id', '', true);
   PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
   PERFORM set_config('app.movement_supplier_id', COALESCE(p_supplier_id::text, ''), true);
@@ -4693,7 +5156,9 @@ BEGIN
     RAISE EXCEPTION 'Item % of type % not found', p_item_id, p_item_type;
   END IF;
 
-  RETURN jsonb_build_object('success', true, 'new_stock', v_new_qty);
+  v_result := jsonb_build_object('success', true, 'new_stock', v_new_qty);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -4770,18 +5235,26 @@ $$ LANGUAGE plpgsql;
 --
 -- p_fabric_items: [{ garment_id: uuid, fabric_id: int, qty: numeric }]
 -- p_shelf_items:  [{ shelf_id: int, qty: int }]
+DROP FUNCTION IF EXISTS consume_for_order(integer, jsonb, jsonb, uuid);
 CREATE OR REPLACE FUNCTION consume_for_order(
   p_order_id INT,
   p_fabric_items JSONB DEFAULT '[]'::jsonb,
   p_shelf_items JSONB DEFAULT '[]'::jsonb,
-  p_user_id UUID DEFAULT NULL
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
   v_item JSONB;
   v_qty NUMERIC;
   v_current NUMERIC;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not decrement stock twice.
+  IF NOT idem_claim(p_idempotency_key, 'consume_for_order') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   -- Stamp ledger context once for the whole batch
   PERFORM set_config('app.movement_type', 'consumption', true);
   PERFORM set_config('app.movement_ref_type', 'order', true);
@@ -4839,7 +5312,9 @@ BEGIN
       WHERE id = (v_item->>'shelf_id')::int;
   END LOOP;
 
-  RETURN jsonb_build_object('success', true, 'order_id', p_order_id);
+  v_result := jsonb_build_object('success', true, 'order_id', p_order_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -4922,13 +5397,15 @@ $$ LANGUAGE plpgsql STABLE;
 -- stock_movements ledger, audit timeline — works unchanged. The only
 -- difference is that requested_at = approved_at = dispatched_at, and all
 -- three qty fields on each item are equal.
+DROP FUNCTION IF EXISTS direct_send_transfer(uuid, brand, transfer_direction, transfer_item_type, jsonb, text);
 CREATE OR REPLACE FUNCTION direct_send_transfer(
   p_sender UUID,
   p_brand brand,
   p_direction transfer_direction,
   p_item_type transfer_item_type,
   p_items JSONB,  -- [{ fabric_id?: int, shelf_id?: int, accessory_id?: int, qty: number }]
-  p_notes TEXT DEFAULT NULL
+  p_notes TEXT DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -4939,7 +5416,14 @@ DECLARE
   v_shelf_id INT;
   v_accessory_id INT;
   v_current_stock DECIMAL;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not create a duplicate transfer
+  -- and double-decrement source stock.
+  IF NOT idem_claim(p_idempotency_key, 'direct_send_transfer') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   -- 1. Create the transfer already in 'dispatched' state.
   INSERT INTO transfer_requests (
     brand, direction, item_type, status,
@@ -5033,7 +5517,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  RETURN jsonb_build_object('success', true, 'transfer_id', v_transfer_id);
+  v_result := jsonb_build_object('success', true, 'transfer_id', v_transfer_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -5048,12 +5534,14 @@ $$ LANGUAGE plpgsql;
 --
 -- p_groups shape: [{ item_type: 'fabric'|'shelf'|'accessory', items: [...] }]
 
+DROP FUNCTION IF EXISTS create_transfer_requests_batch(uuid, brand, transfer_direction, text, jsonb);
 CREATE OR REPLACE FUNCTION create_transfer_requests_batch(
   p_requested_by UUID,
   p_brand brand,
   p_direction transfer_direction,
   p_notes TEXT,
-  p_groups JSONB  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, requested_qty }] }]
+  p_groups JSONB,  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, requested_qty }] }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -5066,7 +5554,13 @@ DECLARE
   v_shelf_id INT;
   v_accessory_id INT;
   v_results JSONB := '[]'::jsonb;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not create duplicate requests.
+  IF NOT idem_claim(p_idempotency_key, 'create_transfer_requests_batch') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   IF p_groups IS NULL OR jsonb_array_length(p_groups) = 0 THEN
     RAISE EXCEPTION 'No groups provided';
   END IF;
@@ -5114,17 +5608,21 @@ BEGIN
     v_results := v_results || jsonb_build_object('transfer_id', v_transfer_id, 'item_type', v_item_type);
   END LOOP;
 
-  RETURN jsonb_build_object('success', true, 'transfers', v_results);
+  v_result := jsonb_build_object('success', true, 'transfers', v_results);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
 
+DROP FUNCTION IF EXISTS direct_send_transfers_batch(uuid, brand, transfer_direction, text, jsonb);
 CREATE OR REPLACE FUNCTION direct_send_transfers_batch(
   p_sender UUID,
   p_brand brand,
   p_direction transfer_direction,
   p_notes TEXT,
-  p_groups JSONB  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, qty }] }]
+  p_groups JSONB,  -- [{ item_type, items: [{ fabric_id?, shelf_id?, accessory_id?, qty }] }]
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -5138,7 +5636,14 @@ DECLARE
   v_accessory_id INT;
   v_current_stock DECIMAL;
   v_results JSONB := '[]'::jsonb;
+  v_result JSONB;
 BEGIN
+  -- Idempotency: a lost-response replay must not create duplicate transfers
+  -- and double-decrement source stock.
+  IF NOT idem_claim(p_idempotency_key, 'direct_send_transfers_batch') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
   IF p_groups IS NULL OR jsonb_array_length(p_groups) = 0 THEN
     RAISE EXCEPTION 'No groups provided';
   END IF;
@@ -5247,6 +5752,8 @@ BEGIN
     v_results := v_results || jsonb_build_object('transfer_id', v_transfer_id, 'item_type', v_item_type);
   END LOOP;
 
-  RETURN jsonb_build_object('success', true, 'transfers', v_results);
+  v_result := jsonb_build_object('success', true, 'transfers', v_results);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;

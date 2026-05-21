@@ -62,8 +62,8 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="rounded-2xl border-2 border-border bg-card overflow-x-auto w-full">
-      <Table>
+    <div className="rounded-lg border border-border bg-card overflow-hidden w-full">
+      <Table className="w-full table-fixed">
         <colgroup>
           {table.getHeaderGroups()[0]?.headers.map((header) => (
             <col key={header.id} span={header.colSpan} />
@@ -71,16 +71,15 @@ export function DataTable<TData, TValue>({
         </colgroup>
         <TableHeader className="bg-muted/30">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="border-b-2 border-border">
+            <TableRow key={headerGroup.id} className="border-b border-border">
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
                   colSpan={header.colSpan}
                   style={{
-                    minWidth: header.column.columnDef.minSize,
-                    width: header.column.columnDef.size,
+                    width: `${header.column.columnDef.size}%`,
                   }}
-                  className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-muted-foreground"
+                  className="px-4 py-3 text-center text-sm font-medium text-muted-foreground"
                 >
                   {header.isPlaceholder
                     ? null
@@ -105,8 +104,7 @@ export function DataTable<TData, TValue>({
                   <TableCell
                     key={cell.id}
                     style={{
-                      minWidth: cell.column.columnDef.minSize,
-                      width: cell.column.columnDef.size,
+                      width: `${cell.column.columnDef.size}%`,
                     }}
                     className="px-4 py-3 text-center"
                   >
@@ -121,9 +119,9 @@ export function DataTable<TData, TValue>({
                 colSpan={columns.length}
                 className="h-32 text-center"
               >
-                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                  <span className="text-sm font-bold uppercase tracking-widest opacity-60">No items added</span>
-                  <span className="text-xs opacity-40">Click "Add Item" to get started</span>
+                <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+                  <span className="text-sm font-medium">No items added yet</span>
+                  <span className="text-sm opacity-60">Pick a product from the grid above</span>
                 </div>
               </TableCell>
             </TableRow>
