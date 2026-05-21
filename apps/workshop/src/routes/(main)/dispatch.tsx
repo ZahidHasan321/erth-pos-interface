@@ -502,7 +502,7 @@ function DispatchHistoryTab() {
                       {r.invoice_number ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{r.customer_name ?? 'Unknown'}</div>
+                      <div className="text-sm truncate max-w-[180px]" title={r.customer_name ?? undefined}>{r.customer_name ?? 'Unknown'}</div>
                       {r.customer_phone && (
                         <div className="text-xs text-muted-foreground tabular-nums">{r.customer_phone}</div>
                       )}

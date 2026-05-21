@@ -631,6 +631,7 @@ function RouteComponent() {
               rowSelection={rowSelection}
               onRowSelectionChange={setRowSelection}
               selectedOrderId={selectedOrder?.order?.id}
+              onSelectForManagement={setSelectedOrder}
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalCount={totalCount}

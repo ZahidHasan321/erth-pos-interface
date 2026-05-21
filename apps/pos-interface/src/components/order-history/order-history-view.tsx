@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
     ShoppingBag,
     Package,
     Clock,
-    CheckCircle2,
     XCircle,
     ChevronRight,
     ChevronLeft,
@@ -32,10 +31,17 @@ import {
 } from "@repo/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { Input } from "@repo/ui/input";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@repo/ui/table";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { format } from "date-fns";
 import { DatePicker } from "@repo/ui/date-picker";
-import { ORDER_PHASE_LABELS } from "@/lib/constants";
 
 // Where a row click should navigate. The $main pages route into the full order
 // editor (work / sales / alteration); the standalone cashier shell uses this
@@ -214,10 +220,13 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                     </div>
                 ) : (
                     <>
-                        <div className={cn("flex flex-col gap-2 transition-opacity duration-200", isFetching && "opacity-60")}>
-                            {orders.map((order) => (
-                                <OrderCard key={order.id} order={order} linkBuilder={linkBuilder} />
-                            ))}
+                        <div className={cn("transition-opacity duration-200", isFetching && "opacity-60")}>
+                            <OrderTable orders={orders} linkBuilder={linkBuilder} />
+                            <div className="flex flex-col gap-2 lg:hidden">
+                                {orders.map((order) => (
+                                    <OrderCard key={order.id} order={order} linkBuilder={linkBuilder} />
+                                ))}
+                            </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 py-2">
@@ -281,23 +290,6 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
     );
 }
 
-const StatusBadge = ({ status }: { status: string }) => {
-    switch (status) {
-        case "confirmed":
-            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-primary border-primary/30"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmed</Badge>;
-        case "cancelled":
-            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-destructive border-destructive/30"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>;
-        default:
-            return <Badge variant="outline" className="text-[11px] font-normal px-1.5 py-0 h-5 text-amber-700 border-amber-300"><Clock className="w-3 h-3 mr-1" />Draft</Badge>;
-    }
-};
-
-const PhaseBadge = ({ phase }: { phase: string }) => (
-    <span className="text-xs text-muted-foreground">
-        {ORDER_PHASE_LABELS[phase as keyof typeof ORDER_PHASE_LABELS]}
-    </span>
-);
-
 const TypeBadge = ({ type }: { type: string }) => <OrderTypeBadge type={type} />;
 
 const DeliveryBadge = ({ homeDelivery }: { homeDelivery: boolean }) => (
@@ -306,12 +298,68 @@ const DeliveryBadge = ({ homeDelivery }: { homeDelivery: boolean }) => (
     </span>
 );
 
-const ItemCount = ({ isWork, count }: { isWork: boolean; count: number }) => (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
-        {isWork ? <Package className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
-        {count} {count === 1 ? "item" : "items"}
-    </span>
-);
+// Single derived state for the order. Collapses checkout_status + order_phase into
+// the one label that actually matters in the history view: Draft / Cancelled / New /
+// In progress / Completed. SALES orders have no phase concept, so a confirmed SALES
+// is shown as Completed.
+function deriveOrderState(order: OrderHistoryItem): {
+    label: string;
+    tone: "draft" | "cancelled" | "new" | "in_progress" | "completed";
+} {
+    if (order.checkout_status === "draft") return { label: "Draft", tone: "draft" };
+    if (order.checkout_status === "cancelled") return { label: "Cancelled", tone: "cancelled" };
+    if (order.order_type === "SALES") return { label: "Completed", tone: "completed" };
+    switch (order.order_phase) {
+        case "completed": return { label: "Completed", tone: "completed" };
+        case "in_progress": return { label: "In progress", tone: "in_progress" };
+        case "new":
+        default: return { label: "New", tone: "new" };
+    }
+}
+
+const StateBadge = ({ order }: { order: OrderHistoryItem }) => {
+    const { label, tone } = deriveOrderState(order);
+    const cls: Record<typeof tone, string> = {
+        draft: "text-amber-700 border-amber-300",
+        cancelled: "text-destructive border-destructive/30",
+        new: "text-muted-foreground border-border",
+        in_progress: "text-primary border-primary/30",
+        completed: "text-primary border-primary/40 bg-primary/5",
+    };
+    return (
+        <Badge variant="outline" className={cn("text-[11px] font-normal px-1.5 py-0 h-5", cls[tone])}>
+            {label}
+        </Badge>
+    );
+};
+
+const PieceCount = ({ order }: { order: OrderHistoryItem }) => {
+    if (order.order_type === "WORK") {
+        const parts: string[] = [];
+        if (order.brova_count > 0) parts.push(`${order.brova_count} ${order.brova_count === 1 ? "brova" : "brovas"}`);
+        if (order.final_count > 0) parts.push(`${order.final_count} ${order.final_count === 1 ? "final" : "finals"}`);
+        const label = parts.length > 0 ? parts.join(" · ") : `${order.fabric_count} ${order.fabric_count === 1 ? "piece" : "pieces"}`;
+        return (
+            <div className="text-sm tabular-nums text-foreground inline-flex items-center gap-1">
+                <Package className="w-3 h-3" />{label}
+            </div>
+        );
+    }
+    if (order.order_type === "ALTERATION") {
+        const c = order.fabric_count;
+        return (
+            <div className="text-sm tabular-nums text-foreground inline-flex items-center gap-1">
+                <Package className="w-3 h-3" />{c} {c === 1 ? "alteration" : "alterations"}
+            </div>
+        );
+    }
+    const c = order.shelf_item_count;
+    return (
+        <div className="text-sm tabular-nums text-foreground inline-flex items-center gap-1">
+            <ShoppingBag className="w-3 h-3" />{c} {c === 1 ? "item" : "items"}
+        </div>
+    );
+};
 
 const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrder: boolean }) => {
     if (!isWorkOrder) {
@@ -338,11 +386,129 @@ const Financials = ({ order, isWorkOrder }: { order: OrderHistoryItem; isWorkOrd
     );
 };
 
+function OrderTable({ orders, linkBuilder }: { orders: OrderHistoryItem[]; linkBuilder: OrderLinkBuilder }) {
+    const navigate = useNavigate();
+    return (
+        <div className="hidden lg:block rounded-lg border bg-card overflow-hidden">
+            <Table>
+                <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                        <TableHead className="py-2 px-4 text-[10px]">Order</TableHead>
+                        <TableHead className="py-2 px-4 text-[10px]">Customer</TableHead>
+                        <TableHead className="py-2 px-4 text-[10px]">Type / State</TableHead>
+                        <TableHead className="py-2 px-4 text-[10px]">Due / Delivery</TableHead>
+                        <TableHead className="py-2 px-4 text-[10px]">Pieces</TableHead>
+                        <TableHead className="py-2 px-4 text-[10px] text-right">Amounts</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {orders.map((order) => (
+                        <OrderTableRow
+                            key={order.id}
+                            order={order}
+                            onNavigate={(target) => navigate(target as any)}
+                            linkBuilder={linkBuilder}
+                        />
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
+    );
+}
+
+function OrderTableRow({
+    order,
+    linkBuilder,
+    onNavigate,
+}: {
+    order: OrderHistoryItem;
+    linkBuilder: OrderLinkBuilder;
+    onNavigate: (target: OrderLinkTarget) => void;
+}) {
+    const isWorkOrder = order.order_type === "WORK";
+    const isAlterationOrder = order.order_type === "ALTERATION";
+    const isGarmentOrder = isWorkOrder || isAlterationOrder;
+    const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
+    const dueDate = isGarmentOrder && order.delivery_date
+        ? format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")
+        : null;
+    const target = linkBuilder(order);
+
+    return (
+        <TableRow
+            onClick={() => onNavigate(target)}
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onNavigate(target);
+                }
+            }}
+            className="cursor-pointer group focus-visible:outline-none focus-visible:bg-muted/50"
+        >
+            <TableCell className="px-4 py-2 align-top">
+                <div className="text-sm font-semibold tabular-nums text-foreground group-hover:text-primary transition-colors">#{order.id}</div>
+                <div className="text-xs text-muted-foreground tabular-nums flex items-center gap-1 mt-0.5">
+                    <Calendar className="w-3 h-3" />{orderDate}
+                </div>
+            </TableCell>
+            <TableCell className="px-4 py-2 align-top max-w-[260px]">
+                <div className="text-sm font-medium truncate">{order.customer_name}</div>
+                <div className="text-xs text-muted-foreground font-mono tabular-nums mt-0.5">{order.customer_phone}</div>
+            </TableCell>
+            <TableCell className="px-4 py-2 align-top">
+                <div className="flex items-center gap-1.5"><TypeBadge type={order.order_type} /></div>
+                <div className="flex items-center gap-1.5 mt-1">
+                    <StateBadge order={order} />
+                </div>
+            </TableCell>
+            <TableCell className="px-4 py-2 align-top">
+                <div className="text-sm tabular-nums text-foreground">
+                    {dueDate ? <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{dueDate}</span> : <span className="text-muted-foreground">—</span>}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                    {isGarmentOrder ? <DeliveryBadge homeDelivery={order.home_delivery} /> : <span>—</span>}
+                </div>
+            </TableCell>
+            <TableCell className="px-4 py-2 align-top">
+                <PieceCount order={order} />
+                {isWorkOrder && order.charges.discount > 0 && (
+                    <div className="text-xs text-muted-foreground tabular-nums mt-0.5">−{order.charges.discount.toFixed(2)} disc</div>
+                )}
+            </TableCell>
+            <TableCell className="px-4 py-2 align-top text-right">
+                {isGarmentOrder ? (
+                    <>
+                        <div className="text-sm tabular-nums">
+                            <span className="text-foreground font-medium">{order.total_amount.toFixed(2)}</span>
+                            <span className="text-muted-foreground/50 mx-1">/</span>
+                            <span className="text-foreground">{order.paid_amount.toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs tabular-nums mt-0.5">
+                            {order.balance > 0 ? (
+                                <span className="text-destructive font-semibold">Due {order.balance.toFixed(2)}</span>
+                            ) : (
+                                <span className="text-primary font-medium">Paid</span>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="text-sm tabular-nums text-foreground font-medium">
+                            {order.total_amount.toFixed(2)} <span className="text-[11px] text-muted-foreground font-normal">KWD</span>
+                        </div>
+                        <div className="text-xs text-primary font-medium mt-0.5">Paid</div>
+                    </>
+                )}
+            </TableCell>
+        </TableRow>
+    );
+}
+
 function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilder: OrderLinkBuilder }) {
     const isWorkOrder = order.order_type === "WORK";
     const isAlterationOrder = order.order_type === "ALTERATION";
     const isGarmentOrder = isWorkOrder || isAlterationOrder;
-    const itemCount = isGarmentOrder ? order.fabric_count : order.shelf_item_count;
     const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
     const target = linkBuilder(order);
 
@@ -355,46 +521,6 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
         >
             <Card className="overflow-hidden border bg-card group-hover:border-primary/40 group-hover:bg-muted/30 transition-colors py-0 gap-0 rounded-lg">
                 <CardContent className="px-4 py-2.5 sm:px-5 space-y-1.5">
-                    {/* ===== DESKTOP (lg+): 2-row layout ===== */}
-                    <div className="hidden lg:block space-y-1.5">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-sm font-semibold tabular-nums text-foreground">#{order.id}</span>
-                                <TypeBadge type={order.order_type} />
-                            </div>
-                            <div className="w-px h-4 bg-border/30 shrink-0" />
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <User className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
-                                <span className="text-xs text-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                <StatusBadge status={order.checkout_status} />
-                                {order.order_phase && <PhaseBadge phase={order.order_phase} />}
-                                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all ml-1" />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 pl-0.5">
-                            <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />{orderDate}
-                            </span>
-                            {isGarmentOrder && order.delivery_date && (
-                                <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
-                                </span>
-                            )}
-                            {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
-                            <ItemCount isWork={isGarmentOrder} count={itemCount} />
-                            {isWorkOrder && order.charges.discount > 0 && (
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                    −{order.charges.discount.toFixed(2)} disc
-                                </span>
-                            )}
-                            <div className="flex-1" />
-                            <Financials order={order} isWorkOrder={isGarmentOrder} />
-                        </div>
-                    </div>
-
                     {/* ===== TABLET (sm to lg): 2-row grid ===== */}
                     <div className="hidden sm:block lg:hidden space-y-1.5">
                         <div className="flex items-center gap-2">
@@ -405,8 +531,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                             <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{order.customer_name}</span>
                             <span className="text-xs text-foreground font-mono tabular-nums shrink-0">{order.customer_phone}</span>
                             <div className="flex-1" />
-                            <StatusBadge status={order.checkout_status} />
-                            {order.order_phase && <PhaseBadge phase={order.order_phase} />}
+                            <StateBadge order={order} />
                             <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -419,7 +544,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                                 </span>
                             )}
                             {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
-                            <ItemCount isWork={isGarmentOrder} count={itemCount} />
+                            <PieceCount order={order} />
                             <div className="flex-1" />
                             <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>
@@ -447,9 +572,8 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                         </div>
                         <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/30">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                <StatusBadge status={order.checkout_status} />
-                                {order.order_phase && <PhaseBadge phase={order.order_phase} />}
-                                <ItemCount isWork={isGarmentOrder} count={itemCount} />
+                                <StateBadge order={order} />
+                                <PieceCount order={order} />
                             </div>
                             <Financials order={order} isWorkOrder={isGarmentOrder} />
                         </div>

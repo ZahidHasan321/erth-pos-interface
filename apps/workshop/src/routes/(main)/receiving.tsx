@@ -119,8 +119,8 @@ function GarmentRow({
         </TableCell>
       )}
       <TableCell className="px-3 py-3 text-sm">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-base tracking-tight">{garment.customer_name ?? "—"}</span>
+        <div className="flex flex-col gap-0.5 max-w-[180px]">
+          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
             <span className="text-sm font-mono text-muted-foreground">{garment.customer_mobile}</span>
           )}

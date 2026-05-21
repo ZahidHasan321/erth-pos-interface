@@ -1650,8 +1650,24 @@ BEGIN
 
     SELECT COALESCE(jsonb_agg(row_to_json(c.*)), '[]'::jsonb) INTO v_data
     FROM (
-      SELECT * FROM customers
-      ORDER BY phone ASC, account_type ASC, created_at DESC
+      SELECT
+        c.*,
+        COALESCE(o.orders_count, 0)::int      AS orders_count,
+        o.last_order_at,
+        COALESCE(o.outstanding_total, 0)::numeric AS outstanding_total,
+        EXISTS (SELECT 1 FROM measurements m WHERE m.customer_id = c.id) AS has_measurements
+      FROM customers c
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)                                                          AS orders_count,
+          MAX(o.order_date)                                                 AS last_order_at,
+          SUM(GREATEST(COALESCE(o.order_total, 0) - COALESCE(o.paid, 0), 0))
+            FILTER (WHERE o.checkout_status = 'confirmed')                  AS outstanding_total
+        FROM orders o
+        WHERE o.customer_id = c.id
+          AND o.checkout_status <> 'cancelled'
+      ) o ON TRUE
+      ORDER BY c.phone ASC, c.account_type ASC, c.created_at DESC
       OFFSET v_offset LIMIT p_page_size
     ) c;
   ELSE
@@ -1677,8 +1693,22 @@ BEGIN
           COALESCE(similarity(LOWER(c.phone), v_query), 0),
           COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
           COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
-        ) AS match_score
+        ) AS match_score,
+        COALESCE(o.orders_count, 0)::int      AS orders_count,
+        o.last_order_at,
+        COALESCE(o.outstanding_total, 0)::numeric AS outstanding_total,
+        EXISTS (SELECT 1 FROM measurements m WHERE m.customer_id = c.id) AS has_measurements
       FROM customers c
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)                                                          AS orders_count,
+          MAX(o.order_date)                                                 AS last_order_at,
+          SUM(GREATEST(COALESCE(o.order_total, 0) - COALESCE(o.paid, 0), 0))
+            FILTER (WHERE o.checkout_status = 'confirmed')                  AS outstanding_total
+        FROM orders o
+        WHERE o.customer_id = c.id
+          AND o.checkout_status <> 'cancelled'
+      ) o ON TRUE
       WHERE LOWER(c.name) % v_query
         OR LOWER(c.phone) % v_query
         OR LOWER(c.arabic_name) % v_query

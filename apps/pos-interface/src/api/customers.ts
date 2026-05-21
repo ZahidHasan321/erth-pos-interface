@@ -5,6 +5,16 @@ import { sanitizeFilterValue } from "@/lib/utils";
 
 const TABLE_NAME = "customers";
 
+// Customer row enriched with the aggregate fields returned by
+// search_customers_paginated. The aggregates are optional because the
+// fallback ILIKE query path doesn't supply them.
+export type CustomerListItem = Customer & {
+  orders_count?: number;
+  last_order_at?: string | null;
+  outstanding_total?: number | string | null;
+  has_measurements?: boolean;
+};
+
 const WRITE_RETRY_ATTEMPTS = 3;
 const WRITE_RETRY_BASE_MS = 300;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -25,7 +35,7 @@ export const getPaginatedCustomers = async (
   page: number,
   pageSize: number,
   search?: string
-): Promise<ApiResponse<Customer[]>> => {
+): Promise<ApiResponse<CustomerListItem[]>> => {
   // Use server-side fuzzy search RPC (pg_trgm powered)
   const { data, error } = await db.rpc('search_customers_paginated', {
     p_query: search || null,

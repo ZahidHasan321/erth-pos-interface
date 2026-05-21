@@ -7,8 +7,6 @@ import { toast } from "sonner";
 import {
   RefreshCw,
   PackageCheck,
-  User,
-  Hash,
   ChevronRight,
   ChevronDown,
   RotateCcw,
@@ -26,7 +24,7 @@ import { Card, CardContent } from "@repo/ui/card";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Skeleton } from "@repo/ui/skeleton";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
+import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 // API and Types
 import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, getBrand, type DispatchHistoryRow } from "@/api/orders";
@@ -55,12 +53,6 @@ interface OrderCardProps {
 // auto-selected for dispatch — staff opts in deliberately.
 const isParkedFinal = (g: { garment_type?: string | null; piece_stage?: string | null }) =>
     g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance";
-
-const PHASE_LABEL: Record<string, string> = {
-    new: "New",
-    in_progress: "In progress",
-    completed: "Completed",
-};
 
 // Neutral chrome only. POS direction: neutral base + single brand accent — no
 // per-type colour fills. Type is distinguished by its label, not by colour.
@@ -117,7 +109,6 @@ interface OrderHeader {
     customerName?: string | null;
     customerPhone?: string | null;
     orderDate?: string | Date | null;
-    phase?: string | null;
     pieceCount: number;
     brovaCount?: number;
     finalCount?: number;
@@ -142,53 +133,41 @@ function OrderCardShell({
     ...h
 }: OrderCardShellProps) {
     const [isExpanded, setIsExpanded] = useState(defaultOpen);
-    const showBody = !collapsible || isExpanded;
     const orderDateStr = h.orderDate
         ? parseUtcTimestamp(h.orderDate).toLocaleDateString("en-GB", { timeZone: TIMEZONE })
         : null;
     const toggle = () => setIsExpanded(v => !v);
 
     const header = (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-            <div className="flex items-center gap-2 min-w-0">
-                <Hash className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="font-medium text-sm shrink-0">{h.orderId}</span>
-                {h.invoiceNumber != null && (
-                    <span className="text-xs text-muted-foreground shrink-0">INV {h.invoiceNumber}</span>
-                )}
-                {h.phase && (
-                    <span className="text-xs text-muted-foreground shrink-0">
-                        {PHASE_LABEL[h.phase] ?? h.phase}
-                    </span>
-                )}
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
-                <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium truncate">{h.customerName || "Unknown customer"}</span>
-                {h.customerPhone && (
-                    <span className="text-xs text-muted-foreground shrink-0">{h.customerPhone}</span>
-                )}
-            </div>
-            {orderDateStr && <span className="text-xs text-muted-foreground shrink-0">{orderDateStr}</span>}
-            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
-                <span>{h.pieceCount} pcs</span>
-                {h.brovaCount ? <span>· {h.brovaCount} brova</span> : null}
-                {h.finalCount ? <span>· {h.finalCount} final</span> : null}
-                {h.alterationCount ? <span>· {h.alterationCount} alteration</span> : null}
-                {h.hasExpress && <span className="text-red-700 font-medium">· Express</span>}
-            </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3">
+            <span className="text-[15px] font-medium text-foreground truncate">
+                {h.customerName || "Unknown customer"}
+            </span>
+            {h.customerPhone && (
+                <span className="text-sm text-muted-foreground shrink-0">{h.customerPhone}</span>
+            )}
+            <span className="text-sm text-muted-foreground shrink-0">#{h.orderId}</span>
+            {h.invoiceNumber != null && (
+                <span className="text-sm text-muted-foreground shrink-0">INV {h.invoiceNumber}</span>
+            )}
+            {orderDateStr && <span className="text-sm text-muted-foreground shrink-0">{orderDateStr}</span>}
+            <span className="text-sm text-foreground/80 shrink-0">
+                {h.pieceCount} {h.pieceCount === 1 ? "piece" : "pieces"}
+                {h.brovaCount ? <span className="text-muted-foreground"> · {h.brovaCount} brova</span> : null}
+                {h.finalCount ? <span className="text-muted-foreground"> · {h.finalCount} final</span> : null}
+                {h.alterationCount ? <span className="text-muted-foreground"> · {h.alterationCount} alteration</span> : null}
+                {h.hasExpress && <span className="text-red-700 font-medium"> · Express</span>}
+            </span>
             <div className="flex items-center gap-2 ml-auto shrink-0">
                 {h.rightBadges}
                 {h.action}
                 {collapsible && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); toggle(); }}
-                        className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                        aria-label={isExpanded ? "Collapse" : "Expand"}
-                        aria-expanded={isExpanded}
-                    >
-                        <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
-                    </button>
+                    <ChevronDown
+                        className={cn(
+                            "size-4 text-muted-foreground transition-transform duration-300",
+                            isExpanded && "rotate-180"
+                        )}
+                    />
                 )}
             </div>
         </div>
@@ -199,7 +178,10 @@ function OrderCardShell({
             <CardContent className="p-0">
                 {collapsible ? (
                     <div
-                        className="cursor-pointer hover:bg-muted/30 transition-colors"
+                        className={cn(
+                            "cursor-pointer transition-colors",
+                            isExpanded ? "bg-muted/30" : "hover:bg-muted/20"
+                        )}
                         onClick={toggle}
                         {...clickableProps(toggle)}
                     >
@@ -211,17 +193,24 @@ function OrderCardShell({
                 {note && (
                     <div className="px-4 py-2 border-t border-border/40 bg-muted/10">{note}</div>
                 )}
-                {showBody && children && (
-                    <div className={cn(collapsible && "border-t border-border/40")}>
-                        {children}
+                {children && (collapsible ? (
+                    <div
+                        className={cn(
+                            "grid transition-[grid-template-rows] duration-300 ease-out",
+                            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                        )}
+                    >
+                        <div className="overflow-hidden">
+                            <div className="border-t border-border/40">{children}</div>
+                        </div>
                     </div>
-                )}
+                ) : (
+                    <div>{children}</div>
+                ))}
             </CardContent>
         </Card>
     );
 }
-
-// --- Shared GarmentRow ---
 
 function GarmentTypeBadge({ type }: { type?: string | null }) {
     if (!type) return null;
@@ -236,41 +225,6 @@ function FabricChip({ source, name }: { source?: string | null; name?: string | 
         return <span className="text-xs text-muted-foreground">Outside fabric</span>;
     }
     return null;
-}
-
-interface GarmentRowProps {
-    leading?: React.ReactNode;
-    garmentId: string | null;
-    type?: string | null;
-    badges?: React.ReactNode;
-    info?: React.ReactNode;
-    action?: React.ReactNode;
-    selected?: boolean;
-    onClick?: () => void;
-    className?: string;
-}
-
-function GarmentRow({ leading, garmentId, type, badges, info, action, selected, onClick, className }: GarmentRowProps) {
-    return (
-        <div
-            className={cn(
-                "flex items-center gap-3 px-4 py-2.5 transition-colors",
-                onClick && "cursor-pointer hover:bg-muted/30",
-                selected === false && "opacity-50",
-                className
-            )}
-            onClick={onClick}
-        >
-            {leading}
-            <div className="flex items-center gap-2 min-w-[140px] shrink-0">
-                <span className="font-medium text-sm">{garmentId}</span>
-                <GarmentTypeBadge type={type} />
-            </div>
-            {badges && <div className="flex items-center gap-2 flex-wrap">{badges}</div>}
-            {info && <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">{info}</div>}
-            {action && <div className="ml-auto shrink-0">{action}</div>}
-        </div>
-    );
 }
 
 // Trip / alteration label. Brova at trip 4+ counts as alt (legacy threshold);
@@ -344,7 +298,6 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
             customerName={order.customer?.name}
             customerPhone={order.customer?.phone}
             orderDate={order.order_date}
-            phase={order.order_phase as string | null}
             pieceCount={numGarments}
             brovaCount={brovaCount}
             finalCount={finalCount}
@@ -549,93 +502,243 @@ function ReturnToWorkshopTab({
   bulkDispatchRef.current = handleBulkDispatch;
 
   return (
-    <div className="space-y-2">
-      {garments.map((g) => {
-        const feedback = getLatestFeedback(g);
-        const isDispatching = dispatchingIds.has(g.id);
-        const fbStatus = (g as { feedback_status?: string | null }).feedback_status;
-        const orderId = g.orders?.id ?? g.order_id;
-        const invoice = g.orders?.work_orders?.invoice_number;
-        const customerName = g.orders?.customers?.name || "Unknown customer";
-        const customerPhone = g.orders?.customers?.phone;
-        const alsoNew = orderId != null && newOrderIds.has(orderId);
+    <Card className="overflow-hidden rounded-lg">
+      <CardContent className="p-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b bg-muted/20">
+              <th className="text-left py-2.5 px-4">Garment</th>
+              <th className="text-left py-2.5 px-4">Order</th>
+              <th className="text-left py-2.5 px-4">Customer</th>
+              <th className="text-left py-2.5 px-4">Status</th>
+              <th className="text-left py-2.5 px-4">Feedback</th>
+              <th className="text-right py-2.5 px-4">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {garments.map((g) => {
+              const feedback = getLatestFeedback(g);
+              const isDispatching = dispatchingIds.has(g.id);
+              const fbStatus = (g as { feedback_status?: string | null }).feedback_status;
+              const orderId = g.orders?.id ?? g.order_id;
+              const invoice = g.orders?.work_orders?.invoice_number;
+              const customerName = g.orders?.customers?.name || "Unknown customer";
+              const customerPhone = g.orders?.customers?.phone;
+              const alsoNew = orderId != null && newOrderIds.has(orderId);
+              const { measurements, styles } = feedback
+                ? countFeedbackChanges(feedback)
+                : { measurements: 0, styles: 0 };
 
-        return (
-          <Card key={g.id} className="overflow-hidden py-0 gap-0 rounded-lg">
-            <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
-              <div className="flex items-center gap-2 min-w-[150px] shrink-0">
-                <span className="font-medium text-sm">{g.garment_id || g.id.slice(0, 8)}</span>
-                <GarmentTypeBadge type={g.garment_type} />
-              </div>
-              <div className="flex items-center gap-2 min-w-0 shrink-0">
-                <Hash className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-xs shrink-0">{orderId}</span>
-                {invoice != null && (
-                  <span className="text-xs text-muted-foreground shrink-0">INV {invoice}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium truncate">{customerName}</span>
-                {customerPhone && (
-                  <span className="text-xs text-muted-foreground shrink-0">{customerPhone}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={cn(
-                  "text-xs font-medium",
-                  fbStatus === "needs_redo" ? "text-destructive" : "text-foreground"
-                )}>
-                  {fbStatus === "needs_redo" ? "Needs redo" : fbStatus === "needs_repair" ? "Needs repair" : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
-                </span>
-                <span className="text-xs text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
-              </div>
-              {feedback && (() => {
-                const { measurements, styles } = countFeedbackChanges(feedback);
-                return (
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">
-                    <MessageSquare className="w-3 h-3" />
-                    <span className="capitalize">{feedback.action?.replace(/_/g, " ")}</span>
-                    {measurements > 0 && (
-                      <span>{measurements} measurement{measurements === 1 ? "" : "s"}</span>
+              return (
+                <tr key={g.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20">
+                  <td className="py-2.5 px-4 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-sm">{g.garment_id || g.id.slice(0, 8)}</span>
+                      <GarmentTypeBadge type={g.garment_type} />
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 whitespace-nowrap">
+                    <div className="text-sm">{orderId}</div>
+                    {invoice != null && (
+                      <div className="text-sm text-muted-foreground">INV {invoice}</div>
                     )}
-                    {styles > 0 && (
-                      <span>{styles} style fix{styles === 1 ? "" : "es"}</span>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="text-sm font-medium truncate max-w-[180px]">{customerName}</div>
+                    {customerPhone && (
+                      <div className="text-sm text-muted-foreground">{customerPhone}</div>
                     )}
-                    {feedback.satisfaction_level && <span>Sat {feedback.satisfaction_level}/5</span>}
-                    {feedback.notes && <span className="max-w-[200px] truncate italic">"{feedback.notes}"</span>}
-                  </div>
-                );
-              })()}
-              {alsoNew && (
-                <button
-                  type="button"
-                  onClick={() => onGoToTab?.("new-orders")}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Also has new garments
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto shrink-0 h-8"
-                onClick={() => handleDispatchGarment(g)}
-                disabled={isDispatching}
-              >
-                {isDispatching ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <RotateCcw className="w-3 h-3 mr-1.5" />}
-                Dispatch
-              </Button>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+                  </td>
+                  <td className="py-2.5 px-4 whitespace-nowrap">
+                    <div className={cn(
+                      "text-sm font-medium",
+                      fbStatus === "needs_redo" ? "text-destructive" : "text-foreground"
+                    )}>
+                      {fbStatus === "needs_redo"
+                        ? "Needs redo"
+                        : fbStatus === "needs_repair"
+                          ? "Needs repair"
+                          : PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</div>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    {feedback ? (
+                      <div className="flex items-center gap-2 flex-wrap text-sm text-foreground/80 min-w-0">
+                        <MessageSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="capitalize">{feedback.action?.replace(/_/g, " ")}</span>
+                        {measurements > 0 && (
+                          <span className="text-muted-foreground">· {measurements} measurement{measurements === 1 ? "" : "s"}</span>
+                        )}
+                        {styles > 0 && (
+                          <span className="text-muted-foreground">· {styles} style fix{styles === 1 ? "" : "es"}</span>
+                        )}
+                        {feedback.satisfaction_level && (
+                          <span className="text-muted-foreground">· Sat {feedback.satisfaction_level}/5</span>
+                        )}
+                        {feedback.notes && (
+                          <span className="text-muted-foreground italic max-w-[180px] truncate">"{feedback.notes}"</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                    {alsoNew && (
+                      <button
+                        type="button"
+                        onClick={() => onGoToTab?.("new-orders")}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+                      >
+                        Also has new garments
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => handleDispatchGarment(g)}
+                      disabled={isDispatching}
+                    >
+                      {isDispatching ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <RotateCcw className="w-3 h-3 mr-1.5" />}
+                      Dispatch
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 
 // --- In Transit to Workshop Tab ---
+
+function InTransitOrderRow({ order }: { order: OrderWithDetails }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const garments = order.garments || [];
+  const lostCount = garments.filter(g => g.location === "lost_in_transit").length;
+  const transitCount = garments.filter(g => g.location === "transit_to_workshop").length;
+  const brovaCount = garments.filter(g => g.garment_type === "brova").length;
+  const finalCount = garments.filter(g => g.garment_type === "final").length;
+
+  return (
+    <>
+      <tr
+        className={cn(
+          "border-b border-border/30 cursor-pointer transition-colors",
+          isExpanded ? "bg-muted/30" : "hover:bg-muted/20"
+        )}
+        onClick={() => setIsExpanded(v => !v)}
+      >
+        <td className="py-2.5 px-4">
+          <div className="flex items-center gap-1.5">
+            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-300 shrink-0", isExpanded && "rotate-180")} />
+            <span className="font-medium text-sm">{order.id}</span>
+          </div>
+        </td>
+        <td className="py-2.5 px-4 text-sm text-muted-foreground">{(order as any).invoice_number ?? '—'}</td>
+        <td className="py-2.5 px-4">
+          <div className="font-medium text-sm">{order.customer?.name ?? 'Unknown'}</div>
+          {order.customer?.phone && <div className="text-sm text-muted-foreground">{order.customer.phone}</div>}
+        </td>
+        <td className="py-2.5 px-4">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base font-semibold tabular-nums text-foreground">{garments.length}</span>
+            <span className="text-sm text-muted-foreground">{garments.length === 1 ? "piece" : "pieces"}</span>
+          </div>
+          {(brovaCount > 0 || finalCount > 0) && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {brovaCount > 0 && <span>{brovaCount} brova</span>}
+              {brovaCount > 0 && finalCount > 0 && <span> · </span>}
+              {finalCount > 0 && <span>{finalCount} final</span>}
+            </div>
+          )}
+        </td>
+        <td className="py-2.5 px-4">
+          <div className="flex items-center gap-3 text-sm">
+            {transitCount > 0 && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Truck className="w-3.5 h-3.5" />
+                {transitCount} in transit
+              </span>
+            )}
+            {lostCount > 0 && (
+              <span className="flex items-center gap-1 text-destructive font-medium">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                {lostCount} lost
+              </span>
+            )}
+          </div>
+        </td>
+      </tr>
+
+      <tr className="border-0 hover:bg-transparent">
+        <td
+          colSpan={5}
+          className={cn(
+            "p-0 transition-colors",
+            isExpanded ? "bg-muted/10 border-b border-border/40" : "border-0"
+          )}
+        >
+          <div className={cn(
+            "grid transition-[grid-template-rows] duration-300 ease-out",
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          )}>
+            <div className="overflow-hidden">
+              <div className="p-3 sm:pl-10">
+                <h4 className="text-xs font-medium mb-2 text-muted-foreground">
+                  Garments ({garments.length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {garments.map(g => {
+                    const isLost = g.location === "lost_in_transit";
+                    return (
+                      <div key={g.id} className="p-2.5 bg-background rounded-md border text-sm">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-medium text-sm truncate">{g.garment_id}</span>
+                            <GarmentTypeBadge type={g.garment_type} />
+                          </div>
+                          {isLost ? (
+                            <span className="flex items-center gap-1 text-xs font-medium text-destructive shrink-0">
+                              <AlertTriangle className="w-3 h-3" />
+                              Lost
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                              <Truck className="w-3 h-3" />
+                              In transit
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                          <span>{tripLabel(g.trip_number, g.garment_type)}</span>
+                          <span>·</span>
+                          <span>{PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}</span>
+                          {(g as any).fabric?.name && (
+                            <>
+                              <span>·</span>
+                              <span className="truncate">{(g as any).fabric.name}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
+  );
+}
 
 function InTransitToWorkshopTab() {
   const queryClient = useQueryClient();
@@ -664,84 +767,24 @@ function InTransitToWorkshopTab() {
   }
 
   return (
-    <div className="space-y-4">
-      {orders.map((order) => {
-        const garments = order.garments || [];
-        const lostCount = garments.filter(g => g.location === "lost_in_transit").length;
-        const transitCount = garments.filter(g => g.location === "transit_to_workshop").length;
-        const brovaCount = garments.filter(g => g.garment_type === "brova").length;
-        const finalCount = garments.filter(g => g.garment_type === "final").length;
-        const alterationCount = garments.filter(g => g.garment_type === "alteration").length;
-
-        const rightBadges = (
-          <div className="flex items-center gap-3 text-xs">
-            {transitCount > 0 && (
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Truck className="w-3 h-3" />
-                {transitCount} in transit
-              </span>
-            )}
-            {lostCount > 0 && (
-              <span className="flex items-center gap-1 text-destructive font-medium">
-                <AlertTriangle className="w-3 h-3" />
-                {lostCount} lost
-              </span>
-            )}
-          </div>
-        );
-
-        return (
-          <OrderCardShell
-            key={order.id}
-            orderId={order.id}
-            invoiceNumber={(order as any).invoice_number}
-            customerName={order.customer?.name}
-            customerPhone={order.customer?.phone}
-            orderDate={order.order_date}
-            pieceCount={garments.length}
-            brovaCount={brovaCount}
-            finalCount={finalCount}
-            alterationCount={alterationCount}
-            rightBadges={rightBadges}
-          >
-            <div className="divide-y divide-border/30">
-              {garments.map((g) => {
-                const isLost = g.location === "lost_in_transit";
-                return (
-                  <GarmentRow
-                    key={g.id}
-                    garmentId={g.garment_id}
-                    type={g.garment_type}
-                    badges={
-                      <>
-                        <span className="text-xs text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}
-                        </span>
-                        <FabricChip source={g.fabric_source} name={(g as any).fabric?.name} />
-                      </>
-                    }
-                    action={
-                      isLost ? (
-                        <span className="flex items-center gap-1 text-xs font-medium text-destructive">
-                          <AlertTriangle className="w-3 h-3" />
-                          Lost in transit
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Truck className="w-3 h-3" />
-                          In transit
-                        </span>
-                      )
-                    }
-                  />
-                );
-              })}
-            </div>
-          </OrderCardShell>
-        );
-      })}
-    </div>
+    <Card className="overflow-hidden rounded-lg">
+      <CardContent className="p-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b bg-muted/20">
+              <th className="text-left py-2.5 px-4">Order</th>
+              <th className="text-left py-2.5 px-4">Invoice</th>
+              <th className="text-left py-2.5 px-4">Customer</th>
+              <th className="text-left py-2.5 px-4">Pieces</th>
+              <th className="text-left py-2.5 px-4">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => <InTransitOrderRow key={order.id} order={order} />)}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -909,11 +952,17 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
           {group.customerPhone && <div className="text-[10px] text-muted-foreground">{group.customerPhone}</div>}
         </td>
         <td className="py-2.5 px-4">
-          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-            <span>{group.rows.length} pcs</span>
-            {brovaCount > 0 && <span>· {brovaCount} brova</span>}
-            {finalCount > 0 && <span>· {finalCount} final</span>}
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base font-semibold tabular-nums text-foreground">{group.rows.length}</span>
+            <span className="text-sm text-muted-foreground">{group.rows.length === 1 ? "piece" : "pieces"}</span>
           </div>
+          {(brovaCount > 0 || finalCount > 0) && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {brovaCount > 0 && <span>{brovaCount} brova</span>}
+              {brovaCount > 0 && finalCount > 0 && <span> · </span>}
+              {finalCount > 0 && <span>{finalCount} final</span>}
+            </div>
+          )}
         </td>
         <td className="py-2.5 px-4 whitespace-nowrap">
           <div className="font-medium text-xs">{lastDispatch.toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</div>
@@ -1064,7 +1113,7 @@ function DispatchHistoryTab() {
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs font-medium text-muted-foreground border-b bg-muted/20">
+                <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b bg-muted/20">
                   <th className="text-left py-2.5 px-4">Order</th>
                   <th className="text-left py-2.5 px-4">Invoice</th>
                   <th className="text-left py-2.5 px-4">Customer</th>
@@ -1083,7 +1132,7 @@ function DispatchHistoryTab() {
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs font-medium text-muted-foreground border-b bg-muted/20">
+                <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b bg-muted/20">
                   <th className="text-left py-2.5 px-4">Date</th>
                   <th className="text-left py-2.5 px-4">Order</th>
                   <th className="text-left py-2.5 px-4">Invoice</th>
@@ -1244,10 +1293,10 @@ export default function DispatchOrderPage() {
 
   return (
     <ErrorBoundary showDetails={true}>
-      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
+      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-5">
         <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-border pb-5">
           <div className="space-y-1">
-            <h1 className="text-xl text-foreground">
+            <h1 className="text-xl font-semibold text-foreground">
               Dispatch Center
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -1258,7 +1307,8 @@ export default function DispatchOrderPage() {
             {activeTab === "new-orders" && (
               <Button
                 size="sm"
-                className="h-10"
+                variant="outline"
+                className="h-9"
                 onClick={handleBulkDispatch}
                 disabled={orders.length === 0 || isLoading || isBulkUpdating}
               >
@@ -1270,7 +1320,7 @@ export default function DispatchOrderPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-10"
+                className="h-9"
                 onClick={() => bulkRedispatchRef.current?.()}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
@@ -1280,93 +1330,176 @@ export default function DispatchOrderPage() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-auto p-1 rounded-md w-full md:w-auto">
-            <TabsTrigger
-              value="new-orders"
-              className="text-sm font-medium px-5 py-2 rounded-sm"
-            >
-              New orders
-              {orders.length > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {orders.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="return-workshop"
-              className="text-sm font-medium px-5 py-2 rounded-sm"
-            >
-              Return to workshop
-              {returnCount > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {returnCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
+        <TabsPrimitive.Root
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex flex-col md:flex-row md:gap-6"
+        >
+          <DispatchTabsList value={activeTab}>
+            <DispatchTab value="new-orders" label="New orders" count={orders.length} />
+            <DispatchTab value="return-workshop" label="Return to workshop" count={returnCount} />
+            <DispatchTab
               value="in-transit"
-              className="text-sm font-medium px-5 py-2 rounded-sm"
-            >
-              In transit
-              {transitGarmentCount > 0 && (
-                <span className={cn(
-                  "ml-2 text-xs",
-                  lostGarmentCount > 0 ? "text-destructive font-medium" : "text-muted-foreground"
-                )}>
-                  {transitGarmentCount}{lostGarmentCount > 0 ? ` (${lostGarmentCount} lost)` : ""}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="history"
-              className="text-sm font-medium px-5 py-2 rounded-sm"
-            >
-              <History className="w-3 h-3 mr-1.5" />
-              History
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="new-orders" className="mt-6">
-            {isLoading ? (
-              <TabLoading count={4} />
-            ) : isError ? (
-              <TabError error={error} onRetry={() => queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })} />
-            ) : orders.length === 0 ? (
-              <TabEmptyState icon={PackageCheck} title="Queue is empty" subtitle="No pending dispatches at this time" />
-            ) : (
-              <div className="space-y-4">
-                {orders.map((order) => (
-                  <OrderListItem
-                    key={order.id}
-                    order={order}
-                    onDispatch={handleDispatch}
-                    isUpdating={updatingOrderIds.has(order.id)}
-                    hasReturning={returningOrderIds.has(order.id)}
-                    onGoToTab={setActiveTab}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="return-workshop" className="mt-6">
-            <ReturnToWorkshopTab
-              bulkDispatchRef={bulkRedispatchRef}
-              newOrderIds={newOrderIds}
-              onGoToTab={setActiveTab}
+              label="In transit"
+              count={transitGarmentCount}
+              alertCount={lostGarmentCount}
             />
-          </TabsContent>
+            <DispatchTab value="history" label="History" icon={History} />
+          </DispatchTabsList>
 
-          <TabsContent value="in-transit" className="mt-6">
-            <InTransitToWorkshopTab />
-          </TabsContent>
+          <div className="flex-1 min-w-0 mt-5 md:mt-0">
+            <TabsPrimitive.Content value="new-orders" className="outline-none">
+              {isLoading ? (
+                <TabLoading count={4} />
+              ) : isError ? (
+                <TabError error={error} onRetry={() => queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] })} />
+              ) : orders.length === 0 ? (
+                <TabEmptyState icon={PackageCheck} title="Queue is empty" subtitle="No pending dispatches at this time" />
+              ) : (
+                <div className="space-y-4">
+                  {orders.map((order) => (
+                    <OrderListItem
+                      key={order.id}
+                      order={order}
+                      onDispatch={handleDispatch}
+                      isUpdating={updatingOrderIds.has(order.id)}
+                      hasReturning={returningOrderIds.has(order.id)}
+                      onGoToTab={setActiveTab}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsPrimitive.Content>
 
-          <TabsContent value="history" className="mt-6">
-            <DispatchHistoryTab />
-          </TabsContent>
-        </Tabs>
+            <TabsPrimitive.Content value="return-workshop" className="outline-none">
+              <ReturnToWorkshopTab
+                bulkDispatchRef={bulkRedispatchRef}
+                newOrderIds={newOrderIds}
+                onGoToTab={setActiveTab}
+              />
+            </TabsPrimitive.Content>
+
+            <TabsPrimitive.Content value="in-transit" className="outline-none">
+              <InTransitToWorkshopTab />
+            </TabsPrimitive.Content>
+
+            <TabsPrimitive.Content value="history" className="outline-none">
+              <DispatchHistoryTab />
+            </TabsPrimitive.Content>
+          </div>
+        </TabsPrimitive.Root>
       </div>
     </ErrorBoundary>
+  );
+}
+
+// Underline-style tabs with a single sliding indicator. Horizontal underline
+// on mobile, vertical left bar on desktop. The indicator is measured against
+// the active trigger and animates between positions.
+function DispatchTabsList({ value, children }: { value: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState<
+    | { top: number; left: number; width: number; height: number; vertical: boolean }
+    | null
+  >(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const list = ref.current;
+      if (!list) return;
+      const active = list.querySelector<HTMLElement>('[data-state="active"]');
+      if (!active) {
+        setIndicator(null);
+        return;
+      }
+      const vertical = window.matchMedia('(min-width: 768px)').matches;
+      const listRect = list.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      setIndicator(
+        vertical
+          ? {
+              vertical: true,
+              top: activeRect.top - listRect.top,
+              left: 0,
+              width: 2,
+              height: activeRect.height,
+            }
+          : {
+              vertical: false,
+              top: 0,
+              left: activeRect.left - listRect.left + list.scrollLeft,
+              width: activeRect.width,
+              height: 2,
+            }
+      );
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const ro = new ResizeObserver(measure);
+    if (ref.current) ro.observe(ref.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro.disconnect();
+    };
+  }, [value]);
+
+  return (
+    <TabsPrimitive.List
+      ref={ref}
+      className="relative flex md:flex-col md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-border overflow-x-auto md:overflow-visible"
+    >
+      {indicator && (
+        <div
+          className="absolute bg-primary transition-all duration-250 ease-out pointer-events-none"
+          style={{
+            top: indicator.vertical ? indicator.top : 'auto',
+            bottom: indicator.vertical ? 'auto' : -1,
+            left: indicator.left,
+            width: indicator.width,
+            height: indicator.height,
+          }}
+        />
+      )}
+      {children}
+    </TabsPrimitive.List>
+  );
+}
+
+function DispatchTab({
+  value,
+  label,
+  count,
+  alertCount,
+  icon: Icon,
+}: {
+  value: string;
+  label: string;
+  count?: number;
+  alertCount?: number;
+  icon?: React.ElementType;
+}) {
+  const hasAlert = alertCount != null && alertCount > 0;
+  return (
+    <TabsPrimitive.Trigger
+      value={value}
+      className={cn(
+        "group inline-flex items-center justify-between gap-3 px-4 py-2.5 text-[15px] font-medium whitespace-nowrap transition-colors outline-none cursor-pointer",
+        "text-muted-foreground hover:text-foreground",
+        "data-[state=active]:text-foreground"
+      )}
+    >
+      <span className="flex items-center gap-1.5">
+        {Icon && <Icon className="w-4 h-4" />}
+        {label}
+      </span>
+      {count != null && count > 0 && (
+        <span className={cn(
+          "text-sm tabular-nums",
+          hasAlert ? "text-destructive font-medium" : "text-muted-foreground group-data-[state=active]:text-foreground/80"
+        )}>
+          {count}{hasAlert ? ` (${alertCount})` : ""}
+        </span>
+      )}
+    </TabsPrimitive.Trigger>
   );
 }

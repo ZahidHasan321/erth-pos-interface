@@ -19,9 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/table";
-import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ClipboardCheck, Settings2, Truck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { cn, clickableProps } from "@/lib/utils";
+import { cn, clickableProps, getKuwaitMidnight, TIMEZONE } from "@/lib/utils";
 import { isAlteration as isAlterationTrip, getAlterationNumber } from "@repo/database";
 
 import type { OrderRow } from "./types";
@@ -34,12 +34,325 @@ import {
   SelectValue,
 } from "@repo/ui/select";
 
+const dateFormatter = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  timeZone: TIMEZONE,
+});
+
+function fmtDate(value?: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return dateFormatter.format(parsed);
+}
+
+function daysOverdue(deliveryDate?: string | null): number {
+  if (!deliveryDate) return 0;
+  const delivery = getKuwaitMidnight(new Date(deliveryDate));
+  const today = getKuwaitMidnight();
+  const diff = Math.ceil((today.getTime() - delivery.getTime()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 0;
+}
+
+function statusBadge(row: OrderRow): { label: string; className: string } {
+  switch (row.showroomStatus.label) {
+    case "alteration_in":
+      return { label: "Alteration (In)", className: "bg-blue-100 text-blue-700 border-blue-200" };
+    case "alteration_out":
+      return { label: "Alteration (Out)", className: "bg-purple-100 text-purple-700 border-purple-200" };
+    case "brova_trial":
+      return { label: "Brova Trial", className: "bg-amber-100 text-amber-700 border-amber-200" };
+    case "needs_action":
+      return { label: "Needs Action", className: "bg-red-100 text-red-700 border-red-200" };
+    case "ready_for_pickup":
+      return { label: "Ready for Pickup", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+    default:
+      return { label: row.fatouraStage || "—", className: "bg-muted text-muted-foreground border-border" };
+  }
+}
+
+// Expanded garments grid — shared between desktop table expansion and mobile list.
+function GarmentList({ row }: { row: OrderRow }) {
+  return (
+    <>
+      <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
+        Garments
+        <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{row.garmentsCount}</span>
+      </h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+        {row.garments
+          .filter((g: any) => {
+            if (row.showroomStatus.label === "ready_for_pickup") return true;
+            return g.locationKey === "shop";
+          })
+          .map((garment) => {
+            const tripNum = (garment.garment as any).trip_number ?? 1;
+            const garmentType = (garment.garment as any).garment_type as string | null;
+            const isAlterationReturn = isAlterationTrip(tripNum);
+            const alterationNum = getAlterationNumber(tripNum);
+            const isAlterationGarment = garmentType === "alteration";
+            const showAsAlteration = isAlterationReturn || isAlterationGarment;
+            const badgeLabel = isAlterationReturn
+              ? `Alt #${alterationNum}`
+              : isAlterationGarment
+                ? "Alteration"
+                : garment.isBrova
+                  ? "Brova"
+                  : "Final";
+            return (
+              <div
+                key={garment.garmentRecordId}
+                className="p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm"
+              >
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="font-mono font-medium text-xs text-muted-foreground">{garment.garmentId}</span>
+                  <div className="flex items-center gap-1">
+                    {isAlterationReturn && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        className="h-9 w-9 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Link
+                          to="/$main/orders/order-management/feedback/$orderId"
+                          params={{ orderId: String(row.order.id) }}
+                          search={{ garmentId: garment.garmentRecordId }}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Alteration feedback"
+                        >
+                          <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    )}
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded border px-1 py-0 text-xs font-bold",
+                        showAsAlteration
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : garment.isBrova
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      )}
+                    >
+                      {badgeLabel}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-xs uppercase font-bold">Stage</span>
+                    <span className="font-bold text-xs bg-muted px-1.5 py-0.5 rounded">{garment.pieceStage}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-xs uppercase font-bold">Location</span>
+                    <span
+                      className={cn(
+                        "font-bold text-xs px-1.5 py-0.5 rounded",
+                        garment.locationKey === "shop" ? "bg-emerald-50 text-emerald-700" : "bg-primary/5 text-primary",
+                      )}
+                    >
+                      {garment.locationLabel}
+                    </span>
+                  </div>
+                  <div className="pt-1 mt-1 border-t border-border/40">
+                    <span className="font-bold text-xs text-primary leading-tight">{garment.style || "Standard Kuwaiti Style"}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </>
+  );
+}
+
+function MobileOrderRow({
+  row,
+  isExpanded,
+  isSelected,
+  onToggle,
+  onSelect,
+}: {
+  row: OrderRow;
+  isExpanded: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+  onSelect: () => void;
+}) {
+  const linkedOrderId = (row.order as any).linked_order_id;
+  const overdue = daysOverdue(row.deliveryDate);
+  const balance = row.balance || 0;
+  const status = statusBadge(row);
+  const showFeedback = row.showroomStatus.hasPhysicalItems;
+  const showDispatch = row.showroomStatus.label === "needs_action";
+  const garments = (row.order as any).garments || [];
+  const atShop = garments.filter(
+    (g: any) => g.location === "shop" && g.piece_stage !== "completed",
+  ).length;
+
+  return (
+    <li
+      className={cn(
+        "border-b border-border/40 transition-colors",
+        linkedOrderId && "border-l-2 border-l-blue-300/70 bg-blue-50/30",
+        isSelected && "border-l-2 border-l-primary bg-primary/10",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        className="w-full text-left px-3 py-2.5 flex flex-col gap-1 active:bg-muted/30"
+      >
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-sm tracking-tighter">#{row.orderId}</span>
+          {row.fatoura && (
+            <span className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">
+              INV {row.fatoura}
+            </span>
+          )}
+          {linkedOrderId && (
+            <span className="text-xs text-blue-500 font-bold">↔#{linkedOrderId}</span>
+          )}
+          <span
+            className={cn(
+              "ml-auto inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-bold uppercase tracking-tight whitespace-nowrap",
+              status.className,
+            )}
+          >
+            {status.label}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "h-4 w-4 text-muted-foreground/60 transition-transform shrink-0",
+              isExpanded && "rotate-180 text-primary",
+            )}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-bold uppercase tracking-tight truncate">
+            {row.customerNickName || row.customerName}
+          </span>
+          <span className="font-mono text-muted-foreground">{row.mobileNumber}</span>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums">
+          <span className="font-bold">
+            <span className="text-muted-foreground/70 uppercase mr-1">at shop</span>
+            {atShop}/{row.garmentsCount}
+          </span>
+          <span
+            className={cn(
+              "font-bold",
+              balance > 0 ? "text-rose-600" : "text-emerald-600",
+            )}
+          >
+            {balance > 0 ? `Bal KD ${balance.toFixed(2)}` : "Paid"}
+          </span>
+          {row.deliveryDate && (
+            <span
+              className={cn(
+                "font-bold",
+                overdue > 0 ? "text-rose-600" : "text-muted-foreground",
+              )}
+            >
+              <span className="text-muted-foreground/70 uppercase mr-1">del</span>
+              {fmtDate(row.deliveryDate)}
+              {overdue > 0 && <span className="ml-1">+{overdue}d</span>}
+            </span>
+          )}
+          {row.homeDelivery && (
+            <span className="inline-flex items-center gap-0.5 text-blue-600 font-bold">
+              <Truck className="size-3" aria-hidden="true" /> Home
+            </span>
+          )}
+        </div>
+      </button>
+
+      <div className="flex items-center gap-2 px-3 pb-3">
+        <Button
+          variant="outline"
+          aria-label="Order options"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+          className="flex-1 h-11 text-xs font-bold uppercase tracking-wider bg-card hover:bg-primary/5 hover:text-primary hover:border-primary/30"
+        >
+          <Settings2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
+          Manage
+        </Button>
+        {showFeedback && (
+          <Button
+            variant="outline"
+            asChild
+            className={cn(
+              "flex-1 h-11 text-xs font-bold uppercase tracking-wider bg-card",
+              row.showroomStatus.label === "brova_trial"
+                ? "text-amber-700 border-amber-200 hover:bg-amber-50"
+                : row.showroomStatus.label === "ready_for_pickup"
+                  ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  : "text-primary border-primary/20 hover:bg-primary/5",
+            )}
+          >
+            <Link
+              to="/$main/orders/order-management/feedback/$orderId"
+              params={{ orderId: String(row.order.id) }}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Feedback"
+            >
+              <ClipboardCheck className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              Feedback
+            </Link>
+          </Button>
+        )}
+        {showDispatch && (
+          <Button
+            variant="outline"
+            asChild
+            className="flex-1 h-11 text-xs font-bold uppercase tracking-wider bg-card text-red-700 border-red-200 hover:bg-red-50"
+          >
+            <Link
+              to="/$main/orders/order-management/dispatch"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Send back to workshop"
+            >
+              <Truck className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              Send Back
+            </Link>
+          </Button>
+        )}
+      </div>
+
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="px-3 pb-3 bg-muted/10 border-t border-border/40">
+            <div className="pt-2">
+              <GarmentList row={row} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 type OrderDataTableProps = {
   columns: ColumnDef<OrderRow, unknown>[];
   data: OrderRow[];
   rowSelection: RowSelectionState;
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
   selectedOrderId?: number;
+  onSelectForManagement?: (row: OrderRow) => void;
   // Server-driven pagination
   pageIndex: number;                       // 0-indexed
   pageSize: number;
@@ -55,6 +368,7 @@ export function OrderDataTable({
   rowSelection,
   onRowSelectionChange,
   selectedOrderId,
+  onSelectForManagement,
   pageIndex,
   pageSize,
   totalCount,
@@ -136,8 +450,26 @@ export function OrderDataTable({
 
   return (
     <div className="space-y-4">
-      {/* Table */}
-      <div className="rounded-xl border border-border shadow-sm overflow-x-auto bg-card py-0 gap-0">
+      <ul className="lg:hidden rounded-xl border border-border bg-card overflow-hidden divide-y divide-border/40">
+        {table.getRowModel().rows?.length ? (
+          table.getRowModel().rows.map((row) => (
+            <MobileOrderRow
+              key={row.id}
+              row={row.original}
+              isExpanded={row.getIsExpanded()}
+              isSelected={!!selectedOrderId && row.original.order.id === selectedOrderId}
+              onToggle={() => row.toggleExpanded()}
+              onSelect={() => onSelectForManagement?.(row.original)}
+            />
+          ))
+        ) : (
+          <li className="px-4 py-12 text-center text-sm text-muted-foreground">
+            No orders found matching filters.
+          </li>
+        )}
+      </ul>
+
+      <div className="hidden lg:block rounded-xl border border-border shadow-sm overflow-x-auto bg-card py-0 gap-0">
         <Table className="min-w-[850px] table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -198,92 +530,7 @@ export function OrderDataTable({
                       >
                         <div className="overflow-hidden">
                           <div className="p-3 sm:pl-10">
-                          <h4 className="text-xs font-bold mb-2 text-foreground flex items-center gap-2">
-                            Garments
-                            <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-black">{row.original.garmentsCount}</span>
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                            {row.original.garments
-                              .filter((g: any) => {
-                                if (row.original.showroomStatus.label === "ready_for_pickup") return true;
-                                return g.locationKey === 'shop';
-                              })
-                              .map((garment) => {
-                                const tripNum = (garment.garment as any).trip_number ?? 1;
-                                const garmentType = (garment.garment as any).garment_type as string | null;
-                                const isAlterationReturn = isAlterationTrip(tripNum);
-                                const alterationNum = getAlterationNumber(tripNum);
-                                const isAlterationGarment = garmentType === "alteration";
-                                const showAsAlteration = isAlterationReturn || isAlterationGarment;
-                                const badgeLabel = isAlterationReturn
-                                  ? `Alt #${alterationNum}`
-                                  : isAlterationGarment
-                                    ? "Alteration"
-                                    : garment.isBrova
-                                      ? "Brova"
-                                      : "Final";
-                                return (
-                                  <div
-                                    key={garment.garmentRecordId}
-                                    className="p-2 bg-background rounded-lg border border-border/60 text-sm shadow-sm"
-                                  >
-                                    <div className="flex justify-between items-center mb-1.5">
-                                      <span className="font-mono font-medium text-xs text-muted-foreground">{garment.garmentId}</span>
-                                      <div className="flex items-center gap-1">
-                                        {isAlterationReturn && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            asChild
-                                            className="h-9 w-9 p-0 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                          >
-                                            <Link
-                                              to="/$main/orders/order-management/feedback/$orderId"
-                                              params={{ orderId: String(row.original.order.id) }}
-                                              search={{ garmentId: garment.garmentRecordId }}
-                                              onClick={(e) => e.stopPropagation()}
-                                              aria-label="Alteration feedback"
-                                            >
-                                              <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
-                                            </Link>
-                                          </Button>
-                                        )}
-                                        <span
-                                          className={cn(
-                                            "inline-flex items-center rounded border px-1 py-0 text-xs font-bold",
-                                            showAsAlteration
-                                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                                              : garment.isBrova
-                                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                          )}
-                                        >
-                                          {badgeLabel}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground text-xs uppercase font-bold">Stage</span>
-                                        <span className="font-bold text-xs bg-muted px-1.5 py-0.5 rounded">{garment.pieceStage}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground text-xs uppercase font-bold">Location</span>
-                                        <span className={cn(
-                                          "font-bold text-xs px-1.5 py-0.5 rounded",
-                                          garment.locationKey === 'shop' ? "bg-emerald-50 text-emerald-700" : "bg-primary/5 text-primary"
-                                        )}>
-                                          {garment.locationLabel}
-                                        </span>
-                                      </div>
-                                      <div className="pt-1 mt-1 border-t border-border/40">
-                                        <span className="font-bold text-xs text-primary leading-tight">{garment.style || "Standard Kuwaiti Style"}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                          </div>
+                            <GarmentList row={row.original} />
                           </div>
                         </div>
                       </div>

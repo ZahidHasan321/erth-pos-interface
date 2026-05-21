@@ -145,8 +145,8 @@ function ParkingGarmentRow({
         </TableCell>
       )}
       <TableCell className="px-3 py-3 text-sm">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-base tracking-tight">{garment.customer_name ?? "—"}</span>
+        <div className="flex flex-col gap-0.5 max-w-[180px]">
+          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "—"}</span>
           {garment.customer_mobile && (
             <span className="text-sm font-mono text-muted-foreground">
               {garment.customer_mobile}
@@ -820,8 +820,8 @@ function ParkingPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-base tracking-tight">
+                            <div className="flex flex-col gap-0.5 max-w-[180px]">
+                              <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>
                                 {g.customer_name ?? "—"}
                               </span>
                               {g.customer_mobile && (

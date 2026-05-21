@@ -350,8 +350,8 @@ function TerminalHistoryPage() {
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-3 text-sm">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-base tracking-tight">{g.customer_name ?? "—"}</span>
+                      <div className="flex flex-col gap-0.5 max-w-[180px]">
+                        <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>{g.customer_name ?? "—"}</span>
                         {g.customer_mobile && (
                           <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
                         )}

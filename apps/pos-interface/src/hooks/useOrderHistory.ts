@@ -17,6 +17,8 @@ export type OrderHistoryItem = {
   paid_amount: number;
   balance: number;
   fabric_count: number;
+  brova_count: number;
+  final_count: number;
   shelf_item_count: number;
   order_phase?: string;
   // Pricing breakdown
@@ -69,7 +71,7 @@ export function useOrderHistory({
           workOrder:work_orders!order_id${phaseFilter !== 'all' ? '!inner' : ''}(*),
           alterationOrder:alteration_orders!order_id(*),
           customer:customers!inner(name, phone, nick_name),
-          garments:garments(id),
+          garments:garments(id, garment_type),
           shelf_items:order_shelf_items(id)
         `, { count: 'exact' });
 
@@ -167,6 +169,8 @@ export function useOrderHistory({
           paid_amount: paid,
           balance: total - paid,
           fabric_count: mergedOrder.garments?.length || 0,
+          brova_count: (mergedOrder.garments || []).filter((g: any) => g.garment_type === "brova").length,
+          final_count: (mergedOrder.garments || []).filter((g: any) => g.garment_type === "final").length,
           shelf_item_count: mergedOrder.shelf_items?.length || 0,
           order_phase: mergedOrder.order_phase,
           charges: {
