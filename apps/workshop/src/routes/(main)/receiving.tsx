@@ -12,9 +12,10 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
-import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
+import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
+import { isAlteration, getAlterationNumber } from "@repo/database";
 import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -27,27 +28,16 @@ export const Route = createFileRoute("/(main)/receiving")({
   head: () => ({ meta: [{ title: "Receiving" }] }),
 });
 
-// ── Alt badge (trip - 1 for brova returns) ──────────────────────────────────
+// ── Alteration-out badge (number only present on trip 2+) ───────────────────
 
-function AltBadge({ trip }: { trip: number }) {
-  const alt = trip - 1;
+function AlterationOutBadge({ tripNumber }: { tripNumber: number | null | undefined }) {
+  const altNum = getAlterationNumber(tripNumber);
   return (
     <Badge
       variant="outline"
       className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
     >
-      Alt {alt}
-    </Badge>
-  );
-}
-
-function AlterationOutBadge() {
-  return (
-    <Badge
-      variant="outline"
-      className="border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)] font-medium text-xs"
-    >
-      Alteration out
+      {altNum != null ? `Alteration out ${altNum}` : "Alteration out"}
     </Badge>
   );
 }
@@ -118,8 +108,8 @@ function GarmentRow({
       {showAlt && (
         <TableCell className="px-3 py-3">
           <div className="flex flex-col gap-1 items-start">
-            {showAlterationOut && <AlterationOutBadge />}
-            {(garment.trip_number ?? 1) >= 2 && <AltBadge trip={garment.trip_number ?? 1} />}
+            {showAlterationOut && <AlterationOutBadge tripNumber={garment.trip_number} />}
+            <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
           </div>
         </TableCell>
       )}
@@ -412,7 +402,7 @@ function ReceivingPage() {
   const finalsInitial = initialTrip.filter((g) => !g.express && g.garment_type === "final");
 
   // Work order alterations: brova/final returning (trip >= 2).
-  const alterations = workOrderGarments.filter((g) => (g.trip_number ?? 1) >= 2);
+  const alterations = workOrderGarments.filter((g) => isAlteration(g.trip_number, g.garment_type));
 
   // Group garments by order, sort groups by delivery date, brovas before finals, flatten
   const groupByOrderSorted = (garments: WorkshopGarment[]): WorkshopGarment[] => {

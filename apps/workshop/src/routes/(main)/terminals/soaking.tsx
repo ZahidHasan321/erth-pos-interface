@@ -41,6 +41,7 @@ function SoakTerminal() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [actingId, setActingId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -132,6 +133,22 @@ function SoakTerminal() {
     });
   };
 
+  const handleRowStart = (id: string) => {
+    setActingId(id);
+    startMut.mutate([id], {
+      onError: (err) => toast.error(`Failed to start soak: ${err?.message ?? "Unknown error"}`),
+      onSettled: () => setActingId((cur) => (cur === id ? null : cur)),
+    });
+  };
+
+  const handleRowDone = (id: string) => {
+    setActingId(id);
+    doneMut.mutate([id], {
+      onError: (err) => toast.error(`Failed to mark done: ${err?.message ?? "Unknown error"}`),
+      onSettled: () => setActingId((cur) => (cur === id ? null : cur)),
+    });
+  };
+
   const total = garments.length;
 
   return (
@@ -180,23 +197,27 @@ function SoakTerminal() {
       ) : (
         <div className="space-y-8">
           <SoakSection
-            title="Pending"
-            subtitle="Not yet in the bath. Select and hit Start Soak to stamp a shared start time."
-            garments={pending}
-            sel={sel}
-            onToggle={toggle}
-            onToggleAll={(on) => setSection(pending, on)}
-            mode="pending"
-          />
-          <SoakSection
             title="In progress"
-            subtitle="Soak started. Select and hit Mark Done when the bath is finished."
+            subtitle="Soak started. Hit Done on a row, or select several and use Mark Done."
             garments={inProgress}
             sel={sel}
             onToggle={toggle}
             onToggleAll={(on) => setSection(inProgress, on)}
             mode="started"
             now={now}
+            onRowAction={handleRowDone}
+            actingId={actingId}
+          />
+          <SoakSection
+            title="Pending"
+            subtitle="Not yet in the bath. Hit Start on a row, or select several to start together."
+            garments={pending}
+            sel={sel}
+            onToggle={toggle}
+            onToggleAll={(on) => setSection(pending, on)}
+            mode="pending"
+            onRowAction={handleRowStart}
+            actingId={actingId}
           />
         </div>
       )}
@@ -204,7 +225,7 @@ function SoakTerminal() {
       <BatchActionBar count={sel.size} onClear={() => setSel(new Set())}>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={handleStart}
           disabled={selPendingIds.length === 0 || startMut.isPending}
         >
@@ -241,6 +262,8 @@ function SoakSection({
   onToggleAll,
   mode,
   now,
+  onRowAction,
+  actingId,
 }: {
   title: string;
   subtitle: string;
@@ -250,6 +273,8 @@ function SoakSection({
   onToggleAll: (on: boolean) => void;
   mode: "pending" | "started";
   now?: number;
+  onRowAction: (id: string) => void;
+  actingId: string | null;
 }) {
   const allSelected = garments.length > 0 && garments.every((g) => sel.has(g.id));
   const someSelected = garments.some((g) => sel.has(g.id));
@@ -298,6 +323,7 @@ function SoakSection({
                 {mode === "started" && (
                   <TableHead className="w-[140px]">Started</TableHead>
                 )}
+                <TableHead className="w-[100px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -374,6 +400,23 @@ function SoakSection({
                       />
                     </TableCell>
                   )}
+                  <TableCell className="px-3 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant={mode === "pending" ? "outline" : "default"}
+                      onClick={() => onRowAction(g.id)}
+                      disabled={actingId === g.id}
+                    >
+                      {actingId === g.id ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : mode === "pending" ? (
+                        <Play className="w-3.5 h-3.5 mr-1" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      {mode === "pending" ? "Start" : "Done"}
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

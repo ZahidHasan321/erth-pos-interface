@@ -93,7 +93,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> =>
         work_orders!work_orders_order_id_orders_id_fk ( invoice_number )
       ),
       garment_feedback!inner (
-        id, action, distribution, satisfaction_level, notes, measurement_diffs, trip_number, created_at
+        id, action, distribution, satisfaction_level, notes, measurement_diffs, options_checklist, trip_number, created_at
       )
     `)
     .eq('location', 'shop')

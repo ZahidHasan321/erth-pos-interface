@@ -136,6 +136,11 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 
 **QC fail:** **no trip increment.** Garment bounced to the earliest failed rework stage; a breadcrumb routes it back to QC; the attempt is logged in the trip's `qc_attempts`. Labeled `alt_p`. No max-attempt cap (accepted).
 
+**Feedback updates the target spec, not just the verdict.** A feedback submission (brova trial or final collection) carries optional measurement deltas (each tagged with a reason) and style/option changes alongside the action. These are applied to the garment's own spec at submit time, so every downstream path picks them up: the same row that loops back on repair, the cloned row on a Reject-Redo replacement, and the parked finals when later released.
+
+- **Measurement reason gates propagation.** `customer_request` writes a new measurement row and repoints `measurement_id`; `workshop_error` / `shop_error` are audit-only — the target is unchanged because the spec was right and the executor erred.
+- **Brova feedback fans out to siblings.** Style/measurement changes from a brova's feedback also apply to every sibling garment on the order sharing that brova's `style_id` / `measurement_id` (unless the user scopes to "this garment only"). This is what lets parked finals inherit the brova's trial adjustments on release.
+
 ### 2.6 Cancellation / refund
 
 Per-component (fabric/stitching/style/express/soaking) or shelf-qty refund, taken by the cashier. Records a `refund` payment_transaction (reason required); `orders.paid` drops via the summing trigger. Order stays `confirmed`. Affected garments get `refunded_*` flags. A **full garment refund → `piece_stage: discarded`** and offers optional fabric-restock (return uncut fabric to shop stock, default off). A **full-order cancel** sets `checkout_status: cancelled` — garments are NOT auto-discarded (in-progress workshop work may continue / orphan — accepted).
@@ -325,6 +330,16 @@ pnpm --filter @repo/database test:workflow  # Docker-backed spec-as-oracle lifec
 
 - Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (in `apps/pos-interface/.env`).
 - Database: `DATABASE_URL`; optional `TRANSACTION_URL` (pooler, port 6543).
+
+---
+
+## 10. Open questions (pending client decisions)
+
+Behaviors the code currently implements one way but the spec has not yet locked in. Each item needs a client decision before code or spec is changed. Do not "fix" these unilaterally — surface them, get a ruling, update the spec first, then the code.
+
+- **Brova feedback fan-out is asymmetric across siblings with partially-shared keys.** Today (§2.5) propagation is two independent matches: measurement changes fan out to every sibling sharing `measurement_id`; style changes fan out to every sibling sharing `style_id`. So for two brovas B1 and B2 that share `measurement_id` but have different `style_id`s, a feedback submission on B1 that changes BOTH measurements (customer_request) and style silently lands B2 in a hybrid state: B2 inherits the new measurement row but keeps its own style and gets none of B1's style edits.
+  - **Why this is a problem:** (a) B2's target measurements shift without B2 ever being trialed — if the measurement edit was actually style-coupled (e.g. "chest sits tight *because of this collar*"), B2 inherits a body change that may not be right for its own silhouette; (b) the UI's "This garment only" escape hatch is measurement-only, so there is no way to scope a style edit, and the default is propagate-silently; (c) if B2 is already past trial (cut/sewn to the old measurement row), repointing `measurement_id` underneath it changes the target spec mid-flight — QC will compare against the new row with no rejection or warning.
+  - **What to ask the client:** When B1's feedback changes both axes and a sibling shares only one key, should we (i) keep current behavior, (ii) require an explicit per-sibling confirm before any cross-key propagation, (iii) treat the brova-pair as atomic (all-or-nothing), or (iv) something else? Also: should `measurement_id` repointing be blocked once a sibling is past `waiting_cut`?
 
 ---
 

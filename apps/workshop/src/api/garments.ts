@@ -484,6 +484,29 @@ export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> =>
   return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
 };
 
+/**
+ * Reject-Redo replacements pending. §2.5: a Reject-Redo discards the original
+ * garment and the workshop must manually create a replacement. Surfaces those
+ * originals that haven't been replaced yet. Excludes refund-discarded rows —
+ * those clear feedback_status (see triggers.sql refund path), so requiring
+ * feedback_status='needs_redo' isolates the Reject-Redo path.
+ */
+export interface RedoPendingRow {
+  id: string;
+  garment_id: string | null;
+  order_id: number;
+}
+export const getRedoReplacementsPending = async (): Promise<RedoPendingRow[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select('id, garment_id, order_id')
+    .eq('piece_stage', 'discarded')
+    .eq('feedback_status', 'needs_redo')
+    .is('replaced_by_garment_id', null);
+  if (error) throw new Error(`getRedoReplacementsPending: failed to fetch pending replacements: ${error.message}`);
+  return (data ?? []) as RedoPendingRow[];
+};
+
 // ── Assigned view RPCs ────────────────────────────────────────────────
 // See get_assigned_overview + get_assigned_orders_page in triggers.sql.
 // The old getAssignedViewGarments fetched every in_progress garment with

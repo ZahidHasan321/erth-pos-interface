@@ -431,9 +431,45 @@ interface RedispatchGarment extends Garment {
     satisfaction_level: number | null;
     notes: string | null;
     measurement_diffs: string | null;
+    options_checklist: string | null;
     trip_number: number | null;
     created_at: string | null;
   }>;
+}
+
+// Count measurement + style changes recorded on a feedback row so the shop
+// staff dispatching the return sees the scope of work, matching the workshop
+// detail page's "N measurement changes · M style fixes" summary.
+function countFeedbackChanges(
+  fb: { measurement_diffs: string | null; options_checklist: string | null } | null,
+): { measurements: number; styles: number } {
+  if (!fb) return { measurements: 0, styles: 0 };
+  let measurements = 0;
+  let styles = 0;
+  try {
+    const diffs = fb.measurement_diffs ? JSON.parse(fb.measurement_diffs) : null;
+    if (Array.isArray(diffs)) {
+      for (const d of diffs) {
+        const orig = d?.original_value;
+        const next = d?.actual_value == null || d.actual_value === "" ? null : Number(d.actual_value);
+        if (orig == null || next == null) continue;
+        if (Number(orig) !== next) measurements += 1;
+      }
+    }
+  } catch {
+    // malformed JSON — count nothing
+  }
+  try {
+    const checklist = fb.options_checklist ? JSON.parse(fb.options_checklist) : null;
+    if (Array.isArray(checklist)) {
+      for (const o of checklist) {
+        if (o?.rejected === true || o?.hashwa_rejected === true) styles += 1;
+      }
+    }
+  } catch {
+    // malformed JSON — count nothing
+  }
+  return { measurements, styles };
 }
 
 function ReturnToWorkshopTab({
@@ -554,14 +590,23 @@ function ReturnToWorkshopTab({
                 </span>
                 <span className="text-xs text-muted-foreground">{tripLabel(g.trip_number, g.garment_type)}</span>
               </div>
-              {feedback && (
-                <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">
-                  <MessageSquare className="w-3 h-3" />
-                  <span className="capitalize">{feedback.action?.replace(/_/g, " ")}</span>
-                  {feedback.satisfaction_level && <span>Sat {feedback.satisfaction_level}/5</span>}
-                  {feedback.notes && <span className="max-w-[200px] truncate italic">"{feedback.notes}"</span>}
-                </div>
-              )}
+              {feedback && (() => {
+                const { measurements, styles } = countFeedbackChanges(feedback);
+                return (
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">
+                    <MessageSquare className="w-3 h-3" />
+                    <span className="capitalize">{feedback.action?.replace(/_/g, " ")}</span>
+                    {measurements > 0 && (
+                      <span>{measurements} measurement{measurements === 1 ? "" : "s"}</span>
+                    )}
+                    {styles > 0 && (
+                      <span>{styles} style fix{styles === 1 ? "" : "es"}</span>
+                    )}
+                    {feedback.satisfaction_level && <span>Sat {feedback.satisfaction_level}/5</span>}
+                    {feedback.notes && <span className="max-w-[200px] truncate italic">"{feedback.notes}"</span>}
+                  </div>
+                );
+              })()}
               {alsoNew && (
                 <button
                   type="button"

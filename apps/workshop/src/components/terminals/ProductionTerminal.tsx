@@ -36,7 +36,7 @@ import type {
   StageTimings,
   ProductionPlan,
 } from "@repo/database";
-import { getGarmentAltLabel } from "@repo/database";
+import { getGarmentAltLabel, isAlteration } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
@@ -45,7 +45,6 @@ import {
   Wrench,
   PlayCircle,
   Search,
-  Droplets,
   Timer,
   Clock,
   Play,
@@ -88,7 +87,7 @@ function hasQcFailThisTrip(g: WorkshopGarment): boolean {
 
 function isAlterationRow(g: WorkshopGarment): boolean {
   return (
-    (g.trip_number ?? 1) >= 2 ||
+    isAlteration(g.trip_number, g.garment_type) ||
     g.garment_type === "alteration" ||
     hasQcFailThisTrip(g)
   );
@@ -330,11 +329,6 @@ function GarmentRow({
           </span>
           <div className="flex items-center gap-1 flex-wrap">
             {showExpressFlag && garment.express && <ExpressBadge />}
-            {garment.soaking && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md">
-                <Droplets className="w-3 h-3" /> Soak{(garment as any).soaking_hours ? ` ${(garment as any).soaking_hours}h` : ""}
-              </span>
-            )}
             {sessionStart && <ElapsedTimer since={sessionStart} />}
           </div>
         </div>

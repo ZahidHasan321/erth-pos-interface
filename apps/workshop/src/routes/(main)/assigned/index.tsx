@@ -9,7 +9,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
 import { OrderTypeBadge } from "@repo/ui/order-type-badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
-import { cn, formatDate, parseUtcTimestamp, toLocalDateStr } from "@/lib/utils";
+import { cn, formatDate, getLocalDateStr, parseUtcTimestamp, toLocalDateStr } from "@/lib/utils";
 import { getGarmentStatusLabel } from "@/lib/garment-status";
 import type { AssignedOrderRow } from "@/api/garments";
 import {
@@ -25,6 +25,7 @@ import {
   X,
   ArrowUp,
   ArrowDown,
+  AlertTriangle,
 } from "lucide-react";
 
 const BRANDS = ["ERTH", "SAKKBA", "QASS"] as const;
@@ -32,13 +33,14 @@ type Brand = (typeof BRANDS)[number];
 
 type DeliverySort = "none" | "asc" | "desc";
 
-type AssignedSearch = { express?: boolean };
+type AssignedSearch = { express?: boolean; overdue?: boolean };
 
 export const Route = createFileRoute("/(main)/assigned/")({
   component: AssignedPage,
   head: () => ({ meta: [{ title: "Production Tracker" }] }),
   validateSearch: (raw: Record<string, unknown>): AssignedSearch => ({
     express: raw.express === true || raw.express === "1" || raw.express === "true",
+    overdue: raw.overdue === true || raw.overdue === "1" || raw.overdue === "true",
   }),
 });
 
@@ -445,8 +447,10 @@ function AssignedPage() {
 
   // ── Filters ─────────────────────────────────────────────────────────────
   const initialExpress = Route.useSearch({ select: (s) => s.express ?? false });
+  const initialOverdue = Route.useSearch({ select: (s) => s.overdue ?? false });
   const [search, setSearch] = useState("");
   const [expressOnly, setExpressOnly] = useState(initialExpress);
+  const [overdueOnly, setOverdueOnly] = useState(initialOverdue);
   const [brovaOnly, setBrovaOnly] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<Brand[]>([]);
   const [deliverySort, setDeliverySort] = useState<DeliverySort>("none");
@@ -462,13 +466,14 @@ function AssignedPage() {
   const clearFilters = () => {
     setSearch("");
     setExpressOnly(false);
+    setOverdueOnly(false);
     setBrovaOnly(false);
     setSelectedBrands([]);
     setDeliverySort("none");
   };
 
   const hasFilters =
-    !!search || expressOnly || brovaOnly || selectedBrands.length > 0 || deliverySort !== "none";
+    !!search || expressOnly || overdueOnly || brovaOnly || selectedBrands.length > 0 || deliverySort !== "none";
 
   // Brand-only counts for chip badges. Search/express/brova not factored in
   // so users can see how many of each brand exist before narrowing.
@@ -480,11 +485,22 @@ function AssignedPage() {
 
   const expressCount = useMemo(() => rows.filter((r) => r.express).length, [rows]);
   const brovaCount = useMemo(() => rows.filter((r) => r.has_brova).length, [rows]);
+  const overdueCount = useMemo(() => {
+    const today = getLocalDateStr();
+    return rows.filter((r) =>
+      r.delivery_date && getLocalDateStr(parseUtcTimestamp(r.delivery_date)) < today,
+    ).length;
+  }, [rows]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const today = getLocalDateStr();
     const filtered = rows.filter((r) => {
       if (expressOnly && !r.express) return false;
+      if (overdueOnly) {
+        if (!r.delivery_date) return false;
+        if (getLocalDateStr(parseUtcTimestamp(r.delivery_date)) >= today) return false;
+      }
       if (brovaOnly && !r.has_brova) return false;
       if (selectedBrands.length > 0 && !r.brands.some((b) => selectedBrands.includes(b as Brand))) return false;
       if (q) {
@@ -507,7 +523,7 @@ function AssignedPage() {
       if (!b.delivery_date) return -1;
       return a.delivery_date < b.delivery_date ? -dir : a.delivery_date > b.delivery_date ? dir : 0;
     });
-  }, [rows, search, expressOnly, brovaOnly, selectedBrands, deliverySort]);
+  }, [rows, search, expressOnly, overdueOnly, brovaOnly, selectedBrands, deliverySort]);
 
   const subtitle = isLoading
     ? "Loading…"
@@ -544,6 +560,15 @@ function AssignedPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <FilterChip
+            active={overdueOnly}
+            onClick={() => setOverdueOnly((v) => !v)}
+            icon={AlertTriangle}
+            iconColor="text-[var(--status-bad)]"
+            count={overdueCount}
+          >
+            Overdue
+          </FilterChip>
           <FilterChip
             active={expressOnly}
             onClick={() => setExpressOnly((v) => !v)}

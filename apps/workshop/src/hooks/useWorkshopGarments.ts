@@ -7,6 +7,7 @@ import {
   getHistoryGarments,
   getBoardGarments,
   getCompletedTodayGarments,
+  getRedoReplacementsPending,
   getGarmentById,
   getOrderGarments,
   getAssignedOverview,
@@ -192,6 +193,16 @@ export function useCompletedTodayGarments() {
   return useQuery({
     queryKey: COMPLETED_TODAY_KEY,
     queryFn: getCompletedTodayGarments,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+/** Reject-Redo discarded originals without a replacement row yet. Slim
+ *  query — used by the dashboard exception card. */
+export function useRedoReplacementsPending() {
+  return useQuery({
+    queryKey: ['redo-replacements-pending'],
+    queryFn: getRedoReplacementsPending,
     staleTime: LIST_STALE_TIME,
   });
 }

@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
+import {
+  useWorkshopGarments,
+  useBrovaStatus,
+  useRedoReplacementsPending,
+} from "@/hooks/useWorkshopGarments";
 import {
   PageHeader,
   SectionCard,
@@ -13,9 +17,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Inbox, CalendarDays, ClipboardList, LayoutDashboard,
+  Inbox, ClipboardList, LayoutDashboard,
   Truck, ArrowRight, Zap, AlertTriangle,
-  Unlock, PackageCheck, RotateCcw,
+  RotateCcw, Hammer, Lock,
   ParkingSquare,
 } from "lucide-react";
 
@@ -68,37 +72,38 @@ const PLAN_KEY_TO_STAGE: Record<string, string> = {
 
 function DashboardPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
+  const { data: redoPending = [] } = useRedoReplacementsPending();
 
-  // ── Action items (PM attention needed) ────────────────────────────
-  const actionItems = useMemo(() => {
+  // Orders that still have a final parked at waiting_for_acceptance. Drives
+  // the "indefinite parking" check below — we need brova-acceptance counts
+  // for those specific orders to distinguish in-flight (brovas still being
+  // trialed) from stuck (all brovas trialed, none accepted).
+  const waitingFinalOrderIds = useMemo(
+    () => [
+      ...new Set(
+        allGarments
+          .filter(
+            (g) =>
+              g.garment_type === "final" &&
+              g.location === "workshop" &&
+              !g.in_production &&
+              g.piece_stage === "waiting_for_acceptance",
+          )
+          .map((g) => g.order_id),
+      ),
+    ],
+    [allGarments],
+  );
+  const { data: brovaStatus = {} } = useBrovaStatus(waitingFinalOrderIds);
+
+  // ── Exception items (no dedicated sidebar surface) ────────────────
+  // Cards are limited to genuine exceptions / risk signals. Routine work
+  // (incoming, ready-to-dispatch, parking, etc.) already shows in the
+  // sidebar with the same counts — keeping it here would be duplication.
+  const exceptions = useMemo(() => {
     const todayStr = getLocalDateStr();
 
-    const finalsToRelease = allGarments.filter(
-      (g) =>
-        g.garment_type === "final" &&
-        g.location === "workshop" &&
-        !g.in_production &&
-        (g.piece_stage === "waiting_for_acceptance" ||
-          (g.piece_stage === "waiting_cut" && !g.production_plan))
-    );
-    const incoming = allGarments.filter(
-      (g) => g.location === "transit_to_workshop"
-    );
-    const needsScheduling = allGarments.filter(
-      (g) =>
-        g.location === "workshop" &&
-        g.in_production &&
-        !g.production_plan &&
-        g.piece_stage === "waiting_cut"
-    );
-    const qcReturns = allGarments.filter(
-      (g) =>
-        (g.location === "workshop" || g.location === "transit_to_workshop") &&
-        (g.feedback_status === "needs_repair" || g.feedback_status === "needs_redo")
-    );
-    const readyToDispatch = allGarments.filter(
-      (g) => g.piece_stage === "ready_for_dispatch"
-    );
+    // Overdue orders: any garment still at workshop past its order's delivery date.
     const overdueOrderIds = new Set<number>();
     for (const g of allGarments) {
       if (
@@ -109,15 +114,62 @@ function DashboardPage() {
         overdueOrderIds.add(g.order_id);
       }
     }
+
+    // Express in active production (urgency signal — no dedicated tab).
     const express = allGarments.filter(
-      (g) => g.express && g.location === "workshop" && g.in_production
+      (g) => g.express && g.location === "workshop" && g.in_production,
     );
 
+    // Accept-with-Fix stranded finals (§2.4 dispatch-pairing rule). A brova
+    // returned from shop with acceptance_status=true is sitting at the
+    // workshop ready_for_dispatch while the order's finals are still being
+    // produced — flag the orders so the PM can chase the finals instead of
+    // hitting the confirm dialog at dispatch time.
+    const acceptWithFixBrovaOrderIds = new Set<number>();
+    for (const g of allGarments) {
+      if (
+        g.garment_type === "brova" &&
+        g.location === "workshop" &&
+        g.piece_stage === "ready_for_dispatch" &&
+        g.acceptance_status === true
+      ) {
+        acceptWithFixBrovaOrderIds.add(g.order_id);
+      }
+    }
+    const finalsStillInProductionByOrder = new Set<number>();
+    for (const g of allGarments) {
+      if (!acceptWithFixBrovaOrderIds.has(g.order_id)) continue;
+      if (g.garment_type !== "final") continue;
+      if (g.location !== "workshop" && g.location !== "transit_to_workshop") continue;
+      if (
+        g.piece_stage === "ready_for_dispatch" ||
+        g.piece_stage === "completed" ||
+        g.piece_stage === "discarded"
+      ) continue;
+      finalsStillInProductionByOrder.add(g.order_id);
+    }
+
+    // Indefinite finals parking (§2.5 stuck state): finals parked at
+    // waiting_for_acceptance on orders where ALL brovas have been trialed
+    // and NONE accepted. Requires brovaStatus (slim per-order RPC) since
+    // trialed brovas live at the shop, not in useWorkshopGarments().
+    const stuckFinalsOrderIds = new Set<number>();
+    for (const orderId of waitingFinalOrderIds) {
+      const s = brovaStatus[orderId];
+      if (!s) continue;
+      if (s.total > 0 && s.accepted === 0 && s.trialed === s.total) {
+        stuckFinalsOrderIds.add(orderId);
+      }
+    }
+
     return {
-      finalsToRelease, incoming, needsScheduling, qcReturns, readyToDispatch,
-      overdueOrders: overdueOrderIds.size, express,
+      overdueOrders: overdueOrderIds.size,
+      express: express.length,
+      redoPending: redoPending.length,
+      acceptWithFixStranded: finalsStillInProductionByOrder.size,
+      stuckFinals: stuckFinalsOrderIds.size,
     };
-  }, [allGarments]);
+  }, [allGarments, redoPending, waitingFinalOrderIds, brovaStatus]);
 
   // Cards only render when count > 0. Tone is semantic, not decorative.
   const actionCards = useMemo(() => {
@@ -132,22 +184,23 @@ function DashboardPage() {
       tone: ActionTone;
     }[] = [];
 
-    if (actionItems.overdueOrders > 0) {
+    if (exceptions.overdueOrders > 0) {
       cards.push({
         key: "overdue",
         label: "Overdue orders",
-        count: actionItems.overdueOrders,
+        count: exceptions.overdueOrders,
         desc: "Past delivery date — still at workshop",
         href: "/assigned",
+        search: { overdue: true },
         icon: AlertTriangle,
         tone: "bad",
       });
     }
-    if (actionItems.express.length > 0) {
+    if (exceptions.express > 0) {
       cards.push({
         key: "express",
         label: "Express priority",
-        count: actionItems.express.length,
+        count: exceptions.express,
         desc: "Rush orders in production",
         href: "/assigned",
         search: { express: true },
@@ -155,64 +208,42 @@ function DashboardPage() {
         tone: "bad",
       });
     }
-    if (actionItems.finalsToRelease.length > 0) {
+    if (exceptions.redoPending > 0) {
       cards.push({
-        key: "finals",
-        label: "Release finals",
-        count: actionItems.finalsToRelease.length,
-        desc: "Finals waiting — release to production",
-        href: "/parking",
-        icon: Unlock,
-        tone: "warn",
-      });
-    }
-    if (actionItems.qcReturns.length > 0) {
-      cards.push({
-        key: "qc-returns",
-        label: "QC returns",
-        count: actionItems.qcReturns.length,
-        desc: "Failed QC — need rescheduling",
-        href: "/scheduler",
+        key: "redo-pending",
+        label: "Redo replacements pending",
+        count: exceptions.redoPending,
+        desc: "Discarded by Reject-Redo — workshop must create a new garment",
+        href: "/assigned",
         icon: RotateCcw,
         tone: "warn",
       });
     }
-    if (actionItems.incoming.length > 0) {
+    if (exceptions.acceptWithFixStranded > 0) {
       cards.push({
-        key: "incoming",
-        label: "Incoming shipments",
-        count: actionItems.incoming.length,
-        desc: "In transit to workshop — receive them",
-        href: "/receiving",
-        icon: Inbox,
-        tone: "info",
-      });
-    }
-    if (actionItems.needsScheduling.length > 0) {
-      cards.push({
-        key: "schedule",
-        label: "Needs scheduling",
-        count: actionItems.needsScheduling.length,
-        desc: "In production but no plan assigned",
-        href: "/scheduler",
-        icon: CalendarDays,
-        tone: "info",
-      });
-    }
-    if (actionItems.readyToDispatch.length > 0) {
-      cards.push({
-        key: "dispatch",
-        label: "Ready to dispatch",
-        count: actionItems.readyToDispatch.length,
-        desc: "Passed QC — send back to shop",
+        key: "accept-with-fix-stranded",
+        label: "Accept-with-Fix stranded finals",
+        count: exceptions.acceptWithFixStranded,
+        desc: "Brova ready to return, but the order's finals are still in production",
         href: "/dispatch",
-        icon: PackageCheck,
-        tone: "info",
+        icon: Hammer,
+        tone: "warn",
+      });
+    }
+    if (exceptions.stuckFinals > 0) {
+      cards.push({
+        key: "stuck-finals",
+        label: "Finals stuck — all brovas rejected",
+        count: exceptions.stuckFinals,
+        desc: "Parked indefinitely — manual intervention needed",
+        href: "/parking",
+        icon: Lock,
+        tone: "warn",
       });
     }
 
     return cards;
-  }, [actionItems]);
+  }, [exceptions]);
 
   // ── Production pipeline (from actual garment data) ────────────────
   const pipelineData = useMemo(() => {
@@ -469,33 +500,6 @@ function DashboardPage() {
         </SectionCard>
       )}
 
-      {/* Quick actions */}
-      <div>
-        <h2 className="text-base font-medium mb-3">Quick actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: "Receive orders", desc: `${actionItems.incoming.length} incoming`, href: "/receiving", icon: Inbox },
-            { label: "Schedule production", desc: `${actionItems.needsScheduling.length} awaiting`, href: "/scheduler", icon: CalendarDays },
-            { label: "Dispatch ready", desc: `${actionItems.readyToDispatch.length} ready`, href: "/dispatch", icon: Truck },
-          ].map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link
-                key={action.href}
-                to={action.href}
-                className="bg-card border border-border rounded-md p-3 flex items-center gap-3 transition-colors hover:bg-muted/40 group"
-              >
-                <Icon className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden="true" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{action.label}</p>
-                  <p className="text-xs text-muted-foreground">{action.desc}</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" aria-hidden="true" />
-              </Link>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
