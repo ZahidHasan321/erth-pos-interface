@@ -23,8 +23,8 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
     const totalCollected = Number(data.total_collected) || 0;
 
     return (
-        <Card className="p-5" style={{ animation: "cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) 200ms both" }}>
-            <h3 className="font-semibold text-sm mb-4">Payment Methods</h3>
+        <Card className="p-5 shadow-none">
+            <h3 className="text-base font-semibold mb-4">Payment methods</h3>
 
             {segments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No payment data</p>
@@ -40,7 +40,6 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
                         }}
                     />
 
-                    {/* Detailed breakdown */}
                     <div className="w-full space-y-2">
                         <div className="flex items-center gap-3 text-xs text-muted-foreground pb-1 border-b border-border">
                             <span className="w-2.5 h-2.5 shrink-0" />
@@ -59,9 +58,9 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
                                 <div key={m.payment_type} className="flex items-center gap-3 text-sm">
                                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                                     <span className="flex-1 text-muted-foreground">{label}</span>
-                                    <span className="tabular-nums font-medium text-xs text-muted-foreground w-12 text-right">{m.count}</span>
-                                    <span className="tabular-nums font-semibold w-24 text-right">{fmtK(m.total)}</span>
-                                    <span className={`tabular-nums w-20 text-right text-xs ${refund > 0 ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
+                                    <span className="tabular-nums text-xs text-muted-foreground w-12 text-right">{m.count}</span>
+                                    <span className="tabular-nums font-medium w-24 text-right">{fmtK(m.total)}</span>
+                                    <span className={`tabular-nums w-20 text-right text-xs ${refund > 0 ? "text-destructive" : "text-muted-foreground"}`}>
                                         {refund > 0 ? `−${fmtK(refund)}` : "—"}
                                     </span>
                                     <span className="tabular-nums text-xs text-muted-foreground w-10 text-right">{pct}%</span>
@@ -76,38 +75,53 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
 }
 
 export function EodOrderBreakdown({ data }: { data: EodReportSummary }) {
+    const total = data.order_count;
+    const workPct = total > 0 ? Math.round((data.work_count / total) * 100) : 0;
+    const salesPct = total > 0 ? Math.round((data.sales_count / total) * 100) : 0;
+
     return (
-        <Card className="p-5" style={{ animation: "cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) 280ms both" }}>
-            <h3 className="font-semibold text-sm mb-4">Order Mix</h3>
+        <Card className="p-5 shadow-none">
+            <h3 className="text-base font-semibold mb-4">Order mix</h3>
 
             {data.order_count === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No orders in this period</p>
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
                     <div>
-                        <p className="text-3xl font-bold tabular-nums">{data.order_count}</p>
-                        <p className="text-xs text-muted-foreground">Total Orders Booked</p>
+                        <p className="text-2xl font-semibold tabular-nums">{data.order_count}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Total orders booked</p>
                     </div>
 
-                    <div className="flex gap-3">
-                        <div className="flex-1 p-3 rounded-lg bg-sky-50">
-                            <p className="text-lg font-bold tabular-nums text-sky-700">{data.work_count}</p>
-                            <p className="text-xs text-sky-600">Work Orders</p>
-                        </div>
-                        <div className="flex-1 p-3 rounded-lg bg-violet-50">
-                            <p className="text-lg font-bold tabular-nums text-violet-700">{data.sales_count}</p>
-                            <p className="text-xs text-violet-600">Sales Orders</p>
-                        </div>
+                    <div className="space-y-2.5">
+                        <MixRow label="Work orders" count={data.work_count} pct={workPct} />
+                        <MixRow label="Sales orders" count={data.sales_count} pct={salesPct} />
                     </div>
 
                     {data.cancelled_count > 0 && (
                         <div className="border-t border-border pt-3 flex justify-between text-sm">
                             <span className="text-muted-foreground">Cancelled</span>
-                            <span className="font-semibold tabular-nums text-red-600">{data.cancelled_count}</span>
+                            <span className="font-medium tabular-nums text-destructive">{data.cancelled_count}</span>
                         </div>
                     )}
                 </div>
             )}
         </Card>
+    );
+}
+
+function MixRow({ label, count, pct }: { label: string; count: number; pct: number }) {
+    return (
+        <div>
+            <div className="flex items-baseline justify-between text-sm mb-1">
+                <span className="text-muted-foreground">{label}</span>
+                <span className="tabular-nums">
+                    <span className="font-medium">{count}</span>
+                    <span className="text-muted-foreground text-xs ml-2">{pct}%</span>
+                </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-primary/60" style={{ width: `${pct}%` }} />
+            </div>
+        </div>
     );
 }

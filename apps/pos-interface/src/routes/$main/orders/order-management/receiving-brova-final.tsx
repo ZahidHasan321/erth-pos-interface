@@ -3,32 +3,34 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 
 import {
-    Package,
+    PackageCheck,
     Search,
     RefreshCw,
-    ChevronDown,
+    ChevronRight,
+    AlertTriangle,
     ExternalLink,
-    CheckCircle2,
-    Hash,
-    User,
 } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
-import { Badge } from "@repo/ui/badge";
 import { Input } from "@repo/ui/input";
 import { Checkbox } from "@repo/ui/checkbox";
-import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
-import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import { updateGarment } from "@/api/garments";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
-import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import type { Order, Garment } from "@repo/database";
+
+import {
+    GarmentTypeBadge,
+    OrderCardShell,
+    TabEmptyState,
+    TabLoading,
+    tripLabel,
+} from "@/components/order-management/_shared";
 
 export const Route = createFileRoute(
     "/$main/orders/order-management/receiving-brova-final"
@@ -38,12 +40,6 @@ export const Route = createFileRoute(
         meta: [{ title: "Receiving Brova & Final" }],
     }),
 });
-
-const PHASE_STYLE: Record<string, string> = {
-    new: "bg-gray-100 text-gray-700",
-    in_progress: "bg-amber-100 text-amber-700",
-    completed: "bg-primary/15 text-primary",
-};
 
 function ReceivingInterface() {
     const queryClient = useQueryClient();
@@ -62,7 +58,7 @@ function ReceivingInterface() {
             );
             const results = await Promise.all(promises);
             const error = results.find((r) => r.status === "error");
-            if (error) throw new Error(`Could not receive garments: ${error.message}`);
+            if (error) throw new Error(`receiveGarments: failed to mark garments received: ${error.message}`);
             return { count: garments.length, orderId };
         },
         onMutate: async ({ garments, orderId }) => {
@@ -92,7 +88,7 @@ function ReceivingInterface() {
             if (context?.prev) {
                 queryClient.setQueryData(["dispatched-orders"], context.prev);
             }
-            toast.error("Failed to mark as received", { description: err.message });
+            toast.error("Could not mark garments as received", { description: err.message });
         },
     });
 
@@ -108,82 +104,61 @@ function ReceivingInterface() {
     }, [orders, searchQuery]);
 
     return (
-        <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b-2 border-border pb-6">
+        <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-5">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-border pb-5">
                 <div className="space-y-1">
-                    <h1 className="text-xl font-bold text-foreground tracking-tight">
-                        Receiving Inventory
+                    <h1 className="text-xl font-semibold text-foreground">
+                        Receiving
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Mark workshop deliveries as received at showroom
-                        {" "}&bull;{" "}{filteredOrders.length} ORDER{filteredOrders.length !== 1 ? "S" : ""}
+                        Mark workshop deliveries as received at the showroom
                     </p>
                 </div>
-                <div className="relative w-full md:w-80 group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <div className="relative w-full md:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search order, invoice, customer..."
+                        placeholder="Search order, invoice, customer…"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 h-10 bg-card border-2 border-border/60 rounded-xl text-sm focus-visible:ring-primary/20"
+                        className="pl-9 h-9 text-sm"
                     />
                 </div>
             </div>
 
-            {/* List */}
-            <div className="space-y-4">
-                {isLoading ? (
-                    <div className="space-y-4">
-                        {[1, 2, 3].map((i) => (
-                            <Card key={i} className="border-2 border-border/60 rounded-2xl py-0 gap-0">
-                                <CardContent className="p-5 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Skeleton className="h-5 w-16 rounded-md" />
-                                            <Skeleton className="h-5 w-32 rounded-md" />
-                                        </div>
-                                        <Skeleton className="h-7 w-24 rounded-full" />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Skeleton className="h-4 w-20 rounded-md" />
-                                        <Skeleton className="h-4 w-28 rounded-md" />
-                                    </div>
-                                    <Skeleton className="h-10 w-full rounded-xl" />
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                ) : filteredOrders.length === 0 ? (
-                    <div className="py-10 text-center">
-                        <div className="inline-flex p-6 bg-muted/30 rounded-full mb-6 border-2 border-dashed border-border">
-                            <Package className="size-10 text-muted-foreground/40" />
-                        </div>
-                        <h2 className="text-base font-bold text-muted-foreground">Queue is Empty</h2>
-                        <p className="text-sm text-muted-foreground/60 font-medium mt-1 uppercase tracking-wider">
-                            No garments are currently in transit from the workshop
-                        </p>
-                    </div>
-                ) : (
-                    filteredOrders.map((order) => (
-                        <OrderCard
+            {isLoading ? (
+                <TabLoading count={4} />
+            ) : filteredOrders.length === 0 ? (
+                <TabEmptyState
+                    icon={PackageCheck}
+                    title={searchQuery ? "No matches" : "Nothing to receive"}
+                    subtitle={
+                        searchQuery
+                            ? "No orders match the current search"
+                            : "No garments are currently in transit from the workshop"
+                    }
+                />
+            ) : (
+                <div className="space-y-4">
+                    {filteredOrders.map((order) => (
+                        <OrderRow
                             key={order.id}
                             order={order}
-                            onReceive={(garments) => receiveMutation.mutate({ garments, orderId: order.id })}
-                            isSubmitting={receiveMutation.isPending && receiveMutation.variables?.orderId === order.id}
+                            onReceive={(garments) =>
+                                receiveMutation.mutate({ garments, orderId: order.id })
+                            }
+                            isSubmitting={
+                                receiveMutation.isPending &&
+                                receiveMutation.variables?.orderId === order.id
+                            }
                         />
-                    ))
-                )}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
 
-function tripLabel(trip: number) {
-    return trip >= 2 ? `Alt ${trip - 1}` : "1st";
-}
-
-function OrderCard({
+function OrderRow({
     order,
     onReceive,
     isSubmitting,
@@ -192,295 +167,210 @@ function OrderCard({
     onReceive: (garments: Garment[]) => void;
     isSubmitting: boolean;
 }) {
-    const [isExpanded, setIsExpanded] = useState(false);
-
+    const allGarments = order.garments ?? [];
     const receivableGarments = useMemo(
-        () => order.garments?.filter((g) => g.location === "transit_to_shop") ?? [],
-        [order.garments]
+        () => allGarments.filter((g) => g.location === "transit_to_shop"),
+        [allGarments],
     );
-
-    const lostGarments = useMemo(
-        () => order.garments?.filter((g) => g.location === "lost_in_transit") ?? [],
-        [order.garments]
-    );
-
-    const allGarments = useMemo(
-        () => order.garments ?? [],
-        [order.garments]
-    );
+    const lostCount = allGarments.filter((g) => g.location === "lost_in_transit").length;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(
-        () => new Set(receivableGarments.map((g) => g.id))
+        () => new Set(receivableGarments.map((g) => g.id)),
     );
 
-    // Keep selectedIds in sync if order.garments changes (e.g. after optimistic update)
     const receivableIds = useMemo(
         () => new Set(receivableGarments.map((g) => g.id)),
-        [receivableGarments]
+        [receivableGarments],
     );
 
     const selectedReceivable = receivableGarments.filter((g) => selectedIds.has(g.id));
-    const allReceivableSelected = receivableGarments.length > 0 && selectedReceivable.length === receivableGarments.length;
-    const someReceivableSelected = selectedReceivable.length > 0 && !allReceivableSelected;
+    const allReceivableSelected =
+        receivableGarments.length > 0 &&
+        selectedReceivable.length === receivableGarments.length;
 
     const brovaCount = allGarments.filter((g) => g.garment_type === "brova").length;
     const finalCount = allGarments.filter((g) => g.garment_type === "final").length;
     const alterationCount = allGarments.filter((g) => g.garment_type === "alteration").length;
-    const lostCount = lostGarments.length;
-    const orderDate = order.order_date ? parseUtcTimestamp(order.order_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : "No Date";
 
-    function toggleSelectAll() {
-        if (allReceivableSelected) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(receivableGarments.map((g) => g.id)));
-        }
+    function toggleSelectAll(checked: boolean) {
+        setSelectedIds(checked ? new Set(receivableGarments.map((g) => g.id)) : new Set());
     }
 
-    function toggleGarment(id: string) {
+    function toggleGarment(id: string, checked: boolean) {
         if (!receivableIds.has(id)) return;
         setSelectedIds((prev) => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
+            if (checked) next.add(id);
+            else next.delete(id);
             return next;
         });
     }
 
     function handleReceive(e: React.MouseEvent) {
         e.stopPropagation();
-        onReceive(selectedReceivable);
+        if (!isSubmitting && selectedReceivable.length > 0) onReceive(selectedReceivable);
     }
 
-    const receiveLabel = selectedReceivable.length === receivableGarments.length
-        ? "Receive All"
-        : `Receive (${selectedReceivable.length})`;
+    const receiveLabel =
+        selectedReceivable.length === receivableGarments.length
+            ? "Receive"
+            : `Receive (${selectedReceivable.length})`;
+
+    const action = (
+        <Button
+            size="sm"
+            className="h-9"
+            onClick={handleReceive}
+            disabled={isSubmitting || selectedReceivable.length === 0}
+        >
+            {isSubmitting ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+                <>
+                    <span>{receiveLabel}</span>
+                    <ChevronRight className="w-3 h-3 ml-1" />
+                </>
+            )}
+        </Button>
+    );
+
+    const detailRoute =
+        order.order_type === "SALES"
+            ? "/$main/orders/new-sales-order"
+            : order.order_type === "ALTERATION"
+              ? "/$main/orders/new-alteration-order"
+              : "/$main/orders/new-work-order";
 
     return (
-        <Card className={cn(
-            "relative overflow-hidden transition-all duration-300 py-0 gap-0 border-l-4",
-            isExpanded ? "border-l-primary shadow-md" : "border-l-transparent hover:border-l-primary/40 hover:bg-muted/30"
-        )}>
-            <CardContent className="p-0">
-                {/* Main row */}
-                <div className="cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-                    {/* Desktop (lg+): single row */}
-                    <div className="hidden lg:flex items-center min-h-[60px]">
-                        <div className="flex-1 px-4 py-2.5 border-r border-border/40 min-w-[180px]">
-                            <div className="flex items-center gap-2.5 mb-0.5">
-                                <div className="p-1 rounded-md bg-primary/10 text-primary">
-                                    <Hash className="size-3" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-bold">Order #{order.id}</h3>
-                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
-                                        <span className="text-primary/80">Inv #{order.invoice_number || "—"}</span>
-                                        <span className="size-1 rounded-full bg-muted-foreground/30" />
-                                        <span>{orderDate}</span>
+        <OrderCardShell
+            orderId={order.id}
+            invoiceNumber={order.invoice_number}
+            customerName={order.customer?.name}
+            customerPhone={order.customer?.phone}
+            orderDate={order.order_date}
+            pieceCount={allGarments.length}
+            brovaCount={brovaCount}
+            finalCount={finalCount}
+            alterationCount={alterationCount}
+            action={action}
+            collapsible
+            rightBadges={
+                lostCount > 0 ? (
+                    <span className="flex items-center gap-1 text-sm font-medium text-destructive">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {lostCount} lost
+                    </span>
+                ) : undefined
+            }
+        >
+            {allGarments.length > 0 && (
+                <div className="p-3">
+                    <div
+                        className="flex items-center justify-between gap-2 mb-2 px-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground cursor-pointer">
+                            <Checkbox
+                                checked={allReceivableSelected}
+                                onCheckedChange={(checked) => toggleSelectAll(!!checked)}
+                                disabled={receivableGarments.length === 0}
+                            />
+                            <span>Select all receivable</span>
+                        </label>
+                        <Link
+                            to={detailRoute}
+                            search={{ orderId: order.id }}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            Order details
+                            <ExternalLink className="w-3 h-3" />
+                        </Link>
+                    </div>
+                    <div
+                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {allGarments.map((g) => {
+                            const isLost = g.location === "lost_in_transit";
+                            const isReceivable = g.location === "transit_to_shop";
+                            const isSelected = selectedIds.has(g.id);
+                            const fabric = (g as any).fabric as
+                                | { name?: string | null; color?: string | null }
+                                | null
+                                | undefined;
+
+                            return (
+                                <div
+                                    key={g.id}
+                                    className={cn(
+                                        "flex items-start gap-2.5 rounded-md border bg-background p-3 transition-colors",
+                                        isReceivable &&
+                                            "cursor-pointer hover:bg-muted/20",
+                                        isReceivable && !isSelected && "opacity-60",
+                                        isLost && "opacity-60",
+                                    )}
+                                    onClick={() =>
+                                        isReceivable && toggleGarment(g.id, !isSelected)
+                                    }
+                                >
+                                    {isReceivable ? (
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onCheckedChange={(checked) =>
+                                                toggleGarment(g.id, !!checked)
+                                            }
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="mt-0.5 shrink-0"
+                                        />
+                                    ) : (
+                                        <div className="w-4 mt-0.5 shrink-0" aria-hidden />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                            <span className="font-medium text-sm">
+                                                {g.garment_id}
+                                            </span>
+                                            <GarmentTypeBadge type={g.garment_type} />
+                                            {isLost && (
+                                                <span className="flex items-center gap-1 text-xs font-medium text-destructive">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    Lost
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                                            <span>{g.style || "Kuwaiti"}</span>
+                                            {fabric?.name && (
+                                                <span className="flex items-center gap-1.5">
+                                                    {fabric.color && (
+                                                        <span
+                                                            className="size-2.5 rounded-full border border-border/60 shrink-0"
+                                                            style={{ backgroundColor: fabric.color }}
+                                                            aria-hidden
+                                                        />
+                                                    )}
+                                                    <span className="truncate max-w-[140px]">
+                                                        {fabric.name}
+                                                    </span>
+                                                </span>
+                                            )}
+                                            <span>{tripLabel(g.trip_number, g.garment_type)}</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            {order.order_phase && (
-                                <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
-                                    {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                                </Badge>
-                            )}
-                        </div>
-                        <div className="flex-[1.5] px-4 py-2.5 border-r border-border/40 bg-muted/10">
-                            <div className="flex items-center gap-2">
-                                <User className="size-3 text-muted-foreground shrink-0" />
-                                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown Customer"}</span>
-                                {order.customer?.phone && <span className="text-xs text-muted-foreground font-medium shrink-0">{order.customer.phone}</span>}
-                            </div>
-                        </div>
-                        <div className="flex-[1.2] px-4 py-2.5 border-r border-border/40">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="secondary" className="font-black text-xs px-2 py-0 h-5">{allGarments.length} Pcs</Badge>
-                                {brovaCount > 0 && <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount} Brova</span>}
-                                {finalCount > 0 && <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount} Final</span>}
-                                {alterationCount > 0 && <span className="text-[11px] font-black bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{alterationCount} Alteration</span>}
-                                {lostCount > 0 && <span className="text-[11px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
-                                {order.delivery_date && (
-                                    <span className="text-[11px] text-muted-foreground font-medium">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>
-                                )}
-                            </div>
-                        </div>
-                        <div className="w-[190px] px-4 py-2.5 flex items-center gap-2 bg-muted/5">
-                            <Button
-                                className="flex-1 h-9 font-bold uppercase tracking-wider text-xs shadow-sm"
-                                onClick={handleReceive}
-                                disabled={isSubmitting || selectedReceivable.length === 0}
-                            >
-                                {isSubmitting
-                                    ? <RefreshCw className="size-3.5 animate-spin" />
-                                    : <><CheckCircle2 className="size-3.5 mr-1.5" />{receiveLabel}</>
-                                }
-                            </Button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                                className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
-                            >
-                                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Tablet + Mobile (<lg): compact 2-row */}
-                    <div className="lg:hidden px-3 sm:px-4 py-2.5 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-sm font-bold shrink-0">#{order.id}</span>
-                                <span className="text-[11px] text-primary/80 font-medium shrink-0">Inv {order.invoice_number || "—"}</span>
-                                {order.order_phase && (
-                                    <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-1.5 py-0 h-4 border-none shadow-xs", PHASE_STYLE[order.order_phase as string] || "bg-muted text-muted-foreground")}>
-                                        {ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS]}
-                                    </Badge>
-                                )}
-                                <div className="w-px h-3.5 bg-border/40 shrink-0" />
-                                <User className="size-3 text-muted-foreground shrink-0" />
-                                <span className="text-sm font-bold truncate">{order.customer?.name || "Unknown"}</span>
-                            </div>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                                className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0"
-                            >
-                                <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-180")} />
-                            </button>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[11px] text-muted-foreground">{orderDate}</span>
-                                {order.customer?.phone && <span className="text-[11px] text-muted-foreground font-medium">{order.customer.phone}</span>}
-                                <Badge variant="secondary" className="font-black text-[11px] px-1.5 py-0 h-4">{allGarments.length} Pcs</Badge>
-                                {brovaCount > 0 && <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{brovaCount}B</span>}
-                                {finalCount > 0 && <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{finalCount}F</span>}
-                                {lostCount > 0 && <span className="text-[10px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{lostCount} Lost</span>}
-                                {order.delivery_date && <span className="text-[11px] text-muted-foreground">Due {format(parseUtcTimestamp(order.delivery_date), "d MMM")}</span>}
-                            </div>
-                            <Button
-                                className="h-8 px-4 font-bold uppercase tracking-wider text-xs shadow-sm shrink-0"
-                                onClick={handleReceive}
-                                disabled={isSubmitting || selectedReceivable.length === 0}
-                            >
-                                {isSubmitting ? <RefreshCw className="size-3 animate-spin" /> : receiveLabel}
-                            </Button>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
-
-                {/* Expanded garment table */}
-                {isExpanded && (
-                    <div className="border-t-2 border-border/40 bg-muted/5">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/40">
-                                    <th className="py-2.5 px-5 w-10">
-                                        <Checkbox
-                                            checked={allReceivableSelected ? true : someReceivableSelected ? "indeterminate" : false}
-                                            onCheckedChange={toggleSelectAll}
-                                            disabled={receivableGarments.length === 0}
-                                        />
-                                    </th>
-                                    <th className="text-left py-2.5 px-3">Garment</th>
-                                    <th className="text-left py-2.5 px-3">Type</th>
-                                    <th className="text-left py-2.5 px-3">Style</th>
-                                    <th className="text-left py-2.5 px-3">Fabric</th>
-                                    <th className="text-left py-2.5 px-3">Trip</th>
-                                    <th className="text-left py-2.5 px-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {allGarments.map((g) => {
-                                    const isLost = g.location === "lost_in_transit";
-                                    const isReceivable = g.location === "transit_to_shop";
-                                    const isSelected = selectedIds.has(g.id);
-
-                                    return (
-                                        <tr
-                                            key={g.id}
-                                            className={cn(
-                                                "border-b border-border/20 last:border-b-0 transition-colors",
-                                                isReceivable && "cursor-pointer hover:bg-muted/30",
-                                                isSelected && isReceivable && "bg-primary/5",
-                                                isLost && "opacity-60",
-                                            )}
-                                            onClick={() => toggleGarment(g.id)}
-                                        >
-                                            <td className="py-2.5 px-5">
-                                                {isReceivable && (
-                                                    <Checkbox
-                                                        checked={isSelected}
-                                                        onCheckedChange={() => toggleGarment(g.id)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    />
-                                                )}
-                                            </td>
-                                            <td className="py-2.5 px-3 font-bold">{g.garment_id}</td>
-                                            <td className="py-2.5 px-3">
-                                                <span className={cn(
-                                                    "inline-block text-xs font-black uppercase px-2 py-0.5 rounded",
-                                                    g.garment_type === "brova"
-                                                        ? "bg-blue-50 text-blue-700"
-                                                        : g.garment_type === "alteration"
-                                                            ? "bg-purple-50 text-purple-700"
-                                                            : "bg-emerald-50 text-emerald-700"
-                                                )}>
-                                                    {g.garment_type}
-                                                </span>
-                                            </td>
-                                            <td className="py-2.5 px-3 text-muted-foreground">{g.style || "Kuwaiti"}</td>
-                                            <td className="py-2.5 px-3">
-                                                {(g as any).fabric ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {(g as any).fabric.color && (
-                                                            <span
-                                                                className="size-3.5 rounded-full border border-border/60 shrink-0"
-                                                                style={{ backgroundColor: (g as any).fabric.color }}
-                                                            />
-                                                        )}
-                                                        <span className="font-medium truncate max-w-[150px]">{(g as any).fabric.name}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-muted-foreground/40">—</span>
-                                                )}
-                                            </td>
-                                            <td className="py-2.5 px-3 font-mono text-muted-foreground text-xs">
-                                                {tripLabel(g.trip_number ?? 1)}
-                                            </td>
-                                            <td className="py-2.5 px-3">
-                                                {isLost ? (
-                                                    <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                                                        Lost in Transit
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs font-bold bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
-                                                        In Transit
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-
-                        <div className="px-5 py-3 flex justify-between items-center border-t border-border/40">
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                                {selectedReceivable.length} of {receivableGarments.length} selected
-                            </span>
-                            <Link
-                                to={order.order_type === "SALES" ? "/$main/orders/new-sales-order" : order.order_type === "ALTERATION" ? "/$main/orders/new-alteration-order" : "/$main/orders/new-work-order"}
-                                search={{ orderId: order.id }}
-                                className="text-xs font-bold text-primary/60 hover:text-primary transition-colors flex items-center gap-1.5"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                View Order Details
-                                <ExternalLink className="size-3" />
-                            </Link>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+            )}
+            {allGarments.length === 0 && (
+                <Card className="border-0 rounded-none shadow-none">
+                    <CardContent className="p-4 text-sm text-muted-foreground text-center">
+                        No garments on this order.
+                    </CardContent>
+                </Card>
+            )}
+        </OrderCardShell>
     );
 }

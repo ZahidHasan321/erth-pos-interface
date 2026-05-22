@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +54,12 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
     const { user } = useAuth();
     const mutation = useAddCashMovementMutation();
 
+    // See close-register-dialog: stable per-submit key for dedupe across retries.
+    const idemKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!open) idemKeyRef.current = null;
+    }, [open]);
+
     const form = useForm<FormValues>({
         resolver: zodResolver(schema) as any,
         defaultValues: { amount: undefined as unknown as number, reason: "" },
@@ -68,6 +74,7 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
 
     const onSubmit = (values: FormValues) => {
         if (!user) return;
+        if (!idemKeyRef.current) idemKeyRef.current = crypto.randomUUID();
         mutation.mutate(
             {
                 sessionId,
@@ -76,10 +83,12 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
                 amount: values.amount,
                 reason: values.reason || "",
                 userId: user.id,
+                idempotencyKey: idemKeyRef.current,
             },
             {
                 onSuccess: (res) => {
                     if (res.status === "success") {
+                        idemKeyRef.current = null;
                         form.reset();
                         setType("cash_in");
                         onOpenChange(false);

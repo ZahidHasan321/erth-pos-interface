@@ -68,7 +68,7 @@ export function DatePicker({
             {...calendarProps}
             mode="single"
             selected={dateValue ?? undefined}
-            onSelect={(date: any) => {
+            onSelect={(date: Date | undefined) => {
               onChange(date ?? null);
               setOpen(false);
             }}

@@ -169,18 +169,11 @@ export function EodTransactionTable({
   };
 
   return (
-    <Card
-      className="overflow-hidden"
-      style={{
-        animation:
-          "cashier-number-count 500ms cubic-bezier(0.2, 0, 0, 1) 400ms both",
-      }}
-    >
-      {/* Header */}
+    <Card className="overflow-hidden shadow-none">
       <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-sm">Transactions</h3>
+            <h3 className="text-base font-semibold">Transactions</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               {totalCount} record{totalCount !== 1 ? "s" : ""}
               {hasFilters && " (filtered)"}
@@ -350,9 +343,7 @@ export function EodTransactionTable({
                         <ExternalLink className="h-2.5 w-2.5 opacity-50" />
                       </Link>
                       {tx.order_type && (
-                        <span
-                          className={`ml-1.5 text-[10px] font-medium ${tx.order_type === "WORK" ? "text-blue-600" : "text-amber-600"}`}
-                        >
+                        <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
                           {tx.order_type === "WORK" ? "W" : "S"}
                         </span>
                       )}
@@ -370,9 +361,9 @@ export function EodTransactionTable({
                     </TableCell>
                     <TableCell className="text-xs">{methodLabel}</TableCell>
                     <TableCell
-                      className={`text-right tabular-nums font-semibold text-sm ${isRefund ? "text-red-600" : "text-emerald-600"}`}
+                      className={`text-right tabular-nums font-medium text-sm ${isRefund ? "text-destructive" : "text-foreground"}`}
                     >
-                      {isRefund ? "-" : ""}
+                      {isRefund ? "−" : ""}
                       {fmt(Math.abs(tx.amount))} KWD
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground truncate max-w-[100px]">

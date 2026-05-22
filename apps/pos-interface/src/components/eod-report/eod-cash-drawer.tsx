@@ -30,9 +30,9 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
 
     if (!session) {
         return (
-            <Card className="p-6 border-dashed border-2 bg-muted/30">
+            <Card className="p-5 shadow-none border-dashed">
                 <div className="flex items-start gap-3">
-                    <Wallet className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <Wallet className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div>
                         <p className="text-sm font-medium">No register session for this day</p>
                         <p className="text-xs text-muted-foreground mt-1">
@@ -55,24 +55,20 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
     const reopened = !!session.reopened_at;
 
     return (
-        <Card className="p-5 border border-border">
+        <Card className="p-5 shadow-none">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
                 <div className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-muted-foreground" />
-                    <h2 className="text-base font-semibold">Cash Drawer Reconciliation</h2>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                    <h2 className="text-base font-semibold">Cash drawer reconciliation</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     {reopened && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-muted text-muted-foreground">
                             <RotateCcw className="h-3 w-3" />
                             Reopened
                         </span>
                     )}
-                    <span
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${
-                            closed ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"
-                        }`}
-                    >
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-muted text-foreground">
                         {closed ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                         {closed ? "Closed" : "Open"}
                     </span>
@@ -121,7 +117,7 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
 }
 
 function Row({ label, value, tone, emphasize }: { label: string; value: string; tone?: "pos" | "neg"; emphasize?: boolean }) {
-    const color = tone === "pos" ? "text-emerald-700" : tone === "neg" ? "text-red-600" : "text-foreground";
+    const color = tone === "neg" ? "text-destructive" : "text-foreground";
     const size = emphasize ? "text-lg font-semibold" : "text-sm font-medium";
     return (
         <div>
@@ -142,19 +138,15 @@ function VarianceRow({ variance, closed }: { variance: number | null; closed: bo
         );
     }
     const zero = Math.abs(variance) < 0.001;
-    const tone = zero ? "ok" : "bad";
+    const color = zero ? "text-foreground" : "text-destructive";
     return (
         <div>
             <p className="text-xs text-muted-foreground mb-1">Variance</p>
-            <p
-                className={`text-lg font-semibold tabular-nums flex items-center gap-1.5 ${
-                    tone === "ok" ? "text-emerald-700" : "text-red-600"
-                }`}
-            >
-                {tone === "ok" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+            <p className={`text-lg font-semibold tabular-nums flex items-center gap-1.5 ${color}`}>
+                {zero ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                 {variance > 0 ? "+" : ""}{fmt(variance)} KWD
             </p>
-            <p className={`text-xs mt-0.5 ${tone === "ok" ? "text-emerald-700" : "text-red-600"}`}>
+            <p className={`text-xs mt-0.5 ${zero ? "text-muted-foreground" : "text-destructive"}`}>
                 {zero ? "Balanced" : variance > 0 ? "Over" : "Short"}
             </p>
         </div>
@@ -163,12 +155,11 @@ function VarianceRow({ variance, closed }: { variance: number | null; closed: bo
 
 function MovementLine({ type, amount, category, reason, by, at }: { type: "in" | "out"; amount: number; category: CashMovementReasonCategory; reason: string; by: string; at: string }) {
     const Icon = type === "in" ? ArrowDownToLine : ArrowUpFromLine;
-    const color = type === "in" ? "text-emerald-700" : "text-red-600";
     const label = CASH_MOVEMENT_CATEGORY_LABEL[category] ?? "Other";
     return (
         <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 min-w-0">
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${color}`} />
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="text-muted-foreground shrink-0">{fmtTime(at)}</span>
                 <span className="truncate">
                     {label}
@@ -176,7 +167,7 @@ function MovementLine({ type, amount, category, reason, by, at }: { type: "in" |
                 </span>
                 <span className="text-muted-foreground shrink-0">· {by}</span>
             </div>
-            <span className={`tabular-nums font-medium ${color}`}>
+            <span className="tabular-nums font-medium">
                 {type === "in" ? "+" : "−"}{fmtK(amount)}
             </span>
         </div>

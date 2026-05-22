@@ -108,55 +108,44 @@ export function SimplifiedCustomerForm({
     const customers = searchResults?.data || [];
     const showResults = isFocused && searchValue.length >= 3 && !hasCustomer;
 
-    const inputClasses = cn(
-        "h-9 font-bold transition-all",
-        hasCustomer ? "bg-muted/50 border-transparent shadow-none" : "bg-background border-border/60"
-    );
+    const inputClasses = "h-9";
 
     return (
-        <div className="w-full space-y-4" ref={containerRef}>
+        <div className="w-full space-y-5" ref={containerRef}>
             {/* Section Header */}
-            <div className="flex justify-between items-end">
-                <div className="space-y-1">
-                    <h2 className="text-lg font-semibold uppercase tracking-tight text-foreground flex items-center gap-2.5">
-                        <div className={cn(
-                            "p-1.5 rounded-lg",
-                            hasCustomer ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-                        )}>
-                            <User className="size-4" />
-                        </div>
-                        Customer <span className="text-primary">Details</span>
-                    </h2>
-                    <p className="text-sm font-bold text-muted-foreground opacity-70 ml-9">
-                        Search existing or create new customer
-                    </p>
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
+                        <User className="size-4" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-medium text-foreground">Customer Details</h2>
+                        <p className="text-sm text-muted-foreground">Search existing or create new customer</p>
+                    </div>
                 </div>
                 {hasCustomer && !isOrderClosed && (
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => {
                             onClear();
                             setSearchValue("");
                         }}
-                        className="h-9 px-4 text-sm font-semibold border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-all shadow-sm"
+                        className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground"
                     >
                         <X className="size-3.5 mr-1.5" />
-                        Change Customer
+                        Change
                     </Button>
                 )}
             </div>
 
             {/* Form Content */}
-            <div className={cn(
-                "rounded-lg border-2 p-4 transition-all duration-300",
-                hasCustomer ? "border-primary/30 bg-primary/[0.02]" : "border-border bg-card"
-            )}>
+            <div className="rounded-lg border border-border bg-card p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
 
                     {/* 1. PHONE / SEARCH */}
                     <div className="sm:col-span-1 lg:col-span-4 space-y-2">
-                        <label className="text-sm font-semibold text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                             <Phone className="size-3" /> Mobile Number
                         </label>
                         <div className="flex gap-2 relative">
@@ -175,7 +164,7 @@ export function SimplifiedCustomerForm({
                                             value={field.value || "+965"}
                                             onChange={field.onChange}
                                             placeholder="Code"
-                                            className="h-9 border-border/60 bg-background font-bold"
+                                            className="h-9"
                                         />
                                     )}
                                 />
@@ -209,44 +198,45 @@ export function SimplifiedCustomerForm({
                                 <AnimatePresence>
                                     {showResults && (
                                         <motion.div
-                                            initial={{ opacity: 0, y: 10 }}
+                                            initial={{ opacity: 0, y: 6 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 10 }}
-                                            className="absolute left-0 right-0 top-full mt-3 bg-card border-2 border-primary/20 shadow-sm rounded-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
+                                            exit={{ opacity: 0, y: 6 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="absolute left-0 right-0 top-full mt-2 bg-popover border border-border shadow-md rounded-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
                                         >
                                             {customers.length > 0 ? (
-                                                <div className="p-2 space-y-1">
-                                                    <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/60 border-b border-muted mb-1">
-                                                        Found {searchResults?.count} accounts
+                                                <div className="p-1">
+                                                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                                                        Found {searchResults?.count} {searchResults?.count === 1 ? "account" : "accounts"}
                                                     </div>
                                                     {customers.map((c) => (
                                                         <button
                                                             key={c.id}
                                                             onClick={() => handleSelect(c)}
-                                                            className="w-full flex items-center justify-between p-3.5 rounded-lg hover:bg-primary/5 transition-colors text-left group"
+                                                            className="w-full flex items-center justify-between gap-3 p-2.5 rounded-md hover:bg-muted/60 transition-colors text-left"
                                                         >
-                                                            <div className="flex items-center gap-3.5">
-                                                                <div className="size-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-sm">
-                                                                    <User className="size-5" />
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <div className="size-9 bg-muted rounded-md flex items-center justify-center text-muted-foreground shrink-0">
+                                                                    <User className="size-4" />
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-bold text-foreground group-hover:text-primary transition-colors">{c.name}</div>
-                                                                    <div className="text-xs font-mono font-bold text-muted-foreground/70">{c.phone}</div>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm font-medium text-foreground truncate">{c.name}</div>
+                                                                    <div className="text-xs font-mono text-muted-foreground">{c.phone}</div>
                                                                 </div>
                                                             </div>
-                                                            <Badge className="text-xs font-semibold uppercase bg-muted/50 text-muted-foreground border-none group-hover:bg-primary/20 group-hover:text-primary">
+                                                            <Badge variant="secondary" className="text-xs font-normal shrink-0">
                                                                 {c.account_type}
                                                             </Badge>
                                                         </button>
                                                     ))}
                                                 </div>
                                             ) : !isFetching && (
-                                                <div className="p-8 text-center bg-muted/5">
-                                                    <div className="size-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
-                                                        <AlertCircle className="size-6 text-muted-foreground/30" />
+                                                <div className="px-6 py-8 text-center">
+                                                    <div className="size-10 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+                                                        <AlertCircle className="size-5 text-muted-foreground" />
                                                     </div>
-                                                    <p className="text-sm font-semibold text-muted-foreground/60 uppercase tracking-tight">No records found</p>
-                                                    <p className="text-sm font-bold text-muted-foreground/40 uppercase mt-1">Fill in details and click Create</p>
+                                                    <p className="text-sm font-medium text-foreground">No records found</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Fill in the details and click Create</p>
                                                 </div>
                                             )}
                                         </motion.div>
@@ -258,7 +248,7 @@ export function SimplifiedCustomerForm({
 
                     {/* 2. NAME */}
                     <div className="sm:col-span-1 lg:col-span-3 space-y-2">
-                        <label className="text-sm font-semibold text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                             <User className="size-3" /> Customer Name
                         </label>
                         <Controller
@@ -267,7 +257,7 @@ export function SimplifiedCustomerForm({
                             render={({ field }) => (
                                 <Input
                                     {...field}
-                                    placeholder="Full Name"
+                                    placeholder="Full name"
                                     readOnly={hasCustomer || isOrderClosed}
                                     className={inputClasses}
                                 />
@@ -277,7 +267,7 @@ export function SimplifiedCustomerForm({
 
                     {/* 3. ARABIC NAME */}
                     <div className="sm:col-span-1 lg:col-span-3 space-y-2">
-                        <label className="text-sm font-semibold text-muted-foreground/80 flex items-center gap-1.5">
+                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                             <Languages className="size-3" /> Arabic Name
                         </label>
                         <Controller
@@ -300,7 +290,7 @@ export function SimplifiedCustomerForm({
                     <div className="sm:col-span-1 lg:col-span-2 flex justify-end">
                         {!hasCustomer && !isOrderClosed && (
                             <Button
-                                className="h-9 w-full font-semibold text-sm gap-2"
+                                className="h-9 w-full gap-2"
                                 onClick={handleCreateQuickly}
                                 disabled={isCreating}
                             >
@@ -309,23 +299,13 @@ export function SimplifiedCustomerForm({
                             </Button>
                         )}
                         {hasCustomer && (
-                            <div className="h-9 flex items-center justify-center w-full">
-                                <div className="size-9 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
-                                    <Check className="size-5" />
-                                </div>
+                            <div className="h-9 flex items-center justify-center w-full text-sm text-primary gap-1.5">
+                                <Check className="size-4" />
+                                <span className="font-medium">Selected</span>
                             </div>
                         )}
                     </div>
                 </div>
-
-                {hasCustomer && (
-                    <div className="mt-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-500">
-                         <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1 bg-card border-primary/20 text-primary shadow-xs">
-                            Account Verified
-                         </Badge>
-                         <div className="h-px flex-1 bg-border" />
-                    </div>
-                )}
             </div>
         </div>
     );

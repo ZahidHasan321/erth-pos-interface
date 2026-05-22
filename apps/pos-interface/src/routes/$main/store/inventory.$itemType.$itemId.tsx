@@ -557,7 +557,7 @@ function StockBreakdown({
           <h2 className="text-sm font-semibold">Stock</h2>
           <span className="text-xs text-muted-foreground">
             Low threshold: <span className="font-medium tabular-nums text-foreground">{formatQty(itemType, threshold, unit)}</span>
-            {isThresholdOverridden && <span className="ml-1 text-[10px] uppercase text-muted-foreground/70">(custom)</span>}
+            {isThresholdOverridden && <span className="ml-1 text-[10px] uppercase text-muted-foreground">(custom)</span>}
           </span>
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -905,7 +905,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <div className="flex items-baseline justify-between mb-1">
         <Label className="text-xs text-muted-foreground">{label}</Label>
-        {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
+        {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
       </div>
       {children}
     </div>

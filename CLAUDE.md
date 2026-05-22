@@ -335,11 +335,7 @@ pnpm --filter @repo/database test:workflow  # Docker-backed spec-as-oracle lifec
 
 ## 10. Open questions (pending client decisions)
 
-Behaviors the code currently implements one way but the spec has not yet locked in. Each item needs a client decision before code or spec is changed. Do not "fix" these unilaterally — surface them, get a ruling, update the spec first, then the code.
-
-- **Brova feedback fan-out is asymmetric across siblings with partially-shared keys.** Today (§2.5) propagation is two independent matches: measurement changes fan out to every sibling sharing `measurement_id`; style changes fan out to every sibling sharing `style_id`. So for two brovas B1 and B2 that share `measurement_id` but have different `style_id`s, a feedback submission on B1 that changes BOTH measurements (customer_request) and style silently lands B2 in a hybrid state: B2 inherits the new measurement row but keeps its own style and gets none of B1's style edits.
-  - **Why this is a problem:** (a) B2's target measurements shift without B2 ever being trialed — if the measurement edit was actually style-coupled (e.g. "chest sits tight *because of this collar*"), B2 inherits a body change that may not be right for its own silhouette; (b) the UI's "This garment only" escape hatch is measurement-only, so there is no way to scope a style edit, and the default is propagate-silently; (c) if B2 is already past trial (cut/sewn to the old measurement row), repointing `measurement_id` underneath it changes the target spec mid-flight — QC will compare against the new row with no rejection or warning.
-  - **What to ask the client:** When B1's feedback changes both axes and a sibling shares only one key, should we (i) keep current behavior, (ii) require an explicit per-sibling confirm before any cross-key propagation, (iii) treat the brova-pair as atomic (all-or-nothing), or (iv) something else? Also: should `measurement_id` repointing be blocked once a sibling is past `waiting_cut`?
+Open questions for the client live in `OPEN_QUESTIONS.docx`. When one is resolved, fold the decision into §2–§6 here and remove it from that file.
 
 ---
 

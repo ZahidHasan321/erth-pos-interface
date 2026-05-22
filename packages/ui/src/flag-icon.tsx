@@ -1,3 +1,4 @@
+import type * as React from "react";
 // Static imports for all country flags used in the application
 import KW from "country-flag-icons/react/3x2/KW";
 import SA from "country-flag-icons/react/3x2/SA";
@@ -45,9 +46,16 @@ interface FlagIconProps {
   className?: string;
 }
 
-// Static mapping of country codes to flag components
-// Using 'any' for flag components due to type incompatibility between React.SVGProps and country-flag-icons
-const flagMap: Record<string, any> = {
+// Static mapping of country codes to flag components.
+// country-flag-icons types each flag against a non-standard HTMLSVGElement;
+// we widen to the loose component shape used here (width/height/className/style).
+type FlagComponent = React.ComponentType<{
+  width?: number;
+  height?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}>;
+const flagMap: Record<string, FlagComponent> = {
   KW, SA, BH, QA, AE, OM,
   IN, BD, PK, LK, NP, BT, MV,
   GB, DE, FR, IT, ES, NL, SE, NO, CH, DK, FI, IE, PT, PL, GR, AT, BE, CZ, HU,

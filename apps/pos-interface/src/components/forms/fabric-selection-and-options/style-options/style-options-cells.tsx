@@ -354,7 +354,7 @@ export const JabzourCell = ({
   row,
   table,
 }: CellContext<GarmentSchema, unknown>) => {
-  const { control, setValue } = useFormContext();
+  const { control, setValue, getValues } = useFormContext();
   const meta = table.options.meta as {
     isFormDisabled?: boolean;
   };
@@ -366,11 +366,14 @@ export const JabzourCell = ({
 
   React.useEffect(() => {
     if (isShaab) {
-      setValue(`garments.${row.index}.jabzour_thickness`, "DOUBLE");
+      const current = getValues(`garments.${row.index}.jabzour_thickness`);
+      if (!current) {
+        setValue(`garments.${row.index}.jabzour_thickness`, "DOUBLE");
+      }
     } else {
       setValue(`garments.${row.index}.jabzour_2`, null);
     }
-  }, [isShaab, setValue, row.index]);
+  }, [isShaab, setValue, getValues, row.index]);
 
   return (
     <div className="flex items-center gap-2">
@@ -496,13 +499,12 @@ export const JabzourCell = ({
             <Select
               onValueChange={field.onChange}
               value={field.value || ""}
-              disabled={isFormDisabled || isShaab}
+              disabled={isFormDisabled}
             >
               <SelectTrigger
                 className={cn(
                   "bg-background border-border/60 min-w-[60px]",
                   fieldState.error && "border-destructive",
-                  isShaab && "opacity-60",
                 )}
               >
                 <SelectValue placeholder="Thickness" />

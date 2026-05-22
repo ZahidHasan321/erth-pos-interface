@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,15 +10,12 @@ import {
   Save,
   Check,
   X,
-  Hash,
   User,
   Clock,
   RefreshCw,
   MessageSquare,
   PenTool,
   AlertCircle,
-  CreditCard,
-  Banknote,
   ArrowLeft,
   ArrowUp,
   Mic,
@@ -27,8 +24,6 @@ import {
   Pause,
   ChevronDown,
   History,
-  Home,
-  MapPin,
 } from "lucide-react";
 
 // UI Components
@@ -63,7 +58,7 @@ import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGa
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import { buildFinalGarmentPayload } from "@/lib/feedback-payload";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
-import { evaluateBrovaFeedback, isAlteration, getAlterationNumber } from "@repo/database";
+import { evaluateBrovaFeedback, getAlterationNumber } from "@repo/database";
 
 // Assets & Constants
 import {
@@ -162,30 +157,33 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
 ];
 
 const SATISFACTION_LEVELS = [
-  { value: "angry", label: "Angry", emoji: "\u{1F621}", numericValue: 1, color: "hover:bg-red-50 peer-data-[state=checked]:bg-red-100 peer-data-[state=checked]:border-red-500 text-red-600" },
-  { value: "sad", label: "Unhappy", emoji: "\u{1F61E}", numericValue: 2, color: "hover:bg-orange-50 peer-data-[state=checked]:bg-orange-100 peer-data-[state=checked]:border-orange-500 text-orange-600" },
-  { value: "neutral", label: "Okay", emoji: "\u{1F636}", numericValue: 3, color: "hover:bg-yellow-50 peer-data-[state=checked]:bg-yellow-100 peer-data-[state=checked]:border-yellow-500 text-yellow-600" },
-  { value: "happy", label: "Happy", emoji: "\u{1F60A}", numericValue: 4, color: "hover:bg-green-50 peer-data-[state=checked]:bg-green-100 peer-data-[state=checked]:border-green-500 text-green-600" },
-  { value: "very_happy", label: "Love It", emoji: "\u{1F929}", numericValue: 5, color: "hover:bg-emerald-50 peer-data-[state=checked]:bg-emerald-100 peer-data-[state=checked]:border-emerald-500 text-emerald-600" },
+  { value: "angry", label: "Angry", emoji: "\u{1F621}", numericValue: 1 },
+  { value: "sad", label: "Unhappy", emoji: "\u{1F61E}", numericValue: 2 },
+  { value: "neutral", label: "Okay", emoji: "\u{1F636}", numericValue: 3 },
+  { value: "happy", label: "Happy", emoji: "\u{1F60A}", numericValue: 4 },
+  { value: "very_happy", label: "Love It", emoji: "\u{1F929}", numericValue: 5 },
 ];
 
 const BROVA_FEEDBACK_OPTIONS = [
-  { value: "accepted", label: "Accept", color: "peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:border-emerald-500" },
-  { value: "needs_repair_accepted", label: "Accept with Fix", color: "peer-data-[state=checked]:bg-yellow-50 peer-data-[state=checked]:text-yellow-700 peer-data-[state=checked]:border-yellow-500" },
-  { value: "needs_repair_rejected", label: "Reject - Repair", color: "peer-data-[state=checked]:bg-amber-50 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:border-amber-500" },
-  { value: "needs_redo", label: "Reject - Redo", color: "peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-red-700 peer-data-[state=checked]:border-red-500" },
+  { value: "accepted", label: "Accept", color: "peer-data-[state=checked]:border-emerald-600 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-emerald-600" },
+  { value: "needs_repair_accepted", label: "Accept with fix", color: "peer-data-[state=checked]:border-amber-500 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-500" },
+  { value: "needs_repair_rejected", label: "Reject — repair", color: "peer-data-[state=checked]:border-amber-600 peer-data-[state=checked]:text-amber-800 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-600" },
+  { value: "needs_redo", label: "Reject — redo", color: "peer-data-[state=checked]:border-destructive peer-data-[state=checked]:text-destructive peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-destructive" },
 ];
 
 const FINAL_FEEDBACK_OPTIONS = [
-  { value: "accepted", label: "Accepted", color: "peer-data-[state=checked]:bg-emerald-50 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:border-emerald-500" },
-  { value: "needs_repair", label: "Needs Repair", color: "peer-data-[state=checked]:bg-amber-50 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:border-amber-500" },
-  { value: "needs_redo", label: "Needs Redo", color: "peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-red-700 peer-data-[state=checked]:border-red-500" },
+  { value: "accepted", label: "Accepted", color: "peer-data-[state=checked]:border-emerald-600 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-emerald-600" },
+  { value: "needs_repair", label: "Needs repair", color: "peer-data-[state=checked]:border-amber-500 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-500" },
+  { value: "needs_redo", label: "Needs redo", color: "peer-data-[state=checked]:border-destructive peer-data-[state=checked]:text-destructive peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-destructive" },
 ];
 
+// `label` is the canonical value stored & matched against in the save handler
+// (e.g. "Customer Request" gates measurement propagation). `short` is the
+// compact form shown in the table trigger so the 96px cell never wraps.
 const DIFFERENCE_REASONS = [
-  { label: "Customer Request", color: "text-emerald-600 bg-emerald-50" },
-  { label: "Workshop Error", color: "text-red-600 bg-red-50" },
-  { label: "Shop Error", color: "text-muted-foreground bg-muted/50" },
+  { label: "Customer Request", short: "Customer", dot: "bg-emerald-500" },
+  { label: "Workshop Error", short: "Workshop", dot: "bg-destructive" },
+  { label: "Shop Error", short: "Shop", dot: "bg-muted-foreground" },
 ];
 
 // Lightweight option lists for non-image style fields (collar position, lines).
@@ -266,10 +264,88 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   measurementGarmentOnly: false,
 });
 
+// --- Local draft persistence ---
+// Keep un-submitted feedback alive across reloads. Keyed per garment+trip
+// (trip increments invalidate the draft — different stage of the garment's life).
+// blob: URLs and File/Blob refs can't survive a reload, so they're dropped from
+// the persisted shape; un-uploaded photos/voice notes are lost on reload by design.
+const DRAFT_KEY_PREFIX = "feedback-draft";
+const draftKey = (garmentId: string, tripNumber: number) =>
+  `${DRAFT_KEY_PREFIX}:${garmentId}:${tripNumber}`;
+
+const toDraftJson = (st: GarmentFeedbackState) => {
+  // pendingUploads holds File/Blob refs that can't be JSON-serialized — drop it.
+  // Blob URLs are tied to the page session and won't resolve after reload.
+  const out = { ...st } as Partial<GarmentFeedbackState>;
+  delete out.pendingUploads;
+  out.sharedPhotos = st.sharedPhotos.filter(p => !p.url.startsWith("blob:"));
+  out.sharedVoiceNotes = st.sharedVoiceNotes.filter(u => !u.startsWith("blob:"));
+  return out;
+};
+
+// Treat empty default state as no-draft so we don't litter localStorage with
+// keys for every garment the user merely clicked through.
+const isDraftMeaningful = (st: GarmentFeedbackState): boolean =>
+  Object.keys(st.feedbackMeasurements).length > 0 ||
+  Object.keys(st.differenceReasons).length > 0 ||
+  Object.keys(st.measurementNotes).length > 0 ||
+  Object.keys(st.optionNotes).length > 0 ||
+  Object.keys(st.optionChecks).length > 0 ||
+  Object.keys(st.styleChanges).length > 0 ||
+  Object.keys(st.hashwaChanges).length > 0 ||
+  st.sharedPhotos.some(p => !p.url.startsWith("blob:")) ||
+  st.sharedVoiceNotes.some(u => !u.startsWith("blob:")) ||
+  st.satisfaction !== null ||
+  st.feedbackAction !== null ||
+  st.distributionAction !== null ||
+  st.isInvestigationNeeded ||
+  !!st.customerSignature ||
+  st.notes.length > 0;
+
+const loadDraft = (garmentId: string, tripNumber: number): Partial<GarmentFeedbackState> | null => {
+  try {
+    const raw = localStorage.getItem(draftKey(garmentId, tripNumber));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...parsed, pendingUploads: {} };
+  } catch {
+    return null;
+  }
+};
+
+const clearDraft = (garmentId: string, tripNumber: number) => {
+  try { localStorage.removeItem(draftKey(garmentId, tripNumber)); } catch { /* ignore */ }
+};
+
 interface OrderWithDetails extends Order {
     customer?: Customer;
     garments?: Garment[];
 }
+
+// Memoized per-row text field for the keyed inputs inside `.map()` (measurement
+// values, measurement notes, option notes). Skips re-render when its own
+// `inputKey`/`value`/`onChange` are unchanged — paired with stable handlers
+// below, a keystroke in one row no longer re-renders all the others.
+type KeyedTextFieldProps = {
+  inputKey: string;
+  value: string;
+  onChange: (key: string, value: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">;
+
+const KeyedTextField = memo(function KeyedTextField({
+  inputKey,
+  value,
+  onChange,
+  ...rest
+}: KeyedTextFieldProps) {
+  return (
+    <Input
+      {...rest}
+      value={value}
+      onChange={(e) => onChange(inputKey, e.target.value)}
+    />
+  );
+});
 
 // --- Voice Note Player ---
 
@@ -400,16 +476,16 @@ function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string;
         onClick={toggle}
         aria-label={playLabel}
         title={playLabel}
-        className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 active:scale-95 transition-all"
+        className="shrink-0 size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
       >
         {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current ml-0.5" />}
       </button>
       <div className="flex flex-col flex-1 min-w-0 gap-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+          <span className="text-[11px] font-medium text-muted-foreground truncate">
             {label}
           </span>
-          <span className="text-[11px] font-bold tabular-nums text-muted-foreground shrink-0">
+          <span className="text-[11px] font-medium tabular-nums text-muted-foreground shrink-0">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
@@ -432,7 +508,7 @@ function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string;
             style={{ width: `${progressPct}%` }}
           />
           <div
-            className="absolute top-1/2 size-3 rounded-full bg-primary border-2 border-background shadow-sm opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            className="absolute top-1/2 size-3 rounded-full bg-primary border border-background opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             style={{ left: `${progressPct}%` }}
             aria-hidden="true"
           />
@@ -538,6 +614,9 @@ function UnifiedFeedbackInterface() {
     if (garmentStates[selectedGarmentId]) return;
 
     const tripNumber = activeGarment.trip_number || 1;
+    // Read draft synchronously up front; overlay after DB result (or use alone
+    // if no DB feedback). Draft wins on conflict — it's the user's newest edits.
+    const draft = loadDraft(selectedGarmentId, tripNumber);
     getFeedbackByGarmentAndTrip(selectedGarmentId, tripNumber).then(res => {
       if (res.status === 'success' && res.data) {
         const fb = res.data;
@@ -617,7 +696,11 @@ function UnifiedFeedbackInterface() {
           existingFeedbackId: fb.id,
           isEditing: true,
           submitted: true,
+          ...(draft || {}),
         });
+      } else if (draft) {
+        // No DB feedback yet, but a local draft exists — restore it.
+        updateGarmentState(selectedGarmentId, draft);
       }
     });
   }, [selectedGarmentId, activeGarment]);
@@ -670,14 +753,46 @@ function UnifiedFeedbackInterface() {
     }
   }, [paramOrderId]);
 
+  // Persist garment drafts to localStorage so a reload doesn't reset in-progress
+  // feedback. Debounced so a flurry of keystrokes is one write.
+  useEffect(() => {
+    if (!activeOrder?.garments) return;
+    const t = setTimeout(() => {
+      for (const [id, st] of Object.entries(garmentStates)) {
+        const g = activeOrder.garments?.find(x => x.id === id);
+        if (!g) continue;
+        const trip = g.trip_number || 1;
+        if (isDraftMeaningful(st)) {
+          try { localStorage.setItem(draftKey(id, trip), JSON.stringify(toDraftJson(st))); }
+          catch { /* quota / private mode — silently skip */ }
+        } else {
+          clearDraft(id, trip);
+        }
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [garmentStates, activeOrder?.garments]);
+
   // --- Handlers ---
 
-  const handleFeedbackMeasurementChange = (key: string, value: string) => {
+  // Keyed handlers below use setGarmentStates(prev => ...) directly instead of
+  // updateGarmentState + currentState — that closes over `prev` (no render-time
+  // dep on currentState) so the callback is stable across re-renders and the
+  // memoized KeyedTextField rows actually skip work.
+  const handleFeedbackMeasurementChange = useCallback((key: string, value: string) => {
+    if (!selectedGarmentId) return;
     const numValue = value === "" ? "" : parseFloat(value);
-    updateGarmentState(selectedGarmentId, {
-      feedbackMeasurements: { ...currentState.feedbackMeasurements, [key]: numValue },
+    setGarmentStates(prev => {
+      const cur = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...cur,
+          feedbackMeasurements: { ...cur.feedbackMeasurements, [key]: numValue },
+        },
+      };
     });
-  };
+  }, [selectedGarmentId]);
 
   const handleDifferenceReasonChange = (key: string, value: string) => {
     updateGarmentState(selectedGarmentId, {
@@ -685,17 +800,33 @@ function UnifiedFeedbackInterface() {
     });
   };
 
-  const handleMeasurementNoteChange = (key: string, value: string) => {
-    updateGarmentState(selectedGarmentId, {
-      measurementNotes: { ...currentState.measurementNotes, [key]: value },
+  const handleMeasurementNoteChange = useCallback((key: string, value: string) => {
+    if (!selectedGarmentId) return;
+    setGarmentStates(prev => {
+      const cur = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...cur,
+          measurementNotes: { ...cur.measurementNotes, [key]: value },
+        },
+      };
     });
-  };
+  }, [selectedGarmentId]);
 
-  const handleOptionNoteChange = (key: string, value: string) => {
-    updateGarmentState(selectedGarmentId, {
-      optionNotes: { ...currentState.optionNotes, [key]: value },
+  const handleOptionNoteChange = useCallback((key: string, value: string) => {
+    if (!selectedGarmentId) return;
+    setGarmentStates(prev => {
+      const cur = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: {
+          ...cur,
+          optionNotes: { ...cur.optionNotes, [key]: value },
+        },
+      };
     });
-  };
+  }, [selectedGarmentId]);
 
   const handleCheck = (key: string, checked: boolean) => {
     updateGarmentState(selectedGarmentId, {
@@ -1186,6 +1317,9 @@ function UnifiedFeedbackInterface() {
         // Mark garment as submitted in local state
         updateGarmentState(selectedGarmentId, { submitted: true, isEditing: true });
 
+        // Submitted — drop the local draft. A subsequent edit creates a fresh one.
+        clearDraft(activeGarment.id, activeGarment.trip_number || 1);
+
         // Refresh order data so garment pills reflect updated piece_stage
         const refreshed = await getOrderById(activeOrder.id, true);
         if (refreshed.status === 'success' && refreshed.data) {
@@ -1211,6 +1345,12 @@ function UnifiedFeedbackInterface() {
             }
           }
           if (affectedIds.size > 0) {
+            // Also drop any localStorage drafts for the affected siblings —
+            // they were anchored to a stale baseline.
+            for (const id of affectedIds) {
+              const g = refreshed.data.garments?.find(x => x.id === id);
+              if (g) clearDraft(id, g.trip_number || 1);
+            }
             setGarmentStates(prev => {
               const next = { ...prev };
               let mutated = false;
@@ -1449,19 +1589,19 @@ function UnifiedFeedbackInterface() {
             <Skeleton className="h-8 w-64 rounded-lg" />
             <Skeleton className="h-4 w-40 rounded-md" />
           </div>
-          <Skeleton className="h-10 w-28 rounded-xl" />
+          <Skeleton className="h-10 w-28 rounded-md" />
         </div>
         {/* Tabs skeleton */}
-        <Skeleton className="h-10 w-80 rounded-xl" />
+        <Skeleton className="h-10 w-80 rounded-md" />
         {/* Content skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="h-48 rounded-2xl" />
-            <Skeleton className="h-32 rounded-2xl" />
+            <Skeleton className="h-48 rounded-md" />
+            <Skeleton className="h-32 rounded-md" />
           </div>
           <div className="space-y-4">
-            <Skeleton className="h-40 rounded-2xl" />
-            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-40 rounded-md" />
+            <Skeleton className="h-24 rounded-md" />
           </div>
         </div>
       </div>
@@ -1471,12 +1611,12 @@ function UnifiedFeedbackInterface() {
   if (!activeOrder) {
     return (
       <div className="p-4 md:p-5 max-w-6xl mx-auto flex flex-col items-center justify-center py-10 text-center">
-        <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 border-2 border-dashed border-border shadow-inner">
+        <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 border border-dashed border-border shadow-inner">
           <Package className="w-10 h-10 text-muted-foreground/40" />
         </div>
-        <h3 className="text-lg font-black text-foreground uppercase tracking-tight">Order Not Found</h3>
-        <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-2">This order could not be loaded</p>
-        <Button variant="outline" className="mt-4 font-bold" onClick={() => router.history.back()}>
+        <h3 className="text-lg font-medium text-foreground">Order not found</h3>
+        <p className="text-muted-foreground text-sm mt-2">This order could not be loaded.</p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => router.history.back()}>
           <ArrowLeft className="size-3.5 mr-2" />
           Go Back
         </Button>
@@ -1487,125 +1627,61 @@ function UnifiedFeedbackInterface() {
   return (
     <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4 pb-20">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border pb-3">
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => router.history.back()}>
-          <ArrowLeft className="size-4" />
-        </Button>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-foreground tracking-tight">
-            Order <span className="text-primary">Feedback</span>
-          </h1>
-          <span className="text-sm text-muted-foreground font-medium">
-            #{activeOrder.id} &bull; {activeOrder.customer?.name || "Guest"}
-          </span>
-          {activeGarment?.garment_type === "brova" && (
-            <Badge variant="outline" className="text-xs font-black uppercase bg-amber-50 text-amber-700 border-amber-200">Brova Trial</Badge>
-          )}
-          {activeGarment?.garment_type === "final" && (
-            <Badge variant="outline" className="text-xs font-black uppercase bg-emerald-50 text-emerald-700 border-emerald-200">Final / Pickup</Badge>
-          )}
-          {activeGarment?.garment_type === "alteration" && (
-            <Badge variant="outline" className="text-xs font-black uppercase bg-purple-50 text-purple-700 border-purple-200">Alteration</Badge>
-          )}
-          {currentState.isEditing && (
-            <Badge variant="outline" className="text-xs font-black uppercase bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
-          )}
-        </div>
-      </div>
+      {/* Header — compact one-row context strip */}
+      {(() => {
+        const balance = (activeOrder.order_total || 0) - (activeOrder.paid || 0);
+        const isHomeDelivery = !!(activeOrder as any).home_delivery;
+        return (
+          <div className="flex items-center gap-3 flex-wrap border-b border-border pb-3">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => router.history.back()}>
+              <ArrowLeft className="size-4" />
+            </Button>
+
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h1 className="text-base font-medium text-foreground truncate">
+                {activeOrder.customer?.name || "Guest"}
+              </h1>
+              <span className="text-xs text-muted-foreground tabular-nums">#{activeOrder.id}</span>
+              {activeOrder.invoice_number && (
+                <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
+                  · INV {activeOrder.invoice_number}
+                </span>
+              )}
+              {activeOrder.customer?.phone && (
+                <span className="text-xs text-muted-foreground font-mono hidden md:inline">
+                  · {activeOrder.customer.phone}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto text-xs">
+              {activeGarment?.garment_type === "brova" && (
+                <Badge variant="outline" className="font-normal">Brova trial</Badge>
+              )}
+              {activeGarment?.garment_type === "final" && (
+                <Badge variant="outline" className="font-normal">Final pickup</Badge>
+              )}
+              {activeGarment?.garment_type === "alteration" && (
+                <Badge variant="outline" className="font-normal">Alteration</Badge>
+              )}
+              {currentState.isEditing && (
+                <Badge variant="outline" className="font-normal">Editing</Badge>
+              )}
+              <span className="text-muted-foreground tabular-nums">
+                Paid <span className="text-foreground">{activeOrder.paid || 0} KWD</span>
+              </span>
+              <span className={cn("tabular-nums", balance > 0 ? "text-destructive" : "text-muted-foreground")}>
+                · {balance > 0 ? `Balance ${balance.toFixed(3)} KWD` : "Paid in full"}
+              </span>
+              <span className="text-muted-foreground hidden md:inline">
+                · {isHomeDelivery ? "Home delivery" : "Pickup"}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="space-y-4">
-          {/* 2. Compact Order Context Bar */}
-          <Card className="border-2 border-primary/10 shadow-sm overflow-hidden bg-muted/20 py-0 gap-0">
-            <CardContent className="p-3">
-              <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-8">
-                {/* Customer Info */}
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                    <User className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Customer</p>
-                    <p className="font-bold text-sm leading-none">{activeOrder.customer?.name || "Guest"}</p>
-                  </div>
-                  <div className="ml-2 pl-3 border-l border-border py-1">
-                    <p className="text-xs font-bold text-muted-foreground font-mono leading-none">{activeOrder.customer?.phone}</p>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block h-6 w-px bg-border/60" />
-
-                {/* Financial Status */}
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                            <Banknote className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Total Paid</p>
-                            <p className="font-black text-sm leading-none text-emerald-700">{activeOrder.paid || 0} KWD</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className={cn(
-                            "p-1.5 rounded-lg",
-                            (activeOrder.order_total || 0) - (activeOrder.paid || 0) > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
-                        )}>
-                            <CreditCard className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Balance</p>
-                            <p className={cn(
-                                "font-black text-sm leading-none",
-                                (activeOrder.order_total || 0) - (activeOrder.paid || 0) > 0 ? "text-red-700" : "text-emerald-700"
-                            )}>
-                                {((activeOrder.order_total || 0) - (activeOrder.paid || 0)).toFixed(3)} KWD
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="hidden lg:block h-6 w-px bg-border/60" />
-
-                {/* Order Details */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                      <Hash className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Order & Inv</p>
-                      <div className="flex items-center gap-2 leading-none">
-                        <span className="font-black text-sm">#{activeOrder.id}</span>
-                        <span className="text-xs font-bold text-primary opacity-70">INV: {activeOrder.invoice_number || "\u2014"}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block h-6 w-px bg-border/60" />
-
-                {/* Delivery Type */}
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-1.5 rounded-lg",
-                    (activeOrder as any).home_delivery ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"
-                  )}>
-                    {(activeOrder as any).home_delivery ? <Home className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Delivery</p>
-                    <p className={cn(
-                      "font-black text-sm leading-none",
-                      (activeOrder as any).home_delivery ? "text-indigo-700" : "text-foreground"
-                    )}>
-                      {(activeOrder as any).home_delivery ? "Home Delivery" : "Pickup"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* ═══ GARMENT-LEVEL FEEDBACK ═══ */}
           {/* 3. Garment Selection Tabs */}
@@ -1619,38 +1695,21 @@ function UnifiedFeedbackInterface() {
                     <TabsTrigger
                         key={garment.id}
                         value={garment.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:border-primary border-2 border-border/60 bg-card px-3 py-1.5 h-12 min-w-[120px] rounded-xl transition-all"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-border bg-card px-3 h-8 rounded-md gap-2 transition-colors"
                     >
-                        <div className="text-left w-full space-y-0.5">
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="font-black text-xs truncate uppercase tracking-tighter">{garment.garment_id}</span>
-                                <div className="flex items-center gap-1">
-                                    {isSubmitted && (
-                                        <div className="size-3.5 rounded-full bg-emerald-500 flex items-center justify-center">
-                                            <Check className="size-2 text-white" />
-                                        </div>
-                                    )}
-                                    <Badge
-                                        className={cn(
-                                            "h-3 px-1 text-[7px] font-black uppercase border-none",
-                                            isAlteration(garment.trip_number)
-                                                ? "bg-blue-100 text-blue-700 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-                                                : garment.garment_type === 'brova'
-                                                    ? "bg-amber-100 text-amber-700 data-[state=active]:bg-amber-500 data-[state=active]:text-white"
-                                                    : "bg-emerald-100 text-emerald-700 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-                                        )}
-                                    >
-                                        {(() => {
-                                            const altNum = getAlterationNumber(garment.trip_number);
-                                            if (altNum !== null) return `Alt ${altNum}`;
-                                            if (garment.garment_type === 'brova') return "Brova";
-                                            if (garment.garment_type === 'alteration') return "Alteration";
-                                            return "Final";
-                                        })()}
-                                    </Badge>
-                                </div>
-                            </div>
-                        </div>
+                        <span className="text-sm font-medium tabular-nums">{garment.garment_id}</span>
+                        <span className="text-[10px] opacity-70">
+                            {(() => {
+                                const altNum = getAlterationNumber(garment.trip_number);
+                                if (altNum !== null) return `Alt ${altNum}`;
+                                if (garment.garment_type === 'brova') return "Brova";
+                                if (garment.garment_type === 'alteration') return "Alt";
+                                return "Final";
+                            })()}
+                        </span>
+                        {isSubmitted && (
+                            <span className="size-1.5 rounded-full bg-emerald-500" aria-label="Submitted" />
+                        )}
                     </TabsTrigger>
                     );
                 })}
@@ -1660,24 +1719,22 @@ function UnifiedFeedbackInterface() {
             <TabsContent value={selectedGarmentId || ""} className="mt-0 space-y-4 focus-visible:ring-0">
 
                  {/* MEASUREMENT feedback SECTION */}
-                <Card className="border border-border shadow-sm overflow-clip rounded-xl py-0 gap-0">
+                <Card className="border border-border overflow-clip rounded-md py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
-                                <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
-                                    <Ruler className="w-4 h-4" />
-                                </div>
-                                <CardTitle className="text-base font-bold uppercase tracking-tight">Measurement Feedback</CardTitle>
+                                <Ruler className="size-4 text-muted-foreground" />
+                                <CardTitle className="text-sm font-medium">Measurement feedback</CardTitle>
                             </div>
                             <div className="flex items-center gap-2">
                                 {isMeasurementLoading ? (
-                                    <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">LOADING…</Badge>
+                                    <Badge variant="outline" className="bg-background font-semibold text-xs h-6 px-2">LOADING…</Badge>
                                 ) : measurementId ? (
-                                    <Badge variant="outline" className="bg-background font-mono font-bold text-[10px] h-6 px-2" title="Measurement ID">
+                                    <Badge variant="outline" className="bg-background font-mono font-medium text-[10px] h-6 px-2" title="Measurement ID">
                                         M: {String(measurementId).slice(0, 8)}
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="bg-background font-black text-xs h-6 px-2">NO MEASUREMENT</Badge>
+                                    <Badge variant="outline" className="bg-background font-semibold text-xs h-6 px-2">NO MEASUREMENT</Badge>
                                 )}
                             </div>
                         </div>
@@ -1685,17 +1742,15 @@ function UnifiedFeedbackInterface() {
 
                     {/* Scope toggle — only meaningful when bulk propagation would otherwise fire (brova) */}
                     {activeGarment?.garment_type === "brova" && (
-                        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50/40 border-b border-amber-200/60">
+                        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-muted/30 border-b border-border">
                             <div className="flex items-start gap-2 min-w-0">
-                                <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                                <AlertCircle className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
                                 <div className="min-w-0">
-                                    <p className="text-xs font-black uppercase tracking-widest text-amber-800">
-                                        This garment only
-                                    </p>
-                                    <p className="text-[11px] font-medium text-amber-700/80 leading-snug">
+                                    <p className="text-xs font-medium">This garment only</p>
+                                    <p className="text-xs text-muted-foreground leading-snug">
                                         {currentState.measurementGarmentOnly
-                                            ? "Customer Request edits will create a new measurement for THIS brova only. Siblings stay unchanged."
-                                            : "Customer Request edits will update every garment in this order sharing the same measurement."}
+                                            ? "Customer-request edits create a new measurement for this brova only — siblings unchanged."
+                                            : "Customer-request edits update every garment on this order sharing this measurement."}
                                     </p>
                                 </div>
                             </div>
@@ -1712,18 +1767,18 @@ function UnifiedFeedbackInterface() {
                     <div className="p-3 space-y-4">
                         {MEASUREMENT_GROUPS.map((group) => (
                             <div key={group.title} className="rounded-lg border border-border/60 overflow-hidden">
-                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-[11px] font-medium text-muted-foreground">
                                     {group.title}
                                 </div>
                                 <div className="relative overflow-x-auto">
-                                    <table className="w-full border-collapse">
-                                        <thead className="bg-muted/30 border-b-2 border-border/60">
-                                            <tr className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                                <th className="text-left p-3 bg-muted/50 border-r border-border/60 min-w-[110px] sticky left-0 z-20">Label</th>
+                                    <table className="border-collapse table-fixed">
+                                        <thead className="bg-muted/30 border-b border-border/60">
+                                            <tr className="text-xs font-medium text-muted-foreground">
+                                                <th className="text-left p-3 bg-muted/50 border-r border-border/60 w-[110px] sticky left-0 z-20">Label</th>
                                                 {group.rows.map((row) => (
-                                                    <th key={row.key} className="p-2 text-center border border-border/40 min-w-[96px]">
-                                                        <div className="font-black text-[11px] leading-tight">{row.type}</div>
-                                                        <div className="font-bold text-[10px] text-muted-foreground/80 leading-tight">{row.subType}</div>
+                                                    <th key={row.key} className="p-2 text-center border border-border/40 w-[96px]">
+                                                        <div className="font-semibold text-[11px] leading-tight">{row.type}</div>
+                                                        <div className="font-medium text-[10px] text-muted-foreground leading-tight">{row.subType}</div>
                                                     </th>
                                                 ))}
                                             </tr>
@@ -1731,19 +1786,23 @@ function UnifiedFeedbackInterface() {
                                         <tbody>
                                             {/* Current row */}
                                             <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Current</td>
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Current</td>
                                                 {group.rows.map((row) => {
                                                     const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
                                                     return (
                                                         <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
-                                                            <span className="font-black text-sm tabular-nums">{orderValue ?? "—"}</span>
+                                                            {orderValue != null ? (
+                                                                <span className="font-semibold text-sm tabular-nums">{orderValue}</span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground/40 text-xs">·</span>
+                                                            )}
                                                         </td>
                                                     );
                                                 })}
                                             </tr>
                                             {/* New row */}
                                             <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-primary/5 border-r border-border/60 font-black text-xs uppercase tracking-widest text-primary sticky left-0 z-10">New</td>
+                                                <td className="p-3 bg-primary/5 border-r border-border/60 text-xs font-medium text-primary sticky left-0 z-10">New</td>
                                                 {group.rows.map((row) => {
                                                     const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
                                                     const feedbackValue = currentState.feedbackMeasurements[row.key];
@@ -1751,19 +1810,19 @@ function UnifiedFeedbackInterface() {
                                                     const status = getDiffStatus(diff);
                                                     return (
                                                         <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
-                                                            <Input
+                                                            <KeyedTextField
                                                                 type="number"
                                                                 step="0.01"
                                                                 className={cn(
-                                                                    "h-8 w-full text-center font-black text-sm tabular-nums border transition-all",
+                                                                    "h-8 w-full text-center font-semibold text-sm tabular-nums border transition-all",
                                                                     status === 'error' && "border-destructive bg-destructive/5 text-destructive",
                                                                     status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
                                                                     status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
                                                                     !feedbackValue && "border-border hover:border-primary/40"
                                                                 )}
-                                                                placeholder="—"
-                                                                value={feedbackValue ?? ""}
-                                                                onChange={(e) => handleFeedbackMeasurementChange(row.key, e.target.value)}
+                                                                inputKey={row.key}
+                                                                value={feedbackValue === "" || feedbackValue == null ? "" : String(feedbackValue)}
+                                                                onChange={handleFeedbackMeasurementChange}
                                                             />
                                                         </td>
                                                     );
@@ -1771,7 +1830,7 @@ function UnifiedFeedbackInterface() {
                                             </tr>
                                             {/* Delta row */}
                                             <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Delta</td>
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Delta</td>
                                                 {group.rows.map((row) => {
                                                     const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
                                                     const feedbackValue = currentState.feedbackMeasurements[row.key];
@@ -1779,17 +1838,15 @@ function UnifiedFeedbackInterface() {
                                                     const status = getDiffStatus(diff);
                                                     return (
                                                         <td key={row.key} className="p-2 text-center border border-border/30">
-                                                            {diff !== null ? (
+                                                            {diff !== null && (
                                                                 <Badge variant="secondary" className={cn(
-                                                                    "font-black text-xs h-5 px-1.5",
+                                                                    "font-semibold text-xs h-5 px-1.5",
                                                                     status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
                                                                     status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
-                                                                    status === 'error' && "bg-red-100 text-red-800 border-red-200"
+                                                                    status === 'error' && "bg-red-100 text-red-800 border-border"
                                                                 )}>
                                                                     {diff > 0 ? `+${diff}` : diff}
                                                                 </Badge>
-                                                            ) : (
-                                                                <span className="text-muted-foreground/30 font-black text-xs">—</span>
                                                             )}
                                                         </td>
                                                     );
@@ -1797,23 +1854,33 @@ function UnifiedFeedbackInterface() {
                                             </tr>
                                             {/* Reason row */}
                                             <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Reason</td>
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Reason</td>
                                                 {group.rows.map((row) => {
                                                     const reasonValue = currentState.differenceReasons[row.key] || "";
                                                     const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
                                                     return (
                                                         <td key={row.key} className="p-0 border border-border/30">
                                                             <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
-                                                                <SelectTrigger className={cn(
-                                                                    "h-full min-h-10 w-full text-[10px] font-bold border-none shadow-none rounded-none px-2 transition-colors",
-                                                                    selectedReason ? selectedReason.color : "bg-muted/20 hover:bg-muted/40"
-                                                                )}>
-                                                                    <SelectValue placeholder="—" />
+                                                                <SelectTrigger
+                                                                    className="h-10 w-full text-xs font-medium border-none shadow-none rounded-none px-2 bg-transparent hover:bg-muted/30 transition-colors"
+                                                                    aria-label="Reason for measurement difference"
+                                                                >
+                                                                    {selectedReason ? (
+                                                                        <span className="flex items-center gap-1.5 truncate">
+                                                                            <span className={cn("size-1.5 rounded-full shrink-0", selectedReason.dot)} />
+                                                                            <span className="truncate">{selectedReason.short}</span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground/50">·</span>
+                                                                    )}
                                                                 </SelectTrigger>
                                                                 <SelectContent>
                                                                     {DIFFERENCE_REASONS.map(r => (
-                                                                        <SelectItem key={r.label} value={r.label} className={cn("text-xs font-bold uppercase py-2", r.color)}>
-                                                                            {r.label}
+                                                                        <SelectItem key={r.label} value={r.label} className="text-xs font-medium py-2">
+                                                                            <span className="flex items-center gap-2">
+                                                                                <span className={cn("size-1.5 rounded-full", r.dot)} />
+                                                                                {r.label}
+                                                                            </span>
                                                                         </SelectItem>
                                                                     ))}
                                                                 </SelectContent>
@@ -1824,16 +1891,16 @@ function UnifiedFeedbackInterface() {
                                             </tr>
                                             {/* Notes row */}
                                             <tr>
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 font-black text-xs uppercase tracking-widest text-muted-foreground sticky left-0 z-10">Notes</td>
+                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Notes</td>
                                                 {group.rows.map((row) => {
                                                     const noteValue = currentState.measurementNotes[row.key] || "";
                                                     return (
                                                         <td key={row.key} className="p-1 border border-border/30">
-                                                            <Input
+                                                            <KeyedTextField
                                                                 className="h-8 w-full text-[11px] font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
-                                                                placeholder="—"
+                                                                inputKey={row.key}
                                                                 value={noteValue}
-                                                                onChange={(e) => handleMeasurementNoteChange(row.key, e.target.value)}
+                                                                onChange={handleMeasurementNoteChange}
                                                             />
                                                         </td>
                                                     );
@@ -1848,14 +1915,12 @@ function UnifiedFeedbackInterface() {
                 </Card>
 
                 {/* STYLE feedback SECTION */}
-                <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
+                <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
-                                <PenTool className="w-4 h-4" />
-                            </div>
-                            <CardTitle className="text-base font-bold uppercase tracking-tight">Style Feedback</CardTitle>
-                            <Badge variant="secondary" className="ml-auto text-xs font-bold">
+                            <PenTool className="size-4 text-muted-foreground" />
+                            <CardTitle className="text-sm font-medium">Style feedback</CardTitle>
+                            <Badge variant="secondary" className="ml-auto text-xs font-medium">
                                 {optionRows.filter(o => currentState.optionChecks[`${o.id}-main`]).length}/{optionRows.length} Confirmed
                             </Badge>
                         </div>
@@ -1878,41 +1943,37 @@ function UnifiedFeedbackInterface() {
                                     <div
                                         key={opt.id}
                                         className={cn(
-                                            "rounded-xl border-2 p-3 transition-all",
-                                            isConfirmed && "border-emerald-300 bg-emerald-50/40",
-                                            isRejected && "border-red-300 bg-red-50/40",
-                                            !isConfirmed && !isRejected && "border-border bg-card"
+                                            "rounded-md border bg-card p-3 transition-colors",
+                                            isConfirmed && "border-emerald-500/50",
+                                            isRejected && "border-destructive/60",
+                                            !isConfirmed && !isRejected && "border-border"
                                         )}
                                     >
                                         <div className="flex items-stretch gap-3">
                                             {/* Current option image */}
                                             {opt.mainImage ? (
-                                                <div className={cn(
-                                                    "h-14 w-14 shrink-0 rounded-lg border-2 p-1 shadow-sm bg-white",
-                                                    isConfirmed ? "border-emerald-300" : isRejected ? "border-red-200" : "border-border"
-                                                )}>
+                                                <div className="h-12 w-12 shrink-0 rounded-md border border-border p-1 bg-background">
                                                     <img src={opt.mainImage} alt={opt.label} className="w-full h-full object-contain" />
                                                 </div>
                                             ) : (
-                                                <div className="h-14 w-14 shrink-0 bg-muted/20 rounded-lg border-2 border-dashed border-border flex items-center justify-center">
-                                                    <Package className="w-4 h-4 text-muted-foreground/30" />
+                                                <div className="h-12 w-12 shrink-0 bg-muted/20 rounded-md border border-dashed border-border flex items-center justify-center">
+                                                    <Package className="w-4 h-4 text-muted-foreground/40" />
                                                 </div>
                                             )}
 
                                             {/* Label + current value */}
                                             <div className="flex-1 min-w-0 flex flex-col justify-between">
                                                 <div>
-                                                    <p className="font-black text-xs uppercase tracking-tight text-foreground">{opt.label}</p>
-                                                    <p className="text-[11px] font-bold text-muted-foreground truncate">{opt.displayText || opt.mainValue}</p>
+                                                    <p className="text-sm font-medium text-foreground">{opt.label}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{opt.displayText || opt.mainValue}</p>
                                                 </div>
                                                 {opt.hashwaValue && (
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            "self-start font-bold text-[10px] h-4 px-1.5 mt-1",
-                                                            hashwaConfirmed && "bg-emerald-100 text-emerald-800 border-emerald-300",
-                                                            hashwaRejected && "bg-red-100 text-red-800 border-red-300",
-                                                            !hashwaConfirmed && !hashwaRejected && "bg-amber-50 text-amber-700 border-amber-200"
+                                                            "self-start font-normal text-[10px] h-4 px-1.5 mt-1",
+                                                            hashwaConfirmed && "border-emerald-500/50 text-emerald-700",
+                                                            hashwaRejected && "border-destructive/60 text-destructive",
                                                         )}
                                                     >
                                                         Hashwa: {opt.hashwaValue}
@@ -1925,10 +1986,10 @@ function UnifiedFeedbackInterface() {
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, true)}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all",
+                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded-md border text-xs font-medium transition-colors",
                                                         isConfirmed
-                                                            ? "bg-emerald-500 border-emerald-500 text-white"
-                                                            : "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
+                                                            ? "bg-emerald-600 border-emerald-600 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
                                                     <Check className="w-3 h-3" />
@@ -1937,16 +1998,13 @@ function UnifiedFeedbackInterface() {
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, false)}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded border-2 font-bold text-[11px] uppercase transition-all whitespace-nowrap",
-                                                        // Booleans: color the reject button green when rejection = ADD,
-                                                        // red when rejection = REMOVE. Picker rows stay red.
+                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded-md border text-xs font-medium transition-colors whitespace-nowrap",
+                                                        // Booleans: green when reject = ADD, red when reject = REMOVE.
                                                         isRejected
                                                             ? (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
-                                                                ? "bg-emerald-500 border-emerald-500 text-white"
-                                                                : "bg-red-500 border-red-500 text-white")
-                                                            : (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
-                                                                ? "bg-background border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"
-                                                                : "bg-background border-border text-muted-foreground hover:border-red-400 hover:text-red-600")
+                                                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                                                : "bg-destructive border-destructive text-white")
+                                                            : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
                                                     <X className="w-3 h-3" />
@@ -1959,15 +2017,15 @@ function UnifiedFeedbackInterface() {
 
                                         {/* Rejected → pick new main style */}
                                         {isRejected && pickerList && (
-                                            <div className="mt-3 pt-3 border-t border-red-200 space-y-2">
+                                            <div className="mt-3 pt-3 border-t border-border space-y-2">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">New →</span>
+                                                    <span className="text-xs text-muted-foreground shrink-0">New →</span>
                                                     <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
-                                                        <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
+                                                        <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                             {newStyleValue ? (
                                                                 <div className="flex items-center gap-2">
                                                                     {newStyleImage && <img src={newStyleImage} alt={newStyleText || ""} className="h-7 w-7 object-contain" />}
-                                                                    <span className="text-xs font-bold">{newStyleText}</span>
+                                                                    <span className="text-xs font-medium">{newStyleText}</span>
                                                                 </div>
                                                             ) : (
                                                                 <SelectValue placeholder="Select replacement..." />
@@ -1980,8 +2038,8 @@ function UnifiedFeedbackInterface() {
                                                                     <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
                                                                         <div className="flex items-center gap-2">
                                                                             {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                            <span className="text-xs font-bold">{o.displayText}</span>
-                                                                            {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                            <span className="text-xs font-medium">{o.displayText}</span>
+                                                                            {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
                                                                         </div>
                                                                     </SelectItem>
                                                                 );
@@ -1997,13 +2055,13 @@ function UnifiedFeedbackInterface() {
                                                     const secondaryText = findDisplayText(secondaryList, secondaryValue);
                                                     return (
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-red-700 shrink-0">Under Zipper →</span>
+                                                            <span className="text-xs text-muted-foreground shrink-0">Under Zipper →</span>
                                                             <Select value={secondaryValue} onValueChange={(v) => handleStyleChange("jabzour_2", v)}>
-                                                                <SelectTrigger className="h-10 flex-1 bg-background border-red-200">
+                                                                <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                                     {secondaryValue ? (
                                                                         <div className="flex items-center gap-2">
                                                                             {secondaryImage && <img src={secondaryImage} alt={secondaryText || ""} className="h-7 w-7 object-contain" />}
-                                                                            <span className="text-xs font-bold">{secondaryText}</span>
+                                                                            <span className="text-xs font-medium">{secondaryText}</span>
                                                                         </div>
                                                                     ) : (
                                                                         <SelectValue placeholder="Select jabzour style..." />
@@ -2017,8 +2075,8 @@ function UnifiedFeedbackInterface() {
                                                                             <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
                                                                                 <div className="flex items-center gap-2">
                                                                                     {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                                    <span className="text-xs font-bold">{o.displayText}</span>
-                                                                                    {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                                    <span className="text-xs font-medium">{o.displayText}</span>
+                                                                                    {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
                                                                                 </div>
                                                                             </SelectItem>
                                                                         );
@@ -2031,16 +2089,19 @@ function UnifiedFeedbackInterface() {
                                             </div>
                                         )}
 
-                                        {/* Boolean reject → flip indicator (no picker). Green = add, red = remove. */}
+                                        {/* Boolean reject → flip indicator (no picker). */}
                                         {isRejected && isBoolOpt(opt.id) && (() => {
                                             const removing = getBoolCurrent(opt.id);
-                                            const tone = removing
-                                                ? { wrap: "border-red-200", label: "text-red-700", badge: "bg-red-50 text-red-700 border-red-200" }
-                                                : { wrap: "border-emerald-200", label: "text-emerald-700", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" };
                                             return (
-                                                <div className={cn("mt-3 pt-3 border-t flex items-center gap-2", tone.wrap)}>
-                                                    <span className={cn("text-[10px] font-black uppercase tracking-widest shrink-0", tone.label)}>New →</span>
-                                                    <Badge variant="outline" className={cn("font-black text-xs", tone.badge)}>
+                                                <div className="mt-3 pt-3 border-t border-border flex items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground shrink-0">New →</span>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "font-medium text-xs",
+                                                            removing ? "text-destructive border-destructive/40" : "text-emerald-700 border-emerald-500/40"
+                                                        )}
+                                                    >
                                                         {removing ? `Remove ${BOOL_OPT_NAMES[opt.id]}` : `Add ${BOOL_OPT_NAMES[opt.id]}`}
                                                     </Badge>
                                                 </div>
@@ -2050,14 +2111,14 @@ function UnifiedFeedbackInterface() {
                                         {/* Hashwa row */}
                                         {opt.hashwaValue && (
                                             <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-2">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Hashwa</span>
+                                                <span className="text-xs text-muted-foreground shrink-0">Hashwa</span>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-2 h-6 rounded border font-bold text-[10px] uppercase transition-all",
+                                                        "flex items-center gap-1 px-2 h-6 rounded-md border text-xs font-medium transition-colors",
                                                         hashwaConfirmed
-                                                            ? "bg-emerald-500 border-emerald-500 text-white"
-                                                            : "bg-background border-border text-muted-foreground hover:border-emerald-400"
+                                                            ? "bg-emerald-600 border-emerald-600 text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
                                                     <Check className="w-3 h-3" /> OK
@@ -2065,26 +2126,26 @@ function UnifiedFeedbackInterface() {
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-2 h-6 rounded border font-bold text-[10px] uppercase transition-all",
+                                                        "flex items-center gap-1 px-2 h-6 rounded-md border text-xs font-medium transition-colors",
                                                         hashwaRejected
-                                                            ? "bg-red-500 border-red-500 text-white"
-                                                            : "bg-background border-border text-muted-foreground hover:border-red-400"
+                                                            ? "bg-destructive border-destructive text-white"
+                                                            : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
                                                     <X className="w-3 h-3" /> No
                                                 </button>
                                                 {hashwaRejected && (
                                                     <Select value={newHashwaValue} onValueChange={(v) => handleHashwaChange(opt.id, v)}>
-                                                        <SelectTrigger className="h-7 text-[11px] flex-1 bg-background border-red-200">
+                                                        <SelectTrigger className="h-7 text-[11px] flex-1 bg-background border-border">
                                                             <SelectValue placeholder="New thickness..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {thicknessOptions.map((t) => {
                                                                 const isCurrent = t.value === opt.hashwaValue;
                                                                 return (
-                                                                    <SelectItem key={t.value} value={t.value} disabled={isCurrent} className="text-xs font-bold">
+                                                                    <SelectItem key={t.value} value={t.value} disabled={isCurrent} className="text-xs font-medium">
                                                                         {t.value === "NO HASHWA" ? "No Hashwa" : t.value.charAt(0) + t.value.slice(1).toLowerCase()}
-                                                                        {isCurrent && <span className="text-[9px] font-bold uppercase text-muted-foreground ml-1">(current)</span>}
+                                                                        {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
                                                                     </SelectItem>
                                                                 );
                                                             })}
@@ -2097,11 +2158,12 @@ function UnifiedFeedbackInterface() {
                                         {/* Notes */}
                                         <div className="mt-2 flex items-center gap-2 bg-muted/20 rounded px-2 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
                                             <MessageSquare className="size-3.5 text-muted-foreground/40 shrink-0" />
-                                            <Input
+                                            <KeyedTextField
                                                 className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[11px] font-medium h-7 p-0"
                                                 placeholder="Note..."
+                                                inputKey={opt.id}
                                                 value={currentState.optionNotes[opt.id] || ""}
-                                                onChange={(e) => handleOptionNoteChange(opt.id, e.target.value)}
+                                                onChange={handleOptionNoteChange}
                                             />
                                         </div>
                                     </div>
@@ -2112,14 +2174,12 @@ function UnifiedFeedbackInterface() {
                 </Card>
 
                 {/* SHARED MEDIA (photos + voice notes) */}
-                <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
+                <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                                <Camera className="w-4 h-4" />
-                            </div>
-                            <CardTitle className="text-base font-bold uppercase tracking-tight">Attachments</CardTitle>
-                            <Badge variant="secondary" className="ml-auto text-xs font-bold">
+                            <Camera className="size-4 text-muted-foreground" />
+                            <CardTitle className="text-sm font-medium">Attachments</CardTitle>
+                            <Badge variant="secondary" className="ml-auto text-xs font-medium">
                                 {currentState.sharedPhotos.length + currentState.sharedVoiceNotes.length} items
                             </Badge>
                         </div>
@@ -2130,7 +2190,7 @@ function UnifiedFeedbackInterface() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-9 font-bold text-xs"
+                                className="h-9 font-medium text-xs"
                                 onClick={() => document.getElementById("shared-photo-input")?.click()}
                             >
                                 <Camera className="w-3.5 h-3.5 mr-1.5" />
@@ -2139,7 +2199,7 @@ function UnifiedFeedbackInterface() {
                             <Button
                                 variant={recordingOptionId === "shared" ? "destructive" : "outline"}
                                 size="sm"
-                                className="h-9 font-bold text-xs"
+                                className="h-9 font-medium text-xs"
                                 onClick={recordingOptionId === "shared" ? stopRecording : startRecording}
                             >
                                 {recordingOptionId === "shared" ? (
@@ -2159,9 +2219,9 @@ function UnifiedFeedbackInterface() {
 
                         {/* Recording indicator */}
                         {recordingOptionId === "shared" && (
-                            <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                                <div className="size-2.5 rounded-full bg-red-500 animate-pulse" />
-                                <span className="text-xs font-bold uppercase tracking-wide text-red-700">Recording...</span>
+                            <div className="flex items-center gap-2 p-2 rounded-md border border-destructive/30 bg-destructive/5">
+                                <div className="size-2 rounded-full bg-destructive animate-pulse" />
+                                <span className="text-xs font-medium text-destructive">Recording…</span>
                             </div>
                         )}
 
@@ -2169,7 +2229,7 @@ function UnifiedFeedbackInterface() {
                         {currentState.sharedPhotos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                                 {currentState.sharedPhotos.map((p, i) => (
-                                    <div key={i} className="relative group size-20 rounded-lg overflow-hidden border-2 border-border shadow-sm">
+                                    <div key={i} className="relative group size-20 rounded-lg overflow-hidden border border-border">
                                         <img src={p.url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
                                         <button
                                             onClick={() => handleRemovePhoto(i)}
@@ -2197,7 +2257,7 @@ function UnifiedFeedbackInterface() {
                         )}
 
                         {currentState.sharedPhotos.length === 0 && currentState.sharedVoiceNotes.length === 0 && (
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60 text-center py-2">
+                            <p className="text-xs text-muted-foreground text-center py-2">
                                 No attachments yet
                             </p>
                         )}
@@ -2206,19 +2266,17 @@ function UnifiedFeedbackInterface() {
 
                 {/* PREVIOUS FEEDBACK HISTORY */}
                 {feedbackHistory.length > 0 && (
-                    <Card className="border border-border shadow-sm rounded-xl overflow-clip py-0 gap-0">
+                    <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
                         <CardHeader
                             className="bg-muted/30 border-b px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
                             onClick={() => setHistoryOpen(!historyOpen)}
                         >
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                                        <History className="w-4 h-4" />
-                                    </div>
+                                    <History className="size-4 text-muted-foreground" />
                                     <div>
-                                        <CardTitle className="text-base font-bold uppercase tracking-tight">Previous Feedback</CardTitle>
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+                                        <CardTitle className="text-sm font-medium">Previous feedback</CardTitle>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
                                             {feedbackHistory.length} previous trip{feedbackHistory.length > 1 ? "s" : ""}
                                         </p>
                                     </div>
@@ -2229,33 +2287,33 @@ function UnifiedFeedbackInterface() {
                         {historyOpen && (
                             <CardContent className="p-4 space-y-3">
                                 {feedbackHistory.map((fb: GarmentFeedback, i: number) => (
-                                    <div key={fb.id} className="p-3 rounded-xl border border-border/60 bg-muted/10 space-y-2">
+                                    <div key={fb.id} className="p-3 rounded-md border border-border/60 bg-muted/10 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="font-black text-xs uppercase">
+                                                <Badge variant="outline" className="text-xs font-normal">
                                                     Trip {fb.trip_number || i + 1}
                                                 </Badge>
                                                 <Badge
+                                                    variant="outline"
                                                     className={cn(
-                                                        "font-black text-xs uppercase border-none",
-                                                        fb.action === "accepted" && "bg-emerald-100 text-emerald-700",
-                                                        fb.action === "needs_repair_accepted" && "bg-yellow-100 text-yellow-700",
-                                                        fb.action === "needs_repair_rejected" && "bg-amber-100 text-amber-700",
-                                                        fb.action === "needs_redo" && "bg-red-100 text-red-700",
-                                                        fb.action === "collected" && "bg-emerald-100 text-emerald-700",
-                                                        fb.action === "delivered" && "bg-blue-100 text-blue-700",
+                                                        "text-xs font-medium",
+                                                        (fb.action === "accepted" || fb.action === "collected") && "border-emerald-500/40 text-emerald-700",
+                                                        fb.action === "needs_repair_accepted" && "border-amber-500/40 text-amber-700",
+                                                        fb.action === "needs_repair_rejected" && "border-amber-600/40 text-amber-800",
+                                                        fb.action === "needs_redo" && "border-destructive/40 text-destructive",
+                                                        fb.action === "delivered" && "border-primary/40 text-primary",
                                                     )}
                                                 >
                                                     {fb.action?.replace(/_/g, " ")}
                                                 </Badge>
                                             </div>
-                                            <span className="text-xs font-bold text-muted-foreground">
+                                            <span className="text-xs font-medium text-muted-foreground">
                                                 {fb.created_at ? parseUtcTimestamp(fb.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : ""}
                                             </span>
                                         </div>
                                         {fb.satisfaction_level && (
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Satisfaction:</span>
+                                                <span className="text-xs text-muted-foreground">Satisfaction:</span>
                                                 <span className="text-sm">
                                                     {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.emoji || ""}{" "}
                                                     {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.label || `${fb.satisfaction_level}/5`}
@@ -2277,18 +2335,16 @@ function UnifiedFeedbackInterface() {
 
           {/* FINAL ACTIONS CONTROL PANEL */}
           {/* CUSTOMER SENTIMENTS */}
-          <Card className="border border-border shadow-sm rounded-xl overflow-clip">
+          <Card className="border border-border rounded-md overflow-clip">
               <CardHeader className="bg-muted/30 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                          <User className="w-4 h-4" />
-                      </div>
-                      <CardTitle className="text-base font-black uppercase tracking-tight">Customer Sentiments</CardTitle>
+                      <User className="size-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Customer sentiments</CardTitle>
                   </div>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Overall Satisfaction <span className="text-red-600">*</span></Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Overall Satisfaction <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.satisfaction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { satisfaction: val })}
@@ -2299,13 +2355,10 @@ function UnifiedFeedbackInterface() {
                                   <RadioGroupItem value={level.value} id={`sat-${level.value}`} className="peer sr-only" />
                                   <Label
                                       htmlFor={`sat-${level.value}`}
-                                      className={cn(
-                                          "flex flex-col items-center justify-center gap-1 h-16 rounded-xl border-2 border-border bg-card p-2 cursor-pointer transition-all",
-                                          level.color
-                                      )}
+                                      className="flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border border-border bg-card p-2 cursor-pointer transition-colors grayscale opacity-60 hover:opacity-100 hover:grayscale-0 hover:border-muted-foreground/40 peer-data-[state=checked]:opacity-100 peer-data-[state=checked]:grayscale-0 peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-primary"
                                   >
-                                      <span className="text-2xl">{level.emoji}</span>
-                                      <span className="font-bold uppercase tracking-wider text-xs">{level.label}</span>
+                                      <span className="text-2xl leading-none">{level.emoji}</span>
+                                      <span className="text-[10px] text-muted-foreground">{level.label}</span>
                                   </Label>
                               </div>
                           ))}
@@ -2316,14 +2369,14 @@ function UnifiedFeedbackInterface() {
                   {activeTab === "brova" && (
                       <div className="pt-3 border-t border-border/60 space-y-3">
                           <div className="flex items-center justify-between">
-                              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
+                              <Label className="text-xs font-medium text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
                               {currentState.customerSignature && (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-xs">SIGNED</Badge>
+                                  <Badge variant="outline" className="text-emerald-700 border-emerald-500/50 text-xs font-medium">Signed</Badge>
                               )}
                           </div>
 
                           {currentState.customerSignature ? (
-                              <div className="relative rounded-xl border-2 border-emerald-300 bg-white p-3">
+                              <div className="relative rounded-md border border-emerald-500/40 bg-white p-3">
                                   <img
                                       src={currentState.customerSignature}
                                       alt="Customer signature"
@@ -2342,11 +2395,11 @@ function UnifiedFeedbackInterface() {
                                   updateGarmentState(selectedGarmentId, { customerSignature: sig });
                               }}
                               trigger={
-                                  <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
+                                  <button className="w-full flex flex-col items-center justify-center gap-2 h-28 rounded-md border border-dashed border-border bg-muted/10 hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
                                       <div className="p-2.5 rounded-full bg-muted/30">
                                           <PenTool className="size-5 text-muted-foreground/50" />
                                       </div>
-                                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tap to Sign</span>
+                                      <span className="text-xs font-medium text-muted-foreground">Tap to Sign</span>
                                   </button>
                               }
                           />
@@ -2357,19 +2410,17 @@ function UnifiedFeedbackInterface() {
           </Card>
 
           {/* GARMENT ACTION */}
-          <Card className="border border-primary/20 shadow-sm rounded-xl overflow-clip">
+          <Card className="border border-primary/20 rounded-md overflow-clip">
               <CardHeader className="bg-primary/5 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 bg-primary text-primary-foreground rounded-lg">
-                          <RefreshCw className="w-4 h-4" />
-                      </div>
-                      <CardTitle className="text-base font-black uppercase tracking-tight">Garment Action</CardTitle>
+                      <RefreshCw className="size-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Garment action</CardTitle>
                   </div>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   {/* Status */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Status <span className="text-red-600">*</span></Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Status <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.feedbackAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { feedbackAction: val })}
@@ -2381,7 +2432,7 @@ function UnifiedFeedbackInterface() {
                                   <Label
                                       htmlFor={`action-${opt.value}`}
                                       className={cn(
-                                          "flex items-center justify-center h-10 rounded-lg border-2 border-border bg-card px-2 cursor-pointer transition-all font-black uppercase tracking-tight text-xs text-center",
+                                          "flex items-center justify-center h-10 rounded-lg border border-border bg-card px-2 cursor-pointer transition-all font-medium text-xs text-center",
                                           opt.color
                                       )}
                                   >
@@ -2394,15 +2445,14 @@ function UnifiedFeedbackInterface() {
 
                   {/* Investigation (Brova + Redo only) */}
                   {activeTab === "brova" && currentState.feedbackAction === "needs_redo" && (
-                      <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                      <div className="p-3 rounded-md border border-destructive/30 bg-destructive/5">
                           <div className="flex items-center gap-3">
-                              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                              <p className="text-xs font-black text-red-700 uppercase tracking-tight flex-1">Investigation Required?</p>
+                              <AlertCircle className="size-4 text-destructive shrink-0" />
+                              <p className="text-sm font-medium text-destructive flex-1">Investigation required?</p>
                               <Checkbox
                                   id="investigation"
                                   checked={currentState.isInvestigationNeeded}
                                   onCheckedChange={(c) => updateGarmentState(selectedGarmentId, { isInvestigationNeeded: c as boolean })}
-                                  className="size-5 border-red-300 data-[state=checked]:bg-red-600"
                               />
                           </div>
                       </div>
@@ -2410,16 +2460,16 @@ function UnifiedFeedbackInterface() {
 
                   {/* Distribution */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Distribution <span className="text-red-600">*</span></Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Distribution <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.distributionAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { distributionAction: val })}
                           className="grid grid-cols-3 gap-2"
                       >
                           {[
-                            { value: "pickup", label: "Customer Pickup", icon: Package },
-                            { value: "workshop", label: "To Workshop", icon: RefreshCw },
-                            { value: "shop", label: "Stay at Shop", icon: Clock },
+                            { value: "pickup", label: "Customer pickup", icon: Package },
+                            { value: "workshop", label: "To workshop", icon: RefreshCw },
+                            { value: "shop", label: "Stay at shop", icon: Clock },
                           ].map((opt) => {
                               const action = currentState.feedbackAction;
                               const forceWorkshop =
@@ -2440,12 +2490,12 @@ function UnifiedFeedbackInterface() {
                                       <Label
                                           htmlFor={`dist-${opt.value}`}
                                           className={cn(
-                                              "flex items-center justify-center gap-2 h-10 rounded-lg border-2 border-border bg-card px-2 cursor-pointer transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5",
-                                              isDisabled && "opacity-40 cursor-not-allowed grayscale"
+                                              "flex items-center justify-center gap-2 h-10 rounded-md border border-border bg-card px-2 cursor-pointer transition-colors text-sm font-medium peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-primary",
+                                              isDisabled && "opacity-40 cursor-not-allowed"
                                           )}
                                       >
-                                          <opt.icon className="w-3.5 h-3.5 text-muted-foreground" />
-                                          <span className="font-bold uppercase tracking-wide text-xs">{opt.label}</span>
+                                          <opt.icon className="size-3.5 text-muted-foreground" />
+                                          <span>{opt.label}</span>
                                       </Label>
                                   </div>
                               );
@@ -2456,8 +2506,8 @@ function UnifiedFeedbackInterface() {
                   {/* Notes + Submit */}
                   <div className="space-y-3">
                       <Textarea
-                          placeholder="Finalization notes..."
-                          className="min-h-[50px] rounded-lg border resize-none font-bold text-sm"
+                          placeholder="Finalization notes…"
+                          className="min-h-[60px] rounded-md border resize-none text-sm"
                           value={currentState.notes}
                           onChange={(e) => updateGarmentState(selectedGarmentId, { notes: e.target.value })}
                       />
@@ -2472,13 +2522,13 @@ function UnifiedFeedbackInterface() {
                             <Button
                                 onClick={onConfirmClick}
                                 disabled={missing.length > 0 || isSubmitting || lockedDone || (!!measurementId && isMeasurementLoading)}
-                                className="w-full h-11 font-black uppercase tracking-widest shadow-md text-sm rounded-xl"
+                                className="w-full h-11 font-medium text-sm rounded-md"
                             >
                                 {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : lockedDone ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                 {currentState.existingFeedbackId ? "Update Feedback" : "Submit Feedback"}
                             </Button>
                             {missing.length > 0 && !lockedDone && (
-                              <p className="text-xs font-bold text-red-600 text-center">
+                              <p className="text-xs text-destructive text-center">
                                 Required: {missing.join(", ")}
                               </p>
                             )}
@@ -2506,7 +2556,7 @@ function UnifiedFeedbackInterface() {
       <Button
         variant="outline"
         size="icon"
-        className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-lg"
+        className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-md"
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       >
         <ArrowUp className="size-4" />

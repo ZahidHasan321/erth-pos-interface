@@ -189,6 +189,13 @@ function NewWorkOrder() {
     const [linkedAppointment, setLinkedAppointment] = React.useState<AppointmentWithRelations | null>(null);
     const appointmentLoadedRef = React.useRef<string | null>(null);
 
+    // Stable idempotency key for the Confirm Order submit. Generated on the
+    // first click, reused on every user-visible retry (toast-on-error → click
+    // again), cleared on success. A fresh key per click would defeat the
+    // RPC-level dedupe and a lost-response retry would double-decrement stock,
+    // double-issue an invoice number, and double-pay the order.
+    const checkoutIdemKeyRef = React.useRef<string | null>(null);
+
     // Print labels ref
     const printLabelsRef = React.useRef<HTMLDivElement>(null);
     const handlePrintLabels = useReactToPrint({
@@ -869,6 +876,7 @@ function NewWorkOrder() {
             .filter(g => g.fabric_id && g.fabric_length && g.fabric_source === 'IN')
             .map(g => ({ id: g.fabric_id!, length: g.fabric_length ?? 0 }));
 
+        if (!checkoutIdemKeyRef.current) checkoutIdemKeyRef.current = crypto.randomUUID();
         completeWorkOrderMutation.mutate({
             orderId,
             checkoutDetails: {
@@ -896,7 +904,14 @@ function NewWorkOrder() {
                 stitchingPrice: data.stitching_price,
             },
             shelfItems,
-            fabricItems
+            fabricItems,
+            idempotencyKey: checkoutIdemKeyRef.current,
+        }, {
+            onSuccess: (res) => {
+                if (res.status === "success") {
+                    checkoutIdemKeyRef.current = null;
+                }
+            },
         });
     };
 

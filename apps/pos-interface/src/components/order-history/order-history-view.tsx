@@ -234,7 +234,7 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-muted-foreground">Rows</span>
                                     <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
-                                        <SelectTrigger className="h-9 w-16 text-sm">
+                                        <SelectTrigger className="h-9 w-20 text-sm">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>

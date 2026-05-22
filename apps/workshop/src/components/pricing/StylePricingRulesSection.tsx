@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { Check, Pencil, Plus, Search, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -7,8 +7,8 @@ import { Label } from "@repo/ui/label";
 import { Switch } from "@repo/ui/switch";
 import { Textarea } from "@repo/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { cn } from "@/lib/utils";
+import { CODE_IMAGE } from "@/components/pricing/style-images";
 import {
   useStyles,
   useStylePricingRules,
@@ -237,77 +237,199 @@ function RuleDialog({
     });
   };
 
-  // Distinct style codes for this brand
+  // Thickness ("hashwa") rows are add-ons to their parent type, not independently
+  // rule-able — exclude them from the tile grid entirely.
+  const ADDON_COMPONENTS = new Set(["jabzour_thickness", "pocket_thickness", "cuffs_thickness"]);
+
+  // Group tiles by garment part so the picker isn't one long flat grid.
+  // Order matches the main pricing page.
+  const PART_GROUPS: { label: string; components: string[] }[] = [
+    { label: "Style & Lines", components: ["base", "lines"] },
+    { label: "Collar",        components: ["collar_type", "collar_button", "collar_accessory"] },
+    { label: "Jabzour",       components: ["jabzour_type"] },
+    { label: "Front Pocket",  components: ["pocket_type"] },
+    { label: "Side Pocket",   components: ["side_pocket_type"] },
+    { label: "Cuffs",         components: ["cuffs_type"] },
+  ];
+
+  // Distinct rule-able style codes for this brand (addons excluded).
   const codeOptions = useMemo(() => {
     const seen = new Set<string>();
     const out: { code: string; name: string; component: string | null }[] = [];
     for (const s of styles) {
       if (!s.code || seen.has(s.code)) continue;
+      if (s.component && ADDON_COMPONENTS.has(s.component)) continue;
       seen.add(s.code);
       out.push({ code: s.code, name: s.name, component: s.component });
     }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styles]);
+
+  const [styleQuery, setStyleQuery] = useState("");
+  useEffect(() => { if (!open) setStyleQuery(""); }, [open]);
+
+  const filteredCodeOptions = useMemo(() => {
+    const q = styleQuery.trim().toLowerCase();
+    if (!q) return codeOptions;
+    return codeOptions.filter((o) =>
+      o.name.toLowerCase().includes(q) ||
+      o.code.toLowerCase().includes(q) ||
+      (o.component ?? "").toLowerCase().includes(q),
+    );
+  }, [codeOptions, styleQuery]);
+
+  const selectedOption = codeOptions.find((o) => o.code === styleCode);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl h-[85vh] flex flex-col gap-4 overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{rule ? "Edit Pricing Rule" : "Add Pricing Rule"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs font-semibold">Style Code</Label>
-            <Select value={styleCode} onValueChange={setStyleCode} disabled={!!rule}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Pick a style…" />
-              </SelectTrigger>
-              <SelectContent>
-                {codeOptions.map((opt) => (
-                  <SelectItem key={opt.code} value={opt.code}>
-                    <span className="font-medium">{opt.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{opt.code}</span>
-                    {opt.component && (
-                      <span className="ml-2 text-xs text-muted-foreground/60">· {opt.component}</span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {rule && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Style code cannot be changed. Delete this rule and create a new one to target a different style.
-              </p>
+        {/* Style picker — the only scrolling section. */}
+        <div className="flex flex-col min-h-0 flex-1">
+          <div className="flex items-center justify-between gap-3 mb-2 shrink-0">
+            <Label className="text-xs font-medium">Style</Label>
+            {!rule && (
+              <div className="relative w-56">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={styleQuery}
+                  onChange={(e) => setStyleQuery(e.target.value)}
+                  placeholder="Search styles…"
+                  className="h-8 pl-7 text-xs"
+                />
+              </div>
             )}
           </div>
+          {rule ? (
+            <div className="border border-border rounded-md p-3 flex items-center gap-3 bg-muted/30 shrink-0">
+              <StyleThumb
+                code={styleCode}
+                alt={selectedOption?.name ?? styleCode}
+                size="sm"
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {selectedOption?.name ?? styleCode}
+                </div>
+              </div>
+              <p className="ml-auto text-[10px] text-muted-foreground max-w-[18ch] text-right">
+                Style cannot be changed. Delete and recreate to retarget.
+              </p>
+            </div>
+          ) : filteredCodeOptions.length === 0 ? (
+            <div className="border border-dashed border-border rounded-md p-6 text-center text-xs text-muted-foreground shrink-0">
+              No styles match "{styleQuery}".
+            </div>
+          ) : (
+            <div className="overflow-y-auto pr-1 min-h-0 flex-1 space-y-4">
+              {PART_GROUPS.map((group) => {
+                const items = filteredCodeOptions.filter(
+                  (o) => o.component && group.components.includes(o.component),
+                );
+                if (items.length === 0) return null;
+                return (
+                  <section key={group.label}>
+                    <div className="text-[11px] font-medium text-muted-foreground mb-2 sticky top-0 bg-background py-1">
+                      {group.label}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {items.map((opt) => {
+                        const selected = opt.code === styleCode;
+                        return (
+                          <button
+                            key={opt.code}
+                            type="button"
+                            onClick={() => setStyleCode(opt.code)}
+                            className={cn(
+                              "relative text-left border rounded-md p-2 transition-colors self-start",
+                              "hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              selected ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border",
+                            )}
+                          >
+                            {selected && (
+                              <span className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center z-10">
+                                <Check className="w-3 h-3" />
+                              </span>
+                            )}
+                            <StyleThumb code={opt.code} alt={opt.name} />
+                            <div className="mt-2 text-xs font-medium truncate">{opt.name}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+              {/* Any style whose component is unknown to the group map — render under "Other" so nothing disappears. */}
+              {(() => {
+                const known = new Set(PART_GROUPS.flatMap((g) => g.components));
+                const orphans = filteredCodeOptions.filter((o) => !o.component || !known.has(o.component));
+                if (orphans.length === 0) return null;
+                return (
+                  <section>
+                    <div className="text-[11px] font-medium text-muted-foreground mb-2 sticky top-0 bg-background py-1">
+                      Other
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {orphans.map((opt) => {
+                        const selected = opt.code === styleCode;
+                        return (
+                          <button
+                            key={opt.code}
+                            type="button"
+                            onClick={() => setStyleCode(opt.code)}
+                            className={cn(
+                              "relative text-left border rounded-md p-2 transition-colors self-start",
+                              "hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              selected ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border",
+                            )}
+                          >
+                            {selected && (
+                              <span className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center z-10">
+                                <Check className="w-3 h-3" />
+                              </span>
+                            )}
+                            <StyleThumb code={opt.code} alt={opt.name} />
+                            <div className="mt-2 text-xs font-medium truncate">{opt.name}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()}
+            </div>
+          )}
+        </div>
 
-          <div>
-            <Label className="text-xs font-semibold">Rule Type</Label>
-            <Select value={ruleType} onValueChange={(v) => setRuleType(v as StyleRuleType)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="flat_override">
-                  Flat override — fixed price, ignore other style options
-                </SelectItem>
-                <SelectItem value="additive">
-                  Additive — default behavior (sum of selected styles)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {ruleType === "flat_override"
-                ? "Garment style price = the flat rate below. Stitching, express, and delivery still apply."
-                : "Use this to explicitly mark a style as additive (e.g. to disable an existing flat override)."}
-            </p>
+        {/* Rule type */}
+        <div className="shrink-0">
+          <Label className="text-xs font-medium mb-2 block">Rule Type</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <RuleTypeCard
+              selected={ruleType === "flat_override"}
+              onSelect={() => setRuleType("flat_override")}
+              title="Flat override"
+              description="Garment style price = the flat rate. Other style options ignored. Stitching, express, and delivery still apply."
+            />
+            <RuleTypeCard
+              selected={ruleType === "additive"}
+              onSelect={() => setRuleType("additive")}
+              title="Additive (default)"
+              description="Add this style's rate to the garment. Use to disable an existing flat override."
+            />
           </div>
+        </div>
 
-          {ruleType === "flat_override" && (
+        {/* Numbers */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+          {ruleType === "flat_override" ? (
             <div>
-              <Label className="text-xs font-semibold">Flat Rate (KD)</Label>
+              <Label className="text-xs font-medium">Flat Rate (KD)</Label>
               <Input
                 type="number"
                 step="0.001"
@@ -319,42 +441,41 @@ function RuleDialog({
                 placeholder="e.g. 6.000"
               />
             </div>
+          ) : (
+            <div className="hidden sm:block" aria-hidden />
           )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs font-semibold">Priority</Label>
-              <Input
-                type="number"
-                step="1"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className="h-9 font-mono"
-              />
-              <p className="text-[10px] text-muted-foreground mt-1">Higher wins.</p>
-            </div>
-            <div>
-              <Label className="text-xs font-semibold">Active</Label>
-              <div className="flex items-center h-9 gap-2">
-                <Switch checked={active} onCheckedChange={setActive} />
-                <span className="text-xs text-muted-foreground">{active ? "On" : "Off"}</span>
-              </div>
-            </div>
-          </div>
-
           <div>
-            <Label className="text-xs font-semibold">Description (optional)</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="When does this rule apply? Why?"
-              rows={2}
+            <Label className="text-xs font-medium">Priority</Label>
+            <Input
+              type="number"
+              step="1"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className="h-9 font-mono"
             />
+            <p className="text-[10px] text-muted-foreground mt-1">Higher wins.</p>
+          </div>
+          <div>
+            <Label className="text-xs font-medium">Active</Label>
+            <div className="flex items-center h-9 gap-2">
+              <Switch checked={active} onCheckedChange={setActive} />
+              <span className="text-xs text-muted-foreground">{active ? "On" : "Off"}</span>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <div className="shrink-0">
+          <Label className="text-xs font-medium">Description (optional)</Label>
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="When does this rule apply? Why?"
+            rows={2}
+          />
+        </div>
+
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={upsert.isPending}>
             {upsert.isPending ? "Saving…" : rule ? "Save Changes" : "Create Rule"}
@@ -362,6 +483,65 @@ function RuleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function StyleThumb({ code, alt, size = "md" }: { code: string; alt: string; size?: "sm" | "md" }) {
+  const box = size === "sm" ? "w-12 h-12" : "aspect-square w-full";
+  const src = CODE_IMAGE[code];
+  if (!src) {
+    const glyph = (alt.trim()[0] ?? "?").toUpperCase();
+    return (
+      <div
+        className={cn(
+          box,
+          "rounded-md bg-muted flex items-center justify-center text-muted-foreground/60 shrink-0 font-medium select-none",
+          size === "sm" ? "text-base" : "text-3xl",
+        )}
+      >
+        {glyph}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className={cn(box, "rounded-md object-contain bg-muted shrink-0 p-1")}
+    />
+  );
+}
+
+function RuleTypeCard({
+  selected,
+  onSelect,
+  title,
+  description,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "text-left border rounded-md p-3 transition-colors relative",
+        "hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        selected ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border",
+      )}
+    >
+      {selected && (
+        <span className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center">
+          <Check className="w-3 h-3" />
+        </span>
+      )}
+      <div className="text-sm font-medium pr-6">{title}</div>
+      <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{description}</p>
+    </button>
   );
 }
 

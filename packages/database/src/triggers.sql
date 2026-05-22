@@ -135,12 +135,17 @@ BEGIN
   v_paid := (p_checkout_details->>'paid')::decimal;
 
   -- 2. Update Core Order
+  -- `paid` is owned by sync_order_paid_from_transactions (the trigger that sums
+  -- payment_transactions). We set it to 0 here as the baseline; if v_paid > 0
+  -- the INSERT below fires the trigger and corrects it to the summed value.
+  -- For v_paid = 0/NULL no INSERT fires and paid stays 0 — same end state,
+  -- without writing the user-supplied value directly to the column.
   UPDATE orders
   SET
     checkout_status = 'confirmed',
     order_type = 'WORK',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
-    paid = v_paid,
+    paid = 0,
     payment_ref_no = (p_checkout_details->>'paymentRefNo'),
     payment_note = (p_checkout_details->>'paymentNote'),
     order_taker_id = (p_checkout_details->>'orderTaker')::uuid,
@@ -292,11 +297,13 @@ BEGIN
   v_paid := (p_checkout_details->>'paid')::decimal;
 
   -- 1. Update Order
+  -- See note in complete_work_order: paid is owned by the summing trigger;
+  -- baseline 0 here, the INSERT below corrects it via trigger when v_paid > 0.
   UPDATE orders
   SET
     checkout_status = 'confirmed',
     payment_type = (p_checkout_details->>'paymentType')::payment_type,
-    paid = v_paid,
+    paid = 0,
     payment_ref_no = (p_checkout_details->>'paymentRefNo'),
     payment_note = (p_checkout_details->>'paymentNote'),
     order_taker_id = (p_checkout_details->>'orderTaker')::uuid,
@@ -432,7 +439,9 @@ BEGIN
     'SALES',
     NOW(),
     (p_checkout_details->>'paymentType')::payment_type,
-    v_paid,
+    -- See complete_work_order: paid is owned by the summing trigger. Insert 0
+    -- here; the INSERT into payment_transactions below corrects via trigger.
+    0,
     (p_checkout_details->>'paymentRefNo'),
     (p_checkout_details->>'paymentNote'),
     (p_checkout_details->>'orderTaker')::uuid,
@@ -2535,7 +2544,15 @@ BEGIN
     AND gf.created_at < v_tx_end;
 
   -- 2. Transaction-level aggregates (actual money movement)
-  --    created_at is UTC, so use timezone-corrected boundaries
+  --    created_at is UTC, so use timezone-corrected boundaries.
+  --
+  --    Cash-basis filter is `checkout_status <> 'draft'` (NOT `= 'confirmed'`):
+  --    a confirmed order that is later cancelled keeps its payment_transactions,
+  --    and the cash that actually moved must still appear in the report.
+  --    Otherwise close_register (which sums by register_session_id alone) and
+  --    EOD diverge any time an order is cancelled in or after the range —
+  --    and a cancel T+N days later would silently mutate a printed prior-day
+  --    EOD. Drafts are excluded as sentinels for "not yet a real order".
   SELECT jsonb_build_object(
     'total_collected', COALESCE(SUM(pt.amount) FILTER (WHERE pt.transaction_type = 'payment'), 0),
     'total_refunded',  COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.transaction_type = 'refund'), 0),
@@ -2547,7 +2564,7 @@ BEGIN
   FROM payment_transactions pt
   JOIN orders o ON o.id = pt.order_id
   WHERE o.brand = p_brand::brand
-    AND o.checkout_status = 'confirmed'
+    AND o.checkout_status <> 'draft'
     AND pt.created_at >= v_tx_start
     AND pt.created_at < v_tx_end;
 
@@ -2571,7 +2588,7 @@ BEGIN
     FROM payment_transactions pt
     JOIN orders o ON o.id = pt.order_id
     WHERE o.brand = p_brand::brand
-      AND o.checkout_status = 'confirmed'
+      AND o.checkout_status <> 'draft'
       AND pt.transaction_type = 'payment'
   )
   SELECT jsonb_build_object(
@@ -2593,7 +2610,7 @@ BEGIN
     FROM payment_transactions pt
     JOIN orders o ON o.id = pt.order_id
     WHERE o.brand = p_brand::brand
-      AND o.checkout_status = 'confirmed'
+      AND o.checkout_status <> 'draft'
       AND pt.created_at >= v_tx_start
       AND pt.created_at < v_tx_end
     GROUP BY pt.payment_type
@@ -2613,7 +2630,7 @@ BEGIN
     FROM payment_transactions pt
     JOIN orders o ON o.id = pt.order_id
     WHERE o.brand = p_brand::brand
-      AND o.checkout_status = 'confirmed'
+      AND o.checkout_status <> 'draft'
       AND pt.created_at >= v_tx_start
       AND pt.created_at < v_tx_end
     GROUP BY (pt.created_at + v_tz_interval)::date
@@ -2632,7 +2649,7 @@ BEGIN
     JOIN orders o ON o.id = pt.order_id
     LEFT JOIN users u ON u.id = pt.cashier_id
     WHERE o.brand = p_brand::brand
-      AND o.checkout_status = 'confirmed'
+      AND o.checkout_status <> 'draft'
       AND pt.created_at >= v_tx_start
       AND pt.created_at < v_tx_end
     GROUP BY u.name
@@ -2818,7 +2835,14 @@ BEGIN
 
   PERFORM assert_active_user();
 
-  SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
+  -- FOR UPDATE serializes concurrent closes (two tabs / two devices). Without
+  -- this, both transactions read status='open' simultaneously, both UPDATE,
+  -- and both INSERT a close event — producing two close_events rows for the
+  -- same logical close with conflicting numbers. With FOR UPDATE, the second
+  -- waits for the first to commit, then sees status='closed' and errors out.
+  SELECT * INTO v_session FROM register_sessions
+    WHERE id = p_session_id AND status = 'open'
+    FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or already closed';
   END IF;
@@ -2922,7 +2946,12 @@ BEGIN
 
   PERFORM assert_active_user();
 
-  SELECT * INTO v_session FROM register_sessions WHERE id = p_session_id AND status = 'open';
+  -- FOR UPDATE serializes concurrent cash-out checks. Without it, two parallel
+  -- cash_out calls could both read the same drawer balance, both pass the
+  -- sufficiency check, then both INSERT — overdrawing the drawer.
+  SELECT * INTO v_session FROM register_sessions
+    WHERE id = p_session_id AND status = 'open'
+    FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Register session not found or not open';
   END IF;
@@ -3057,7 +3086,7 @@ BEGIN
   LEFT JOIN customers c ON c.id = o.customer_id
   LEFT JOIN work_orders wo ON wo.order_id = o.id
   WHERE o.brand = p_brand::brand
-    AND o.checkout_status = 'confirmed'
+    AND o.checkout_status <> 'draft'
     AND pt.created_at >= v_tx_start
     AND pt.created_at < v_tx_end
     AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)
@@ -3098,7 +3127,7 @@ BEGIN
     LEFT JOIN customers c ON c.id = o.customer_id
     LEFT JOIN work_orders wo ON wo.order_id = o.id
     WHERE o.brand = p_brand::brand
-      AND o.checkout_status = 'confirmed'
+      AND o.checkout_status <> 'draft'
       AND pt.created_at >= v_tx_start
       AND pt.created_at < v_tx_end
       AND (p_payment_type IS NULL OR pt.payment_type = p_payment_type::payment_type)

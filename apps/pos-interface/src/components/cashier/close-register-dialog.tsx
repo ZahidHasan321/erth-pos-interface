@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -42,6 +43,15 @@ interface CloseRegisterDialogProps {
 export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegisterDialogProps) {
     const { user } = useAuth();
     const mutation = useCloseRegisterMutation();
+
+    // Idempotency key bound to this dialog instance: generated on first submit,
+    // reused on every user-visible retry (toast-on-error → click again), and
+    // cleared when the dialog closes. A fresh key per click would defeat the
+    // server-side dedupe and let a lost-response retry double-record the close.
+    const idemKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!open) idemKeyRef.current = null;
+    }, [open]);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(schema) as any,
@@ -88,16 +98,19 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
             toast.error("Variance is non-zero — explain the difference in notes before closing.");
             return;
         }
+        if (!idemKeyRef.current) idemKeyRef.current = crypto.randomUUID();
         mutation.mutate(
             {
                 sessionId: session.id,
                 userId: user.id,
                 countedCash: values.counted_cash,
                 notes: values.notes || undefined,
+                idempotencyKey: idemKeyRef.current,
             },
             {
                 onSuccess: (res) => {
                     if (res.status === "success") {
+                        idemKeyRef.current = null;
                         form.reset();
                         onOpenChange(false);
                     }

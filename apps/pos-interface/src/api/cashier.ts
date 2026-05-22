@@ -747,8 +747,11 @@ export const closeRegister = async (params: {
     userId: string;
     countedCash: number;
     notes?: string;
+    /** Caller-stable UUID — must be the SAME across user-visible retries of the
+     *  same close attempt. Generating it here would defeat idem (each retry
+     *  would get a fresh key and the server would re-insert close events). */
+    idempotencyKey: string;
 }) => {
-    const p_idempotency_key = crypto.randomUUID();
     const { data, error } = await withWriteRetry(
         () => db.rpc('close_register', {
             p_session_id: params.sessionId,
@@ -756,7 +759,7 @@ export const closeRegister = async (params: {
             p_counted_cash: params.countedCash,
             p_notes: params.notes || null,
             p_tz_offset_minutes: getLocalTzOffsetMinutes(),
-            p_idempotency_key,
+            p_idempotency_key: params.idempotencyKey,
         }),
         (r) => isTransientNetworkError(r.error),
     );
@@ -783,8 +786,11 @@ export const addCashMovement = async (params: {
     amount: number;
     reason: string;
     userId: string;
+    /** Caller-stable UUID — same key across user-visible retries of the same
+     *  movement. A fresh key per retry would let a lost-response tail land
+     *  the original AND the retry, double-crediting the drawer ledger. */
+    idempotencyKey: string;
 }) => {
-    const p_idempotency_key = crypto.randomUUID();
     const { data, error } = await withWriteRetry(
         () => db.rpc('add_cash_movement', {
             p_session_id: params.sessionId,
@@ -794,7 +800,7 @@ export const addCashMovement = async (params: {
             p_user_id: params.userId,
             p_tz_offset_minutes: getLocalTzOffsetMinutes(),
             p_reason_category: params.reasonCategory,
-            p_idempotency_key,
+            p_idempotency_key: params.idempotencyKey,
         }),
         (r) => isTransientNetworkError(r.error),
     );

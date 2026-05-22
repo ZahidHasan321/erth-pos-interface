@@ -114,7 +114,7 @@ export function EodReportView() {
         <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-bold tracking-tight">End of Day Report</h1>
+                    <h1 className="text-xl font-semibold tracking-tight">End of day report</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Financial summary and transaction history
                         {summary && !isMultiDay && summary.invoice_first !== null && summary.invoice_last !== null && (
@@ -155,12 +155,13 @@ export function EodReportView() {
             />
 
             {reportError ? (
-                <Card className="shadow-none rounded-xl border border-destructive/20">
+                <Card className="shadow-none">
                     <CardContent className="py-10 text-center">
-                        <AlertCircle className="h-10 w-10 mx-auto mb-3 text-destructive/60" />
-                        <p className="font-medium text-sm">Failed to load report</p>
+                        <AlertCircle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+                        <p className="font-medium text-sm">Could not load end-of-day report</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                            Something went wrong. Please try again.
+                            The report RPC failed for {dateFromStr}
+                            {isMultiDay ? ` – ${dateToStr}` : ""}. Retry, or check the browser console for details.
                         </p>
                         <Button variant="outline" size="sm" onClick={() => reportRefetch()} className="mt-4">
                             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -172,23 +173,24 @@ export function EodReportView() {
                 <div className="space-y-6">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {[...Array(4)].map((_, i) => (
-                            <Skeleton key={i} className="h-28 rounded-lg" />
+                            <Skeleton key={i} className="h-24 rounded-lg" />
                         ))}
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                        <Skeleton className="h-80 rounded-lg lg:col-span-3" />
-                        <Skeleton className="h-80 rounded-lg lg:col-span-2" />
-                    </div>
-                    <Skeleton className="h-72 rounded-lg" />
+                    <Skeleton className="h-56 rounded-lg" />
                     <Skeleton className="h-64 rounded-lg" />
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                        <Skeleton className="h-72 rounded-lg lg:col-span-3" />
+                        <Skeleton className="h-72 rounded-lg lg:col-span-2" />
+                    </div>
                 </div>
             ) : summary && summary.transaction_count === 0 && summary.order_count === 0 ? (
-                <Card className="shadow-none rounded-xl border">
+                <Card className="shadow-none">
                     <CardContent className="py-14 text-center text-muted-foreground">
-                        <ReceiptText className="h-10 w-10 mx-auto mb-3 opacity-25" />
-                        <p className="font-medium">No transactions found</p>
-                        <p className="text-xs mt-1 opacity-70">
-                            There are no transactions for the selected date range
+                        <ReceiptText className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                        <p className="text-sm font-medium">No transactions in this period</p>
+                        <p className="text-xs mt-1">
+                            Nothing was collected, refunded, or booked between {dateFromStr}
+                            {isMultiDay ? ` and ${dateToStr}` : ""}.
                         </p>
                     </CardContent>
                 </Card>

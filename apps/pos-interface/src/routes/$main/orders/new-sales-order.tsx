@@ -114,6 +114,10 @@ function NewSalesOrder() {
     const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
     const loadingOrderIdRef = React.useRef<number | null>(null);
 
+    // Stable idempotency key for the sales-order Confirm submit. See
+    // new-work-order.tsx for rationale.
+    const checkoutIdemKeyRef = React.useRef<string | null>(null);
+
     const handleLoadOrder = React.useCallback(async (orderIdToLoad: number) => {
         setIsLoadingOrderData(true);
         try {
@@ -277,6 +281,11 @@ function NewSalesOrder() {
             soakingCharge: data.soaking_charge ?? 0,
         };
 
+        if (!checkoutIdemKeyRef.current) checkoutIdemKeyRef.current = crypto.randomUUID();
+        const clearKeyOnSuccess = (res: { status: string }) => {
+            if (res.status === "success") checkoutIdemKeyRef.current = null;
+        };
+
         if (orderId) {
             completeSalesOrderMutation.mutate({
                 orderId,
@@ -284,8 +293,9 @@ function NewSalesOrder() {
                     ...checkoutDetails,
                     shelfCharge: data.shelf_charge
                 },
-                shelfItems
-            });
+                shelfItems,
+                idempotencyKey: checkoutIdemKeyRef.current,
+            }, { onSuccess: clearKeyOnSuccess });
         } else {
             createCompleteSalesOrderMutation.mutate({
                 customerId,
@@ -293,8 +303,9 @@ function NewSalesOrder() {
                     ...checkoutDetails,
                     shelfCharge: data.shelf_charge
                 },
-                shelfItems
-            });
+                shelfItems,
+                idempotencyKey: checkoutIdemKeyRef.current,
+            }, { onSuccess: clearKeyOnSuccess });
         }
     };
 

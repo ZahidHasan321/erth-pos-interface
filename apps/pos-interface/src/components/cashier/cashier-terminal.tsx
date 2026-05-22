@@ -7,6 +7,7 @@ import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { ChipToggle } from "@repo/ui/chip-toggle";
 import { Skeleton } from "@repo/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { TIMEZONE } from "@/lib/utils";
 import {
     useRecentCashierOrders,
@@ -44,17 +45,15 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
     const isNew = isNewUnprocessed(item);
 
     const rowBg = isNew
-        ? "bg-violet-50 border-violet-400 hover:bg-violet-100 hover:shadow-sm"
+        ? "bg-card border-primary/40 hover:bg-accent"
         : isCancelled
-            ? "bg-red-50 border-red-300 hover:bg-red-100"
-            : isPaid
-                ? "bg-emerald-50 border-emerald-300 hover:bg-emerald-100"
-                : "bg-amber-50 border-amber-300 hover:bg-amber-100 hover:shadow-sm";
+            ? "bg-card border-border opacity-70 hover:bg-accent"
+            : "bg-card border-border hover:bg-accent";
 
     const phaseColors: Record<string, string> = {
-        new: "bg-sky-100 text-sky-700",
-        in_progress: "bg-amber-100 text-amber-700",
-        completed: "bg-primary/15 text-primary",
+        new: "bg-muted text-muted-foreground",
+        in_progress: "bg-muted text-muted-foreground",
+        completed: "bg-primary/10 text-primary",
     };
 
     const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "-";
@@ -67,15 +66,6 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
             className={`w-full text-left px-3.5 py-3 rounded-lg border transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] ${rowBg}`}
         >
             <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                    <div className={`w-1.5 h-10 rounded-full ${isNew ? "bg-violet-500" : isPaid ? "bg-emerald-500" : isCancelled ? "bg-red-400" : "bg-amber-400"}`} />
-                    {isNew && (
-                        <span
-                            className="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-violet-500 border-2 border-violet-50"
-                            style={{ animation: "cashier-new-pulse 1.5s ease-in-out infinite" }}
-                        />
-                    )}
-                </div>
                 <div className="w-16 shrink-0">
                     <span className="font-bold text-sm tabular-nums">#{item.id}</span>
                     {item.invoice_number && <p className="text-xs text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}</p>}
@@ -86,14 +76,14 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
                 </div>
                 <div className="text-right shrink-0">
                     <p className="font-bold text-sm tabular-nums leading-tight">{fmtK(item.order_total)}</p>
-                    <p className={`text-sm font-semibold tabular-nums leading-tight ${isPaid ? "text-emerald-600" : "text-red-600"}`}>
+                    <p className={`text-sm font-semibold tabular-nums leading-tight ${isPaid ? "text-emerald-700" : "text-destructive"}`}>
                         {isPaid ? "Paid" : `-${fmtK(remaining)}`}
                     </p>
                 </div>
             </div>
-            <div className="flex items-center gap-2 mt-2 ml-[28px]">
+            <div className="flex items-center gap-2 mt-2">
                 {isNew && (
-                    <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded bg-violet-500 text-white shrink-0">
+                    <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded bg-primary text-primary-foreground shrink-0">
                         New
                     </span>
                 )}
@@ -113,7 +103,7 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
                     </span>
                 )}
                 {item.home_delivery && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                         Delivery
                     </span>
                 )}
@@ -128,6 +118,117 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
                 </div>
             </div>
         </button>
+    );
+}
+
+// ── Order Table Row (lg+) ───────────────────────────────────────────────────
+
+function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (id: string) => void }) {
+    const remaining = item.order_total - item.paid;
+    const isPaid = remaining <= 0;
+    const isCancelled = item.checkout_status === "cancelled";
+    const hasReady = item.garment_ready > 0;
+    const isNew = isNewUnprocessed(item);
+
+    const phaseColors: Record<string, string> = {
+        new: "bg-muted text-muted-foreground",
+        in_progress: "bg-muted text-muted-foreground",
+        completed: "bg-primary/10 text-primary",
+    };
+
+    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "—";
+    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : "—";
+
+    const rowTint = isNew
+        ? "bg-primary/[0.04] hover:bg-primary/[0.07]"
+        : isCancelled
+            ? "opacity-60 hover:bg-muted/50"
+            : "hover:bg-muted/50";
+
+    return (
+        <TableRow
+            onClick={() => onSelect(String(item.id))}
+            className={`cursor-pointer ${rowTint}`}
+        >
+            <TableCell className="py-2.5">
+                <div className="font-semibold text-sm tabular-nums leading-tight">#{item.id}</div>
+                {item.invoice_number && (
+                    <div className="text-[11px] text-muted-foreground tabular-nums leading-tight">INV {item.invoice_number}</div>
+                )}
+            </TableCell>
+            <TableCell className="py-2.5">
+                <div className="font-medium text-sm truncate leading-tight">{item.customer_name || "Unknown"}</div>
+                <div className="text-[11px] text-muted-foreground truncate leading-tight">{item.customer_phone || "—"}</div>
+            </TableCell>
+            <TableCell className="py-2.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">{orderDateStr}</TableCell>
+            <TableCell className="py-2.5 text-xs tabular-nums whitespace-nowrap">
+                {deliveryDateStr === "—" ? (
+                    <span className="text-muted-foreground">—</span>
+                ) : (
+                    <span className="font-semibold">{deliveryDateStr}</span>
+                )}
+            </TableCell>
+            <TableCell className="py-2.5 text-right font-semibold text-sm tabular-nums whitespace-nowrap">
+                {fmtK(item.order_total)}
+            </TableCell>
+            <TableCell className={`py-2.5 text-right font-semibold text-sm tabular-nums whitespace-nowrap ${isPaid ? "text-emerald-700" : "text-destructive"}`}>
+                {isPaid ? "Paid" : `-${fmtK(remaining)}`}
+            </TableCell>
+            <TableCell className="py-2.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {isNew && (
+                        <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                            New
+                        </span>
+                    )}
+                    {item.order_phase && (
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${phaseColors[item.order_phase] || "bg-muted text-muted-foreground"}`}>
+                            {ORDER_PHASE_LABELS[item.order_phase as keyof typeof ORDER_PHASE_LABELS] || item.order_phase}
+                        </span>
+                    )}
+                    {item.order_type && (
+                        <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {item.order_type === "WORK" ? "Work" : "Sales"}
+                        </span>
+                    )}
+                    {hasReady && item.garment_total > 0 && (
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                            {item.garment_ready}/{item.garment_total} ready
+                        </span>
+                    )}
+                    {item.home_delivery && (
+                        <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            Delivery
+                        </span>
+                    )}
+                </div>
+            </TableCell>
+        </TableRow>
+    );
+}
+
+function OrderTable({ items, onSelect }: { items: CashierOrderListItem[]; onSelect: (id: string) => void }) {
+    return (
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <Table>
+                <TableHeader>
+                    <TableRow className="hover:bg-transparent bg-muted/40">
+                        <TableHead className="w-[88px]">#</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead className="w-[72px]">Placed</TableHead>
+                        <TableHead className="w-[72px]">Due</TableHead>
+                        <TableHead className="w-[96px] text-right">Total</TableHead>
+                        <TableHead className="w-[112px] text-right">Remaining</TableHead>
+                        <TableHead className="w-[240px]">Status</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {items.map((item) => (
+                        <OrderTableRow key={item.id} item={item} onSelect={onSelect} />
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }
 
@@ -161,9 +262,9 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
 
     return (
         <div className="space-y-2">
-            <Card className="p-2.5">
-                <h3 className="font-bold text-sm mb-2.5 flex items-center gap-1.5">
-                    <Clock className="h-4 w-4 text-muted-foreground" /> Today
+            <Card className="p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Today
                 </h3>
                 {todayCount > 0 ? (
                     <div className="flex items-center gap-3">
@@ -183,15 +284,15 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 <span className="font-semibold">{todayCount}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
                                 <span className="font-semibold">{fmtK(todayPaid)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Due</span>
-                                <span className="font-semibold text-orange-600">{fmtK(todayDue)}</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Due</span>
+                                <span className="font-semibold">{fmtK(todayDue)}</span>
                             </div>
-                            <div className="border-t border-border pt-1 flex justify-between font-bold">
-                                <span>Billed</span>
+                            <div className="border-t border-border pt-1 flex justify-between font-semibold">
+                                <span className="text-muted-foreground">Billed</span>
                                 <span>{fmtK(todayBilled)}</span>
                             </div>
                         </div>
@@ -201,9 +302,9 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                 )}
             </Card>
 
-            <Card className="p-2.5">
-                <h3 className="font-bold text-sm mb-2.5 flex items-center gap-1.5">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" /> {monthName}
+            <Card className="p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <CreditCard className="h-3.5 w-3.5" /> {monthName}
                 </h3>
                 {monthTotal > 0 ? (
                     <div className="flex items-center gap-3">
@@ -219,15 +320,15 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                         />
                         <div className="flex-1 text-xs tabular-nums space-y-1">
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
                                 <span className="font-semibold">{fmtK(monthPaid)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Remaining</span>
-                                <span className="font-semibold text-orange-600">{fmtK(monthOutstanding)}</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Remaining</span>
+                                <span className="font-semibold">{fmtK(monthOutstanding)}</span>
                             </div>
-                            <div className="border-t border-border pt-1 flex justify-between font-bold">
-                                <span>Billed</span>
+                            <div className="border-t border-border pt-1 flex justify-between font-semibold">
+                                <span className="text-muted-foreground">Billed</span>
                                 <span>{fmtK(monthTotal)}</span>
                             </div>
                         </div>
@@ -237,19 +338,19 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                 )}
             </Card>
 
-            <Card className={`p-2.5 ${unpaidOrders.length > 0 ? "border-red-200 bg-red-50/30" : ""}`}>
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-sm text-red-700 flex items-center gap-1.5">
-                        <CreditCard className="h-4 w-4" /> Outstanding ({unpaidCount || unpaidOrders.length})
+            <Card className="p-3">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <CreditCard className="h-3.5 w-3.5" /> Outstanding ({unpaidCount || unpaidOrders.length})
                     </h3>
                     {totalUnpaidAmount > 0 && (
-                        <span className="font-bold text-sm text-red-600 tabular-nums">{fmtK(totalUnpaidAmount)}</span>
+                        <span className="font-semibold text-base text-destructive tabular-nums">{fmtK(totalUnpaidAmount)}</span>
                     )}
                 </div>
                 {unpaidOrders.length === 0 ? (
                     <div className="text-center py-4">
-                        <CheckCircle2 className="h-6 w-6 mx-auto mb-1 text-emerald-500" />
-                        <p className="text-xs text-emerald-600 font-medium">All orders are fully paid</p>
+                        <CheckCircle2 className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground font-medium">All orders are fully paid</p>
                     </div>
                 ) : (
                     <>
@@ -259,18 +360,18 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 const paidPct = o.order_total > 0 ? Math.round((o.paid / o.order_total) * 100) : 0;
                                 return (
                                     <button key={o.id} type="button" onClick={() => onSelectOrder(String(o.id))}
-                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-red-100/80 transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] border border-transparent hover:border-red-200"
+                                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-accent transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] border border-transparent hover:border-border"
                                         style={i < 8 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 40}ms both` } : undefined}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <span className="font-bold text-xs tabular-nums text-red-800">#{o.id}</span>
-                                                <span className="text-xs truncate">{o.customer_name || "—"}</span>
+                                                <span className="font-semibold text-xs tabular-nums">#{o.id}</span>
+                                                <span className="text-xs truncate text-muted-foreground">{o.customer_name || "—"}</span>
                                             </div>
-                                            <span className="font-bold text-xs text-red-600 tabular-nums shrink-0">{fmtK(due)}</span>
+                                            <span className="font-semibold text-xs text-destructive tabular-nums shrink-0">{fmtK(due)}</span>
                                         </div>
                                         <div className="flex items-center gap-2 mt-1.5">
-                                            <div className="flex-1 h-2 rounded-full bg-red-200/60 overflow-hidden">
-                                                <div className="h-full rounded-full bg-emerald-500 origin-left" style={{ width: `${paidPct}%`, animation: "cashier-bar-fill 600ms cubic-bezier(0.2, 0, 0, 1) 200ms both" }} />
+                                            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                                                <div className="h-full rounded-full bg-primary origin-left" style={{ width: `${paidPct}%`, animation: "cashier-bar-fill 600ms cubic-bezier(0.2, 0, 0, 1) 200ms both" }} />
                                             </div>
                                             <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 font-medium">
                                                 {fmt(o.paid)} / {fmt(o.order_total)}
@@ -281,7 +382,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                             })}
                         </div>
                         {unpaidOrders.length > unpaidVisible && (
-                            <Button variant="ghost" size="sm" className="w-full text-xs text-red-600 mt-1.5 hover:bg-red-100"
+                            <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground mt-1.5"
                                 onClick={() => setUnpaidVisible(v => v + UNPAID_PAGE_SIZE)}>
                                 Show more ({unpaidOrders.length - unpaidVisible} remaining)
                             </Button>
@@ -358,7 +459,7 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
         <div className="h-full flex flex-col">
             <div className="flex-1 overflow-y-auto p-3 will-change-scroll [transform:translateZ(0)]">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 md:h-full">
-                    <div className="md:col-span-3 flex flex-col min-h-0">
+                    <div className="md:col-span-3 flex flex-col min-h-0 rounded-lg bg-muted/40 border border-border p-2">
                         <div className="relative mb-2 shrink-0">
                             {isListSearching ? (
                                 <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
@@ -366,7 +467,7 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             )}
                             <Input placeholder="Search by name, phone, or order ID..." value={listSearchInput}
-                                onChange={(e) => setListSearchInput(e.target.value)} className="pl-10 h-11 text-sm font-medium border-2 border-border rounded-xl shadow-sm focus-visible:border-primary focus-visible:shadow-md transition-shadow" />
+                                onChange={(e) => setListSearchInput(e.target.value)} className="pl-10 h-11 text-sm font-medium border border-border rounded-lg focus-visible:border-primary" />
                             {listSearchInput && (
                                 <button type="button" onClick={() => setListSearchInput("")}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -407,8 +508,8 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                 )}
                             </p>
                             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Paid</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Due</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />Paid</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Due</span>
                             </div>
                         </div>
                         <div className="max-h-[50vh] md:max-h-none flex-1 overflow-y-auto space-y-1 min-h-0 pr-3 md:pr-2 scrollbar-thin will-change-scroll [transform:translateZ(0)]">
@@ -424,11 +525,20 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                 </div>
                             )}
 
-                            {!isListSearching && displayOrders.map((item, i) => (
-                                <div key={item.id} style={i < 10 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 30}ms both` } : undefined}>
-                                    <OrderRow item={item} onSelect={onSelectOrder} />
-                                </div>
-                            ))}
+                            {!isListSearching && displayOrders.length > 0 && (
+                                <>
+                                    <div className="lg:hidden space-y-1">
+                                        {displayOrders.map((item, i) => (
+                                            <div key={item.id} style={i < 10 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 30}ms both` } : undefined}>
+                                                <OrderRow item={item} onSelect={onSelectOrder} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="hidden lg:block">
+                                        <OrderTable items={displayOrders} onSelect={onSelectOrder} />
+                                    </div>
+                                </>
+                            )}
 
                             {!isListSearching && hasMore && (
                                 <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground mt-1"

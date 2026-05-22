@@ -670,16 +670,20 @@ export const completeWorkOrder = async (
         stitchingPrice?: number;
     },
     shelfItems: { id: number; quantity: number }[],
-    fabricItems: { id: number; length: number }[]
+    fabricItems: { id: number; length: number }[],
+    /** Caller-stable UUID — must be the SAME across user-visible retries of
+     *  the same checkout attempt. A fresh key per click would let a lost-
+     *  response tail land the original AND the retry, double-decrementing
+     *  stock, double-issuing the invoice number, and double-paying the order. */
+    idempotencyKey: string,
 ): Promise<ApiResponse<Order>> => {
-    const p_idempotency_key = crypto.randomUUID();
     const { data, error } = await withWriteRetry(
         () => db.rpc('complete_work_order', {
             p_order_id: orderId,
             p_checkout_details: checkoutDetails,
             p_shelf_items: shelfItems,
             p_fabric_items: fabricItems,
-            p_idempotency_key
+            p_idempotency_key: idempotencyKey,
         }),
         (r) => isTransientNetworkError(r.error),
     );
@@ -707,15 +711,16 @@ export const completeSalesOrder = async (
         shelfCharge: number;
         deliveryCharge?: number;
     },
-    shelfItems: { id: number; quantity: number; unitPrice: number }[]
+    shelfItems: { id: number; quantity: number; unitPrice: number }[],
+    /** Caller-stable UUID — see completeWorkOrder. */
+    idempotencyKey: string,
 ): Promise<ApiResponse<Order>> => {
-    const p_idempotency_key = crypto.randomUUID();
     const { data, error } = await withWriteRetry(
         () => db.rpc('complete_sales_order', {
             p_order_id: orderId,
             p_checkout_details: checkoutDetails,
             p_shelf_items: shelfItems,
-            p_idempotency_key
+            p_idempotency_key: idempotencyKey,
         }),
         (r) => isTransientNetworkError(r.error),
     );
@@ -745,15 +750,16 @@ export const createCompleteSalesOrder = async (
         deliveryCharge?: number;
         brand?: string;
     },
-    shelfItems: { id: number; quantity: number; unitPrice: number }[]
+    shelfItems: { id: number; quantity: number; unitPrice: number }[],
+    /** Caller-stable UUID — see completeWorkOrder. */
+    idempotencyKey: string,
 ): Promise<ApiResponse<Order>> => {
-    const p_idempotency_key = crypto.randomUUID();
     const { data, error } = await withWriteRetry(
         () => db.rpc('create_complete_sales_order', {
             p_customer_id: customerId,
             p_checkout_details: { ...checkoutDetails, brand: getBrand() },
             p_shelf_items: shelfItems,
-            p_idempotency_key
+            p_idempotency_key: idempotencyKey,
         }),
         (r) => isTransientNetworkError(r.error),
     );

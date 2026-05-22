@@ -266,7 +266,7 @@ function TransferRowDesktop({
       <TableCell><TransferStatusBadge status={t.status} /></TableCell>
       <TableCell className="text-xs">
         <span className={action ? "text-amber-700 font-medium" : "text-muted-foreground"}>{personalAwaitingLabel(user, t)}</span>
-        {at && <span className="block text-[10px] text-muted-foreground/70 mt-0.5">{new Date(at).toLocaleDateString()}</span>}
+        {at && <span className="block text-[10px] text-muted-foreground mt-0.5">{new Date(at).toLocaleDateString()}</span>}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         {action ? (

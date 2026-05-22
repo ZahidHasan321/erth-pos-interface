@@ -35,7 +35,7 @@ export function showNotificationToast({
           {body && (
             <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{body}</p>
           )}
-          <p className="mt-1 text-[11px] text-muted-foreground/70">Just now</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Just now</p>
         </div>
         <button
           type="button"

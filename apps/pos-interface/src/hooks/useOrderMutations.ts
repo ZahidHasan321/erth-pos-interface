@@ -286,7 +286,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             orderId,
             checkoutDetails,
             shelfItems,
-            fabricItems
+            fabricItems,
+            idempotencyKey,
         }: {
             orderId: number;
             checkoutDetails: {
@@ -314,8 +315,10 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];
+            /** Stable per-submit UUID — see completeWorkOrder in api/orders.ts. */
+            idempotencyKey: string;
         }) => {
-            return completeWorkOrder(orderId, checkoutDetails as any, shelfItems, fabricItems);
+            return completeWorkOrder(orderId, checkoutDetails as any, shelfItems, fabricItems, idempotencyKey);
         },
         onSuccess: (response) => {
             if (response.status === "error") {
@@ -340,7 +343,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             mutationFn: ({
                 orderId,
                 checkoutDetails,
-                shelfItems
+                shelfItems,
+                idempotencyKey,
             }: {
                 orderId: number;
                             checkoutDetails: {
@@ -358,8 +362,10 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                                 deliveryCharge?: number;
                             };
                 shelfItems: { id: number; quantity: number; unitPrice: number }[];
+                /** Stable per-submit UUID — see completeSalesOrder in api/orders.ts. */
+                idempotencyKey: string;
             }) => {
-                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems);
+                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems, idempotencyKey);
             },
             onSuccess: (response) => {
                 if (response.status === "error") {
@@ -385,7 +391,8 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             mutationFn: ({
                 customerId,
                 checkoutDetails,
-                shelfItems
+                shelfItems,
+                idempotencyKey,
             }: {
                 customerId: number;
                 checkoutDetails: {
@@ -404,8 +411,10 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                                     deliveryCharge?: number;
                                 };
                 shelfItems: { id: number; quantity: number; unitPrice: number }[];
+                /** Stable per-submit UUID — see createCompleteSalesOrder in api/orders.ts. */
+                idempotencyKey: string;
             }) => {
-                return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems);
+                return createCompleteSalesOrder(customerId, checkoutDetails, shelfItems, idempotencyKey);
             },
             onSuccess: (response) => {
                 if (response.status === "error") {

@@ -511,7 +511,7 @@ function NewTransferPage() {
                   <div className="rounded-lg border border-dashed bg-muted/20 px-3 py-8 text-center">
                     <ShoppingCart className="h-8 w-8 mx-auto text-muted-foreground/40" />
                     <p className="text-xs text-muted-foreground mt-2">No items yet</p>
-                    <p className="text-[11px] text-muted-foreground/70 mt-0.5">Items you add appear here.</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Items you add appear here.</p>
                   </div>
                 ) : (
                   <div className="rounded-lg border divide-y max-h-[480px] overflow-y-auto">

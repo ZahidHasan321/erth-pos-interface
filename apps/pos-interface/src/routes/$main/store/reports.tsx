@@ -106,7 +106,7 @@ function ReportsPage() {
                 ) : (
                   <p className="text-lg font-bold tabular-nums">{k.value}</p>
                 )}
-                <p className="text-[10px] text-muted-foreground/70">{k.trend}</p>
+                <p className="text-[10px] text-muted-foreground">{k.trend}</p>
               </div>
             </CardContent>
           </Card>
