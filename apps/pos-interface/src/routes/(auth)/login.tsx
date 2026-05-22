@@ -74,6 +74,9 @@ function LoginComponent() {
   const [userType, setUserType] =
     React.useState<(typeof BRAND_NAMES)[keyof typeof BRAND_NAMES]>(initialUserType);
 
+  // DEV-ONLY: get_login_users returns the active-user roster to anon so
+  // the picker below can show clickable staff. Disable before exposing
+  // the app on a public domain (see CLAUDE.md §11).
   React.useEffect(() => {
     db.rpc("get_login_users").then(({ data }) => {
       if (data) {
@@ -551,11 +554,11 @@ function LoginComponent() {
                   <Input
                     id="pin-input"
                     name="pin"
-                    placeholder="••••"
+                    placeholder="••••••"
                     type="password"
                     inputMode="numeric"
-                    maxLength={4}
-                    pattern="[0-9]{4}"
+                    maxLength={10}
+                    pattern="[0-9]{6,10}"
                     required
                     className="lg-input"
                   />

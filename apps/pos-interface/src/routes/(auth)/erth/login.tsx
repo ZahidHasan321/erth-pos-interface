@@ -54,6 +54,9 @@ function ErthLoginPage() {
     return () => clearTimeout(t);
   }, []);
 
+  // DEV-ONLY: get_login_users powers the quick-access picker by returning
+  // the active-user roster to anon. Disable before exposing the app on a
+  // public domain (see CLAUDE.md §11).
   React.useEffect(() => {
     db.rpc("get_login_users").then(({ data }) => {
       if (data) {
@@ -414,11 +417,11 @@ function ErthLoginPage() {
                   className="el-input"
                   type="password"
                   inputMode="numeric"
-                  maxLength={4}
+                  maxLength={10}
                   autoComplete="off"
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  placeholder="••••"
+                  placeholder="••••••"
                   required
                 />
               </div>

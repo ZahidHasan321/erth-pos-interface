@@ -97,7 +97,7 @@ RETURNS INT AS $$
 BEGIN
   RETURN nextval('alteration_invoice_seq');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 GRANT EXECUTE ON FUNCTION next_alteration_invoice() TO authenticated, anon, service_role;
 
@@ -1742,23 +1742,39 @@ $$ LANGUAGE plpgsql;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Hash a plaintext PIN using bcrypt
+-- bcrypt cost 10 ≈ 2^10 rounds. Existing cost-8 hashes still verify (cost is
+-- encoded in the stored hash itself), so this is a no-op for current users —
+-- new and reset PINs get the stronger cost from here on.
 CREATE OR REPLACE FUNCTION hash_pin(p_pin TEXT)
 RETURNS TEXT AS $$
 BEGIN
-  RETURN crypt(p_pin, gen_salt('bf', 8));
+  RETURN crypt(p_pin, gen_salt('bf', 10));
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
--- Set a user's PIN (hashes before storing)
+-- Set a user's PIN. Enforces the PIN policy server-side so the rule holds
+-- regardless of which client (admin UI, edge function, psql) calls it.
 CREATE OR REPLACE FUNCTION set_user_pin(p_user_id UUID, p_pin TEXT)
 RETURNS VOID AS $$
 BEGIN
-  IF length(p_pin) < 4 THEN
-    RAISE EXCEPTION 'PIN must be at least 4 digits';
+  -- Numeric, length >= 6.
+  IF p_pin !~ '^\d{6,}$' THEN
+    RAISE EXCEPTION 'PIN must be at least 6 digits and contain only numbers';
+  END IF;
+
+  -- Reject all-same-digit (000000, 111111, …).
+  IF p_pin ~ '^(\d)\1+$' THEN
+    RAISE EXCEPTION 'PIN cannot be all the same digit';
+  END IF;
+
+  -- Reject trivial ascending/descending sequences (123456, 234567, 987654, …).
+  -- Substring match against the two reference strings catches every length.
+  IF position(p_pin IN '01234567890') > 0 OR position(p_pin IN '09876543210') > 0 THEN
+    RAISE EXCEPTION 'PIN cannot be a simple sequence';
   END IF;
 
   UPDATE users
-  SET pin = crypt(p_pin, gen_salt('bf', 8)),
+  SET pin = crypt(p_pin, gen_salt('bf', 10)),
       updated_at = now()
   WHERE id = p_user_id;
 
@@ -1766,7 +1782,7 @@ BEGIN
     RAISE EXCEPTION 'User not found';
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- Verify PIN and return user data (handles lockout logic server-side)
 CREATE OR REPLACE FUNCTION verify_pin(p_username TEXT, p_pin TEXT)
@@ -1786,7 +1802,10 @@ BEGIN
   LIMIT 1;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'User not found';
+    -- Match the bad-PIN delay so timing can't distinguish "wrong username"
+    -- from "wrong PIN" — closes the username-enumeration side channel.
+    PERFORM pg_sleep(0.5);
+    RAISE EXCEPTION 'Invalid username or PIN';
   END IF;
 
   IF NOT v_user.is_active THEN
@@ -1825,6 +1844,11 @@ BEGIN
       'brands', v_user.brands
     );
   ELSE
+    -- Throttle: caps brute-force at ~2 attempts/sec per connection regardless
+    -- of any network-layer rate limit. Bcrypt itself takes ~10ms at cost 10 —
+    -- this is the dominant factor.
+    PERFORM pg_sleep(0.5);
+
     -- Failed: increment attempts
     v_attempts := coalesce(v_user.failed_login_attempts, 0) + 1;
 
@@ -1840,7 +1864,7 @@ BEGIN
     END IF;
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- Migrate existing plaintext PINs to hashed (run once, idempotent)
 -- Plaintext PINs are short numeric strings; bcrypt hashes start with '$2'
@@ -1850,14 +1874,14 @@ DECLARE
   v_count INT := 0;
 BEGIN
   UPDATE users
-  SET pin = crypt(pin, gen_salt('bf', 8))
+  SET pin = crypt(pin, gen_salt('bf', 10))
   WHERE pin IS NOT NULL
     AND pin NOT LIKE '$2%';
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- Link a Supabase Auth user to our users table (called from Edge Functions)
 CREATE OR REPLACE FUNCTION link_auth_id(p_user_id UUID, p_auth_id UUID)
@@ -1868,22 +1892,31 @@ BEGIN
     RAISE EXCEPTION 'User not found: %', p_user_id;
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- ── PIN/Auth RPC access control ──
 -- These are SECURITY DEFINER and would otherwise be callable by anon/
 -- authenticated via PostgREST. set_user_pin and link_auth_id are
 -- account-takeover primitives if exposed; restrict to service_role
--- (Edge Functions). verify_pin and get_login_users stay public — login
--- needs them.
+-- (Edge Functions). verify_pin is only invoked from login_with_pin
+-- (SECURITY DEFINER), so clients never need direct access — locking it
+-- down closes a parallel brute-force path that would bypass any future
+-- hardening on login_with_pin.
 REVOKE EXECUTE ON FUNCTION set_user_pin(UUID, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION link_auth_id(UUID, UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION migrate_plaintext_pins() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION verify_pin(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_user_pin(UUID, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION link_auth_id(UUID, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION migrate_plaintext_pins() TO service_role;
+GRANT EXECUTE ON FUNCTION verify_pin(TEXT, TEXT) TO service_role;
 
--- Public RPC: returns active users for login page (no auth required, minimal fields)
+-- DEV-ONLY convenience: returns the full active-user roster so the login
+-- pages can render a clickable staff picker (fast role-switching during
+-- testing). Anyone hitting the URL gets the roster — that's a staff-
+-- enumeration leak in a public-internet deployment. Tracked in
+-- CLAUDE.md §11: DROP this function before exposing the app on a public
+-- domain, and switch the login pages back to typed-username only.
 CREATE OR REPLACE FUNCTION get_login_users()
 RETURNS JSONB AS $$
   SELECT coalesce(jsonb_agg(
@@ -1899,7 +1932,7 @@ RETURNS JSONB AS $$
   ), '[]'::jsonb)
   FROM users
   WHERE is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- RLS HELPER FUNCTIONS
@@ -1915,19 +1948,19 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS TEXT AS $$
   SELECT role::text FROM users WHERE auth_id = auth.uid() AND is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Get the current user's department from auth.uid() → users.auth_id
 CREATE OR REPLACE FUNCTION get_my_department()
 RETURNS TEXT AS $$
   SELECT department::text FROM users WHERE auth_id = auth.uid() AND is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Get the current user's job_functions (empty = office user, not terminal-locked)
 CREATE OR REPLACE FUNCTION get_my_job_functions()
 RETURNS job_function[] AS $$
   SELECT job_functions FROM users WHERE auth_id = auth.uid() AND is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Drop the legacy single-value helper. No callers in app code or RLS.
 DROP FUNCTION IF EXISTS get_my_job_function();
@@ -1936,7 +1969,7 @@ DROP FUNCTION IF EXISTS get_my_job_function();
 CREATE OR REPLACE FUNCTION get_my_user_id()
 RETURNS UUID AS $$
   SELECT id FROM users WHERE auth_id = auth.uid() AND is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Raise if the calling user is not active. Use at the top of state-mutating
 -- RPCs so that disabling a user (is_active = false) takes effect for live
@@ -1954,7 +1987,7 @@ BEGIN
     RAISE EXCEPTION 'Your account has been disabled. Please contact a manager.';
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Replacement for bare `is_active_user()` checks in RLS policies.
 -- Returns true only when the JWT maps to an existing, active user row.
@@ -1965,19 +1998,19 @@ RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true
   );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Check if current user is admin
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin'));
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Check if current user is admin or manager
 CREATE OR REPLACE FUNCTION is_manager_or_above()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin', 'manager'));
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Check if current user can access a given brand
 -- super_admin and workshop users see all brands; shop users only see their assigned brands.
@@ -1998,7 +2031,7 @@ RETURNS BOOLEAN AS $$
     )
     -- brand is in the user's brands array (case-insensitive)
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND lower(brand_value) = ANY(brands));
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- ROW LEVEL SECURITY POLICIES
@@ -2077,9 +2110,21 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
 -- ── User Sessions (Presence) ────────────────────────────────────────
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 
--- Everyone can read sessions (needed for online indicators)
+-- Presence is visible within the same department; managers see all. Scoped
+-- this way so an attacker who lands one valid JWT can't enumerate every
+-- staff member's login activity across both apps.
 DROP POLICY IF EXISTS "sessions_select" ON user_sessions;
-CREATE POLICY "sessions_select" ON user_sessions FOR SELECT USING (true);
+CREATE POLICY "sessions_select" ON user_sessions FOR SELECT USING (
+  is_active_user() AND (
+    is_manager_or_above()
+    OR user_id = get_my_user_id()
+    OR EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.id = user_sessions.user_id
+        AND u.department::text = get_my_department()
+    )
+  )
+);
 
 -- Users can manage their own sessions
 DROP POLICY IF EXISTS "sessions_insert" ON user_sessions;
@@ -3566,7 +3611,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 DROP TRIGGER IF EXISTS garment_location_notification ON garments;
 CREATE TRIGGER garment_location_notification
@@ -3611,7 +3656,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 DROP TRIGGER IF EXISTS garment_redo_notification ON garments;
 CREATE TRIGGER garment_redo_notification
@@ -3648,7 +3693,7 @@ BEGIN
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 DROP TRIGGER IF EXISTS transfer_created_notification ON transfer_requests;
 CREATE TRIGGER transfer_created_notification
@@ -3693,7 +3738,7 @@ BEGIN
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 DROP TRIGGER IF EXISTS transfer_status_notification ON transfer_requests;
 CREATE TRIGGER transfer_status_notification
@@ -3739,7 +3784,7 @@ RETURNS JSONB AS $$
     LIMIT p_limit
     OFFSET p_offset
   ) t;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Get unread notification count (department + user-scoped combined)
 DROP FUNCTION IF EXISTS get_unread_notification_count();
@@ -3760,7 +3805,7 @@ RETURNS INTEGER AS $$
       WHERE nr.notification_id = n.id
         AND nr.user_id = get_my_user_id()
     );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Mark a single notification as read
 CREATE OR REPLACE FUNCTION mark_notification_read(p_notification_id INTEGER)
@@ -3770,7 +3815,7 @@ BEGIN
   VALUES (p_notification_id, get_my_user_id())
   ON CONFLICT (notification_id, user_id) DO NOTHING;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- Mark all visible notifications as read (department + user-scoped combined)
 DROP FUNCTION IF EXISTS mark_all_notifications_read();
@@ -3794,7 +3839,7 @@ BEGIN
         AND nr.user_id = get_my_user_id()
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- Cleanup expired notifications (housekeeping — call periodically)
 CREATE OR REPLACE FUNCTION expire_old_notifications()
@@ -3802,7 +3847,7 @@ RETURNS void AS $$
 BEGIN
   DELETE FROM notifications WHERE expires_at < now();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- ========================================================================
 -- DISPATCH LOG RLS
@@ -3831,7 +3876,7 @@ BEGIN
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- SHOWROOM ORDERS: paginated, server-filtered RPC

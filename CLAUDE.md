@@ -339,6 +339,25 @@ Open questions for the client live in `OPEN_QUESTIONS.docx`. When one is resolve
 
 ---
 
+## 11. Deployment hardening checklist (do these at the host / proxy, not in code)
+
+The app is internal-only but reachable from the public internet via a domain on a VPS. The code-level hardening (PIN policy, lockout, server-side throttle, RLS, SECURITY DEFINER `search_path`) is in place; the items below are the deployment-layer half — they live wherever this is hosted (VPS reverse proxy, Cloudflare in front, Tailscale tunnel, etc.) and **must be re-applied if the deployment moves**. Treat this as a host-config TODO, not a coding TODO.
+
+0. **Drop `get_login_users` (and the picker calls in the four login pages).** It returns the full active-user roster to anon to make dev role-switching fast. On a public domain that's free staff enumeration for anyone who hits the URL. Before going live: `DROP FUNCTION IF EXISTS get_login_users();` in `triggers.sql`, and remove the `db.rpc("get_login_users")` `useEffect` blocks in `apps/pos-interface/src/routes/(auth)/login.tsx`, `apps/pos-interface/src/routes/(auth)/erth/login.tsx`, `apps/pos-interface/src/routes/(auth)/sakkba/login.tsx`, `apps/workshop/src/routes/(auth)/login.tsx`. The typed-username form already in each page handles login without the picker.
+1. **Rate-limit the auth endpoints at the reverse proxy.** Cap `POST /rest/v1/rpc/login_with_pin` and `POST /auth/v1/token` at ~10/min per IP with burst smoothing. The DB has a per-user lockout and a 0.5s pg_sleep on bad PINs (verify_pin in triggers.sql), but those don't stop a parallel attacker hammering many users from one IP — only the network layer does.
+2. **Force HTTPS, enforce HSTS.** `login_with_pin` returns a one-time password the client immediately exchanges for a JWT; if any path runs over plaintext HTTP that credential is sniffable. Set `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`, redirect HTTP→HTTPS at the proxy, do not bind port 80 to the app at all.
+3. **No HTTP listener for the API at all.** Same reasoning as above — TLS-only on the public surface.
+4. **(Stretch, biggest single win) Put the app behind a private tunnel** (Tailscale / WireGuard / Cloudflare Access). If only authenticated tunnel members can reach the domain, every public-internet brute-force / enumeration concern in this file collapses to "internal LAN" — the original threat model. The app code is already designed for that model; the public domain is what stretches it.
+5. **Per-IP / global lockout.** Not implementable in plpgsql without piping the client IP through (PostgREST doesn't expose it to RPC bodies). If you want this layer, do it at the proxy (fail2ban-style: lock an IP after N 4xx responses on the login endpoint within a window). Per-user lockout is already in `verify_pin`.
+6. **TLS termination + upstream.** If TLS terminates at the proxy and is re-proxied to Supabase, confirm the upstream leg is also TLS. Don't let the one-time password from `login_with_pin` ride plaintext over a "trusted" internal network.
+7. **CSP / framing.** Set `Content-Security-Policy` (script-src 'self' + Supabase host), `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`. Cheap defense-in-depth at the proxy.
+8. **Service-role key blast radius.** The service-role key must live only on the server side (Edge Functions, admin scripts). Never bake it into a `VITE_*` env var. CI guard: grep-fail any commit that introduces `VITE_*SERVICE*` or `SERVICE_ROLE` in `apps/`.
+9. **Backup & rotation.** Schedule DB backups; have a rotation plan for the Supabase service-role key and a procedure for revoking it if it leaks (it does not appear in this repo today — keep it that way).
+
+If any of these aren't yet in place at the chosen deployment, the in-code hardening still holds — these stack on top, they don't replace it.
+
+---
+
 ## Appendix A — Implementation map (NON-AUTHORITATIVE — may drift)
 
 Navigation aid only. If anything here disagrees with §1–§7, **the spec wins and this is stale**. Do not cite these as the source of a test's expected value.

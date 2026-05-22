@@ -69,6 +69,9 @@ function LoginPage() {
     return () => clearTimeout(t);
   }, []);
 
+  // DEV-ONLY: get_login_users returns the active-user roster to anon so
+  // the picker can show clickable staff. Disable before exposing the app
+  // on a public domain (see CLAUDE.md §11).
   useEffect(() => {
     db.rpc("get_login_users").then(({ data }) => {
       if (data) {
@@ -434,10 +437,10 @@ function LoginPage() {
                     autoComplete="off"
                     type="password"
                     inputMode="numeric"
-                    maxLength={4}
+                    maxLength={10}
                     value={pin}
                     onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                    placeholder="••••"
+                    placeholder="••••••"
                     required
                   />
                 </div>
