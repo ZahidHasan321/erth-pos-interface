@@ -259,6 +259,7 @@ export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
     .eq('in_production', true)
     .eq('piece_stage', 'waiting_cut')
     .is('production_plan', null)
+    .eq('needs_investigation', false) // §2.10: held garments leave the queue until resolved
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {
@@ -284,6 +285,7 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
     .select(WORKSHOP_QUERY_LIGHT)
     .eq('location', 'workshop')
     .eq('piece_stage', stage)
+    .eq('needs_investigation', false) // §2.10: held garments leave terminal queues until resolved
     .eq('order.checkout_status', 'confirmed');
 
   if (stage === 'cutting') {
@@ -493,13 +495,14 @@ export interface WorkshopSidebarCounts {
   finishing: number;
   ironing: number;
   quality_check: number;
+  investigations: number;
   dispatch: number;
 }
 
 /**
  * Sidebar badge counts. Replaces the old pattern of fetching every workshop
- * garment just to call .filter().length 11 times. Now the server returns
- * the 11 integers in one small jsonb object.
+ * garment just to call .filter().length 12 times. Now the server returns
+ * the 12 integers in one small jsonb object.
  */
 export const getWorkshopSidebarCounts = async (): Promise<WorkshopSidebarCounts> => {
   const { data, error } = await db.rpc('get_workshop_sidebar_counts');
@@ -509,7 +512,7 @@ export const getWorkshopSidebarCounts = async (): Promise<WorkshopSidebarCounts>
   return (data ?? {
     receiving: 0, parking: 0, scheduler: 0, soaking: 0, cutting: 0,
     post_cutting: 0, sewing: 0, finishing: 0, ironing: 0,
-    quality_check: 0, dispatch: 0,
+    quality_check: 0, investigations: 0, dispatch: 0,
   }) as WorkshopSidebarCounts;
 };
 

@@ -1509,6 +1509,32 @@ ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_customer_must_provide_fabric 
 ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS annotated_qty NUMERIC(10,2);
 ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS root_cause root_cause;
 
+-- ─── Group C: repeated-returns investigation (CLAUDE.md §2.10) ────────────
+-- needs_investigation holds a garment out of production after repeated returns
+-- (≥2 quality / ≥3 total) until a manager records the investigation. Detection
+-- + the start-guard live in the BEFORE-UPDATE trigger _garment_investigation_gate
+-- (further below); record_investigation resolves it. garment_investigations is
+-- the append-only resolution history. Created here so both the trigger and the
+-- RPC (defined later in this single batch) find the column/table.
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS needs_investigation BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS garment_investigations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  garment_id UUID NOT NULL REFERENCES garments(id),
+  order_id INTEGER,
+  root_cause root_cause,
+  decision TEXT NOT NULL,                 -- continue | redo | refund
+  history_note TEXT,
+  corrective_short TEXT,
+  corrective_long TEXT,
+  quality_returns INTEGER,
+  alteration_returns INTEGER,
+  resolved_by UUID,
+  resolved_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS garment_investigations_garment_idx ON garment_investigations(garment_id);
+-- RLS policy is created below, after is_active_user() is defined.
+
 -- 11f. RPC: Create a replacement garment after a Reject-Redo.
 -- Promoted from apps/workshop/src/api/garments.ts createGarmentForOrder (:1817)
 -- replacement path (+ nextGarmentIdForOrder :1801). Clones the original's
@@ -5309,6 +5335,7 @@ AS $$
         'finishing',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'finishing'),
         'ironing',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ironing'),
         'quality_check', COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'quality_check'),
+        'investigations', COUNT(*) FILTER (WHERE needs_investigation IS TRUE),
         'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ready_for_dispatch')
     )
     FROM scoped;
@@ -6008,6 +6035,268 @@ RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
   END;
 $$;
 
+-- ─── Redo performance impact by responsible party (Q14) ──────────────────
+-- CLAUDE.md §6 "Redo performance impact": charge a redo to the responsible
+-- party derived from its root_cause (§2.9), never a blanket factory penalty.
+-- Source = the redo material-waste annotations create_replacement_garment
+-- stamps on the scrapped original (movement_type='waste', reason='redo' — the
+-- unique tag that isolates redo scrap from §4 Damage/Waste, which uses the
+-- WASTE_REASONS categories and never sets root_cause). One annotation per
+-- company-fabric redo; net-zero, length in annotated_qty. Returns an array
+-- (one row per root_cause) with the derived party so the frontend never
+-- re-implements the value→party mapping (§2.9: it lives in this one SQL helper).
+-- Customer (OUT) fabric redos write no annotation → no material cost, by design.
+-- Defined AFTER root_cause_responsible_party (a LANGUAGE sql function's body is
+-- validated at CREATE time, so the helper it calls must already exist).
+CREATE OR REPLACE FUNCTION get_redo_impact(
+  p_from TIMESTAMPTZ,
+  p_to TIMESTAMPTZ
+)
+RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'root_cause',  rc,
+           'party',       root_cause_responsible_party(rc),
+           'redo_count',  cnt,
+           'waste_qty',   qty,
+           'waste_cost',  cost
+         ) ORDER BY cost DESC, cnt DESC), '[]'::jsonb)
+  FROM (
+    SELECT root_cause AS rc,
+           COUNT(*) AS cnt,
+           SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)) AS qty,
+           SUM((ABS(qty_delta) + COALESCE(annotated_qty, 0)) * COALESCE(unit_cost, 0)) AS cost
+    FROM stock_movements
+    WHERE movement_type = 'waste'
+      AND reason = 'redo'
+      AND created_at >= p_from AND created_at < p_to
+    GROUP BY root_cause
+  ) AS t;
+$$ LANGUAGE sql STABLE;
+
+-- ─── QC quality analytics (Q2) ───────────────────────────────────────────
+-- CLAUDE.md §6 "QC analytics": use the 1–5 quality ratings analytically (the
+-- pass/fail rule — any aspect < 4 → non-conformity → back to production — is
+-- unchanged; this only READS the numbers). Flattens every qc_attempt in
+-- trip_history whose `date` is in [from, to) and returns: totals
+-- (attempts/pass/fail), per-aspect avg + fail count (defect-category breakdown),
+-- measurement- and option-defect counts (the same analytical lens extended to
+-- spec defects), defect origin by return_stage, and a per-day quality trend.
+-- Ranged on the attempt's own date (set by the app's buildQcAttempt) so a
+-- garment still in production counts the moment it was inspected.
+CREATE OR REPLACE FUNCTION get_qc_analytics(
+  p_from TIMESTAMPTZ,
+  p_to TIMESTAMPTZ
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  -- jsonb_typeof guards: real rows may hold a JSON `null` or a non-array scalar
+  -- in trip_history / qc_attempts / quality_ratings / the failed-key arrays;
+  -- jsonb_array_elements / jsonb_each_text RAISE on those (COALESCE only catches
+  -- SQL NULL, not the JSON scalar 'null'). Normalize each to [] / {} here so the
+  -- downstream unnests are total.
+  WITH attempts AS (
+    SELECT
+      att->>'result'             AS result,
+      (att->>'date')::timestamptz AS adate,
+      CASE WHEN jsonb_typeof(att->'quality_ratings')     = 'object' THEN att->'quality_ratings'     ELSE '{}'::jsonb END AS ratings,
+      CASE WHEN jsonb_typeof(att->'failed_measurements') = 'array'  THEN att->'failed_measurements' ELSE '[]'::jsonb END AS failed_meas,
+      CASE WHEN jsonb_typeof(att->'failed_options')      = 'array'  THEN att->'failed_options'      ELSE '[]'::jsonb END AS failed_opts,
+      CASE WHEN jsonb_typeof(att->'return_stages')       = 'array'  THEN att->'return_stages'       ELSE '[]'::jsonb END AS return_stages
+    FROM garments g
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE WHEN jsonb_typeof(g.trip_history) = 'array' THEN g.trip_history ELSE '[]'::jsonb END
+    ) AS trip
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE WHEN jsonb_typeof(trip->'qc_attempts') = 'array' THEN trip->'qc_attempts' ELSE '[]'::jsonb END
+    ) AS att
+    WHERE att->>'date' IS NOT NULL
+      AND (att->>'date')::timestamptz >= p_from
+      AND (att->>'date')::timestamptz <  p_to
+  )
+  SELECT jsonb_build_object(
+    'total_attempts', (SELECT count(*) FROM attempts),
+    'pass',           (SELECT count(*) FROM attempts WHERE result = 'pass'),
+    'fail',           (SELECT count(*) FROM attempts WHERE result = 'fail'),
+    'by_aspect', COALESCE((
+      SELECT jsonb_object_agg(aspect, payload) FROM (
+        SELECT kv.key AS aspect,
+               jsonb_build_object(
+                 'avg',   round(avg(kv.value::numeric), 2),
+                 'rated', count(*),
+                 'fails', count(*) FILTER (WHERE kv.value::numeric < 4)
+               ) AS payload
+        FROM attempts a
+        CROSS JOIN LATERAL jsonb_each_text(COALESCE(a.ratings, '{}'::jsonb)) AS kv
+        GROUP BY kv.key
+      ) t
+    ), '{}'::jsonb),
+    'measurement_defects', COALESCE((
+      SELECT jsonb_object_agg(field, cnt) FROM (
+        SELECT m.value AS field, count(*) AS cnt
+        FROM attempts a CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(a.failed_meas, '[]'::jsonb)) AS m(value)
+        GROUP BY m.value
+      ) t
+    ), '{}'::jsonb),
+    'option_defects', COALESCE((
+      SELECT jsonb_object_agg(opt, cnt) FROM (
+        SELECT o.value AS opt, count(*) AS cnt
+        FROM attempts a CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(a.failed_opts, '[]'::jsonb)) AS o(value)
+        GROUP BY o.value
+      ) t
+    ), '{}'::jsonb),
+    'stage_defects', COALESCE((
+      SELECT jsonb_object_agg(stage, cnt) FROM (
+        SELECT s.value AS stage, count(*) AS cnt
+        FROM attempts a CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(a.return_stages, '[]'::jsonb)) AS s(value)
+        GROUP BY s.value
+      ) t
+    ), '{}'::jsonb),
+    'trend', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', cnt.d, 'avg', sc.avg_score, 'attempts', cnt.n) ORDER BY cnt.d)
+      FROM (SELECT to_char(adate, 'YYYY-MM-DD') AS d, count(*) AS n FROM attempts GROUP BY 1) cnt
+      LEFT JOIN (
+        SELECT to_char(a.adate, 'YYYY-MM-DD') AS d, round(avg(kv.value::numeric), 2) AS avg_score
+        FROM attempts a CROSS JOIN LATERAL jsonb_each_text(COALESCE(a.ratings, '{}'::jsonb)) AS kv
+        GROUP BY 1
+      ) sc ON sc.d = cnt.d
+    ), '[]'::jsonb)
+  ) INTO v_result;
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- GROUP C — Repeated-returns investigation (auto-hold)  (CLAUDE.md §2.10)
+-- ════════════════════════════════════════════════════════════════════════
+
+-- Quality returns = # of QC fails (result='fail') across a garment's trip_history.
+-- jsonb_typeof guards: a row may hold JSON null / a scalar (jsonb_array_elements
+-- RAISEs on those). Alteration returns are trip_number-1, computed inline.
+CREATE OR REPLACE FUNCTION _count_qc_fails(p_trip_history JSONB)
+RETURNS INT LANGUAGE sql IMMUTABLE AS $$
+  SELECT COUNT(*)::int
+  FROM jsonb_array_elements(
+    CASE WHEN jsonb_typeof(p_trip_history) = 'array' THEN p_trip_history ELSE '[]'::jsonb END
+  ) AS trip
+  CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(trip->'qc_attempts') = 'array' THEN trip->'qc_attempts' ELSE '[]'::jsonb END
+  ) AS att
+  WHERE att->>'result' = 'fail';
+$$;
+
+-- BEFORE-UPDATE on garments: (1) DETECTION — when a NEW return crosses the §2.10
+-- threshold (≥2 quality OR ≥3 total), flag needs_investigation and drop the
+-- garment out of active production; fired on the *increase* so it re-arms only on
+-- a genuinely new return, never on an unrelated update. (2) HOLD GUARD — while
+-- flagged, the in_production false→true "start" transition is rejected. The hold
+-- is per-garment (the flag is on the row) — siblings are never affected.
+CREATE OR REPLACE FUNCTION _garment_investigation_gate()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  v_old_q INT; v_new_q INT; v_old_total INT; v_new_total INT;
+BEGIN
+  -- (1) Detection — only recompute when returns actually changed.
+  IF NEW.trip_history IS DISTINCT FROM OLD.trip_history
+     OR NEW.trip_number IS DISTINCT FROM OLD.trip_number THEN
+    v_new_q := _count_qc_fails(NEW.trip_history);
+    v_new_total := v_new_q + GREATEST(COALESCE(NEW.trip_number, 0) - 1, 0);
+    v_old_q := _count_qc_fails(OLD.trip_history);
+    v_old_total := v_old_q + GREATEST(COALESCE(OLD.trip_number, 0) - 1, 0);
+    IF v_new_total > v_old_total AND (v_new_q >= 2 OR v_new_total >= 3) THEN
+      NEW.needs_investigation := true;
+      NEW.in_production := false;  -- drop out of active production while held
+    END IF;
+  END IF;
+
+  -- (2) Hold guard — a flagged garment cannot be (re)started.
+  IF NEW.needs_investigation AND NEW.in_production AND NOT COALESCE(OLD.in_production, false) THEN
+    RAISE EXCEPTION 'garment % needs investigation (repeated returns) — record the investigation before resuming production', NEW.id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_garment_investigation_gate ON garments;
+CREATE TRIGGER trg_garment_investigation_gate
+  BEFORE UPDATE ON garments
+  FOR EACH ROW EXECUTE FUNCTION _garment_investigation_gate();
+
+-- Manager resolves a held garment's investigation (CLAUDE.md §2.10). Records the
+-- root_cause / decision / corrective actions (append-only history) and clears the
+-- hold. decision='continue' RESUMES production in the same write (sets
+-- in_production=true; the guard permits it because needs_investigation is now
+-- false). redo/refund clear the hold only — the §2.5 remake / §2.6 refund run
+-- through their own flows. Idempotent; manager-gated.
+CREATE OR REPLACE FUNCTION record_investigation(
+  p_garment_id UUID,
+  p_root_cause root_cause,
+  p_decision TEXT,                        -- continue | redo | refund
+  p_history_note TEXT DEFAULT NULL,
+  p_corrective_short TEXT DEFAULT NULL,
+  p_corrective_long TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_g garments%ROWTYPE;
+  v_q INT;
+  v_alt INT;
+  v_inv_id UUID;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'record_investigation') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+  IF NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'record_investigation: only a manager may resolve an investigation';
+  END IF;
+  IF p_decision NOT IN ('continue', 'redo', 'refund') THEN
+    RAISE EXCEPTION 'record_investigation: invalid decision % (expected continue|redo|refund)', p_decision;
+  END IF;
+
+  SELECT * INTO v_g FROM garments WHERE id = p_garment_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'record_investigation: garment % not found', p_garment_id;
+  END IF;
+  IF NOT v_g.needs_investigation THEN
+    RAISE EXCEPTION 'record_investigation: garment % is not flagged for investigation', p_garment_id;
+  END IF;
+
+  v_q := _count_qc_fails(v_g.trip_history);
+  v_alt := GREATEST(COALESCE(v_g.trip_number, 0) - 1, 0);
+
+  INSERT INTO garment_investigations (
+    garment_id, order_id, root_cause, decision, history_note,
+    corrective_short, corrective_long, quality_returns, alteration_returns, resolved_by
+  ) VALUES (
+    p_garment_id, v_g.order_id, p_root_cause, p_decision, p_history_note,
+    p_corrective_short, p_corrective_long, v_q, v_alt, p_user_id
+  ) RETURNING id INTO v_inv_id;
+
+  IF p_decision = 'continue' THEN
+    -- Resume: clear the hold AND return to production in one write.
+    UPDATE garments SET needs_investigation = false, in_production = true WHERE id = p_garment_id;
+  ELSE
+    -- redo / refund: release the hold; the remake / refund is taken elsewhere.
+    UPDATE garments SET needs_investigation = false WHERE id = p_garment_id;
+  END IF;
+
+  v_result := jsonb_build_object(
+    'investigation_id', v_inv_id,
+    'decision', p_decision,
+    'resumed', (p_decision = 'continue'),
+    'quality_returns', v_q,
+    'alteration_returns', v_alt
+  );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
 -- ════════════════════════════════════════════════════════════════════════
 -- GROUP A — Redo lifecycle, material & waste  (CLAUDE.md §2.5/§4/§6)
 -- ════════════════════════════════════════════════════════════════════════
@@ -6068,6 +6357,12 @@ CREATE POLICY "stocktake_sessions_select" ON stocktake_sessions FOR SELECT USING
 ALTER TABLE stocktake_counts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "stocktake_counts_select" ON stocktake_counts;
 CREATE POLICY "stocktake_counts_select" ON stocktake_counts FOR SELECT USING (is_active_user());
+
+-- garment_investigations (CLAUDE.md §2.10): reads direct; writes only via the
+-- manager-gated record_investigation RPC (SECURITY DEFINER) below.
+ALTER TABLE garment_investigations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "garment_investigations_select" ON garment_investigations;
+CREATE POLICY "garment_investigations_select" ON garment_investigations FOR SELECT USING (is_active_user());
 
 -- ─── Low-stock threshold + crossing notification ─────────────────────────
 -- Per-item override else per-type default (must match LOW_STOCK_THRESHOLDS in

@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { usePerformanceData, type WorkerKpi, type UnitKpi } from "@/hooks/usePerformance";
-import { WORKER_SCOPED_STAGES, UNIT_SCOPED_STAGES, GROUP_SCOPED_STAGES } from "@/lib/stage-shape";
+import { usePerformanceData, useRedoImpact, type WorkerKpi, type UnitKpi, type RedoImpactRow } from "@/hooks/usePerformance";
+import { WORKER_SCOPED_STAGES, UNIT_SCOPED_STAGES } from "@/lib/stage-shape";
+import { getRootCauseLabel } from "@/lib/root-causes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Skeleton } from "@repo/ui/skeleton";
@@ -19,8 +20,8 @@ import {
   TrendingUp, ShieldCheck,
   Package2, Star, ChevronDown, ChevronUp,
   ArrowUpRight, ArrowDownRight, Minus,
-  Search, RotateCcw, Users, Clock, CalendarCheck,
-  Timer, CalendarClock, ThumbsUp, Droplets, Rocket,
+  Search, RotateCcw, Users, Clock,
+  Timer, CalendarClock, ThumbsUp, Recycle, Rocket,
 } from "lucide-react";
 
 // URL is the source of truth for the date preset, stage filter, breakdown tab,
@@ -116,6 +117,21 @@ const TONE_TEXT: Record<"ok" | "warn" | "bad" | "info", string> = {
   bad:  "text-[var(--status-bad)]",
   info: "text-[var(--status-info)]",
 };
+
+// Responsible-party display labels. The party value itself is derived server-side
+// from root_cause (root_cause_responsible_party, §2.9) — never recomputed here.
+const PARTY_LABEL: Record<string, string> = {
+  production: "Production team",
+  qc: "Quality control",
+  showroom: "Showroom",
+  customer: "Customer",
+  supplier: "Supplier",
+};
+
+// CLAUDE.md §6 Q14: only production and QC redos count against the factory's
+// performance. Showroom / customer / supplier / unattributed are external — the
+// material cost is real, but the factory is NOT penalized for it.
+const INTERNAL_PARTIES = new Set(["production", "qc"]);
 
 // ── KPI Card ────────────────────────────────────────────────────────
 
@@ -303,47 +319,31 @@ function WorkerTable({
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </div>
-                {w.unitOnly ? (
-                  <>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <CalendarCheck className="w-3 h-3" />
-                      <span className="tabular-nums">{w.daysPresent} day{w.daysPresent === 1 ? "" : "s"}</span>
-                    </div>
-                    <div className="flex items-center justify-end">
-                      <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-                        Unit-scored
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground tabular-nums">{w.dailyTarget || "—"}</span>
+                    <span className="text-base font-medium tabular-nums">{w.actual}</span>
+                  </div>
+                  <TargetProgressBar
+                    actual={w.actual}
+                    target={(w.dailyTarget || 0)}
+                    tone={tone}
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-1">
+                  {w.dailyTarget > 0 ? (
+                    <>
+                      {tone === "ok" ? <ArrowUpRight className="w-3 h-3 text-[var(--status-ok)]" />
+                        : tone === "warn" ? <Minus className="w-3 h-3 text-[var(--status-warn)]" />
+                        : <ArrowDownRight className="w-3 h-3 text-[var(--status-bad)]" />}
+                      <span className={cn("text-sm font-medium tabular-nums", TONE_TEXT[tone])}>
+                        {w.efficiency}%
                       </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground tabular-nums">{w.dailyTarget || "—"}</span>
-                        <span className="text-base font-medium tabular-nums">{w.actual}</span>
-                      </div>
-                      <TargetProgressBar
-                        actual={w.actual}
-                        target={(w.dailyTarget || 0)}
-                        tone={tone}
-                      />
-                    </div>
-                    <div className="flex items-center justify-end gap-1">
-                      {w.dailyTarget > 0 ? (
-                        <>
-                          {tone === "ok" ? <ArrowUpRight className="w-3 h-3 text-[var(--status-ok)]" />
-                            : tone === "warn" ? <Minus className="w-3 h-3 text-[var(--status-warn)]" />
-                            : <ArrowDownRight className="w-3 h-3 text-[var(--status-bad)]" />}
-                          <span className={cn("text-sm font-medium tabular-nums", TONE_TEXT[tone])}>
-                            {w.efficiency}%
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </div>
-                  </>
-                )}
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                </div>
                 <div className="flex items-center justify-end gap-0.5">
                   {w.rating ? (
                     <>
@@ -409,7 +409,7 @@ function WorkerTable({
 
 // ── Units Table ─────────────────────────────────────────────────────
 
-function UnitTable({ units }: { units: UnitKpi[] }) {
+function UnitTable({ units, onMemberClick }: { units: UnitKpi[]; onMemberClick?: (name: string, stage: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   if (units.length === 0) {
     return <EmptyState icon={Users} message="No units configured" />;
@@ -417,7 +417,7 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
 
   return (
     <div className="border border-border rounded-md overflow-hidden bg-card">
-      <div className="hidden md:grid grid-cols-[1.2fr_100px_60px_80px_90px_80px_80px_80px_80px_70px] gap-2 px-5 py-2.5 bg-muted/30 border-b text-sm font-medium text-muted-foreground">
+      <div className="hidden md:grid grid-cols-[1.2fr_100px_60px_80px_90px_80px_80px_80px_70px] gap-2 px-5 py-2.5 bg-muted/30 border-b text-sm font-medium text-muted-foreground">
         <span>Unit</span>
         <span>Stage</span>
         <span className="text-right">Members</span>
@@ -425,7 +425,6 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
         <span className="text-right">Avg min</span>
         <span className="text-right">p90 min</span>
         <span className="text-right">Defect %</span>
-        <span className="text-right">Accept %</span>
         <span className="text-right">Target</span>
         <span className="text-right">Eff %</span>
       </div>
@@ -437,17 +436,12 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
             : u.defectRate <= 5 ? "ok"
             : u.defectRate <= 15 ? "warn"
             : "bad";
-        const acceptTone: "ok" | "warn" | "bad" | null =
-          u.acceptRate === null ? null
-            : u.acceptRate >= 90 ? "ok"
-            : u.acceptRate >= 75 ? "warn"
-            : "bad";
         const isExpanded = expandedId === u.id;
         return (
           <div key={u.id} className="border-b last:border-b-0 hover:bg-muted/20 transition-colors">
             <div
               className={cn(
-                "hidden md:grid grid-cols-[1.2fr_100px_60px_80px_90px_80px_80px_80px_80px_70px] gap-2 px-5 py-3 items-center",
+                "hidden md:grid grid-cols-[1.2fr_100px_60px_80px_90px_80px_80px_80px_70px] gap-2 px-5 py-3 items-center",
                 u.members.length > 0 && "cursor-pointer",
               )}
               onClick={() => u.members.length > 0 && setExpandedId(isExpanded ? null : u.id)}
@@ -501,14 +495,6 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
               >
                 {u.defectRate !== null ? `${u.defectRate}%` : "—"}
               </span>
-              <span
-                className={cn(
-                  "text-sm tabular-nums text-right",
-                  acceptTone ? TONE_TEXT[acceptTone] : "text-muted-foreground",
-                )}
-              >
-                {u.acceptRate !== null ? `${u.acceptRate}%` : "—"}
-              </span>
               <span className="text-sm text-muted-foreground tabular-nums text-right">
                 {u.totalDailyTarget > 0 ? u.totalDailyTarget : "—"}
               </span>
@@ -530,15 +516,17 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {u.members.map((m) => (
-                    <span
+                    <button
                       key={m}
-                      className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-card border border-border"
+                      type="button"
+                      onClick={() => onMemberClick?.(m, u.stage)}
+                      className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-card border border-border cursor-pointer transition-[background-color,transform] duration-100 ease-out hover:bg-muted active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       <span className="w-4 h-4 rounded-md bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground">
                         {m.charAt(0).toUpperCase()}
                       </span>
                       {m}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -581,6 +569,95 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
   );
 }
 
+// ── Redo impact by responsibility (Q14) ─────────────────────────────
+
+function RedoImpactCard({ rows, isLoading }: { rows: RedoImpactRow[]; isLoading: boolean }) {
+  const totalCost = rows.reduce((s, r) => s + (r.waste_cost ?? 0), 0);
+  const totalCount = rows.reduce((s, r) => s + (r.redo_count ?? 0), 0);
+  return (
+    <SectionCard
+      title="Redo impact by responsibility"
+      action={
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {totalCount} redo{totalCount === 1 ? "" : "s"}
+        </span>
+      }
+    >
+      {isLoading ? (
+        <div className="h-24 flex items-center justify-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={Recycle} message="No redos recorded in this period" />
+      ) : (
+        <div className="space-y-1.5">
+          {/* CLAUDE.md §6 Q14: redo labor is double-classified — productive
+              effort (capacity) AND failed-quality cost — never netted. Both
+              halves are shown as distinct figures; neutral so the per-row
+              factory/external coloring stays the one signal. */}
+          <div className="grid grid-cols-2 -mx-4 -mt-4 mb-2 border-b border-border/60">
+            <div className="flex flex-col gap-1 px-4 py-3 min-w-0">
+              <span className="text-xs text-muted-foreground">Production effort</span>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="text-base font-medium tabular-nums shrink-0">
+                  {totalCount} piece{totalCount === 1 ? "" : "s"}
+                </span>
+                <span className="text-xs text-muted-foreground truncate">counted toward capacity</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 px-4 py-3 min-w-0 border-l border-border/60">
+              <span className="text-xs text-muted-foreground">Failed-quality cost</span>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="text-base font-medium tabular-nums shrink-0">{totalCost.toFixed(2)}</span>
+                <span className="text-xs text-muted-foreground truncate">material scrapped</span>
+              </div>
+            </div>
+          </div>
+          {rows.map((r) => {
+            const internal = r.party != null && INTERNAL_PARTIES.has(r.party);
+            const pct = totalCost > 0 ? (r.waste_cost / totalCost) * 100 : 0;
+            const partyLabel = r.party ? PARTY_LABEL[r.party] ?? r.party : "Unattributed";
+            return (
+              <div key={r.root_cause ?? "unattributed"} className="flex items-center gap-3 text-sm">
+                <div className="w-44 min-w-0">
+                  <div className="truncate">{getRootCauseLabel(r.root_cause)}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs text-muted-foreground truncate">{partyLabel}</span>
+                    <span
+                      className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-md shrink-0 bg-muted",
+                        internal ? "text-[var(--status-bad)]" : "text-muted-foreground",
+                      )}
+                    >
+                      {internal ? "factory" : "external"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 bg-muted rounded-md h-2 overflow-hidden" aria-hidden="true">
+                  <div
+                    className={cn("h-full", internal ? "bg-[var(--status-bad)]" : "bg-[var(--muted-foreground)]")}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="tabular-nums text-muted-foreground w-16 text-right">{r.redo_count}×</span>
+                <span className="tabular-nums text-muted-foreground w-20 text-right">{r.waste_qty.toFixed(1)} m</span>
+                <span className="tabular-nums font-medium w-24 text-right">cost {r.waste_cost.toFixed(2)}</span>
+              </div>
+            );
+          })}
+          <p className="text-xs text-muted-foreground pt-2 mt-2 border-t border-border/60">
+            Factory rows (production, QC) count against performance; external rows
+            carry the material cost but no blanket factory penalty. Customer-fabric
+            redos have no material cost. Redone pieces are double-classified — the
+            production labor counts toward capacity, the material is a failed-quality
+            cost — and the two are never netted against each other.
+          </p>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────
 
 function PerformancePage() {
@@ -605,12 +682,16 @@ function PerformancePage() {
 
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
   const { workers, daily, summary, units, stageCycleTimes, isLoading } = usePerformanceData(dateRange);
+  const redoImpact = useRedoImpact(dateRange);
+  const redoRows = redoImpact.data ?? [];
+  const redoTotalCost = redoRows.reduce((s, r) => s + (r.waste_cost ?? 0), 0);
+  const redoTotalCount = redoRows.reduce((s, r) => s + (r.redo_count ?? 0), 0);
 
   // Stage pills available in the filter depend on the current tab.
   const availableStages = useMemo<string[]>(() => {
     if (tab === "workers") return WORKER_SCOPED_STAGES;
-    // Units tab covers sewing units + the synthetic soaking group.
-    return [...UNIT_SCOPED_STAGES, ...GROUP_SCOPED_STAGES];
+    // Units tab covers sewing units only — soaking is excluded from Performance (§6 Q1).
+    return UNIT_SCOPED_STAGES;
   }, [tab]);
 
   // If the user selected a filter that doesn't apply to the current tab,
@@ -721,13 +802,13 @@ function PerformancePage() {
             />
             <KpiCard
               icon={ShieldCheck}
-              label="QC pass rate"
+              label="First-pass yield"
               value={summary.qcPassRate === null ? "—" : `${summary.qcPassRate}%`}
               subtitle={
                 summary.qcPassRate === null
                   ? "No QC data"
                   : summary.qcPassRate >= 90
-                  ? "Strong"
+                  ? "No QC fails, all attempts"
                   : summary.qcPassRate >= 75
                   ? "Watch"
                   : "Needs attention"
@@ -753,10 +834,10 @@ function PerformancePage() {
             />
             <SecondaryStat
               index={2}
-              icon={Droplets}
-              label="Avg soak"
-              value={formatDuration(summary.avgSoakActualMinutes)}
-              hint={summary.avgSoakTargetMinutes !== null ? `target ${formatDuration(summary.avgSoakTargetMinutes)}` : "no soaks"}
+              icon={Recycle}
+              label="Redo cost"
+              value={redoTotalCost > 0 ? redoTotalCost.toFixed(2) : "—"}
+              hint={redoTotalCount > 0 ? `${redoTotalCount} redo${redoTotalCount === 1 ? "" : "s"}` : "no redos"}
             />
             <SecondaryStat
               index={3}
@@ -900,6 +981,9 @@ function PerformancePage() {
             </SectionCard>
           </div>
 
+          {/* Redo impact by responsibility (Q14) */}
+          <RedoImpactCard rows={redoRows} isLoading={redoImpact.isLoading} />
+
           {/* Breakdown */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -949,7 +1033,14 @@ function PerformancePage() {
               </>
             ) : (
               <>
-                <UnitTable units={filteredUnits} />
+                <UnitTable
+                  units={filteredUnits}
+                  onMemberClick={(name, stage) => navigate({
+                    to: "/performance/worker/$workerName",
+                    params: { workerName: name },
+                    search: { stage, preset },
+                  })}
+                />
                 {filteredUnits.length > 0 && (
                   <p className="text-xs text-muted-foreground px-1">
                     {filteredUnits.length} unit{filteredUnits.length !== 1 ? "s" : ""}

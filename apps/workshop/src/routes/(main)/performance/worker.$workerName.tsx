@@ -376,7 +376,7 @@ function WorkerDetailPage() {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <ShieldCheck className="w-3 h-3" />
-                  <span className="text-xs">QC pass rate</span>
+                  <span className="text-xs">First-pass yield</span>
                 </div>
                 <p
                   className={cn(

@@ -15,10 +15,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as mainTeamRouteImport } from './routes/(main)/team'
 import { Route as mainSchedulerRouteImport } from './routes/(main)/scheduler'
 import { Route as mainReceivingRouteImport } from './routes/(main)/receiving'
+import { Route as mainQcAnalyticsRouteImport } from './routes/(main)/qc-analytics'
 import { Route as mainProfileRouteImport } from './routes/(main)/profile'
 import { Route as mainPricingRouteImport } from './routes/(main)/pricing'
 import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainNotificationsRouteImport } from './routes/(main)/notifications'
+import { Route as mainInvestigationsRouteImport } from './routes/(main)/investigations'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
 import { Route as mainBoardRouteImport } from './routes/(main)/board'
@@ -85,6 +87,11 @@ const mainReceivingRoute = mainReceivingRouteImport.update({
   path: '/receiving',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainQcAnalyticsRoute = mainQcAnalyticsRouteImport.update({
+  id: '/qc-analytics',
+  path: '/qc-analytics',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainProfileRoute = mainProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -103,6 +110,11 @@ const mainParkingRoute = mainParkingRouteImport.update({
 const mainNotificationsRoute = mainNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainInvestigationsRoute = mainInvestigationsRouteImport.update({
+  id: '/investigations',
+  path: '/investigations',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainDispatchRoute = mainDispatchRouteImport.update({
@@ -305,10 +317,12 @@ export interface FileRoutesByFullPath {
   '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
+  '/investigations': typeof mainInvestigationsRoute
   '/notifications': typeof mainNotificationsRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
   '/profile': typeof mainProfileRoute
+  '/qc-analytics': typeof mainQcAnalyticsRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
@@ -350,10 +364,12 @@ export interface FileRoutesByTo {
   '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
   '/dispatch': typeof mainDispatchRoute
+  '/investigations': typeof mainInvestigationsRoute
   '/notifications': typeof mainNotificationsRoute
   '/parking': typeof mainParkingRoute
   '/pricing': typeof mainPricingRoute
   '/profile': typeof mainProfileRoute
+  '/qc-analytics': typeof mainQcAnalyticsRoute
   '/receiving': typeof mainReceivingRoute
   '/scheduler': typeof mainSchedulerRoute
   '/team': typeof mainTeamRoute
@@ -399,10 +415,12 @@ export interface FileRoutesById {
   '/(main)/board': typeof mainBoardRoute
   '/(main)/dashboard': typeof mainDashboardRoute
   '/(main)/dispatch': typeof mainDispatchRoute
+  '/(main)/investigations': typeof mainInvestigationsRoute
   '/(main)/notifications': typeof mainNotificationsRoute
   '/(main)/parking': typeof mainParkingRoute
   '/(main)/pricing': typeof mainPricingRoute
   '/(main)/profile': typeof mainProfileRoute
+  '/(main)/qc-analytics': typeof mainQcAnalyticsRoute
   '/(main)/receiving': typeof mainReceivingRoute
   '/(main)/scheduler': typeof mainSchedulerRoute
   '/(main)/team': typeof mainTeamRoute
@@ -448,10 +466,12 @@ export interface FileRouteTypes {
     | '/board'
     | '/dashboard'
     | '/dispatch'
+    | '/investigations'
     | '/notifications'
     | '/parking'
     | '/pricing'
     | '/profile'
+    | '/qc-analytics'
     | '/receiving'
     | '/scheduler'
     | '/team'
@@ -493,10 +513,12 @@ export interface FileRouteTypes {
     | '/board'
     | '/dashboard'
     | '/dispatch'
+    | '/investigations'
     | '/notifications'
     | '/parking'
     | '/pricing'
     | '/profile'
+    | '/qc-analytics'
     | '/receiving'
     | '/scheduler'
     | '/team'
@@ -541,10 +563,12 @@ export interface FileRouteTypes {
     | '/(main)/board'
     | '/(main)/dashboard'
     | '/(main)/dispatch'
+    | '/(main)/investigations'
     | '/(main)/notifications'
     | '/(main)/parking'
     | '/(main)/pricing'
     | '/(main)/profile'
+    | '/(main)/qc-analytics'
     | '/(main)/receiving'
     | '/(main)/scheduler'
     | '/(main)/team'
@@ -631,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainReceivingRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/qc-analytics': {
+      id: '/(main)/qc-analytics'
+      path: '/qc-analytics'
+      fullPath: '/qc-analytics'
+      preLoaderRoute: typeof mainQcAnalyticsRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/profile': {
       id: '/(main)/profile'
       path: '/profile'
@@ -657,6 +688,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof mainNotificationsRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/investigations': {
+      id: '/(main)/investigations'
+      path: '/investigations'
+      fullPath: '/investigations'
+      preLoaderRoute: typeof mainInvestigationsRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/dispatch': {
@@ -950,10 +988,12 @@ interface mainRouteRouteChildren {
   mainBoardRoute: typeof mainBoardRoute
   mainDashboardRoute: typeof mainDashboardRoute
   mainDispatchRoute: typeof mainDispatchRoute
+  mainInvestigationsRoute: typeof mainInvestigationsRoute
   mainNotificationsRoute: typeof mainNotificationsRoute
   mainParkingRoute: typeof mainParkingRoute
   mainPricingRoute: typeof mainPricingRoute
   mainProfileRoute: typeof mainProfileRoute
+  mainQcAnalyticsRoute: typeof mainQcAnalyticsRoute
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
@@ -989,10 +1029,12 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainBoardRoute: mainBoardRoute,
   mainDashboardRoute: mainDashboardRoute,
   mainDispatchRoute: mainDispatchRoute,
+  mainInvestigationsRoute: mainInvestigationsRoute,
   mainNotificationsRoute: mainNotificationsRoute,
   mainParkingRoute: mainParkingRoute,
   mainPricingRoute: mainPricingRoute,
   mainProfileRoute: mainProfileRoute,
+  mainQcAnalyticsRoute: mainQcAnalyticsRoute,
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,

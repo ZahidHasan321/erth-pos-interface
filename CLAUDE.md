@@ -55,6 +55,7 @@ The **verbatim specification** of this product's features and workflows, plus th
 | `trip_number` | `0` on a fresh garment (pre-dispatch). +1 each time the garment is sent back to the workshop. Dispatch from shop only picks `trip_number = 0`; alteration thresholds treat a missing value as `1` |
 | `garment_type` | `brova` (trial garment), `final`, or `alteration` (customer-brought; `order_type: ALTERATION`; never auto-discarded) |
 | `trip_history` | Per-trip record incl. `qc_attempts` (QC pass/fail breadcrumb) |
+| `needs_investigation` | Auto-set when repeated returns cross the §2.10 threshold; holds the garment out of production until a manager records the investigation |
 
 ### 2.2 Piece-stage set
 
@@ -74,6 +75,7 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 - **Brova & final, unified:** trip 1 = initial; trip 2+ = alteration (alteration # = trip − 1). Finals have no trial step; a brova returning at trip 2+ is also treated as an alteration.
 - **QC-fail rework:** **no trip increment** — detected via a `result: "fail"` entry in the current trip's `qc_attempts`. Labeled `alt_p`, which **wins over** the trip-based `alt_N` label.
 - **No maximum** trip / alteration / QC-attempt count — unbounded by design.
+- **Return counters (§2.10):** *alteration returns* = `trip_number − 1` (this trip-based count); *quality returns* = QC fails. They feed the repeated-returns investigation trigger.
 
 ### 2.4 Step-by-step flow
 
@@ -143,6 +145,8 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 ### 2.6 Cancellation / refund
 
 Per-component (fabric/stitching/style/express/soaking) or shelf-qty refund, taken by the cashier. Records a `refund` payment_transaction (reason required); `orders.paid` drops via the summing trigger. Order stays `confirmed`. Affected garments get `refunded_*` flags. A **full garment refund → `piece_stage: discarded`**, offering optional fabric-restock (return uncut fabric to shop stock, default off). A **full-order cancel** sets `checkout_status: cancelled` — garments NOT auto-discarded (in-progress workshop work may continue/orphan — accepted).
+
+**Refund policy is staff judgment — the system imposes no restriction (decided 2026-06-03).** There is deliberately **no automated stage / material-ownership / fault gating** and **no "consult factory before refunding started production" block** — the cashier decides full / partial / no refund per amount and reason, by hand. The system enforces only the mechanical guardrails below (amount cap, reason required, full-garment discard, orphaned-finals release, idempotency); it does not compute *who is owed what*. (Supersedes the Q5 stage/ownership/fault matrix that Group B had drafted — that matrix is **not** built.)
 
 **Edge rules:**
 
@@ -214,6 +218,29 @@ The enum (`root_cause`); each value carries a **responsible party** that is a de
 - **Waste physical-reason categories (§4 `WASTE_REASONS`: `supplier_defect` / `staff_mistake` / `customer_damage` / `lost` / `mis_cut` / `other`)** are a separate axis — "what physically happened to the stock," not "who is responsible." A redo's wasted fabric can carry **both** a `WASTE_REASONS` reason and a `root_cause`. Damage/Waste keeps `WASTE_REASONS`; this taxonomy does not replace it.
 
 **Persistence.** The DB enum `root_cause` is the single source of truth (mirrored in `schema.ts`); the value→responsible-party mapping lives in exactly one SQL helper (`root_cause_responsible_party`). The frontend label set (`ROOT_CAUSES`) imports these six values — no group invents its own.
+
+---
+
+### 2.10 Repeated-returns investigation (auto-hold) (Q3)
+
+A garment that keeps coming back is auto-flagged for a **manual manager investigation** and **held** until that investigation is recorded.
+
+**Two return counters, per garment — both DERIVED, never hand-maintained:**
+
+- **Quality returns** = the count of **QC fails** in the garment's history (each `result: "fail"` quality-check attempt in `trip_history`). QC-fail rework does not bump the trip, so this is independent of trip number.
+- **Alteration returns** = **`trip_number − 1`** (trip 1 = initial production; each later trip is one customer-driven return to the workshop, §2.3).
+- **Total** = quality + alteration.
+
+**Trigger.** **≥ 2 quality returns OR ≥ 3 total returns** flags the garment `needs_investigation` (e.g. 1 customer return + 2 QC fails ⇒ investigate). Set **server-side** the moment a return pushes the counts past the threshold — fired on the *increase* (so it re-arms only on a genuinely new return, never re-fires on an unrelated update), and independent of which app wrote the return.
+
+**Auto-hold — per garment, NEVER the order.** Flagging also drops the garment out of active production (`in_production: false`); while flagged it **cannot be put back into production** (the `in_production` false→true "start" transition is rejected server-side) and it surfaces in a workshop **"Needs Investigation"** list. The hold is strictly **per garment** — the flag lives on the garment row, so its order-siblings schedule and produce normally and are never blocked.
+
+**Manager resolution** (manager-only, idempotent) records in one step: the **`root_cause` (§2.9)**, a note comparing the QC/return history vs the actual return reason, the **decision** (`continue` correction / `redo` remake / `refund`), and **short-term** + **long-term** corrective actions. It is retained for history. Recording it clears the hold; then:
+
+- **`continue` → resumes production**: the same write clears `needs_investigation` **and** sets `in_production: true`, so the garment re-enters the production flow at its current stage (the guard permits it because the flag is already cleared in that write). This is the "resume after investigation" path — without resolution nothing un-holds the garment.
+- **`redo` / `refund`** clear the hold only; the actual remake (§2.5 replacement) or refund (§2.6) is taken through its existing flow.
+
+**Re-arming & reset.** After resolution the garment does not re-flag until a **new** return arrives (a later QC fail or customer return that increases the total again). A **redo replacement is a brand-new garment row** (fresh `trip_history`, trip 1), so its counters start at 0 (§2.5). No maximum — repeated investigations on a lineage are unbounded.
 
 ---
 
@@ -341,6 +368,39 @@ An **operational tool**, not a marketing page — dense-data / control-panel (Li
 **Worker team (unit) assignment — explicit, never silently defaulted.** A worker (a `resources` row) belongs to a **unit** (team) within its production stage. In create/edit, the manager **explicitly picks the team** for **every station the worker runs** — cutting, sewing, finishing, ironing, quality-check — via a visible, required picker (with inline "create team" when a station's first/second team is needed). Never silently default to the first/lowest-id unit (that silently re-pins e.g. a second-cutting-table worker back to "Team A" on every routine edit). On edit, each picker is pre-filled from the worker's *actual* current unit (not recomputed), so saving an unrelated field never moves their team. **Soaking is excluded** (all-hands, negligible labor; not on the Performance page) and keeps auto-assignment; `post_cutting` is disabled.
 
 **Redo priority queue — full manager control.** Each redo replacement (§2.5) carries a manager-set `redo_priority`: `immediate` (jump the queue) / `next_slot` (default — folds into the normal flow) / `parked` (blocked, not schedulable). A parked redo also carries a `redo_parked_reason`: `waiting_material` (replacement fabric short) / `customer_decision` (customer-brought `fabric_source: OUT` — must provide fabric) / `approval` / `clarification`. The **redo-creation step captures `root_cause` (§2.9) + `redo_priority`** in one dialog. The scheduler surfaces these as sortable sections — a pinned high-priority `immediate` queue, `next_slot` redos in the normal flow, and a "parked redos" section showing each `redo_parked_reason` for manager attention. A **resume-parked** action un-parks a redo once the blocking issue clears: it re-runs the fabric consume (the deferred `-L consumption`) and makes the replacement schedulable; the scrap waste annotation (already written at creation) is **not** re-recorded.
+
+**Performance scoring — per-station model (Q1).** The Performance page scores production at the **same granularity each station is assigned** (the worker-team rule above):
+
+- **Individual** scoring for **cutting, finishing, ironing, quality-check** — each worker carries their own output / efficiency / quality.
+- **Sewing is scored at the unit (team) level only** — members share the unit's output; there is **no** individual sewing-operator breakdown (the objective is unit performance, not internal competition).
+- **Soaking does not appear on the Performance page at all** — a time-based technical stage with negligible labor; it lives in the workflow surfaces (scheduler / dashboard) only, never as a scored worker, unit, or summary stat.
+- **Defect attribution is per station/unit** (a stage that caused a QC fail is genuinely attributable to who executed it) — kept. **Customer acceptance is NOT team-attributable** (see redo impact): a customer accepting/rejecting at trial is a whole-production outcome, so there is **no per-unit "accept rate"** (the page keeps only the whole-shop accept rate).
+
+**Redo performance impact (Q14) — attribution by `root_cause`, no blanket penalty.** A redo's performance cost is charged to the **responsible party derived from its `root_cause` (§2.9)** — never a blanket penalty on the factory:
+
+| `root_cause` | Responsible party | Performance impact |
+|---|---|---|
+| `production_error` | production | production team impacted — quality score, redo rate, waste cost |
+| `qc_escape` | QC | QC impacted — **but** a customer rejecting **design/style** (not a technical defect) is a `customer_change`, not a `qc_escape`, so QC is **not** penalized for taste |
+| `showroom_error` | showroom | showroom responsibility — factory **not** penalized |
+| `customer_change` | customer | no internal penalty |
+| `material_defect` | supplier | supplier — factory **not** penalized |
+| `other` | unattributed | no party penalized |
+
+- **Labor on a redone (discarded) garment is double-classified:** it still counts as **productive effort for capacity analysis** (the work really happened) **and** as **failed-quality cost** in performance reporting — the two are never netted against each other.
+- The Performance page surfaces a **redo impact by responsible party** breakdown (redo count + wasted-material cost), reading the redo material-waste annotations (§4, tagged `reason='redo'`) grouped by `root_cause`. Material cost is recorded only for **company** fabric — customer-brought (`OUT`) redos carry the attribution but no material cost (§4).
+
+**QC analytics (Q2) — the 1–5 ratings, used analytically.** The QC pass/fail rule is unchanged (any quality aspect rated **< 4** = non-conformity → back to production); on top of it a **QC Analytics** surface reads the stored ratings/breadcrumbs (the per-attempt `quality_ratings`, `failed_measurements`, `failed_options`, `return_stages` accumulated in each garment's QC history) for a date range and shows:
+
+- **Defect-category breakdown** — each quality aspect (seam, ironing, front pocket, collar, jabzour, hemming) analyzed separately: average rating + fail count + sample size, worst-first.
+- **Measurement- and option/specification-defect breakdown** — the same lens extended to spec defects (which measurement fields / which options fail most).
+- **Defect origin by stage** — fails grouped by the `return_stages` the QC routed them back to (where quality problems come from).
+- **Quality trend over time** — average rating per day, so a team/period rising (3.8 → 4.6) or declining (4.8 → 4.2) is visible.
+- **Team comparison** is the Performance page's existing **per-unit defect rate** (the QC-fail rate a unit's stage caused, §6 Q1) — the QC Analytics page does not re-attribute individual aspect ratings to a team (that aspect→team ownership is not specified; left to the client).
+
+Headline attempt-level pass rate (passes / inspections) and inspection count anchor the page; garment-level first-pass yield (no QC fail across all attempts) stays on the Performance page. Ranged on each attempt's own inspection date, so a garment still in production counts from the moment it was inspected.
+
+**Needs Investigation view (Q3, §2.10).** A workshop list of garments auto-held for repeated returns. Each row shows the garment/order, its quality- and alteration-return counts, and its QC + return history. A manager opens a **review dialog** to record the investigation (root cause, history-comparison note, decision, short-/long-term corrective actions); resolving with **continue** resumes the garment's production, while redo/refund hand off to their existing flows (§2.5/§2.6). The held garment is excluded from the schedulable queues until resolved; siblings are unaffected.
 
 ---
 

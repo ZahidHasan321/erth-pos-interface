@@ -6,7 +6,7 @@ This is a second set of questions about how the system should work. Each one is 
 
 ---
 
-## Q1. Performance — individual scoring for every station except sewing and soaking. Right?
+## ~~Q1. Performance — individual scoring for every station except sewing and soaking. Right?~~ — ✅ RESOLVED (Group D, 2026-06-03)
 
 **What we have right now.** The Performance page shows raw counts per worker and per team. Cutters, finishers, ironers, and QC inspectors each get their own number. Sewers are credited at the team level — whoever finished a thobe on the terminal gets the count, so a sewer who worked on a thobe but didn't close it shows 0. Soakers always show 0 because no one is recorded as starting or finishing a soak (any soaker can act on any thobe). There are no targets, no trends, no comparison baseline.
 
@@ -19,7 +19,7 @@ This is a second set of questions about how the system should work. Each one is 
 
 ---
 
-## Q2. QC ratings — we collect 1–5 numbers; how should we use them?
+## ~~Q2. QC ratings — we collect 1–5 numbers; how should we use them?~~ — ✅ RESOLVED (Group C, 2026-06-03)
 
 **What we have right now.** When the QC inspector checks a thobe, they rate six things on a 1–5 scale: seam, ironing, front pocket, collar, jabzour, hemming. Anything below 4 on any aspect fails the thobe; everything 4 or higher passes. Today only the pass/fail decision drives anything — the 1–5 numbers themselves are stored on every QC attempt but never shown anywhere or aggregated.
 
@@ -34,7 +34,7 @@ This is a second set of questions about how the system should work. Each one is 
 
 ---
 
-## Q3. A thobe has come back 5 times — should there be an investigation workflow?
+## ~~Q3. A thobe has come back 5 times — should there be an investigation workflow?~~ — ✅ RESOLVED (Group C, 2026-06-03)
 
 **What we have right now.** The system tracks every trip back to the workshop and every QC attempt — unbounded by design (no cap). But nothing on screen highlights a thobe that has come back many times. To a tailor picking it up off the rack, a thobe on its 5th alteration looks like any other returning alteration.
 
@@ -56,7 +56,7 @@ This is a second set of questions about how the system should work. Each one is 
 
 ---
 
-## Q5. Refunds — should the system ever block one? And what about parked finals if their trial thobe is refunded?
+## ~~Q5. Refunds — should the system ever block one? And what about parked finals if their trial thobe is refunded?~~ — ✅ RESOLVED (2026-06-03: manual, NO restriction — staff handle it; matrix not built. Orphaned-finals release already shipped in Group B.)
 
 **What we have right now.** The cashier can refund anything as long as the register is open, the cashier types a reason, and the refund amount doesn't exceed what was paid. The system blocks nothing — not for cancelled orders, not for thobes in mid-production, not for already-collected thobes. (One related safety gap is now closed: if the **only** trial thobe (brova) on an order is refunded with no replacement coming, the finals that were parked waiting on it are now **automatically released to production** rather than silently parked forever — see Question 2. Everything else below is still as described.)
 
@@ -235,7 +235,7 @@ This is related to V1 Q5 (Reject-Redo), which covered re-trial / delivery date /
 
 ---
 
-## Q14. How should a Redo affect Performance numbers?
+## ~~Q14. How should a Redo affect Performance numbers?~~ — ✅ RESOLVED (Group D, 2026-06-03)
 
 *(Only applies if you said yes to a Performance page in Q1.)*
 

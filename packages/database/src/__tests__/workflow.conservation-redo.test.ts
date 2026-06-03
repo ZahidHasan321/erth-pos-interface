@@ -278,6 +278,61 @@ describe("T2 redo scrap surfaces in waste reports (CLAUDE.md §4 reports)", () =
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// T-impact — get_redo_impact attributes redo cost by RESPONSIBLE PARTY (Q14)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("get_redo_impact attributes redo material cost by responsible party (CLAUDE.md §6 Q14)", () => {
+  it("groups redo scrap by root_cause and derives party per §2.9 (production_error→production, customer_change→customer)", async () => {
+    await inRolledBackTx(async (tx) => {
+      // Two company-fabric redos with distinct root causes (both write a scrap
+      // annotation; company fabric ⇒ a real material cost in both cases).
+      const a = await brovaDiscardedAtShop(tx);
+      await wf.createReplacementResult(tx, a.bId, { rootCause: "production_error" });
+      const b = await brovaDiscardedAtShop(tx);
+      await wf.createReplacementResult(tx, b.bId, { rootCause: "customer_change" });
+
+      const from = tx`now() - interval '1 minute'`;
+      const to = tx`now() + interval '1 minute'`;
+      const res = only(
+        await tx`SELECT get_redo_impact(${from}, ${to}) AS r`,
+        "get_redo_impact",
+      ) as unknown as {
+        r: Array<{
+          root_cause: string;
+          party: string | null;
+          redo_count: number;
+          waste_qty: number;
+          waste_cost: number;
+        }>;
+      };
+      const byCause = new Map(res.r.map((row) => [row.root_cause, row]));
+
+      // SPEC §6 Q14 + §2.9 (the value→party mapping is the ORACLE, not the RPC):
+      // a cutting/sewing execution fault is the production team's redo.
+      const pe = byCause.get("production_error");
+      expect(pe).toBeDefined();
+      expect(pe!.party).toBe("production");
+      expect(pe!.redo_count).toBe(1);
+      expect(Number(pe!.waste_qty)).toBe(L);
+      expect(Number(pe!.waste_cost)).toBe(L * FABRIC_A_PRICE);
+
+      // SPEC §6 Q14 + §2.9: a customer change of mind is the CUSTOMER's — the
+      // factory is NOT penalized (no blanket penalty), yet the material cost is
+      // still attributed and recorded.
+      const cc = byCause.get("customer_change");
+      expect(cc).toBeDefined();
+      expect(cc!.party).toBe("customer");
+      expect(cc!.redo_count).toBe(1);
+      expect(Number(cc!.waste_qty)).toBe(L);
+      expect(Number(cc!.waste_cost)).toBe(L * FABRIC_A_PRICE);
+
+      // Only the two redos created in this tx fall in the micro-window.
+      expect(res.r.length).toBe(2);
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // T3 — material unavailable → replacement PARKED; annotation still written
 // ════════════════════════════════════════════════════════════════════════════
 

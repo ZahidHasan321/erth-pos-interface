@@ -35,6 +35,8 @@ import {
   LayoutDashboard,
   ChevronDown,
   TrendingUp,
+  ShieldCheck,
+  ShieldAlert,
   UserCog,
   Package,
   Building2,
@@ -78,8 +80,10 @@ export function WorkshopSidebar() {
   ];
 
   const peopleItems = [
-    { label: "Team",        icon: Users,       href: "/team" },
-    { label: "Performance", icon: TrendingUp,  href: "/performance" },
+    { label: "Team",         icon: Users,       href: "/team" },
+    { label: "Performance",   icon: TrendingUp,  href: "/performance" },
+    { label: "QC Analytics",  icon: ShieldCheck, href: "/qc-analytics" },
+    { label: "Investigations", icon: ShieldAlert, href: "/investigations", count: counts?.investigations, badgeTone: "warn" as const },
     ...((isAdmin(authUser) || isManager(authUser)) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
   ];
 
@@ -237,6 +241,17 @@ export function WorkshopSidebar() {
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {!!item.count && (
+                    <SidebarMenuBadge
+                      className={cn(
+                        item.badgeTone === "warn"
+                          ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
+                          : "bg-muted text-foreground",
+                      )}
+                    >
+                      {item.count}
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

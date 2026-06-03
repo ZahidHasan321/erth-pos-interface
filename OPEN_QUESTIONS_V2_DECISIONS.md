@@ -20,11 +20,11 @@
 
 | Q | Topic | Group | Status |
 |---|-------|-------|--------|
-| Q1 | Performance scoring per station (individual vs team) | D | ☐ |
-| Q2 | QC 1–5 ratings → analytics | C | ☐ |
-| Q3 | Investigation workflow for repeated returns | C | ☐ |
+| Q1 | Performance scoring per station (individual vs team) | D | ☑ (shipped 2026-06-03) |
+| Q2 | QC 1–5 ratings → analytics | C | ☑ (shipped 2026-06-03) |
+| Q3 | Investigation workflow for repeated returns | C | ☑ (shipped 2026-06-03) |
 | Q4 | Explicit team assignment for all stations | D | ☑ |
-| Q5 | Refund rules (by stage / material ownership / fault) | B | ◐ |
+| Q5 | Refund rules (by stage / material ownership / fault) | B | ☑ (decided 2026-06-03 — **manual, no restriction**; matrix dropped) |
 | Q6 | Home delivery two-step flow | — | ⏸ |
 | Q7 | Trial media access / privacy | — | ⏸ |
 | Q8 | Cash register / EOD walkthrough | — | ⏸ |
@@ -33,7 +33,7 @@
 | Q11 | Damage / waste tracking (separate from Adjust) | E | ☑ |
 | Q12 | Redo — material & waste handling | A | ◐ (workshop/inventory slice shipped; customer-charging deferred) |
 | Q13 | Redo — priority, ownership, visibility | A | ◐ (factory priority queue + finals-flag shipped; showroom-visibility / customer-comms deferred) |
-| Q14 | Redo — performance impact | A / D | ☐ (unblocked — `root_cause` now captured on redo) |
+| Q14 | Redo — performance impact | A / D | ☑ (shipped 2026-06-03 — attribution by root_cause; team accept-rate dropped) |
 | — | Inventory ownership, stock visibility & transfer flow (this session) | F | ☑ |
 
 ---
@@ -115,7 +115,9 @@ Scope shipped per the working-scope rule (workshop-answered items now; showroom 
 
 ---
 
-## Group B — Refunds  ◐
+## Group B — Refunds  ☑ (closed 2026-06-03 — refunds are manual; no restriction matrix)
+
+> **Client decision (2026-06-03): "for refund, we won't put any restriction, let the people handle it manually."** The planned Q5 stage / material-ownership / fault matrix and the "consult factory before refunding started production" gate are **dropped** — they will **not** be built. Refunds stay the existing manual §2.6 flow: the cashier decides full / partial / no refund by judgment, with only the mechanical guardrails (amount cap, reason required, full-garment discard → `discarded`, orphaned-finals auto-release, idempotency). The two flagged Q5 client gaps (Scenario-B non-internal-error amount; finals fate) are **moot** under manual handling. Folded into `CLAUDE.md` §2.6 ("Refund policy is staff judgment"). The §2.6 orphaned-finals **auto-release** (shipped 2026-06-02, below) is a *lifecycle* invariant, unaffected by this — it still fires.
 
 **Answers:** Q5 (overlaps Group A fabric handling and the §2.6 orphaned-finals release).
 
@@ -147,9 +149,20 @@ Refund rules depend on **order stage**, **material ownership**, and **responsibi
 
 ---
 
-## Group C — QC analytics & investigation workflow  ☐
+## Group C — QC analytics & investigation workflow  ☑ (closed 2026-06-03)
 
 **Answers:** Q2, Q3 (root-cause taxonomy shared with Group A/D; counters shared with Group D).
+
+### Progress (2026-06-03) — Q3 shipped (client-clarified design); Group C closed
+- ☑ **Q3 repeated-returns investigation.** Client clarifications folded in: **alteration returns = `trip_number−1`**, **quality returns = QC fails**, **redo resets** (new garment row), trigger **≥2 quality OR ≥3 total**, the hold is **per-garment (never blocks order-siblings)**, and resolving with **`continue` RESUMES production**. Spec `CLAUDE.md` §2.10 (+§2.1/§2.3/§6). DB: `garments.needs_investigation` + `garment_investigations` table (+RLS); `_count_qc_fails` helper; `_garment_investigation_gate` BEFORE-UPDATE trigger (fire-on-increase detection sets the flag + drops `in_production`; hold guard rejects the `in_production` false→true start while flagged); `record_investigation` RPC (manager-gated, idempotent; `continue` clears the hold AND sets `in_production=true` in one write to resume; redo/refund clear only). Frontend: `/investigations` page + review dialog (root cause / decision / short+long corrective actions), sidebar + RBAC, and held-garment exclusion from `getSchedulerGarments` + `getTerminalStageGarments`. Workshop type-checks clean; no new lint.
+- ☑ **Tests** — `workflow.investigation.test.ts` (5): detection (quality + total arms), per-garment hold (sibling unaffected), start-guard rejection, manager-gated `continue` resume + idempotency, re-arming. `test:workflow` **100/100** green on Docker (no regression across existing lifecycle flows despite the new always-on garments trigger).
+- ☑ **Applied to live DB** — `db:triggers` run; verified column / table / `record_investigation` / `_count_qc_fails` / `_garment_investigation_gate` / trigger present; 0 garments retro-flagged (fire-on-increase ⇒ history is not retro-flagged).
+
+### Progress (2026-06-03) — Q2 shipped
+- ☑ **Q2 QC analytics.** Spec `CLAUDE.md` §6 "QC analytics (Q2)". DB: `get_qc_analytics(from,to)` (plpgsql STABLE) — flattens every `qc_attempt` in range (by its own inspection date) into totals (attempts/pass/fail), per-aspect avg + fail count (defect-category breakdown), measurement/option defect counts, defect-origin-by-`return_stage`, and a per-day quality trend. **`jsonb_typeof` guards** on trip_history/qc_attempts/ratings/failed-arrays (real rows hold JSON `null`/scalars that `jsonb_array_elements` RAISEs on — COALESCE only catches SQL NULL). Frontend: new `/qc-analytics` route (`api/qcAnalytics.ts` + page) — KPI headline (pass rate / inspections / fails), worst-first defect-by-category bars, measurement/option/stage defect lists, quality-trend line chart; sidebar entry + RBAC `/qc-analytics`. Team comparison stays the Performance page's per-unit defect rate (no aspect→team attribution invented — flagged as a client gap). Workshop type-checks clean.
+- ☑ **Tests** — `workflow.qc-analytics.test.ts` constructs a known trip_history and asserts hand-computed aggregates (oracle, not mirror). `test:workflow` **95/95** green on Docker.
+- ☑ **Applied to live DB** — `db:triggers` run; `get_qc_analytics` verified callable against real data (no scalar-unnest error after the typeof guards).
+- ☐ **Q3 repeated-returns investigation — NOT started.** High blast radius (new gated lifecycle state + DB migration + separate quality/alteration return counters + auto-block at 2 quality / 3 total returns + manager review flow). Checkpointed with the client before touching §2 / the lifecycle.
 
 ### Decisions
 
@@ -178,7 +191,7 @@ Refund rules depend on **order stage**, **material ownership**, and **responsibi
 
 ---
 
-## Group D — Performance & team structure  ☐
+## Group D — Performance & team structure  ☑ (closed 2026-06-03)
 
 **Answers:** Q1, Q4, Q14 (Q14 performance impact also lives partly in Group A; root-cause taxonomy shared).
 
@@ -208,7 +221,13 @@ Refund rules depend on **order stage**, **material ownership**, and **responsibi
 - Workshop: Performance page (station scoring, redo-impact attribution); worker create/edit team picker for all stations (kill the silent Team-A default).
 - DB: team assignment fields per station; performance aggregate RPCs keyed on root cause.
 
-### Progress (2026-06-02) — Q4 shipped; Q1 + Q14 still ☐
+### Progress (2026-06-03) — Q1 + Q14 shipped; Group D closed
+- ☑ **Q1 per-station scoring model.** Spec `CLAUDE.md` §6 "Performance scoring — per-station model": individual scoring for cutting/finishing/ironing/QC; **sewing unit-level only**; **soaking removed from the Performance page entirely** (no scored worker/unit/summary stat — workflow surfaces only). Code (workshop): `usePerformance.ts` drops the synthetic soaking unit + soak summary fields; `performance/index.tsx` drops the "Avg soak" stat and the soaking stage chip on the Units tab; orphaned soaking_* fetch columns removed from `api/performance.ts`. The current worker/unit assignment-scoped model already matched the rest. Workshop type-checks clean.
+- ☑ **Q14 redo performance impact.** Spec §6 "Redo performance impact" table (attribution by `root_cause` → responsible party via §2.9; **no blanket factory penalty**; labor double-classified as capacity *and* failed-quality cost). Code: **team-level accept-rate dropped** (`UnitKpi.acceptRate` + the Units "Accept %" column removed — customer acceptance is whole-production, not team-attributable; resolves memory `project_drop_team_accept_rate`); whole-shop accept rate kept. New DB `get_redo_impact(from,to)` (reads redo scrap annotations `reason='redo'`, groups by root_cause, derives party server-side — defined AFTER `root_cause_responsible_party` since a LANGUAGE sql body is validated at create time); new "Redo impact by responsibility" panel + "Redo cost" summary stat in `performance/index.tsx` (internal production/QC vs external framing, reuses `getRootCauseLabel`).
+- ☑ **Tests** — new `get_redo_impact` oracle in `workflow.conservation-redo.test.ts` (party values anchored to the §2.9 table, not the RPC body). `test:workflow` **94/94** green on Docker.
+- ☑ **Applied to live DB** — `db:triggers` run; `get_redo_impact` verified present + callable via `pg_get_function_identity_arguments`.
+
+### Progress (2026-06-02) — Q4 shipped
 - ☑ **Q4 explicit team assignment shipped.** Spec `CLAUDE.md` §6 — new "Worker team (unit) assignment — explicit, never silently defaulted" rule. Code (workshop): the sewing-only unit picker generalized to **all operational stations** (cutting / sewing / finishing / ironing / quality-check) — `TEAM_ASSIGNABLE_STAGES` + `STAGE_TEAM_LABELS` in `lib/job-functions.ts`; `UserFormState.sewing_unit_id` → `unit_ids` (per-stage map); `SewingUnitPicker`/`CreateSewingUnitDialog` → generic `UnitPicker(stage)`/`CreateUnitDialog(stage)`; one **required** visible picker per selected operational job (with inline "New team"); `isUserFormValid` requires a team for each operational station. **The silent lowest-id default is gone:** `new.tsx`/`$userId.edit.tsx` submit `form.unit_ids[stage]` for operational stations (soaking keeps the default fallback); **edit pre-fills each station's team from the worker's *actual* resource row** (not recomputed), so saving an unrelated field can't re-pin them. Edit init now also waits for the resources query so required pickers aren't left empty. Backend unchanged — `auth-admin` already reassigns `unit_id` per stage generically. Workshop type-checks clean; no new lint issues. No DB change (assignment already lives in `resources.unit_id`).
 - ☐ **Still TODO:** Q1 per-station scoring model (Performance page) and Q14 redo performance impact (depends on Group A capturing redo `root_cause`).
 

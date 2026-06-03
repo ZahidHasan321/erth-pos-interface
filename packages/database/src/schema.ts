@@ -942,10 +942,37 @@ export const garments = pgTable("garments", {
     redo_priority: redoPriorityEnum("redo_priority"),
     redo_parked_reason: redoParkedReasonEnum("redo_parked_reason"),
     redo_customer_must_provide_fabric: boolean("redo_customer_must_provide_fabric").default(false).notNull(),
+
+    // --- Group C repeated-returns investigation (CLAUDE.md §2.10) ---
+    // Auto-set server-side when quality returns (QC fails) ≥ 2 OR total returns ≥ 3.
+    // Holds the garment out of production (the in_production false→true "start" is
+    // rejected while true) until a manager records an investigation. Per-garment;
+    // never cascades to order-siblings.
+    needs_investigation: boolean("needs_investigation").default(false).notNull(),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
     orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
     replacedByUnique: uniqueIndex("garments_replaced_by_unique").on(t.replaced_by_garment_id),
+}));
+
+// --- 6.3 GARMENT INVESTIGATIONS (CLAUDE.md §2.10 repeated-returns) ---
+// One row per resolved investigation (append-only history). Written by the
+// manager-gated record_investigation RPC, which also clears the garment's hold.
+export const garmentInvestigations = pgTable("garment_investigations", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    garment_id: uuid("garment_id").notNull().references((): AnyPgColumn => garments.id),
+    order_id: integer("order_id"),
+    root_cause: rootCauseEnum("root_cause"),
+    decision: text("decision").notNull(), // continue | redo | refund
+    history_note: text("history_note"),
+    corrective_short: text("corrective_short"),
+    corrective_long: text("corrective_long"),
+    quality_returns: integer("quality_returns"),
+    alteration_returns: integer("alteration_returns"),
+    resolved_by: uuid("resolved_by"),
+    resolved_at: timestamp("resolved_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+    garmentIdx: index("garment_investigations_garment_idx").on(t.garment_id),
 }));
 
 // --- 6.25 DISPATCH LOG (append-only audit of shop↔workshop dispatches) ---

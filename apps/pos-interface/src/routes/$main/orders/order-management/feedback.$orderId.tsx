@@ -56,7 +56,12 @@ import { getMeasurementById, createMeasurement } from "@/api/measurements";
 import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/api/garments";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
-import { buildFinalGarmentPayload } from "@/lib/feedback-payload";
+import {
+  buildFinalGarmentPayload,
+  planMeasurementPropagation,
+  planStylePropagation,
+  MEASUREMENT_PROPAGATION_REASON,
+} from "@/lib/feedback-payload";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback } from "@repo/database";
 import { evaluateBrovaFeedback, getAlterationNumber } from "@repo/database";
 
@@ -1066,18 +1071,33 @@ function UnifiedFeedbackInterface() {
         // --- Measurement propagation (Customer Request only) ---
         // Customer Request rows feed a new measurements row; Workshop Error rows stay
         // logged in measurement_diffs only (original spec preserved — workshop just refixes).
+        // The reason gate + sibling fan-out scope are the §2.5 spec rules, factored
+        // into planMeasurementPropagation (see @/lib/feedback-payload) so they're
+        // unit-tested rather than buried here.
         let newMeasurementId: string | null = null;
         const previousMeasurementId = activeGarment.measurement_id || null;
         const customerReqRows = MEASUREMENT_ROWS.filter(row => {
           const fbVal = state.feedbackMeasurements[row.key];
           return (
-            state.differenceReasons[row.key] === "Customer Request" &&
+            state.differenceReasons[row.key] === MEASUREMENT_PROPAGATION_REASON &&
             fbVal !== "" &&
             fbVal !== undefined
           );
         });
+        const measurementPlan = planMeasurementPropagation({
+          rows: MEASUREMENT_ROWS.map(row => {
+            const fbVal = state.feedbackMeasurements[row.key];
+            return {
+              reason: state.differenceReasons[row.key] ?? null,
+              hasValue: fbVal !== "" && fbVal !== undefined,
+            };
+          }),
+          garmentType: activeGarment.garment_type,
+          prevMeasurementId: previousMeasurementId,
+          thisGarmentOnly: state.measurementGarmentOnly,
+        });
 
-        if (customerReqRows.length > 0 && measurement && activeOrder.customer?.id) {
+        if (measurementPlan.createNewMeasurement && measurement && activeOrder.customer?.id) {
           const baseRecord: Record<string, unknown> = { ...measurement };
           delete baseRecord["id"];
           delete baseRecord["created_at"];
@@ -1091,14 +1111,11 @@ function UnifiedFeedbackInterface() {
           if (created.status === "success" && created.data) {
             newMeasurementId = created.data.id;
 
-            // Default: brovas bulk-repoint all order garments sharing the
-            // measurement (so finals inherit the body correction). When the
-            // user toggled "this garment only", skip the bulk update.
-            if (
-              activeGarment.garment_type === "brova" &&
-              previousMeasurementId &&
-              !state.measurementGarmentOnly
-            ) {
+            // "siblings" (a brova with a prior measurement, not scoped to this
+            // garment only) bulk-repoints all order garments sharing the old
+            // measurement so finals inherit the body correction; otherwise just
+            // this garment is repointed.
+            if (measurementPlan.scope === "siblings" && previousMeasurementId) {
               await bulkRepointMeasurement(
                 activeOrder.id,
                 previousMeasurementId,
@@ -1167,12 +1184,16 @@ function UnifiedFeedbackInterface() {
             }
           }
           const combined = { ...styleFieldUpdates, ...hashwaFieldUpdates };
-          if (Object.keys(combined).length > 0) {
-            if (activeGarment.garment_type === "brova" && activeGarment.style_id != null) {
-              await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
-            } else {
-              await updateGarment(activeGarment.id, combined);
-            }
+          // Fan-out scope is the §2.5 spec rule, factored into planStylePropagation.
+          const stylePlan = planStylePropagation({
+            hasStyleChanges: Object.keys(combined).length > 0,
+            garmentType: activeGarment.garment_type,
+            styleId: activeGarment.style_id ?? null,
+          });
+          if (stylePlan === "siblings" && activeGarment.style_id != null) {
+            await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
+          } else if (stylePlan === "single") {
+            await updateGarment(activeGarment.id, combined);
           }
         }
 

@@ -47,3 +47,68 @@ export function buildFinalGarmentPayload(args: {
     acceptance_status: false,
   };
 }
+
+/**
+ * The single measurement-difference reason that re-points the garment's spec.
+ *
+ * CLAUDE.md §2.5 "Measurement reason gates propagation": only `customer_request`
+ * writes a new measurements row and re-points `measurement_id`. `workshop_error`
+ * / `shop_error` are audit-only (the spec was right, the executor erred — target
+ * unchanged). The shop UI labels these "Customer Request" / "Workshop Error" /
+ * "Shop Error"; this is the label that gates propagation.
+ */
+export const MEASUREMENT_PROPAGATION_REASON = "Customer Request";
+
+/**
+ * Pure decision for measurement-spec propagation on a feedback submission.
+ *
+ * Encodes two CLAUDE.md §2.5 rules:
+ *   • Reason gate — a new measurement row is created (and the garment re-pointed)
+ *     ONLY when at least one entered measurement carries the customer_request
+ *     reason. Workshop/shop-error rows are audit-only → no new row, no re-point.
+ *   • Sibling fan-out — a brova's correction fans out to every order garment
+ *     sharing its old measurement_id ("siblings"), so parked finals inherit the
+ *     body change; UNLESS the user scoped it to "this garment only". Finals and
+ *     alteration garments (and brovas with no prior measurement) re-point only
+ *     themselves ("single").
+ *
+ * `scope` maps to the write the caller performs: "siblings" → bulkRepointMeasurement,
+ * "single" → updateGarment(self, { measurement_id }), "none" → no write.
+ */
+export function planMeasurementPropagation(args: {
+  rows: { reason: string | null; hasValue: boolean }[];
+  garmentType: string | null;
+  prevMeasurementId: string | null;
+  thisGarmentOnly: boolean;
+}): { createNewMeasurement: boolean; scope: "siblings" | "single" | "none" } {
+  const hasCustomerRequest = args.rows.some(
+    (r) => r.hasValue && r.reason === MEASUREMENT_PROPAGATION_REASON,
+  );
+  if (!hasCustomerRequest) return { createNewMeasurement: false, scope: "none" };
+
+  const scope =
+    args.garmentType === "brova" && !!args.prevMeasurementId && !args.thisGarmentOnly
+      ? "siblings"
+      : "single";
+  return { createNewMeasurement: true, scope };
+}
+
+/**
+ * Pure decision for style/option-spec propagation on a feedback submission.
+ *
+ * CLAUDE.md §2.5 "Brova feedback fans out to siblings": a brova's style/option
+ * changes apply to every sibling sharing its style_id ("siblings"), so parked
+ * finals inherit the design correction before they're produced. Finals and
+ * alteration garments update only themselves ("single") — their siblings may
+ * already be in a different production state. No changes → "none".
+ *
+ * "siblings" → bulkUpdateStyleFields, "single" → updateGarment(self, fields).
+ */
+export function planStylePropagation(args: {
+  hasStyleChanges: boolean;
+  garmentType: string | null;
+  styleId: number | null;
+}): "siblings" | "single" | "none" {
+  if (!args.hasStyleChanges) return "none";
+  return args.garmentType === "brova" && args.styleId != null ? "siblings" : "single";
+}

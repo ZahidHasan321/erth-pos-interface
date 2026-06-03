@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getCompletedGarmentsInRange, type GarmentPerformanceRow } from "@/api/performance";
+import { getCompletedGarmentsInRange, getRedoImpact, type GarmentPerformanceRow, type RedoImpactRow } from "@/api/performance";
 import { useResources } from "@/hooks/useResources";
 import type { Resource, StageTimingEntry } from "@repo/database";
 
@@ -16,14 +16,12 @@ export interface WorkerKpi {
   rating: number | null;
   reworkCount: number;
   /** True when this worker's stage is rolled up to its unit (sewing, soaking).
-   *  Output/efficiency are not personally meaningful — `daysPresent` is. */
+   *  Output/efficiency are not personally meaningful. */
   unitOnly: boolean;
-  /** Distinct calendar days this worker had at least one stage_timings session in range. */
-  daysPresent: number;
 }
 
 export interface UnitKpi {
-  /** Unit row id when available, otherwise a synthetic id like `soaking::default`. */
+  /** Unit row id when available, otherwise a synthetic id like `sewing::Team A`. */
   id: string;
   name: string;
   stage: string;
@@ -37,11 +35,9 @@ export interface UnitKpi {
   totalDailyTarget: number;
   efficiency: number;
   /** Garments this unit's stage caused to fail QC, divided by garments handled.
-   *  null when sample < MIN_QUALITY_SAMPLE. */
+   *  null when sample < MIN_QUALITY_SAMPLE. Defects ARE stage-attributable (who
+   *  executed the work), so this stays per-unit (CLAUDE.md §6 Q1). */
   defectRate: number | null;
-  /** Garments accepted at customer trial / garments handled that had a trial outcome.
-   *  null when sample < MIN_QUALITY_SAMPLE. */
-  acceptRate: number | null;
 }
 
 export interface StageKpi {
@@ -76,12 +72,9 @@ export interface PerformanceSummary {
   /** Mean days late among garments that were late. null when none late. */
   avgDaysLate: number | null;
   /** % of garments accepted at customer trial. Denominator = garments with non-null
-   *  feedback_status (i.e. trial happened). null when sample = 0. */
+   *  feedback_status (i.e. trial happened). null when sample = 0. Whole-shop only —
+   *  customer acceptance is NOT team-attributable (CLAUDE.md §6 Q14). */
   acceptRate: number | null;
-  /** Avg minutes of actual soak (soaking_started_at → soaking_completed_at), and avg target
-   *  (soaking_hours × 60). null when no soak data. */
-  avgSoakActualMinutes: number | null;
-  avgSoakTargetMinutes: number | null;
   /** Avg workshop minutes split by express flag. */
   avgWorkshopMinutesExpress: number | null;
   avgWorkshopMinutesRegular: number | null;
@@ -104,12 +97,10 @@ const HISTORY_KEY_TO_STAGE: Record<string, string> = {
   quality_checker: "quality_check",
 };
 
-/** Stages where individual workers should NOT be scored on output — roll up to unit instead. */
+/** Stages whose individual workers are NOT scored on output. Sewing rolls up to
+ *  its unit; soaking is excluded from the Performance page entirely (§6 Q1) — both
+ *  are kept out of the Workers tab via this set. */
 export const UNIT_ONLY_STAGES = new Set(["sewing", "soaking"]);
-
-/** Synthetic id for the single virtual soaking unit (no DB row). */
-const SOAKING_UNIT_ID = "soaking::default";
-const SOAKING_UNIT_NAME = "Soaking";
 
 /** Minimum garments handled before showing defect/accept rates — avoid noisy 100% from 1 piece. */
 export const MIN_QUALITY_SAMPLE = 10;
@@ -166,24 +157,6 @@ function durationMinutes(entry: StageTimingEntry): number | null {
   return (end - start) / 60000;
 }
 
-/** Worker → set of YYYY-MM-DD they had a session, across all stages. */
-function buildAttendance(garments: GarmentPerformanceRow[]): Map<string, Set<string>> {
-  const out = new Map<string, Set<string>>();
-  for (const g of garments) {
-    if (!g.stage_timings) continue;
-    for (const sessions of Object.values(g.stage_timings)) {
-      if (!sessions) continue;
-      for (const s of sessions) {
-        if (!s.worker || !s.started_at) continue;
-        const day = s.started_at.slice(0, 10);
-        if (!out.has(s.worker)) out.set(s.worker, new Set());
-        out.get(s.worker)!.add(day);
-      }
-    }
-  }
-  return out;
-}
-
 function computeKpis(
   garments: GarmentPerformanceRow[],
   resources: Resource[],
@@ -230,8 +203,6 @@ function computeKpis(
     }
   }
 
-  const attendance = buildAttendance(garments);
-
   const workers: WorkerKpi[] = [];
   const stageAgg = new Map<string, { target: number; actual: number; count: number }>();
 
@@ -264,7 +235,6 @@ function computeKpis(
       rating: resource?.rating ?? null,
       reworkCount: unitOnly ? 0 : rework,
       unitOnly,
-      daysPresent: attendance.get(name)?.size ?? 0,
     });
 
     if (!unitOnly) {
@@ -388,25 +358,6 @@ function computeKpis(
   }
   const acceptRate = acceptDenom > 0 ? Math.round((acceptNum / acceptDenom) * 100) : null;
 
-  // Soak duration (avg actual vs target)
-  const soakActualMinutes: number[] = [];
-  const soakTargetMinutes: number[] = [];
-  for (const g of garments) {
-    if (!g.soaking) continue;
-    if (g.soaking_started_at && g.soaking_completed_at) {
-      const start = new Date(g.soaking_started_at).getTime();
-      const end = new Date(g.soaking_completed_at).getTime();
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-        soakActualMinutes.push((end - start) / 60000);
-      }
-    }
-    if (g.soaking_hours && g.soaking_hours > 0) {
-      soakTargetMinutes.push(g.soaking_hours * 60);
-    }
-  }
-  const avgSoakActualMinutes = mean(soakActualMinutes);
-  const avgSoakTargetMinutes = mean(soakTargetMinutes);
-
   // Stage cycle times — avg minutes per stage from stage_timings
   const stageDurations = new Map<string, number[]>();
   for (const g of garments) {
@@ -450,8 +401,6 @@ function computeKpis(
       onTimePct,
       avgDaysLate,
       acceptRate,
-      avgSoakActualMinutes,
-      avgSoakTargetMinutes,
       avgWorkshopMinutesExpress,
       avgWorkshopMinutesRegular,
     },
@@ -496,8 +445,6 @@ function computeUnitKpis(
     let completed = 0;
     const durations: number[] = [];
     let defects = 0;
-    let acceptNum = 0;
-    let acceptDenom = 0;
 
     const historyKey = Object.entries(HISTORY_KEY_TO_STAGE).find(
       ([, v]) => v === bucket.stage,
@@ -522,12 +469,6 @@ function computeUnitKpis(
 
       // Defect attribution: this stage is in any QC fail's return_stages
       if (getFailedStagesForGarment(g).has(bucket.stage)) defects++;
-
-      // Accept rate: garments with feedback_status set, attributed to this stage's worker
-      if (g.feedback_status) {
-        acceptDenom++;
-        if (g.feedback_status === "accepted") acceptNum++;
-      }
     }
 
     const totalDailyTarget = bucket.members.reduce(
@@ -551,63 +492,11 @@ function computeUnitKpis(
       efficiency: totalTarget > 0 ? Math.round((completed / totalTarget) * 100) : 0,
       defectRate:
         completed >= MIN_QUALITY_SAMPLE ? Math.round((defects / completed) * 100) : null,
-      acceptRate:
-        acceptDenom >= MIN_QUALITY_SAMPLE
-          ? Math.round((acceptNum / acceptDenom) * 100)
-          : null,
     });
   }
 
-  // Soaking — single synthetic unit. Counts garments where soaking_completed_at falls
-  // in the same window as completion_time (we only loaded completed garments).
-  // Members = all resources with responsibility=soaking.
-  const soakers = resources.filter((r) => r.responsibility === "soaking");
-  let soakCompleted = 0;
-  const soakDurations: number[] = [];
-  let soakDefects = 0;
-  let soakAcceptNum = 0;
-  let soakAcceptDenom = 0;
-  for (const g of garments) {
-    if (!g.soaking) continue;
-    soakCompleted++;
-    const sessions = g.stage_timings?.soaking;
-    if (sessions) {
-      for (const s of sessions) {
-        const m = durationMinutes(s);
-        if (m !== null) soakDurations.push(m);
-      }
-    }
-    if (getFailedStagesForGarment(g).has("soaking")) soakDefects++;
-    if (g.feedback_status) {
-      soakAcceptDenom++;
-      if (g.feedback_status === "accepted") soakAcceptNum++;
-    }
-  }
-  const soakDailyTarget = soakers.reduce((sum, m) => sum + (m.daily_target ?? 0), 0);
-  const soakTotalTarget = soakDailyTarget * days;
-  const sortedSoak = [...soakDurations].sort((a, b) => a - b);
-  units.push({
-    id: SOAKING_UNIT_ID,
-    name: SOAKING_UNIT_NAME,
-    stage: "soaking",
-    memberCount: soakers.length,
-    members: soakers.map((m) => m.resource_name),
-    completed: soakCompleted,
-    avgMinutes: soakDurations.length
-      ? Math.round(soakDurations.reduce((a, b) => a + b, 0) / soakDurations.length)
-      : null,
-    p90Minutes: soakDurations.length ? Math.round(percentile(sortedSoak, 0.9)!) : null,
-    totalDailyTarget: soakDailyTarget,
-    efficiency: soakTotalTarget > 0 ? Math.round((soakCompleted / soakTotalTarget) * 100) : 0,
-    defectRate:
-      soakCompleted >= MIN_QUALITY_SAMPLE
-        ? Math.round((soakDefects / soakCompleted) * 100)
-        : null,
-    acceptRate:
-      soakAcceptDenom >= MIN_QUALITY_SAMPLE
-        ? Math.round((soakAcceptNum / soakAcceptDenom) * 100)
-        : null,
-  });
+  // Soaking is intentionally NOT scored on the Performance page (CLAUDE.md §6 Q1:
+  // time-based technical stage, negligible labor — workflow surfaces only).
 
   units.sort((a, b) => b.completed - a.completed);
   // workerCounts param kept for future cross-checks; not used in current aggregation.
@@ -742,4 +631,17 @@ export function usePerformanceData(dateRange: { from: string; to: string }) {
   );
 
   return { ...result, garments, isLoading, error };
+}
+
+/** Redo performance impact by responsible party (CLAUDE.md §6 Q14). Separate
+ *  query — its population (redos in range, by waste-annotation time) differs from
+ *  the completed-garments set, and it has no dependency on the KPI computation. */
+export type { RedoImpactRow };
+export function useRedoImpact(dateRange: { from: string; to: string }) {
+  return useQuery({
+    queryKey: ["redo-impact", dateRange.from, dateRange.to],
+    queryFn: () => getRedoImpact(dateRange.from, dateRange.to),
+    staleTime: 30_000,
+    enabled: !!dateRange.from && !!dateRange.to,
+  });
 }
